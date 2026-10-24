@@ -22,10 +22,11 @@ pub mod wrappers;
 pub use compare::{assert_same_content, assert_same_view};
 pub use failure::Failure;
 pub use fixture::{
-    new_file, standard_meta, Capabilities, Faults, Fixture, RealTime, StoreFactory, Time, ALGORITHM, BASE_FILE,
-    DOC_MODEL, MIME,
+    new_file, standard_meta, Capabilities, Faults, Fixture, RealTime, StoreFactory, Time,
+    ALGORITHM, BASE_FILE, DOC_MODEL, MIME,
 };
 pub use memory_factory::MemoryFactory;
 pub use runner::{
-    journey_names, run_all, run_one, run_selected, Journey, JourneyResult, Need, Outcome, Report, JOURNEYS,
+    journey_names, run_all, run_one, run_selected, Journey, JourneyResult, Need, Outcome, Report,
+    JOURNEYS,
 };

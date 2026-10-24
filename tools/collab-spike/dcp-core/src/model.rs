@@ -157,7 +157,13 @@ pub struct Stamped<T> {
 
 impl<T> Stamped<T> {
     pub fn new(id: impl Into<String>, ts_ms: u64, sender: impl Into<String>, body: T) -> Self {
-        Stamped { id: id.into(), ts_ms, sender: sender.into(), body, device: None }
+        Stamped {
+            id: id.into(),
+            ts_ms,
+            sender: sender.into(),
+            body,
+            device: None,
+        }
     }
 
     pub fn with_device(mut self, device: impl Into<String>) -> Self {

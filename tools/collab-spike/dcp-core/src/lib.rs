@@ -11,6 +11,9 @@
 //! - [`lease`]: lease rules (4.3)
 //! - [`integrity`]: file references and verification (4.2 rule 2)
 //! - [`schema`]: validate any DCP object (4)
+//! - [`outbox`]: queue and back off, never drop a version (10)
+//! - [`presence`]: ephemeral roster with the 15 s rule (4.5)
+//! - [`publish`]: the writer's checks (4.2 rules 3 and 4)
 //! - [`updates`]: the update profile (4.4, 7)
 //! - [`view`]: the reader pipeline combining the above
 //! - [`memory`]: the in-memory reference store
@@ -20,6 +23,9 @@ pub mod integrity;
 pub mod lease;
 pub mod memory;
 pub mod model;
+pub mod outbox;
+pub mod presence;
+pub mod publish;
 pub mod schema;
 pub mod store;
 pub mod updates;

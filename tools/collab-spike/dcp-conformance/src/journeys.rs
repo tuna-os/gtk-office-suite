@@ -17,11 +17,13 @@ use std::sync::Arc;
 use dcp_core::lease::{self, Acquire, Claim, Release};
 use dcp_core::updates::{self, Receiver, Skip, StreamWriter, Target};
 use dcp_core::view::{read_view, Head, Reason, View};
-use dcp_core::{graph, DocumentStore, Lease, LeaseState, Role, Stamped, StoreError, Update, Version};
+use dcp_core::{
+    graph, DocumentStore, Lease, LeaseState, Role, Stamped, StoreError, Update, Version,
+};
 
 use crate::compare::assert_same_view;
 use crate::fixture::{new_file, Fixture, StoreFactory, ALGORITHM, BASE_FILE, DOC_MODEL};
-use crate::wrappers::{Corruption, CorruptingStore, Target as CorruptTarget};
+use crate::wrappers::{CorruptingStore, Corruption, Target as CorruptTarget};
 use crate::{ensure, Failure};
 
 type Handle = Arc<dyn DocumentStore>;
@@ -53,7 +55,12 @@ async fn publish_child(
     bytes: &[u8],
 ) -> Result<Stamped<Version>, Failure> {
     Ok(who
-        .publish_version(&fx.doc, parents.iter().map(|p| p.to_string()).collect(), new_file(bytes), None)
+        .publish_version(
+            &fx.doc,
+            parents.iter().map(|p| p.to_string()).collect(),
+            new_file(bytes),
+            None,
+        )
         .await?)
 }
 
@@ -73,11 +80,19 @@ async fn wait_lease(
 fn forbidden<T: Debug>(what: &str, r: Result<T, StoreError>) -> Result<(), Failure> {
     match r {
         Err(StoreError::Forbidden(_)) => Ok(()),
-        other => Err(Failure::new(format!("{what} must be refused with Forbidden by the store, got {other:?}"))),
+        other => Err(Failure::new(format!(
+            "{what} must be refused with Forbidden by the store, got {other:?}"
+        ))),
     }
 }
 
-fn update(algorithm: &str, doc_model: &str, base: &str, seq: u64, bytes: &[u8]) -> Result<Update, Failure> {
+fn update(
+    algorithm: &str,
+    doc_model: &str,
+    base: &str,
+    seq: u64,
+    bytes: &[u8],
+) -> Result<Update, Failure> {
     Ok(Update {
         dcp: 0,
         algorithm: algorithm.into(),
@@ -97,11 +112,17 @@ struct AppendDoc {
 
 impl AppendDoc {
     fn from_file(bytes: &[u8]) -> Self {
-        AppendDoc { state: bytes.to_vec(), supported: true }
+        AppendDoc {
+            state: bytes.to_vec(),
+            supported: true,
+        }
     }
 
     fn knows_nothing(bytes: &[u8]) -> Self {
-        AppendDoc { state: bytes.to_vec(), supported: false }
+        AppendDoc {
+            state: bytes.to_vec(),
+            supported: false,
+        }
     }
 
     fn text(&self) -> String {
@@ -131,15 +152,26 @@ fn plus(base: &[u8], more: &str) -> String {
 pub async fn convergence_on_one_head(f: &dyn StoreFactory) -> Result<(), Failure> {
     let fx = f.fresh().await?;
     let first = fx.first_version.clone();
-    for (name, who) in [("owner", &fx.owner), ("editor", &fx.editor), ("viewer", &fx.viewer)] {
+    for (name, who) in [
+        ("owner", &fx.owner),
+        ("editor", &fx.editor),
+        ("viewer", &fx.viewer),
+    ] {
         let v = wait_for_head(&fx, who, &first).await?;
-        ensure!(v.heads[0].bytes == BASE_FILE, "{name} reads different bytes for the first version");
+        ensure!(
+            v.heads[0].bytes == BASE_FILE,
+            "{name} reads different bytes for the first version"
+        );
     }
 
     let v2 = publish_child(&fx, &fx.owner, &[&first], b"edit by the owner").await?;
     for who in [&fx.editor, &fx.viewer] {
         let v = wait_for_head(&fx, who, &v2.id).await?;
-        ensure!(v.heads[0].bytes == b"edit by the owner", "{} reads the wrong bytes of v2", who.principal());
+        ensure!(
+            v.heads[0].bytes == b"edit by the owner",
+            "{} reads the wrong bytes of v2",
+            who.principal()
+        );
     }
 
     let v3 = publish_child(&fx, &fx.editor, &[&v2.id], b"edit by the editor").await?;
@@ -150,12 +182,27 @@ pub async fn convergence_on_one_head(f: &dyn StoreFactory) -> Result<(), Failure
     assert_same_view(&*fx.owner, &*fx.editor, &fx.doc).await?;
     assert_same_view(&*fx.owner, &*fx.viewer, &fx.doc).await?;
     let v = read_view(&*fx.owner, &fx.doc).await?;
-    ensure!(v.heads.len() == 1, "expected one head, got {:?}", v.head_ids());
-    ensure!(v.rejected.is_empty(), "versions were rejected: {:?}", v.rejected);
-    ensure!(v.heads[0].bytes == b"edit by the editor", "the converged head has the wrong content");
+    ensure!(
+        v.heads.len() == 1,
+        "expected one head, got {:?}",
+        v.head_ids()
+    );
+    ensure!(
+        v.rejected.is_empty(),
+        "versions were rejected: {:?}",
+        v.rejected
+    );
+    ensure!(
+        v.heads[0].bytes == b"edit by the editor",
+        "the converged head has the wrong content"
+    );
     if fx.caps.history {
         let all = fx.owner.versions(&fx.doc).await?;
-        ensure!(all.len() == 3, "version rule 4: a save adds a child, nothing is overwritten; found {} versions", all.len());
+        ensure!(
+            all.len() == 3,
+            "version rule 4: a save adds a child, nothing is overwritten; found {} versions",
+            all.len()
+        );
     }
     Ok(())
 }
@@ -171,14 +218,27 @@ pub async fn second_head_shown_not_hidden(f: &dyn StoreFactory) -> Result<(), Fa
     let a = publish_child(&fx, &fx.owner, &[&first], b"offline edit A").await?;
     let b = publish_child(&fx, &fx.editor, &[&first], b"offline edit B").await?;
 
-    for (name, who) in [("owner", &fx.owner), ("editor", &fx.editor), ("viewer", &fx.viewer)] {
-        let v = view_when(&fx, who, &format!("{name} sees both heads"), |v| v.heads.len() == 2).await?;
-        ensure!(v.is_conflict(), "{name}: two heads must be reported as a conflict");
+    for (name, who) in [
+        ("owner", &fx.owner),
+        ("editor", &fx.editor),
+        ("viewer", &fx.viewer),
+    ] {
+        let v = view_when(&fx, who, &format!("{name} sees both heads"), |v| {
+            v.heads.len() == 2
+        })
+        .await?;
+        ensure!(
+            v.is_conflict(),
+            "{name}: two heads must be reported as a conflict"
+        );
         let mut ids = v.head_ids();
         ids.sort();
         let mut want = vec![a.id.as_str(), b.id.as_str()];
         want.sort();
-        ensure!(ids == want, "{name} lists heads {ids:?}, expected both {want:?}: one was hidden");
+        ensure!(
+            ids == want,
+            "{name} lists heads {ids:?}, expected both {want:?}: one was hidden"
+        );
         let mut contents: Vec<Vec<u8>> = v.heads.iter().map(|h| h.bytes.clone()).collect();
         contents.sort();
         ensure!(
@@ -186,7 +246,9 @@ pub async fn second_head_shown_not_hidden(f: &dyn StoreFactory) -> Result<(), Fa
             "{name} shows the wrong content for the heads"
         );
         ensure!(
-            v.heads.windows(2).all(|w| w[0].version.ts_ms >= w[1].version.ts_ms),
+            v.heads
+                .windows(2)
+                .all(|w| w[0].version.ts_ms >= w[1].version.ts_ms),
             "{name}: heads are not newest first by binding timestamp"
         );
     }
@@ -194,7 +256,10 @@ pub async fn second_head_shown_not_hidden(f: &dyn StoreFactory) -> Result<(), Fa
 
     // Nothing merged them behind the user's back.
     let after = read_view(&*fx.viewer, &fx.doc).await?;
-    ensure!(after.heads.len() == 2, "the conflict went away without a merge");
+    ensure!(
+        after.heads.len() == 2,
+        "the conflict went away without a merge"
+    );
 
     // The user merges: a version listing every head as a parent.
     let heads: Vec<&Stamped<Version>> = after.heads.iter().map(|h| &h.version).collect();
@@ -203,11 +268,18 @@ pub async fn second_head_shown_not_hidden(f: &dyn StoreFactory) -> Result<(), Fa
     let merged = publish_child(&fx, &fx.owner, &parents_ref, b"merged by the user").await?;
     for who in [&fx.owner, &fx.editor, &fx.viewer] {
         let v = wait_for_head(&fx, who, &merged.id).await?;
-        ensure!(v.heads[0].bytes == b"merged by the user", "wrong merged content");
+        ensure!(
+            v.heads[0].bytes == b"merged by the user",
+            "wrong merged content"
+        );
     }
     if fx.caps.history {
         let all = fx.owner.versions(&fx.doc).await?;
-        ensure!(all.len() == 4, "merging must keep every earlier version; found {}", all.len());
+        ensure!(
+            all.len() == 4,
+            "merging must keep every earlier version; found {}",
+            all.len()
+        );
     }
     Ok(())
 }
@@ -224,23 +296,41 @@ pub async fn corrupt_file_rejected(f: &dyn StoreFactory) -> Result<(), Failure> 
     let first = fx.first_version.clone();
     let v2 = publish_child(&fx, &fx.owner, &[&first], b"the second version's content").await?;
     let honest = wait_for_head(&fx, &fx.editor, &v2.id).await?;
-    ensure!(honest.rejected.is_empty(), "an undamaged file was rejected: {:?}", honest.rejected);
+    ensure!(
+        honest.rejected.is_empty(),
+        "an undamaged file was rejected: {:?}",
+        honest.rejected
+    );
 
     for corruption in Corruption::ALL {
-        let damaged = CorruptingStore::new(fx.editor.clone(), corruption, CorruptTarget::Version(v2.id.clone()));
+        let damaged = CorruptingStore::new(
+            fx.editor.clone(),
+            corruption,
+            CorruptTarget::Version(v2.id.clone()),
+        );
         let v = read_view(&damaged, &fx.doc).await?;
         let rejection = v.rejected.iter().find(|r| r.id == v2.id);
         let Some(rejection) = rejection else {
-            return Err(Failure::new(format!("{corruption:?}: the damaged version {} was accepted", v2.id)));
+            return Err(Failure::new(format!(
+                "{corruption:?}: the damaged version {} was accepted",
+                v2.id
+            )));
         };
         let Reason::Integrity(cause) = &rejection.reason else {
-            return Err(Failure::new(format!("{corruption:?}: rejected for the wrong reason: {:?}", rejection.reason)));
+            return Err(Failure::new(format!(
+                "{corruption:?}: rejected for the wrong reason: {:?}",
+                rejection.reason
+            )));
         };
         let size_changed = !matches!(corruption, Corruption::FlipBit);
         ensure!(
             matches!(cause, IntegrityError::SizeMismatch { .. }) == size_changed,
             "{corruption:?}: expected {} but got {cause:?}",
-            if size_changed { "a size mismatch" } else { "a hash mismatch" }
+            if size_changed {
+                "a size mismatch"
+            } else {
+                "a hash mismatch"
+            }
         );
         ensure!(
             v.head_ids() == [first.as_str()],
@@ -250,10 +340,22 @@ pub async fn corrupt_file_rejected(f: &dyn StoreFactory) -> Result<(), Failure> 
     }
 
     // When the only version is damaged there is no content, and it is reported.
-    let everything = CorruptingStore::new(fx.editor.clone(), Corruption::Truncate, CorruptTarget::Every);
+    let everything = CorruptingStore::new(
+        fx.editor.clone(),
+        Corruption::Truncate,
+        CorruptTarget::Every,
+    );
     let v = read_view(&everything, &fx.doc).await?;
-    ensure!(v.heads.is_empty(), "a damaged file was shown as a head: {:?}", v.head_ids());
-    ensure!(v.rejected.len() >= 2, "every damaged version must be reported, got {:?}", v.rejected);
+    ensure!(
+        v.heads.is_empty(),
+        "a damaged file was shown as a head: {:?}",
+        v.head_ids()
+    );
+    ensure!(
+        v.rejected.len() >= 2,
+        "every damaged version must be reported, got {:?}",
+        v.rejected
+    );
     Ok(())
 }
 
@@ -263,25 +365,48 @@ pub async fn truncated_upload_never_published(f: &dyn StoreFactory) -> Result<()
     let fx = f.fresh().await?;
     let first = fx.first_version.clone();
     let Some(faults) = fx.faults.clone() else {
-        return Err(Failure::new("capabilities.upload_faults is set but the fixture has no Faults"));
+        return Err(Failure::new(
+            "capabilities.upload_faults is set but the fixture has no Faults",
+        ));
     };
     faults.truncate_next_upload();
     let res = fx
         .editor
-        .publish_version(&fx.doc, vec![first.clone()], new_file(b"a file that is cut in half on upload"), None)
+        .publish_version(
+            &fx.doc,
+            vec![first.clone()],
+            new_file(b"a file that is cut in half on upload"),
+            None,
+        )
         .await;
-    ensure!(res.is_err(), "a version whose upload was truncated was published: {res:?}");
+    ensure!(
+        res.is_err(),
+        "a version whose upload was truncated was published: {res:?}"
+    );
 
     // The next, healthy save works, and it is the only thing that appeared.
     let good = publish_child(&fx, &fx.editor, &[&first], b"a healthy save").await?;
     let v = wait_for_head(&fx, &fx.owner, &good.id).await?;
-    ensure!(v.rejected.is_empty(), "something unreadable was published: {:?}", v.rejected);
+    ensure!(
+        v.rejected.is_empty(),
+        "something unreadable was published: {:?}",
+        v.rejected
+    );
     if fx.caps.history {
-        let mut ids: Vec<String> = fx.owner.versions(&fx.doc).await?.into_iter().map(|v| v.id).collect();
+        let mut ids: Vec<String> = fx
+            .owner
+            .versions(&fx.doc)
+            .await?
+            .into_iter()
+            .map(|v| v.id)
+            .collect();
         ids.sort();
         let mut want = vec![first, good.id];
         want.sort();
-        ensure!(ids == want, "after the failed upload the document has versions {ids:?}, expected {want:?}");
+        ensure!(
+            ids == want,
+            "after the failed upload the document has versions {ids:?}, expected {want:?}"
+        );
     }
     Ok(())
 }
@@ -294,12 +419,30 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
     let fx = f.fresh().await?;
     let first = fx.first_version.clone();
     let (ed, ow) = (&fx.editor, &fx.owner);
-    let ce = Claim::new(ed.principal(), "session-editor", "token-editor", &first, 60_000);
-    let co = Claim::new(ow.principal(), "session-owner", "token-owner", &first, 60_000);
+    let ce = Claim::new(
+        ed.principal(),
+        "session-editor",
+        "token-editor",
+        &first,
+        60_000,
+    );
+    let co = Claim::new(
+        ow.principal(),
+        "session-owner",
+        "token-owner",
+        &first,
+        60_000,
+    );
 
     // Both sessions look, both see a free lease, both write, then both read back.
-    ensure!(lease::available(&**ed, &fx.doc, &ce.holder).await?.is_ok(), "no lease was ever written, yet it is not available");
-    ensure!(lease::available(&**ow, &fx.doc, &co.holder).await?.is_ok(), "no lease was ever written, yet it is not available");
+    ensure!(
+        lease::available(&**ed, &fx.doc, &ce.holder).await?.is_ok(),
+        "no lease was ever written, yet it is not available"
+    );
+    ensure!(
+        lease::available(&**ow, &fx.doc, &co.holder).await?.is_ok(),
+        "no lease was ever written, yet it is not available"
+    );
     let we = lease::write(&**ed, &fx.doc, &ce).await?;
     let wo = lease::write(&**ow, &fx.doc, &co).await?;
     if fx.caps.racy_lease {
@@ -308,7 +451,9 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
             "the binding says it has no compare-and-set but refused a write: editor {we:?}, owner {wo:?}"
         );
     }
-    fx.settle("both handles see the same, latest lease record", || async {
+    // Give both handles time to see the same latest record. If they never do,
+    // the read-backs below decide: that is the rule being tested.
+    fx.settle_soft(|| async {
         let a = ed.lease(&fx.doc).await?.map(|l| l.id);
         let b = ow.lease(&fx.doc).await?.map(|l| l.id);
         Ok((a.is_some() && a == b).then_some(()))
@@ -320,39 +465,77 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         re.is_acquired() != ro.is_acquired(),
         "exactly one session may hold the lease after a simultaneous write; editor: {re:?}, owner: {ro:?}"
     );
-    let (winner, wc, loser, lc) = if re.is_acquired() { (ed, &ce, ow, &co) } else { (ow, &co, ed, &ce) };
+    let (winner, wc, loser, lc) = if re.is_acquired() {
+        (ed, &ce, ow, &co)
+    } else {
+        (ow, &co, ed, &ce)
+    };
 
     // The loser cannot take an active lease.
     let again = lease::acquire(&**loser, &fx.doc, lc).await?;
-    ensure!(matches!(again, Acquire::Held(_)), "a session took (or fought for) an active lease: {again:?}");
-    ensure!(lease::holds(&**winner, &fx.doc, &wc.holder).await?, "the winner lost the lease to a refused attempt");
+    ensure!(
+        matches!(again, Acquire::Held(_)),
+        "a session took (or fought for) an active lease: {again:?}"
+    );
+    ensure!(
+        lease::holds(&**winner, &fx.doc, &wc.holder).await?,
+        "the winner lost the lease to a refused attempt"
+    );
 
     // Rule 6: a save without the lease is still a version.
     let saved = publish_child(&fx, loser, &[&first], b"saved without holding the lease").await?;
     wait_for_head(&fx, winner, &saved.id).await?;
 
     // The winner lets go; only then may the other take it.
-    ensure!(lease::release(&**winner, &fx.doc, &wc.holder).await? == Release::Released, "the holder could not release");
+    ensure!(
+        lease::release(&**winner, &fx.doc, &wc.holder).await? == Release::Released,
+        "the holder could not release"
+    );
     ensure!(
         lease::release(&**loser, &fx.doc, &lc.holder).await? == Release::NotHolder,
         "a session that does not hold the lease released it"
     );
 
     // Rule 5: an owner may break a lease; an editor may not; the former holder sees it.
-    let editor_again = Claim::new(ed.principal(), "session-editor-2", "token-editor-2", &saved.id, 60_000);
-    wait_lease(&fx, ed, "the release is visible", |l| l.is_some_and(|l| l.body.state == LeaseState::Released)).await?;
+    let editor_again = Claim::new(
+        ed.principal(),
+        "session-editor-2",
+        "token-editor-2",
+        &saved.id,
+        60_000,
+    );
+    wait_lease(&fx, ed, "the release is visible", |l| {
+        l.is_some_and(|l| l.body.state == LeaseState::Released)
+    })
+    .await?;
     let got = lease::acquire(&**ed, &fx.doc, &editor_again).await?;
-    ensure!(got.is_acquired(), "the lease was released but could not be acquired: {got:?}");
-    let breaker = Claim::new(ow.principal(), "session-owner-break", "token-break", &saved.id, 60_000);
+    ensure!(
+        got.is_acquired(),
+        "the lease was released but could not be acquired: {got:?}"
+    );
+    let breaker = Claim::new(
+        ow.principal(),
+        "session-owner-break",
+        "token-break",
+        &saved.id,
+        60_000,
+    );
     wait_lease(&fx, ow, "the owner sees the editor's lease", |l| {
         l.is_some_and(|l| lease::names(&l.body, &editor_again.holder))
     })
     .await?;
-    let by_editor = lease::break_lease(&**ed, &fx.doc, &Claim::new(ed.principal(), "session-editor-3", "t", &saved.id, 60_000)).await;
+    let by_editor = lease::break_lease(
+        &**ed,
+        &fx.doc,
+        &Claim::new(ed.principal(), "session-editor-3", "t", &saved.id, 60_000),
+    )
+    .await;
     forbidden("an editor breaking a lease", by_editor)?;
     let broke = lease::break_lease(&**ow, &fx.doc, &breaker).await?;
     let Acquire::Acquired(rec) = broke else {
-        return Err(Failure::new(format!("an owner could not break a lease: {broke:?}")));
+        return Err(Failure::new(format!(
+            "an owner could not break a lease: {broke:?}"
+        )));
     };
     ensure!(
         rec.body.holder.as_ref() == Some(&breaker.holder),
@@ -364,7 +547,10 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
     })
     .await?;
     let blocked = lease::acquire(&**ed, &fx.doc, &editor_again).await?;
-    ensure!(matches!(blocked, Acquire::Held(_)), "the former holder retook a lease the owner broke: {blocked:?}");
+    ensure!(
+        matches!(blocked, Acquire::Held(_)),
+        "the former holder retook a lease the owner broke: {blocked:?}"
+    );
     Ok(())
 }
 
@@ -381,39 +567,76 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
     let co = Claim::new(ow.principal(), "session-owner", "token-owner", &first, D);
 
     let Acquire::Acquired(held) = lease::acquire(&**ed, &fx.doc, &ce).await? else {
-        return Err(Failure::new("a fresh document's lease could not be acquired"));
+        return Err(Failure::new(
+            "a fresh document's lease could not be acquired",
+        ));
     };
-    wait_lease(&fx, ow, "the owner sees the editor's lease", |l| l.is_some_and(|l| l.id == held.id)).await?;
+    wait_lease(&fx, ow, "the owner sees the editor's lease", |l| {
+        l.is_some_and(|l| l.id == held.id)
+    })
+    .await?;
     let blocked = lease::acquire(&**ow, &fx.doc, &co).await?;
-    ensure!(matches!(blocked, Acquire::Held(_)), "an active lease was taken: {blocked:?}");
+    ensure!(
+        matches!(blocked, Acquire::Held(_)),
+        "an active lease was taken: {blocked:?}"
+    );
 
     // Kill the holder: it stops renewing. After the duration anyone may acquire.
     fx.time.pass(D + 500).await;
     let Acquire::Acquired(taken) = lease::acquire(&**ow, &fx.doc, &co).await? else {
         return Err(Failure::new("the lease did not expire after its duration"));
     };
-    wait_lease(&fx, ed, "the editor sees the new lease", |l| l.is_some_and(|l| l.id == taken.id)).await?;
-    ensure!(!lease::holds(&**ed, &fx.doc, &ce.holder).await?, "the dead holder still thinks it holds the lease");
+    wait_lease(&fx, ed, "the editor sees the new lease", |l| {
+        l.is_some_and(|l| l.id == taken.id)
+    })
+    .await?;
+    ensure!(
+        !lease::holds(&**ed, &fx.doc, &ce.holder).await?,
+        "the dead holder still thinks it holds the lease"
+    );
     let retry = lease::acquire(&**ed, &fx.doc, &ce).await?;
-    ensure!(matches!(retry, Acquire::Held(_)), "the expired holder retook the lease the new holder has: {retry:?}");
+    ensure!(
+        matches!(retry, Acquire::Held(_)),
+        "the expired holder retook the lease the new holder has: {retry:?}"
+    );
 
     // Renewal: due at half the duration, and it really extends the lease.
     fx.time.pass(D / 2).await;
     let renewed = lease::renew_if_due(&**ow, &fx.doc, &co, &taken).await?;
     let Some(Acquire::Acquired(renewed)) = renewed else {
-        return Err(Failure::new(format!("no renewal at half the duration: {renewed:?}")));
+        return Err(Failure::new(format!(
+            "no renewal at half the duration: {renewed:?}"
+        )));
     };
-    ensure!(renewed.ts_ms > taken.ts_ms, "renewal did not produce a newer lease record");
+    ensure!(
+        renewed.ts_ms > taken.ts_ms,
+        "renewal did not produce a newer lease record"
+    );
     fx.time.pass(D * 3 / 4).await; // past the ORIGINAL expiry, inside the renewed one
-    wait_lease(&fx, ed, "the editor sees the renewal", |l| l.is_some_and(|l| l.id == renewed.id)).await?;
+    wait_lease(&fx, ed, "the editor sees the renewal", |l| {
+        l.is_some_and(|l| l.id == renewed.id)
+    })
+    .await?;
     let still = lease::acquire(&**ed, &fx.doc, &ce).await?;
-    ensure!(matches!(still, Acquire::Held(_)), "renewal did not keep the lease alive: {still:?}");
+    ensure!(
+        matches!(still, Acquire::Held(_)),
+        "renewal did not keep the lease alive: {still:?}"
+    );
 
     // Normal close releases at once.
-    ensure!(lease::release(&**ow, &fx.doc, &co.holder).await? == Release::Released, "release failed");
-    wait_lease(&fx, ed, "the editor sees the release", |l| l.is_some_and(|l| l.body.state == LeaseState::Released)).await?;
+    ensure!(
+        lease::release(&**ow, &fx.doc, &co.holder).await? == Release::Released,
+        "release failed"
+    );
+    wait_lease(&fx, ed, "the editor sees the release", |l| {
+        l.is_some_and(|l| l.body.state == LeaseState::Released)
+    })
+    .await?;
     let free = lease::acquire(&**ed, &fx.doc, &ce).await?;
-    ensure!(free.is_acquired(), "a released lease could not be acquired: {free:?}");
+    ensure!(
+        free.is_acquired(),
+        "a released lease could not be acquired: {free:?}"
+    );
     Ok(())
 }
 
@@ -425,9 +648,18 @@ pub async fn roles_enforced_at_store(f: &dyn StoreFactory) -> Result<(), Failure
     let first = fx.first_version.clone();
     let caps = fx.caps;
 
-    ensure!(fx.owner.role(&fx.doc).await? == Role::Owner, "the owner's role is not owner");
-    ensure!(fx.editor.role(&fx.doc).await? == Role::Editor, "the editor's role is not editor");
-    ensure!(fx.viewer.role(&fx.doc).await? == Role::Viewer, "the viewer's role is not viewer");
+    ensure!(
+        fx.owner.role(&fx.doc).await? == Role::Owner,
+        "the owner's role is not owner"
+    );
+    ensure!(
+        fx.editor.role(&fx.doc).await? == Role::Editor,
+        "the editor's role is not editor"
+    );
+    ensure!(
+        fx.viewer.role(&fx.doc).await? == Role::Viewer,
+        "the viewer's role is not viewer"
+    );
 
     // A viewer reads.
     fx.viewer.meta(&fx.doc).await?;
@@ -436,51 +668,106 @@ pub async fn roles_enforced_at_store(f: &dyn StoreFactory) -> Result<(), Failure
     // A viewer cannot write anything.
     forbidden(
         "a viewer publishing a version",
-        fx.viewer.publish_version(&fx.doc, vec![first.clone()], new_file(b"viewer was here"), None).await,
+        fx.viewer
+            .publish_version(
+                &fx.doc,
+                vec![first.clone()],
+                new_file(b"viewer was here"),
+                None,
+            )
+            .await,
     )?;
     if caps.updates {
         forbidden(
             "a viewer publishing an update",
-            fx.viewer.publish_update(&fx.doc, update(ALGORITHM, DOC_MODEL, &first, 0, b"v")?).await,
+            fx.viewer
+                .publish_update(&fx.doc, update(ALGORITHM, DOC_MODEL, &first, 0, b"v")?)
+                .await,
         )?;
     }
     if caps.arbitrary_lease_writes {
-        let claim = Claim::new(fx.viewer.principal(), "session-viewer", "token-viewer", &first, 60_000);
-        forbidden("a viewer writing a lease", fx.viewer.write_lease(&fx.doc, claim.lease()).await)?;
+        let claim = Claim::new(
+            fx.viewer.principal(),
+            "session-viewer",
+            "token-viewer",
+            &first,
+            60_000,
+        );
+        forbidden(
+            "a viewer writing a lease",
+            fx.viewer.write_lease(&fx.doc, claim.lease()).await,
+        )?;
     }
     if caps.grant_revoke {
-        forbidden("a viewer granting itself a role", fx.viewer.grant(&fx.doc, &fx.viewer.principal(), Role::Owner).await)?;
-        forbidden("a viewer removing the editor", fx.viewer.revoke(&fx.doc, &fx.editor.principal()).await)?;
+        forbidden(
+            "a viewer granting itself a role",
+            fx.viewer
+                .grant(&fx.doc, &fx.viewer.principal(), Role::Owner)
+                .await,
+        )?;
+        forbidden(
+            "a viewer removing the editor",
+            fx.viewer.revoke(&fx.doc, &fx.editor.principal()).await,
+        )?;
     }
 
     // An editor writes, but does not administer.
     let by_editor = publish_child(&fx, &fx.editor, &[&first], b"editor was here").await?;
     if caps.grant_revoke {
-        forbidden("an editor granting a role", fx.editor.grant(&fx.doc, &fx.viewer.principal(), Role::Editor).await)?;
-        forbidden("an editor removing the viewer", fx.editor.revoke(&fx.doc, &fx.viewer.principal()).await)?;
+        forbidden(
+            "an editor granting a role",
+            fx.editor
+                .grant(&fx.doc, &fx.viewer.principal(), Role::Editor)
+                .await,
+        )?;
+        forbidden(
+            "an editor removing the viewer",
+            fx.editor.revoke(&fx.doc, &fx.viewer.principal()).await,
+        )?;
     }
 
     // Nothing the viewer tried left a trace.
     wait_for_head(&fx, &fx.owner, &by_editor.id).await?;
     if caps.history {
         let all = fx.owner.versions(&fx.doc).await?;
-        ensure!(all.len() == 2, "only the editor's version should exist besides the first, found {}", all.len());
+        ensure!(
+            all.len() == 2,
+            "only the editor's version should exist besides the first, found {}",
+            all.len()
+        );
     }
     if caps.arbitrary_lease_writes {
         let l = fx.owner.lease(&fx.doc).await?;
-        ensure!(l.is_none(), "the viewer's refused lease write left a record: {l:?}");
+        ensure!(
+            l.is_none(),
+            "the viewer's refused lease write left a record: {l:?}"
+        );
     }
     if caps.updates {
         let u = fx.owner.updates(&fx.doc).await?;
-        ensure!(u.is_empty(), "the viewer's refused update left a record: {u:?}");
+        ensure!(
+            u.is_empty(),
+            "the viewer's refused update left a record: {u:?}"
+        );
     }
 
     // The owner changes a role, and the store follows it in both directions.
     if caps.grant_revoke {
-        fx.owner.grant(&fx.doc, &fx.viewer.principal(), Role::Editor).await?;
+        fx.owner
+            .grant(&fx.doc, &fx.viewer.principal(), Role::Editor)
+            .await?;
         let promoted = fx
             .settle("the promoted viewer can publish", || async {
-                match fx.viewer.publish_version(&fx.doc, vec![by_editor.id.clone()], new_file(b"now an editor"), None).await {
+                match fx
+                    .viewer
+                    .publish_version(
+                        &fx.doc,
+                        vec![by_editor.id.clone()],
+                        new_file(b"now an editor"),
+                        None,
+                    )
+                    .await
+                {
                     Ok(v) => Ok(Some(v)),
                     Err(StoreError::Forbidden(_)) => Ok(None),
                     Err(e) => Err(e.into()),
@@ -488,14 +775,23 @@ pub async fn roles_enforced_at_store(f: &dyn StoreFactory) -> Result<(), Failure
             })
             .await?;
         wait_for_head(&fx, &fx.owner, &promoted.id).await?;
-        fx.owner.grant(&fx.doc, &fx.viewer.principal(), Role::Viewer).await?;
+        fx.owner
+            .grant(&fx.doc, &fx.viewer.principal(), Role::Viewer)
+            .await?;
         fx.settle("the demotion reaches the viewer", || async {
             Ok((fx.viewer.role(&fx.doc).await? == Role::Viewer).then_some(()))
         })
         .await?;
         forbidden(
             "a demoted viewer publishing",
-            fx.viewer.publish_version(&fx.doc, vec![promoted.id.clone()], new_file(b"still an editor?"), None).await,
+            fx.viewer
+                .publish_version(
+                    &fx.doc,
+                    vec![promoted.id.clone()],
+                    new_file(b"still an editor?"),
+                    None,
+                )
+                .await,
         )?;
     }
     Ok(())
@@ -531,7 +827,9 @@ pub async fn revocation_hides_new_content(f: &dyn StoreFactory) -> Result<(), Fa
     }
     forbidden(
         "a removed member publishing",
-        fx.viewer.publish_version(&fx.doc, vec![hidden.id.clone()], new_file(b"x"), None).await,
+        fx.viewer
+            .publish_version(&fx.doc, vec![hidden.id.clone()], new_file(b"x"), None)
+            .await,
     )?;
     // Everyone who stayed still sees it.
     wait_for_head(&fx, &fx.editor, &hidden.id).await?;
@@ -571,19 +869,39 @@ pub async fn unknown_algorithm_falls_back_to_versions(f: &dyn StoreFactory) -> R
         "state after applying is {:?}: the unsupported updates must be ignored and the others applied",
         doc.text()
     );
-    let unsupported = report.skipped.iter().filter(|(_, s)| *s == Skip::Unsupported).count();
-    ensure!(unsupported == 2, "expected the 2 unsupported updates to be reported as skipped, got {report:?}");
-    ensure!(report.gaps.is_empty(), "an ignored update was mistaken for a lost one: {report:?}");
-    ensure!(report.dropped.is_empty(), "nothing should have been dropped: {report:?}");
+    let unsupported = report
+        .skipped
+        .iter()
+        .filter(|(_, s)| *s == Skip::Unsupported)
+        .count();
+    ensure!(
+        unsupported == 2,
+        "expected the 2 unsupported updates to be reported as skipped, got {report:?}"
+    );
+    ensure!(
+        report.gaps.is_empty(),
+        "an ignored update was mistaken for a lost one: {report:?}"
+    );
+    ensure!(
+        report.dropped.is_empty(),
+        "nothing should have been dropped: {report:?}"
+    );
 
     // A program that supports no algorithm shows no partial result at all.
     let mut none = AppendDoc::knows_nothing(BASE_FILE);
     Receiver::new(Some(first.clone())).ingest(&log, &mut none);
-    ensure!(none.state == BASE_FILE, "a program that supports nothing changed its state: {:?}", none.text());
+    ensure!(
+        none.state == BASE_FILE,
+        "a program that supports nothing changed its state: {:?}",
+        none.text()
+    );
 
     // And the document opens from versions.
     let v = read_view(&*fx.viewer, &fx.doc).await?;
-    ensure!(v.head_ids() == [first.as_str()] && v.heads[0].bytes == BASE_FILE, "the document does not open from its versions");
+    ensure!(
+        v.head_ids() == [first.as_str()] && v.heads[0].bytes == BASE_FILE,
+        "the document does not open from its versions"
+    );
     Ok(())
 }
 
@@ -597,17 +915,27 @@ pub async fn update_stream_gap_recovery(f: &dyn StoreFactory) -> Result<(), Fail
 
     // The editor makes four updates but one (seq 2) is lost on the way.
     let mut writer = StreamWriter::new(ALGORITHM, DOC_MODEL);
-    let mk = |w: &mut StreamWriter, base: &str, p: &str| w.next(base, p.as_bytes()).map_err(|e| Failure::new(e.to_string()));
-    let (u0, u1, _lost, u3) =
-        (mk(&mut writer, &first, "a")?, mk(&mut writer, &first, "b")?, mk(&mut writer, &first, "c")?, mk(&mut writer, &first, "d")?);
+    let mk = |w: &mut StreamWriter, base: &str, p: &str| {
+        w.next(base, p.as_bytes())
+            .map_err(|e| Failure::new(e.to_string()))
+    };
+    let (u0, u1, _lost, u3) = (
+        mk(&mut writer, &first, "a")?,
+        mk(&mut writer, &first, "b")?,
+        mk(&mut writer, &first, "c")?,
+        mk(&mut writer, &first, "d")?,
+    );
     for u in [u0, u1, u3] {
         fx.editor.publish_update(&fx.doc, u).await?;
     }
     let log = fx
-        .settle("the viewer receives the three updates that were sent", || async {
-            let l = fx.viewer.updates(&fx.doc).await?;
-            Ok((l.len() == 3).then_some(l))
-        })
+        .settle(
+            "the viewer receives the three updates that were sent",
+            || async {
+                let l = fx.viewer.updates(&fx.doc).await?;
+                Ok((l.len() == 3).then_some(l))
+            },
+        )
         .await?;
 
     let mut rx = Receiver::new(Some(first.clone()));
@@ -629,11 +957,18 @@ pub async fn update_stream_gap_recovery(f: &dyn StoreFactory) -> Result<(), Fail
     let truth = plus(BASE_FILE, "abcd");
     let v2 = publish_child(&fx, &fx.editor, &[&first], truth.as_bytes()).await?;
     let view = wait_for_head(&fx, &fx.viewer, &v2.id).await?;
-    ensure!(doc.text() != truth, "the gap did not matter: the lossy state already equals the truth");
+    ensure!(
+        doc.text() != truth,
+        "the gap did not matter: the lossy state already equals the truth"
+    );
     let head: &Head = &view.heads[0];
     rx.reload(&head.version);
     doc = AppendDoc::from_file(&head.bytes);
-    ensure!(doc.text() == truth, "reloading from the latest version did not recover the state: {:?}", doc.text());
+    ensure!(
+        doc.text() == truth,
+        "reloading from the latest version did not recover the state: {:?}",
+        doc.text()
+    );
     let report = rx.ingest(&log, &mut doc);
     ensure!(
         report.applied.is_empty() && report.gaps.is_empty() && !rx.is_stopped(),
@@ -650,7 +985,14 @@ pub async fn update_stream_gap_recovery(f: &dyn StoreFactory) -> Result<(), Fail
         })
         .await?;
     let report = rx.ingest(&log, &mut doc);
-    ensure!(report.applied == [sent.id.clone()], "the update after recovery was not applied: {report:?}");
-    ensure!(doc.text() == plus(truth.as_bytes(), "e"), "state after recovery plus one update is {:?}", doc.text());
+    ensure!(
+        report.applied == [sent.id.clone()],
+        "the update after recovery was not applied: {report:?}"
+    );
+    ensure!(
+        doc.text() == plus(truth.as_bytes(), "e"),
+        "state after recovery plus one update is {:?}",
+        doc.text()
+    );
     Ok(())
 }

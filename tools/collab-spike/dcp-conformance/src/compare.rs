@@ -10,30 +10,55 @@ fn describe(view: &View) -> String {
     format!(
         "heads {:?}, rejected {:?}",
         view.head_ids(),
-        view.rejected.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()
+        view.rejected
+            .iter()
+            .map(|r| r.id.as_str())
+            .collect::<Vec<_>>()
     )
 }
 
 /// Two handles on ONE binding show the same document: the same heads (same
 /// identifiers, same order) with the same verified bytes, and the same
 /// versions rejected.
-pub async fn assert_same_view(a: &dyn DocumentStore, b: &dyn DocumentStore, doc: &DocId) -> Result<(), Failure> {
+pub async fn assert_same_view(
+    a: &dyn DocumentStore,
+    b: &dyn DocumentStore,
+    doc: &DocId,
+) -> Result<(), Failure> {
     let va = read_view(a, doc).await?;
     let vb = read_view(b, doc).await?;
-    same_view(&va, &vb, &format!("{} and {}", a.principal(), b.principal()))
+    same_view(
+        &va,
+        &vb,
+        &format!("{} and {}", a.principal(), b.principal()),
+    )
 }
 
 pub fn same_view(va: &View, vb: &View, who: &str) -> Result<(), Failure> {
-    ensure!(va.head_ids() == vb.head_ids(), "{who} disagree on the heads: {} vs {}", describe(va), describe(vb));
+    ensure!(
+        va.head_ids() == vb.head_ids(),
+        "{who} disagree on the heads: {} vs {}",
+        describe(va),
+        describe(vb)
+    );
     for (ha, hb) in va.heads.iter().zip(&vb.heads) {
-        ensure!(ha.bytes == hb.bytes, "{who} see different bytes for head {}", ha.version.id);
+        ensure!(
+            ha.bytes == hb.bytes,
+            "{who} see different bytes for head {}",
+            ha.version.id
+        );
     }
     let rejected = |v: &View| {
         let mut ids: Vec<String> = v.rejected.iter().map(|r| r.id.clone()).collect();
         ids.sort();
         ids
     };
-    ensure!(rejected(va) == rejected(vb), "{who} reject different versions: {} vs {}", describe(va), describe(vb));
+    ensure!(
+        rejected(va) == rejected(vb),
+        "{who} reject different versions: {} vs {}",
+        describe(va),
+        describe(vb)
+    );
     Ok(())
 }
 

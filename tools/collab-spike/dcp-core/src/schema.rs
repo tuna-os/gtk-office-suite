@@ -29,7 +29,13 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Kind; 5] = [Kind::Meta, Kind::Version, Kind::Lease, Kind::Update, Kind::FileRef];
+    pub const ALL: [Kind; 5] = [
+        Kind::Meta,
+        Kind::Version,
+        Kind::Lease,
+        Kind::Update,
+        Kind::FileRef,
+    ];
 
     fn index(self) -> usize {
         self as usize
@@ -55,20 +61,20 @@ pub struct SchemaError {
 }
 
 static VALIDATORS: LazyLock<[Validator; 5]> = LazyLock::new(|| {
-        let build = |kind: Kind| -> Validator {
-            let mut options = jsonschema::options().with_draft(Draft::Draft202012);
-            // `version` and `update` `$ref` the file reference by its relative
-            // name, which resolves against `$id`, so it has to be registered
-            // under that absolute URI (there is no network retriever).
-            let file_ref: Value = serde_json::from_str(FILE_REF).expect("file-ref schema is JSON");
-            options = options.with_resource(
-                format!("{BASE}file-ref.schema.json"),
-                Resource::from_contents(file_ref).expect("file-ref schema is a schema"),
-            );
-            let schema: Value = serde_json::from_str(kind.source()).expect("schema is JSON");
-            options.build(&schema).expect("the draft-0 schemas compile")
-        };
-        Kind::ALL.map(build)
+    let build = |kind: Kind| -> Validator {
+        let mut options = jsonschema::options().with_draft(Draft::Draft202012);
+        // `version` and `update` `$ref` the file reference by its relative
+        // name, which resolves against `$id`, so it has to be registered
+        // under that absolute URI (there is no network retriever).
+        let file_ref: Value = serde_json::from_str(FILE_REF).expect("file-ref schema is JSON");
+        options = options.with_resource(
+            format!("{BASE}file-ref.schema.json"),
+            Resource::from_contents(file_ref).expect("file-ref schema is a schema"),
+        );
+        let schema: Value = serde_json::from_str(kind.source()).expect("schema is JSON");
+        options.build(&schema).expect("the draft-0 schemas compile")
+    };
+    Kind::ALL.map(build)
 });
 
 /// Validate `value` against the schema for `kind`.
@@ -88,8 +94,10 @@ pub fn validate(kind: Kind, value: &Value) -> Result<(), SchemaError> {
 /// Validate a typed DCP object by serializing it first. This catches what the
 /// Rust types cannot express (lengths, patterns, conditional requirements).
 pub fn validate_typed<T: Serialize>(kind: Kind, object: &T) -> Result<(), SchemaError> {
-    let value = serde_json::to_value(object)
-        .map_err(|e| SchemaError { kind, errors: vec![format!("not serializable: {e}")] })?;
+    let value = serde_json::to_value(object).map_err(|e| SchemaError {
+        kind,
+        errors: vec![format!("not serializable: {e}")],
+    })?;
     validate(kind, &value)
 }
 
@@ -98,8 +106,10 @@ pub fn validate_typed<T: Serialize>(kind: Kind, object: &T) -> Result<(), Schema
 /// error, and a client MUST ignore such an event (spec 8.1).
 pub fn parse<T: serde::de::DeserializeOwned>(kind: Kind, raw: &Value) -> Result<T, SchemaError> {
     validate(kind, raw)?;
-    serde_json::from_value(raw.clone())
-        .map_err(|e| SchemaError { kind, errors: vec![format!("does not fit the Rust type: {e}")] })
+    serde_json::from_value(raw.clone()).map_err(|e| SchemaError {
+        kind,
+        errors: vec![format!("does not fit the Rust type: {e}")],
+    })
 }
 
 #[cfg(test)]
@@ -114,7 +124,9 @@ mod tests {
         let text = match name {
             "meta.json" => include_str!("../../../../docs/collab-spec/examples/meta.json"),
             "version.json" => include_str!("../../../../docs/collab-spec/examples/version.json"),
-            "lease-held.json" => include_str!("../../../../docs/collab-spec/examples/lease-held.json"),
+            "lease-held.json" => {
+                include_str!("../../../../docs/collab-spec/examples/lease-held.json")
+            }
             "lease-released.json" => {
                 include_str!("../../../../docs/collab-spec/examples/lease-released.json")
             }
@@ -139,9 +151,15 @@ mod tests {
         let v: Version = parse(Kind::Version, &example("version.json")).unwrap();
         assert_eq!(serde_json::to_value(&v).unwrap(), example("version.json"));
         let l: Lease = parse(Kind::Lease, &example("lease-held.json")).unwrap();
-        assert_eq!(serde_json::to_value(&l).unwrap(), example("lease-held.json"));
+        assert_eq!(
+            serde_json::to_value(&l).unwrap(),
+            example("lease-held.json")
+        );
         let r: Lease = parse(Kind::Lease, &example("lease-released.json")).unwrap();
-        assert_eq!(serde_json::to_value(&r).unwrap(), example("lease-released.json"));
+        assert_eq!(
+            serde_json::to_value(&r).unwrap(),
+            example("lease-released.json")
+        );
         let u: Update = parse(Kind::Update, &example("update.json")).unwrap();
         assert_eq!(serde_json::to_value(&u).unwrap(), example("update.json"));
     }
@@ -155,23 +173,65 @@ mod tests {
             change(&mut doc);
             out.push((label, kind, doc));
         };
-        add("meta without L1", Kind::Meta, "meta.json", &|d| d["levels"] = json!(["L0"]));
-        add("meta L2 without algorithms", Kind::Meta, "meta.json", &|d| {
-            d.as_object_mut().unwrap().remove("algorithms");
+        add("meta without L1", Kind::Meta, "meta.json", &|d| {
+            d["levels"] = json!(["L0"])
         });
-        add("version with bad hash", Kind::Version, "version.json", &|d| d["file"]["sha256"] = json!("xyz"));
-        add("version without parents", Kind::Version, "version.json", &|d| {
-            d.as_object_mut().unwrap().remove("parents");
-        });
-        add("version, plain-http webdav", Kind::Version, "version.json", &|d| {
-            d["file"]["locator"] = json!({"type": "webdav", "href": "http://x/y"});
-        });
-        add("held lease without token", Kind::Lease, "lease-held.json", &|d| {
-            d.as_object_mut().unwrap().remove("token");
-        });
-        add("held lease, 2 hour duration", Kind::Lease, "lease-held.json", &|d| d["duration_ms"] = json!(7_200_000));
-        add("update over 34000 bytes", Kind::Update, "update.json", &|d| d["payload"]["size"] = json!(34001));
-        add("update with bad algorithm id", Kind::Update, "update.json", &|d| d["algorithm"] = json!("Loro"));
+        add(
+            "meta L2 without algorithms",
+            Kind::Meta,
+            "meta.json",
+            &|d| {
+                d.as_object_mut().unwrap().remove("algorithms");
+            },
+        );
+        add(
+            "version with bad hash",
+            Kind::Version,
+            "version.json",
+            &|d| d["file"]["sha256"] = json!("xyz"),
+        );
+        add(
+            "version without parents",
+            Kind::Version,
+            "version.json",
+            &|d| {
+                d.as_object_mut().unwrap().remove("parents");
+            },
+        );
+        add(
+            "version, plain-http webdav",
+            Kind::Version,
+            "version.json",
+            &|d| {
+                d["file"]["locator"] = json!({"type": "webdav", "href": "http://x/y"});
+            },
+        );
+        add(
+            "held lease without token",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| {
+                d.as_object_mut().unwrap().remove("token");
+            },
+        );
+        add(
+            "held lease, 2 hour duration",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["duration_ms"] = json!(7_200_000),
+        );
+        add(
+            "update over 34000 bytes",
+            Kind::Update,
+            "update.json",
+            &|d| d["payload"]["size"] = json!(34001),
+        );
+        add(
+            "update with bad algorithm id",
+            Kind::Update,
+            "update.json",
+            &|d| d["algorithm"] = json!("Loro"),
+        );
         out
     }
 
@@ -190,9 +250,16 @@ mod tests {
         // Rust list above gets the same case.
         let py = include_str!("../../../../docs/collab-spec/validate.py");
         let in_py = py.matches("\n    (\"").count();
-        assert_eq!(in_py, negatives().len(), "validate.py negatives changed; update negatives() here");
+        assert_eq!(
+            in_py,
+            negatives().len(),
+            "validate.py negatives changed; update negatives() here"
+        );
         for (label, _, _) in negatives() {
-            assert!(py.contains(&format!("\"{label}\"")), "validate.py lacks the case {label:?}");
+            assert!(
+                py.contains(&format!("\"{label}\"")),
+                "validate.py lacks the case {label:?}"
+            );
         }
     }
 
@@ -206,7 +273,10 @@ mod tests {
         ] {
             let mut doc = example(name);
             doc["surprise"] = json!(1);
-            assert!(validate(kind, &doc).is_err(), "{name} accepted an unknown field");
+            assert!(
+                validate(kind, &doc).is_err(),
+                "{name} accepted an unknown field"
+            );
         }
         // And nested ones.
         let mut v = example("version.json");
@@ -214,7 +284,10 @@ mod tests {
         assert!(validate(Kind::Version, &v).is_err());
         let mut v = example("version.json");
         v["file"]["extra"] = json!(true);
-        assert!(validate(Kind::Version, &v).is_err(), "the file-ref $ref must be enforced");
+        assert!(
+            validate(Kind::Version, &v).is_err(),
+            "the file-ref $ref must be enforced"
+        );
     }
 
     #[test]

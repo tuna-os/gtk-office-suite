@@ -52,8 +52,10 @@ pub fn newest_first(a: &Stamped<Version>, b: &Stamped<Version>) -> std::cmp::Ord
 /// Pass the versions the reader accepted; a version already rejected must not
 /// be able to demote its parent from head. Duplicate identifiers count once.
 pub fn heads(versions: &[Stamped<Version>]) -> Vec<&Stamped<Version>> {
-    let parents: HashSet<&str> =
-        versions.iter().flat_map(|v| v.body.parents.iter().map(String::as_str)).collect();
+    let parents: HashSet<&str> = versions
+        .iter()
+        .flat_map(|v| v.body.parents.iter().map(String::as_str))
+        .collect();
     let mut seen = HashSet::new();
     let mut out: Vec<&Stamped<Version>> = versions
         .iter()
@@ -117,7 +119,10 @@ pub fn validate(versions: &[Stamped<Version>], options: Options) -> Vec<Rejected
     let mut out = Vec::new();
     for v in versions {
         if let Some(error) = check_one(v, &known, &cyclic, options) {
-            out.push(Rejected { id: v.id.clone(), error });
+            out.push(Rejected {
+                id: v.id.clone(),
+                error,
+            });
         }
     }
     out
@@ -160,11 +165,20 @@ fn check_one(
 /// Iterative Tarjan strongly-connected components over child to parent edges,
 /// linear in versions plus parent links.
 fn on_cycles(versions: &[Stamped<Version>]) -> HashMap<&str, String> {
-    let index_of: HashMap<&str, usize> =
-        versions.iter().enumerate().map(|(i, v)| (v.id.as_str(), i)).collect();
+    let index_of: HashMap<&str, usize> = versions
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (v.id.as_str(), i))
+        .collect();
     let edges: Vec<Vec<usize>> = versions
         .iter()
-        .map(|v| v.body.parents.iter().filter_map(|p| index_of.get(p.as_str()).copied()).collect())
+        .map(|v| {
+            v.body
+                .parents
+                .iter()
+                .filter_map(|p| index_of.get(p.as_str()).copied())
+                .collect()
+        })
         .collect();
 
     let n = versions.len();
@@ -243,8 +257,31 @@ pub fn split(
 ) -> (Vec<Stamped<Version>>, Vec<Rejected>) {
     let rejected = validate(versions, options);
     let bad: HashSet<&str> = rejected.iter().map(|r| r.id.as_str()).collect();
-    let accepted = versions.iter().filter(|v| !bad.contains(v.id.as_str())).cloned().collect();
+    let accepted = versions
+        .iter()
+        .filter(|v| !bad.contains(v.id.as_str()))
+        .cloned()
+        .collect();
     (accepted, rejected)
+}
+
+/// Spec 6.4 retention: drop versions stamped before `cutoff_ms`, but keep
+/// every head and every version a retained version lists as a parent. (The
+/// parents' own parents may then be unknown, which is what
+/// [`Options::allow_unknown_parents`] is for.)
+pub fn prune(versions: &[Stamped<Version>], cutoff_ms: u64) -> Vec<Stamped<Version>> {
+    let head_ids: HashSet<&str> = heads(versions).iter().map(|h| h.id.as_str()).collect();
+    let kept = |v: &Stamped<Version>| v.ts_ms >= cutoff_ms || head_ids.contains(v.id.as_str());
+    let parents_of_kept: HashSet<&str> = versions
+        .iter()
+        .filter(|v| kept(v))
+        .flat_map(|v| v.body.parents.iter().map(String::as_str))
+        .collect();
+    versions
+        .iter()
+        .filter(|v| kept(v) || parents_of_kept.contains(v.id.as_str()))
+        .cloned()
+        .collect()
 }
 
 /// The writer's side of the rules: `parents` for a version about to be
@@ -252,7 +289,10 @@ pub fn split(
 /// started from (rule 4), so every parent must be a version the writer can
 /// see; only the first version is parentless (rule 7). Parents must be
 /// unique and at most 8. Self and descendant cannot arise for a new version.
-pub fn check_new_parents(existing: &[Stamped<Version>], parents: &[String]) -> Result<(), ParentError> {
+pub fn check_new_parents(
+    existing: &[Stamped<Version>],
+    parents: &[String],
+) -> Result<(), ParentError> {
     if parents.len() > MAX_PARENTS {
         return Err(ParentError::TooManyParents(parents.len()));
     }
@@ -285,8 +325,17 @@ mod tests {
             Version {
                 dcp: 0,
                 parents: parents.iter().map(|p| p.to_string()).collect(),
-                file: integrity::file_ref("text/plain", id.as_bytes(), Locator::Url { href: "https://x/y".into() }),
-                created_by: Author { principal: "@a:x".into(), device: "D".into() },
+                file: integrity::file_ref(
+                    "text/plain",
+                    id.as_bytes(),
+                    Locator::Url {
+                        href: "https://x/y".into(),
+                    },
+                ),
+                created_by: Author {
+                    principal: "@a:x".into(),
+                    device: "D".into(),
+                },
                 message: None,
                 covers: None,
             },
@@ -321,10 +370,19 @@ mod tests {
 
     #[test]
     fn heads_are_ordered_newest_first_with_a_deterministic_tiebreak() {
-        let vs = [v("a", 1, &[]), v("x", 5, &["a"]), v("y", 5, &["a"]), v("z", 9, &["a"])];
+        let vs = [
+            v("a", 1, &[]),
+            v("x", 5, &["a"]),
+            v("y", 5, &["a"]),
+            v("z", 9, &["a"]),
+        ];
         assert_eq!(ids(&heads(&vs)), ["z", "y", "x"]);
         let rev: Vec<_> = vs.iter().rev().cloned().collect();
-        assert_eq!(ids(&heads(&rev)), ["z", "y", "x"], "input order must not matter");
+        assert_eq!(
+            ids(&heads(&rev)),
+            ["z", "y", "x"],
+            "input order must not matter"
+        );
     }
 
     #[test]
@@ -360,7 +418,13 @@ mod tests {
     fn self_parent_is_rejected_rule_6() {
         let vs = [v("a", 1, &[]), v("b", 2, &["a", "b"])];
         let r = validate(&vs, Options::default());
-        assert_eq!(r, [Rejected { id: "b".into(), error: ParentError::SelfParent }]);
+        assert_eq!(
+            r,
+            [Rejected {
+                id: "b".into(),
+                error: ParentError::SelfParent
+            }]
+        );
     }
 
     #[test]
@@ -369,8 +433,14 @@ mod tests {
         let vs = [v("a", 1, &["c"]), v("b", 2, &["a"]), v("c", 3, &["b"])];
         let r = validate(&vs, Options::default());
         let bad: HashSet<&str> = r.iter().map(|x| x.id.as_str()).collect();
-        assert_eq!(bad, HashSet::from(["a", "b", "c"]), "all three sit on the loop");
-        assert!(r.iter().all(|x| matches!(x.error, ParentError::ListsDescendant(_))));
+        assert_eq!(
+            bad,
+            HashSet::from(["a", "b", "c"]),
+            "all three sit on the loop"
+        );
+        assert!(r
+            .iter()
+            .all(|x| matches!(x.error, ParentError::ListsDescendant(_))));
     }
 
     #[test]
@@ -387,8 +457,20 @@ mod tests {
     fn unknown_parent_is_rejected_unless_history_was_trimmed() {
         let vs = [v("b", 2, &["gone"]), v("c", 3, &["b"])];
         let r = validate(&vs, Options::default());
-        assert_eq!(r, [Rejected { id: "b".into(), error: ParentError::UnknownParent("gone".into()) }]);
-        assert!(validate(&vs, Options { allow_unknown_parents: true }).is_empty());
+        assert_eq!(
+            r,
+            [Rejected {
+                id: "b".into(),
+                error: ParentError::UnknownParent("gone".into())
+            }]
+        );
+        assert!(validate(
+            &vs,
+            Options {
+                allow_unknown_parents: true
+            }
+        )
+        .is_empty());
     }
 
     #[test]
@@ -409,8 +491,14 @@ mod tests {
         vs.push(v("big", 2, &refs));
         vs.push(v("dup", 3, &["p0", "p0"]));
         let r = validate(&vs, Options::default());
-        assert!(r.contains(&Rejected { id: "big".into(), error: ParentError::TooManyParents(9) }));
-        assert!(r.contains(&Rejected { id: "dup".into(), error: ParentError::DuplicateParent("p0".into()) }));
+        assert!(r.contains(&Rejected {
+            id: "big".into(),
+            error: ParentError::TooManyParents(9)
+        }));
+        assert!(r.contains(&Rejected {
+            id: "dup".into(),
+            error: ParentError::DuplicateParent("p0".into())
+        }));
     }
 
     #[test]
@@ -430,15 +518,27 @@ mod tests {
         check_new_parents(&vs, &["b".into()]).unwrap();
         check_new_parents(&vs, &["a".into(), "b".into()]).unwrap();
         check_new_parents(&[], &[]).unwrap();
-        assert_eq!(check_new_parents(&vs, &[]), Err(ParentError::RootAfterFirst));
-        assert_eq!(check_new_parents(&vs, &["zz".into()]), Err(ParentError::UnknownParent("zz".into())));
-        assert_eq!(check_new_parents(&[], &["a".into()]), Err(ParentError::UnknownParent("a".into())));
+        assert_eq!(
+            check_new_parents(&vs, &[]),
+            Err(ParentError::RootAfterFirst)
+        );
+        assert_eq!(
+            check_new_parents(&vs, &["zz".into()]),
+            Err(ParentError::UnknownParent("zz".into()))
+        );
+        assert_eq!(
+            check_new_parents(&[], &["a".into()]),
+            Err(ParentError::UnknownParent("a".into()))
+        );
         assert_eq!(
             check_new_parents(&vs, &["a".into(), "a".into()]),
             Err(ParentError::DuplicateParent("a".into()))
         );
         let nine: Vec<String> = (0..9).map(|i| format!("p{i}")).collect();
-        assert_eq!(check_new_parents(&vs, &nine), Err(ParentError::TooManyParents(9)));
+        assert_eq!(
+            check_new_parents(&vs, &nine),
+            Err(ParentError::TooManyParents(9))
+        );
     }
 
     #[test]
@@ -450,5 +550,55 @@ mod tests {
         vs.push(v("c", 3, &["a"]));
         assert!(vs.iter().any(|x| x.id == "a"));
         assert_eq!(ids(&heads(&vs)), ["c", "b"]);
+    }
+
+    #[test]
+    fn retention_keeps_every_head_and_the_parents_of_what_it_keeps_rule_6_4() {
+        // a(1) <- b(2) <- c(3) <- d(10); e(4) is a stale second head.
+        let vs = [
+            v("a", 1, &[]),
+            v("b", 2, &["a"]),
+            v("c", 3, &["b"]),
+            v("d", 10, &["c"]),
+            v("e", 4, &["c"]),
+        ];
+        let kept = prune(&vs, 10);
+        let kept_ids: HashSet<&str> = kept.iter().map(|x| x.id.as_str()).collect();
+        assert_eq!(
+            kept_ids,
+            HashSet::from(["c", "d", "e"]),
+            "d by age, e as a head, c as their parent; a and b dropped"
+        );
+        assert_eq!(
+            ids(&heads(&kept)),
+            ["d", "e"],
+            "no head was lost, conflict still visible"
+        );
+        // the dropped ancestors are now unknown, which the reader must tolerate
+        // only when the binding says history was trimmed
+        assert!(validate(&kept, Options::default())
+            .iter()
+            .all(|r| r.id == "c"));
+        assert!(validate(
+            &kept,
+            Options {
+                allow_unknown_parents: true
+            }
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn retention_with_nothing_old_drops_nothing() {
+        let vs = [v("a", 5, &[]), v("b", 6, &["a"])];
+        assert_eq!(prune(&vs, 0).len(), 2);
+    }
+
+    #[test]
+    fn a_second_root_is_a_second_head_not_a_silent_choice_rule_7() {
+        // Only the first version has no parents; a second parentless version
+        // is not a child of anything, so it is shown as a conflict.
+        let vs = [v("a", 1, &[]), v("z", 2, &[])];
+        assert!(conflict(&vs).is_some());
     }
 }

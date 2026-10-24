@@ -22,8 +22,8 @@ use crate::integrity;
 use crate::lease;
 use crate::schema::{self, Kind};
 use crate::{
-    Author, DocId, DocumentStore, Lease, LeaseState, Locator, Meta, NewFile, Result, Role, Stamped, StoreError,
-    Update, Version,
+    Author, DocId, DocumentStore, Lease, LeaseState, Locator, Meta, NewFile, Result, Role, Stamped,
+    StoreError, Update, Version,
 };
 
 /// The time source of a backend, in milliseconds. This is the "binding's own
@@ -83,7 +83,10 @@ pub struct MemoryConfig {
 
 impl Default for MemoryConfig {
     fn default() -> Self {
-        MemoryConfig { cas_leases: true, verify_uploads: true }
+        MemoryConfig {
+            cas_leases: true,
+            verify_uploads: true,
+        }
     }
 }
 
@@ -135,12 +138,22 @@ impl MemoryBackend {
     }
 
     pub fn with_config(clock: Arc<dyn Clock>, config: MemoryConfig) -> Self {
-        MemoryBackend { inner: Arc::new(Inner { clock, config, state: Mutex::new(State::default()) }) }
+        MemoryBackend {
+            inner: Arc::new(Inner {
+                clock,
+                config,
+                state: Mutex::new(State::default()),
+            }),
+        }
     }
 
     /// A handle that acts as `principal` from `device`.
     pub fn store(&self, principal: &str, device: &str) -> MemoryStore {
-        MemoryStore { backend: self.clone(), principal: principal.to_owned(), device: device.to_owned() }
+        MemoryStore {
+            backend: self.clone(),
+            principal: principal.to_owned(),
+            device: device.to_owned(),
+        }
     }
 
     /// Fault injection: the next upload is cut in half on its way to storage.
@@ -195,13 +208,19 @@ impl Doc {
     fn require(&self, principal: &str, at_least: Role, what: &str) -> Result<Role> {
         let role = self.role_of(principal)?;
         if role < at_least {
-            return Err(StoreError::Forbidden(format!("{principal} is {role:?}; {what} needs {at_least:?}")));
+            return Err(StoreError::Forbidden(format!(
+                "{principal} is {role:?}; {what} needs {at_least:?}"
+            )));
         }
         Ok(role)
     }
 
     fn visible_versions(&self, principal: &str) -> Vec<Stamped<Version>> {
-        self.versions.iter().filter(|i| i.readers.contains(principal)).map(|i| i.stamped.clone()).collect()
+        self.versions
+            .iter()
+            .filter(|i| i.readers.contains(principal))
+            .map(|i| i.stamped.clone())
+            .collect()
     }
 }
 
@@ -240,29 +259,38 @@ impl MemoryStore {
         let href = format!("https://mem.invalid/{doc}/{id}");
         // Upload, read the stored bytes back, check them against the
         // reference built from what the caller meant to upload.
-        let file_ref = integrity::file_ref(&file.mime, &file.bytes, Locator::Url { href: href.clone() });
+        let file_ref =
+            integrity::file_ref(&file.mime, &file.bytes, Locator::Url { href: href.clone() });
         let mut stored = file.bytes;
         if truncate {
             stored.truncate(stored.len() / 2);
         }
         if config.verify_uploads {
-            integrity::verify(&file_ref, &stored)
-                .map_err(|e| StoreError::Transport(format!("upload failed verification, not published: {e}")))?;
+            integrity::verify(&file_ref, &stored).map_err(|e| {
+                StoreError::Transport(format!("upload failed verification, not published: {e}"))
+            })?;
         }
         let version = Version {
             dcp: 0,
             parents,
             file: file_ref,
-            created_by: Author { principal: self.principal.clone(), device: self.device.clone() },
+            created_by: Author {
+                principal: self.principal.clone(),
+                device: self.device.clone(),
+            },
             message,
             covers: None,
         };
-        schema::validate_typed(Kind::Version, &version).map_err(|e| StoreError::Invalid(e.to_string()))?;
+        schema::validate_typed(Kind::Version, &version)
+            .map_err(|e| StoreError::Invalid(e.to_string()))?;
         state.files.insert(href, stored);
         let stamped = self.stamp(id, version);
         let d = state.doc_mut(doc)?;
         let readers = d.members.keys().cloned().collect();
-        d.versions.push(Item { stamped: stamped.clone(), readers });
+        d.versions.push(Item {
+            stamped: stamped.clone(),
+            readers,
+        });
         Ok(stamped)
     }
 }
@@ -318,7 +346,12 @@ impl DocumentStore for MemoryStore {
         let d = state.doc_mut(doc)?;
         d.require(&self.principal, Role::Owner, "changing roles")?;
         if d.ever_members.insert(principal.to_owned()) {
-            for readers in d.versions.iter_mut().map(|i| &mut i.readers).chain(d.updates.iter_mut().map(|i| &mut i.readers)) {
+            for readers in d
+                .versions
+                .iter_mut()
+                .map(|i| &mut i.readers)
+                .chain(d.updates.iter_mut().map(|i| &mut i.readers))
+            {
                 readers.insert(principal.to_owned());
             }
         }
@@ -331,7 +364,9 @@ impl DocumentStore for MemoryStore {
         let d = state.doc_mut(doc)?;
         d.require(&self.principal, Role::Owner, "removing a member")?;
         if principal == self.principal {
-            return Err(StoreError::Invalid("an owner cannot remove themselves".into()));
+            return Err(StoreError::Invalid(
+                "an owner cannot remove themselves".into(),
+            ));
         }
         d.members.remove(principal);
         Ok(())
@@ -342,7 +377,10 @@ impl DocumentStore for MemoryStore {
         let d = state.doc(doc)?;
         let seen = d.visible_versions(&self.principal);
         if seen.is_empty() && !d.members.contains_key(&self.principal) {
-            return Err(StoreError::Forbidden(format!("{} has no access", self.principal)));
+            return Err(StoreError::Forbidden(format!(
+                "{} has no access",
+                self.principal
+            )));
         }
         Ok(seen)
     }
@@ -354,11 +392,22 @@ impl DocumentStore for MemoryStore {
             .versions
             .iter()
             .find(|i| i.stamped.id == version.id && i.readers.contains(&self.principal))
-            .ok_or_else(|| StoreError::NotFound(format!("version {} (not readable by {})", version.id, self.principal)))?;
+            .ok_or_else(|| {
+                StoreError::NotFound(format!(
+                    "version {} (not readable by {})",
+                    version.id, self.principal
+                ))
+            })?;
         let Locator::Url { href } = &item.stamped.body.file.locator else {
-            return Err(StoreError::Invalid("memory store only holds url locators".into()));
+            return Err(StoreError::Invalid(
+                "memory store only holds url locators".into(),
+            ));
         };
-        state.files.get(href).cloned().ok_or_else(|| StoreError::NotFound(href.clone()))
+        state
+            .files
+            .get(href)
+            .cloned()
+            .ok_or_else(|| StoreError::NotFound(href.clone()))
     }
 
     async fn publish_version(
@@ -380,7 +429,8 @@ impl DocumentStore for MemoryStore {
     }
 
     async fn write_lease(&self, doc: &DocId, record: Lease) -> Result<Stamped<Lease>> {
-        schema::validate_typed(Kind::Lease, &record).map_err(|e| StoreError::Invalid(e.to_string()))?;
+        schema::validate_typed(Kind::Lease, &record)
+            .map_err(|e| StoreError::Invalid(e.to_string()))?;
         let mut state = self.lock();
         let id = state.event_id();
         let now = self.now();
@@ -388,7 +438,10 @@ impl DocumentStore for MemoryStore {
         let d = state.doc_mut(doc)?;
         let role = d.require(&self.principal, Role::Editor, "writing a lease")?;
         if record.state == LeaseState::Held {
-            let holder = record.holder.as_ref().expect("schema: held lease has a holder");
+            let holder = record
+                .holder
+                .as_ref()
+                .expect("schema: held lease has a holder");
             if holder.principal != self.principal {
                 return Err(StoreError::Forbidden(format!(
                     "{} cannot write a lease held by {}",
@@ -399,7 +452,11 @@ impl DocumentStore for MemoryStore {
         if cas && role != Role::Owner {
             if let Some(current) = &d.lease {
                 if lease::is_active(current, now) {
-                    let current_holder = current.body.holder.as_ref().expect("held lease has a holder");
+                    let current_holder = current
+                        .body
+                        .holder
+                        .as_ref()
+                        .expect("held lease has a holder");
                     let same_session = match &record.holder {
                         Some(h) => h == current_holder,
                         // a release carries no holder: the principal decides
@@ -425,24 +482,40 @@ impl DocumentStore for MemoryStore {
     }
 
     async fn publish_update(&self, doc: &DocId, update: Update) -> Result<Stamped<Update>> {
-        schema::validate_typed(Kind::Update, &update).map_err(|e| StoreError::Invalid(e.to_string()))?;
+        schema::validate_typed(Kind::Update, &update)
+            .map_err(|e| StoreError::Invalid(e.to_string()))?;
         let mut state = self.lock();
         let id = state.event_id();
         let d = state.doc_mut(doc)?;
         d.require(&self.principal, Role::Editor, "publishing an update")?;
         let stamped = self.stamp(id, update);
         let readers = d.members.keys().cloned().collect();
-        d.updates.push(Item { stamped: stamped.clone(), readers });
+        d.updates.push(Item {
+            stamped: stamped.clone(),
+            readers,
+        });
         Ok(stamped)
     }
 
     async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>> {
         let state = self.lock();
         let d = state.doc(doc)?;
-        if !d.members.contains_key(&self.principal) && !d.updates.iter().any(|i| i.readers.contains(&self.principal)) {
-            return Err(StoreError::Forbidden(format!("{} has no access", self.principal)));
+        if !d.members.contains_key(&self.principal)
+            && !d
+                .updates
+                .iter()
+                .any(|i| i.readers.contains(&self.principal))
+        {
+            return Err(StoreError::Forbidden(format!(
+                "{} has no access",
+                self.principal
+            )));
         }
-        Ok(d.updates.iter().filter(|i| i.readers.contains(&self.principal)).map(|i| i.stamped.clone()).collect())
+        Ok(d.updates
+            .iter()
+            .filter(|i| i.readers.contains(&self.principal))
+            .map(|i| i.stamped.clone())
+            .collect())
     }
 }
 
@@ -463,7 +536,10 @@ mod tests {
     }
 
     fn file(s: &str) -> NewFile {
-        NewFile { mime: "text/plain".into(), bytes: s.as_bytes().to_vec() }
+        NewFile {
+            mime: "text/plain".into(),
+            bytes: s.as_bytes().to_vec(),
+        }
     }
 
     struct Rig {
@@ -481,10 +557,20 @@ mod tests {
         let owner = backend.store("@o:mem", "OD");
         let editor = backend.store("@e:mem", "ED");
         let viewer = backend.store("@v:mem", "VD");
-        let doc = owner.create_document(&meta(), Some(file("one"))).await.unwrap();
+        let doc = owner
+            .create_document(&meta(), Some(file("one")))
+            .await
+            .unwrap();
         owner.grant(&doc, "@e:mem", Role::Editor).await.unwrap();
         owner.grant(&doc, "@v:mem", Role::Viewer).await.unwrap();
-        Rig { clock, backend, owner, editor, viewer, doc }
+        Rig {
+            clock,
+            backend,
+            owner,
+            editor,
+            viewer,
+            doc,
+        }
     }
 
     #[tokio::test]
@@ -504,19 +590,40 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let head = r.owner.versions(&r.doc).await.unwrap()[0].id.clone();
         assert_eq!(r.viewer.role(&r.doc).await.unwrap(), Role::Viewer);
-        let denied = r.viewer.publish_version(&r.doc, vec![head.clone()], file("x"), None).await;
-        assert!(matches!(denied, Err(StoreError::Forbidden(_))), "{denied:?}");
-        assert!(matches!(r.viewer.grant(&r.doc, "@v:mem", Role::Owner).await, Err(StoreError::Forbidden(_))));
-        assert!(matches!(r.editor.grant(&r.doc, "@e:mem", Role::Owner).await, Err(StoreError::Forbidden(_))));
-        assert!(matches!(r.editor.revoke(&r.doc, "@v:mem").await, Err(StoreError::Forbidden(_))));
-        r.editor.publish_version(&r.doc, vec![head], file("two"), None).await.unwrap();
+        let denied = r
+            .viewer
+            .publish_version(&r.doc, vec![head.clone()], file("x"), None)
+            .await;
+        assert!(
+            matches!(denied, Err(StoreError::Forbidden(_))),
+            "{denied:?}"
+        );
+        assert!(matches!(
+            r.viewer.grant(&r.doc, "@v:mem", Role::Owner).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            r.editor.grant(&r.doc, "@e:mem", Role::Owner).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            r.editor.revoke(&r.doc, "@v:mem").await,
+            Err(StoreError::Forbidden(_))
+        ));
+        r.editor
+            .publish_version(&r.doc, vec![head], file("two"), None)
+            .await
+            .unwrap();
         assert_eq!(r.owner.versions(&r.doc).await.unwrap().len(), 2);
     }
 
     #[tokio::test]
     async fn a_rejected_publish_leaves_no_version_behind() {
         let r = rig(MemoryConfig::default()).await;
-        let _ = r.viewer.publish_version(&r.doc, vec!["$ev000001:mem".into()], file("x"), None).await;
+        let _ = r
+            .viewer
+            .publish_version(&r.doc, vec!["$ev000001:mem".into()], file("x"), None)
+            .await;
         assert_eq!(r.owner.versions(&r.doc).await.unwrap().len(), 1);
     }
 
@@ -524,11 +631,15 @@ mod tests {
     async fn bad_parents_are_refused() {
         let r = rig(MemoryConfig::default()).await;
         assert!(matches!(
-            r.editor.publish_version(&r.doc, vec![], file("x"), None).await,
+            r.editor
+                .publish_version(&r.doc, vec![], file("x"), None)
+                .await,
             Err(StoreError::Invalid(_))
         ));
         assert!(matches!(
-            r.editor.publish_version(&r.doc, vec!["$nope".into()], file("x"), None).await,
+            r.editor
+                .publish_version(&r.doc, vec!["$nope".into()], file("x"), None)
+                .await,
             Err(StoreError::Invalid(_))
         ));
     }
@@ -539,16 +650,29 @@ mod tests {
         let old = r.viewer.versions(&r.doc).await.unwrap();
         assert_eq!(old.len(), 1);
         r.owner.revoke(&r.doc, "@v:mem").await.unwrap();
-        let new = r.editor.publish_version(&r.doc, vec![old[0].id.clone()], file("secret"), None).await.unwrap();
+        let new = r
+            .editor
+            .publish_version(&r.doc, vec![old[0].id.clone()], file("secret"), None)
+            .await
+            .unwrap();
 
         // what they already had stays readable (spec 11) ...
         assert_eq!(r.viewer.fetch_file(&r.doc, &old[0]).await.unwrap(), b"one");
         // ... what came later is not.
         let seen = r.viewer.versions(&r.doc).await.unwrap();
         assert!(seen.iter().all(|v| v.id != new.id));
-        assert!(matches!(r.viewer.fetch_file(&r.doc, &new).await, Err(StoreError::NotFound(_))));
-        assert!(matches!(r.viewer.role(&r.doc).await, Err(StoreError::Forbidden(_))));
-        assert!(matches!(r.viewer.lease(&r.doc).await, Err(StoreError::Forbidden(_))));
+        assert!(matches!(
+            r.viewer.fetch_file(&r.doc, &new).await,
+            Err(StoreError::NotFound(_))
+        ));
+        assert!(matches!(
+            r.viewer.role(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            r.viewer.lease(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
     }
 
     #[tokio::test]
@@ -556,18 +680,37 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let head = r.owner.versions(&r.doc).await.unwrap()[0].id.clone();
         r.owner.revoke(&r.doc, "@v:mem").await.unwrap();
-        let hidden = r.editor.publish_version(&r.doc, vec![head], file("gap"), None).await.unwrap();
+        let hidden = r
+            .editor
+            .publish_version(&r.doc, vec![head], file("gap"), None)
+            .await
+            .unwrap();
         r.owner.grant(&r.doc, "@v:mem", Role::Viewer).await.unwrap();
-        assert!(r.viewer.versions(&r.doc).await.unwrap().iter().all(|v| v.id != hidden.id));
+        assert!(r
+            .viewer
+            .versions(&r.doc)
+            .await
+            .unwrap()
+            .iter()
+            .all(|v| v.id != hidden.id));
     }
 
     #[tokio::test]
     async fn a_stranger_reads_nothing() {
         let r = rig(MemoryConfig::default()).await;
         let stranger = r.backend.store("@x:mem", "XD");
-        assert!(matches!(stranger.versions(&r.doc).await, Err(StoreError::Forbidden(_))));
-        assert!(matches!(stranger.updates(&r.doc).await, Err(StoreError::Forbidden(_))));
-        assert!(matches!(stranger.meta(&r.doc).await, Err(StoreError::Forbidden(_))));
+        assert!(matches!(
+            stranger.versions(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            stranger.updates(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            stranger.meta(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
     }
 
     #[tokio::test]
@@ -575,20 +718,34 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let head = r.owner.versions(&r.doc).await.unwrap()[0].id.clone();
         r.backend.truncate_next_upload();
-        let res = r.editor.publish_version(&r.doc, vec![head.clone()], file("a long enough file"), None).await;
+        let res = r
+            .editor
+            .publish_version(&r.doc, vec![head.clone()], file("a long enough file"), None)
+            .await;
         assert!(matches!(res, Err(StoreError::Transport(_))), "{res:?}");
         assert_eq!(r.owner.versions(&r.doc).await.unwrap().len(), 1);
         // the fault was one-shot
-        r.editor.publish_version(&r.doc, vec![head], file("fine"), None).await.unwrap();
+        r.editor
+            .publish_version(&r.doc, vec![head], file("fine"), None)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn skipping_upload_verification_lets_a_truncated_file_through() {
         // The deliberate defect the conformance mutation tests rely on.
-        let r = rig(MemoryConfig { verify_uploads: false, ..MemoryConfig::default() }).await;
+        let r = rig(MemoryConfig {
+            verify_uploads: false,
+            ..MemoryConfig::default()
+        })
+        .await;
         let head = r.owner.versions(&r.doc).await.unwrap()[0].id.clone();
         r.backend.truncate_next_upload();
-        let v = r.editor.publish_version(&r.doc, vec![head], file("a long enough file"), None).await.unwrap();
+        let v = r
+            .editor
+            .publish_version(&r.doc, vec![head], file("a long enough file"), None)
+            .await
+            .unwrap();
         let bytes = r.editor.fetch_file(&r.doc, &v).await.unwrap();
         assert!(integrity::verify(&v.body.file, &bytes).is_err());
     }
@@ -596,31 +753,65 @@ mod tests {
     #[tokio::test]
     async fn lease_cas_refuses_a_second_session_but_lets_an_owner_break() {
         let r = rig(MemoryConfig::default()).await;
-        let claim = |p: &str, s: &str| lease::Claim::new(p, s, format!("t-{s}"), "$ev000001:mem", 60_000);
-        r.editor.write_lease(&r.doc, claim("@e:mem", "s1").lease()).await.unwrap();
+        let claim =
+            |p: &str, s: &str| lease::Claim::new(p, s, format!("t-{s}"), "$ev000001:mem", 60_000);
+        r.editor
+            .write_lease(&r.doc, claim("@e:mem", "s1").lease())
+            .await
+            .unwrap();
         // the same session may rewrite (renew); another session is refused
-        r.editor.write_lease(&r.doc, claim("@e:mem", "s1").lease()).await.unwrap();
+        r.editor
+            .write_lease(&r.doc, claim("@e:mem", "s1").lease())
+            .await
+            .unwrap();
         let other = r.backend.store("@e2:mem", "E2");
-        r.owner.grant(&r.doc, "@e2:mem", Role::Editor).await.unwrap();
-        assert!(matches!(other.write_lease(&r.doc, claim("@e2:mem", "s2").lease()).await, Err(StoreError::Conflict(_))));
-        assert!(matches!(other.write_lease(&r.doc, lease::released()).await, Err(StoreError::Conflict(_))));
-        r.owner.write_lease(&r.doc, claim("@o:mem", "so").lease()).await.unwrap();
+        r.owner
+            .grant(&r.doc, "@e2:mem", Role::Editor)
+            .await
+            .unwrap();
+        assert!(matches!(
+            other
+                .write_lease(&r.doc, claim("@e2:mem", "s2").lease())
+                .await,
+            Err(StoreError::Conflict(_))
+        ));
+        assert!(matches!(
+            other.write_lease(&r.doc, lease::released()).await,
+            Err(StoreError::Conflict(_))
+        ));
+        r.owner
+            .write_lease(&r.doc, claim("@o:mem", "so").lease())
+            .await
+            .unwrap();
         // after expiry anyone may write
         r.clock.advance(60_000);
-        other.write_lease(&r.doc, claim("@e2:mem", "s2").lease()).await.unwrap();
+        other
+            .write_lease(&r.doc, claim("@e2:mem", "s2").lease())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn lease_holder_must_be_the_authenticated_principal() {
         let r = rig(MemoryConfig::default()).await;
         let spoof = lease::Claim::new("@o:mem", "s", "t", "$v", 5_000).lease();
-        assert!(matches!(r.editor.write_lease(&r.doc, spoof).await, Err(StoreError::Forbidden(_))));
+        assert!(matches!(
+            r.editor.write_lease(&r.doc, spoof).await,
+            Err(StoreError::Forbidden(_))
+        ));
     }
 
     #[tokio::test]
     async fn racy_lease_accepts_both_writers_last_wins() {
-        let r = rig(MemoryConfig { cas_leases: false, ..MemoryConfig::default() }).await;
-        r.owner.grant(&r.doc, "@e2:mem", Role::Editor).await.unwrap();
+        let r = rig(MemoryConfig {
+            cas_leases: false,
+            ..MemoryConfig::default()
+        })
+        .await;
+        r.owner
+            .grant(&r.doc, "@e2:mem", Role::Editor)
+            .await
+            .unwrap();
         let other = r.backend.store("@e2:mem", "E2");
         let c1 = lease::Claim::new("@e:mem", "s1", "t1", "$v", 60_000);
         let c2 = lease::Claim::new("@e2:mem", "s2", "t2", "$v", 60_000);
@@ -635,16 +826,25 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let mut bad = lease::Claim::new("@e:mem", "s", "t", "$v", 5_000).lease();
         bad.duration_ms = Some(7_200_000);
-        assert!(matches!(r.editor.write_lease(&r.doc, bad).await, Err(StoreError::Invalid(_))));
+        assert!(matches!(
+            r.editor.write_lease(&r.doc, bad).await,
+            Err(StoreError::Invalid(_))
+        ));
         let bad_update = Update {
             dcp: 0,
             algorithm: "Loro".into(),
             doc_model: "text/1".into(),
             base_version: "$v".into(),
             seq: 0,
-            payload: Payload::Base64 { data: String::new(), size: 0 },
+            payload: Payload::Base64 {
+                data: String::new(),
+                size: 0,
+            },
         };
-        assert!(matches!(r.editor.publish_update(&r.doc, bad_update).await, Err(StoreError::Invalid(_))));
+        assert!(matches!(
+            r.editor.publish_update(&r.doc, bad_update).await,
+            Err(StoreError::Invalid(_))
+        ));
     }
 
     #[tokio::test]
@@ -652,14 +852,24 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let mut w = crate::updates::StreamWriter::new("append/1", "text/1");
         let u = w.next("$ev000001:mem", b"hi").unwrap();
-        assert!(matches!(r.viewer.publish_update(&r.doc, u.clone()).await, Err(StoreError::Forbidden(_))));
+        assert!(matches!(
+            r.viewer.publish_update(&r.doc, u.clone()).await,
+            Err(StoreError::Forbidden(_))
+        ));
         let s = r.editor.publish_update(&r.doc, u).await.unwrap();
-        assert_eq!((s.sender.as_str(), s.device.as_deref()), ("@e:mem", Some("ED")));
+        assert_eq!(
+            (s.sender.as_str(), s.device.as_deref()),
+            ("@e:mem", Some("ED"))
+        );
         assert_eq!(r.viewer.updates(&r.doc).await.unwrap().len(), 1);
         r.owner.revoke(&r.doc, "@v:mem").await.unwrap();
         let u2 = w.next("$ev000001:mem", b"later").unwrap();
         r.editor.publish_update(&r.doc, u2).await.unwrap();
-        assert_eq!(r.viewer.updates(&r.doc).await.unwrap().len(), 1, "the later update is unreadable");
+        assert_eq!(
+            r.viewer.updates(&r.doc).await.unwrap().len(),
+            1,
+            "the later update is unreadable"
+        );
         assert_eq!(r.owner.updates(&r.doc).await.unwrap().len(), 2);
     }
 
@@ -669,5 +879,45 @@ mod tests {
         assert_eq!(r.owner.now_ms(&r.doc).await.unwrap(), 10_000);
         r.clock.advance(5);
         assert_eq!(r.viewer.now_ms(&r.doc).await.unwrap(), 10_005);
+    }
+
+    #[tokio::test]
+    async fn a_commenter_reads_but_cannot_publish_spec_5() {
+        let r = rig(MemoryConfig::default()).await;
+        r.owner
+            .grant(&r.doc, "@c:mem", Role::Commenter)
+            .await
+            .unwrap();
+        let c = r.backend.store("@c:mem", "CD");
+        let head = c.versions(&r.doc).await.unwrap()[0].id.clone();
+        assert_eq!(c.role(&r.doc).await.unwrap(), Role::Commenter);
+        assert!(matches!(
+            c.publish_version(&r.doc, vec![head], file("x"), None).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        assert!(matches!(
+            c.grant(&r.doc, "@c:mem", Role::Owner).await,
+            Err(StoreError::Forbidden(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_member_who_joins_later_reads_the_history_but_only_what_follows_after_a_removal() {
+        // history_visibility shared (spec 8.1): a new member sees earlier versions.
+        let r = rig(MemoryConfig::default()).await;
+        let late = r.backend.store("@late:mem", "LD");
+        assert!(matches!(
+            late.versions(&r.doc).await,
+            Err(StoreError::Forbidden(_))
+        ));
+        r.owner
+            .grant(&r.doc, "@late:mem", Role::Viewer)
+            .await
+            .unwrap();
+        assert_eq!(
+            late.versions(&r.doc).await.unwrap().len(),
+            1,
+            "joined later, reads what was published before"
+        );
     }
 }

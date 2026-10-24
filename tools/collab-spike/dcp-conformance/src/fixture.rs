@@ -122,7 +122,10 @@ pub fn standard_meta() -> Meta {
 }
 
 pub fn new_file(bytes: &[u8]) -> NewFile {
-    NewFile { mime: MIME.into(), bytes: bytes.to_vec() }
+    NewFile {
+        mime: MIME.into(),
+        bytes: bytes.to_vec(),
+    }
 }
 
 impl Fixture {
@@ -139,10 +142,13 @@ impl Fixture {
         faults: Option<Arc<dyn Faults>>,
         settle: Duration,
     ) -> Result<Fixture, Failure> {
-        let doc = owner.create_document(&standard_meta(), Some(new_file(BASE_FILE))).await?;
+        let doc = owner
+            .create_document(&standard_meta(), Some(new_file(BASE_FILE)))
+            .await?;
         owner.grant(&doc, &editor.principal(), Role::Editor).await?;
         owner.grant(&doc, &viewer.principal(), Role::Viewer).await?;
-        let fx = Fixture::from_existing(owner, editor, viewer, doc, time, caps, faults, settle).await?;
+        let fx =
+            Fixture::from_existing(owner, editor, viewer, doc, time, caps, faults, settle).await?;
         Ok(fx)
     }
 
@@ -158,7 +164,17 @@ impl Fixture {
         faults: Option<Arc<dyn Faults>>,
         settle: Duration,
     ) -> Result<Fixture, Failure> {
-        let mut fx = Fixture { owner, editor, viewer, doc, first_version: String::new(), time, caps, faults, settle };
+        let mut fx = Fixture {
+            owner,
+            editor,
+            viewer,
+            doc,
+            first_version: String::new(),
+            time,
+            caps,
+            faults,
+            settle,
+        };
         let versions = fx.owner.versions(&fx.doc).await?;
         if versions.len() != 1 || !versions[0].body.parents.is_empty() {
             return Err(Failure::new(format!(
@@ -170,11 +186,9 @@ impl Fixture {
         Ok(fx)
     }
 
-    /// Poll `probe` until it yields `Some`, for at most [`Self::settle`]. With
-    /// a zero settle time it is tried exactly once. Use it for anything that
-    /// has to propagate between handles; never to wait for something that
-    /// must NOT happen.
-    pub async fn settle<T, F, Fut>(&self, what: &str, mut probe: F) -> Result<T, Failure>
+    /// Poll `probe` until it yields `Some`, for at most [`Self::settle`]; `None`
+    /// if it never did. With a zero settle time it is tried exactly once.
+    pub async fn settle_soft<T, F, Fut>(&self, mut probe: F) -> Result<Option<T>, Failure>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<Option<T>, Failure>>,
@@ -182,13 +196,33 @@ impl Fixture {
         let deadline = tokio::time::Instant::now() + self.settle;
         loop {
             if let Some(v) = probe().await? {
-                return Ok(v);
+                return Ok(Some(v));
             }
             if tokio::time::Instant::now() >= deadline {
-                return Err(Failure::new(format!("timed out after {:?} waiting for: {what}", self.settle)));
+                return Ok(None);
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
+    }
+
+    /// Like [`Self::settle_soft`] but a timeout is a failure. Use it for
+    /// anything that has to propagate between handles; never to wait for
+    /// something that must NOT happen.
+    pub async fn settle<T, F, Fut>(&self, what: &str, probe: F) -> Result<T, Failure>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<Option<T>, Failure>>,
+    {
+        self.settle_soft(probe).await?.ok_or_else(|| {
+            if self.settle.is_zero() {
+                Failure::new(format!("expected at once, but not so: {what}"))
+            } else {
+                Failure::new(format!(
+                    "timed out after {:?} waiting for: {what}",
+                    self.settle
+                ))
+            }
+        })
     }
 }
 

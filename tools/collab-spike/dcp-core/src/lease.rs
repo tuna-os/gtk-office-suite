@@ -31,7 +31,10 @@ impl Claim {
         duration_ms: u64,
     ) -> Self {
         Claim {
-            holder: Holder { principal: principal.into(), session: session.into() },
+            holder: Holder {
+                principal: principal.into(),
+                session: session.into(),
+            },
             token: token.into(),
             base_version: base_version.into(),
             duration_ms,
@@ -52,7 +55,14 @@ impl Claim {
 
 /// The record that releases a lease (spec examples/lease-released.json).
 pub fn released() -> Lease {
-    Lease { dcp: 0, state: LeaseState::Released, holder: None, token: None, base_version: None, duration_ms: None }
+    Lease {
+        dcp: 0,
+        state: LeaseState::Released,
+        holder: None,
+        token: None,
+        base_version: None,
+        duration_ms: None,
+    }
 }
 
 /// Binding time at which a held lease stops being active.
@@ -155,7 +165,11 @@ pub async fn write(
 
 /// Step 3, lease rule 3: read the lease back and claim it only if the record
 /// names this session. This is what resolves two sessions that wrote at once.
-pub async fn confirm(store: &dyn DocumentStore, doc: &DocId, claim: &Claim) -> Result<Acquire, StoreError> {
+pub async fn confirm(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    claim: &Claim,
+) -> Result<Acquire, StoreError> {
     match store.lease(doc).await? {
         Some(record) if names(&record.body, &claim.holder) => Ok(Acquire::Acquired(record)),
         other => Ok(Acquire::Lost(other)),
@@ -164,7 +178,11 @@ pub async fn confirm(store: &dyn DocumentStore, doc: &DocId, claim: &Claim) -> R
 
 /// Acquire (or renew, if already the holder) the lease:
 /// [`available`], then [`write`], then [`confirm`].
-pub async fn acquire(store: &dyn DocumentStore, doc: &DocId, claim: &Claim) -> Result<Acquire, StoreError> {
+pub async fn acquire(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    claim: &Claim,
+) -> Result<Acquire, StoreError> {
     if let Err(current) = available(store, doc, &claim.holder).await? {
         return Ok(Acquire::Held(current));
     }
@@ -191,9 +209,16 @@ pub async fn renew_if_due(
 /// Does the binding currently say this session holds an active lease?
 /// (A holder checks this before it saves; a broken lease shows up here, which
 /// is how it is "visible to the former holder", rule 5.)
-pub async fn holds(store: &dyn DocumentStore, doc: &DocId, holder: &Holder) -> Result<bool, StoreError> {
+pub async fn holds(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    holder: &Holder,
+) -> Result<bool, StoreError> {
     let now = store.now_ms(doc).await?;
-    Ok(store.lease(doc).await?.is_some_and(|l| names(&l.body, holder) && is_active(&l, now)))
+    Ok(store
+        .lease(doc)
+        .await?
+        .is_some_and(|l| names(&l.body, holder) && is_active(&l, now)))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,7 +230,11 @@ pub enum Release {
 
 /// Lease rule 4: release when the document closes normally. Only the session
 /// the record names releases it.
-pub async fn release(store: &dyn DocumentStore, doc: &DocId, holder: &Holder) -> Result<Release, StoreError> {
+pub async fn release(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    holder: &Holder,
+) -> Result<Release, StoreError> {
     match store.lease(doc).await? {
         Some(l) if names(&l.body, holder) => {
             store.write_lease(doc, released()).await?;
@@ -218,9 +247,15 @@ pub async fn release(store: &dyn DocumentStore, doc: &DocId, holder: &Holder) ->
 /// Lease rule 5: a principal with the `owner` role MAY break a lease. The
 /// result is a lease held by the breaker, and the read-back confirms it.
 /// Anyone else is refused here and, in a store that enforces it, there too.
-pub async fn break_lease(store: &dyn DocumentStore, doc: &DocId, claim: &Claim) -> Result<Acquire, StoreError> {
+pub async fn break_lease(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    claim: &Claim,
+) -> Result<Acquire, StoreError> {
     if store.role(doc).await? != Role::Owner {
-        return Err(StoreError::Forbidden("only an owner may break a lease".into()));
+        return Err(StoreError::Forbidden(
+            "only an owner may break a lease".into(),
+        ));
     }
     let _ = write(store, doc, claim).await?;
     confirm(store, doc, claim).await
@@ -238,15 +273,27 @@ mod tests {
     }
 
     fn me() -> Holder {
-        Holder { principal: "@a:x".into(), session: "s1".into() }
+        Holder {
+            principal: "@a:x".into(),
+            session: "s1".into(),
+        }
     }
 
     fn other() -> Holder {
-        Holder { principal: "@b:x".into(), session: "s2".into() }
+        Holder {
+            principal: "@b:x".into(),
+            session: "s2".into(),
+        }
     }
 
     fn claim(h: &Holder, duration_ms: u64) -> Claim {
-        Claim::new(h.principal.clone(), h.session.clone(), format!("tok-{}", h.session), "$v1", duration_ms)
+        Claim::new(
+            h.principal.clone(),
+            h.session.clone(),
+            format!("tok-{}", h.session),
+            "$v1",
+            duration_ms,
+        )
     }
 
     #[test]
@@ -254,7 +301,10 @@ mod tests {
         let l = stamped(1_000, claim(&me(), 60_000).lease());
         assert!(is_active(&l, 1_000));
         assert!(is_active(&l, 60_999));
-        assert!(!is_active(&l, 61_000), "ts + duration is not later than now: expired");
+        assert!(
+            !is_active(&l, 61_000),
+            "ts + duration is not later than now: expired"
+        );
         assert!(!is_active(&l, 90_000));
     }
 
@@ -269,11 +319,17 @@ mod tests {
     #[test]
     fn local_clock_comparison_allows_30_seconds_of_skew() {
         let l = stamped(0, claim(&me(), 60_000).lease());
-        assert!(is_active_local(&l, 60_000), "past the binding expiry but inside the skew");
+        assert!(
+            is_active_local(&l, 60_000),
+            "past the binding expiry but inside the skew"
+        );
         assert!(is_active_local(&l, 89_999));
         assert!(!is_active_local(&l, 90_000));
         assert_eq!(SKEW_MS, 30_000);
-        assert!(!is_active(&l, 60_000), "while the binding's own clock has no skew allowance");
+        assert!(
+            !is_active(&l, 60_000),
+            "while the binding's own clock has no skew allowance"
+        );
     }
 
     #[test]
@@ -290,7 +346,10 @@ mod tests {
     #[test]
     fn same_principal_other_session_is_not_the_holder() {
         let l = stamped(0, claim(&me(), 60_000).lease());
-        let sibling = Holder { principal: me().principal, session: "s9".into() };
+        let sibling = Holder {
+            principal: me().principal,
+            session: "s9".into(),
+        };
         assert!(!can_acquire(Some(&l), &sibling, 10));
     }
 
@@ -301,7 +360,10 @@ mod tests {
         assert!(!renewal_due(&l, 30_999));
         assert!(renewal_due(&l, 31_000));
         assert!(renewal_due(&l, 50_000));
-        assert!(!renewal_due(&stamped(0, released()), 99), "nothing to renew");
+        assert!(
+            !renewal_due(&stamped(0, released()), 99),
+            "nothing to renew"
+        );
     }
 
     // ---- against a store -------------------------------------------------
@@ -331,13 +393,26 @@ mod tests {
             editor_services: None,
         };
         let doc = owner
-            .create_document(&meta, Some(NewFile { mime: "text/plain".into(), bytes: b"x".to_vec() }))
+            .create_document(
+                &meta,
+                Some(NewFile {
+                    mime: "text/plain".into(),
+                    bytes: b"x".to_vec(),
+                }),
+            )
             .await
             .unwrap();
         owner.grant(&doc, "@a:x", Role::Editor).await.unwrap();
         owner.grant(&doc, "@b:x", Role::Editor).await.unwrap();
         owner.grant(&doc, "@v:x", Role::Viewer).await.unwrap();
-        World { clock, a: Arc::new(a), b: Arc::new(b), owner: Arc::new(owner), viewer: Arc::new(viewer), doc }
+        World {
+            clock,
+            a: Arc::new(a),
+            b: Arc::new(b),
+            owner: Arc::new(owner),
+            viewer: Arc::new(viewer),
+            doc,
+        }
     }
 
     #[tokio::test]
@@ -345,7 +420,9 @@ mod tests {
         let w = world(MemoryConfig::default()).await;
         let r = acquire(&*w.a, &w.doc, &claim(&me(), 60_000)).await.unwrap();
         assert!(r.is_acquired());
-        let r = acquire(&*w.b, &w.doc, &claim(&other(), 60_000)).await.unwrap();
+        let r = acquire(&*w.b, &w.doc, &claim(&other(), 60_000))
+            .await
+            .unwrap();
         assert!(matches!(r, Acquire::Held(l) if l.body.holder == Some(me())));
     }
 
@@ -354,15 +431,25 @@ mod tests {
         // Racy store: no compare-and-set, both writes succeed. Both sessions
         // checked first, then wrote, then read back: the second write is the
         // one the record keeps, and only that session may claim the lease.
-        let w = world(MemoryConfig { cas_leases: false, ..MemoryConfig::default() }).await;
+        let w = world(MemoryConfig {
+            cas_leases: false,
+            ..MemoryConfig::default()
+        })
+        .await;
         let (ca, cb) = (claim(&me(), 60_000), claim(&other(), 60_000));
         assert!(available(&*w.a, &w.doc, &ca.holder).await.unwrap().is_ok());
         assert!(available(&*w.b, &w.doc, &cb.holder).await.unwrap().is_ok());
         assert!(write(&*w.a, &w.doc, &ca).await.unwrap().is_ok());
-        assert!(write(&*w.b, &w.doc, &cb).await.unwrap().is_ok(), "the racy store accepted both writes");
+        assert!(
+            write(&*w.b, &w.doc, &cb).await.unwrap().is_ok(),
+            "the racy store accepted both writes"
+        );
         let ra = confirm(&*w.a, &w.doc, &ca).await.unwrap();
         let rb = confirm(&*w.b, &w.doc, &cb).await.unwrap();
-        assert!(matches!(&ra, Acquire::Lost(Some(l)) if l.body.holder == Some(other())), "{ra:?}");
+        assert!(
+            matches!(&ra, Acquire::Lost(Some(l)) if l.body.holder == Some(other())),
+            "{ra:?}"
+        );
         assert!(rb.is_acquired(), "{rb:?}");
     }
 
@@ -371,27 +458,54 @@ mod tests {
         let w = world(MemoryConfig::default()).await;
         let (ca, cb) = (claim(&me(), 60_000), claim(&other(), 60_000));
         assert!(write(&*w.a, &w.doc, &ca).await.unwrap().is_ok());
-        assert!(matches!(write(&*w.b, &w.doc, &cb).await.unwrap(), Err(StoreError::Conflict(_))));
+        assert!(matches!(
+            write(&*w.b, &w.doc, &cb).await.unwrap(),
+            Err(StoreError::Conflict(_))
+        ));
         assert!(confirm(&*w.a, &w.doc, &ca).await.unwrap().is_acquired());
-        assert!(matches!(confirm(&*w.b, &w.doc, &cb).await.unwrap(), Acquire::Lost(_)));
+        assert!(matches!(
+            confirm(&*w.b, &w.doc, &cb).await.unwrap(),
+            Acquire::Lost(_)
+        ));
     }
 
     #[tokio::test]
     async fn renewal_extends_and_expiry_frees_the_lease() {
         let w = world(MemoryConfig::default()).await;
         let c = claim(&me(), 60_000);
-        let Acquire::Acquired(first) = acquire(&*w.a, &w.doc, &c).await.unwrap() else { panic!() };
-        assert!(renew_if_due(&*w.a, &w.doc, &c, &first).await.unwrap().is_none(), "not due at once");
+        let Acquire::Acquired(first) = acquire(&*w.a, &w.doc, &c).await.unwrap() else {
+            panic!()
+        };
+        assert!(
+            renew_if_due(&*w.a, &w.doc, &c, &first)
+                .await
+                .unwrap()
+                .is_none(),
+            "not due at once"
+        );
         w.clock.advance(30_000);
-        let Some(Acquire::Acquired(second)) = renew_if_due(&*w.a, &w.doc, &c, &first).await.unwrap() else {
+        let Some(Acquire::Acquired(second)) =
+            renew_if_due(&*w.a, &w.doc, &c, &first).await.unwrap()
+        else {
             panic!("due at half the duration")
         };
         assert!(second.ts_ms > first.ts_ms);
         w.clock.advance(59_000);
-        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000)).await.unwrap() == Acquire::Held(second.clone()));
+        assert!(
+            acquire(&*w.b, &w.doc, &claim(&other(), 60_000))
+                .await
+                .unwrap()
+                == Acquire::Held(second.clone())
+        );
         w.clock.advance(2_000);
-        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000)).await.unwrap().is_acquired());
-        assert!(!holds(&*w.a, &w.doc, &c.holder).await.unwrap(), "the former holder sees it is gone");
+        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000))
+            .await
+            .unwrap()
+            .is_acquired());
+        assert!(
+            !holds(&*w.a, &w.doc, &c.holder).await.unwrap(),
+            "the former holder sees it is gone"
+        );
     }
 
     #[tokio::test]
@@ -399,11 +513,20 @@ mod tests {
         let w = world(MemoryConfig::default()).await;
         let ca = claim(&me(), 60_000);
         acquire(&*w.a, &w.doc, &ca).await.unwrap();
-        assert_eq!(release(&*w.b, &w.doc, &other()).await.unwrap(), Release::NotHolder);
+        assert_eq!(
+            release(&*w.b, &w.doc, &other()).await.unwrap(),
+            Release::NotHolder
+        );
         assert!(holds(&*w.a, &w.doc, &ca.holder).await.unwrap());
-        assert_eq!(release(&*w.a, &w.doc, &ca.holder).await.unwrap(), Release::Released);
+        assert_eq!(
+            release(&*w.a, &w.doc, &ca.holder).await.unwrap(),
+            Release::Released
+        );
         assert!(!holds(&*w.a, &w.doc, &ca.holder).await.unwrap());
-        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000)).await.unwrap().is_acquired());
+        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000))
+            .await
+            .unwrap()
+            .is_acquired());
     }
 
     #[tokio::test]
@@ -411,20 +534,45 @@ mod tests {
         let w = world(MemoryConfig::default()).await;
         let ca = claim(&me(), 60_000);
         acquire(&*w.a, &w.doc, &ca).await.unwrap();
-        let breaker = claim(&Holder { principal: "@owner:mem".into(), session: "so".into() }, 60_000);
+        let breaker = claim(
+            &Holder {
+                principal: "@owner:mem".into(),
+                session: "so".into(),
+            },
+            60_000,
+        );
         let r = break_lease(&*w.owner, &w.doc, &breaker).await.unwrap();
-        let Acquire::Acquired(rec) = r else { panic!("{r:?}") };
+        let Acquire::Acquired(rec) = r else {
+            panic!("{r:?}")
+        };
         assert_eq!(rec.body.state, LeaseState::Held);
-        assert_eq!(rec.body.holder, Some(breaker.holder.clone()), "recorded as held by the breaker");
-        assert!(!holds(&*w.a, &w.doc, &ca.holder).await.unwrap(), "visible to the former holder");
+        assert_eq!(
+            rec.body.holder,
+            Some(breaker.holder.clone()),
+            "recorded as held by the breaker"
+        );
+        assert!(
+            !holds(&*w.a, &w.doc, &ca.holder).await.unwrap(),
+            "visible to the former holder"
+        );
     }
 
     #[tokio::test]
     async fn only_an_owner_may_break() {
         let w = world(MemoryConfig::default()).await;
-        acquire(&*w.owner, &w.doc, &claim(&Holder { principal: "@owner:mem".into(), session: "so".into() }, 60_000))
-            .await
-            .unwrap();
+        acquire(
+            &*w.owner,
+            &w.doc,
+            &claim(
+                &Holder {
+                    principal: "@owner:mem".into(),
+                    session: "so".into(),
+                },
+                60_000,
+            ),
+        )
+        .await
+        .unwrap();
         let r = break_lease(&*w.b, &w.doc, &claim(&other(), 60_000)).await;
         assert!(matches!(r, Err(StoreError::Forbidden(_))));
     }
@@ -432,8 +580,45 @@ mod tests {
     #[tokio::test]
     async fn a_viewer_cannot_take_a_lease_and_nothing_is_claimed() {
         let w = world(MemoryConfig::default()).await;
-        let v = Holder { principal: "@v:x".into(), session: "sv".into() };
+        let v = Holder {
+            principal: "@v:x".into(),
+            session: "sv".into(),
+        };
         let r = acquire(&*w.viewer, &w.doc, &claim(&v, 60_000)).await;
         assert!(matches!(r, Err(StoreError::Forbidden(_))), "{r:?}");
+    }
+
+    #[tokio::test]
+    async fn lease_lost_while_editing_still_saves_as_a_version_and_shows_the_conflict() {
+        // Failure table row 2: continue locally; before saving, try to
+        // reacquire; if another session holds the lease, save as a version
+        // anyway (rule 6) and show the resulting conflict.
+        let w = world(MemoryConfig::default()).await;
+        let base = w.a.versions(&w.doc).await.unwrap()[0].id.clone();
+        let mine = Claim::new("@a:x", "s1", "t1", &base, 60_000);
+        assert!(acquire(&*w.a, &w.doc, &mine).await.unwrap().is_acquired());
+        w.clock.advance(61_000); // the lease expires while A keeps editing offline
+        assert!(acquire(&*w.b, &w.doc, &claim(&other(), 60_000))
+            .await
+            .unwrap()
+            .is_acquired());
+
+        let retry = acquire(&*w.a, &w.doc, &mine).await.unwrap();
+        assert!(
+            matches!(retry, Acquire::Held(_)),
+            "another session holds it now"
+        );
+        let file = |s: &str| NewFile {
+            mime: "text/plain".into(),
+            bytes: s.as_bytes().to_vec(),
+        };
+        w.a.publish_version(&w.doc, vec![base.clone()], file("A's edits"), None)
+            .await
+            .unwrap();
+        w.b.publish_version(&w.doc, vec![base], file("B's edits"), None)
+            .await
+            .unwrap();
+        let view = crate::view::read_view(&*w.owner, &w.doc).await.unwrap();
+        assert!(view.is_conflict(), "both saves are kept, as two heads");
     }
 }

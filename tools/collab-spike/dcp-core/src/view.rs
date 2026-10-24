@@ -74,7 +74,10 @@ where
         for v in versions {
             match schema::validate_typed(Kind::Version, &v.body) {
                 Ok(()) => live.push(v),
-                Err(e) => bad.push(Rejected { id: v.id, reason: Reason::Schema(e.to_string()) }),
+                Err(e) => bad.push(Rejected {
+                    id: v.id,
+                    reason: Reason::Schema(e.to_string()),
+                }),
             }
         }
         (live, bad)
@@ -82,7 +85,10 @@ where
     rejected.extend(schema_bad);
 
     let (accepted, parent_bad) = graph::split(&live, options);
-    rejected.extend(parent_bad.into_iter().map(|r| Rejected { id: r.id, reason: Reason::Parents(r.error) }));
+    rejected.extend(parent_bad.into_iter().map(|r| Rejected {
+        id: r.id,
+        reason: Reason::Parents(r.error),
+    }));
     live = accepted;
 
     let mut verified: Vec<Head> = Vec::new();
@@ -95,10 +101,16 @@ where
             }
             let bytes = fetch(head.clone()).await?;
             match integrity::verify_version(&head, &bytes) {
-                Ok(()) => verified.push(Head { version: head, bytes }),
+                Ok(()) => verified.push(Head {
+                    version: head,
+                    bytes,
+                }),
                 Err(d) => {
                     live.retain(|v| v.id != d.id);
-                    rejected.push(Rejected { id: d.id, reason: Reason::Integrity(d.cause) });
+                    rejected.push(Rejected {
+                        id: d.id,
+                        reason: Reason::Integrity(d.cause),
+                    });
                     dropped_any = true;
                 }
             }
@@ -108,13 +120,19 @@ where
         }
     }
     verified.sort_by(|a, b| graph::newest_first(&a.version, &b.version));
-    Ok(View { heads: verified, rejected })
+    Ok(View {
+        heads: verified,
+        rejected,
+    })
 }
 
 /// The view of `doc` as `store` shows it.
 pub async fn read_view(store: &dyn DocumentStore, doc: &DocId) -> Result<View, StoreError> {
     let versions = store.versions(doc).await?;
-    build(versions, Options::default(), |v| async move { store.fetch_file(doc, &v).await }).await
+    build(versions, Options::default(), |v| async move {
+        store.fetch_file(doc, &v).await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -136,7 +154,10 @@ mod tests {
     }
 
     fn file(s: &str) -> NewFile {
-        NewFile { mime: "text/plain".into(), bytes: s.as_bytes().to_vec() }
+        NewFile {
+            mime: "text/plain".into(),
+            bytes: s.as_bytes().to_vec(),
+        }
     }
 
     #[tokio::test]
@@ -168,8 +189,12 @@ mod tests {
         let doc = o.create_document(&meta(), Some(file("v1"))).await.unwrap();
         o.grant(&doc, "@e:m", Role::Editor).await.unwrap();
         let root = o.versions(&doc).await.unwrap()[0].id.clone();
-        o.publish_version(&doc, vec![root.clone()], file("by-o"), None).await.unwrap();
-        e.publish_version(&doc, vec![root], file("by-e"), None).await.unwrap();
+        o.publish_version(&doc, vec![root.clone()], file("by-o"), None)
+            .await
+            .unwrap();
+        e.publish_version(&doc, vec![root], file("by-e"), None)
+            .await
+            .unwrap();
         let view = read_view(&o, &doc).await.unwrap();
         assert!(view.is_conflict());
         let mut contents: Vec<_> = view.heads.iter().map(|h| h.bytes.clone()).collect();
@@ -183,7 +208,10 @@ mod tests {
         let o = backend.store("@o:m", "D");
         let doc = o.create_document(&meta(), Some(file("v1"))).await.unwrap();
         let root = o.versions(&doc).await.unwrap()[0].id.clone();
-        let v2 = o.publish_version(&doc, vec![root.clone()], file("v2 content"), None).await.unwrap();
+        let v2 = o
+            .publish_version(&doc, vec![root.clone()], file("v2 content"), None)
+            .await
+            .unwrap();
         let versions = o.versions(&doc).await.unwrap();
         let view = build(versions, Options::default(), |v| {
             let o = o.clone();
@@ -201,7 +229,10 @@ mod tests {
         assert_eq!(view.head_ids(), [root.as_str()]);
         assert_eq!(view.rejected.len(), 1);
         assert_eq!(view.rejected[0].id, v2.id);
-        assert!(matches!(view.rejected[0].reason, Reason::Integrity(IntegrityError::SizeMismatch { .. })));
+        assert!(matches!(
+            view.rejected[0].reason,
+            Reason::Integrity(IntegrityError::SizeMismatch { .. })
+        ));
     }
 
     #[tokio::test]
@@ -210,9 +241,19 @@ mod tests {
         let o = backend.store("@o:m", "D");
         let doc = o.create_document(&meta(), Some(file("v1"))).await.unwrap();
         let versions = o.versions(&doc).await.unwrap();
-        let view = build(versions, Options::default(), |_| async { Ok(b"v2".to_vec()) }).await.unwrap();
-        assert!(view.heads.is_empty(), "the only version was corrupt: no content, and it is reported");
-        assert!(matches!(view.rejected[0].reason, Reason::Integrity(IntegrityError::HashMismatch { .. })));
+        let view = build(versions, Options::default(), |_| async {
+            Ok(b"v2".to_vec())
+        })
+        .await
+        .unwrap();
+        assert!(
+            view.heads.is_empty(),
+            "the only version was corrupt: no content, and it is reported"
+        );
+        assert!(matches!(
+            view.rejected[0].reason,
+            Reason::Integrity(IntegrityError::HashMismatch { .. })
+        ));
     }
 
     #[tokio::test]
@@ -231,19 +272,37 @@ mod tests {
         unknown.id = "$bad3".into();
         unknown.body.parents = vec!["$ghost".into()];
         let fetched = parking_lot::Mutex::new(Vec::new());
-        let view = build(vec![good.clone(), bad_schema, bad_parent, unknown], Options::default(), |v| {
-            fetched.lock().push(v.id.clone());
-            let o = o.clone();
-            let doc = doc.clone();
-            async move { o.fetch_file(&doc, &v).await }
-        })
+        let view = build(
+            vec![good.clone(), bad_schema, bad_parent, unknown],
+            Options::default(),
+            |v| {
+                fetched.lock().push(v.id.clone());
+                let o = o.clone();
+                let doc = doc.clone();
+                async move { o.fetch_file(&doc, &v).await }
+            },
+        )
         .await
         .unwrap();
         assert_eq!(fetched.into_inner(), [good.id.clone()]);
         assert_eq!(view.head_ids(), [good.id.as_str()]);
-        let reasons: Vec<_> = view.rejected.iter().map(|r| (r.id.as_str(), &r.reason)).collect();
-        assert!(reasons.iter().any(|(id, r)| *id == "$bad1" && matches!(r, Reason::Schema(_))));
-        assert!(reasons.iter().any(|(id, r)| *id == "$bad2" && matches!(r, Reason::Parents(ParentError::SelfParent))));
-        assert!(reasons.iter().any(|(id, r)| *id == "$bad3" && matches!(r, Reason::Parents(ParentError::UnknownParent(_)))));
+        let reasons: Vec<_> = view
+            .rejected
+            .iter()
+            .map(|r| (r.id.as_str(), &r.reason))
+            .collect();
+        assert!(reasons
+            .iter()
+            .any(|(id, r)| *id == "$bad1" && matches!(r, Reason::Schema(_))));
+        assert!(
+            reasons
+                .iter()
+                .any(|(id, r)| *id == "$bad2"
+                    && matches!(r, Reason::Parents(ParentError::SelfParent)))
+        );
+        assert!(reasons
+            .iter()
+            .any(|(id, r)| *id == "$bad3"
+                && matches!(r, Reason::Parents(ParentError::UnknownParent(_)))));
     }
 }

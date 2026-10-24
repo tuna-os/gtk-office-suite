@@ -24,7 +24,10 @@ pub struct StreamKey {
 }
 
 pub fn stream_of(update: &Stamped<Update>) -> StreamKey {
-    StreamKey { principal: update.sender.clone(), device: update.device.clone().unwrap_or_default() }
+    StreamKey {
+        principal: update.sender.clone(),
+        device: update.device.clone().unwrap_or_default(),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -45,7 +48,10 @@ pub fn inline_payload(bytes: &[u8]) -> Result<Payload, PayloadError> {
     if size > MAX_INLINE_BYTES {
         return Err(PayloadError::TooLarge(size));
     }
-    Ok(Payload::Base64 { data: base64::engine::general_purpose::STANDARD.encode(bytes), size })
+    Ok(Payload::Base64 {
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+        size,
+    })
 }
 
 /// A file payload (an update over the inline limit).
@@ -65,7 +71,10 @@ pub fn decode_inline(payload: &Payload) -> Result<Vec<u8>, PayloadError> {
                 .decode(data)
                 .map_err(|e| PayloadError::NotBase64(e.to_string()))?;
             if bytes.len() as u64 != *size {
-                return Err(PayloadError::SizeMismatch { declared: *size, actual: bytes.len() as u64 });
+                return Err(PayloadError::SizeMismatch {
+                    declared: *size,
+                    actual: bytes.len() as u64,
+                });
             }
             Ok(bytes)
         }
@@ -83,7 +92,11 @@ pub struct StreamWriter {
 
 impl StreamWriter {
     pub fn new(algorithm: impl Into<String>, doc_model: impl Into<String>) -> Self {
-        StreamWriter { algorithm: algorithm.into(), doc_model: doc_model.into(), next_seq: 0 }
+        StreamWriter {
+            algorithm: algorithm.into(),
+            doc_model: doc_model.into(),
+            next_seq: 0,
+        }
     }
 
     /// Build the next update. The sequence number is consumed even if the
@@ -167,13 +180,19 @@ impl Receiver {
     /// A receiver for the document state at `base_version` (`None`: accept
     /// updates based on any version).
     pub fn new(base_version: Option<String>) -> Self {
-        Receiver { base_version, ..Receiver::default() }
+        Receiver {
+            base_version,
+            ..Receiver::default()
+        }
     }
 
     /// Streams currently stopped by a gap; the caller must recover by loading
     /// the latest version (spec 7 rule 2) and calling [`Self::reload`].
     pub fn stopped(&self) -> Vec<&Gap> {
-        self.streams.values().filter_map(|s| s.stopped.as_ref()).collect()
+        self.streams
+            .values()
+            .filter_map(|s| s.stopped.as_ref())
+            .collect()
     }
 
     pub fn is_stopped(&self) -> bool {
@@ -200,8 +219,15 @@ impl Receiver {
             // seq order; the binding timestamp then id decide between two
             // updates that claim the same seq.
             log.sort_by(|a, b| (a.body.seq, a.ts_ms, &a.id).cmp(&(b.body.seq, b.ts_ms, &b.id)));
-            let start = if self.streams.contains_key(&key) { 0 } else { self.start_of(&log) };
-            let state = self.streams.entry(key.clone()).or_insert(StreamState { next: start, stopped: None });
+            let start = if self.streams.contains_key(&key) {
+                0
+            } else {
+                self.start_of(&log)
+            };
+            let state = self.streams.entry(key.clone()).or_insert(StreamState {
+                next: start,
+                stopped: None,
+            });
             if state.stopped.is_some() {
                 continue;
             }
@@ -215,7 +241,11 @@ impl Receiver {
                     continue; // handled by an earlier call
                 }
                 if u.body.seq > state.next {
-                    let gap = Gap { stream: key.clone(), expected: state.next, found: u.body.seq };
+                    let gap = Gap {
+                        stream: key.clone(),
+                        expected: state.next,
+                        found: u.body.seq,
+                    };
                     state.stopped = Some(gap.clone());
                     report.gaps.push(gap);
                     break;
@@ -237,7 +267,9 @@ impl Receiver {
     /// that first update cannot be told from a stream that simply began
     /// there; see the spec corrections in the Spike results.
     fn start_of(&self, log: &[&Stamped<Update>]) -> u64 {
-        let Some(base) = &self.base_version else { return 0 };
+        let Some(base) = &self.base_version else {
+            return 0;
+        };
         log.iter()
             .filter(|u| &u.body.base_version == base)
             .map(|u| u.body.seq)
@@ -256,7 +288,10 @@ impl Receiver {
             report.skipped.push((u.id.clone(), Skip::Unsupported));
             return;
         }
-        if base_version.as_deref().is_some_and(|b| b != body.base_version) {
+        if base_version
+            .as_deref()
+            .is_some_and(|b| b != body.base_version)
+        {
             report.skipped.push((u.id.clone(), Skip::OtherBase));
             return;
         }
@@ -274,6 +309,60 @@ impl Receiver {
         target.apply(&body.algorithm, &body.doc_model, &bytes);
         report.applied.push(u.id.clone());
     }
+}
+
+/// Spec 7 rule 6, as a check an algorithm profile runs against its own
+/// [`Target`]: applying the same updates in different orders MUST give
+/// byte-identical state. Per-stream order is fixed by rule 2, so what varies
+/// is how the streams interleave; `trials` pseudo-random interleavings
+/// (deterministic, seeded by the trial number) are delivered to a fresh
+/// receiver and target, and every final state must equal the first one.
+pub fn order_independent<T: Target>(
+    updates: &[Stamped<Update>],
+    mut fresh: impl FnMut() -> T,
+    state_of: impl Fn(&T) -> Vec<u8>,
+    trials: u64,
+) -> Result<(), String> {
+    let mut streams: BTreeMap<StreamKey, Vec<&Stamped<Update>>> = BTreeMap::new();
+    for u in updates {
+        streams.entry(stream_of(u)).or_default().push(u);
+    }
+    for log in streams.values_mut() {
+        log.sort_by_key(|u| u.body.seq);
+    }
+    let mut reference: Option<Vec<u8>> = None;
+    for trial in 0..trials {
+        let mut cursors: Vec<(usize, &Vec<&Stamped<Update>>)> =
+            streams.values().map(|l| (0, l)).collect();
+        let mut rng = trial
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        let (mut delivered, mut receiver, mut target) = (Vec::new(), Receiver::new(None), fresh());
+        while cursors.iter().any(|(at, l)| *at < l.len()) {
+            rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let live: Vec<usize> = (0..cursors.len())
+                .filter(|i| cursors[*i].0 < cursors[*i].1.len())
+                .collect();
+            let pick = live[(rng >> 33) as usize % live.len()];
+            let (at, log) = &mut cursors[pick];
+            delivered.push(log[*at].clone());
+            *at += 1;
+            receiver.ingest(&delivered, &mut target);
+        }
+        let state = state_of(&target);
+        match &reference {
+            None => reference = Some(state),
+            Some(first) if *first != state => {
+                return Err(format!(
+                    "interleaving {trial} gave {state:?}, interleaving 0 gave {first:?}"
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -301,7 +390,14 @@ mod tests {
         }
     }
 
-    fn upd(id: &str, ts: u64, sender: &str, device: Option<&str>, seq: u64, payload: &str) -> Stamped<Update> {
+    fn upd(
+        id: &str,
+        ts: u64,
+        sender: &str,
+        device: Option<&str>,
+        seq: u64,
+        payload: &str,
+    ) -> Stamped<Update> {
         upd_with(id, ts, sender, device, "append/1", "$v1", seq, payload)
     }
 
@@ -354,12 +450,24 @@ mod tests {
 
     #[test]
     fn a_gap_stops_the_stream_and_nothing_past_it_is_applied_rule_2() {
-        let log = [a("u0", 0, "a"), a("u1", 1, "b"), a("u3", 3, "d"), a("u4", 4, "e")];
+        let log = [
+            a("u0", 0, "a"),
+            a("u1", 1, "b"),
+            a("u3", 3, "d"),
+            a("u4", 4, "e"),
+        ];
         let mut r = Receiver::new(None);
         let mut t = Append(Vec::new());
         let rep = r.ingest(&log, &mut t);
         assert_eq!(state(&t), "ab");
-        assert_eq!(rep.gaps, [Gap { stream: stream_of(&log[0]), expected: 2, found: 3 }]);
+        assert_eq!(
+            rep.gaps,
+            [Gap {
+                stream: stream_of(&log[0]),
+                expected: 2,
+                found: 3
+            }]
+        );
         assert!(r.is_stopped());
     }
 
@@ -409,13 +517,19 @@ mod tests {
         let mut r = Receiver::new(None);
         let mut t = Append(Vec::new());
         let rep = r.ingest(&log, &mut t);
-        assert!(rep.gaps.is_empty(), "same seq on two devices is not a duplicate: {rep:?}");
+        assert!(
+            rep.gaps.is_empty(),
+            "same seq on two devices is not a duplicate: {rep:?}"
+        );
         assert_eq!(rep.applied.len(), 4);
     }
 
     #[test]
     fn without_a_device_a_principal_is_one_stream() {
-        let log = [upd("u0", 1, "@a:x", None, 0, "a"), upd("u1", 2, "@a:x", None, 1, "b")];
+        let log = [
+            upd("u0", 1, "@a:x", None, 0, "a"),
+            upd("u1", 2, "@a:x", None, 1, "b"),
+        ];
         let mut r = Receiver::new(None);
         let mut t = Append(Vec::new());
         r.ingest(&log, &mut t);
@@ -432,7 +546,11 @@ mod tests {
         let mut r = Receiver::new(None);
         let mut t = Append(Vec::new());
         let rep = r.ingest(&log, &mut t);
-        assert_eq!(state(&t), "ac", "nothing from the unsupported update is shown");
+        assert_eq!(
+            state(&t),
+            "ac",
+            "nothing from the unsupported update is shown"
+        );
         assert_eq!(rep.skipped, [("u1".to_string(), Skip::Unsupported)]);
         assert!(rep.gaps.is_empty(), "not mistaken for a lost update");
     }
@@ -455,30 +573,53 @@ mod tests {
         let mut t = Append(Vec::new());
         let rep = r.ingest(&log, &mut t);
         assert_eq!(state(&t), "ac", "the last valid state is kept");
-        assert_eq!(rep.dropped, [("u1".to_string(), Dropped::Invalid("instruction not valid".into()))]);
+        assert_eq!(
+            rep.dropped,
+            [(
+                "u1".to_string(),
+                Dropped::Invalid("instruction not valid".into())
+            )]
+        );
         assert!(rep.gaps.is_empty());
     }
 
     #[test]
     fn malformed_payloads_are_dropped_not_applied() {
         let mut bad_size = a("u0", 0, "abc");
-        bad_size.body.payload = Payload::Base64 { data: "YWJj".into(), size: 7 };
+        bad_size.body.payload = Payload::Base64 {
+            data: "YWJj".into(),
+            size: 7,
+        };
         let mut bad_b64 = a("u1", 1, "x");
-        bad_b64.body.payload = Payload::Base64 { data: "!!!".into(), size: 1 };
+        bad_b64.body.payload = Payload::Base64 {
+            data: "!!!".into(),
+            size: 1,
+        };
         let mut file = a("u2", 2, "x");
         file.body.payload = file_payload(integrity::file_ref(
             "application/octet-stream",
             b"x",
-            Locator::Url { href: "https://x/y".into() },
+            Locator::Url {
+                href: "https://x/y".into(),
+            },
         ));
         let mut r = Receiver::new(None);
         let mut t = Append(Vec::new());
         let rep = r.ingest(&[bad_size, bad_b64, file], &mut t);
         assert_eq!(state(&t), "");
         assert_eq!(rep.dropped.len(), 3);
-        assert!(matches!(rep.dropped[0].1, Dropped::BadPayload(PayloadError::SizeMismatch { .. })));
-        assert!(matches!(rep.dropped[1].1, Dropped::BadPayload(PayloadError::NotBase64(_))));
-        assert!(matches!(rep.dropped[2].1, Dropped::BadPayload(PayloadError::IsFile)));
+        assert!(matches!(
+            rep.dropped[0].1,
+            Dropped::BadPayload(PayloadError::SizeMismatch { .. })
+        ));
+        assert!(matches!(
+            rep.dropped[1].1,
+            Dropped::BadPayload(PayloadError::NotBase64(_))
+        ));
+        assert!(matches!(
+            rep.dropped[2].1,
+            Dropped::BadPayload(PayloadError::IsFile)
+        ));
     }
 
     #[test]
@@ -492,7 +633,10 @@ mod tests {
         let rep = r.ingest(&log, &mut t);
         assert_eq!(state(&t), "b");
         assert_eq!(rep.applied, ["u1"]);
-        assert!(rep.gaps.is_empty(), "older updates are behind the loaded version, not a gap: {rep:?}");
+        assert!(
+            rep.gaps.is_empty(),
+            "older updates are behind the loaded version, not a gap: {rep:?}"
+        );
     }
 
     #[test]
@@ -539,8 +683,17 @@ mod tests {
             Version {
                 dcp: 0,
                 parents: vec![],
-                file: integrity::file_ref("text/plain", b"v", Locator::Url { href: "https://x/y".into() }),
-                created_by: Author { principal: "@a:x".into(), device: "D".into() },
+                file: integrity::file_ref(
+                    "text/plain",
+                    b"v",
+                    Locator::Url {
+                        href: "https://x/y".into(),
+                    },
+                ),
+                created_by: Author {
+                    principal: "@a:x".into(),
+                    device: "D".into(),
+                },
                 message: None,
                 covers: covers.map(|(algorithm, through)| Covers {
                     algorithm: algorithm.into(),
@@ -565,11 +718,27 @@ mod tests {
         assert!(!r.is_stopped());
         let mut fresh = Append(b"v2:".to_vec());
         let rep = r.ingest(&log, &mut fresh);
-        assert_eq!(state(&fresh), "v2:", "updates based on v1 are not replayed onto v2");
-        assert!(rep.gaps.is_empty(), "the old hole is behind the version now: {rep:?}");
+        assert_eq!(
+            state(&fresh),
+            "v2:",
+            "updates based on v1 are not replayed onto v2"
+        );
+        assert!(
+            rep.gaps.is_empty(),
+            "the old hole is behind the version now: {rep:?}"
+        );
 
         // New updates on top of v2 continue the stream.
-        log.push(upd_with("u3", 30, "@a:x", Some("D1"), "append/1", "$v2", 3, "d"));
+        log.push(upd_with(
+            "u3",
+            30,
+            "@a:x",
+            Some("D1"),
+            "append/1",
+            "$v2",
+            3,
+            "d",
+        ));
         let rep = r.ingest(&log, &mut fresh);
         assert_eq!(state(&fresh), "v2:d");
         assert_eq!(rep.applied, ["u3"]);
@@ -587,7 +756,14 @@ mod tests {
         let mut t = Append(Vec::new());
         let rep = r.ingest(&log, &mut t);
         assert_eq!(state(&t), "d");
-        assert_eq!(rep.gaps, [Gap { stream: stream_of(&log[0]), expected: 4, found: 5 }]);
+        assert_eq!(
+            rep.gaps,
+            [Gap {
+                stream: stream_of(&log[0]),
+                expected: 4,
+                found: 5
+            }]
+        );
     }
 
     #[test]
@@ -610,7 +786,11 @@ mod tests {
 
     #[test]
     fn compaction_covered_updates_still_in_the_log_are_not_replayed() {
-        let log = [a("u0", 0, "a"), a("u1", 1, "b"), upd_with("u2", 30, "@a:x", Some("D1"), "append/1", "$v2", 2, "c")];
+        let log = [
+            a("u0", 0, "a"),
+            a("u1", 1, "b"),
+            upd_with("u2", 30, "@a:x", Some("D1"), "append/1", "$v2", 2, "c"),
+        ];
         let v2 = version("$v2", Some(("append/1", "u1")));
         let mut r = Receiver::new(None);
         r.reload(&v2);
@@ -623,11 +803,16 @@ mod tests {
     #[test]
     fn inline_payload_limit_is_34000_bytes_rule_5() {
         assert!(inline_payload(&vec![7u8; 34_000]).is_ok());
-        assert_eq!(inline_payload(&vec![7u8; 34_001]), Err(PayloadError::TooLarge(34_001)));
+        assert_eq!(
+            inline_payload(&vec![7u8; 34_001]),
+            Err(PayloadError::TooLarge(34_001))
+        );
         let p = inline_payload(b"hello").unwrap();
         assert_eq!(decode_inline(&p).unwrap(), b"hello");
         // The base64 text of the largest payload still fits the schema's maxLength.
-        let Payload::Base64 { data, .. } = inline_payload(&vec![255u8; 34_000]).unwrap() else { panic!() };
+        let Payload::Base64 { data, .. } = inline_payload(&vec![255u8; 34_000]).unwrap() else {
+            panic!()
+        };
         assert!(data.len() <= 48_000);
     }
 
@@ -644,5 +829,48 @@ mod tests {
         let mut w = StreamWriter::new("append/1", "text/1");
         let u = w.next("$v1", b"hello").unwrap();
         crate::schema::validate_typed(crate::schema::Kind::Update, &u).unwrap();
+    }
+
+    /// A commutative toy algorithm: the state is the set of payloads.
+    struct SetDoc(std::collections::BTreeSet<Vec<u8>>);
+
+    impl Target for SetDoc {
+        fn supports(&self, _: &str, _: &str) -> bool {
+            true
+        }
+        fn dry_run(&self, _: &str, _: &str, _: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+        fn apply(&mut self, _: &str, _: &str, payload: &[u8]) {
+            self.0.insert(payload.to_vec());
+        }
+    }
+
+    fn two_streams() -> Vec<Stamped<Update>> {
+        vec![
+            upd("a0", 1, "@a:x", Some("D1"), 0, "x"),
+            upd("a1", 2, "@a:x", Some("D1"), 1, "y"),
+            upd("b0", 3, "@b:x", Some("D2"), 0, "p"),
+            upd("b1", 4, "@b:x", Some("D2"), 1, "q"),
+        ]
+    }
+
+    #[test]
+    fn determinism_rule_6_holds_for_a_commutative_algorithm() {
+        let r = order_independent(
+            &two_streams(),
+            || SetDoc(Default::default()),
+            |t| t.0.iter().flatten().copied().collect(),
+            50,
+        );
+        assert_eq!(r, Ok(()));
+    }
+
+    #[test]
+    fn determinism_check_can_fail_an_order_dependent_algorithm() {
+        // `append` depends on how the streams interleave, which is exactly
+        // what rule 6 forbids of a real profile.
+        let r = order_independent(&two_streams(), || Append(Vec::new()), |t| t.0.clone(), 50);
+        assert!(r.is_err(), "the harness must be able to fail");
     }
 }

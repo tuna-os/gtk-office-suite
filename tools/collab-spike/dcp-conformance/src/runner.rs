@@ -59,21 +59,38 @@ pub struct Journey {
 
 macro_rules! journey {
     ($name:ident, $spec:expr, $needs:expr) => {
-        Journey { name: stringify!($name), spec_test: $spec, needs: $needs, run: |f| Box::pin(journeys::$name(f)) }
+        Journey {
+            name: stringify!($name),
+            spec_test: $spec,
+            needs: $needs,
+            run: |f| Box::pin(journeys::$name(f)),
+        }
     };
 }
 
 /// Every journey, in spec order.
 pub const JOURNEYS: &[Journey] = &[
     journey!(convergence_on_one_head, "1", &[]),
-    journey!(second_head_shown_not_hidden, "2", &[Need::ArbitraryParents, Need::History]),
+    journey!(
+        second_head_shown_not_hidden,
+        "2",
+        &[Need::ArbitraryParents, Need::History]
+    ),
     journey!(corrupt_file_rejected, "3", &[]),
     journey!(truncated_upload_never_published, "3", &[Need::UploadFaults]),
     journey!(lease_exclusion_and_readback, "4", &[Need::LeaseWrites]),
     journey!(lease_expiry_releases, "5", &[Need::LeaseWrites]),
     journey!(roles_enforced_at_store, "6", &[]),
-    journey!(revocation_hides_new_content, "7", &[Need::GrantRevoke, Need::Revocation]),
-    journey!(unknown_algorithm_falls_back_to_versions, "8", &[Need::Updates]),
+    journey!(
+        revocation_hides_new_content,
+        "7",
+        &[Need::GrantRevoke, Need::Revocation]
+    ),
+    journey!(
+        unknown_algorithm_falls_back_to_versions,
+        "8",
+        &[Need::Updates]
+    ),
     journey!(update_stream_gap_recovery, "9", &[Need::Updates]),
 ];
 
@@ -86,7 +103,9 @@ pub enum Outcome {
     Passed,
     Failed(Failure),
     /// A capability the journey needs is declared absent. Not a pass.
-    Skipped { missing: Vec<&'static str> },
+    Skipped {
+        missing: Vec<&'static str>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,7 +139,11 @@ impl Report {
     }
 
     fn names(&self, keep: impl Fn(&Outcome) -> bool) -> Vec<&'static str> {
-        self.results.iter().filter(|r| keep(&r.outcome)).map(|r| r.name).collect()
+        self.results
+            .iter()
+            .filter(|r| keep(&r.outcome))
+            .map(|r| r.name)
+            .collect()
     }
 
     /// Panic unless no journey failed. Skips do not fail this; check them
@@ -130,11 +153,18 @@ impl Report {
             .results
             .iter()
             .filter_map(|r| match &r.outcome {
-                Outcome::Failed(f) => Some(format!("  {} (spec test {}): {f}", r.name, r.spec_test)),
+                Outcome::Failed(f) => {
+                    Some(format!("  {} (spec test {}): {f}", r.name, r.spec_test))
+                }
                 _ => None,
             })
             .collect();
-        assert!(failed.is_empty(), "{} failed conformance journeys:\n{}\n\n{self}", self.binding, failed.join("\n"));
+        assert!(
+            failed.is_empty(),
+            "{} failed conformance journeys:\n{}\n\n{self}",
+            self.binding,
+            failed.join("\n")
+        );
     }
 
     /// Panic unless exactly the named journeys were skipped (by name). A
@@ -145,7 +175,11 @@ impl Report {
         got.sort_unstable();
         let mut want: Vec<&str> = expected.to_vec();
         want.sort_unstable();
-        assert_eq!(got, want, "{}: the skipped journeys differ from the declared ones\n{self}", self.binding);
+        assert_eq!(
+            got, want,
+            "{}: the skipped journeys differ from the declared ones\n{self}",
+            self.binding
+        );
     }
 
     /// No failures, no skips: every journey ran and passed.
@@ -162,10 +196,16 @@ impl fmt::Display for Report {
         for r in &self.results {
             match &r.outcome {
                 Outcome::Passed => writeln!(f, "  PASS    {} (spec test {})", r.name, r.spec_test)?,
-                Outcome::Failed(e) => writeln!(f, "  FAIL    {} (spec test {}): {e}", r.name, r.spec_test)?,
-                Outcome::Skipped { missing } => {
-                    writeln!(f, "  SKIPPED {} (spec test {}): binding lacks {}", r.name, r.spec_test, missing.join(", "))?
+                Outcome::Failed(e) => {
+                    writeln!(f, "  FAIL    {} (spec test {}): {e}", r.name, r.spec_test)?
                 }
+                Outcome::Skipped { missing } => writeln!(
+                    f,
+                    "  SKIPPED {} (spec test {}): binding lacks {}",
+                    r.name,
+                    r.spec_test,
+                    missing.join(", ")
+                )?,
             }
         }
         write!(
@@ -180,9 +220,19 @@ impl fmt::Display for Report {
 
 async fn run_journey(factory: &dyn StoreFactory, j: &Journey) -> JourneyResult {
     let caps = factory.capabilities();
-    let missing: Vec<&'static str> = j.needs.iter().filter(|n| !n.met(&caps)).map(|n| n.label()).collect();
+    let missing: Vec<&'static str> = j
+        .needs
+        .iter()
+        .filter(|n| !n.met(&caps))
+        .map(|n| n.label())
+        .collect();
     let outcome = if !missing.is_empty() {
-        eprintln!("SKIPPED {} on {}: binding lacks {}", j.name, factory.name(), missing.join(", "));
+        eprintln!(
+            "SKIPPED {} on {}: binding lacks {}",
+            j.name,
+            factory.name(),
+            missing.join(", ")
+        );
         Outcome::Skipped { missing }
     } else {
         match (j.run)(factory).await {
@@ -190,20 +240,31 @@ async fn run_journey(factory: &dyn StoreFactory, j: &Journey) -> JourneyResult {
             Err(e) => Outcome::Failed(e),
         }
     };
-    JourneyResult { name: j.name, spec_test: j.spec_test, outcome }
+    JourneyResult {
+        name: j.name,
+        spec_test: j.spec_test,
+        outcome,
+    }
 }
 
 /// Run the journeys named in `names`, in spec order. An unknown name panics:
 /// a typo must not silently select nothing.
 pub async fn run_selected(factory: &dyn StoreFactory, names: &[&str]) -> Report {
     for n in names {
-        assert!(JOURNEYS.iter().any(|j| j.name == *n), "no journey named {n}; known: {:?}", journey_names());
+        assert!(
+            JOURNEYS.iter().any(|j| j.name == *n),
+            "no journey named {n}; known: {:?}",
+            journey_names()
+        );
     }
     let mut results = Vec::new();
     for j in JOURNEYS.iter().filter(|j| names.contains(&j.name)) {
         results.push(run_journey(factory, j).await);
     }
-    Report { binding: factory.name(), results }
+    Report {
+        binding: factory.name(),
+        results,
+    }
 }
 
 /// Run every journey against `factory`.
@@ -212,7 +273,10 @@ pub async fn run_all(factory: &dyn StoreFactory) -> Report {
     for j in JOURNEYS {
         results.push(run_journey(factory, j).await);
     }
-    let report = Report { binding: factory.name(), results };
+    let report = Report {
+        binding: factory.name(),
+        results,
+    };
     eprintln!("{report}");
     report
 }
@@ -220,6 +284,9 @@ pub async fn run_all(factory: &dyn StoreFactory) -> Report {
 /// Run one journey by name (even if the binding lacks a capability it needs
 /// that is reported as `Skipped`).
 pub async fn run_one(factory: &dyn StoreFactory, name: &str) -> JourneyResult {
-    let j = JOURNEYS.iter().find(|j| j.name == name).unwrap_or_else(|| panic!("no journey named {name}"));
+    let j = JOURNEYS
+        .iter()
+        .find(|j| j.name == name)
+        .unwrap_or_else(|| panic!("no journey named {name}"));
     run_journey(factory, j).await
 }

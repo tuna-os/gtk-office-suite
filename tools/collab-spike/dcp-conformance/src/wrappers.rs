@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use dcp_core::{
-    graph, DocId, DocumentStore, Lease, Meta, NewFile, Result, Role, Stamped, StoreError, Update, Version,
+    graph, DocId, DocumentStore, Lease, Meta, NewFile, Result, Role, Stamped, StoreError, Update,
+    Version,
 };
 use parking_lot::Mutex;
 
@@ -30,8 +31,12 @@ pub enum Corruption {
 }
 
 impl Corruption {
-    pub const ALL: [Corruption; 4] =
-        [Corruption::Truncate, Corruption::FlipBit, Corruption::Append, Corruption::Empty];
+    pub const ALL: [Corruption; 4] = [
+        Corruption::Truncate,
+        Corruption::FlipBit,
+        Corruption::Append,
+        Corruption::Empty,
+    ];
 
     pub fn apply(self, mut bytes: Vec<u8>) -> Vec<u8> {
         match self {
@@ -65,7 +70,11 @@ pub struct CorruptingStore {
 
 impl CorruptingStore {
     pub fn new(inner: Arc<dyn DocumentStore>, corruption: Corruption, target: Target) -> Self {
-        CorruptingStore { inner, corruption, target }
+        CorruptingStore {
+            inner,
+            corruption,
+            target,
+        }
     }
 }
 
@@ -101,7 +110,11 @@ impl DocumentStore for CorruptingStore {
             Target::Every => true,
             Target::Version(id) => *id == version.id,
         };
-        Ok(if hit { self.corruption.apply(bytes) } else { bytes })
+        Ok(if hit {
+            self.corruption.apply(bytes)
+        } else {
+            bytes
+        })
     }
     async fn publish_version(
         &self,
@@ -110,7 +123,9 @@ impl DocumentStore for CorruptingStore {
         file: NewFile,
         message: Option<String>,
     ) -> Result<Stamped<Version>> {
-        self.inner.publish_version(doc, parents, file, message).await
+        self.inner
+            .publish_version(doc, parents, file, message)
+            .await
     }
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
         self.inner.lease(doc).await
@@ -184,7 +199,12 @@ pub struct Defective {
 
 impl Defective {
     pub fn new(inner: Arc<dyn DocumentStore>, defect: Defect) -> Self {
-        Defective { inner, defect, echo: Mutex::new(HashMap::new()), frozen: Mutex::new(None) }
+        Defective {
+            inner,
+            defect,
+            echo: Mutex::new(HashMap::new()),
+            frozen: Mutex::new(None),
+        }
     }
 
     /// Where writes go: the inner store, or the privileged one for
@@ -250,7 +270,9 @@ impl DocumentStore for Defective {
         file: NewFile,
         message: Option<String>,
     ) -> Result<Stamped<Version>> {
-        self.writer().publish_version(doc, parents, file, message).await
+        self.writer()
+            .publish_version(doc, parents, file, message)
+            .await
     }
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
         if matches!(self.defect, Defect::LeaseEcho) {
@@ -296,7 +318,10 @@ impl DocumentStore for Defective {
         if matches!(self.defect, Defect::ReorderUpdates) {
             let mut streams: BTreeMap<(String, Option<String>), Vec<usize>> = BTreeMap::new();
             for (i, u) in all.iter().enumerate() {
-                streams.entry((u.sender.clone(), u.device.clone())).or_default().push(i);
+                streams
+                    .entry((u.sender.clone(), u.device.clone()))
+                    .or_default()
+                    .push(i);
             }
             for mut idx in streams.into_values() {
                 idx.sort_by_key(|&i| all[i].body.seq);

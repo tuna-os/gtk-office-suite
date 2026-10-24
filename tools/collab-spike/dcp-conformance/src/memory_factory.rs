@@ -35,13 +35,20 @@ pub struct MemoryFactory {
 impl MemoryFactory {
     /// Compare-and-set leases, verified uploads: the correct reference store.
     pub fn new() -> Self {
-        MemoryFactory { config: MemoryConfig::default() }
+        MemoryFactory {
+            config: MemoryConfig::default(),
+        }
     }
 
     /// The same, but `write_lease` lets two writers both succeed (last wins),
     /// as Matrix state events do.
     pub fn racy() -> Self {
-        MemoryFactory { config: MemoryConfig { cas_leases: false, ..MemoryConfig::default() } }
+        MemoryFactory {
+            config: MemoryConfig {
+                cas_leases: false,
+                ..MemoryConfig::default()
+            },
+        }
     }
 
     pub fn with_config(config: MemoryConfig) -> Self {
@@ -58,11 +65,18 @@ impl Default for MemoryFactory {
 #[async_trait]
 impl StoreFactory for MemoryFactory {
     fn name(&self) -> String {
-        if self.config.cas_leases { "memory".into() } else { "memory-racy-lease".into() }
+        if self.config.cas_leases {
+            "memory".into()
+        } else {
+            "memory-racy-lease".into()
+        }
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities { racy_lease: !self.config.cas_leases, ..Capabilities::full() }
+        Capabilities {
+            racy_lease: !self.config.cas_leases,
+            ..Capabilities::full()
+        }
     }
 
     async fn fresh(&self) -> Result<Fixture, Failure> {

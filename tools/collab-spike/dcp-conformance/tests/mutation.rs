@@ -8,8 +8,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use dcp_conformance::wrappers::{Defect, Defective};
 use dcp_conformance::{
-    journey_names, run_all, run_one, run_selected, Capabilities, Failure, Fixture, MemoryFactory, Outcome,
-    StoreFactory,
+    journey_names, run_all, run_one, run_selected, Capabilities, Failure, Fixture, MemoryFactory,
+    Outcome, StoreFactory,
 };
 use dcp_core::memory::MemoryConfig;
 use dcp_core::DocumentStore;
@@ -29,7 +29,11 @@ struct Mutant {
 
 impl Mutant {
     fn new(label: &'static str, apply: impl Fn(&mut Fixture) + Send + Sync + 'static) -> Self {
-        Mutant { label, base: MemoryFactory::new(), apply: Box::new(apply) }
+        Mutant {
+            label,
+            base: MemoryFactory::new(),
+            apply: Box::new(apply),
+        }
     }
 
     fn on(mut self, base: MemoryFactory) -> Self {
@@ -57,7 +61,10 @@ async fn assert_caught(factory: &dyn StoreFactory, journey: &str) {
     let r = run_one(factory, journey).await;
     match r.outcome {
         Outcome::Failed(why) => eprintln!("caught: {journey} on {}: {why}", factory.name()),
-        other => panic!("{journey} did NOT fail on {} (got {other:?}): the suite cannot see this defect", factory.name()),
+        other => panic!(
+            "{journey} did NOT fail on {} (got {other:?}): the suite cannot see this defect",
+            factory.name()
+        ),
     }
 }
 
@@ -112,7 +119,11 @@ impl StoreFactory for Limited {
 async fn a_missing_capability_is_reported_as_skipped_not_passed() {
     let f = Limited {
         inner: MemoryFactory::new(),
-        caps: Capabilities { updates: false, revocation: false, ..Capabilities::full() },
+        caps: Capabilities {
+            updates: false,
+            revocation: false,
+            ..Capabilities::full()
+        },
     };
     let report = run_all(&f).await;
     report.assert_no_failures();
@@ -122,7 +133,9 @@ async fn a_missing_capability_is_reported_as_skipped_not_passed() {
         "update_stream_gap_recovery",
     ]);
     assert_eq!(report.passed().len(), 7);
-    assert!(matches!(&report.get("update_stream_gap_recovery").unwrap().outcome, Outcome::Skipped { missing } if missing == &["updates"]));
+    assert!(
+        matches!(&report.get("update_stream_gap_recovery").unwrap().outcome, Outcome::Skipped { missing } if missing == &["updates"])
+    );
 }
 
 #[test]
@@ -133,7 +146,9 @@ fn declaring_the_wrong_skips_fails() {
         results: vec![dcp_conformance::JourneyResult {
             name: "revocation_hides_new_content",
             spec_test: "7",
-            outcome: Outcome::Skipped { missing: vec!["revocation"] },
+            outcome: Outcome::Skipped {
+                missing: vec!["revocation"],
+            },
         }],
     };
     report.assert_skipped_exactly(&[]);
@@ -150,15 +165,24 @@ async fn a_misspelled_journey_name_panics_instead_of_selecting_nothing() {
 #[tokio::test]
 async fn store_that_ignores_roles_fails_roles_enforced_at_store() {
     let f = Mutant::new("ignores roles", |fx| {
-        fx.viewer = wrap(&fx.viewer, Defect::IgnoreRoles { privileged: fx.owner.clone() });
+        fx.viewer = wrap(
+            &fx.viewer,
+            Defect::IgnoreRoles {
+                privileged: fx.owner.clone(),
+            },
+        );
     });
     assert_caught(&f, "roles_enforced_at_store").await;
 }
 
 #[tokio::test]
 async fn store_that_skips_the_upload_hash_check_fails_truncated_upload_never_published() {
-    let f = Mutant::new("skips the hash check of uploads", |_| {})
-        .on(MemoryFactory::with_config(MemoryConfig { verify_uploads: false, ..MemoryConfig::default() }));
+    let f = Mutant::new("skips the hash check of uploads", |_| {}).on(MemoryFactory::with_config(
+        MemoryConfig {
+            verify_uploads: false,
+            ..MemoryConfig::default()
+        },
+    ));
     assert_caught(&f, "truncated_upload_never_published").await;
 }
 
@@ -237,7 +261,12 @@ async fn a_defect_does_not_fail_unrelated_journeys() {
     let f = Mutant::new("revoke is a no-op", |fx| {
         fx.owner = wrap(&fx.owner, Defect::RevokeIsNoop);
     });
-    for name in ["convergence_on_one_head", "second_head_shown_not_hidden", "corrupt_file_rejected", "lease_expiry_releases"] {
+    for name in [
+        "convergence_on_one_head",
+        "second_head_shown_not_hidden",
+        "corrupt_file_rejected",
+        "lease_expiry_releases",
+    ] {
         assert_eq!(run_one(&f, name).await.outcome, Outcome::Passed, "{name}");
     }
 }
