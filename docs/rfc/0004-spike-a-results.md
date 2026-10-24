@@ -64,7 +64,8 @@ The load-bearing results:
 - **Runner.** GitHub-hosted `ubuntu-24.04` (image 20261021.618), 2 vCPU, rustc
   1.99.1, debug (`test` profile) builds.
 - **Commands.** Workflow
-  [`.github/workflows/collab-spike-matrix.yml`](../../.github/workflows/collab-spike-matrix.yml);
+  [`.github/workflows/collab-spike.yml`](../../.github/workflows/collab-spike.yml) (job `matrix`;
+  at the time of the run it was the separate `collab-spike-matrix.yml`, now merged into it);
   in `tools/collab-spike`:
   `cargo test -p dcp-matrix --no-fail-fast` (unit, journeys, conformance, against
   `relaxed`; again against `default` for journeys and conformance) and

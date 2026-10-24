@@ -66,10 +66,11 @@ contains:
   Online source.
 - `scripts/collabora-up.sh`: starts `collabora/code` with `aliasgroup1`, TLS
   off and `--network host`.
-- `.github/workflows/collab-spike-wopi.yml`: the `simulator` job on every push
-  to `spike/collab-wopi`; the `collabora` job on `workflow_dispatch` or when the
-  head commit message contains `[collabora]` (a workflow can only be dispatched
-  once it is on the default branch).
+- `.github/workflows/collab-spike.yml`: the `wopi-sim` job on every push (it was
+  `collab-spike-wopi.yml`'s `simulator` job on `spike/collab-wopi` when these runs
+  were made); the `collabora` job on `workflow_dispatch`, nightly, on a PR touching
+  `dcp-wopi/**`, or when the head commit message contains `[collabora]` (a workflow
+  can only be dispatched once it is on the default branch).
 
 **Sources for Collabora's behaviour.** The Collabora SDK pages are behind an
 anti-bot wall and were not readable. Behaviour was taken from Microsoft's public
