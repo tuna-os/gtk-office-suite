@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tunaos.org/dcp/0/meta.schema.json",
+  "$id": "https://tunaos.org/dcp/1/meta.schema.json",
   "title": "DCP document metadata",
   "type": "object",
   "required": [
@@ -12,7 +12,7 @@
   "additionalProperties": false,
   "properties": {
     "dcp": {
-      "const": 0
+      "const": 1
     },
     "title": {
       "type": "string",

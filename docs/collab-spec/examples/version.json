@@ -1,5 +1,5 @@
 {
-  "dcp": 0,
+  "dcp": 1,
   "parents": [
     "$parent_event_id"
   ],

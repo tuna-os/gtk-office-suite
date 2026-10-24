@@ -1,6 +1,6 @@
 # RFC 0004: An interoperable document-collaboration protocol (Matrix, OCM, WOPI and local-first bindings)
 
-Date: 2026-10-24 · Status: **draft, not accepted** · Related: [RFC-0001](0001-crdt-collaboration.md), [RFC-0003](0003-cloud-documents.md)
+Date: 2026-10-24 · Status: **draft, not accepted** (Spikes A and D have run; B, C and E have not) · Related: [RFC-0001](0001-crdt-collaboration.md), [RFC-0003](0003-cloud-documents.md)
 
 ## Provenance
 
@@ -10,9 +10,11 @@ implement (Collabora Office was "just one example"); and what newer local-first 
 iroh, should be considered. This RFC writes down the research behind those answers so it can be
 argued with before any code exists.
 
-Nothing here was built or run. Every claim below is either cited to a source in
-[References](#references) or listed under [Not verified](#not-verified). Where a source is a
-vendor blog or a conference abstract, the claim is only as strong as that.
+The research below was written before anything was built, and every claim in it is either cited to a
+source in [References](#references) or listed under [Not verified](#not-verified). Where a source is a
+vendor blog or a conference abstract, the claim is only as strong as that. Spikes A (Matrix) and D
+(WOPI) have since run once each; see [Spike results](#spike-results), and the claims they checked
+have moved out of Not verified.
 
 ## Summary
 
@@ -82,7 +84,9 @@ Two consequences follow.
   - The Matrix event size limit is 64 KiB. It chunks snapshots into 34 KB blocks so that base64
     and encryption stay under the limit (ADR005).
   - Homeservers rate-limit timeline events to under 10 per second. NeoBoard budgets about 3 per
-    second, so a 1 MB snapshot takes about 8 seconds to save (ADR005).
+    second, so a 1 MB snapshot takes about 8 seconds to save (ADR005). ([Spike A](0004-spike-a-results.md)
+    measured stock Synapse at 0.2 events per second per user, burst 10: 3 per second is a ceiling,
+    not a rate.)
   - Synapse latency averages about 500 ms and each event carries about 350 bytes of JSON
     overhead, so cursors and presence go over a real-time channel and are never stored (MC'25 talk).
   - ADR005 says storing snapshots in the Matrix content repository is "preferable"; the Widget
@@ -101,8 +105,9 @@ Two consequences follow.
   `org.matrix.msc*` prefixes. The talk warns about scalability of delayed events (MSC4140) and
   about apps overwriting each other's shared RTC state.
 - **Rust SDK.** `matrix-rust-sdk` (Apache-2.0) has modules for media, encryption, send queue,
-  room directory search and widgets. Whether they suffice for non-chat event types, relations and
-  encrypted attachments is [not verified](#not-verified).
+  room directory search and widgets. Whether they suffice for non-chat event types and encrypted
+  attachments was checked by [Spike A](0004-spike-a-results.md); relations are
+  [not verified](#not-verified).
 
 ### WOPI
 
@@ -177,8 +182,9 @@ a requirement.
   (title, MIME, profiles, current version), `...document.version` timeline events (media
   reference with encryption info and hash, parent version, author), a `...document.lease` state
   event (holder, expiry), and `...document.update` events (algorithm id, base version, payload
-  inline up to about 30 KB or a media reference). Names and shapes are placeholders until a spike
-  proves them.
+  inline up to about 30 KB or a media reference). Names and shapes were placeholders until a spike
+  proved them; Spike A measured the corrected version of this sketch, which is now
+  [spec section 8.1](../DOCUMENT-COLLABORATION-SPEC.md#81-matrix-binding-measured-once).
 
 ## Problems
 
@@ -221,19 +227,20 @@ a requirement.
 
 ## What would have to be proven
 
-Matching this repository's definition of done:
+Matching this repository's definition of done. The last column is what Spikes A and D showed; "not
+run" means no spike has tried it.
 
-| Claim | Evidence |
-|---|---|
-| Two instances converge over each binding | AT-SPI journey launching two app instances, per binding |
-| A removed member cannot read new updates | Journey: remove, edit, assert the removed device cannot decrypt (Matrix; p2panda-auth if chosen) |
-| Offline gap merges after reconnect | Journey: disconnect, edit both sides, reconnect |
-| A version always points at a complete, valid file | Atomic-save property tests extended to version creation |
-| A WOPI client round-trips a version | Collabora Online opens a version, edits, saves, and the new version appears with correct parent |
-| Lease expiry releases the document | Journey: kill the holder, assert another editor can take over after expiry |
-| A merged document round-trips ODT/DOCX with a truthful loss report | Existing oracle corpora on post-merge documents |
-| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default |
-| Identity mapping between bindings is unambiguous | Test: a Matrix ID and an OCM address never resolve to the same principal unless explicitly linked |
+| Claim | Evidence | After Spikes A and D |
+|---|---|---|
+| Two instances converge over each binding | AT-SPI journey launching two app instances, per binding | Matrix and WOPI: store-level journey 1 passed (two store handles, not two app instances). Other bindings: not run |
+| A removed member cannot read new updates | Journey: remove, edit, assert the removed device cannot decrypt (Matrix; p2panda-auth if chosen) | Matrix: passed, 0 of 70 trials with a control, on the condition that the sender's member view shows the removal. p2panda-auth: not run |
+| Offline gap merges after reconnect | Journey: disconnect, edit both sides, reconnect | Not run as a merge. Matrix: queued events were delivered in order after a 6 to 8 s outage; a second head is shown, not merged |
+| A version always points at a complete, valid file | Atomic-save property tests extended to version creation | Matrix: verify-after-upload, and a truncated upload was never published. The property tests were not extended |
+| A WOPI client round-trips a version | Collabora Online opens a version, edits, saves, and the new version appears with correct parent | **Passed once**, Collabora Online 26.04.5.2, over an in-memory store |
+| Lease expiry releases the document | Journey: kill the holder, assert another editor can take over after expiry | Passed at store level on Matrix and in memory (journey 5), after a fix: a renewal had to change the record. On the WOPI wire: host tests only |
+| A merged document round-trips ODT/DOCX with a truthful loss report | Existing oracle corpora on post-merge documents | Not run |
+| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default | Not run |
+| Identity mapping between bindings is unambiguous | Test: a Matrix ID and an OCM address never resolve to the same principal unless explicitly linked | Not run |
 
 ## Phases and spikes
 
@@ -241,18 +248,37 @@ Each must be abandonable without leaving the codebase worse.
 
 - **Spike A: Matrix.** Two Tables instances converge through a local Synapse. Loro deltas as small
   events, snapshots as encrypted media, an offline gap through the SDK send queue. Measure delta
-  latency, events per minute, room growth over an hour, and removal of a member.
+  latency, events per minute, room growth over an hour, and removal of a member. *Ran, with store
+  level journeys instead of two Tables instances and no Loro deltas; room growth was measured to
+  1,000 events, not an hour (see [Spike results](#spike-results)).*
 - **Spike B: Durable Streams.** The same journeys over a Durable Streams server with client-side
   encryption.
 - **Spike C: iroh and p2panda.** The same journeys with `p2panda-auth` and `p2panda-encryption`.
 - **Spike D: WOPI host adapter.** A small Matrix-backed WOPI host. Collabora Online reads and writes
-  versions with no Collabora change. This is the test of L1 for session-hosted editors.
+  versions with no Collabora change. This is the test of L1 for session-hosted editors. *Ran, over
+  an in-memory store rather than Matrix (see [Spike results](#spike-results)).*
 - **Spike E: OCM interoperability.** Read-only: discover and receive an OCM share from a Nextcloud
   instance and open it. Decides whether an OCM binding is practical.
 - **Output.** A results file for each, like `0001-spike-results.md`, ending in go or no-go, and a
   recommendation on whether the three transports remain bindings or one wins.
 
-A draft-0 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-COLLABORATION-SPEC.md), with schemas and examples in [`docs/collab-spec/`](../collab-spec/). It is unvalidated. Its Matrix event names, size limits and lease rules are a strawman that spikes A and D must confirm or replace; nobody outside this repository should implement it before they report.
+A draft-1 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-COLLABORATION-SPEC.md), with schemas and examples in [`docs/collab-spec/`](../collab-spec/). Its Matrix binding and WOPI adapter have each been measured once and corrected from the results ([Spike results](#spike-results)); its OCM, Durable Streams and iroh bindings have not been measured. Nobody outside this repository should implement it before the remaining spikes report and the namespace is registered.
+
+## Spike results
+
+Spikes A and D have run; B, C and E have not. Each ran **once**, in CI, on one build, and says so.
+
+| Spike | Measured against | Verdict | Results |
+|---|---|---|---|
+| **A: Matrix** | Synapse 1.163.2, matrix-sdk 0.19.1, loopback, one GitHub-hosted 2-core runner | **Go** for L0, L1 and the version-carrying half of L2, with nine corrections to the draft (now in the spec). **No-go as written** for the power-level table (a viewer's forged encrypted version was accepted until `m.room.encrypted` was set to 50) and for "3 events per second" as a default (stock Synapse allows 0.2 per user, burst 10); **thin margin** for the 34000-byte inline payload (largest working payload 36,109 bytes). Lease read-back alone is **partial** (both sessions believed they held it in 7 of 40 races) | [`0004-spike-a-results.md`](0004-spike-a-results.md) |
+| **D: WOPI host adapter** | Collabora Online 26.04.5.2 (`collabora/code:latest`, 2026-10-23), one run | **GO with conditions** for L1 (versions and lease) on session-hosted editors. **L2 and L3 are not offered over WOPI**, and WOPI cannot express two heads or a merge. Conditions: a per-token base-version record, conflict detection by Collabora's timestamp header (`409` with `COOLStatusCode` 1010), a fixed 30-minute lock | [`0004-spike-d-results.md`](0004-spike-d-results.md) |
+
+What the spikes changed in the draft is listed in the [spec's changelog](../DOCUMENT-COLLABORATION-SPEC.md#changelog):
+an on-wire change (`dcp` 1: a lease `renewal` counter), the Matrix power-level table, the rate and
+size rules, the time source, lease read-back, and the WOPI call order, headers and conflict form.
+What neither spike shows: the OCM, Durable Streams and iroh bindings, L3 presence, any update
+algorithm profile, interoperation with real Matrix clients or other WOPI clients, and the WOPI
+adapter running over the Matrix binding (Collabora's save frequency against Matrix's limits).
 
 ## Open questions
 
@@ -273,9 +299,16 @@ A draft-0 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-C
 - Collabora's SDK architecture page was unreachable (anti-bot wall); its internals above rest on
   its blog posts and search snippets.
 - ONLYOFFICE and CryptPad internals beyond their documentation snippets.
-- Whether `matrix-rust-sdk` is sufficient for non-chat events, relations and encrypted
-  attachments; whether a Rust MatrixRTC or LiveKit path exists.
-- Real homeserver limits for relations, retention and media size.
+- Whether `matrix-rust-sdk` is sufficient for **relations**, and whether a Rust MatrixRTC or
+  LiveKit path exists. (Checked by Spike A with matrix-sdk 0.19.1: custom state and timeline event
+  types and encrypted attachments are sufficient, with its own send queue and cross-signing
+  bootstrap; see [Spike results](#spike-results).)
+- Homeserver limits for relations and retention, and any homeserver other than Synapse. (Checked by
+  Spike A on Synapse 1.163.2: message rate, the 64 KiB event cap and media up to 32 MiB; `rc_joins`,
+  `rc_invites` and `rc_login` were not pushed.)
+- What neither spike ran: each results document ends with its own list, including federation, real
+  Matrix clients, a second WOPI client, HTTPS and WOPI proof keys, and the WOPI adapter over the
+  Matrix binding.
 - Whether OCM defines anything beyond shares and access that overlaps versions or leases.
 - Whether OCM addresses and Matrix IDs could collide.
 - Whether Nextcloud editors work with Nextcloud's E2EE folders.

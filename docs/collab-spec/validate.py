@@ -23,6 +23,8 @@ POSITIVE = {
     "version.json": "version.schema.json",
     "lease-held.json": "lease.schema.json",
     "lease-released.json": "lease.schema.json",
+    "lease-held-empty-document.json": "lease.schema.json",
+    "lease-held-wopi.json": "lease.schema.json",
     "update.json": "update.schema.json",
 }
 
@@ -47,10 +49,22 @@ NEGATIVE = [
      lambda d: d["file"].update(locator={"type": "webdav", "href": "http://x/y"})),
     ("held lease without token", "lease-held.json", "lease.schema.json", lambda d: d.pop("token")),
     ("held lease, 2 hour duration", "lease-held.json", "lease.schema.json", lambda d: d.update(duration_ms=7_200_000)),
+    ("held lease without renewal", "lease-held.json", "lease.schema.json", lambda d: d.pop("renewal")),
+    ("held lease, negative renewal", "lease-held.json", "lease.schema.json", lambda d: d.update(renewal=-1)),
+    ("held lease, fractional renewal", "lease-held.json", "lease.schema.json", lambda d: d.update(renewal=1.5)),
+    ("held lease, string renewal", "lease-held.json", "lease.schema.json", lambda d: d.update(renewal="2")),
+    ("held lease, empty base_version (use omission, not a sentinel)", "lease-held.json", "lease.schema.json",
+     lambda d: d.update(base_version="")),
+    ("held lease, unknown field", "lease-held.json", "lease.schema.json", lambda d: d.update(epoch=1)),
+    ("held lease, 257-character token", "lease-held.json", "lease.schema.json", lambda d: d.update(token="t" * 257)),
     ("update over 34000 bytes", "update.json", "update.schema.json",
      lambda d: d["payload"].update(size=34001)),
     ("update with bad algorithm id", "update.json", "update.schema.json", lambda d: d.update(algorithm="Loro")),
 ]
+
+# Draft 0 objects ("dcp": 0) must be rejected by every draft 1 schema.
+for _example, _schema in POSITIVE.items():
+    NEGATIVE.append((f"{_example} with dcp 0", _example, _schema, lambda d: d.update(dcp=0)))
 
 failed = False
 for example, schema in POSITIVE.items():

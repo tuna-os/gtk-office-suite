@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tunaos.org/dcp/0/file-ref.schema.json",
+  "$id": "https://tunaos.org/dcp/1/file-ref.schema.json",
   "title": "DCP file reference",
   "type": "object",
   "required": [
