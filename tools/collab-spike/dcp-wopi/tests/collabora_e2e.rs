@@ -17,6 +17,8 @@
 //!   DCP_WOPI_HOST_URL    how Collabora reaches the WopiHost,
 //!                        default http://127.0.0.1:<port>
 //!   DCP_WOPI_LOG_FILE    where to write the table of requests the host saw
+//!   DCP_COLLABORA_WAIT_SECS  how long to wait for Collabora's discovery
+//!                        document before failing (default 60)
 
 mod support;
 
@@ -72,7 +74,8 @@ fn env() -> Env {
 async fn require_collabora(e: &Env) {
     let url = format!("{}/hosting/discovery", e.cool_url);
     let mut last = String::new();
-    for _ in 0..30 {
+    let wait_secs: u64 = std::env::var("DCP_COLLABORA_WAIT_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(60);
+    for _ in 0..=(wait_secs / 2) {
         match http().get(&url).send().await {
             Ok(r) if r.status().is_success() => {
                 let body = r.text().await.unwrap_or_default();
