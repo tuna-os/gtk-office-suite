@@ -2,6 +2,13 @@
 
 Date: 2026-10-24 · Tracks: [RFC-0004](0004-interoperable-document-collaboration.md), spec [section 8.2](../DOCUMENT-COLLABORATION-SPEC.md) · Code: [`tools/collab-spike/dcp-wopi/`](../../tools/collab-spike/dcp-wopi/)
 
+> **Draft 1 follow-up (2026-10-24).** The measurements below are of the draft-0 host and are
+> not redone. The host changed with draft 1: `base_version` is omitted on an empty document
+> (no `"none"` sentinel), a lock refresh writes `renewal` + 1, the duration is always
+> 1 800 000 ms, a `PutFile` from a token that read no version is refused, and "the host over
+> the Matrix binding" (listed under Not verified) was run, including a real Collabora. See
+> [the interop results](0004-spike-interop-results.md#draft-1-update).
+
 **These results come from one Collabora Online build (26.04.5.2, the
 `collabora/code:latest` image of 2026-10-23) on GitHub-hosted runners, driven
 by our own tests with a generated document. Every observation is of that one

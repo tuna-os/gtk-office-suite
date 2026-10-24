@@ -2,6 +2,12 @@
 
 Date: 2026-10-24 · Tracks: [RFC-0004](0004-interoperable-document-collaboration.md), [DCP draft 0 §8.1](../DOCUMENT-COLLABORATION-SPEC.md) · Code: [`tools/collab-spike/dcp-matrix/`](../../tools/collab-spike/dcp-matrix/) · Raw data: CI artifact `spike-a-measurements` of [run 40079034176](https://github.com/tuna-os/gtk-office-suite/actions/runs/40079034176)
 
+> **Draft 1 follow-up (2026-10-24).** The measurements below are of the draft-0 binding and
+> are not redone. Two behaviours described here changed with draft 1: the lease `renewal`
+> counter replaced the 1 ms `duration_ms` alternation (the dedupe workaround under "The
+> lease race"), and lease rule 3 is now two read-backs with a settle interval. See
+> [the interop results](0004-spike-interop-results.md#draft-1-update).
+
 **These numbers come from one CI run on a shared 2-core GitHub-hosted runner, with
 Synapse in a container on the same host, over loopback.** They say what this
 binding, matrix-sdk 0.19.1 and Synapse 1.163.2 did on our workloads. They are not

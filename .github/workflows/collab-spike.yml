@@ -20,6 +20,8 @@ name: collab-spike
 #              switch is how it runs), and on a pull request that touches
 #              tools/collab-spike/dcp-wopi/**.
 #
+# Results and what is not verified: docs/rfc/0004-spike-{a,d,interop}-results.md
+#
 # A test that needs Synapse or Collabora FAILS when the service is missing; only
 # DCP_SKIP_SYNAPSE=1 / DCP_SKIP_COLLABORA=1 skip it, and the test says so.
 on:
