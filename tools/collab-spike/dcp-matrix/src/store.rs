@@ -294,15 +294,29 @@ impl MatrixStore {
     /// the join.
     async fn room_for(&self, doc: &str) -> Result<Room> {
         let rid = RoomId::parse(doc).map_err(|e| StoreError::Invalid(format!("doc id {doc:?}: {e}")))?;
-        if let Some(room) = self.inner.client.get_room(&rid) {
+        let client = &self.inner.client;
+        if let Some(room) = client.get_room(&rid) {
             if room.state() == RoomState::Joined {
                 return Ok(room);
             }
         }
-        let client = &self.inner.client;
-        if !self.inner.cfg.background_sync {
-            // The invitation and, with it, the history key bundle only arrive by sync.
-            let _ = client.sync_once(SyncSettings::new().timeout(Duration::ZERO)).await;
+        // Joining by room ID works as soon as the server has the invite, but
+        // matrix-sdk imports the inviter's shared history only if it had seen the
+        // invite by /sync *before* the join (it records who invited us then).
+        // Join too early and every version published before the invite stays
+        // undecryptable (measured, see the results doc). So wait for our own
+        // sync to deliver the invite. A room we already know we left is given
+        // a short wait (re-invite), an unknown one a longer one.
+        let known_left = client.get_room(&rid).is_some();
+        let wait = if known_left { Duration::from_secs(2) } else { Duration::from_secs(10) };
+        self.poll_until(wait, || async {
+            client.get_room(&rid).is_some_and(|r| matches!(r.state(), RoomState::Invited | RoomState::Joined))
+        })
+        .await;
+        if let Some(room) = client.get_room(&rid) {
+            if room.state() == RoomState::Joined {
+                return Ok(room);
+            }
         }
         self.retry_rl(|| client.join_room_by_id(&rid))
             .await

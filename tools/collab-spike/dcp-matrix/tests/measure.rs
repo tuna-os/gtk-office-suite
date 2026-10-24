@@ -530,17 +530,17 @@ async fn m06_late_joiner_reads_history() {
 
 /// Lease rule 3 as written: acquire only if none is active (or ours), write,
 /// read back, and believe only if the record names our session.
-async fn acquire(s: &MatrixStore, doc: &DocId, session: &str, base: &str) -> (bool, bool) {
+async fn acquire(s: &MatrixStore, doc: &DocId, session: &str, base: &str) -> (bool, bool, Option<u64>) {
     let cur = s.lease(doc).await.unwrap();
     let now = s.now_ms(doc).await.unwrap();
     if let Some(c) = &cur {
         if c.body.state == LeaseState::Held && c.ts_ms + c.body.duration_ms.unwrap_or(0) > now && c.body.holder.as_ref().map(|h| h.session.as_str()) != Some(session) {
-            return (false, false);
+            return (false, false, None);
         }
     }
-    s.write_lease(doc, held(s, session, base)).await.unwrap();
+    let written = s.write_lease(doc, held(s, session, base)).await.unwrap();
     let back = s.lease(doc).await.unwrap().unwrap();
-    (back.body.holder.as_ref().map(|h| h.session.as_str()) == Some(session), true)
+    (back.body.holder.as_ref().map(|h| h.session.as_str()) == Some(session), true, Some(written.ts_ms))
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -587,7 +587,11 @@ async fn m07_lease_race() {
         if (ra.0 && winner == sa) || (rb.0 && winner == sb) {
             bump("settled_holder_is_a_believer");
         }
-        rows.push(json!({"round": round, "bob_offset_ms": offset, "alice_believes": ra.0, "bob_believes": rb.0, "alice_wrote": ra.1, "bob_wrote": rb.1, "settled_winner": winner}));
+        let ts_gap = match (ra.2, rb.2) {
+            (Some(a), Some(b)) => Some(a as i64 - b as i64),
+            _ => None,
+        };
+        rows.push(json!({"round": round, "bob_offset_ms": offset, "alice_believes": ra.0, "bob_believes": rb.0, "alice_wrote": ra.1, "bob_wrote": rb.1, "write_ts_gap_alice_minus_bob_ms": ts_gap, "settled_winner": winner}));
     }
     record(&syn, "lease_race", json!({ "rounds": rounds, "tally": tally, "rows": rows }));
 }

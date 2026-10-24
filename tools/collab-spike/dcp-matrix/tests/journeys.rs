@@ -290,3 +290,22 @@ async fn renewing_a_lease_with_identical_content_still_produces_a_newer_record()
     assert_eq!(read.body.token, l.token);
     assert!(read.body.duration_ms.unwrap().abs_diff(60_000) <= 1);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_editor_granted_right_after_creation_reads_the_first_version_at_once() {
+    let Some(syn) = require_synapse!() else { return };
+    // Regression for a measured failure: the invite is followed at once by a
+    // power-level event, and the invitee joins by room ID straight away. If the
+    // store joins before its own sync has delivered the invite, matrix-sdk never
+    // imports the shared history and the first version stays undecryptable.
+    for _ in 0..3 {
+        let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
+        let late = syn.user("late").await;
+        let bytes = noise(900, 5);
+        let doc = alice.create_document(&meta("Late editor"), Some(file(&bytes))).await.unwrap();
+        alice.grant(&doc, &late.principal(), Role::Editor).await.unwrap();
+        let rep = late.read_report(&doc).await.unwrap();
+        assert_eq!(rep.versions.len(), 1, "undecryptable: {}", rep.undecryptable);
+        assert_eq!(late.fetch_file(&doc, &rep.versions[0]).await.unwrap(), bytes);
+    }
+}
