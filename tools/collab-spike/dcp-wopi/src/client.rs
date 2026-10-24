@@ -87,9 +87,6 @@ impl FileInfo {
         Some(self.str("Version")).filter(|v| !v.is_empty())
     }
 
-    fn head(&self) -> Result<Option<Stamped<Version>>> {
-        stamped_version(&self.raw, self.head_id())
-    }
 }
 
 fn stamped_version(raw: &Value, id: Option<&str>) -> Result<Option<Stamped<Version>>> {

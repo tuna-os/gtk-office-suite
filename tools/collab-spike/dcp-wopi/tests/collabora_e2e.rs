@@ -28,6 +28,7 @@ use dcp_wopi::{HostConfig, LoggedRequest, WopiHost};
 use futures_util::{SinkExt, StreamExt};
 use parking_lot::Mutex;
 use support::*;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
 const TYPED: &str = "DcpWopiSpike42";
@@ -106,7 +107,12 @@ impl Session {
         let ws_base = e.cool_url.replacen("http", "ws", 1);
         let url = format!("{ws_base}/cool/{encoded}/ws");
         eprintln!("COOL websocket: {}/cool/<encoded WOPISrc>/ws", ws_base);
-        let (ws, resp) = tokio_tungstenite::connect_async(url.as_str())
+        // Collabora (26.04) rejects a WebSocket upgrade that has no Origin
+        // header ("Rejecting message with no Origin header"); the browser sends
+        // its own origin, which is Collabora's web server URL.
+        let mut request = url.as_str().into_client_request().expect("websocket request");
+        request.headers_mut().insert("Origin", e.cool_url.parse().expect("origin header"));
+        let (ws, resp) = tokio_tungstenite::connect_async(request)
             .await
             .unwrap_or_else(|err| panic!("COOL websocket connect failed: {err}"));
         eprintln!("COOL websocket upgraded: {}", resp.status());
@@ -261,7 +267,10 @@ async fn collabora_edits_and_saves_a_new_dcp_version() {
     let (host, server) = start_host(&e).await;
 
     let mut s = open_in_collabora(&e, &host, &doc, owner.clone(), &backend, "@alice:test").await;
-    assert!(s.seen(|m| m.starts_with("perm: edit") || m.contains("\"perm\":\"edit\"") || m.starts_with("perm:")), "no perm message; Collabora may have opened read-only");
+    if !s.seen(|m| m == "perm: edit") {
+        s.dump();
+        panic!("Collabora did not grant `perm: edit`; it opened the document read-only");
+    }
 
     type_text(&mut s, TYPED).await;
     s.send("save dontTerminateEdit=0 dontSaveIfUnmodified=0").await;
@@ -283,6 +292,8 @@ async fn collabora_edits_and_saves_a_new_dcp_version() {
     let content = content_xml(&bytes);
     assert!(content.contains(TYPED), "typed text {TYPED:?} not in saved content.xml:\n{content}");
     eprintln!("saved content.xml contains {TYPED:?}; version {} parent {:?}", v2.id, v2.body.parents);
+
+    s.dump();
 
     // What Collabora actually sent.
     let ops: Vec<_> = log.iter().map(|r| (r.method.as_str(), r.operation.as_deref().unwrap_or(""), r.path.as_str())).collect();

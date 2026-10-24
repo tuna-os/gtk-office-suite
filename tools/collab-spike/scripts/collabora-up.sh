@@ -52,7 +52,7 @@ echo "collabora-up.sh: waiting up to ${TIMEOUT}s for http://127.0.0.1:9980/hosti
 for _ in $(seq 1 "$TIMEOUT"); do
   if curl -fsS -o /dev/null "http://127.0.0.1:9980/hosting/discovery" 2>/dev/null; then
     echo "collabora-up.sh: Collabora is up ($IMAGE)"
-    "$ENGINE" exec "$NAME" sh -c 'coolwsd --version 2>&1 | head -3' 2>/dev/null || true
+    "$ENGINE" logs "$NAME" 2>&1 | grep -m1 -i "coolwsd-[0-9]" || true
     exit 0
   fi
   if [ "$("$ENGINE" inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" != "true" ]; then
