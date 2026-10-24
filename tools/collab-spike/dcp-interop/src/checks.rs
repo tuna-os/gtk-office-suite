@@ -18,7 +18,7 @@ use dcp_conformance::{
     assert_same_content, assert_same_view, ensure, new_file, Failure, BASE_FILE,
 };
 use dcp_core::lease::{self, Acquire, Claim, Release};
-use dcp_core::{graph, LeaseState, StoreError};
+use dcp_core::{graph, DocumentStore, LeaseState, StoreError};
 use dcp_wopi::timefmt::iso8601_ms;
 use serde_json::Value;
 
