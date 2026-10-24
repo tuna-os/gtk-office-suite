@@ -15,3 +15,4 @@ status line as the record of the reasoning.
 | [0001](0001-crdt-collaboration.md) | CRDT collaboration for Letters, Tables and Decks | accepted 2026-09-25 (Loro) |
 | [0002](0002-extension-architecture.md) | Extension architecture — sandboxed WASM and out-of-process IPC | draft |
 | [0003](0003-cloud-documents.md) | Cloud documents: Google Drive, Nextcloud and Microsoft 365 | draft |
+| [0004](0004-interoperable-document-collaboration.md) | An interoperable document-collaboration protocol (Matrix, OCM, WOPI and local-first bindings); spec: [DOCUMENT-COLLABORATION-SPEC](../DOCUMENT-COLLABORATION-SPEC.md) | draft |
