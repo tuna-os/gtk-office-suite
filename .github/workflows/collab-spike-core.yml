@@ -32,10 +32,11 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: tools/collab-spike
-      - name: validate.py (the Rust negatives are kept in step with it)
-        run: |
-          python3 -m pip install --quiet jsonschema
-          python3 docs/collab-spec/validate.py
       - name: cargo test -p dcp-core -p dcp-conformance
         working-directory: tools/collab-spike
         run: cargo test -p dcp-core -p dcp-conformance -- --nocapture --test-threads=2
+      - name: validate.py (the Rust negatives are kept in step with it)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/v"
+          "$RUNNER_TEMP/v/bin/pip" install --quiet jsonschema
+          "$RUNNER_TEMP/v/bin/python" docs/collab-spec/validate.py
