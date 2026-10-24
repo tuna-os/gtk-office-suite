@@ -23,5 +23,5 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 dcp-conformance = { path = "../dcp-conformance" }
-tokio-tungstenite = "0.26"
+tokio-tungstenite = "0.30"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
