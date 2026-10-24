@@ -1,0 +1,11 @@
+{
+  "dcp": 0,
+  "state": "held",
+  "holder": {
+    "principal": "@alice:example.org",
+    "session": "s-7f3a"
+  },
+  "token": "lease-9c1e",
+  "base_version": "$head_event_id",
+  "duration_ms": 60000
+}
