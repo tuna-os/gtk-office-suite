@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tunaos.org/dcp/0/update.schema.json",
+  "$id": "https://tunaos.org/dcp/1/update.schema.json",
   "title": "DCP update",
   "type": "object",
   "required": [
@@ -14,7 +14,7 @@
   "additionalProperties": false,
   "properties": {
     "dcp": {
-      "const": 0
+      "const": 1
     },
     "algorithm": {
       "type": "string",

@@ -1,5 +1,5 @@
 {
-  "dcp": 0,
+  "dcp": 1,
   "algorithm": "loro/1",
   "doc_model": "tables/1",
   "base_version": "$head_event_id",

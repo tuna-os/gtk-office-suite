@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tunaos.org/dcp/0/lease.schema.json",
+  "$id": "https://tunaos.org/dcp/1/lease.schema.json",
   "title": "DCP lease",
   "type": "object",
   "required": [
@@ -10,7 +10,7 @@
   "additionalProperties": false,
   "properties": {
     "dcp": {
-      "const": 0
+      "const": 1
     },
     "state": {
       "enum": [
@@ -52,6 +52,11 @@
       "type": "integer",
       "minimum": 1000,
       "maximum": 3600000
+    },
+    "renewal": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
     }
   },
   "if": {
@@ -68,7 +73,7 @@
     "required": [
       "holder",
       "token",
-      "base_version",
+      "renewal",
       "duration_ms"
     ]
   }
