@@ -151,3 +151,60 @@ fn stamp<T>(ev: &Value, body: T) -> Option<Stamped<T>> {
         body,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn create(version: &str) -> Value {
+        json!({"type": "m.room.create", "state_key": "", "sender": "@o:s", "content": {"type": ROOM_TYPE, "room_version": version}})
+    }
+
+    fn pl(users: Value) -> Value {
+        json!({"type": "m.room.power_levels", "state_key": "", "sender": "@o:s", "content": {
+            "users": users, "users_default": 0, "events": {"m.room.encrypted": 50, VERSION: 50}, "state_default": 100}})
+    }
+
+    #[test]
+    fn roles_follow_power_levels() {
+        let s = Snapshot::from_events(&[create("11"), pl(json!({"@o:s": 100, "@e:s": 50}))]);
+        assert_eq!(s.room_type.as_deref(), Some(ROOM_TYPE));
+        assert_eq!(s.power.role_of("@o:s"), Role::Owner);
+        assert_eq!(s.power.role_of("@e:s"), Role::Editor);
+        assert_eq!(s.power.role_of("@v:s"), Role::Viewer);
+        assert!(s.power.server_gates_encrypted_timeline());
+    }
+
+    #[test]
+    fn room_v12_creators_are_owners_without_a_users_entry() {
+        let s = Snapshot::from_events(&[create("12"), pl(json!({}))]);
+        assert_eq!(s.power.role_of("@o:s"), Role::Owner);
+        let s11 = Snapshot::from_events(&[create("11"), pl(json!({}))]);
+        assert_eq!(s11.power.role_of("@o:s"), Role::Viewer, "before v12 only the users table counts");
+    }
+
+    #[test]
+    fn spec_literal_table_does_not_gate_the_encrypted_timeline() {
+        let literal = json!({"type": "m.room.power_levels", "state_key": "", "sender": "@o:s", "content": {
+            "users": {"@o:s": 100}, "users_default": 0, "events": {VERSION: 50, UPDATE: 50, LEASE: 50, META: 100}}});
+        let s = Snapshot::from_events(&[create("11"), literal]);
+        assert!(!s.power.server_gates_encrypted_timeline());
+    }
+
+    #[test]
+    fn invalid_dcp_state_is_ignored_and_counted() {
+        let bad = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 5, "sender": "@o:s", "content": {"dcp": 0, "state": "held", "surprise": 1}});
+        let s = Snapshot::from_events(&[create("11"), bad]);
+        assert!(s.lease.is_none());
+        assert_eq!(s.invalid_dcp_state, 1);
+    }
+
+    #[test]
+    fn valid_lease_and_meta_are_stamped_from_the_event() {
+        let lease = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 1234, "sender": "@o:s", "content": {"dcp": 0, "state": "released"}});
+        let s = Snapshot::from_events(&[create("11"), lease]);
+        let l = s.lease.unwrap();
+        assert_eq!((l.id.as_str(), l.ts_ms, l.sender.as_str()), ("$l", 1234, "@o:s"));
+    }
+}

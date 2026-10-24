@@ -307,7 +307,7 @@ impl MatrixStore {
         let client = &self.inner.client;
         let rid = room.room_id().to_owned();
         let resp = self
-            .retry_rl(|| client.send(get_state_events::v3::Request::new(rid.clone())))
+            .retry_rl(|| async { client.send(get_state_events::v3::Request::new(rid.clone())).await })
             .await
             .map_err(|e| to_store(e, "read room state"))?;
         let events: Vec<Value> =
@@ -332,7 +332,7 @@ impl MatrixStore {
         let client = &self.inner.client;
         let rid = room.room_id().to_owned();
         let resp = self
-            .retry_rl(|| client.send(get_room_event::v3::Request::new(rid.clone(), eid.clone())))
+            .retry_rl(|| async { client.send(get_room_event::v3::Request::new(rid.clone(), eid.clone())).await })
             .await
             .map_err(|e| to_store(e, "read event"))?;
         let v: Value = serde_json::from_str(resp.event.json().get()).map_err(|e| StoreError::Transport(e.to_string()))?;

@@ -193,3 +193,27 @@ async fn send_with_retry(
         tokio::time::sleep(wait).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bucket_allows_a_burst_then_paces() {
+        let mut b = Bucket::new(3.0, 3).unwrap();
+        for _ in 0..3 {
+            assert_eq!(b.take(), Duration::ZERO, "burst of 3 goes out at once");
+        }
+        let w = b.take();
+        assert!(w > Duration::from_millis(300) && w <= Duration::from_millis(340), "4th waits about 1/3 s, got {w:?}");
+        // Taking again before the wait elapses queues behind the previous one.
+        let w2 = b.take();
+        assert!(w2 > Duration::from_millis(600) && w2 <= Duration::from_millis(680), "5th waits about 2/3 s, got {w2:?}");
+    }
+
+    #[test]
+    fn non_positive_rate_disables_the_limiter() {
+        assert!(Bucket::new(0.0, 3).is_none());
+        assert!(Bucket::new(-1.0, 3).is_none());
+    }
+}
