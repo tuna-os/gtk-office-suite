@@ -1,0 +1,41 @@
+# Profile "relaxed": limits high enough not to matter, for tests that want to
+# see the binding's behaviour rather than the homeserver's throttle.
+rc_message:
+  per_second: 10000
+  burst_count: 100000
+rc_registration:
+  per_second: 10000
+  burst_count: 100000
+rc_login:
+  address:
+    per_second: 10000
+    burst_count: 100000
+  account:
+    per_second: 10000
+    burst_count: 100000
+  failed_attempts:
+    per_second: 10000
+    burst_count: 100000
+rc_joins:
+  local:
+    per_second: 10000
+    burst_count: 100000
+  remote:
+    per_second: 10000
+    burst_count: 100000
+rc_joins_per_room:
+  per_second: 10000
+  burst_count: 100000
+rc_invites:
+  per_room:
+    per_second: 10000
+    burst_count: 100000
+  per_user:
+    per_second: 10000
+    burst_count: 100000
+  per_issuer:
+    per_second: 10000
+    burst_count: 100000
+rc_admin_redaction:
+  per_second: 10000
+  burst_count: 100000
