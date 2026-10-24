@@ -755,7 +755,7 @@ dependencies = [
  "dcp-conformance",
  "dcp-core",
  "futures-util",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "hex",
  "parking_lot",
  "reqwest 0.12.28",

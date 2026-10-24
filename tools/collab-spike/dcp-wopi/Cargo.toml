@@ -18,7 +18,7 @@ axum = { version = "0.8", default-features = false, features = ["http1", "tokio"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
-getrandom = "0.3"
+getrandom = "0.4"
 parking_lot = "0.12"
 
 [dev-dependencies]
