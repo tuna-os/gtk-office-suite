@@ -395,11 +395,16 @@ impl DocumentStore for WopiClientStore {
             }
         };
 
+        // Collabora's measured order (Spike D, run on collabora/code 26.04.5.2):
+        // CheckFileInfo, GetFile, LOCK, PutFile ... UNLOCK on close.
+        if let Some(base) = &base {
+            self.read_base(doc, base, forced).await?;
+        }
         let lock = new_lock_string();
         self.lock_call(doc, "LOCK", Some(&lock), None).await?;
-        let result = self.save_locked(doc, &info, &lock, base.as_deref(), forced, file).await;
-        // Collabora unlocks on close whether or not the save worked; a failed
-        // unlock after a good save does not undo the version.
+        let result = self.save_locked(doc, &info, &lock, forced, file).await;
+        // Collabora unlocks when its last editing session goes; a failed unlock
+        // after a good save does not undo the version.
         let _ = self.lock_call(doc, "UNLOCK", Some(&lock), None).await;
         result
     }
@@ -455,37 +460,38 @@ impl DocumentStore for WopiClientStore {
 }
 
 impl WopiClientStore {
+    /// Collabora downloads the base before it edits; the host takes that read
+    /// as the version a later PutFile is a child of. A base that is not the
+    /// head is opened by version (host extension).
+    async fn read_base(&self, doc: &str, base: &str, forced: bool) -> Result<()> {
+        let q: Vec<(&str, &str)> = if forced { vec![("dcp_version", base)] } else { vec![] };
+        let resp = self.send_q(Method::GET, doc, true, &q, &[], None).await?;
+        let status = resp.status();
+        let served = resp
+            .headers()
+            .get("x-wopi-itemversion")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
+        if status != StatusCode::OK {
+            return Err(map_status(status, None, &bytes, "GetFile"));
+        }
+        if served.as_deref() != Some(base) {
+            return Err(StoreError::Conflict(format!(
+                "head moved from {base} to {served:?} between CheckFileInfo and GetFile"
+            )));
+        }
+        Ok(())
+    }
+
     async fn save_locked(
         &self,
         doc: &str,
         info: &FileInfo,
         lock: &str,
-        base: Option<&str>,
         forced: bool,
         file: NewFile,
     ) -> Result<Stamped<Version>> {
-        if let Some(base) = base {
-            // Collabora downloads the base before it edits; the host takes
-            // that read as the version a later PutFile is a child of. A base
-            // that is not the head is opened by version (host extension).
-            let q: Vec<(&str, &str)> = if forced { vec![("dcp_version", base)] } else { vec![] };
-            let resp = self.send_q(Method::GET, doc, true, &q, &[], None).await?;
-            let status = resp.status();
-            let served = resp
-                .headers()
-                .get("x-wopi-itemversion")
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string);
-            let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
-            if status != StatusCode::OK {
-                return Err(map_status(status, None, &bytes, "GetFile"));
-            }
-            if served.as_deref() != Some(base) {
-                return Err(StoreError::Conflict(format!(
-                    "head moved from {base} to {served:?} between CheckFileInfo and GetFile"
-                )));
-            }
-        }
         let mut headers = vec![
             ("X-WOPI-Override", "PUT".to_string()),
             ("X-WOPI-Lock", lock.to_string()),

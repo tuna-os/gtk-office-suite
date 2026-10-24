@@ -138,6 +138,13 @@ impl Session {
         Session { tx, msgs }
     }
 
+    /// Close the websocket the way a browser tab closing does. Collabora
+    /// unlocks the file when its last editing session disconnects.
+    async fn close(mut self) {
+        let _ = self.tx.send(Message::Close(None)).await;
+        let _ = self.tx.close().await;
+    }
+
     async fn send(&mut self, line: &str) {
         eprintln!("-> {line}");
         self.tx.send(Message::Text(line.to_string().into())).await.unwrap();
@@ -235,15 +242,14 @@ async fn open_in_collabora(
     e: &Env,
     host: &WopiHost,
     rig_doc: &str,
-    owner: Arc<Handle>,
+    _owner: Arc<Handle>,
     backend: &Arc<Backend>,
     who: &str,
 ) -> Session {
     let token = host.register(rig_doc.to_string(), backend.handle(who), who);
-    let _ = owner;
     let src = format!("{}?access_token={token}", WopiHost::wopi_src(&e.host_url, rig_doc));
     let s = Session::connect(e, &src).await;
-    s.wait_for("the document to load (status:)", Duration::from_secs(180), |m| m.starts_with("status:")).await;
+    s.wait_for("the document to load (status:)", Duration::from_secs(120), |m| m.starts_with("status:")).await;
     eprintln!("document loaded; permission messages: {:?}", s.msgs.lock().iter().filter(|(_, m)| m.starts_with("perm:")).map(|(_, m)| m.clone()).collect::<Vec<_>>());
     s
 }
@@ -256,7 +262,7 @@ async fn collabora_edits_and_saves_a_new_dcp_version() {
     let e = env();
     require_collabora(&e).await;
 
-    let backend = Backend::new();
+    let backend = Backend::with_prefix("edit");
     let owner = backend.handle("@alice:test");
     let base = make_odt("base");
     let doc = owner
@@ -313,23 +319,22 @@ async fn collabora_edits_and_saves_a_new_dcp_version() {
     assert_eq!(lease.body.state, LeaseState::Held);
     assert_eq!(lease.body.token.as_deref(), Some(lock_string.as_str()));
 
-    // Close and see whether Collabora unlocks (observed and printed; the
-    // results doc reports it, the assertion is only that the log is complete).
-    s.send("closedocument").await;
-    drop(s);
-    let end = Instant::now() + Duration::from_secs(60);
-    let mut unlocked = false;
-    while Instant::now() < end {
-        if host.request_log().iter().any(|r| r.operation.as_deref() == Some("UNLOCK")) {
-            unlocked = true;
-            break;
-        }
+    // Close the tab: Collabora unlocks when its last editing session
+    // disconnects. What it sends is recorded for the results doc.
+    s.close().await;
+    let end = Instant::now() + Duration::from_secs(90);
+    let mut unlock = None;
+    while Instant::now() < end && unlock.is_none() {
+        unlock = host.request_log().into_iter().find(|r| r.operation.as_deref() == Some("UNLOCK"));
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    let final_log = host.request_log();
-    write_request_log(&final_log);
-    eprintln!("Collabora sent UNLOCK after closedocument within 60s: {unlocked}");
-    eprintln!("lease after close: {:?}", owner.lease(&doc).await.unwrap().map(|l| l.body));
+    write_request_log(&host.request_log());
+    let unlock = unlock.expect("Collabora did not send UNLOCK within 90s of the websocket closing");
+    assert_eq!(unlock.status, 200);
+    assert_eq!(unlock.header("x-wopi-lock"), Some(lock_string.as_str()));
+    let lease = owner.lease(&doc).await.unwrap().expect("a lease record");
+    eprintln!("lease after UNLOCK: {:?}", lease.body);
+    assert_eq!(lease.body.state, LeaseState::Released);
     server.shutdown().await;
 }
 
@@ -341,9 +346,8 @@ async fn collabora_save_after_a_native_publish_is_refused_as_a_conflict() {
     let e = env();
     require_collabora(&e).await;
 
-    let backend = Backend::new();
+    let backend = Backend::with_prefix("conflict");
     let owner = backend.handle("@alice:test");
-    backend.handle("@alice:test");
     let doc = owner
         .create_document(&meta("Spike D conflict"), Some(NewFile { mime: ODT_MIME.into(), bytes: make_odt("base") }))
         .await
@@ -382,5 +386,92 @@ async fn collabora_save_after_a_native_publish_is_refused_as_a_conflict() {
     assert!(versions.iter().any(|v| v.id == native.id));
     // Collabora tells the user instead of overwriting.
     s.wait_for("a conflict message to the user", Duration::from_secs(30), |m| m.contains("documentconflict") || m.contains("Conflict")).await;
+    s.dump();
+    s.close().await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    write_request_log(&host.request_log());
+    server.shutdown().await;
+}
+
+/// Collabora refreshes its lock by sending `LOCK` again with the same string,
+/// not `REFRESH_LOCK` (`DocumentBroker::refreshLock` calls
+/// `updateStorageLockStateAsync(LOCK)`). `collabora-up.sh` sets
+/// `storage.wopi.locking.refresh` to 10 s so this is observable; the default is
+/// 900 s.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn collabora_refreshes_the_lease_with_the_same_lock_string() {
+    if skip() {
+        return;
+    }
+    let e = env();
+    require_collabora(&e).await;
+
+    let backend = Backend::with_prefix("refresh");
+    let owner = backend.handle("@alice:test");
+    let doc = owner
+        .create_document(&meta("Spike D refresh"), Some(NewFile { mime: ODT_MIME.into(), bytes: make_odt("base") }))
+        .await
+        .unwrap();
+    let (host, server) = start_host(&e).await;
+    let s = open_in_collabora(&e, &host, &doc, owner.clone(), &backend, "@alice:test").await;
+
+    let lock_count = |host: &WopiHost| host.request_log().iter().filter(|r| r.operation.as_deref() == Some("LOCK")).count();
+    let first = owner.lease(&doc).await.unwrap().expect("lease after load");
+    let end = Instant::now() + Duration::from_secs(90);
+    while Instant::now() < end && lock_count(&host) < 2 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    let log = host.request_log();
+    write_request_log(&log);
+    let locks: Vec<_> = log.iter().filter(|r| r.operation.as_deref() == Some("LOCK")).collect();
+    assert!(locks.len() >= 2, "no lock refresh within 90s ({} LOCK requests)", locks.len());
+    assert_eq!(locks[0].header("x-wopi-lock"), locks[1].header("x-wopi-lock"), "a refresh uses the same lock string");
+    assert_eq!(locks[1].status, 200);
+    assert!(
+        !log.iter().any(|r| matches!(r.operation.as_deref(), Some("REFRESH_LOCK" | "GET_LOCK" | "UNLOCK_AND_RELOCK"))),
+        "Collabora was expected to use only LOCK, PUT and UNLOCK: {log:?}"
+    );
+    // The refresh moved the lease's binding timestamp (spec 4.3 rule 4).
+    let second = owner.lease(&doc).await.unwrap().unwrap();
+    assert_eq!(second.body.token, first.body.token);
+    assert!(second.ts_ms > first.ts_ms, "lease was not re-stamped: {} -> {}", first.ts_ms, second.ts_ms);
+    s.close().await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    server.shutdown().await;
+}
+
+/// A viewer's session is read-only: Collabora never locks and never saves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn collabora_opens_a_viewer_read_only_and_never_locks_or_saves() {
+    if skip() {
+        return;
+    }
+    let e = env();
+    require_collabora(&e).await;
+
+    let backend = Backend::with_prefix("viewer");
+    let owner = backend.handle("@alice:test");
+    let doc = owner
+        .create_document(&meta("Spike D viewer"), Some(NewFile { mime: ODT_MIME.into(), bytes: make_odt("base") }))
+        .await
+        .unwrap();
+    owner.grant(&doc, "@carol:test", Role::Viewer).await.unwrap();
+    let (host, server) = start_host(&e).await;
+    let mut s = open_in_collabora(&e, &host, &doc, owner.clone(), &backend, "@carol:test").await;
+    s.dump();
+    assert!(s.seen(|m| m.starts_with("perm: readonly") || m.starts_with("perm: view")), "expected a read-only permission message");
+    assert!(s.seen(|m| m.starts_with("filemode:") && m.contains("\"readOnly\": true")), "expected filemode readOnly");
+
+    // Typing and saving change nothing.
+    s.send(&format!("textinput id=0 text={}", enc(TYPED))).await;
+    s.send("save dontTerminateEdit=0 dontSaveIfUnmodified=0").await;
+    tokio::time::sleep(Duration::from_secs(15)).await;
+    let log = host.request_log();
+    write_request_log(&log);
+    assert!(!log.iter().any(|r| r.operation.is_some()), "a read-only session sent WOPI operations: {log:?}");
+    assert_eq!(owner.versions(&doc).await.unwrap().len(), 1);
+    assert!(owner.lease(&doc).await.unwrap().is_none(), "a read-only session must not take a lease");
+    s.close().await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
     server.shutdown().await;
 }

@@ -13,6 +13,8 @@
 #   COLLABORA_IMAGE    default collabora/code:latest
 #   COLLABORA_NAME     container name, default dcp-collabora
 #   DCP_WOPI_HOST_PORT port of the WOPI host the test starts (default 18080)
+#   COLLABORA_LOCK_REFRESH_SECS storage.wopi.locking.refresh (default 10 here;
+#                      Collabora's own default is 900), so a refresh is observable
 #   COLLABORA_READY_TIMEOUT seconds to wait for discovery (default 180)
 #
 # Exits non-zero, with the container log, when Collabora does not come up. It
@@ -44,7 +46,7 @@ fi
   --network host \
   --cap-add MKNOD \
   -e "aliasgroup1=http://127.0.0.1:${PORT}" \
-  -e "extra_params=--o:ssl.enable=false --o:ssl.termination=false" \
+  -e "extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:storage.wopi.locking.refresh=${COLLABORA_LOCK_REFRESH_SECS:-10}" \
   -e "username=admin" -e "password=admin" \
   "$IMAGE"
 

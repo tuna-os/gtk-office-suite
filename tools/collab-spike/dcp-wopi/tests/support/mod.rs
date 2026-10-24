@@ -91,11 +91,22 @@ struct State {
 pub struct Backend {
     state: Mutex<State>,
     skew_ms: AtomicU64,
+    prefix: String,
 }
 
 impl Backend {
     pub fn new() -> Arc<Backend> {
-        Arc::new(Backend { state: Mutex::new(State::default()), skew_ms: AtomicU64::new(0) })
+        Self::with_prefix("doc")
+    }
+
+    /// Document ids are `<prefix><n>`. Collabora keys its document broker by
+    /// WOPISrc, so tests that share one Collabora need distinct ids.
+    pub fn with_prefix(prefix: &str) -> Arc<Backend> {
+        Arc::new(Backend {
+            state: Mutex::new(State::default()),
+            skew_ms: AtomicU64::new(0),
+            prefix: prefix.to_string(),
+        })
     }
 
     /// Move the binding's clock forward (lease expiry tests).
@@ -157,7 +168,7 @@ impl DocumentStore for Handle {
         let now = self.backend.now();
         let mut s = self.backend.state.lock();
         s.next += 1;
-        let id = format!("doc{}", s.next);
+        let id = format!("{}{}", self.backend.prefix, s.next);
         let mut d = DocState { meta: Some(meta.clone()), last_ts: now, ..Default::default() };
         d.roles.insert(self.principal.clone(), Role::Owner);
         if let Some(f) = first {
