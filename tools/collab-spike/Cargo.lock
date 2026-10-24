@@ -696,7 +696,7 @@ name = "dcp-core"
 version = "0.0.0"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "hex",
  "jsonschema",
  "parking_lot",
@@ -730,7 +730,7 @@ name = "dcp-matrix"
 version = "0.0.0"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "dcp-conformance",
  "dcp-core",
  "hex",
