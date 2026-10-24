@@ -12,10 +12,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use dcp_conformance::wrappers::{Defect, Defective};
 use dcp_conformance::{
-    new_file, run_all, run_one, standard_meta, Capabilities, Failure, Faults, Fixture, Outcome,
-    StoreFactory, Time, BASE_FILE,
+    new_file, run_all, run_one, standard_meta, Capabilities, Failure, Faults, Fixture, MemoryForger,
+    Outcome, StoreFactory, Time, BASE_FILE,
 };
-use dcp_core::memory::{ManualClock, MemoryBackend};
+use dcp_core::memory::{ManualClock, MemoryBackend, MemoryConfig};
 use dcp_core::{DocumentStore, Role};
 use dcp_wopi::{HostConfig, WopiClientStore, WopiHost};
 
@@ -46,11 +46,16 @@ enum ViewerBacking {
 
 struct WopiFactory {
     viewer_backing: ViewerBacking,
+    memory: MemoryConfig,
 }
 
 impl WopiFactory {
     fn new() -> Self {
-        WopiFactory { viewer_backing: ViewerBacking::Honest }
+        WopiFactory { viewer_backing: ViewerBacking::Honest, memory: MemoryConfig::default() }
+    }
+
+    fn with_memory(memory: MemoryConfig) -> Self {
+        WopiFactory { viewer_backing: ViewerBacking::Honest, memory }
     }
 }
 
@@ -80,12 +85,14 @@ impl StoreFactory for WopiFactory {
             arbitrary_parents: false,
             updates: false,
             upload_faults: true,
+            // The forger acts on the in-memory backend, not through WOPI.
+            forgery: true,
         }
     }
 
     async fn fresh(&self) -> Result<Fixture, Failure> {
         let clock = Arc::new(ManualClock::new(1_000_000));
-        let backend = MemoryBackend::new(clock.clone());
+        let backend = MemoryBackend::with_config(clock.clone(), self.memory);
         let owner_m: Arc<dyn DocumentStore> = Arc::new(backend.store("@owner:mem", "OWNER-DEV"));
         let editor_m: Arc<dyn DocumentStore> = Arc::new(backend.store("@editor:mem", "EDITOR-DEV"));
         let viewer_m: Arc<dyn DocumentStore> = Arc::new(backend.store("@viewer:mem", "VIEWER-DEV"));
@@ -121,17 +128,21 @@ impl StoreFactory for WopiFactory {
             sims.push(Arc::new(sim));
         }
         let (viewer, editor, owner) = (sims.pop().unwrap(), sims.pop().unwrap(), sims.pop().unwrap());
-        Fixture::from_existing(
+        let mut fx = Fixture::from_existing(
             owner,
             editor,
             viewer,
             doc,
             Arc::new(ManualTime(clock)),
             self.capabilities(),
-            Some(Arc::new(MemoryFaults(backend))),
+            Some(Arc::new(MemoryFaults(backend.clone()))),
             Duration::ZERO,
         )
-        .await
+        .await?;
+        // The forger acts as the viewer directly on the in-memory backend;
+        // the readers are the WOPI simulators over the host.
+        fx.forger = Some(Arc::new(MemoryForger { backend, principal: "@viewer:mem".into() }));
+        Ok(fx)
     }
 }
 
@@ -142,7 +153,7 @@ async fn journeys_over_wopi() {
     report.assert_skipped_exactly(&[
         // WOPI saves have one parent; a merge needs two (spec 6.3).
         "second_head_shown_not_hidden",
-        // Lease records carry holder, base_version and duration_ms.
+        // Lease records carry holder, base_version, renewal and duration_ms.
         "lease_exclusion_and_readback",
         "lease_expiry_releases",
         // No grant or revoke in WOPI.
@@ -158,10 +169,35 @@ async fn journeys_over_wopi() {
         [
             "convergence_on_one_head",
             "corrupt_file_rejected",
+            "forged_version_from_a_viewer_is_not_accepted",
             "roles_enforced_at_store",
             "truncated_upload_never_published"
         ]
     );
+}
+
+/// The forged-version journey through WOPI readers over a memory "server"
+/// that does NOT gate the timeline (it accepts whatever a member sends): the memory
+/// store's reader rules drop the forgery, and the WOPI host inherits that
+/// because it reads through the store. Nothing in WOPI itself does it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn forged_versions_are_dropped_through_wopi_when_the_server_does_not_gate() {
+    let f = WopiFactory::with_memory(MemoryConfig { gates_timeline: false, ..Default::default() });
+    let r = run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await;
+    assert!(matches!(r.outcome, Outcome::Passed), "{:?}", r.outcome);
+}
+
+/// Negative control: with neither a gating server nor a reader check the
+/// forgery reaches the WOPI readers, and the journey must fail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn forged_versions_reach_wopi_readers_when_nothing_drops_them() {
+    let f = WopiFactory::with_memory(MemoryConfig {
+        gates_timeline: false,
+        reader_checks_senders: false,
+        ..Default::default()
+    });
+    let r = run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await;
+    assert!(matches!(r.outcome, Outcome::Failed(_)), "{:?}", r.outcome);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -169,7 +205,7 @@ async fn the_journeys_can_fail_through_wopi() {
     // A backing store that hides the newest version: the viewer, reading
     // through WOPI, never converges. If this passed, the WOPI path would be
     // hiding what the store does wrong.
-    let f = WopiFactory { viewer_backing: ViewerBacking::HideNewest };
+    let f = WopiFactory { viewer_backing: ViewerBacking::HideNewest, memory: MemoryConfig::default() };
     let r = run_one(&f, "convergence_on_one_head").await;
     assert!(matches!(r.outcome, Outcome::Failed(_)), "{:?}", r.outcome);
 }

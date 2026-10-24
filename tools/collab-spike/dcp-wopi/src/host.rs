@@ -6,10 +6,10 @@
 //! |---|---|
 //! | file id | `DocId` |
 //! | access token | registry entry: `(doc, store handle, principal)` |
-//! | `CheckFileInfo` | `meta` + head of `versions` + `role` |
+//! | `CheckFileInfo` | `meta` + head of `versions` + `role` + the active lease (`DcpLease`) |
 //! | `GetFile` | `fetch_file` of the head, hash and size checked here |
-//! | `PutFile` | `publish_version` with the parent the session last read |
-//! | `Lock`/`RefreshLock`/`Unlock`/`UnlockAndRelock`/`GetLock` | `write_lease`/`lease` with `token` = the WOPI lock string |
+//! | `PutFile` | `publish_version` with the parent the session last read; refused (409, empty lock) when it has read none of an existing version |
+//! | `Lock`/`RefreshLock`/`Unlock`/`UnlockAndRelock`/`GetLock` | `write_lease`/`lease` with `token` = the WOPI lock string, `renewal` per lease rule 8, `duration_ms` always 1 800 000, confirmed by read-back, settle, read-back (lease rule 3) |
 //!
 //! Locks are not user-owned in WOPI (Microsoft's concepts page): any valid
 //! token with write permission may refresh or release a lock whose string it
@@ -30,6 +30,7 @@ use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
+use dcp_core::lease;
 use dcp_core::{
     DocId, DocumentStore, Holder, Lease, LeaseState, NewFile, Role, Stamped, StoreError, Version,
 };
@@ -50,14 +51,17 @@ pub const COOL_STATUS_DOC_CHANGED: u32 = 1010;
 
 #[derive(Clone, Debug)]
 pub struct HostConfig {
-    /// Lease duration written on every lock. WOPI says 30 minutes; spec 4.3
-    /// allows 1 s to 1 h.
-    pub lock_duration_ms: u64,
     pub max_put_bytes: usize,
     /// Spec version rule 3: refuse a `PutFile` body that is not a readable ODF
     /// or OOXML package. On by default; the shared conformance fixtures use
     /// opaque bytes and turn it off.
     pub validate_packages: bool,
+    /// Lease rule 3 settle interval: after writing a lease the host reads it
+    /// back, waits this long, reads it back again, and only then answers 200.
+    /// Defaults to [`lease::MATRIX_SETTLE_MS`]; tests over an in-memory store
+    /// with a manual clock may set 0. The lease duration is not configurable:
+    /// the host always writes [`lease::WOPI_DURATION_MS`] (spec 8.2 rule 4).
+    pub lease_settle_ms: u64,
     /// Print one line per request to stderr (also enabled by `DCP_WOPI_LOG=1`).
     pub log_stderr: bool,
 }
@@ -65,9 +69,9 @@ pub struct HostConfig {
 impl Default for HostConfig {
     fn default() -> Self {
         HostConfig {
-            lock_duration_ms: 30 * 60 * 1000,
             max_put_bytes: 64 * 1024 * 1024,
             validate_packages: true,
+            lease_settle_ms: lease::MATRIX_SETTLE_MS,
             log_stderr: std::env::var("DCP_WOPI_LOG").is_ok_and(|v| v == "1"),
         }
     }
@@ -431,6 +435,7 @@ async fn build_check_file_info(s: &Session, with_history: bool) -> Result<Value,
     let heads = heads_of(&versions);
     let head = heads.first();
     let now = s.store.now_ms(&s.doc).await.map_err(store_err)?;
+    let active = active_lease(s).await?;
 
     let mime = head.map_or(meta.mime.as_str(), |h| h.body.file.mime.as_str());
     let owner = versions
@@ -463,7 +468,14 @@ async fn build_check_file_info(s: &Session, with_history: bool) -> Result<Value,
         "SupportsExtendedLockLength": false,
         // Vendor extensions. A plain WOPI client ignores unknown members; the
         // WopiClientStore simulator reads them to rebuild the DCP objects that
-        // WOPI's own fields cannot carry (parents, hash, author, role, clock).
+        // WOPI's own fields cannot carry (parents, hash, author, role, clock,
+        // lease). `DcpLease` is the active lease record as the binding holds
+        // it and `DcpLeaseTimestampMs` its binding timestamp; both null when
+        // no lease is active (spec 4.3 rule 2). A WOPI client's own lock is
+        // only the string; a DCP-aware client needs holder, base_version and
+        // renewal too.
+        "DcpLease": active.as_ref().map(|l| serde_json::to_value(&l.body).expect("Lease serialises")),
+        "DcpLeaseTimestampMs": active.as_ref().map(|l| l.ts_ms),
         "DcpMeta": serde_json::to_value(&meta).expect("Meta serialises"),
         "DcpRole": serde_json::to_value(role).expect("Role serialises"),
         "DcpVersion": head.map(|h| serde_json::to_value(&h.body).expect("Version serialises")),
@@ -612,6 +624,13 @@ async fn do_put(
         }
     }
 
+    // Spec 8.2 rule 1: a token that has read no version may not save over a
+    // document that has one; there is no parent to give. Empty X-WOPI-Lock,
+    // nothing published.
+    if opened.is_none() && head.is_some() {
+        return Err(lock_mismatch("", "this session has not read a version of the document"));
+    }
+
     // 2. Collabora's timestamp precondition (X-COOL-WOPI-Timestamp, legacy
     //    X-LOOL-WOPI-Timestamp): the LastModifiedTime it was last given.
     if let (Some(h), Some(ts)) = (
@@ -631,13 +650,10 @@ async fn do_put(
         package::validate(&mime, &bytes).map_err(|why| text(StatusCode::BAD_REQUEST, why))?;
     }
 
-    // 4. Publish a child of the version this session read (rule 4). A session
-    //    that never read falls back to the head.
-    let parents: Vec<String> = match (&opened, head) {
-        (Some(o), _) => vec![o.clone()],
-        (None, Some(h)) => vec![h.id.clone()],
-        (None, None) => vec![],
-    };
+    // 4. Publish a child of the version this session read (rule 4). Rule 1
+    //    refused a session that never read a version of a document that has
+    //    one, so `opened` is only `None` here for a document with no version.
+    let parents: Vec<String> = opened.iter().cloned().collect();
     let autosave = hdr(headers, "x-cool-wopi-isautosave").as_deref() == Some("true");
     let exit_save = hdr(headers, "x-cool-wopi-isexitsave").as_deref() == Some("true");
     let message = Some(format!("WOPI PutFile (autosave={autosave}, exit_save={exit_save})"));
@@ -697,8 +713,8 @@ async fn file_operation(
 
 fn lock_header(headers: &HeaderMap, name: &str) -> Result<String, Response> {
     match hdr(headers, name) {
-        Some(v) if !v.is_empty() && v.len() <= MAX_LOCK_LEN => Ok(v),
-        Some(v) if v.len() > MAX_LOCK_LEN => Err(text(
+        Some(v) if !v.is_empty() && v.chars().count() <= MAX_LOCK_LEN => Ok(v),
+        Some(v) if !v.is_empty() => Err(text(
             StatusCode::BAD_REQUEST,
             format!("lock string longer than {MAX_LOCK_LEN} (DCP lease token limit)"),
         )),
@@ -711,43 +727,56 @@ fn ok_empty() -> Response {
     respond(StatusCode::OK, &[], Body::empty())
 }
 
-async fn base_version_for(s: &Session) -> Result<String, Response> {
+/// The version the lease names as `base_version` (spec 8.2 rule 1): the one
+/// this session last read or wrote, else the head, else `None`: a document
+/// with no version has no base and the field is omitted, never filled with a
+/// placeholder (spec 4.3).
+async fn base_version_for(s: &Session) -> Result<Option<String>, Response> {
     if let Some(o) = s.opened.lock().clone() {
-        return Ok(o);
+        return Ok(Some(o));
     }
     let versions = s.store.versions(&s.doc).await.map_err(store_err)?;
-    // Spec 4.3 requires `base_version` on a held lease, and a document with
-    // no version has none to give: draft 0 gap, see the spike results.
-    Ok(heads_of(&versions).first().map_or_else(|| "none".to_string(), |h| h.id.clone()))
+    Ok(heads_of(&versions).first().map(|h| h.id.clone()))
 }
 
-/// Write a held lease, then read it back (spec 4.3 rule 3). `Err` is the 409
-/// to return when the read-back names someone else.
+/// Write a held lease, then confirm it (spec 4.3 rules 3 and 8): read the
+/// record over which it is written to get `renewal`, write, read back, wait
+/// the settle interval, read back again, and answer `Ok` only when both
+/// read-backs carry the holder, token and renewal written. `Err` is the 409
+/// to return otherwise. The duration is always the WOPI one (spec 8.2 rule 4).
 async fn write_held(
     s: &Session,
     host: &WopiHost,
     token: &str,
     holder: Holder,
-    base_version: String,
+    base_version: Option<String>,
 ) -> Result<(), Response> {
+    let current = s.store.lease(&s.doc).await.map_err(store_err)?;
+    let renewal = lease::next_renewal(current.as_ref().map(|c| &c.body));
     let lease = Lease {
-        dcp: 0,
+        dcp: 1,
         state: LeaseState::Held,
         holder: Some(holder.clone()),
         token: Some(token.to_string()),
-        base_version: Some(base_version),
-        duration_ms: Some(host.inner.cfg.lock_duration_ms),
+        base_version,
+        renewal: Some(renewal),
+        duration_ms: Some(lease::WOPI_DURATION_MS),
     };
     s.store.write_lease(&s.doc, lease).await.map_err(store_err)?;
-    match s.store.lease(&s.doc).await.map_err(store_err)? {
-        Some(r)
-            if r.body.state == LeaseState::Held
-                && r.body.token.as_deref() == Some(token)
-                && r.body.holder.as_ref() == Some(&holder) =>
-        {
-            Ok(())
-        }
-        other => Err(lock_mismatch(
+    let ours = |r: &Stamped<Lease>| {
+        r.body.state == LeaseState::Held
+            && r.body.token.as_deref() == Some(token)
+            && r.body.holder.as_ref() == Some(&holder)
+            && r.body.renewal == Some(renewal)
+    };
+    let first = s.store.lease(&s.doc).await.map_err(store_err)?;
+    if host.inner.cfg.lease_settle_ms > 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(host.inner.cfg.lease_settle_ms)).await;
+    }
+    let second = s.store.lease(&s.doc).await.map_err(store_err)?;
+    match (first, second) {
+        (Some(a), Some(b)) if ours(&a) && ours(&b) => Ok(()),
+        (_, other) => Err(lock_mismatch(
             other.as_ref().and_then(|r| r.body.token.as_deref()).unwrap_or(""),
             "another writer won the lease read-back",
         )),
@@ -781,12 +810,13 @@ async fn lock(host: &WopiHost, s: &Session, headers: &HeaderMap) -> Result<Respo
 }
 
 /// Re-stamp a lease with the same token, holder and base, so the binding
-/// timestamp (and so the expiry) moves.
+/// timestamp (and so the expiry) moves. The new record is written over a held
+/// one, so its `renewal` is the old one plus 1 (lease rule 8).
 async fn refresh_existing(s: &Session, host: &WopiHost, l: Stamped<Lease>) -> Result<(), Response> {
     let token = l.body.token.clone().unwrap_or_default();
     let holder = l.body.holder.clone().unwrap_or_else(|| my_holder(s));
     let base = match l.body.base_version.clone() {
-        Some(b) => b,
+        Some(b) => Some(b),
         None => base_version_for(s).await?,
     };
     write_held(s, host, &token, holder, base).await
@@ -821,15 +851,8 @@ async fn unlock(s: &Session, headers: &HeaderMap) -> Result<Response, Response> 
     require_write(s).await?;
     match active_lease(s).await? {
         Some(l) if l.body.token.as_deref() == Some(token.as_str()) => {
-            let released = Lease {
-                dcp: 0,
-                state: LeaseState::Released,
-                holder: None,
-                token: None,
-                base_version: None,
-                duration_ms: None,
-            };
-            s.store.write_lease(&s.doc, released).await.map_err(store_err)?;
+            // Lease rule 8: a released record carries no `renewal`.
+            s.store.write_lease(&s.doc, lease::released()).await.map_err(store_err)?;
             Ok(ok_empty())
         }
         other => Err(lock_mismatch(
@@ -850,10 +873,11 @@ async fn unlock_and_relock(
     match active_lease(s).await? {
         Some(l) if l.body.token.as_deref() == Some(old_token.as_str()) => {
             // One lease record replaces the other: atomic as far as readers of
-            // the lease can tell.
+            // the lease can tell. It is written over a held record, so its
+            // renewal is the replaced one plus 1 (lease rule 8).
             let holder = l.body.holder.clone().unwrap_or_else(|| my_holder(s));
             let base = match l.body.base_version.clone() {
-                Some(b) => b,
+                Some(b) => Some(b),
                 None => base_version_for(s).await?,
             };
             write_held(s, host, &new_token, holder, base).await?;

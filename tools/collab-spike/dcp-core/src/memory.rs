@@ -79,6 +79,17 @@ pub struct MemoryConfig {
     /// `false` skips the read-back of uploaded bytes (version rule 2). This
     /// is a deliberate defect for mutation tests, never a sensible setting.
     pub verify_uploads: bool,
+    /// `true`: the "server" refuses any version a member below the editor
+    /// level sends, even around the store's own check (what Synapse does once
+    /// `events["m.room.encrypted"]` is 50, spec 8.1). `false`: it accepts
+    /// anything a member sends (the draft-0 power-level table), and only the
+    /// reader's check stands between a viewer's forged version and the user.
+    pub gates_timeline: bool,
+    /// `true`: when the server does not gate, a reader drops versions whose
+    /// sender is below the editor level (spec 8.1, "a reader ... SHOULD drop
+    /// DCP timeline events from senders below the editor level"). `false` is
+    /// a deliberate defect for mutation tests, never a sensible setting.
+    pub reader_checks_senders: bool,
 }
 
 impl Default for MemoryConfig {
@@ -86,6 +97,8 @@ impl Default for MemoryConfig {
         MemoryConfig {
             cas_leases: true,
             verify_uploads: true,
+            gates_timeline: true,
+            reader_checks_senders: true,
         }
     }
 }
@@ -165,6 +178,38 @@ impl MemoryBackend {
         self.inner.config
     }
 
+    /// What a hostile member's client does: send a version event straight to
+    /// the "server" as `principal`, skipping every check `MemoryStore` makes
+    /// (role, parents, upload, author). Only the server's own gate applies:
+    /// with [`MemoryConfig::gates_timeline`] a sender below the editor level
+    /// is refused `Forbidden`; without it the event is accepted and recorded
+    /// with `principal` as its authenticated sender. A non-member is always
+    /// refused. For tests of the reader rules.
+    pub fn send_version_unchecked(
+        &self,
+        principal: &str,
+        doc: &DocId,
+        version: Version,
+    ) -> Result<Stamped<Version>> {
+        let mut state = self.lock();
+        let id = state.event_id();
+        let now = self.inner.clock.now_ms();
+        let d = state.doc_mut(doc)?;
+        let role = d.role_of(principal)?;
+        if self.inner.config.gates_timeline && role < Role::Editor {
+            return Err(StoreError::Forbidden(format!(
+                "{principal} is {role:?}; the server refuses timeline events below the editor level"
+            )));
+        }
+        let stamped = Stamped::new(id, now, principal.to_string(), version);
+        let readers = d.members.keys().cloned().collect();
+        d.versions.push(Item {
+            stamped: stamped.clone(),
+            readers,
+        });
+        Ok(stamped)
+    }
+
     fn lock(&self) -> MutexGuard<'_, State> {
         self.inner.state.lock()
     }
@@ -215,10 +260,23 @@ impl Doc {
         Ok(role)
     }
 
-    fn visible_versions(&self, principal: &str) -> Vec<Stamped<Version>> {
+    /// What `principal` reads: the versions it was a member for, minus what
+    /// the reader rules of spec 8.1 discard: a version whose `created_by` is
+    /// not its authenticated sender, and, when the server does not gate the
+    /// timeline, one from a sender below the editor level.
+    fn visible_versions(&self, principal: &str, config: &MemoryConfig) -> Vec<Stamped<Version>> {
+        let check_level = !config.gates_timeline && config.reader_checks_senders;
         self.versions
             .iter()
             .filter(|i| i.readers.contains(principal))
+            .filter(|i| i.stamped.body.created_by.principal == i.stamped.sender)
+            .filter(|i| {
+                !check_level
+                    || self
+                        .members
+                        .get(&i.stamped.sender)
+                        .is_some_and(|r| *r >= Role::Editor)
+            })
             .map(|i| i.stamped.clone())
             .collect()
     }
@@ -251,7 +309,7 @@ impl MemoryStore {
         {
             let d = state.doc(doc)?;
             d.require(&self.principal, Role::Editor, "publishing a version")?;
-            graph::check_new_parents(&d.visible_versions(&self.principal), &parents)
+            graph::check_new_parents(&d.visible_versions(&self.principal, &config), &parents)
                 .map_err(|e| StoreError::Invalid(format!("parents: {e}")))?;
         }
         let truncate = std::mem::take(&mut state.truncate_next_upload);
@@ -271,7 +329,7 @@ impl MemoryStore {
             })?;
         }
         let version = Version {
-            dcp: 0,
+            dcp: 1,
             parents,
             file: file_ref,
             created_by: Author {
@@ -373,9 +431,10 @@ impl DocumentStore for MemoryStore {
     }
 
     async fn versions(&self, doc: &DocId) -> Result<Vec<Stamped<Version>>> {
+        let config = self.backend.inner.config;
         let state = self.lock();
         let d = state.doc(doc)?;
-        let seen = d.visible_versions(&self.principal);
+        let seen = d.visible_versions(&self.principal, &config);
         if seen.is_empty() && !d.members.contains_key(&self.principal) {
             return Err(StoreError::Forbidden(format!(
                 "{} has no access",
@@ -447,6 +506,20 @@ impl DocumentStore for MemoryStore {
                     "{} cannot write a lease held by {}",
                     self.principal, holder.principal
                 )));
+            }
+            // Lease rule 8 (checked only where a write is atomic against the
+            // record it replaces; a racy store cannot know what it replaced):
+            // 0 over a record that is not held, previous + 1 over a held one.
+            // A different number means the writer built its record over a
+            // record that has since been replaced: the compare-and-set fails.
+            if cas {
+                let expected = lease::next_renewal(d.lease.as_ref().map(|l| &l.body));
+                if record.renewal != Some(expected) {
+                    return Err(StoreError::Conflict(format!(
+                        "lease renewal must be {expected} over the current record (rule 8), got {:?}: the record changed since it was read",
+                        record.renewal
+                    )));
+                }
             }
         }
         if cas && role != Role::Owner {
@@ -526,7 +599,7 @@ mod tests {
 
     fn meta() -> Meta {
         Meta {
-            dcp: 0,
+            dcp: 1,
             title: "Doc".into(),
             mime: "text/plain".into(),
             levels: vec![Level::L1, Level::L2],
@@ -755,23 +828,32 @@ mod tests {
         let r = rig(MemoryConfig::default()).await;
         let claim =
             |p: &str, s: &str| lease::Claim::new(p, s, format!("t-{s}"), "$ev000001:mem", 60_000);
-        r.editor
-            .write_lease(&r.doc, claim("@e:mem", "s1").lease())
+        // Every write is built over what its writer just read (rule 8).
+        let over = |c: lease::Claim, cur: Option<Stamped<Lease>>| c.lease_over(cur.as_ref());
+        let cur = r.editor.lease(&r.doc).await.unwrap();
+        let first = r
+            .editor
+            .write_lease(&r.doc, over(claim("@e:mem", "s1"), cur))
             .await
             .unwrap();
+        assert_eq!(first.body.renewal, Some(0));
         // the same session may rewrite (renew); another session is refused
-        r.editor
-            .write_lease(&r.doc, claim("@e:mem", "s1").lease())
+        let cur = r.editor.lease(&r.doc).await.unwrap();
+        let renewed = r
+            .editor
+            .write_lease(&r.doc, over(claim("@e:mem", "s1"), cur))
             .await
             .unwrap();
+        assert_eq!(renewed.body.renewal, Some(1));
         let other = r.backend.store("@e2:mem", "E2");
         r.owner
             .grant(&r.doc, "@e2:mem", Role::Editor)
             .await
             .unwrap();
+        let cur = other.lease(&r.doc).await.unwrap();
         assert!(matches!(
             other
-                .write_lease(&r.doc, claim("@e2:mem", "s2").lease())
+                .write_lease(&r.doc, over(claim("@e2:mem", "s2"), cur))
                 .await,
             Err(StoreError::Conflict(_))
         ));
@@ -779,22 +861,66 @@ mod tests {
             other.write_lease(&r.doc, lease::released()).await,
             Err(StoreError::Conflict(_))
         ));
-        r.owner
-            .write_lease(&r.doc, claim("@o:mem", "so").lease())
+        let cur = r.owner.lease(&r.doc).await.unwrap();
+        let broken = r
+            .owner
+            .write_lease(&r.doc, over(claim("@o:mem", "so"), cur))
             .await
             .unwrap();
+        assert_eq!(broken.body.renewal, Some(2), "a break is a write over a held record");
         // after expiry anyone may write
         r.clock.advance(60_000);
-        other
-            .write_lease(&r.doc, claim("@e2:mem", "s2").lease())
+        let cur = other.lease(&r.doc).await.unwrap();
+        let taken = other
+            .write_lease(&r.doc, over(claim("@e2:mem", "s2"), cur))
             .await
             .unwrap();
+        assert_eq!(taken.body.renewal, Some(3), "a takeover over an expired held record");
+    }
+
+    #[tokio::test]
+    async fn lease_renewal_must_follow_rule_8() {
+        let r = rig(MemoryConfig::default()).await;
+        let c = lease::Claim::new("@e:mem", "s1", "t", "$v", 60_000);
+        // 0 over nothing: a first lease claiming renewal 5 is refused.
+        let mut bad = c.lease_over(None);
+        bad.renewal = Some(5);
+        assert!(matches!(
+            r.editor.write_lease(&r.doc, bad).await,
+            Err(StoreError::Conflict(_))
+        ));
+        let first = r.editor.write_lease(&r.doc, c.lease_over(None)).await.unwrap();
+        // A renewal that repeats the record (what Synapse would silently drop) is refused.
+        assert!(matches!(
+            r.editor.write_lease(&r.doc, first.body.clone()).await,
+            Err(StoreError::Conflict(_))
+        ));
+        // Skipping a number is refused too.
+        let mut skip = c.lease_over(Some(&first));
+        skip.renewal = Some(2);
+        assert!(matches!(
+            r.editor.write_lease(&r.doc, skip).await,
+            Err(StoreError::Conflict(_))
+        ));
+        r.editor
+            .write_lease(&r.doc, c.lease_over(Some(&first)))
+            .await
+            .unwrap();
+        // Over a released record the count starts again at 0.
+        r.editor.write_lease(&r.doc, lease::released()).await.unwrap();
+        let cur = r.editor.lease(&r.doc).await.unwrap();
+        let again = r
+            .editor
+            .write_lease(&r.doc, c.lease_over(cur.as_ref()))
+            .await
+            .unwrap();
+        assert_eq!(again.body.renewal, Some(0));
     }
 
     #[tokio::test]
     async fn lease_holder_must_be_the_authenticated_principal() {
         let r = rig(MemoryConfig::default()).await;
-        let spoof = lease::Claim::new("@o:mem", "s", "t", "$v", 5_000).lease();
+        let spoof = lease::Claim::new("@o:mem", "s", "t", "$v", 5_000).lease_over(None);
         assert!(matches!(
             r.editor.write_lease(&r.doc, spoof).await,
             Err(StoreError::Forbidden(_))
@@ -815,23 +941,26 @@ mod tests {
         let other = r.backend.store("@e2:mem", "E2");
         let c1 = lease::Claim::new("@e:mem", "s1", "t1", "$v", 60_000);
         let c2 = lease::Claim::new("@e2:mem", "s2", "t2", "$v", 60_000);
-        r.editor.write_lease(&r.doc, c1.lease()).await.unwrap();
-        other.write_lease(&r.doc, c2.lease()).await.unwrap();
+        r.editor.write_lease(&r.doc, c1.lease_over(None)).await.unwrap();
+        // Both read nothing before either wrote: both write renewal 0, and a
+        // racy store keeps the later write without complaint.
+        other.write_lease(&r.doc, c2.lease_over(None)).await.unwrap();
         let rec = r.editor.lease(&r.doc).await.unwrap().unwrap();
         assert_eq!(rec.body.holder, Some(c2.holder));
+        assert_eq!(rec.body.renewal, Some(0));
     }
 
     #[tokio::test]
     async fn invalid_lease_and_update_are_refused_by_the_schema() {
         let r = rig(MemoryConfig::default()).await;
-        let mut bad = lease::Claim::new("@e:mem", "s", "t", "$v", 5_000).lease();
+        let mut bad = lease::Claim::new("@e:mem", "s", "t", "$v", 5_000).lease_over(None);
         bad.duration_ms = Some(7_200_000);
         assert!(matches!(
             r.editor.write_lease(&r.doc, bad).await,
             Err(StoreError::Invalid(_))
         ));
         let bad_update = Update {
-            dcp: 0,
+            dcp: 1,
             algorithm: "Loro".into(),
             doc_model: "text/1".into(),
             base_version: "$v".into(),

@@ -75,7 +75,7 @@ async fn viewer_is_refused_by_the_store_and_by_the_server() {
     // The store's own check.
     let e = vera.publish_version(&doc, vec![], file(b"x"), None).await.unwrap_err();
     assert!(matches!(e, StoreError::Forbidden(_)), "{e:?}");
-    let lease = Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: vera.principal(), session: "s".into() }), token: Some("t".into()), base_version: Some("$x".into()), duration_ms: Some(60_000) };
+    let lease = Lease { dcp: 1, state: LeaseState::Held, holder: Some(Holder { principal: vera.principal(), session: "s".into() }), token: Some("t".into()), base_version: Some("$x".into()), renewal: Some(0), duration_ms: Some(60_000) };
     assert!(matches!(vera.write_lease(&doc, lease.clone()).await.unwrap_err(), StoreError::Forbidden(_)));
     assert!(matches!(vera.grant(&doc, &alice.principal(), Role::Viewer).await.unwrap_err(), StoreError::Forbidden(_)));
 
@@ -83,7 +83,7 @@ async fn viewer_is_refused_by_the_store_and_by_the_server() {
     // binding, not only in the UI". A DCP timeline event in an encrypted room is
     // an `m.room.encrypted` event to the server, so it is that type's level that
     // counts (see the results doc).
-    let v = serde_json::to_value(Version { dcp: 0, parents: vec![], file: FileRef { mime: "x/y".into(), size: 1, sha256: sha(b"x"), locator: Locator::MatrixMedia { url: "mxc://localhost/x".into() } }, created_by: Author { principal: vera.principal(), device: vera.device() }, message: None, covers: None }).unwrap();
+    let v = serde_json::to_value(Version { dcp: 1, parents: vec![], file: FileRef { mime: "x/y".into(), size: 1, sha256: sha(b"x"), locator: Locator::MatrixMedia { url: "mxc://localhost/x".into() } }, created_by: Author { principal: vera.principal(), device: vera.device() }, message: None, covers: None }).unwrap();
     let e = vera.send_unchecked(&doc, state::VERSION, v).await.unwrap_err();
     assert!(matches!(e, StoreError::Forbidden(_)), "server must refuse a viewer's encrypted timeline event: {e:?}");
     let e = vera.send_state_unchecked(&doc, state::LEASE, "", serde_json::to_value(&lease).unwrap()).await.unwrap_err();
@@ -112,7 +112,7 @@ async fn spec_literal_power_table_does_not_stop_a_viewers_encrypted_event_but_th
     assert!(!snap.power.server_gates_encrypted_timeline());
     assert_eq!(snap.power.events.get(state::VERSION), Some(&50));
 
-    let forged = serde_json::to_value(Version { dcp: 0, parents: vec![], file: FileRef { mime: "x/y".into(), size: 1, sha256: sha(b"x"), locator: Locator::MatrixMedia { url: "mxc://localhost/x".into() } }, created_by: Author { principal: vera.principal(), device: vera.device() }, message: Some("forged by a viewer".into()), covers: None }).unwrap();
+    let forged = serde_json::to_value(Version { dcp: 1, parents: vec![], file: FileRef { mime: "x/y".into(), size: 1, sha256: sha(b"x"), locator: Locator::MatrixMedia { url: "mxc://localhost/x".into() } }, created_by: Author { principal: vera.principal(), device: vera.device() }, message: Some("forged by a viewer".into()), covers: None }).unwrap();
     // Server accepts it: this is the hole in the spec's table.
     vera.send_unchecked(&doc, state::VERSION, forged).await.expect("server accepts a viewer's encrypted timeline event under the spec's literal table");
 
@@ -132,7 +132,7 @@ async fn update_roundtrip_and_inline_limit() {
 
     let mk = |len: usize, seq: u64, size_field: Option<u64>| {
         let raw = noise(len, seq);
-        Update { dcp: 0, algorithm: "loro/1".into(), doc_model: "tables/1".into(), base_version: "$base".into(), seq, payload: Payload::Base64 { data: base64::engine::general_purpose::STANDARD.encode(&raw), size: size_field.unwrap_or(len as u64) } }
+        Update { dcp: 1, algorithm: "loro/1".into(), doc_model: "tables/1".into(), base_version: "$base".into(), seq, payload: Payload::Base64 { data: base64::engine::general_purpose::STANDARD.encode(&raw), size: size_field.unwrap_or(len as u64) } }
     };
     let u0 = mk(1000, 0, None);
     let sent = alice.publish_update(&doc, u0.clone()).await.unwrap();
@@ -161,8 +161,9 @@ async fn lease_is_a_state_event_with_server_timestamps_and_read_back() {
     assert!(alice.lease(&doc).await.unwrap().is_none(), "never written");
 
     let v1 = alice.versions(&doc).await.unwrap().remove(0);
-    let held = |who: &MatrixStore, session: &str| Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: session.into() }), token: Some(format!("tok-{session}")), base_version: Some(v1.id.clone()), duration_ms: Some(60_000) };
-    let written = alice.write_lease(&doc, held(&alice, "alice-s1")).await.unwrap();
+    // Rule 8: renewal is 0 over a record that is not held, previous + 1 over a held one.
+    let held = |who: &MatrixStore, session: &str, renewal: u64| Lease { dcp: 1, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: session.into() }), token: Some(format!("tok-{session}")), base_version: Some(v1.id.clone()), renewal: Some(renewal), duration_ms: Some(60_000) };
+    let written = alice.write_lease(&doc, held(&alice, "alice-s1", 0)).await.unwrap();
     let read = bob.lease(&doc).await.unwrap().expect("bob reads alice's lease");
     assert_eq!(read.id, written.id);
     assert_eq!(read.ts_ms, written.ts_ms);
@@ -176,14 +177,14 @@ async fn lease_is_a_state_event_with_server_timestamps_and_read_back() {
     assert!((-2_000..30_000).contains(&skew), "Date-header clock vs origin_server_ts skew {skew} ms");
 
     // Bob overwrites (no compare-and-set); the read-back names him.
-    let b = bob.write_lease(&doc, held(&bob, "bob-s1")).await.unwrap();
+    let b = bob.write_lease(&doc, held(&bob, "bob-s1", 1)).await.unwrap();
     let back = alice.lease(&doc).await.unwrap().unwrap();
     assert_eq!(back.id, b.id);
     assert_eq!(back.body.holder.unwrap().principal, bob.principal());
     assert!(back.ts_ms >= written.ts_ms);
 
     // Release.
-    let released = Lease { dcp: 0, state: LeaseState::Released, holder: None, token: None, base_version: None, duration_ms: None };
+    let released = Lease { dcp: 1, state: LeaseState::Released, holder: None, token: None, base_version: None, renewal: None, duration_ms: None };
     bob.write_lease(&doc, released.clone()).await.unwrap();
     assert_eq!(alice.lease(&doc).await.unwrap().unwrap().body, released);
 }
@@ -196,17 +197,19 @@ async fn simultaneous_lease_writers_agree_on_one_winner_after_settling() {
     let doc = alice.create_document(&meta("Race"), Some(file(b"v1"))).await.unwrap();
     alice.grant(&doc, &bob.principal(), Role::Editor).await.unwrap();
     let base = alice.versions(&doc).await.unwrap().remove(0).id;
-    let held = |who: &MatrixStore, s: &str| Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: s.into() }), token: Some(s.into()), base_version: Some(base.clone()), duration_ms: Some(60_000) };
+    let held = |who: &MatrixStore, s: &str, renewal: u64| Lease { dcp: 1, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: s.into() }), token: Some(s.into()), base_version: Some(base.clone()), renewal: Some(renewal), duration_ms: Some(60_000) };
     // Warm both so the race is the writes, not first-use setup.
-    alice.write_lease(&doc, held(&alice, "warm-a")).await.unwrap();
-    bob.write_lease(&doc, held(&bob, "warm-b")).await.unwrap();
+    alice.write_lease(&doc, held(&alice, "warm-a", 0)).await.unwrap();
+    bob.write_lease(&doc, held(&bob, "warm-b", 1)).await.unwrap();
 
     for round in 0..5 {
         let (sa, sb) = (format!("a{round}"), format!("b{round}"));
-        let (wa, wb) = tokio::join!(alice.write_lease(&doc, held(&alice, &sa)), bob.write_lease(&doc, held(&bob, &sb)));
+        // Both replace the same held record, so both carry the same next renewal.
+        let renewal = round + 2;
+        let (wa, wb) = tokio::join!(alice.write_lease(&doc, held(&alice, &sa, renewal)), bob.write_lease(&doc, held(&bob, &sb, renewal)));
         let (wa, wb) = (wa.unwrap(), wb.unwrap());
         assert_ne!(wa.id, wb.id, "no compare-and-set: both writes succeed");
-        sleep_ms(300).await;
+        sleep_ms(600).await;
         let (ra, rb) = (alice.lease(&doc).await.unwrap().unwrap(), bob.lease(&doc).await.unwrap().unwrap());
         assert_eq!(ra.id, rb.id, "after settling, both read the same record");
         assert!(ra.id == wa.id || ra.id == wb.id);
@@ -273,22 +276,29 @@ async fn a_plain_room_is_not_a_document() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn renewing_a_lease_with_identical_content_still_produces_a_newer_record() {
+async fn renewal_counter_is_what_makes_a_renewal_a_new_event() {
     let Some(syn) = require_synapse!() else { return };
     let alice = syn.user("alice").await;
     let doc = alice.create_document(&meta("Renew"), Some(file(b"v1"))).await.unwrap();
     let base = alice.versions(&doc).await.unwrap().remove(0).id;
-    let l = Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: alice.principal(), session: "s".into() }), token: Some("t".into()), base_version: Some(base), duration_ms: Some(60_000) };
+    let l = Lease { dcp: 1, state: LeaseState::Held, holder: Some(Holder { principal: alice.principal(), session: "s".into() }), token: Some("t".into()), base_version: Some(base), renewal: Some(0), duration_ms: Some(1_800_000) };
     let first = alice.write_lease(&doc, l.clone()).await.unwrap();
     sleep_ms(1100).await;
-    let second = alice.write_lease(&doc, l.clone()).await.unwrap();
+
+    // Why spec 4.3 rule 8 exists: the same record again from the same sender
+    // is silently ignored by Synapse, which answers with the old event.
+    let again = alice.write_lease(&doc, l.clone()).await.unwrap();
+    assert_eq!(again.id, first.id, "Synapse hands back the old event for identical state content");
+    assert_eq!(alice.lease(&doc).await.unwrap().unwrap().ts_ms, first.ts_ms, "and nothing was extended");
+
+    // A renewal over a held record carries renewal + 1 and is a new event.
+    let renewed = Lease { renewal: Some(1), ..l.clone() };
+    let second = alice.write_lease(&doc, renewed.clone()).await.unwrap();
     assert_ne!(first.id, second.id, "a renewal must be a new event, not the old one handed back");
     assert!(second.ts_ms > first.ts_ms);
     let read = alice.lease(&doc).await.unwrap().unwrap();
     assert_eq!(read.id, second.id);
-    assert_eq!(read.body.holder, l.holder);
-    assert_eq!(read.body.token, l.token);
-    assert!(read.body.duration_ms.unwrap().abs_diff(60_000) <= 1);
+    assert_eq!(read.body, renewed, "the binding writes exactly what it is given");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

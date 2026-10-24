@@ -323,7 +323,7 @@ mod tests {
             ts,
             "@a:x",
             Version {
-                dcp: 0,
+                dcp: 1,
                 parents: parents.iter().map(|p| p.to_string()).collect(),
                 file: integrity::file_ref(
                     "text/plain",

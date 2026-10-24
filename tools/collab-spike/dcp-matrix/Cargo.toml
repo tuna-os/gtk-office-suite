@@ -1,6 +1,6 @@
 [package]
 name = "dcp-matrix"
-description = "DCP draft-0 Matrix binding (spec 8.1), Spike A of RFC-0004. Measured against a real Synapse."
+description = "DCP draft-1 Matrix binding (spec 8.1), Spike A of RFC-0004. Measured against a real Synapse."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

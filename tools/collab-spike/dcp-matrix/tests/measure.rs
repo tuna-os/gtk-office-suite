@@ -33,7 +33,7 @@ fn ms(d: Duration) -> f64 {
 fn update(seq: u64, payload_len: usize) -> Update {
     let raw = noise(payload_len, seq);
     Update {
-        dcp: 0,
+        dcp: 1,
         algorithm: "loro/1".into(),
         doc_model: "tables/1".into(),
         base_version: "$0123456789012345678901234567890123456789012".into(),
@@ -42,12 +42,22 @@ fn update(seq: u64, payload_len: usize) -> Update {
     }
 }
 
-fn held(who: &MatrixStore, session: &str, base: &str) -> Lease {
-    Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: session.into() }), token: Some(session.into()), base_version: Some(base.into()), duration_ms: Some(60_000) }
+/// A held lease at `renewal` (spec 4.3 rule 8: 0 over a record that is not
+/// held, the replaced record's renewal + 1 over a held one).
+fn held(who: &MatrixStore, session: &str, base: &str, renewal: u64) -> Lease {
+    Lease { dcp: 1, state: LeaseState::Held, holder: Some(Holder { principal: who.principal(), session: session.into() }), token: Some(session.into()), base_version: Some(base.into()), renewal: Some(renewal), duration_ms: Some(60_000) }
 }
 
 fn released() -> Lease {
-    Lease { dcp: 0, state: LeaseState::Released, holder: None, token: None, base_version: None, duration_ms: None }
+    Lease { dcp: 1, state: LeaseState::Released, holder: None, token: None, base_version: None, renewal: None, duration_ms: None }
+}
+
+/// Rule 8 for a lease written over `cur`.
+fn renewal_over(cur: Option<&Lease>) -> u64 {
+    match cur {
+        Some(l) if l.state == LeaseState::Held => l.renewal.map_or(0, |r| r + 1),
+        _ => 0,
+    }
 }
 
 fn is_default(syn: &Synapse) -> bool {
@@ -538,7 +548,7 @@ async fn acquire(s: &MatrixStore, doc: &DocId, session: &str, base: &str) -> (bo
             return (false, false, None);
         }
     }
-    let written = s.write_lease(doc, held(s, session, base)).await.unwrap();
+    let written = s.write_lease(doc, held(s, session, base, renewal_over(cur.as_ref().map(|c| &c.body)))).await.unwrap();
     let back = s.lease(doc).await.unwrap().unwrap();
     (back.body.holder.as_ref().map(|h| h.session.as_str()) == Some(session), true, Some(written.ts_ms))
 }
@@ -552,8 +562,8 @@ async fn m07_lease_race() {
     let doc = alice.create_document(&meta("Race"), Some(file(b"v1"))).await.unwrap();
     alice.grant(&doc, &bob.principal(), Role::Editor).await.unwrap();
     let base = alice.versions(&doc).await.unwrap().remove(0).id;
-    alice.write_lease(&doc, held(&alice, "warm-a", &base)).await.unwrap();
-    bob.write_lease(&doc, held(&bob, "warm-b", &base)).await.unwrap();
+    alice.write_lease(&doc, held(&alice, "warm-a", &base, 0)).await.unwrap();
+    bob.write_lease(&doc, held(&bob, "warm-b", &base, 1)).await.unwrap();
 
     let rounds = if is_default(&syn) { 4 } else { 40 };
     let mut tally = json!({"both_believe_at_first_read_back": 0, "exactly_one_believes": 0, "none_believes": 0, "one_refused_at_check": 0, "settled_agree": 0, "settled_holder_is_a_believer": 0});
@@ -909,7 +919,7 @@ async fn late_trial(syn: &Synapse, variant: &str) -> Value {
         v if v.contains("lease_after_invite") => {
             alice.grant(&doc, &late.principal(), role).await.unwrap();
             let base = alice.versions(&doc).await.unwrap().remove(0).id;
-            alice.write_lease(&doc, held(&alice, "s", &base)).await.unwrap();
+            alice.write_lease(&doc, held(&alice, "s", &base, 0)).await.unwrap();
         }
         v if v.contains("read_after_3s") => {
             alice.grant(&doc, &late.principal(), role).await.unwrap();
@@ -969,22 +979,23 @@ async fn m12_state_event_dedup() {
     let doc = alice.create_document(&meta("Dedup"), Some(file(b"v1"))).await.unwrap();
     alice.grant(&doc, &bob.principal(), Role::Editor).await.unwrap();
     let base = alice.versions(&doc).await.unwrap().remove(0).id;
-    let l = held(&alice, "s", &base);
+    let l = held(&alice, "s", &base, 0);
     let content = serde_json::to_value(&l).unwrap();
     let a = alice.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
     sleep_ms(1100).await;
     let b = alice.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
     let c = bob.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
     let d = alice.send_state_unchecked(&doc, state::LEASE, "", content).await.unwrap();
-    // The binding's own renewal path (duration differs by 1 ms).
-    let w1 = alice.write_lease(&doc, l.clone()).await.unwrap();
+    // The binding's renewal path: the record carries renewal + 1, so it is not
+    // identical content and Synapse creates a new event.
+    let w1 = alice.write_lease(&doc, Lease { renewal: Some(1), ..l.clone() }).await.unwrap();
     sleep_ms(1100).await;
-    let w2 = alice.write_lease(&doc, l.clone()).await.unwrap();
+    let w2 = alice.write_lease(&doc, Lease { renewal: Some(2), ..l.clone() }).await.unwrap();
     record(&syn, "state_event_dedup", json!({
         "same_sender_same_content_twice_returns_same_event_id": a == b,
         "other_sender_same_content_is_a_new_event": c != b,
         "same_sender_again_after_other_sender_is_a_new_event": d != c,
         "binding_renewal_new_event_and_later_ts": w1.id != w2.id && w2.ts_ms > w1.ts_ms,
-        "binding_renewal_durations_ms": [w1.body.duration_ms, w2.body.duration_ms],
+        "binding_renewal_counters": [w1.body.renewal, w2.body.renewal],
     }));
 }

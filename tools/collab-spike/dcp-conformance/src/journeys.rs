@@ -14,7 +14,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use dcp_core::lease::{self, Acquire, Claim, Release};
+use dcp_core::lease::{self, Acquire, Claim, Pause, Release, Settle, MATRIX_SETTLE_MS};
 use dcp_core::updates::{self, Receiver, Skip, StreamWriter, Target};
 use dcp_core::view::{read_view, Head, Reason, View};
 use dcp_core::{
@@ -22,11 +22,22 @@ use dcp_core::{
 };
 
 use crate::compare::assert_same_view;
-use crate::fixture::{new_file, Fixture, StoreFactory, ALGORITHM, BASE_FILE, DOC_MODEL};
+use crate::fixture::{new_file, Fixture, StoreFactory, Time, ALGORITHM, BASE_FILE, DOC_MODEL};
 use crate::wrappers::{CorruptingStore, Corruption, Target as CorruptTarget};
 use crate::{ensure, Failure};
 
 type Handle = Arc<dyn DocumentStore>;
+
+/// Lets the settle interval of lease rule 3 pass on the fixture's own clock:
+/// real time for a real binding, the injected clock for an in-memory one.
+struct TimePause(Arc<dyn Time>);
+
+#[async_trait::async_trait]
+impl Pause for TimePause {
+    async fn pause(&self, ms: u64) {
+        self.0.pass(ms).await;
+    }
+}
 
 // ---------------------------------------------------------------- helpers
 
@@ -94,7 +105,7 @@ fn update(
     bytes: &[u8],
 ) -> Result<Update, Failure> {
     Ok(Update {
-        dcp: 0,
+        dcp: 1,
         algorithm: algorithm.into(),
         doc_model: doc_model.into(),
         base_version: base.into(),
@@ -434,6 +445,9 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         60_000,
     );
 
+    let pause = TimePause(fx.time.clone());
+    let st = Settle::new(&pause, MATRIX_SETTLE_MS);
+
     // Both sessions look, both see a free lease, both write, then both read back.
     ensure!(
         lease::available(&**ed, &fx.doc, &ce.holder).await?.is_ok(),
@@ -443,12 +457,24 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         lease::available(&**ow, &fx.doc, &co.holder).await?.is_ok(),
         "no lease was ever written, yet it is not available"
     );
-    let we = lease::write(&**ed, &fx.doc, &ce).await?;
-    let wo = lease::write(&**ow, &fx.doc, &co).await?;
+    // Both looked before either wrote: both build their record over "no lease".
+    let seen_by_ed = ed.lease(&fx.doc).await?;
+    let seen_by_ow = ow.lease(&fx.doc).await?;
+    let we = lease::write_over(&**ed, &fx.doc, &ce, seen_by_ed.as_ref()).await?;
+    let wo = lease::write_over(&**ow, &fx.doc, &co, seen_by_ow.as_ref()).await?;
+    // Rule 8: written over nothing, so renewal 0, for both.
+    ensure!(
+        we.lease.renewal == Some(0) && wo.lease.renewal == Some(0),
+        "a lease written over no record must carry renewal 0: editor {:?}, owner {:?}",
+        we.lease.renewal,
+        wo.lease.renewal
+    );
     if fx.caps.racy_lease {
         ensure!(
-            we.is_ok() && wo.is_ok(),
-            "the binding says it has no compare-and-set but refused a write: editor {we:?}, owner {wo:?}"
+            we.result.is_ok() && wo.result.is_ok(),
+            "the binding says it has no compare-and-set but refused a write: editor {:?}, owner {:?}",
+            we.result,
+            wo.result
         );
     }
     // Give both handles time to see the same latest record. If they never do,
@@ -459,8 +485,8 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         Ok((a.is_some() && a == b).then_some(()))
     })
     .await?;
-    let re = lease::confirm(&**ed, &fx.doc, &ce).await?;
-    let ro = lease::confirm(&**ow, &fx.doc, &co).await?;
+    let re = lease::confirm(&**ed, &fx.doc, &ce, &we, &st).await?;
+    let ro = lease::confirm(&**ow, &fx.doc, &co, &wo, &st).await?;
     ensure!(
         re.is_acquired() != ro.is_acquired(),
         "exactly one session may hold the lease after a simultaneous write; editor: {re:?}, owner: {ro:?}"
@@ -472,7 +498,7 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
     };
 
     // The loser cannot take an active lease.
-    let again = lease::acquire(&**loser, &fx.doc, lc).await?;
+    let again = lease::acquire(&**loser, &fx.doc, lc, &st).await?;
     ensure!(
         matches!(again, Acquire::Held(_)),
         "a session took (or fought for) an active lease: {again:?}"
@@ -508,10 +534,16 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         l.is_some_and(|l| l.body.state == LeaseState::Released)
     })
     .await?;
-    let got = lease::acquire(&**ed, &fx.doc, &editor_again).await?;
+    let got = lease::acquire(&**ed, &fx.doc, &editor_again, &st).await?;
+    let Acquire::Acquired(got) = got else {
+        return Err(Failure::new(format!(
+            "the lease was released but could not be acquired: {got:?}"
+        )));
+    };
     ensure!(
-        got.is_acquired(),
-        "the lease was released but could not be acquired: {got:?}"
+        got.body.renewal == Some(0),
+        "a lease written over a released record must carry renewal 0 (rule 8), got {:?}",
+        got.body.renewal
     );
     let breaker = Claim::new(
         ow.principal(),
@@ -528,10 +560,11 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         &**ed,
         &fx.doc,
         &Claim::new(ed.principal(), "session-editor-3", "t", &saved.id, 60_000),
+        &st,
     )
     .await;
     forbidden("an editor breaking a lease", by_editor)?;
-    let broke = lease::break_lease(&**ow, &fx.doc, &breaker).await?;
+    let broke = lease::break_lease(&**ow, &fx.doc, &breaker, &st).await?;
     let Acquire::Acquired(rec) = broke else {
         return Err(Failure::new(format!(
             "an owner could not break a lease: {broke:?}"
@@ -542,11 +575,16 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
         "a broken lease must be recorded as held by the breaker, got {:?}",
         rec.body.holder
     );
+    ensure!(
+        rec.body.renewal == Some(1),
+        "a break is a write over a held record: renewal must be the replaced 0 plus 1 (rule 8), got {:?}",
+        rec.body.renewal
+    );
     fx.settle("the former holder sees its lease was broken", || async {
         Ok((!lease::holds(&**ed, &fx.doc, &editor_again.holder).await?).then_some(()))
     })
     .await?;
-    let blocked = lease::acquire(&**ed, &fx.doc, &editor_again).await?;
+    let blocked = lease::acquire(&**ed, &fx.doc, &editor_again, &st).await?;
     ensure!(
         matches!(blocked, Acquire::Held(_)),
         "the former holder retook a lease the owner broke: {blocked:?}"
@@ -559,23 +597,32 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
 /// Test 5: lease expiry releases the document, and renewal at half the
 /// duration keeps it.
 pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> {
-    const D: u64 = 2_000;
+    // Long enough that the settle interval inside every acquire (rule 3)
+    // does not eat the lease it just took.
+    const D: u64 = 4_000;
     let fx = f.fresh().await?;
     let first = fx.first_version.clone();
     let (ed, ow) = (&fx.editor, &fx.owner);
     let ce = Claim::new(ed.principal(), "session-editor", "token-editor", &first, D);
     let co = Claim::new(ow.principal(), "session-owner", "token-owner", &first, D);
+    let pause = TimePause(fx.time.clone());
+    let st = Settle::new(&pause, MATRIX_SETTLE_MS);
 
-    let Acquire::Acquired(held) = lease::acquire(&**ed, &fx.doc, &ce).await? else {
+    let Acquire::Acquired(held) = lease::acquire(&**ed, &fx.doc, &ce, &st).await? else {
         return Err(Failure::new(
             "a fresh document's lease could not be acquired",
         ));
     };
+    ensure!(
+        held.body.renewal == Some(0),
+        "a fresh lease must carry renewal 0 (rule 8), got {:?}",
+        held.body.renewal
+    );
     wait_lease(&fx, ow, "the owner sees the editor's lease", |l| {
         l.is_some_and(|l| l.id == held.id)
     })
     .await?;
-    let blocked = lease::acquire(&**ow, &fx.doc, &co).await?;
+    let blocked = lease::acquire(&**ow, &fx.doc, &co, &st).await?;
     ensure!(
         matches!(blocked, Acquire::Held(_)),
         "an active lease was taken: {blocked:?}"
@@ -583,9 +630,14 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
 
     // Kill the holder: it stops renewing. After the duration anyone may acquire.
     fx.time.pass(D + 500).await;
-    let Acquire::Acquired(taken) = lease::acquire(&**ow, &fx.doc, &co).await? else {
+    let Acquire::Acquired(taken) = lease::acquire(&**ow, &fx.doc, &co, &st).await? else {
         return Err(Failure::new("the lease did not expire after its duration"));
     };
+    ensure!(
+        taken.body.renewal == Some(1),
+        "a takeover over an expired held record continues the count (rule 8): expected 1, got {:?}",
+        taken.body.renewal
+    );
     wait_lease(&fx, ed, "the editor sees the new lease", |l| {
         l.is_some_and(|l| l.id == taken.id)
     })
@@ -594,7 +646,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
         !lease::holds(&**ed, &fx.doc, &ce.holder).await?,
         "the dead holder still thinks it holds the lease"
     );
-    let retry = lease::acquire(&**ed, &fx.doc, &ce).await?;
+    let retry = lease::acquire(&**ed, &fx.doc, &ce, &st).await?;
     ensure!(
         matches!(retry, Acquire::Held(_)),
         "the expired holder retook the lease the new holder has: {retry:?}"
@@ -602,7 +654,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
 
     // Renewal: due at half the duration, and it really extends the lease.
     fx.time.pass(D / 2).await;
-    let renewed = lease::renew_if_due(&**ow, &fx.doc, &co, &taken).await?;
+    let renewed = lease::renew_if_due(&**ow, &fx.doc, &co, &taken, &st).await?;
     let Some(Acquire::Acquired(renewed)) = renewed else {
         return Err(Failure::new(format!(
             "no renewal at half the duration: {renewed:?}"
@@ -612,12 +664,17 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
         renewed.ts_ms > taken.ts_ms,
         "renewal did not produce a newer lease record"
     );
+    ensure!(
+        renewed.body.renewal == Some(2),
+        "a renewal carries the previous renewal plus 1 (rule 8): expected 2, got {:?}",
+        renewed.body.renewal
+    );
     fx.time.pass(D * 3 / 4).await; // past the ORIGINAL expiry, inside the renewed one
     wait_lease(&fx, ed, "the editor sees the renewal", |l| {
         l.is_some_and(|l| l.id == renewed.id)
     })
     .await?;
-    let still = lease::acquire(&**ed, &fx.doc, &ce).await?;
+    let still = lease::acquire(&**ed, &fx.doc, &ce, &st).await?;
     ensure!(
         matches!(still, Acquire::Held(_)),
         "renewal did not keep the lease alive: {still:?}"
@@ -632,7 +689,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
         l.is_some_and(|l| l.body.state == LeaseState::Released)
     })
     .await?;
-    let free = lease::acquire(&**ed, &fx.doc, &ce).await?;
+    let free = lease::acquire(&**ed, &fx.doc, &ce, &st).await?;
     ensure!(
         free.is_acquired(),
         "a released lease could not be acquired: {free:?}"
@@ -695,7 +752,7 @@ pub async fn roles_enforced_at_store(f: &dyn StoreFactory) -> Result<(), Failure
         );
         forbidden(
             "a viewer writing a lease",
-            fx.viewer.write_lease(&fx.doc, claim.lease()).await,
+            fx.viewer.write_lease(&fx.doc, claim.lease_over(None)).await,
         )?;
     }
     if caps.grant_revoke {
@@ -793,6 +850,98 @@ pub async fn roles_enforced_at_store(f: &dyn StoreFactory) -> Result<(), Failure
                 )
                 .await,
         )?;
+    }
+    Ok(())
+}
+
+// ------------------------------------------------------------ journey 6b
+
+/// Test 6, second half: a viewer cannot publish a version that a reader
+/// accepts, even by going around the store. The viewer's client sends the
+/// event straight to the server ([`crate::Forger`]), once under its own name
+/// and once with `created_by` naming the owner. Either the server refuses
+/// (the gate: on Matrix `events["m.room.encrypted"]` is 50) or, when it does
+/// not gate, every reader drops it (spec 8.1: the sender is below the editor
+/// level, or `created_by.principal` is not the sender). A legitimate save sent
+/// afterwards is the only head everywhere: the forged events, sent before it,
+/// would have been seen by then.
+pub async fn forged_version_from_a_viewer_is_not_accepted(
+    f: &dyn StoreFactory,
+) -> Result<(), Failure> {
+    let fx = f.fresh().await?;
+    let Some(forger) = fx.forger.clone() else {
+        return Err(Failure::new(
+            "capabilities.forgery is set but the fixture has no Forger",
+        ));
+    };
+    let first = fx.first_version.clone();
+    let base = fx
+        .owner
+        .versions(&fx.doc)
+        .await?
+        .into_iter()
+        .find(|v| v.id == first)
+        .ok_or_else(|| Failure::new("the first version is not listed"))?;
+
+    let mut accepted_by_server = Vec::new();
+    for (label, claimed) in [
+        ("under its own name", fx.viewer.principal()),
+        ("claiming to be the owner", fx.owner.principal()),
+    ] {
+        // Otherwise valid: the file is the first version's, so only the
+        // authorisation rules can reject it.
+        let forged = Version {
+            dcp: 1,
+            parents: vec![first.clone()],
+            file: base.body.file.clone(),
+            created_by: dcp_core::Author {
+                principal: claimed,
+                device: fx.viewer.device(),
+            },
+            message: Some(format!("forged by a viewer, {label}")),
+            covers: None,
+        };
+        if let Some(id) = forger.forge_version(&fx.doc, forged).await? {
+            accepted_by_server.push(id);
+        }
+    }
+
+    let marker = publish_child(
+        &fx,
+        &fx.owner,
+        &[&first],
+        b"a legitimate save after the forgeries",
+    )
+    .await?;
+    for (name, who) in [
+        ("owner", &fx.owner),
+        ("editor", &fx.editor),
+        ("viewer", &fx.viewer),
+    ] {
+        let v = view_when(&fx, who, &format!("{name} sees the legitimate save"), |v| {
+            v.heads.iter().any(|h| h.version.id == marker.id)
+        })
+        .await?;
+        ensure!(
+            v.head_ids() == [marker.id.as_str()],
+            "{name}: a viewer's forged version was accepted by a reader (server accepted {accepted_by_server:?}); heads are {:?}",
+            v.head_ids()
+        );
+        ensure!(
+            v.rejected.is_empty(),
+            "{name}: the forgery was not dropped by the reader's rules but rejected later: {:?}",
+            v.rejected
+        );
+        let listed = who.versions(&fx.doc).await?;
+        let leaked: Vec<&str> = listed
+            .iter()
+            .filter(|l| accepted_by_server.contains(&l.id))
+            .map(|l| l.id.as_str())
+            .collect();
+        ensure!(
+            leaked.is_empty(),
+            "{name}'s store still lists the viewer's forged versions {leaked:?}"
+        );
     }
     Ok(())
 }

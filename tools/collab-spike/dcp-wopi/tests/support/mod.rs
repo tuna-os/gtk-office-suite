@@ -4,7 +4,6 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -14,54 +13,15 @@ use dcp_wopi::{HostConfig, RunningHost, WopiHost};
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 
-pub const ODT_MIME: &str = "application/vnd.oasis.opendocument.text";
-
-/// A minimal but real ODT package (mimetype first and stored, manifest,
-/// content.xml) holding `text` in one paragraph.
-pub fn make_odt(text: &str) -> Vec<u8> {
-    let mut buf = std::io::Cursor::new(Vec::new());
-    {
-        let mut z = zip::ZipWriter::new(&mut buf);
-        let stored = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        let deflated = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        z.start_file("mimetype", stored).unwrap();
-        z.write_all(ODT_MIME.as_bytes()).unwrap();
-        z.start_file("META-INF/manifest.xml", deflated).unwrap();
-        z.write_all(
-            br#"<?xml version="1.0" encoding="UTF-8"?>
-<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
- <manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.text"/>
- <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
-</manifest:manifest>"#,
-        )
-        .unwrap();
-        z.start_file("content.xml", deflated).unwrap();
-        write!(
-            z,
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">
- <office:body><office:text><text:p>{text}</text:p></office:text></office:body>
-</office:document-content>"#
-        )
-        .unwrap();
-        z.finish().unwrap();
-    }
-    buf.into_inner()
-}
-
-pub fn content_xml(odt: &[u8]) -> String {
-    use std::io::Read;
-    let mut z = zip::ZipArchive::new(std::io::Cursor::new(odt)).expect("ODT is a zip");
-    let mut s = String::new();
-    z.by_name("content.xml").expect("content.xml").read_to_string(&mut s).unwrap();
-    s
-}
+#[path = "../shared/odf.rs"]
+mod odf;
+pub use odf::{make_odt, ODT_MIME};
+#[allow(unused_imports)]
+pub use odf::content_xml;
 
 pub fn meta(title: &str) -> Meta {
     Meta {
-        dcp: 0,
+        dcp: 1,
         title: title.to_string(),
         mime: ODT_MIME.to_string(),
         levels: vec![Level::L0, Level::L1],
@@ -174,7 +134,7 @@ impl DocumentStore for Handle {
         if let Some(f) = first {
             let vid = format!("{id}-v1");
             let body = Version {
-                dcp: 0,
+                dcp: 1,
                 parents: vec![],
                 file: file_ref(&f.mime, &f.bytes, &vid),
                 created_by: Author { principal: self.principal.clone(), device: self.device() },
@@ -258,7 +218,7 @@ impl DocumentStore for Handle {
         let id = format!("{doc}-v{n}");
         d.last_ts = now.max(d.last_ts + 1);
         let body = Version {
-            dcp: 0,
+            dcp: 1,
             parents,
             file: file_ref(&file.mime, &file.bytes, &id),
             created_by: Author { principal: self.principal.clone(), device: self.device() },
@@ -284,6 +244,17 @@ impl DocumentStore for Handle {
         let d = s.docs.get_mut(doc).ok_or_else(|| StoreError::NotFound(doc.clone()))?;
         if self.role_in(d) < Some(Role::Editor) {
             return Err(StoreError::Forbidden("viewers cannot write leases".into()));
+        }
+        // Lease rule 8: the renewal a lease carries is fixed by the record it
+        // replaces. A held lease with any other counter is a client bug.
+        if lease.state == dcp_core::LeaseState::Held {
+            let want = dcp_core::lease::next_renewal(d.lease.as_ref().map(|l| &l.body));
+            if lease.renewal != Some(want) {
+                return Err(StoreError::Invalid(format!(
+                    "lease renewal {:?}, rule 8 requires {want}",
+                    lease.renewal
+                )));
+            }
         }
         d.last_ts = now.max(d.last_ts + 1);
         let st = Stamped::new(format!("lease-{}", d.last_ts), d.last_ts, self.principal.clone(), lease);
@@ -317,7 +288,7 @@ pub struct Rig {
 
 impl Rig {
     pub async fn new() -> Rig {
-        Self::with_config(HostConfig { log_stderr: false, ..HostConfig::default() }).await
+        Self::with_config(HostConfig { log_stderr: false, lease_settle_ms: 0, ..HostConfig::default() }).await
     }
 
     pub async fn with_config(cfg: HostConfig) -> Rig {

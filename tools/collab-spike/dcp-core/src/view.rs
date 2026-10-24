@@ -144,7 +144,7 @@ mod tests {
 
     fn meta() -> Meta {
         Meta {
-            dcp: 0,
+            dcp: 1,
             title: "d".into(),
             mime: "text/plain".into(),
             levels: vec![Level::L1],

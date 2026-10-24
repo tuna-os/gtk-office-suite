@@ -20,6 +20,7 @@ pub enum Need {
     ArbitraryParents,
     Updates,
     UploadFaults,
+    Forgery,
 }
 
 impl Need {
@@ -32,6 +33,7 @@ impl Need {
             Need::ArbitraryParents => c.arbitrary_parents,
             Need::Updates => c.updates,
             Need::UploadFaults => c.upload_faults,
+            Need::Forgery => c.forgery,
         }
     }
 
@@ -44,6 +46,7 @@ impl Need {
             Need::ArbitraryParents => "arbitrary_parents",
             Need::Updates => "updates",
             Need::UploadFaults => "upload_faults",
+            Need::Forgery => "forgery",
         }
     }
 }
@@ -81,6 +84,11 @@ pub const JOURNEYS: &[Journey] = &[
     journey!(lease_exclusion_and_readback, "4", &[Need::LeaseWrites]),
     journey!(lease_expiry_releases, "5", &[Need::LeaseWrites]),
     journey!(roles_enforced_at_store, "6", &[]),
+    journey!(
+        forged_version_from_a_viewer_is_not_accepted,
+        "6",
+        &[Need::Forgery]
+    ),
     journey!(
         revocation_hides_new_content,
         "7",

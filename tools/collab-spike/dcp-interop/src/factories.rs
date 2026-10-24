@@ -3,8 +3,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dcp_conformance::{Capabilities, Failure, Fixture, RealTime, StoreFactory};
-use dcp_core::DocumentStore;
+use dcp_conformance::{Capabilities, Failure, Fixture, Forger, RealTime, StoreFactory};
+use dcp_core::{DocId, DocumentStore, StoreError, Version};
+use dcp_matrix::MatrixStore;
 
 use crate::common::Synapse;
 use crate::rig::{Rig, RigOptions, Who};
@@ -18,6 +19,22 @@ pub enum Stack {
     /// WOPI client simulator, and the host behind it stores in Matrix. Roles
     /// and membership are set up natively, because WOPI has no way to.
     WopiOverMatrix,
+}
+
+/// The viewer's client sending a version event straight to Synapse, around
+/// `MatrixStore`'s own role check ([`MatrixStore::send_unchecked`]).
+pub struct MatrixViewerForger(pub Arc<MatrixStore>);
+
+#[async_trait]
+impl Forger for MatrixViewerForger {
+    async fn forge_version(&self, doc: &DocId, version: Version) -> Result<Option<String>, Failure> {
+        let content = serde_json::to_value(&version).map_err(|e| Failure::new(e.to_string()))?;
+        match self.0.send_unchecked(doc, "org.tunaos.dcp.version", content).await {
+            Ok(id) => Ok(Some(id)),
+            Err(StoreError::Forbidden(_)) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 pub struct InteropFactory {
@@ -61,6 +78,7 @@ impl StoreFactory for InteropFactory {
                 arbitrary_parents: true,
                 updates: true,
                 upload_faults: true,
+                forgery: true,
             },
             // As spike D's own conformance test declares it for WOPI over
             // memory; the stack behind the host does not change what WOPI can
@@ -74,6 +92,9 @@ impl StoreFactory for InteropFactory {
                 arbitrary_parents: false,
                 updates: false,
                 upload_faults: true,
+                // The forger is a viewer on the Matrix room; the readers
+                // are WOPI clients over the host.
+                forgery: true,
             },
         }
     }
@@ -85,7 +106,7 @@ impl StoreFactory for InteropFactory {
             Stack::WopiOverMatrix => Who::ALL.map(|w| Arc::new(rig.sim(w)) as Arc<dyn DocumentStore>),
         };
         let [owner, editor, viewer] = handles;
-        Fixture::from_existing(
+        let mut fx = Fixture::from_existing(
             owner,
             editor,
             viewer,
@@ -95,6 +116,8 @@ impl StoreFactory for InteropFactory {
             Some(rig.proxy.clone()),
             rig.settle,
         )
-        .await
+        .await?;
+        fx.forger = Some(Arc::new(MatrixViewerForger(rig.handles.viewer.clone())));
+        Ok(fx)
     }
 }

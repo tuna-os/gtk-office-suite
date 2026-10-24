@@ -7,7 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use dcp_core::memory::{ManualClock, MemoryBackend, MemoryConfig};
 
-use crate::{Capabilities, Failure, Faults, Fixture, StoreFactory, Time};
+use crate::{Capabilities, Failure, Faults, Fixture, Forger, StoreFactory, Time};
 
 pub const START_MS: u64 = 1_000_000;
 
@@ -25,6 +25,28 @@ struct MemoryFaults(MemoryBackend);
 impl Faults for MemoryFaults {
     fn truncate_next_upload(&self) {
         self.0.truncate_next_upload();
+    }
+}
+
+/// Acts as the viewer: sends versions to the in-memory "server" around the
+/// store ([`MemoryBackend::send_version_unchecked`]).
+pub struct MemoryForger {
+    pub backend: MemoryBackend,
+    pub principal: String,
+}
+
+#[async_trait]
+impl Forger for MemoryForger {
+    async fn forge_version(
+        &self,
+        doc: &dcp_core::DocId,
+        version: dcp_core::Version,
+    ) -> Result<Option<String>, Failure> {
+        match self.backend.send_version_unchecked(&self.principal, doc, version) {
+            Ok(v) => Ok(Some(v.id)),
+            Err(dcp_core::StoreError::Forbidden(_)) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -51,6 +73,18 @@ impl MemoryFactory {
         }
     }
 
+    /// The server does not gate the timeline (the draft-0 power-level table):
+    /// a viewer's forged version is accepted, and only the reader's rules
+    /// can drop it.
+    pub fn ungated() -> Self {
+        MemoryFactory {
+            config: MemoryConfig {
+                gates_timeline: false,
+                ..MemoryConfig::default()
+            },
+        }
+    }
+
     pub fn with_config(config: MemoryConfig) -> Self {
         MemoryFactory { config }
     }
@@ -65,10 +99,11 @@ impl Default for MemoryFactory {
 #[async_trait]
 impl StoreFactory for MemoryFactory {
     fn name(&self) -> String {
-        if self.config.cas_leases {
-            "memory".into()
-        } else {
-            "memory-racy-lease".into()
+        match (self.config.cas_leases, self.config.gates_timeline) {
+            (true, true) => "memory".into(),
+            (false, true) => "memory-racy-lease".into(),
+            (true, false) => "memory-ungated-timeline".into(),
+            (false, false) => "memory-racy-lease-ungated-timeline".into(),
         }
     }
 
@@ -82,7 +117,11 @@ impl StoreFactory for MemoryFactory {
     async fn fresh(&self) -> Result<Fixture, Failure> {
         let clock = Arc::new(ManualClock::new(START_MS));
         let backend = MemoryBackend::with_config(clock.clone(), self.config);
-        Fixture::standard(
+        let forger = MemoryForger {
+            backend: backend.clone(),
+            principal: "@viewer:mem".into(),
+        };
+        let mut fx = Fixture::standard(
             Arc::new(backend.store("@owner:mem", "OWNER-DEV")),
             Arc::new(backend.store("@editor:mem", "EDITOR-DEV")),
             Arc::new(backend.store("@viewer:mem", "VIEWER-DEV")),
@@ -91,6 +130,8 @@ impl StoreFactory for MemoryFactory {
             Some(Arc::new(MemoryFaults(backend))),
             Duration::ZERO,
         )
-        .await
+        .await?;
+        fx.forger = Some(Arc::new(forger));
+        Ok(fx)
     }
 }

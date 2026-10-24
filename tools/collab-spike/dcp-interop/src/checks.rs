@@ -17,8 +17,9 @@ use std::time::Instant;
 use dcp_conformance::{
     assert_same_content, assert_same_view, ensure, new_file, Failure, BASE_FILE,
 };
-use dcp_core::lease::{self, Acquire, Claim, Release};
-use dcp_core::{graph, DocumentStore, LeaseState, StoreError};
+use dcp_core::lease::{self, Acquire, Claim, Pause, Release, Settle, MATRIX_SETTLE_MS};
+use dcp_core::schema::{self, Kind};
+use dcp_core::{graph, Author, DocumentStore, LeaseState, StoreError, Version};
 use dcp_wopi::timefmt::iso8601_ms;
 use serde_json::Value;
 
@@ -54,7 +55,11 @@ checks!(
     native_lease_blocks_wopi_save,
     owner_break_invalidates_the_wopi_lock,
     native_lease_expiry_frees_the_wopi_lock,
+    wopi_lock_refresh_is_a_new_record_on_matrix,
+    wopi_lock_on_an_empty_document_omits_base_version,
     removed_members_wopi_token_gets_no_new_content_and_no_write,
+    forged_version_is_dropped_by_matrix_readers,
+    forged_version_is_dropped_by_wopi_readers,
 );
 
 pub fn by_name(name: &str) -> &'static Check {
@@ -76,13 +81,32 @@ fn field<'a>(v: &'a Value, k: &str) -> &'a str {
 /// the head. What the host sees is what a `PutFile` will be judged against.
 async fn wait_host_head(rig: &Rig, who: Who, id: &str) -> Result<Value, Failure> {
     let raw = rig.raw(who);
-    rig.until(&format!("the WOPI host's CheckFileInfo for {who:?} shows Version {id}"), || async {
+    rig.until(&format!("the WOPI host's CheckFileInfo for {who:?} to show Version {id}"), || async {
         let r = raw.check_file_info().await?;
         status("CheckFileInfo", &r, 200)?;
         let j = r.json()?;
-        Ok((field(&j, "Version") == id).then_some(j))
+        if field(&j, "Version") == id {
+            return Ok(Ok(j));
+        }
+        Ok(Err(format!("Version {:?}", field(&j, "Version"))))
     })
     .await
+}
+
+/// Lease rule 3's settle interval, in real time (the binding is a real Synapse).
+struct RealPause;
+
+#[async_trait::async_trait]
+impl Pause for RealPause {
+    async fn pause(&self, ms: u64) {
+        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+    }
+}
+
+static REAL_PAUSE: RealPause = RealPause;
+
+fn settle() -> Settle<'static> {
+    Settle::new(&REAL_PAUSE, MATRIX_SETTLE_MS)
 }
 
 fn claim(rig: &Rig, who: Who, token: &str, duration_ms: u64) -> Claim {
@@ -477,7 +501,7 @@ pub async fn wopi_lock_blocks_native_acquire_and_the_reverse(rig: &Rig) -> R {
 
     let owner = rig.native(Who::Owner);
     let mine = claim(rig, Who::Owner, "native-token-owner", 60_000);
-    match lease::acquire(&**owner, doc, &mine).await? {
+    match lease::acquire(&**owner, doc, &mine, &settle()).await? {
         Acquire::Held(cur) => {
             ensure!(cur.body.state == LeaseState::Held, "the lease the owner was refused for is not held: {cur:?}");
             ensure!(cur.body.token.as_deref() == Some("wopi-lock-A"), "the held lease carries token {:?}", cur.body.token);
@@ -487,13 +511,15 @@ pub async fn wopi_lock_blocks_native_acquire_and_the_reverse(rig: &Rig) -> R {
                 cur.body.holder
             );
             ensure!(cur.body.duration_ms == Some(30 * 60 * 1000), "WOPI locks last 30 minutes, got {:?}", cur.body.duration_ms);
+            ensure!(cur.body.renewal == Some(0), "a WOPI LOCK over no record must write renewal 0 (rule 8), got {:?}", cur.body.renewal);
+            schema::validate_typed(Kind::Lease, &cur.body).map_err(|e| Failure::new(format!("the WOPI host's lease does not validate: {e}")))?;
             ensure!(cur.body.base_version.as_deref() == Some(rig.first.as_str()), "base_version {:?}", cur.body.base_version);
         }
         other => return Err(Failure::new(format!("a native session acquired a lease the WOPI client holds: {other:?}"))),
     }
     // The same principal in another session is also refused: the holder is a session.
     let editor_native = claim(rig, Who::Editor, "native-token-editor", 60_000);
-    let a = lease::acquire(&**rig.native(Who::Editor), doc, &editor_native).await?;
+    let a = lease::acquire(&**rig.native(Who::Editor), doc, &editor_native, &settle()).await?;
     ensure!(matches!(a, Acquire::Held(_)), "the WOPI holder's own principal in another session acquired: {a:?}");
     // The Matrix reader sees the same record.
     let seen = rig.native(Who::Viewer).lease(doc).await?;
@@ -504,8 +530,11 @@ pub async fn wopi_lock_blocks_native_acquire_and_the_reverse(rig: &Rig) -> R {
 
     // WOPI lets go; the native session takes over.
     status("UNLOCK", &ed.unlock("wopi-lock-A").await?, 200)?;
-    let got = lease::acquire(&**owner, doc, &mine).await?;
-    ensure!(got.is_acquired(), "after UNLOCK a native session must acquire: {got:?}");
+    let got = lease::acquire(&**owner, doc, &mine, &settle()).await?;
+    let Acquire::Acquired(rec) = got else {
+        return Err(Failure::new(format!("after UNLOCK a native session must acquire: {got:?}")));
+    };
+    ensure!(rec.body.renewal == Some(0), "over the WOPI host's released record the count starts again at 0, got {:?}", rec.body.renewal);
 
     // ... and now WOPI is the one refused, with the native token as the current lock.
     let refused = ed.lock("wopi-lock-B").await?;
@@ -533,7 +562,7 @@ pub async fn native_lease_blocks_wopi_save(rig: &Rig) -> R {
     let doc = &rig.doc;
     let owner = rig.native(Who::Owner);
     let mine = claim(rig, Who::Owner, "native-token-hold", 60_000);
-    let got = lease::acquire(&**owner, doc, &mine).await?;
+    let got = lease::acquire(&**owner, doc, &mine, &settle()).await?;
     ensure!(got.is_acquired(), "the owner must acquire a free lease: {got:?}");
 
     let ed = rig.raw(Who::Editor);
@@ -589,8 +618,15 @@ pub async fn owner_break_invalidates_the_wopi_lock(rig: &Rig) -> R {
     status("LOCK", &ed.lock("wopi-lock-C").await?, 200)?;
 
     let breaker = claim(rig, Who::Owner, "native-token-break", 60_000);
-    match lease::break_lease(&**rig.native(Who::Owner), doc, &breaker).await? {
-        Acquire::Acquired(rec) => ensure!(rec.body.token.as_deref() == Some("native-token-break"), "the break wrote {rec:?}"),
+    match lease::break_lease(&**rig.native(Who::Owner), doc, &breaker, &settle()).await? {
+        Acquire::Acquired(rec) => {
+            ensure!(rec.body.token.as_deref() == Some("native-token-break"), "the break wrote {rec:?}");
+            ensure!(
+                rec.body.renewal == Some(1),
+                "a break over the WOPI host's held record (renewal 0) must write renewal 1 (rule 8), got {:?}",
+                rec.body.renewal
+            );
+        }
         other => return Err(Failure::new(format!("the owner could not break the lease: {other:?}"))),
     }
     let now = ed.get_lock().await?;
@@ -617,21 +653,21 @@ pub async fn owner_break_invalidates_the_wopi_lock(rig: &Rig) -> R {
 pub async fn native_lease_expiry_frees_the_wopi_lock(rig: &Rig) -> R {
     let doc = &rig.doc;
     let mine = claim(rig, Who::Owner, "native-token-short", 6_000);
-    let got = lease::acquire(&**rig.native(Who::Owner), doc, &mine).await?;
+    let got = lease::acquire(&**rig.native(Who::Owner), doc, &mine, &settle()).await?;
     ensure!(got.is_acquired(), "the owner must acquire a free lease: {got:?}");
     let started = Instant::now();
 
     let ed = rig.raw(Who::Editor);
     status("LOCK against an active native lease", &ed.lock("wopi-after-expiry").await?, 409)?;
     let mut attempts = 0u32;
-    rig.until("the WOPI LOCK succeeds once the native lease has expired", || {
+    rig.until("the WOPI LOCK to succeed once the native lease has expired", || {
         attempts += 1;
         let ed = ed.clone();
         async move {
             let r = ed.lock("wopi-after-expiry").await?;
             match r.status {
-                200 => Ok(Some(())),
-                409 => Ok(None),
+                200 => Ok(Ok(())),
+                409 => Ok(Err(format!("LOCK still 409, current lock {:?}", r.lock))),
                 other => Err(Failure::new(format!("LOCK answered HTTP {other}: {:?}", r.text()))),
             }
         }
@@ -644,7 +680,11 @@ pub async fn native_lease_expiry_frees_the_wopi_lock(rig: &Rig) -> R {
         matches!(&l, Some(l) if l.body.token.as_deref() == Some("wopi-after-expiry") && l.body.state == LeaseState::Held),
         "after expiry the lease must be the WOPI one, got {l:?}"
     );
-    let a = lease::acquire(&**rig.native(Who::Owner), doc, &mine).await?;
+    ensure!(
+        l.as_ref().is_some_and(|l| l.body.renewal == Some(1)),
+        "a WOPI LOCK over an expired HELD native record continues the count (rule 8): expected renewal 1, got {l:?}"
+    );
+    let a = lease::acquire(&**rig.native(Who::Owner), doc, &mine, &settle()).await?;
     ensure!(matches!(a, Acquire::Held(_)), "the native session acquired over the new WOPI lock: {a:?}");
     status("UNLOCK", &ed.unlock("wopi-after-expiry").await?, 200)?;
     Ok(())
@@ -722,5 +762,225 @@ pub async fn removed_members_wopi_token_gets_no_new_content_and_no_write(rig: &R
     ensure!(ids == want, "the removed member's attempts left versions: {ids:?}, expected {want:?}");
     let l = rig.native(Who::Owner).lease(doc).await?;
     ensure!(l.is_none(), "the removed member's LOCK left a lease record: {l:?}");
+    Ok(())
+}
+
+// ------------------------------------------------- the renewal counter (4.3)
+
+/// Collabora refreshes a lock by sending `LOCK` again with the same string.
+/// Over Matrix that is a state event whose content would be IDENTICAL to the
+/// host's own current one, which Synapse silently discards (spike A). The
+/// host writes `renewal` + 1 (lease rule 8), so each refresh is a new event
+/// with a later timestamp; over a released record the count starts again at 0.
+pub async fn wopi_lock_refresh_is_a_new_record_on_matrix(rig: &Rig) -> R {
+    let doc = &rig.doc;
+    let ed = rig.raw(Who::Editor);
+    status("GetFile", &ed.get_file(None).await?, 200)?;
+    let reader = rig.native(Who::Viewer);
+    let lock = "interop-refresh-lock";
+
+    status("LOCK", &ed.lock(lock).await?, 200)?;
+    let mut previous = reader.lease(doc).await?.ok_or_else(|| Failure::new("no lease record after LOCK"))?;
+    ensure!(previous.body.renewal == Some(0), "first LOCK: renewal {:?}", previous.body.renewal);
+    for expected in [1u64, 2, 3] {
+        // The same lock string again: a refresh.
+        status("refresh (LOCK, same string)", &ed.lock(lock).await?, 200)?;
+        let now = reader.lease(doc).await?.ok_or_else(|| Failure::new("no lease record after the refresh"))?;
+        ensure!(
+            now.body.renewal == Some(expected),
+            "refresh {expected}: the record carries renewal {:?}, expected {expected} (rule 8)",
+            now.body.renewal
+        );
+        ensure!(
+            now.id != previous.id && now.ts_ms > previous.ts_ms,
+            "refresh {expected} did not produce a new event with a later timestamp: {} @ {} after {} @ {} (Synapse drops an identical state event)",
+            now.id,
+            now.ts_ms,
+            previous.id,
+            previous.ts_ms
+        );
+        ensure!(
+            now.body.token.as_deref() == Some(lock) && now.body.holder == previous.body.holder && now.body.base_version == previous.body.base_version,
+            "a refresh must keep the holder, token and base version: {:?} after {:?}",
+            now.body,
+            previous.body
+        );
+        previous = now;
+    }
+
+    // Released, then locked again: over a record that is not held it is 0.
+    status("UNLOCK", &ed.unlock(lock).await?, 200)?;
+    status("LOCK after UNLOCK", &ed.lock(lock).await?, 200)?;
+    let again = reader.lease(doc).await?.ok_or_else(|| Failure::new("no lease record"))?;
+    ensure!(again.body.renewal == Some(0), "over a released record the count starts again at 0, got {:?}", again.body.renewal);
+    status("UNLOCK", &ed.unlock(lock).await?, 200)?;
+    Ok(())
+}
+
+/// A lease on a document with no version yet omits `base_version` (never a
+/// placeholder), still validates against the schema, and the WOPI session can
+/// then save the document's first version (no parents).
+pub async fn wopi_lock_on_an_empty_document_omits_base_version(rig: &Rig) -> R {
+    let (doc, ed) = rig.empty_document().await?;
+    let owner = rig.native(Who::Owner);
+    ensure!(owner.versions(&doc).await?.is_empty(), "the document must start with no version");
+
+    let got = ed.get_file(None).await?;
+    status("GetFile of an empty document", &got, 200)?;
+    ensure!(got.body.is_empty(), "an empty document has no content (version rule 7)");
+    let lock = "interop-empty-lock";
+    status("LOCK", &ed.lock(lock).await?, 200)?;
+    let l = owner.lease(&doc).await?.ok_or_else(|| Failure::new("no lease record after LOCK"))?;
+    ensure!(l.body.state == LeaseState::Held && l.body.token.as_deref() == Some(lock), "{:?}", l.body);
+    ensure!(l.body.base_version.is_none(), "base_version must be omitted on an empty document, got {:?}", l.body.base_version);
+    ensure!(l.body.renewal == Some(0) && l.body.duration_ms == Some(1_800_000), "{:?}", l.body);
+    schema::validate_typed(Kind::Lease, &l.body).map_err(|e| Failure::new(format!("the lease does not validate: {e}")))?;
+    let wire = serde_json::to_value(&l.body).map_err(|e| Failure::new(e.to_string()))?;
+    ensure!(wire.get("base_version").is_none(), "the record on the wire has a base_version: {wire}");
+
+    // The first version: no parents.
+    let put = ed.put_file(Some(lock), None, b"the first version, saved through WOPI").await?;
+    status("PutFile of the first version", &put, 200)?;
+    let id = put.item_version.clone().ok_or_else(|| Failure::new("PutFile response has no X-WOPI-ItemVersion"))?;
+    let versions = owner.versions(&doc).await?;
+    ensure!(
+        versions.len() == 1 && versions[0].id == id && versions[0].body.parents.is_empty(),
+        "the first version must have no parents: {versions:?}"
+    );
+    status("UNLOCK", &ed.unlock(lock).await?, 200)?;
+    Ok(())
+}
+
+// ------------------------------------- forged versions from a viewer (8.1)
+
+/// What a hostile viewer's client sends: a version event straight to the
+/// homeserver, around `MatrixStore`'s own role check, once under its own name
+/// and once with `created_by` naming the owner. The file is the first
+/// version's, so only the authorisation rules can reject it. Returns the ids
+/// of the events the server accepted.
+///
+/// In a room with the spec's power-level table (`m.room.encrypted` gated at
+/// 50) the server must refuse both; in a room with the draft-0 table it
+/// accepts both, and the readers are all that is left. Which one this room is
+/// is read from its power levels, and the expectation follows it: a rig that
+/// does not behave as its table says fails here.
+async fn forge_as_viewer(rig: &Rig) -> Result<Vec<String>, Failure> {
+    let doc = &rig.doc;
+    let viewer = &rig.handles.viewer;
+    let gated = rig.handles.owner.snapshot(doc).await?.power.server_gates_encrypted_timeline();
+    let base = rig
+        .native(Who::Owner)
+        .versions(doc)
+        .await?
+        .into_iter()
+        .find(|v| v.id == rig.first)
+        .ok_or_else(|| Failure::new("the first version is not listed"))?;
+    let mut accepted = Vec::new();
+    for (label, claimed) in [("under its own name", rig.principal(Who::Viewer)), ("claiming to be the owner", rig.principal(Who::Owner))] {
+        let forged = Version {
+            dcp: 1,
+            parents: vec![rig.first.clone()],
+            file: base.body.file.clone(),
+            created_by: Author { principal: claimed, device: viewer.device() },
+            message: Some(format!("forged by a viewer, {label}")),
+            covers: None,
+        };
+        let content = serde_json::to_value(&forged).map_err(|e| Failure::new(e.to_string()))?;
+        let sent = viewer.send_unchecked(doc, "org.tunaos.dcp.version", content).await;
+        match (gated, sent) {
+            (true, Err(StoreError::Forbidden(_))) => {}
+            (true, other) => {
+                return Err(Failure::new(format!(
+                    "the room's power levels gate m.room.encrypted at the editor level, so the server must refuse a viewer's version ({label}); got {other:?}"
+                )))
+            }
+            (false, Ok(id)) => accepted.push(id),
+            (false, other) => {
+                return Err(Failure::new(format!(
+                    "the room has no m.room.encrypted gate (draft-0 table), so the server must accept the viewer's event ({label}) for this check to mean anything; got {other:?}"
+                )))
+            }
+        }
+    }
+    Ok(accepted)
+}
+
+/// Publish a legitimate save after the forgeries: it is the only head
+/// anywhere, and the forgeries (sent before it) cannot be later than anything
+/// a reader has seen once it sees this.
+async fn legitimate_save_after_forgeries(rig: &Rig) -> Result<dcp_core::Stamped<Version>, Failure> {
+    Ok(rig
+        .native(Who::Owner)
+        .publish_version(&rig.doc, vec![rig.first.clone()], new_file(b"a legitimate save after the forgeries"), None)
+        .await?)
+}
+
+/// A viewer cannot publish a version a Matrix reader accepts (spec 6, 8.1):
+/// refused by the server when `m.room.encrypted` is gated, otherwise dropped
+/// by every Matrix reader (sender below the editor level; `created_by` not the
+/// sender). Every principal's native view shows the legitimate save alone.
+pub async fn forged_version_is_dropped_by_matrix_readers(rig: &Rig) -> R {
+    let forged = forge_as_viewer(rig).await?;
+    let marker = legitimate_save_after_forgeries(rig).await?;
+    for who in Who::ALL {
+        let v = rig
+            .until(&format!("{who:?} to see the legitimate save"), || async {
+                let v = rig.view(who).await?;
+                if v.heads.iter().any(|h| h.version.id == marker.id) {
+                    return Ok(Ok(v));
+                }
+                Ok(Err(format!("heads {:?}", v.head_ids())))
+            })
+            .await?;
+        ensure!(
+            v.head_ids() == [marker.id.as_str()],
+            "{who:?}: a viewer's forged version was accepted by a Matrix reader (the server accepted {forged:?}); heads are {:?}",
+            v.head_ids()
+        );
+        let listed = rig.version_ids(&**rig.native(who)).await?;
+        ensure!(
+            listed.iter().all(|id| !forged.contains(id)),
+            "{who:?}'s store still lists the forged versions: {listed:?}"
+        );
+    }
+    Ok(())
+}
+
+/// The same through WOPI: the host inherits the Matrix reader's defence. Every
+/// WOPI token's CheckFileInfo has the legitimate save as its single head
+/// (`DcpHeads`), the editor can still write (no phantom conflict), GetFile
+/// serves the legitimate bytes, and the version listing the simulator reads
+/// has no forgery. A viewer's own WOPI token cannot add one either.
+pub async fn forged_version_is_dropped_by_wopi_readers(rig: &Rig) -> R {
+    let forged = forge_as_viewer(rig).await?;
+    let marker = legitimate_save_after_forgeries(rig).await?;
+    for who in Who::ALL {
+        let info = wait_host_head(rig, who, &marker.id).await?;
+        ensure!(
+            heads_of_info(&info) == [marker.id.clone()],
+            "{who:?}: through WOPI the heads are {:?}, expected only the legitimate save (the server accepted {forged:?})",
+            heads_of_info(&info)
+        );
+        ensure!(
+            info["UserCanWrite"] == Value::Bool(who != Who::Viewer),
+            "{who:?}: UserCanWrite is {} (a forged head would make the document read-only)",
+            info["UserCanWrite"]
+        );
+        let got = rig.raw(who).get_file(None).await?;
+        status("GetFile", &got, 200)?;
+        ensure!(
+            got.body == b"a legitimate save after the forgeries" && got.item_version.as_deref() == Some(marker.id.as_str()),
+            "{who:?}: GetFile served something else than the legitimate save"
+        );
+        let listed = rig.version_ids(&rig.sim(who)).await?;
+        ensure!(
+            listed.iter().all(|id| !forged.contains(id)),
+            "{who:?}: the WOPI version listing contains the forged versions: {listed:?}"
+        );
+    }
+    // The viewer's WOPI token is no way around it.
+    let vw = rig.raw(Who::Viewer);
+    status("viewer PutFile", &vw.put_file(None, None, b"forged through WOPI").await?, 403)?;
+    status("viewer LOCK", &vw.lock("forgery-lock").await?, 403)?;
     Ok(())
 }

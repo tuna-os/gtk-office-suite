@@ -54,7 +54,7 @@ mod tests {
         let backend = MemoryBackend::new(Arc::new(ManualClock::new(1)));
         let o = backend.store("@o:m", "D");
         let meta = Meta {
-            dcp: 0,
+            dcp: 1,
             title: "t".into(),
             mime: ODT.into(),
             levels: vec![Level::L1],

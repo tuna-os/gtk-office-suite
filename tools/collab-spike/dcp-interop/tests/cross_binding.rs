@@ -38,7 +38,35 @@ cross_binding_tests!(
     native_lease_blocks_wopi_save,
     owner_break_invalidates_the_wopi_lock,
     native_lease_expiry_frees_the_wopi_lock,
+    wopi_lock_refresh_is_a_new_record_on_matrix,
+    wopi_lock_on_an_empty_document_omits_base_version,
     removed_members_wopi_token_gets_no_new_content_and_no_write,
+    forged_version_is_dropped_by_matrix_readers,
+    forged_version_is_dropped_by_wopi_readers,
+);
+
+/// The same two forgery checks in a room created with the literal draft-0
+/// power-level table: Synapse accepts the viewer's forged events (the checks
+/// assert that it did, so they cannot pass vacuously), and every reader, native
+/// and through WOPI, drops them.
+macro_rules! draft0_tests {
+    ($($test:ident => $check:ident),+ $(,)?) => {
+        $(
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn $test() {
+                let Some(syn) = synapse() else { return };
+                let rig = Rig::new(&syn, RigOptions::honest().draft0_power_levels()).await.expect("rig");
+                if let Err(f) = checks::$check(&rig).await {
+                    panic!("cross-binding check {} failed on a draft-0 room: {f}", stringify!($check));
+                }
+            }
+        )+
+    };
+}
+
+draft0_tests!(
+    a_draft0_server_accepts_the_forgery_and_matrix_readers_drop_it => forged_version_is_dropped_by_matrix_readers,
+    a_draft0_server_accepts_the_forgery_and_wopi_readers_drop_it => forged_version_is_dropped_by_wopi_readers,
 );
 
 /// Needs no Synapse: the registry and the tests cannot drift apart.

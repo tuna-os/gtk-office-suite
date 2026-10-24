@@ -122,11 +122,11 @@ impl Snapshot {
                         s.membership.insert(user.to_owned(), m.to_owned());
                     }
                 }
-                (META, "") => match serde_json::from_value::<Meta>(content.clone()) {
+                (META, "") => match dcp_core::schema::parse::<Meta>(dcp_core::schema::Kind::Meta, content) {
                     Ok(m) => s.meta = stamp(ev, m),
                     Err(_) => s.invalid_dcp_state += 1,
                 },
-                (LEASE, "") => match serde_json::from_value::<Lease>(content.clone()) {
+                (LEASE, "") => match dcp_core::schema::parse::<Lease>(dcp_core::schema::Kind::Lease, content) {
                     Ok(l) => s.lease = stamp(ev, l),
                     Err(_) => s.invalid_dcp_state += 1,
                 },
@@ -194,15 +194,43 @@ mod tests {
 
     #[test]
     fn invalid_dcp_state_is_ignored_and_counted() {
-        let bad = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 5, "sender": "@o:s", "content": {"dcp": 0, "state": "held", "surprise": 1}});
+        let bad = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 5, "sender": "@o:s", "content": {"dcp": 1, "state": "held", "surprise": 1}});
         let s = Snapshot::from_events(&[create("11"), bad]);
+        assert!(s.lease.is_none());
+        assert_eq!(s.invalid_dcp_state, 1);
+    }
+
+    fn lease_event(content: Value) -> Value {
+        json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 5, "sender": "@o:s", "content": content})
+    }
+
+    #[test]
+    fn held_lease_without_renewal_is_invalid() {
+        let held = json!({"dcp": 1, "state": "held", "holder": {"principal": "@o:s", "session": "s"}, "token": "t", "base_version": "$v", "duration_ms": 60000});
+        let s = Snapshot::from_events(&[create("11"), lease_event(held)]);
+        assert!(s.lease.is_none());
+        assert_eq!(s.invalid_dcp_state, 1);
+    }
+
+    #[test]
+    fn held_lease_with_renewal_is_stamped_and_base_version_is_optional() {
+        let held = json!({"dcp": 1, "state": "held", "holder": {"principal": "@o:s", "session": "s"}, "token": "t", "renewal": 0, "duration_ms": 60000});
+        let s = Snapshot::from_events(&[create("11"), lease_event(held)]);
+        let l = s.lease.unwrap();
+        assert_eq!((l.body.renewal, l.body.base_version), (Some(0), None));
+    }
+
+    #[test]
+    fn held_lease_without_holder_is_invalid() {
+        let held = json!({"dcp": 1, "state": "held", "token": "t", "renewal": 0, "duration_ms": 60000});
+        let s = Snapshot::from_events(&[create("11"), lease_event(held)]);
         assert!(s.lease.is_none());
         assert_eq!(s.invalid_dcp_state, 1);
     }
 
     #[test]
     fn valid_lease_and_meta_are_stamped_from_the_event() {
-        let lease = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 1234, "sender": "@o:s", "content": {"dcp": 0, "state": "released"}});
+        let lease = json!({"type": LEASE, "state_key": "", "event_id": "$l", "origin_server_ts": 1234, "sender": "@o:s", "content": {"dcp": 1, "state": "released"}});
         let s = Snapshot::from_events(&[create("11"), lease]);
         let l = s.lease.unwrap();
         assert_eq!((l.id.as_str(), l.ts_ms, l.sender.as_str()), ("$l", 1234, "@o:s"));

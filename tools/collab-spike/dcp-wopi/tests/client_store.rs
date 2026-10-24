@@ -88,11 +88,12 @@ async fn a_held_lock_blocks_the_simulator_and_nothing_is_published() {
         .write_lease(
             &rig.doc,
             Lease {
-                dcp: 0,
+                dcp: 1,
                 state: LeaseState::Held,
                 holder: None,
                 token: Some("alice-lock".into()),
                 base_version: None,
+                renewal: Some(0),
                 duration_ms: None,
             },
         )
@@ -104,7 +105,7 @@ async fn a_held_lock_blocks_the_simulator_and_nothing_is_published() {
     let err = bob
         .write_lease(
             &rig.doc,
-            Lease { dcp: 0, state: LeaseState::Held, holder: None, token: Some("bob-lock".into()), base_version: None, duration_ms: None },
+            Lease { dcp: 1, state: LeaseState::Held, holder: None, token: Some("bob-lock".into()), base_version: None, renewal: Some(0), duration_ms: None },
         )
         .await
         .unwrap_err();
@@ -115,7 +116,7 @@ async fn a_held_lock_blocks_the_simulator_and_nothing_is_published() {
 
     // Release by anyone who knows the string (WOPI locks are not user-owned),
     // via the Released lease.
-    bob.write_lease(&rig.doc, Lease { dcp: 0, state: LeaseState::Released, holder: None, token: None, base_version: None, duration_ms: None })
+    bob.write_lease(&rig.doc, Lease { dcp: 1, state: LeaseState::Released, holder: None, token: None, base_version: None, renewal: None, duration_ms: None })
         .await
         .unwrap();
     bob.publish_version(&rig.doc, vec![rig.v1.clone()], new_file("bob"), None).await.unwrap();
@@ -126,7 +127,7 @@ async fn lease_expiry_by_the_binding_clock() {
     let rig = Rig::new().await;
     let alice = sim(&rig, "@alice:test");
     alice
-        .write_lease(&rig.doc, Lease { dcp: 0, state: LeaseState::Held, holder: None, token: Some("t".into()), base_version: None, duration_ms: None })
+        .write_lease(&rig.doc, Lease { dcp: 1, state: LeaseState::Held, holder: None, token: Some("t".into()), base_version: None, renewal: Some(0), duration_ms: None })
         .await
         .unwrap();
     assert_eq!(alice.lease(&rig.doc).await.unwrap().unwrap().body.state, LeaseState::Held);

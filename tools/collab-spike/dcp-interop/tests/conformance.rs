@@ -26,6 +26,7 @@ async fn every_journey_passes_on_matrix() {
     // MatrixStore claims every capability: nothing is skipped.
     report.assert_skipped_exactly(&[]);
     assert_eq!(report.passed(), journey_names(), "every journey, in spec order, must pass");
+    assert_eq!(report.passed().len(), 11);
 }
 
 /// What WOPI cannot express, and why (docs/rfc/0004-spike-d-results.md,
@@ -59,6 +60,9 @@ async fn the_journeys_wopi_can_express_pass_over_a_matrix_host() {
         [
             "convergence_on_one_head",
             "corrupt_file_rejected",
+            // The forger is a viewer on the Matrix room; every reader is a
+            // WOPI client over the host.
+            "forged_version_from_a_viewer_is_not_accepted",
             "roles_enforced_at_store",
             "truncated_upload_never_published"
         ]
@@ -82,4 +86,40 @@ async fn the_journeys_can_fail_through_wopi_over_matrix() {
     let f = InteropFactory::new(syn, Stack::WopiOverMatrix).with_options(opts);
     let r = run_one(&f, "convergence_on_one_head").await;
     assert!(matches!(r.outcome, Outcome::Failed(_)), "{:?}", r.outcome);
+}
+
+/// The room has the literal draft-0 power-level table, so Synapse accepts a
+/// viewer's forged version and only the readers' rules can drop it. Every
+/// journey still passes, on both stacks: the Matrix readers drop it, and so
+/// do WOPI readers over the host.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_forged_version_journey_passes_on_both_stacks_when_the_server_does_not_gate() {
+    let Some(syn) = synapse() else { return };
+    for stack in [Stack::Matrix, Stack::WopiOverMatrix] {
+        let f = InteropFactory::new(syn.clone(), stack).with_options(RigOptions::honest().draft0_power_levels());
+        let r = run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await;
+        assert_eq!(r.outcome, Outcome::Passed, "{stack:?}");
+    }
+}
+
+/// The negative control for the above: the same draft-0 room, and readers
+/// that trust the sender. The forgery becomes a second head and the journey
+/// must fail, on both stacks.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_forged_version_journey_fails_when_neither_the_server_nor_the_readers_check() {
+    let Some(syn) = synapse() else { return };
+    for stack in [Stack::Matrix, Stack::WopiOverMatrix] {
+        let opts = RigOptions::honest()
+            .draft0_power_levels_and_readers_that_trust_senders()
+            .settle(Duration::from_secs(8));
+        let f = InteropFactory::new(syn.clone(), stack).with_options(opts);
+        let r = run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await;
+        match &r.outcome {
+            Outcome::Failed(why) => {
+                println!("{stack:?}: failed as it must: {why}");
+                assert!(why.0.contains("forged version was accepted"), "{stack:?}: failed for another reason: {why}");
+            }
+            other => panic!("{stack:?}: the journey did not fail with an accepted forgery: {other:?}"),
+        }
+    }
 }

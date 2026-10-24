@@ -11,7 +11,9 @@ name: collab-spike
 #   interop    dcp-interop: MatrixStore and WopiHost<MatrixStore> against each
 #              other on a real Synapse (conformance journeys on both stacks,
 #              cross-binding checks, negative controls)
-#   collabora  real Collabora Online editing a document WopiHost serves.
+#   collabora  real Collabora Online editing a document WopiHost serves: over
+#              the in-memory store (dcp-wopi's collabora_e2e) and over a Matrix
+#              room on a real Synapse (dcp-interop's collabora_over_matrix).
 #              Runs on workflow_dispatch, nightly, on a push whose head commit
 #              message contains "[collabora]" (a workflow can only be dispatched
 #              once it exists on the default branch, so on a spike branch this
@@ -249,6 +251,8 @@ jobs:
           shared-key: collab-spike-interop
       - name: Output directory
         run: mkdir -p "$GITHUB_WORKSPACE/interop-logs"
+      # collabora_over_matrix is built here (so a compile error shows up in this
+      # job) but only run by the `collabora` job: it needs a Collabora.
       - name: Build tests
         run: cargo test -p dcp-interop --no-run --locked
 
@@ -274,7 +278,7 @@ jobs:
           set -euo pipefail
           eval "$(scripts/synapse-up.sh relaxed)"
           trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/interop-logs/synapse.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
-          cargo test -p dcp-interop --locked --no-fail-fast -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/interop-logs/interop.log"
+          cargo test -p dcp-interop --locked --no-fail-fast --test conformance --test cross_binding --test negative_control -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/interop-logs/interop.log"
 
       - name: Upload logs
         if: always()
@@ -323,19 +327,34 @@ jobs:
         with:
           workspaces: tools/collab-spike
           shared-key: collab-spike-collabora
-      - name: Build the Collabora test
-        run: cargo test -p dcp-wopi --test collabora_e2e --no-run --locked
+      - name: Build the Collabora tests
+        run: |
+          cargo test -p dcp-wopi --test collabora_e2e --no-run --locked
+          cargo test -p dcp-interop --test collabora_over_matrix --no-run --locked
       - name: Start Collabora Online
         run: |
           docker pull collabora/code:latest
           docker image inspect collabora/code:latest --format 'image {{.Id}} created {{.Created}}'
           ./scripts/collabora-up.sh
-      - name: Real Collabora round trip
+      - name: Real Collabora round trip over the in-memory store
         env:
           DCP_WOPI_HOST_PORT: '18080'
           DCP_WOPI_LOG: '1'
           DCP_WOPI_LOG_FILE: ${{ runner.temp }}/wopi-request-log.txt
         run: cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture --test-threads=1
+      # Collabora in front of WopiHost<MatrixStore>: the host stores in a room
+      # on a real Synapse. One test at a time: they share the WOPI host port.
+      - name: Real Collabora over a Matrix room (Synapse + Collabora + WopiHost over MatrixStore)
+        env:
+          DCP_WOPI_HOST_PORT: '18080'
+          DCP_WOPI_LOG: '1'
+          DCP_WOPI_LOG_FILE: ${{ runner.temp }}/wopi-matrix-request-log.txt
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh relaxed)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$RUNNER_TEMP/synapse.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
+          free -m
+          cargo test -p dcp-interop --locked --test collabora_over_matrix -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/collabora-over-matrix.log"
       - name: Collabora container log
         if: always()
         run: docker logs dcp-collabora > "$RUNNER_TEMP/collabora.log" 2>&1 || true
@@ -346,5 +365,8 @@ jobs:
           name: collabora-spike-logs
           path: |
             ${{ runner.temp }}/wopi-request-log.txt
+            ${{ runner.temp }}/wopi-matrix-request-log.txt
+            ${{ runner.temp }}/collabora-over-matrix.log
+            ${{ runner.temp }}/synapse.log
             ${{ runner.temp }}/collabora.log
           if-no-files-found: warn

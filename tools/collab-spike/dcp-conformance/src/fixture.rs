@@ -46,6 +46,9 @@ pub struct Capabilities {
     pub updates: bool,
     /// The fixture carries [`Faults`] that can truncate an upload.
     pub upload_faults: bool,
+    /// The fixture carries a [`Forger`]: a way to send a version as the
+    /// viewer around the store's own checks (the forged-version journey).
+    pub forgery: bool,
 }
 
 impl Capabilities {
@@ -60,6 +63,7 @@ impl Capabilities {
             arbitrary_parents: true,
             updates: true,
             upload_faults: true,
+            forgery: true,
         }
     }
 }
@@ -88,6 +92,20 @@ pub trait Faults: Send + Sync {
     fn truncate_next_upload(&self);
 }
 
+/// What a hostile member's client does: send a version event to the binding's
+/// server as the fixture's **viewer**, skipping every check the store makes
+/// (role, parents, upload verification, author). The server's own gate is the
+/// only thing that can refuse it; if it does not, only the reader's rules
+/// (spec 8.1: `created_by.principal` equals the sender, and senders below the
+/// editor level are dropped when the server does not gate) stand between the
+/// forged version and the user.
+#[async_trait]
+pub trait Forger: Send + Sync {
+    /// `Ok(Some(id))`: the server accepted the event and gave it this id.
+    /// `Ok(None)`: the server refused it. Any other failure is an `Err`.
+    async fn forge_version(&self, doc: &DocId, version: dcp_core::Version) -> Result<Option<String>, Failure>;
+}
+
 /// A document in a known state, with a principal for each role.
 ///
 /// Contract for [`StoreFactory::fresh`]: `doc` exists; `owner` is its owner,
@@ -105,6 +123,9 @@ pub struct Fixture {
     pub time: Arc<dyn Time>,
     pub caps: Capabilities,
     pub faults: Option<Arc<dyn Faults>>,
+    /// Set by a binding whose `capabilities().forgery` is true; it acts as
+    /// `viewer`. `None` from the constructors: assign it after building.
+    pub forger: Option<Arc<dyn Forger>>,
     /// How long a journey waits for an effect to reach another handle
     /// (eventual consistency over a network). Zero for in-process stores.
     pub settle: Duration,
@@ -112,7 +133,7 @@ pub struct Fixture {
 
 pub fn standard_meta() -> Meta {
     Meta {
-        dcp: 0,
+        dcp: 1,
         title: "DCP conformance document".into(),
         mime: MIME.into(),
         levels: vec![Level::L1, Level::L2],
@@ -173,6 +194,7 @@ impl Fixture {
             time,
             caps,
             faults,
+            forger: None,
             settle,
         };
         let versions = fx.owner.versions(&fx.doc).await?;

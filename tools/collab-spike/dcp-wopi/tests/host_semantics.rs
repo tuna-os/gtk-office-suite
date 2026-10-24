@@ -169,7 +169,8 @@ async fn lock_family_returns_the_current_lock_on_mismatch() {
     assert_eq!(lease.body.token.as_deref(), Some("L1"));
     assert_eq!(lease.body.holder.as_ref().unwrap().principal, "@alice:test");
     assert_eq!(lease.body.base_version.as_deref(), Some(rig.v1.as_str()));
-    assert_eq!(lease.body.duration_ms, Some(30 * 60 * 1000));
+    assert_eq!(lease.body.duration_ms, Some(1_800_000));
+    assert_eq!(lease.body.renewal, Some(0));
 
     // Another lock string: 409 carrying the current lock; the lease is untouched.
     let r = post_op(&rig, &b, "LOCK", &[("X-WOPI-Lock", "L-other")]).await;
@@ -546,4 +547,124 @@ async fn get_file_can_open_an_older_version_and_the_save_is_a_child_of_it() {
     let r = http().get(rig.url(false)).query(&[("access_token", a.as_str()), ("dcp_history", "1")]).send().await.unwrap();
     let with: Value = r.json().await.unwrap();
     assert_eq!(with["DcpVersions"].as_array().unwrap().len(), 3);
+}
+
+async fn current_lease(rig: &Rig) -> Stamped<Lease> {
+    rig.owner.lease(&rig.doc).await.unwrap().expect("a lease record")
+}
+
+#[tokio::test]
+async fn lock_twice_with_the_same_string_is_a_new_record_with_renewal_plus_one() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    let first = current_lease(&rig).await;
+    assert_eq!(first.body.renewal, Some(0), "written over no record: rule 8");
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    let second = current_lease(&rig).await;
+    assert_eq!(second.body.renewal, Some(1), "written over a held record: previous + 1");
+    assert!(second.ts_ms > first.ts_ms, "a different record with a later timestamp");
+    assert_eq!(second.body.token.as_deref(), Some("L1"));
+    // REFRESH_LOCK and UNLOCK_AND_RELOCK are writes over a held record too.
+    assert_eq!(post_op(&rig, &a, "REFRESH_LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    assert_eq!(current_lease(&rig).await.body.renewal, Some(2));
+    let r = post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L2"), ("X-WOPI-OldLock", "L1")]).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    assert_eq!(current_lease(&rig).await.body.renewal, Some(3));
+}
+
+#[tokio::test]
+async fn lock_over_a_released_record_starts_at_renewal_zero_again() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    for _ in 0..3 {
+        assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    }
+    assert_eq!(current_lease(&rig).await.body.renewal, Some(2));
+    assert_eq!(post_op(&rig, &a, "UNLOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    let released = current_lease(&rig).await;
+    assert_eq!(released.body.state, LeaseState::Released);
+    assert_eq!(released.body.renewal, None, "a released record carries no renewal");
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L2")]).await.status(), StatusCode::OK);
+    assert_eq!(current_lease(&rig).await.body.renewal, Some(0));
+}
+
+#[tokio::test]
+async fn a_takeover_after_expiry_continues_the_counter() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    rig.backend.advance(1_800_000 + 1);
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L9")]).await.status(), StatusCode::OK);
+    // The expired record was still `held`: rule 8 says previous + 1.
+    assert_eq!(current_lease(&rig).await.body.renewal, Some(1));
+}
+
+#[tokio::test]
+async fn lock_on_a_document_with_no_version_writes_a_lease_without_base_version() {
+    let backend = Backend::new();
+    let owner = backend.handle("@alice:test");
+    let doc = owner.create_document(&meta("Fresh"), None).await.unwrap();
+    let host = dcp_wopi::WopiHost::new(dcp_wopi::HostConfig { lease_settle_ms: 0, ..Default::default() });
+    let server = host.serve("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let tok = host.register(doc.clone(), owner.clone(), "@alice:test");
+    let base = format!("{}/wopi/files/{doc}", server.base_url());
+    let r = http()
+        .post(&base)
+        .query(&[("access_token", tok.as_str())])
+        .header("X-WOPI-Override", "LOCK")
+        .header("X-WOPI-Lock", "L1")
+        .header("content-length", "0")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    let stored = owner.lease(&doc).await.unwrap().unwrap();
+    assert_eq!(stored.body.state, LeaseState::Held);
+    assert_eq!(stored.body.base_version, None, "omitted, never a placeholder");
+    let wire = serde_json::to_value(&stored.body).unwrap();
+    assert!(wire.get("base_version").is_none(), "{wire}");
+    dcp_core::schema::validate_typed(dcp_core::schema::Kind::Lease, &stored.body).expect("valid against the lease schema");
+}
+
+#[tokio::test]
+async fn the_lease_duration_is_always_the_wopi_one_and_the_record_is_schema_valid() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    get_file(&rig, &a).await;
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    let l = current_lease(&rig).await;
+    assert_eq!(l.body.duration_ms, Some(1_800_000));
+    assert_eq!(l.body.base_version.as_deref(), Some(rig.v1.as_str()));
+    dcp_core::schema::validate_typed(dcp_core::schema::Kind::Lease, &l.body).expect("valid against the lease schema");
+    // CheckFileInfo carries the same record for a DCP-aware client.
+    let info = cfi(&rig, &a).await;
+    assert_eq!(info["DcpLease"]["renewal"], 0);
+    assert_eq!(info["DcpLeaseTimestampMs"], l.ts_ms);
+}
+
+#[tokio::test]
+async fn lock_waits_the_settle_interval_before_answering() {
+    let rig = Rig::with_config(dcp_wopi::HostConfig { log_stderr: false, ..Default::default() }).await;
+    assert_eq!(rig.host.config().lease_settle_ms, dcp_core::lease::MATRIX_SETTLE_MS);
+    let a = rig.token("@alice:test");
+    let t0 = std::time::Instant::now();
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    assert!(t0.elapsed().as_millis() as u64 >= dcp_core::lease::MATRIX_SETTLE_MS);
+}
+
+#[tokio::test]
+async fn put_file_from_a_token_that_never_read_is_refused_with_an_empty_lock() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    // Locked by this very session's string, but it never downloaded a version.
+    assert_eq!(post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await.status(), StatusCode::OK);
+    let r = put(&rig, &a, &[("X-WOPI-Lock", "L1")], make_odt("blind")).await;
+    assert_eq!(r.status(), StatusCode::CONFLICT);
+    assert_eq!(lock_of(&r).await.as_deref(), Some(""));
+    assert_eq!(version_count(&rig).await, 1, "nothing published");
+    // After reading it works.
+    get_file(&rig, &a).await;
+    assert_eq!(put(&rig, &a, &[("X-WOPI-Lock", "L1")], make_odt("seen")).await.status(), StatusCode::OK);
 }

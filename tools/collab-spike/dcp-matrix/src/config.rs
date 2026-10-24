@@ -56,6 +56,13 @@ pub struct MatrixConfig {
     /// a kick made elsewhere reaches matrix-sdk only with the next /sync, and
     /// anything sent in between is encrypted for the removed device too.
     pub guard_stale_members: bool,
+    /// Reader rule of spec 8.1: when an encrypted room's power-levels table
+    /// does not gate `m.room.encrypted` at the editor level, drop DCP timeline
+    /// events (versions and updates) from senders below level 50. A test knob
+    /// like `guard_stale_members`: turn it off to see what a reader without the
+    /// rule accepts (the negative control of the forged-version journey). It
+    /// never disables the `created_by.principal == sender` check on versions.
+    pub reader_checks_senders: bool,
     /// Room version for new documents; `None` takes the server default.
     pub room_version: Option<String>,
     /// Keep the SDK's state and crypto store in this directory (needs the
@@ -79,6 +86,7 @@ impl MatrixConfig {
             enforce_encrypted_pl: true,
             clock: ClockSource::Calibrated,
             guard_stale_members: true,
+            reader_checks_senders: true,
             room_version: None,
             store_dir: None,
         }

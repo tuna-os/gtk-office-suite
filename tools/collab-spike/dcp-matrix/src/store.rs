@@ -1,4 +1,4 @@
-//! `MatrixStore`: the Matrix binding of DCP draft-0 (spec 8.1) as a
+//! `MatrixStore`: the Matrix binding of DCP draft 1 (spec 8.1) as a
 //! [`DocumentStore`].
 //!
 //! One document is one end-to-end encrypted room of type
@@ -500,13 +500,13 @@ impl MatrixStore {
                 rep.rejected_plaintext += 1;
                 continue;
             }
-            if !gated && snap.power.level_of(&it.sender) < LEVEL_EDITOR {
+            if self.inner.cfg.reader_checks_senders && !gated && snap.power.level_of(&it.sender) < LEVEL_EDITOR {
                 rep.rejected_unauthorised += 1;
                 continue;
             }
             let mut invalid = false;
             if it.ty == state::VERSION {
-                match serde_json::from_value::<Version>(it.content.clone()) {
+                match dcp_core::schema::parse::<Version>(dcp_core::schema::Kind::Version, &it.content) {
                     Ok(v) if v.created_by.principal == it.sender => {
                         let mut s = Stamped::new(it.id, it.ts, it.sender, v);
                         if let Some(d) = it.device {
@@ -517,7 +517,7 @@ impl MatrixStore {
                     _ => invalid = true,
                 }
             } else {
-                match serde_json::from_value::<Update>(it.content.clone()) {
+                match dcp_core::schema::parse::<Update>(dcp_core::schema::Kind::Update, &it.content) {
                     Ok(u) => {
                         let mut s = Stamped::new(it.id, it.ts, it.sender, u);
                         if let Some(d) = it.device {
@@ -669,7 +669,7 @@ impl MatrixStore {
     ) -> Result<Stamped<Version>> {
         let file_ref = self.upload_verified(&file).await?;
         let version = Version {
-            dcp: 0,
+            dcp: 1,
             parents,
             file: file_ref,
             created_by: dcp_core::Author { principal: self.inner.user_id.clone(), device: self.inner.device_id.clone() },
@@ -886,16 +886,11 @@ impl DocumentStore for MatrixStore {
         let room = self.room_for(doc).await?;
         let snap = self.snapshot_of(&room).await?;
         self.require_editor(&snap, "write lease")?;
-        // Synapse does not persist a state event whose content equals the
-        // sender's current one for that key: it answers with the existing event
-        // ID and the old timestamp. A renewal that changes nothing would never
-        // extend the lease. Differ by one millisecond of duration, alternating.
-        let mut lease = lease;
-        if snap.lease.as_ref().is_some_and(|l| l.sender == self.inner.user_id && l.body == lease) {
-            if let Some(d) = lease.duration_ms.as_mut() {
-                *d = if *d > 1000 { *d - 1 } else { *d + 1 };
-            }
-        }
+        // Writes exactly what it is given. Synapse does not persist a state
+        // event whose content equals the sender's current one for that key (it
+        // answers with the old event ID and timestamp); spec 4.3 rule 8 makes
+        // that impossible by requiring the caller's `renewal` to differ from the
+        // record it replaces, so nothing is rewritten here.
         let content = serde_json::to_value(&lease).map_err(|e| StoreError::Invalid(e.to_string()))?;
         let q = self.queue_for(&room).await;
         let id = q
@@ -919,7 +914,7 @@ impl DocumentStore for MatrixStore {
                 let room = self.room_for(doc).await?;
                 let snap = self.snapshot_of(&room).await?;
                 self.require_editor(&snap, "clock probe")?;
-                let (_, ts) = self.publish_timeline(&room, state::CLOCK, &json!({"dcp": 0})).await?;
+                let (_, ts) = self.publish_timeline(&room, state::CLOCK, &json!({"dcp": 1})).await?;
                 Ok(ts)
             }
         }

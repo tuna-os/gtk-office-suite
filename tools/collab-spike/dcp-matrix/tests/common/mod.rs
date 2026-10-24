@@ -92,7 +92,7 @@ impl Synapse {
 }
 
 pub fn meta(title: &str) -> Meta {
-    Meta { dcp: 0, title: title.into(), mime: "application/vnd.oasis.opendocument.text".into(), levels: vec![Level::L0, Level::L1, Level::L2], algorithms: Some(vec!["loro/1".into()]), editor_services: None }
+    Meta { dcp: 1, title: title.into(), mime: "application/vnd.oasis.opendocument.text".into(), levels: vec![Level::L0, Level::L1, Level::L2], algorithms: Some(vec!["loro/1".into()]), editor_services: None }
 }
 
 pub fn file(bytes: &[u8]) -> NewFile {

@@ -111,8 +111,12 @@ pub struct Lease {
     pub holder: Option<Holder>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    /// Omitted when the document has no version yet (never a placeholder).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_version: Option<String>,
+    /// Required when held (lease rule 8); absent on a released record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renewal: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u64>,
 }

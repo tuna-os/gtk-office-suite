@@ -47,9 +47,12 @@ pub struct WopiCapabilities {
     pub merge_parents: bool,
     /// `message` survives. `PutFile` has no field for it.
     pub version_messages: bool,
-    /// The lease record's `holder`, `base_version` and `duration_ms` are
-    /// readable and writable. WOPI carries only the lock string, so the
-    /// conformance lease journeys cannot run.
+    /// The lease record's `holder`, `base_version`, `renewal` and
+    /// `duration_ms` are WRITABLE: `write_lease` carries only the lock string
+    /// (through `LOCK`/`UNLOCK`; the host chooses holder, base_version,
+    /// renewal and the fixed 1 800 000 duration), so the conformance lease
+    /// journeys cannot run. READING is richer: `lease()` returns the real
+    /// record through the host's `DcpLease` extension in CheckFileInfo.
     pub lease_fields: bool,
     /// L2 updates.
     pub updates: bool,
@@ -409,14 +412,48 @@ impl DocumentStore for WopiClientStore {
         result
     }
 
+    /// With the host's `DcpLease` member the real active record comes back,
+    /// stamped with its binding timestamp (`DcpLeaseTimestampMs`), so holder,
+    /// base_version, renewal and duration_ms are all readable. `DcpLease`
+    /// null means no lease is active: a released record stamped with the
+    /// host's clock. Only when the member is absent (a host that is not this
+    /// one) does it fall back to `GetLock`, which yields the lock string and
+    /// nothing else (so that held record has no `renewal`).
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
+        let info = self.file_info(doc).await?;
+        if let Some(member) = info.raw.get("DcpLease") {
+            if member.is_null() {
+                let now = info
+                    .raw
+                    .get("DcpNowMs")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| StoreError::Invalid("host did not send DcpNowMs; WOPI has no clock".into()))?;
+                return Ok(Some(Stamped::new("wopi-lock", now, "", dcp_core::lease::released())));
+            }
+            let body: Lease = serde_json::from_value(member.clone())
+                .map_err(|e| StoreError::Invalid(format!("DcpLease does not parse: {e}")))?;
+            let ts = info
+                .raw
+                .get("DcpLeaseTimestampMs")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| StoreError::Invalid("DcpLease without DcpLeaseTimestampMs".into()))?;
+            return Ok(Some(Stamped::new("wopi-lock", ts, "", body)));
+        }
         let token = self.get_lock(doc).await?;
         let now = self.now_ms(doc).await?;
         let body = if token.is_empty() {
-            Lease { dcp: 0, state: LeaseState::Released, holder: None, token: None, base_version: None, duration_ms: None }
+            dcp_core::lease::released()
         } else {
             // WOPI GetLock returns the lock string and nothing else.
-            Lease { dcp: 0, state: LeaseState::Held, holder: None, token: Some(token), base_version: None, duration_ms: None }
+            Lease {
+                dcp: 1,
+                state: LeaseState::Held,
+                holder: None,
+                token: Some(token),
+                base_version: None,
+                renewal: None,
+                duration_ms: None,
+            }
         };
         Ok(Some(Stamped::new("wopi-lock", now, "", body)))
     }

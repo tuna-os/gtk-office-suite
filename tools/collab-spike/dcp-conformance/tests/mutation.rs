@@ -74,7 +74,15 @@ async fn assert_caught(factory: &dyn StoreFactory, journey: &str) {
 async fn whole_suite_passes_on_the_memory_store() {
     let report = run_all(&MemoryFactory::new()).await;
     report.assert_all_passed();
-    assert_eq!(report.results.len(), 10);
+    assert_eq!(report.results.len(), 11);
+}
+
+#[tokio::test]
+async fn whole_suite_passes_when_the_server_does_not_gate_and_the_reader_does() {
+    // The draft-0 power-level table: the server accepts a viewer's forged
+    // version, the reader drops it.
+    let report = run_all(&MemoryFactory::ungated()).await;
+    report.assert_all_passed();
 }
 
 #[tokio::test]
@@ -132,7 +140,7 @@ async fn a_missing_capability_is_reported_as_skipped_not_passed() {
         "unknown_algorithm_falls_back_to_versions",
         "update_stream_gap_recovery",
     ]);
-    assert_eq!(report.passed().len(), 7);
+    assert_eq!(report.passed().len(), 8);
     assert!(
         matches!(&report.get("update_stream_gap_recovery").unwrap().outcome, Outcome::Skipped { missing } if missing == &["updates"])
     );
@@ -286,4 +294,42 @@ async fn store_that_serves_damaged_files_fails_the_corruption_journey() {
         });
         assert_caught(&f, "corrupt_file_rejected").await;
     }
+}
+
+// ---- the forged-version journey ------------------------------------------
+
+#[tokio::test]
+async fn a_reader_that_does_not_check_senders_fails_the_forged_version_journey() {
+    // The server does not gate (draft-0 table) and the reader does not drop
+    // the viewer's version either: the forgery becomes a second head.
+    let f = MemoryFactory::with_config(MemoryConfig {
+        gates_timeline: false,
+        reader_checks_senders: false,
+        ..MemoryConfig::default()
+    });
+    assert_caught(&f, "forged_version_from_a_viewer_is_not_accepted").await;
+}
+
+#[tokio::test]
+async fn a_gated_server_passes_the_forged_version_journey_by_refusing() {
+    // Same journey, the other way to pass: the gate refuses both forgeries.
+    let f = MemoryFactory::new();
+    assert_eq!(
+        run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await.outcome,
+        Outcome::Passed
+    );
+    let fx = f.fresh().await.unwrap();
+    let base = fx.owner.versions(&fx.doc).await.unwrap().remove(0);
+    let forged = dcp_core::Version {
+        dcp: 1,
+        parents: vec![fx.first_version.clone()],
+        file: base.body.file.clone(),
+        created_by: dcp_core::Author {
+            principal: fx.viewer.principal(),
+            device: fx.viewer.device(),
+        },
+        message: None,
+        covers: None,
+    };
+    assert_eq!(fx.forger.unwrap().forge_version(&fx.doc, forged).await.unwrap(), None);
 }

@@ -248,7 +248,7 @@ pub(crate) mod tests {
             5,
             "@a:x",
             Version {
-                dcp: 0,
+                dcp: 1,
                 parents: vec![],
                 file: file_ref("text/plain", b"abc", url()),
                 created_by: Author {

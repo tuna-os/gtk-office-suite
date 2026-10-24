@@ -1,4 +1,4 @@
-//! Validation of any DCP object against the draft-0 JSON schemas.
+//! Validation of any DCP object against the draft-1 JSON schemas.
 //!
 //! The schemas are `include_str!`ed from `docs/collab-spec/schemas`, so that
 //! directory stays the single source of truth: a change there changes what
@@ -17,7 +17,7 @@ const UPDATE: &str = include_str!("../../../../docs/collab-spec/schemas/update.s
 const FILE_REF: &str = include_str!("../../../../docs/collab-spec/schemas/file-ref.schema.json");
 
 /// The `$id` base the schemas use for their `$ref`s.
-const BASE: &str = "https://tunaos.org/dcp/0/";
+const BASE: &str = "https://tunaos.org/dcp/1/";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -72,7 +72,7 @@ static VALIDATORS: LazyLock<[Validator; 5]> = LazyLock::new(|| {
             Resource::from_contents(file_ref).expect("file-ref schema is a schema"),
         );
         let schema: Value = serde_json::from_str(kind.source()).expect("schema is JSON");
-        options.build(&schema).expect("the draft-0 schemas compile")
+        options.build(&schema).expect("the draft-1 schemas compile")
     };
     Kind::ALL.map(build)
 });
@@ -130,6 +130,12 @@ mod tests {
             "lease-released.json" => {
                 include_str!("../../../../docs/collab-spec/examples/lease-released.json")
             }
+            "lease-held-empty-document.json" => include_str!(
+                "../../../../docs/collab-spec/examples/lease-held-empty-document.json"
+            ),
+            "lease-held-wopi.json" => {
+                include_str!("../../../../docs/collab-spec/examples/lease-held-wopi.json")
+            }
             "update.json" => include_str!("../../../../docs/collab-spec/examples/update.json"),
             other => panic!("unknown example {other} (examples live in {DIR})"),
         };
@@ -142,6 +148,8 @@ mod tests {
         validate(Kind::Version, &example("version.json")).unwrap();
         validate(Kind::Lease, &example("lease-held.json")).unwrap();
         validate(Kind::Lease, &example("lease-released.json")).unwrap();
+        validate(Kind::Lease, &example("lease-held-empty-document.json")).unwrap();
+        validate(Kind::Lease, &example("lease-held-wopi.json")).unwrap();
         validate(Kind::Update, &example("update.json")).unwrap();
 
         // The typed model serializes back to something the schema accepts and
@@ -160,12 +168,18 @@ mod tests {
             serde_json::to_value(&r).unwrap(),
             example("lease-released.json")
         );
+        for name in ["lease-held-empty-document.json", "lease-held-wopi.json"] {
+            let l: Lease = parse(Kind::Lease, &example(name)).unwrap();
+            assert_eq!(serde_json::to_value(&l).unwrap(), example(name), "{name}");
+        }
         let u: Update = parse(Kind::Update, &example("update.json")).unwrap();
         assert_eq!(serde_json::to_value(&u).unwrap(), example("update.json"));
     }
 
-    /// The nine malformed variants of `docs/collab-spec/validate.py`, in the
-    /// same order and with the same labels. Each must be rejected.
+    /// The sixteen malformed variants of `docs/collab-spec/validate.py`, in the
+    /// same order and with the same labels (the draft-0 variants it generates
+    /// from the examples are covered by `draft_0_objects_are_rejected`). Each
+    /// must be rejected.
     fn negatives() -> Vec<(&'static str, Kind, Value)> {
         let mut out = Vec::new();
         let mut add = |label, kind, example_name: &str, change: &dyn Fn(&mut Value)| {
@@ -221,6 +235,50 @@ mod tests {
             &|d| d["duration_ms"] = json!(7_200_000),
         );
         add(
+            "held lease without renewal",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| {
+                d.as_object_mut().unwrap().remove("renewal");
+            },
+        );
+        add(
+            "held lease, negative renewal",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["renewal"] = json!(-1),
+        );
+        add(
+            "held lease, fractional renewal",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["renewal"] = json!(1.5),
+        );
+        add(
+            "held lease, string renewal",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["renewal"] = json!("2"),
+        );
+        add(
+            "held lease, empty base_version (use omission, not a sentinel)",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["base_version"] = json!(""),
+        );
+        add(
+            "held lease, unknown field",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["epoch"] = json!(1),
+        );
+        add(
+            "held lease, 257-character token",
+            Kind::Lease,
+            "lease-held.json",
+            &|d| d["token"] = json!("t".repeat(257)),
+        );
+        add(
             "update over 34000 bytes",
             Kind::Update,
             "update.json",
@@ -236,9 +294,9 @@ mod tests {
     }
 
     #[test]
-    fn the_nine_validate_py_negatives_are_rejected() {
+    fn the_sixteen_validate_py_negatives_are_rejected() {
         let cases = negatives();
-        assert_eq!(cases.len(), 9);
+        assert_eq!(cases.len(), 16);
         for (label, kind, doc) in &cases {
             assert!(validate(*kind, doc).is_err(), "accepted: {label}");
         }
@@ -291,10 +349,30 @@ mod tests {
     }
 
     #[test]
-    fn dcp_version_must_be_zero() {
-        let mut v = example("version.json");
-        v["dcp"] = json!(1);
-        assert!(validate(Kind::Version, &v).is_err());
+    fn dcp_version_must_be_one() {
+        for v in [0, 2] {
+            let mut d = example("version.json");
+            d["dcp"] = json!(v);
+            assert!(validate(Kind::Version, &d).is_err(), "dcp {v} accepted");
+        }
+    }
+
+    /// `validate.py` appends a `"dcp": 0` variant of every positive example.
+    #[test]
+    fn draft_0_objects_are_rejected() {
+        for (name, kind) in [
+            ("meta.json", Kind::Meta),
+            ("version.json", Kind::Version),
+            ("lease-held.json", Kind::Lease),
+            ("lease-released.json", Kind::Lease),
+            ("lease-held-empty-document.json", Kind::Lease),
+            ("lease-held-wopi.json", Kind::Lease),
+            ("update.json", Kind::Update),
+        ] {
+            let mut d = example(name);
+            d["dcp"] = json!(0);
+            assert!(validate(kind, &d).is_err(), "{name} with dcp 0 accepted");
+        }
     }
 
     #[test]

@@ -107,7 +107,7 @@ impl StreamWriter {
         let seq = self.next_seq;
         self.next_seq += 1;
         Ok(Update {
-            dcp: 0,
+            dcp: 1,
             algorithm: self.algorithm.clone(),
             doc_model: self.doc_model.clone(),
             base_version: base_version.to_owned(),
@@ -417,7 +417,7 @@ mod tests {
             ts,
             sender,
             Update {
-                dcp: 0,
+                dcp: 1,
                 algorithm: algorithm.into(),
                 doc_model: "text/1".into(),
                 base_version: base.into(),
@@ -681,7 +681,7 @@ mod tests {
             100,
             "@a:x",
             Version {
-                dcp: 0,
+                dcp: 1,
                 parents: vec![],
                 file: integrity::file_ref(
                     "text/plain",

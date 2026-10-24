@@ -1,4 +1,4 @@
-//! DCP draft-0 Matrix binding (spec 8.1): Spike A of RFC-0004.
+//! DCP draft 1 Matrix binding (spec 8.1): Spike A of RFC-0004.
 //!
 //! [`MatrixStore`] implements [`dcp_core::DocumentStore`] over matrix-sdk with
 //! end-to-end encryption. See `docs/rfc/0004-spike-a-results.md` for what was
