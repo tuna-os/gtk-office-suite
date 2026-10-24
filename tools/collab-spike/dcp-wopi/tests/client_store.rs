@@ -23,7 +23,7 @@ async fn publish_through_wopi_makes_a_child_of_the_head() {
     let s = sim(&rig, "@alice:test");
 
     let before = s.versions(&rig.doc).await.unwrap();
-    assert_eq!(before.len(), 1, "WOPI shows only the head");
+    assert_eq!(before.len(), 1);
     assert_eq!(before[0].id, rig.v1);
     assert_eq!(before[0].body.parents, Vec::<String>::new());
     assert_eq!(before[0].sender, "@alice:test");
@@ -47,10 +47,12 @@ async fn publish_through_wopi_makes_a_child_of_the_head() {
     let lease = s.lease(&rig.doc).await.unwrap().unwrap();
     assert_eq!(lease.body.state, LeaseState::Released);
 
-    // The head moved; a chain continues from it.
-    let head = s.versions(&rig.doc).await.unwrap();
-    assert_eq!(head.len(), 1);
-    assert_eq!(head[0].id, v2.id);
+    // The whole graph is listed (host extension) and every version is readable.
+    let all = s.versions(&rig.doc).await.unwrap();
+    assert_eq!(all.len(), 2);
+    let first = all.iter().find(|v| v.id == rig.v1).unwrap();
+    assert_eq!(s.fetch_file(&rig.doc, first).await.unwrap(), make_odt("base"));
+    assert_eq!(s.fetch_file(&rig.doc, &v2).await.unwrap(), make_odt("v2"));
     let v3 = s.publish_version(&rig.doc, vec![v2.id.clone()], new_file("v3"), None).await.unwrap();
     assert_eq!(v3.body.parents, vec![v2.id.clone()]);
 }
@@ -173,26 +175,28 @@ async fn what_wopi_cannot_express_is_refused_loudly() {
         .await
         .unwrap_err();
     assert!(invalid(err));
-    // A parent the session never read and that is not the head.
-    let err = s.publish_version(&rig.doc, vec!["old".into()], new_file("o"), None).await.unwrap_err();
-    assert!(invalid(err));
+    // A parent that is not a retained version.
+    let err = s.publish_version(&rig.doc, vec!["nonesuch".into()], new_file("o"), None).await.unwrap_err();
+    assert!(matches!(err, StoreError::NotFound(_)), "{err}");
     assert_eq!(rig.owner.versions(&rig.doc).await.unwrap().len(), 1);
+    // A first version of a document that has one.
+    let err = s.publish_version(&rig.doc, vec![], new_file("o"), None).await.unwrap_err();
+    assert!(invalid(err));
 
     // The capability flags say the same thing.
     let c = s.capabilities();
     assert_eq!(c, CAPABILITIES);
-    assert!(!c.create_document && !c.grant_revoke && !c.version_history && !c.updates);
+    assert!(!c.create_document && !c.grant_revoke && !c.merge_parents && !c.lease_fields && !c.updates);
+    assert!(!c.version_messages);
 }
 
 #[tokio::test]
-async fn a_session_that_read_an_older_version_forks_when_it_forces_the_save() {
+async fn saving_a_child_of_an_older_version_forks() {
     let rig = Rig::new().await;
     rig.owner.grant(&rig.doc, "@bob:test", Role::Editor).await.unwrap();
     let alice = sim(&rig, "@alice:test");
 
-    // Alice's editor opens v1 ...
-    let v1 = alice.versions(&rig.doc).await.unwrap().remove(0);
-    alice.fetch_file(&rig.doc, &v1).await.unwrap();
+    // Alice's editor has v1 open ...
     // ... Bob publishes natively (DCP, not WOPI) ...
     let bob = rig.backend.handle("@bob:test");
     let vb = bob

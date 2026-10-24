@@ -48,10 +48,10 @@ jobs:
           workspaces: tools/collab-spike
       - name: Build everything in the spike workspace (including the Collabora test)
         run: cargo test -p dcp-wopi --all-targets --no-run
-      - name: Simulator tests (WopiHost, WopiClientStore)
+      - name: Simulator tests (WopiHost, WopiClientStore, conformance over WOPI)
         # collabora_e2e is excluded here: it needs a real Collabora and fails
         # without one. The `collabora` job runs it.
-        run: cargo test -p dcp-wopi --lib --test host_semantics --test client_store -- --nocapture
+        run: cargo test -p dcp-wopi --lib --test host_semantics --test client_store --test conformance_over_wopi -- --nocapture
 
   collabora:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collabora]')

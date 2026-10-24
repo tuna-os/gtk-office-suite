@@ -24,6 +24,11 @@ use crate::host::{pct_encode, COOL_STATUS_DOC_CHANGED};
 
 /// What this store can honestly do through WOPI. Every `false` is a reason a
 /// journey must be reported as unsupported, not passed.
+///
+/// `*_via_extension` means: WOPI itself has no such call, and the simulator
+/// gets it from a vendor extension of this host (`DcpVersions` in
+/// CheckFileInfo, `?dcp_version=` on GetFile). A stock WOPI client such as
+/// Collabora never uses these and cannot do the thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WopiCapabilities {
     /// `PutRelativeFile` is the only WOPI creation call and the host forbids it
@@ -31,17 +36,20 @@ pub struct WopiCapabilities {
     pub create_document: bool,
     /// WOPI has no permission-management call.
     pub grant_revoke: bool,
-    /// `CheckFileInfo` describes one file. Only the head is visible.
-    pub version_history: bool,
-    /// `publish_version` accepts any retained parent. WOPI only lets a session
-    /// save as a child of the version it read.
-    pub arbitrary_parents: bool,
+    /// `versions` lists the whole graph, and `fetch_file` reads any retained
+    /// version. Plain WOPI shows the current file only.
+    pub version_history_via_extension: bool,
+    /// A save can be a child of one chosen retained version: the session opens
+    /// it (`?dcp_version=`) and then saves, which is how Collabora's forced
+    /// save forks.
+    pub single_chosen_parent_via_extension: bool,
     /// A version can list more than one parent. A WOPI save has exactly one.
     pub merge_parents: bool,
     /// `message` survives. `PutFile` has no field for it.
     pub version_messages: bool,
     /// The lease record's `holder`, `base_version` and `duration_ms` are
-    /// readable and writable. WOPI carries only the lock string.
+    /// readable and writable. WOPI carries only the lock string, so the
+    /// conformance lease journeys cannot run.
     pub lease_fields: bool,
     /// L2 updates.
     pub updates: bool,
@@ -50,8 +58,8 @@ pub struct WopiCapabilities {
 pub const CAPABILITIES: WopiCapabilities = WopiCapabilities {
     create_document: false,
     grant_revoke: false,
-    version_history: false,
-    arbitrary_parents: false,
+    version_history_via_extension: true,
+    single_chosen_parent_via_extension: true,
     merge_parents: false,
     version_messages: false,
     lease_fields: false,
@@ -64,9 +72,6 @@ pub struct WopiClientStore {
     device: String,
     http: reqwest::Client,
     tokens: Mutex<HashMap<DocId, String>>,
-    /// The version this client last read or wrote, per document. The host keeps
-    /// the same fact per access token and uses it as the parent of a save.
-    opened: Mutex<HashMap<DocId, String>>,
 }
 
 struct FileInfo {
@@ -123,7 +128,6 @@ impl WopiClientStore {
             device: device.into(),
             http: reqwest::Client::builder().no_proxy().build().expect("reqwest client"),
             tokens: Mutex::new(HashMap::new()),
-            opened: Mutex::new(HashMap::new()),
         }
     }
 
@@ -162,11 +166,24 @@ impl WopiClientStore {
         headers: &[(&str, String)],
         body: Option<Vec<u8>>,
     ) -> Result<reqwest::Response> {
+        self.send_q(method, doc, contents, &[], headers, body).await
+    }
+
+    async fn send_q(
+        &self,
+        method: Method,
+        doc: &str,
+        contents: bool,
+        extra_query: &[(&str, &str)],
+        headers: &[(&str, String)],
+        body: Option<Vec<u8>>,
+    ) -> Result<reqwest::Response> {
         let token = self.token(doc)?;
         let mut req = self
             .http
             .request(method, self.file_url(doc, contents))
-            .query(&[("access_token", token.as_str())]);
+            .query(&[("access_token", token.as_str())])
+            .query(extra_query);
         for (k, v) in headers {
             req = req.header(*k, v);
         }
@@ -181,7 +198,12 @@ impl WopiClientStore {
     }
 
     async fn file_info(&self, doc: &str) -> Result<FileInfo> {
-        let resp = self.send(Method::GET, doc, false, &[], None).await?;
+        self.file_info_q(doc, false).await
+    }
+
+    async fn file_info_q(&self, doc: &str, history: bool) -> Result<FileInfo> {
+        let q: &[(&str, &str)] = if history { &[("dcp_history", "1")] } else { &[] };
+        let resp = self.send_q(Method::GET, doc, false, q, &[], None).await?;
         let status = resp.status();
         let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
         if status != StatusCode::OK {
@@ -313,33 +335,37 @@ impl DocumentStore for WopiClientStore {
     }
 
     async fn versions(&self, doc: &DocId) -> Result<Vec<Stamped<Version>>> {
-        // CheckFileInfo describes the current file only; WOPI has no history
-        // call (the optional `Version` is an opaque string of the head).
-        Ok(self.file_info(doc).await?.head()?.into_iter().collect())
+        // Plain WOPI: CheckFileInfo describes the current file only (its
+        // optional `Version` is an opaque string of the head). This host also
+        // lists every version when asked (`DcpVersions`).
+        let info = self.file_info_q(doc, true).await?;
+        let list = info
+            .raw
+            .get("DcpVersions")
+            .and_then(Value::as_array)
+            .ok_or_else(|| StoreError::Invalid("host did not send DcpVersions".into()))?;
+        list.iter()
+            .map(|e| {
+                let id = e.get("id").and_then(Value::as_str).unwrap_or_default();
+                let ts = e.get("ts_ms").and_then(Value::as_u64).unwrap_or(0);
+                let sender = e.get("sender").and_then(Value::as_str).unwrap_or_default();
+                let body: Version = serde_json::from_value(e.get("version").cloned().unwrap_or(Value::Null))
+                    .map_err(|err| StoreError::Invalid(format!("DcpVersions entry does not parse: {err}")))?;
+                Ok(Stamped::new(id, ts, sender, body))
+            })
+            .collect()
     }
 
     async fn fetch_file(&self, doc: &DocId, version: &Stamped<Version>) -> Result<Vec<u8>> {
-        let info = self.file_info(doc).await?;
-        if info.head_id() != Some(version.id.as_str()) {
-            return Err(StoreError::NotFound(format!(
-                "WOPI serves only the head ({:?}); {} is not it",
-                info.head_id(),
-                version.id
-            )));
-        }
-        let resp = self.send(Method::GET, doc, true, &[], None).await?;
+        // The standard GetFile cannot name a version; `?dcp_version=` is this
+        // host's extension.
+        let resp = self
+            .send_q(Method::GET, doc, true, &[("dcp_version", version.id.as_str())], &[], None)
+            .await?;
         let status = resp.status();
-        let served = resp
-            .headers()
-            .get("x-wopi-itemversion")
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string);
         let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
         if status != StatusCode::OK {
             return Err(map_status(status, None, &bytes, "GetFile"));
-        }
-        if let Some(id) = served {
-            self.opened.lock().insert(doc.clone(), id);
         }
         Ok(bytes.to_vec())
     }
@@ -356,20 +382,14 @@ impl DocumentStore for WopiClientStore {
         }
         let info = self.file_info(doc).await?;
         let head = info.head_id().map(str::to_string);
-        let opened = self.opened.lock().get(doc).cloned();
 
-        // `forced` mirrors Collabora's "savetostorage force=1": no timestamp
-        // precondition, so the host may fork instead of refusing.
-        let forced = match (&head, parents.first()) {
-            (None, None) => false,
-            (Some(h), Some(p)) if h == p => false,
-            (Some(_), Some(p)) if opened.as_deref() == Some(p.as_str()) => true,
-            (Some(_), Some(p)) => {
-                return Err(unsupported(
-                    "publish_version",
-                    &format!("parent {p} is not the head and was not read by this session; WOPI saves only as a child of what the session opened"),
-                ));
-            }
+        // `base` is the version the session opens and the host will take as
+        // the parent. `forced` mirrors Collabora's "savetostorage force=1": no
+        // timestamp precondition, so the host may fork instead of refusing.
+        let (base, forced) = match (&head, parents.first()) {
+            (None, None) => (None, false),
+            (Some(h), Some(p)) if h == p => (Some(p.clone()), false),
+            (Some(_), Some(p)) => (Some(p.clone()), true),
             (Some(_), None) => {
                 return Err(unsupported("publish_version", "parents [] on a document that already has versions"));
             }
@@ -380,7 +400,7 @@ impl DocumentStore for WopiClientStore {
 
         let lock = new_lock_string();
         self.lock_call(doc, "LOCK", Some(&lock), None).await?;
-        let result = self.save_locked(doc, &info, &lock, forced, file).await;
+        let result = self.save_locked(doc, &info, &lock, base.as_deref(), forced, file).await;
         // Collabora unlocks on close whether or not the save worked; a failed
         // unlock after a good save does not undo the version.
         let _ = self.lock_call(doc, "UNLOCK", Some(&lock), None).await;
@@ -443,30 +463,30 @@ impl WopiClientStore {
         doc: &str,
         info: &FileInfo,
         lock: &str,
+        base: Option<&str>,
         forced: bool,
         file: NewFile,
     ) -> Result<Stamped<Version>> {
-        if let Some(head) = info.head_id() {
-            if !forced {
-                // Collabora downloads the base before it edits; the host takes
-                // that read as the version a later PutFile is a child of.
-                let resp = self.send(Method::GET, doc, true, &[], None).await?;
-                let status = resp.status();
-                let served = resp
-                    .headers()
-                    .get("x-wopi-itemversion")
-                    .and_then(|v| v.to_str().ok())
-                    .map(str::to_string);
-                let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
-                if status != StatusCode::OK {
-                    return Err(map_status(status, None, &bytes, "GetFile"));
-                }
-                if served.as_deref() != Some(head) {
-                    return Err(StoreError::Conflict(format!(
-                        "head moved from {head} to {served:?} between CheckFileInfo and GetFile"
-                    )));
-                }
-                self.opened.lock().insert(doc.to_string(), head.to_string());
+        if let Some(base) = base {
+            // Collabora downloads the base before it edits; the host takes
+            // that read as the version a later PutFile is a child of. A base
+            // that is not the head is opened by version (host extension).
+            let q: Vec<(&str, &str)> = if forced { vec![("dcp_version", base)] } else { vec![] };
+            let resp = self.send_q(Method::GET, doc, true, &q, &[], None).await?;
+            let status = resp.status();
+            let served = resp
+                .headers()
+                .get("x-wopi-itemversion")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
+            let bytes = resp.bytes().await.map_err(|e| StoreError::Transport(e.to_string()))?;
+            if status != StatusCode::OK {
+                return Err(map_status(status, None, &bytes, "GetFile"));
+            }
+            if served.as_deref() != Some(base) {
+                return Err(StoreError::Conflict(format!(
+                    "head moved from {base} to {served:?} between CheckFileInfo and GetFile"
+                )));
             }
         }
         let mut headers = vec![
@@ -490,9 +510,7 @@ impl WopiClientStore {
         let raw: Value = serde_json::from_slice(&bytes)
             .map_err(|e| StoreError::Transport(format!("PutFile response is not JSON: {e}")))?;
         let id = item.ok_or_else(|| StoreError::Transport("PutFile response has no X-WOPI-ItemVersion".into()))?;
-        let v = stamped_version(&raw, Some(&id))?
-            .ok_or_else(|| StoreError::Invalid("PutFile response has no DcpVersion".into()))?;
-        self.opened.lock().insert(doc.to_string(), id);
-        Ok(v)
+        stamped_version(&raw, Some(&id))?
+            .ok_or_else(|| StoreError::Invalid("PutFile response has no DcpVersion".into()))
     }
 }

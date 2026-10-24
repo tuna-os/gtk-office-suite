@@ -54,6 +54,10 @@ pub struct HostConfig {
     /// allows 1 s to 1 h.
     pub lock_duration_ms: u64,
     pub max_put_bytes: usize,
+    /// Spec version rule 3: refuse a `PutFile` body that is not a readable ODF
+    /// or OOXML package. On by default; the shared conformance fixtures use
+    /// opaque bytes and turn it off.
+    pub validate_packages: bool,
     /// Print one line per request to stderr (also enabled by `DCP_WOPI_LOG=1`).
     pub log_stderr: bool,
 }
@@ -63,6 +67,7 @@ impl Default for HostConfig {
         HostConfig {
             lock_duration_ms: 30 * 60 * 1000,
             max_put_bytes: 64 * 1024 * 1024,
+            validate_packages: true,
             log_stderr: std::env::var("DCP_WOPI_LOG").is_ok_and(|v| v == "1"),
         }
     }
@@ -220,7 +225,11 @@ impl WopiHost {
         let task = tokio::spawn(async move {
             let _ = axum::serve(listener, app)
                 .with_graceful_shutdown(async move {
-                    let _ = rx.await;
+                    // Only an explicit `shutdown()` stops the server. A dropped
+                    // handle leaves it serving until the runtime ends.
+                    if rx.await.is_err() {
+                        std::future::pending::<()>().await;
+                    }
                 })
                 .await;
         });
@@ -408,13 +417,14 @@ async fn check_file_info(
         Ok(s) => s,
         Err(r) => return r,
     };
-    match build_check_file_info(&s).await {
+    let with_history = q.get("dcp_history").is_some_and(|v| v == "1");
+    match build_check_file_info(&s, with_history).await {
         Ok(v) => json_resp(StatusCode::OK, &v),
         Err(r) => r,
     }
 }
 
-async fn build_check_file_info(s: &Session) -> Result<Value, Response> {
+async fn build_check_file_info(s: &Session, with_history: bool) -> Result<Value, Response> {
     let meta = s.store.meta(&s.doc).await.map_err(store_err)?;
     let role = role_of(s).await?;
     let versions = s.store.versions(&s.doc).await.map_err(store_err)?;
@@ -461,7 +471,19 @@ async fn build_check_file_info(s: &Session) -> Result<Value, Response> {
         "DcpVersionSender": head.map(|h| h.sender.clone()),
         "DcpHeads": heads.iter().map(|h| h.id.clone()).collect::<Vec<_>>(),
         "DcpNowMs": now,
+        // Every retained version, only when asked (`?dcp_history=1`): plain
+        // WOPI has no history call, and Collabora never asks.
+        "DcpVersions": with_history.then(|| versions.iter().map(version_json).collect::<Vec<_>>()),
     }))
+}
+
+fn version_json(v: &Stamped<Version>) -> Value {
+    json!({
+        "id": v.id,
+        "ts_ms": v.ts_ms,
+        "sender": v.sender,
+        "version": serde_json::to_value(&v.body).expect("Version serialises"),
+    })
 }
 
 // ---- GetFile -----------------------------------------------------------------
@@ -476,16 +498,28 @@ async fn get_file(
         Ok(s) => s,
         Err(r) => return r,
     };
-    match serve_file(&s).await {
+    match serve_file(&s, q.get("dcp_version").map(String::as_str)).await {
         Ok(r) => r,
         Err(r) => r,
     }
 }
 
-async fn serve_file(s: &Session) -> Result<Response, Response> {
+/// `GetFile`. With `?dcp_version=<id>` (a host extension; the standard call has
+/// no way to name a version) the file of that retained version is served, so a
+/// session can open an older version and save a child of it (spec 6.2).
+async fn serve_file(s: &Session, requested: Option<&str>) -> Result<Response, Response> {
     let versions = s.store.versions(&s.doc).await.map_err(store_err)?;
     let heads = heads_of(&versions);
-    let Some(head) = heads.first() else {
+    let served = match requested {
+        Some(id) => Some(
+            versions
+                .iter()
+                .find(|v| v.id == id)
+                .ok_or_else(|| text(StatusCode::NOT_FOUND, format!("no retained version {id}")))?,
+        ),
+        None => heads.first(),
+    };
+    let Some(head) = served else {
         // Spec version rule 7: a document with no version has no content.
         return Ok(respond(
             StatusCode::OK,
@@ -593,7 +627,9 @@ async fn do_put(
     // 3. Spec version rule 3: only publish a package that opens.
     let meta = s.store.meta(&s.doc).await.map_err(store_err)?;
     let mime = head.map_or(meta.mime.clone(), |h| h.body.file.mime.clone());
-    package::validate(&mime, &bytes).map_err(|why| text(StatusCode::BAD_REQUEST, why))?;
+    if host.inner.cfg.validate_packages {
+        package::validate(&mime, &bytes).map_err(|why| text(StatusCode::BAD_REQUEST, why))?;
+    }
 
     // 4. Publish a child of the version this session read (rule 4). A session
     //    that never read falls back to the head.
@@ -611,7 +647,6 @@ async fn do_put(
         .await
         .map_err(store_err)?;
     *s.opened.lock() = Some(published.id.clone());
-    let _ = host; // the doc guard is held by the caller
     Ok(respond(
         StatusCode::OK,
         &[("content-type", "application/json"), ("x-wopi-itemversion", &published.id)],

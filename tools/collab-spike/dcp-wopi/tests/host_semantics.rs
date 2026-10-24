@@ -480,9 +480,9 @@ async fn roles_are_enforced_on_put_file() {
     assert_eq!(r.status(), StatusCode::FORBIDDEN);
     assert_eq!(version_count(&rig).await, 1);
 
-    // The host's own check is not the only one: a token whose store handle is a
-    // viewer is refused by the store as well. Promote on the host side only by
-    // handing out a viewer's store handle under an owner label.
+    // The role comes from the store handle, not from the label the host puts on
+    // the token: a viewer's handle registered under an owner's name is still a
+    // viewer.
     let t = rig.host.register(rig.doc.clone(), rig.backend.handle("@carol:test"), "@alice:test");
     let r = put(&rig, &t, &[], make_odt("spoof")).await;
     assert_eq!(r.status(), StatusCode::FORBIDDEN);
@@ -508,4 +508,42 @@ async fn a_new_document_accepts_its_first_version_without_a_lock() {
     let v = owner.versions(&doc).await.unwrap();
     assert_eq!(v.len(), 1);
     assert!(v[0].body.parents.is_empty(), "first version has parents: []");
+}
+
+#[tokio::test]
+async fn get_file_can_open_an_older_version_and_the_save_is_a_child_of_it() {
+    let rig = Rig::new().await;
+    let a = rig.token("@alice:test");
+    // Head moves to v2 (natively).
+    let v2 = rig
+        .owner
+        .publish_version(&rig.doc, vec![rig.v1.clone()], NewFile { mime: ODT_MIME.into(), bytes: make_odt("two") }, None)
+        .await
+        .unwrap();
+
+    // `?dcp_version=` is a host extension: the standard GetFile cannot name one.
+    let r = http().get(rig.url(true)).query(&[("access_token", a.as_str()), ("dcp_version", rig.v1.as_str())]).send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    assert_eq!(r.headers()["x-wopi-itemversion"], rig.v1.as_str());
+    assert_eq!(r.bytes().await.unwrap().to_vec(), make_odt("base"));
+    let r = http().get(rig.url(true)).query(&[("access_token", a.as_str()), ("dcp_version", "nope")]).send().await.unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    // The session now has v1 open (not the head), so a lock-protected save is a
+    // child of v1: a second head, and the head v2 is not overwritten.
+    post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await;
+    let r = put(&rig, &a, &[("X-WOPI-Lock", "L1")], make_odt("from v1")).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    let all = rig.owner.versions(&rig.doc).await.unwrap();
+    assert_eq!(all.len(), 3);
+    let new = all.iter().find(|v| v.id == r.headers()["x-wopi-itemversion"].to_str().unwrap()).unwrap();
+    assert_eq!(new.body.parents, vec![rig.v1.clone()]);
+    assert!(all.iter().any(|v| v.id == v2.id));
+
+    // CheckFileInfo lists the history only when asked.
+    let plain = cfi(&rig, &a).await;
+    assert!(plain["DcpVersions"].is_null());
+    let r = http().get(rig.url(false)).query(&[("access_token", a.as_str()), ("dcp_history", "1")]).send().await.unwrap();
+    let with: Value = r.json().await.unwrap();
+    assert_eq!(with["DcpVersions"].as_array().unwrap().len(), 3);
 }
