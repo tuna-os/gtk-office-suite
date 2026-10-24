@@ -1,0 +1,96 @@
+name: collab-spike-wopi
+
+# RFC-0004 Spike D. Branch spike/collab-wopi only; not part of the product CI.
+#
+#   simulator   every push to the branch: WopiHost + WopiClientStore tests.
+#   collabora   real Collabora Online (collabora/code) editing a document that
+#               WopiHost serves. Runs on workflow_dispatch, and on a push whose
+#               head commit message contains "[collabora]" (a workflow can only
+#               be dispatched once it exists on the default branch, so the
+#               commit-message switch is how the spike runs it from the branch).
+#               The test FAILS when Collabora is unreachable; DCP_SKIP_COLLABORA=1
+#               is the only way to skip it, and then it says so.
+on:
+  push:
+    branches: [spike/collab-wopi]
+    paths:
+      - 'tools/collab-spike/**'
+      - '.github/workflows/collab-spike-wopi.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: collab-spike-wopi-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+
+permissions:
+  contents: read
+
+jobs:
+  simulator:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+      - name: Build everything in the spike workspace (including the Collabora test)
+        run: cargo test -p dcp-wopi --all-targets --no-run
+      - name: Simulator tests (WopiHost, WopiClientStore)
+        # collabora_e2e is excluded here: it needs a real Collabora and fails
+        # without one. The `collabora` job runs it.
+        run: cargo test -p dcp-wopi --lib --test host_semantics --test client_store -- --nocapture
+
+  collabora:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[collabora]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+      - name: Build the Collabora test
+        run: cargo test -p dcp-wopi --test collabora_e2e --no-run
+      - name: Start Collabora Online
+        run: |
+          docker pull collabora/code:latest
+          docker image inspect collabora/code:latest --format 'image {{.Id}} created {{.Created}}'
+          ./scripts/collabora-up.sh
+      - name: Real Collabora round trip
+        env:
+          DCP_WOPI_HOST_PORT: '18080'
+          DCP_WOPI_LOG: '1'
+          DCP_WOPI_LOG_FILE: ${{ runner.temp }}/wopi-request-log.txt
+        run: cargo test -p dcp-wopi --test collabora_e2e -- --nocapture --test-threads=1
+      - name: Collabora container log
+        if: always()
+        run: docker logs dcp-collabora > "$RUNNER_TEMP/collabora.log" 2>&1 || true
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: collabora-spike-logs
+          path: |
+            ${{ runner.temp }}/wopi-request-log.txt
+            ${{ runner.temp }}/collabora.log
+          if-no-files-found: warn
