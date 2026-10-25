@@ -10,15 +10,17 @@ Date: 2026-10-25 · Tracks: [RFC-0004](0004-interoperable-document-collaboration
 same workflow on this branch that failed or were superseded: 40174628555 (the relay binary was not on `sudo`'s PATH),
 40175038124 and 40175614808 (compile errors found by `check`), 40176037256 (a smoke run, below).
 
-**Machine and versions.** GitHub-hosted `ubuntu-24.04`, kernel 6.17.0-1022-azure, AMD EPYC 7763, 4 vCPU, 16 GB, shared
-(`setup.txt` of each job). rustc/cargo 1.99.1. iroh 1.4.1, noq 1.4.0, iroh-blobs 0.103.1, p2panda 0.7.1 (the dcp-p2p lockfile).
+**Machine and versions.** GitHub-hosted `ubuntu-24.04`, kernel 6.17.0-1022-azure, 4 vCPU, 16 GB, shared. **The CPU model differs
+between jobs** (`setup.txt`): in the matrix run the `rest` jobs of unshaped, rtt50, rtt150, loss5 and worst ran on an AMD EPYC
+7763, those of loss1 and rate1m on an EPYC 9V45, the `journeys` jobs on 7763 or 9V74. CPU seconds are therefore only compared
+below between rows on the same CPU. rustc/cargo 1.99.1. iroh 1.4.1, noq 1.4.0, iroh-blobs 0.103.1, p2panda 0.7.1 (the dcp-p2p lockfile).
 The relay is **`iroh-relay` 1.4.1** (`iroh-relay --version` prints `iroh-relay 1.4.1`), installed with
 `cargo install iroh-relay --version =1.4.1 --features server --locked` (the lockfile shipped in the crate), the same number as the
 `iroh` in `dcp-p2p/Cargo.lock`. iptables v1.8.10 (nf_tables), iproute2 6.1.0, OpenSSL 3.0.13, tshark from the Ubuntu archive.
 
 ## Recommendation
 
-**The relay and path questions Spike C left open now have measured answers, and they change four sentences of 8.5.** Nothing
+**The relay and path questions Spike C left open now have measured answers, and they change several sentences of 8.5 (see Spec corrections).** Nothing
 failed: all 154 journey runs (11 journeys × 2 modes × 7 link conditions) passed, and every assertion below held in every
 condition. What the runs do not cover (NAT, a real WAN, jitter) is in [Not verified](#not-verified).
 
@@ -28,7 +30,7 @@ condition. What the runs do not cover (NAT, a real WAN, jitter) is in [Not verif
    stays on the relay only when direct UDP is impossible. With the firewall dropping all peer-to-peer packets, iroh's own path
    data showed 1,515 connections over 7 conditions with **no IP path ever opened and 0 IP bytes**; with UDP allowed and the same
    withheld addresses the same assertion failed in **35 of 35** runs (the negative control).
-2. **A relay is needed only to start.** An already-direct connection survived the relay being killed in 7 of 7 conditions and kept
+2. **A relay is needed to start and to recover, not to continue.** An already-direct connection survived the relay being killed in 7 of 7 conditions and kept
    carrying publishes; a relay-only connection delivered nothing while the relay was dead (7 of 7) and recovered 3.5 to 22.6 s
    after the relay came back.
 3. **A silently dead direct path costs 15 to 20 s.** With the firewall cutting an upgraded connection, the next publish became
@@ -120,8 +122,8 @@ sudo tools/collab-spike/scripts/netns-footprint.sh target/release/dcp-p2p-footpr
 python3 tools/collab-spike/scripts/wan-results.py <downloaded artifacts>                      # tables from results.jsonl
 ```
 
-Hosted runners allow all of it: namespaces, veth, `tc netem` (`sch_netem`), iptables and tcpdump all worked as root in the first
-probe (run 40174628555), so the fallback to a userspace delay proxy was not needed.
+Hosted runners allow all of it: namespaces, veth, `tc netem` (`sch_netem`) and iptables worked as root in the first probe (run
+40174628555) and tcpdump in the `wan` jobs, so the fallback to a userspace delay proxy was not needed.
 
 ### How this was iterated, and what changed after seeing data
 
@@ -134,7 +136,7 @@ and the matrix run is the first in which all of it ran. Compile errors in `tests
 job (runs 40175038124, 40175614808) before any measurement.
 
 **Lockfiles.** The committed `tools/collab-spike/dcp-p2p/Cargo.lock` on main was stale: `cargo metadata --locked` on a clean
-checkout of main fails, because `dcp-core` and `dcp-conformance` moved to `parking_lot 0.13`. It is regenerated here (adding
+checkout of main fails, because the lock has no `parking_lot 0.13`, which `dcp-core` and `dcp-conformance` require. It is regenerated here (adding
 `parking_lot 0.13`, `lock_api 0.5`, `parking_lot_core 0.10` and the new direct dependency edges; no existing version changed,
 iroh stays 1.4.1) and `cargo check --all-targets --locked`, with and without `relay-test`, passes in the `check` job. The other
 workspace's `tools/collab-spike/Cargo.lock` is also stale on main (the `collab-spike.yml` jobs on this branch fail with "cannot
@@ -307,22 +309,23 @@ conditions (those with no delay and no rate limit) was not explained.
 
 N inline updates of 100 bytes from one writer to one reader (both editors); the reader's CPU time is read from `/proc/self/task`
 (CLK_TCK 100) in the node process, in total and for the store's own thread (named `dcp-p2p`, where p2panda runs), and the bytes
-from the reader's veth counters. 1,000 entries only in the conditions marked big (`unshaped`, `rtt150`, `rate1m`, `worst`).
+from the reader's veth counters. 1,000 entries only in the conditions marked big (`unshaped`, `rtt150`, `rate1m`, `worst`). CPU model of these jobs: EPYC 7763 for
+unshaped, rtt50, rtt150, loss5, worst; EPYC 9V45 for loss1 and rate1m.
 Direct mode shown; relay-only gave the same picture (its wait differed from direct by up to 42 %, `worst` at N = 300: 29.3 s
 against 20.7 s; all rows are in `results.jsonl`). "CPU after the last publish" below is the reader's CPU during the wait.
 
-| condition | N | reader complete after the last publish (s) | reader CPU (s) | of which store thread (s) | reader veth rx (MB) | the same bytes at 1 Mbit/s (s) |
+| condition | N | reader complete after the last publish (s) | reader CPU in that wait (s) | of which store thread (s) | reader veth rx (MB) | the same bytes at 1 Mbit/s (s) |
 |---|---|---|---|---|---|---|
-| unshaped | 100 | 0.57 | 0.99 | 0.91 | 3.7 | |
-| unshaped | 300 | 5.8 | 7.1 | 6.7 | 40.3 | |
-| unshaped | 1,000 | 64.4 | 72.8 | 69.6 | 438.0 | |
+| unshaped | 100 | 0.57 | 0.57 | 0.53 | 3.7 | |
+| unshaped | 300 | 5.8 | 5.7 | 5.4 | 40.3 | |
+| unshaped | 1,000 | 64.4 | 66.0 | 63.0 | 438.0 | |
 | rtt150 | 100 | 1.7 | 0.65 | 0.60 | 0.9 | |
-| rtt150 | 300 | 5.2 | 4.6 | 4.3 | 4.5 | |
-| rtt150 | 1,000 | 49.3 | 53.3 | 51.1 | 81.9 | |
-| loss5 | 300 | 5.3 | 6.3 | 6.1 | 32.0 | |
-| rate1m | 100 | 5.7 | 0.44 | 0.41 | 0.73 | 5.8 |
+| rtt150 | 300 | 5.2 | 4.5 | 4.3 | 4.5 | |
+| rtt150 | 1,000 | 49.3 | 50.2 | 48.1 | 81.9 | |
+| loss5 | 300 | 5.3 | 5.3 | 5.0 | 32.0 | |
+| rate1m | 100 | 5.7 | 0.43 | 0.40 | 0.73 | 5.8 |
 | rate1m | 300 | 15.7 | 2.6 | 2.5 | 2.0 | 16.0 |
-| rate1m | 1,000 | 60.1 | 31.3 | 29.8 | 7.2 | 57.9 |
+| rate1m | 1,000 | 60.1 | 31.2 | 29.8 | 7.2 | 57.9 |
 | worst | 300 | 20.7 | 4.4 | 4.2 | 1.6 | 12.8 |
 | worst | 1,000 | 99.1 | 48.0 | 45.9 | 6.1 | 48.6 |
 
@@ -337,18 +340,42 @@ Reading it:
 - **In `worst` (150 ms, 5 % loss, 1 Mbit/s) the two add up** (99 s wall for 48 s of link time and 48 s of CPU): QUIC under loss
   and delay on a thin link did not keep the reader fed.
 - **The bytes are not the state.** The state is 2.1 MB at N = 1,000 but the reader received **438 MB** unshaped, 82 MB at 150 ms RTT
-  and 7 MB at 1 Mbit/s, and its CPU for the same final state was 73 s, 53 s and 31 s. [INFERENCE] The writer starts a session
-  on every publish (6.8 s for the 1,000 here) while the reader needs about 65 s to apply them, so a fast link re-sends what
-  the reader has not yet applied; a slow link overlaps fewer sessions. Counters that test this (operations received against
-  applied, sessions) were added after this run: see "State-growth counters" below.
+  and 7 MB at 1 Mbit/s, and its total CPU for the same final state was 72.8 s unshaped, 53.3 s at 150 ms RTT and 48.0 s in `worst` (all on the
+  same EPYC 7763; the 31 s at 1 Mbit/s is on a faster CPU and not comparable). The counters added for the follow-up run
+  (below) show where the bytes go.
+
+**State-growth counters** (follow-up run [40192160497](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192160497), commit
+`f45846ac`, `[growth]` switch: the state-growth test alone in two conditions; the library code is that of the matrix run, only
+the test's counters were added; different runners: **Intel Xeon 6973P-C** for unshaped, EPYC 9V45 for rate1m). Reader side, direct
+mode; "received" is `Counters::ops_received` (operations decoded from sessions, duplicates included), "applied" `ops_applied`
+(the 1,000 updates plus the document's own entries):
+
+| condition | N | wait after last publish (s) | reader CPU in the wait (s) | reader veth rx (MB) | operations received | operations applied | sync sessions (reader / writer) |
+|---|---|---|---|---|---|---|---|
+| unshaped | 100 | 0.44 | 0.38 | 3.3 | 1,472 | 106 | 109 / 109 |
+| unshaped | 300 | 3.7 | 3.7 | 34.6 | 15,574 | 306 | 268 / 268 |
+| unshaped | 1,000 | 43.7 | 44.4 | 381.2 | **172,067** | 1,006 | 768 / 768 |
+| rate1m | 100 | 6.0 | 0.38 | 0.8 | 270 | 106 | 9 / 12 |
+| rate1m | 300 | 14.6 | 2.6 | 1.9 | 627 | 306 | 10 / 12 |
+| rate1m | 1,000 | 56.7 | 31.0 | 6.4 | 2,803 | 1,006 | 53 / 53 |
+
+(Relay-only: 149,606 received for 1,006 applied unshaped at N = 1,000, 1,959 at 1 Mbit/s.) **On a fast link each operation was
+received 171 times**: 768 sessions for 1,000 publishes, each carrying the backlog the reader had not yet applied, at about 2,200
+bytes an operation (381 MB / 172,067 = 2,215 B, the 2,170 B per operation of Spike C). At 1 Mbit/s a session takes long enough that
+about 53 of them ran and each operation was received 2.8 times. [INFERENCE] The mechanism: a session sends what the receiver's
+stored log heights lack, the reader's heights advance only as fast as it applies (O(N) per operation), and the writer starts a
+session on every publish, so a fast writer re-sends an ever longer backlog; this was not traced in p2panda-sync. The same final
+state took the reader 44 s here on a Xeon 6973P-C and 64 s on an EPYC 7763 in the matrix run, so absolute seconds in this
+section depend on the CPU model; the ratios within a job do not.
 
 So the 81 s of Spike C is a library cost (p2panda-spaces rewriting its state per message) that no network condition removes
 at a fast link, and that a slow link merely hides behind the transfer time.
 
 ### 6. What a client needs outbound; can discovery be switched off (item 5, the RFC-0001 Flatpak question)
 
-**Private relay, observed.** Node a's traffic in every `rest` job, captured on its veth (`wire-summary.txt`, `tcpdump -s 128`,
-`tshark`), all 14 jobs: only three kinds of destination appeared and **no DNS query, no other host**:
+**Private relay, observed.** Node a's traffic in each of the 14 `wan` jobs, captured on its veth (`wire-summary.txt`,
+`tcpdump -s 128`, `tshark`): only three kinds of destination appeared and **no DNS query, no other host** (each summary also
+has one `icmp` line, an artefact: ICMP errors embed the header of the UDP packet they answer; the script now skips them):
 
 ```
 tcp 10.77.0.1:443   (relay: the relay protocol over TLS; it also carries every relayed byte)
@@ -418,13 +445,13 @@ Proposed; not applied (`docs/DOCUMENT-COLLABORATION-SPEC.md` is not owned by thi
    network; 500 ms is enough only there."* Lease rule 3 itself says "500 ms" for Matrix; the p2p binding should state its own
    value. (The journeys pass with 500 ms at 150 ms RTT, so a passing journey is not evidence for the value.)
 5. **8.5 "Availability"**: add the WAN figures: offline catch-up of five versions 53 ms unshaped, 363 ms at 50 ms RTT, 877 ms at 150 ms,
-   1.4 to 2.5 s at 1 Mbit/s; two divergent heads visible everywhere 56 ms to 2.5 s after reconnecting; a 1 MiB file fetched
-   in 0.5 s at 50 ms RTT, 1.4 s at 150 ms and 9 to 13 s at 1 Mbit/s.
-6. **8.5 "Updates (L2) and scale"**: add *"The reader is CPU-bound without a rate limit (CPU time 79 to 102 % of the wait, 95 % of
+   1.4 to 2.5 s at 1 Mbit/s; two divergent heads visible everywhere 54 ms to 2.5 s after reconnecting (1.0 s where one lost round was needed); a 1 MiB file
+   fetched in 0.5 s at 50 ms RTT, 1.4 s at 150 ms and 9 to 21 s at 1 Mbit/s.
+6. **8.5 "Updates (L2) and scale"**: add *"The reader is CPU-bound without a rate limit (at 300 and 1,000 entries CPU time was 79 to 102 % of the wait, 95 % of
    it in the store's own thread) and network-bound at 1 Mbit/s (wait within 4 % of the transfer time of the bytes received);
    delay and loss alone do not change that. At 1,000 entries the reader needed 49 s (150 ms RTT) to 64 s (no shaping) and
    60 to 99 s at 1 Mbit/s. On an unshaped link the reader received 438 MB for 1,000 entries whose state is 2.1 MB."* (The
-   cause of the volume is pending the counters run, see below.)
+   counters run: each operation was received 171 times, 768 sessions for 1,000 publishes.)
 7. **8.5 "Flatpak" sentence** ("reaching another device needs a UDP socket and, when peers are not directly reachable, a relay, both
    of which need `--share=network`"): replace with *"A client needs outbound TCP 443 to the relay and, to be direct, UDP to its
    peers' addresses on any port. UDP 7842 and TCP 80 to the relay are optional (blocking them made a node ready after 3.0 to
@@ -459,5 +486,9 @@ Proposed; not applied (`docs/DOCUMENT-COLLABORATION-SPEC.md` is not owned by thi
 - iroh's own **path and socket counters** are read as documented in the 1.4.1 source (`path_watcher.rs`, `socket/metrics.rs`);
   their definitions were not cross-checked against a packet capture byte for byte (only the destinations were). The "bytes on
   relay paths" of direct-mode connections is a sum over every path of a connection, selected or not.
-- The extra 5 s in 3 of the 7 mid-session fall-back times, the fifth `worst` upgrade timestamp, and why the reader's wire volume
-  falls from 438 MB to 82 MB to 7 MB as the link slows (hypothesis above) are unexplained or unmeasured.
+- The extra 5 s in 3 of the 7 mid-session fall-back times and the fifth `worst` upgrade timestamp are unexplained; the
+  mechanism of the 171-fold re-send (above) is an inference from the counters, not a trace of p2panda-sync.
+- One failed sync session per unshaped state-growth run (`sync_failures` 1 at the reader in all four unshaped rows of the counters
+  run) was not examined.
+- **Hardware drift**: the CPU model differed between jobs (see the top) and the same state-growth test took 64 s and 44 s on two
+  runners. Only ratios inside one job are comparable.
