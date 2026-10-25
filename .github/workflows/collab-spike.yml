@@ -41,7 +41,9 @@ name: collab-spike
 # test says so. Each job checks both behaviours.
 on:
   push:
-    branches: [spike/collab, 'spike/collab-*']
+    # main too: this workflow first ran on main 7 hours after the merge, and every
+    # build job failed on a stale lockfile that Renovate's bumps had broken.
+    branches: [main, spike/collab, 'spike/collab-*']
     paths:
       - 'tools/collab-spike/**'
       - 'docs/collab-spec/**'
