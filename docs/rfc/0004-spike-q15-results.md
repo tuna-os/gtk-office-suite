@@ -1,6 +1,6 @@
 # RFC-0004 Spike Q15: the power level of a sender AT an event
 
-Date: 2026-10-25 · Tracks: [RFC-0004](0004-interoperable-document-collaboration.md), DCP draft 1 [§8.1](../DOCUMENT-COLLABORATION-SPEC.md) (reader rule) and §13 question 15 · Code: [`tools/collab-spike/dcp-matrix/`](../../tools/collab-spike/dcp-matrix/) (`src/levels.rs`, `read_report_with` in `src/store.rs`, `tests/levels.rs`), [`dcp-interop/src/power_at_event.rs`](../../tools/collab-spike/dcp-interop/src/power_at_event.rs) and `tests/power_at_event.rs` · Workflow: [`collab-spike-q15.yml`](../../.github/workflows/collab-spike-q15.yml) · Input: [Spike F](0004-spike-f-results.md), section "The previously unverified items" (the finding this closes)
+Date: 2026-10-25 · Tracks: [RFC-0004](0004-interoperable-document-collaboration.md), DCP draft 1 [§8.1](../DOCUMENT-COLLABORATION-SPEC.md) (reader rule) and §13 question 15 · Code: [`tools/collab-spike/dcp-matrix/`](../../tools/collab-spike/dcp-matrix/) (`src/levels.rs`, `read_report_with` in `src/store.rs`, `tests/levels.rs`), [`dcp-interop/src/power_at_event.rs`](../../tools/collab-spike/dcp-interop/src/power_at_event.rs) and `tests/power_at_event.rs` · Workflow: [`collab-spike.yml`](../../.github/workflows/collab-spike.yml) (the spike ran it as its own `collab-spike-q15.yml`, merged into it at integration; now the job `q15`, and the spike's `conformance` job is the `matrix` and `interop` jobs) · Input: [Spike F](0004-spike-f-results.md), section "The previously unverified items" (the finding this closes)
 
 **Every number below is from one CI run ("run A"), [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967)
 (workflow `collab-spike-q15`, branch `spike/collab-q15`, commit `92c7466`), 7 of 7 jobs green, unless another run is named. The whole workflow was run again on the
@@ -51,7 +51,7 @@ federation, or release builds.
 
 ## What was run
 
-Workflow [`collab-spike-q15.yml`](../../.github/workflows/collab-spike-q15.yml), all in `tools/collab-spike` after `eval "$(scripts/synapse-up.sh <profile>)"`:
+Workflow [`collab-spike.yml`](../../.github/workflows/collab-spike.yml) (job `q15`), all in `tools/collab-spike` after `eval "$(scripts/synapse-up.sh <profile>)"`:
 
 | Job | Commands |
 |---|---|
