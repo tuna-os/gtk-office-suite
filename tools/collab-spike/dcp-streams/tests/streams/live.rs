@@ -58,6 +58,12 @@ pub fn follow(
                             let _ = tx.send(Ev { idx, at, kind: EvKind::Data(r.items.len()) });
                         }
                     }
+                    // A transport error (the connection died under the poll) is not the end of the
+                    // reader: it resumes from the offset it holds. Anything else is.
+                    Err(e) if matches!(e, dcp_streams::http::HttpError::Transport(_)) => {
+                        let _ = tx.send(ev(EvKind::Reconnect(e.to_string())));
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    }
                     Err(e) => {
                         let _ = tx.send(ev(EvKind::Failed(e.to_string())));
                         return;

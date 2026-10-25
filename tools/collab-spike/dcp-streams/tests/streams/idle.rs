@@ -50,6 +50,11 @@ enum Rule {
     Age(Kill),
 }
 
+/// HTTP/2 keep-alive pings at a quarter of the proxy's timeout (15 s for 60 s).
+fn ping_every(after: Duration) -> Duration {
+    (after / 4).max(Duration::from_secs(1))
+}
+
 impl Rule {
     fn name(self) -> String {
         match self {
@@ -78,7 +83,7 @@ async fn between_requests(base: String, rule: Rule, keep_alive: bool, after: Dur
     // is reused (the binding's default drops it after 2 s, before any proxy could).
     tr.pool_idle = Duration::from_secs(600);
     if keep_alive {
-        tr.h2_keep_alive = Some(Duration::from_secs(15));
+        tr.h2_keep_alive = Some(ping_every(after));
     }
     let h = Http::with_transport(&fwd.url_for(&base), tr);
     let path = stream_path("idle");
@@ -126,7 +131,7 @@ async fn in_flight(
     let fwd = Fwd::start(rule.opts(&base, after)).await;
     let mut tr = transport();
     if keep_alive {
-        tr.h2_keep_alive = Some(Duration::from_secs(15));
+        tr.h2_keep_alive = Some(ping_every(after));
     }
     let h = Http::with_transport(&fwd.url_for(&base), tr);
     let direct = http(&base);
@@ -208,7 +213,7 @@ async fn a_proxy_that_closes_idle_connections_after_60_s() {
         poll_s
     });
     let h2 = wanted_alpn() == "h2";
-    let append_at = after + Duration::from_secs(15);
+    let append_at = after + after / 4;
     let watch = Duration::from_secs(80);
 
     // (rule, HTTP/2 keep-alive pings). Pings only exist in HTTP/2.

@@ -176,7 +176,7 @@ async fn bytes_per_request(base: &str, n: usize) -> Value {
     let h = http(&via);
     let path = stream_path("ovh");
     h.create(&path, JSON, None, false).await.unwrap();
-    let body = |i: usize| format!("{{\"i\":{i:05},\"pad\":\"{}\"}}", "x".repeat(600)).into_bytes();
+    let body = |i: usize| format!("{{\"i\":\"{i:05}\",\"pad\":\"{}\"}}", "x".repeat(600)).into_bytes();
     let body_len = body(0).len();
     for i in 0..20 {
         h.append(&path, JSON, body(i), None, false).await.unwrap();
