@@ -240,7 +240,7 @@ run" means no spike has tried it.
 | A WOPI client round-trips a version | Collabora Online opens a version, edits, saves, and the new version appears with correct parent | **Passed once**, Collabora Online 26.04.5.2, over an in-memory store (Spike D) and over the Matrix binding (interop results, Spike F churn: one version per `PutFile`) |
 | Lease expiry releases the document | Journey: kill the holder, assert another editor can take over after expiry | Passed at store level on Matrix, in memory, Durable Streams, iroh and p2panda (with clocks 60 s apart) and Nextcloud; **a 4 s lease failed across an OCM federation in 7 of 8 runs and passes at 20 s**. On the WOPI wire: host tests only |
 | A merged document round-trips ODT/DOCX with a truthful loss report | Existing oracle corpora on post-merge documents | Not run |
-| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default | Not run. Spike C: three nodes in one Flatpak build sandbox reach each other over loopback with and without `--share=network`; reaching another device needs `--share=network` in `finish-args`, which the repository's manifests grant only to the build |
+| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default | Not run. Spike C: three nodes in one Flatpak build sandbox reach each other over loopback with and without `--share=network`; reaching another device needs `--share=network` in `finish-args`, which the repository's manifests grant only to the build. Relay spike: the permission cannot be limited to ports; outside Flatpak a client needed outbound TCP 443 to the relay and, to be direct, UDP to its peers, and nothing else (no DNS with an IP-literal relay URL; nothing contacted with iroh's `Minimal` preset, while the `N0` preset publishes the endpoint id and home relay to `dns.iroh.link`). Not run inside an installed Flatpak on two devices |
 | Identity mapping between bindings is unambiguous | Test: a Matrix ID and an OCM address never resolve to the same principal unless explicitly linked | Not run |
 
 ## Phases and spikes
@@ -274,9 +274,10 @@ A draft-1 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-C
 
 ## Spike results
 
-Spikes A to F have each run **once**, in CI, on one build of each system, and say so. The results
-documents for B, C, E and F live on the branches `spike/collab-b`, `-c`, `-e` and `-f` until they are
-integrated.
+Spikes A to F have each run **once**, in CI, on one build of each system, and say so. Three further
+CI verification spikes (TLS, Q15 and relay, below) closed items the first six left open, each run on
+its own branch and workflow. The results documents for the three new spikes live on the branches
+`spike/collab-tls`, `spike/collab-q15` and `spike/collab-relay` until they are integrated.
 
 | Spike | Measured against | Verdict | Results |
 |---|---|---|---|
@@ -286,15 +287,22 @@ integrated.
 | **D: WOPI host adapter** | Collabora Online 26.04.5.2 (`collabora/code:latest`, 2026-10-23), one run | **GO with conditions** for L1 (versions and lease) on session-hosted editors. **L2 and L3 are not offered over WOPI**, and WOPI cannot express two heads or a merge. Conditions: a per-token base-version record, conflict detection by Collabora's timestamp header (`409` with `COOLStatusCode` 1010), a fixed 30-minute lock | [`0004-spike-d-results.md`](0004-spike-d-results.md) |
 | **E: OCM and WebDAV** | Nextcloud 34.0.5 and 35.0.2 (`nextcloud:*-apache`, by digest), PostgreSQL 16, one server and a two-server OCM federation, plain HTTP; CI run 40139702356, commit `cee909b9` | **The draft-1 outline is rejected as written** (an ETag is not a version: a replaced file kept its ETag in 16 of 20 trials; `If-Match` gave 0 or 1 winner; Nextcloud has no core lock provider and `LOCK` is authorised by its token alone). **A redesign is GO for L0 and L1 for `viewer` and `editor`**: a document is two folders, versions are create-only files with a sidecar, the lease is a create-if-absent log (0 double wins in 280 rounds). L2 and L3 not offered; `commenter` not expressible, and over a federation `owner` is not either; `created_by` is a claim (an editor named the owner). One server: 9 passed, 2 skipped; federation: 8 passed, 1 failed (4 s lease), 2 skipped | [`0004-spike-e-results.md`](0004-spike-e-results.md) |
 | **F: verification gaps** | Synapse 1.163.2 (relaxed, default, default-drained) and Collabora Online 26.04.5.2, matrix-sdk 0.19.1, debug builds; CI run 40142775201, commit `513086d`, 14 jobs green | **No binding failure on default rate limits**: the interop suites pass unchanged, because a fresh user's burst of 10 covers a journey. Forged updates and a demoted editor are stopped by the server or dropped by every reader. The two-read lease rule let one session acquire in 1 200 of 1 200 rounds, and fails when a limiter delays a write by seconds. Collabora's churn did not reach the limit (6, 14 and 40 events in 187 s), but on a spent budget it abandons a call after 3003 ms. **Three findings**: `WopiHost` accepted a `PutFile` on a conflicted document (fixed), the Matrix reader rule applied the current power levels to history, and the two-read rule has no bound under delayed writes | [`0004-spike-f-results.md`](0004-spike-f-results.md) |
+| **TLS: Durable Streams over TLS 1.3, HTTP/1.1 and HTTP/2** | The same two servers as Spike B (`@durable-streams/server` 0.3.9, Node v22; Go server v0.3.0), each behind Caddy v2.10.2 terminating TLS with a generated test CA; client: rustls 0.23.46 (`ring`), reqwest 0.12.28, hyper 1.12.0, h2 0.4.20; ubuntu-24.04, rustc 1.99.1, loopback. Correctness run [40182677787](https://github.com/tuna-os/gtk-office-suite/actions/runs/40182677787), commit `167aa64` (workflow `collab-spike-tls`): all four server and version jobs and the dependency job green. Measurements run [40178415302](https://github.com/tuna-os/gtk-office-suite/actions/runs/40178415302), commit `63e0bf9`: the four `tls-measure` jobs green (its four correctness jobs failed there on an openssl probe step, since fixed); run [40179818637](https://github.com/tuna-os/gtk-office-suite/actions/runs/40179818637), commit `8e4f228`, has the 32 passed, 0 failed count and the server access-log check | **GO for L0 to L2 over `https`, HTTP/1.1 and HTTP/2, on both servers, with conditions that are now spec 8.4 text.** The Spike B suite behaves the same over TLS; the client fails closed on a wrong CA, a wrong host name, an expired certificate, a server that offers no HTTP/2 when HTTP/2 is required, a plaintext URL and a redirect to `http`; `openssl s_client` agrees. TLS added nothing measurable to a warm connection (4.5 to 6.7 ms p50 Node, 2.6 to 2.8 ms Go); a handshake is 0.3 to 0.6 ms; 50 live readers used 1 HTTP/2 connection against 50 on HTTP/1.1. Findings: the Node server's `Location` names its plaintext origin; a proxy that is silent for 60 s costs a long poll 45 s and an HTTP/2 request 90 s without keep-alive PINGs, and 10 s with them; a server heartbeat longer than the proxy's idle timeout never completes a long poll for a reader that does not resume from its offset. One terminator (Caddy), one run, loopback | [`0004-spike-tls-results.md`](0004-spike-tls-results.md) |
+| **Q15: the power level of a sender at an event (Matrix)** | Synapse 1.163.2 (`matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322…`, and once `:latest`, also 1.163.2), SQLite, one homeserver, no federation; matrix-sdk 0.19.1; ubuntu-24.04, rustc 1.99.1, debug builds. Run A [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967), commit `92c7466`, and run B [40192035297](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192035297), commit `fb2dfa4` (workflow `collab-spike-q15`): 7 of 7 jobs green in both | **Answered on Synapse.** A reader that judges by the power level at the event got every verdict right in all six scenarios (65 reader runs, 0 wrong) under four ways of getting the level (`/context` raw and through matrix-sdk, a linked forward walk, a backward walk through `unsigned.prev_content`) and their hybrid, which is now spec 8.1; draft 1's current-table reader got 24 verdicts wrong in 10 runs and a trusting reader 20 in 8. `/context` was not rate limited (0 of 620 requests per job) and cost 2.7 to 5.6 ms and 4 KB per event on loopback. A plain forward walk fails silently when a demotion is hidden by `history_visibility: joined` (scenario 6, found by the spike), hence the `replaces_state` link check and `/context` for what the walk cannot place. One server, one homeserver: no federation, no other homeserver, no 429 on `/context` | [`0004-spike-q15-results.md`](0004-spike-q15-results.md) |
+| **Relay: dcp-p2p over a real `iroh-relay` on shaped links** | iroh 1.4.1, `iroh-relay` 1.4.1 (test CA), noq 1.4.0, iroh-blobs 0.103.1, p2panda 0.7.1; ubuntu-24.04 (kernel 6.17.0-1022-azure), 4 vCPU, Linux network namespaces with `tc netem` (50 and 150 ms RTT, 1 % and 5 % loss, 1 Mbit/s, and all three), relay-only (firewall drops all peer-to-peer packets) and direct modes. Run [40179059127](https://github.com/tuna-os/gtk-office-suite/actions/runs/40179059127), commit `53e2285` (workflow `collab-spike-relay`): all jobs green (`check`, `probe`, `build`, 14 `wan`, `footprint`); run [40192160497](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192160497), commit `f45846a`: in-process relay path data and state-growth counters, green | **Relay and path behaviour measured; several 8.5 sentences corrected.** All 154 journey runs (11 journeys, 2 modes, 7 conditions) passed. Spike C's "relay-only" run had synced over a direct path (its latency comparison compared two direct connections); with peer-to-peer UDP dropped no IP path was ever opened (1,515 connections). An upgraded connection survived the relay being killed (7 of 7); a relay-only one recovered 3.5 to 22.6 s after the relay returned; a silently cut direct path took 15 to 21 s to fail over. **A lease write took 437 to 507 ms median at 150 ms RTT, so the 500 ms settle is too short on a WAN (now at least 2 s).** The reader of p2panda-spaces is CPU-bound without a rate limit and received 438 MB for a 2.1 MB state at 1,000 entries. A client needs TCP 443 to the relay and optionally UDP to peers; iroh's `Minimal` preset contacts nothing, the `N0` preset publishes the endpoint id and home relay. No NAT, no jitter, no real WAN, no n0 relay carrying dcp-p2p traffic | [`0004-spike-relay-results.md`](0004-spike-relay-results.md) |
 
 What the spikes changed in the draft is listed in the [spec's changelog](../DOCUMENT-COLLABORATION-SPEC.md#changelog):
 on-wire changes (`dcp` 1: a lease `renewal` counter; two additive locator types), the Matrix
 power-level table, the rate and size rules, the time source, lease rules 3 and 9 to 13, the WOPI
 call order, headers, conflict form and refusal on a conflicted document, and a replacement of the
-OCM and WebDAV binding, plus two new bindings (8.4, 8.5). What the spikes do not show: L3
-presence, any update algorithm profile, a real network or TLS for any binding but WebDAV's
-plain HTTP, a second implementation of any binding, interoperation with real Matrix clients, other
-WOPI clients, other OCM servers or ownCloud, and Keyhive.
+OCM and WebDAV binding, plus two new bindings (8.4, 8.5). The three CI verification spikes added
+the at-event reader rule (8.1), transport and live-read rules (8.4) and path, settle-interval and
+port text (8.5), and changed no object. What the spikes do not show: L3
+presence, any update algorithm profile, a network that is not loopback or emulated for any binding
+but WebDAV's plain HTTP (Durable Streams was run over TLS on loopback only; iroh through a relay
+in network namespaces only, with no NAT or jitter; Matrix, WOPI and OCM over TLS not at all), a
+second implementation of any binding, interoperation with real Matrix clients, other WOPI
+clients, other OCM servers or ownCloud, and Keyhive.
 
 ## Open questions
 
@@ -311,7 +319,8 @@ Each answer below is **evidence, not a decision**; the owner decides.
    control, media and encryption, but needs raised rate limits for inline updates (0.2 events per
    second by default), has no `commenter`, and a new device reads no history. The iroh and p2panda
    binding (8.5) is the weakest today: three of p2panda 0.7.1's pieces cannot be used as published,
-   leases cannot be exclusive, and inline updates stop being usable past a few hundred entries.
+   leases cannot be exclusive and need a settle interval of at least 2 s on a WAN, a cut direct path
+   takes 15 to 20 s to fail over, and inline updates stop being usable past a few hundred entries.
    OCM with WebDAV (8.3) is L1 only. So the evidence supports Matrix or Durable Streams first and
    the peer-to-peer binding last.
 2. **Is a Matrix account an acceptable requirement, or must a Matrix-free binding exist from the
@@ -348,6 +357,24 @@ Each answer below is **evidence, not a decision**; the owner decides.
 7. **New:** how many bindings should the specification keep? Each is feasible, and each adds a
    section that one implementation has read. Holding 8.5 back until p2panda-spaces can change a
    role and scale, or keeping 8.3 as L1 only, would shrink what has to be kept honest.
+8. **Closed on one homeserver (spec question 15, [Spike Q15](#spike-results)): how does a Matrix
+   reader know a sender's power level at the event?** From the room's own `m.room.power_levels`
+   events in the `/messages` pass, trusted only while each names the previous one in
+   `unsigned.replaces_state`, or from `GET /rooms/{id}/context/{eventId}?limit=0` for what that
+   cannot place; an event whose level cannot be established is dropped, never judged by the
+   current table. The measured cost on Synapse 1.163.2 is 0 extra requests in the usual case and
+   2.7 to 5.6 ms and 4 KB per event otherwise, with no rate limit. Still open: other homeservers,
+   a room that federates across two homeservers, a `429` on `/context`, and incremental `/sync`
+   readers.
+9. **New: which trust anchor does a Durable Streams client use?** The TLS spike ran with a
+   configured CA and no built-in roots; using the platform's roots, and what a product does on
+   certificate rotation, is a decision. Real load balancers and CDNs were not run (their idle
+   rules were emulated), so the 30 s server heartbeat and the 15 s HTTP/2 PING in spec 8.4 are
+   measured against an emulated 60 s proxy only.
+10. **New: is the iroh binding acceptable with a 2 s settle and a 15 to 20 s path fail-over?** The
+    relay spike measured both on routed namespaces with no NAT; hole-punch success behind real
+    NATs and the behaviour on a real WAN are open, and so is whether a host-name relay URL, more
+    than one relay or a relay behind an HTTP proxy works.
 
 ## Not verified
 
@@ -363,10 +390,13 @@ Each answer below is **evidence, not a decision**; the owner decides.
   added the interop suites on default and spent `rc_message` budgets; `rc_joins`, `rc_invites`,
   `rc_login` and `rc_registration` were not pushed.)
 - What no spike ran, each results document ending with its own list: any network beyond loopback and
-  any TLS for the Durable Streams and iroh bindings, a WAN, NAT traversal and relays; a second
-  implementation of any binding; Matrix federation and real Matrix clients; a second WOPI client,
-  WOPI proof keys and two real Collabora sessions; ownCloud and any OCM server but Nextcloud's
-  sender; L3 presence; and a `loro/1` update profile.
+  namespaces with `tc netem` for the Durable Streams and iroh bindings, and any TLS for Matrix, WOPI
+  and OCM; a TLS terminator other than Caddy 2.10.2, the platform trust store, mutual TLS,
+  revocation checking and HTTP/3 for Durable Streams; a WAN, NAT traversal, jitter and production
+  relays for iroh; a second implementation of any binding; Matrix federation, a homeserver other
+  than Synapse 1.163.2 and real Matrix clients; a second WOPI client, WOPI proof keys and two real
+  Collabora sessions; ownCloud and any OCM server but Nextcloud's sender; L3 presence; and a
+  `loro/1` update profile.
 - Whether OCM defines anything beyond shares and access that overlaps versions or leases. (Spike E
   found none that it needed; it did not search the OCM text for one.)
 - Whether OCM addresses and Matrix IDs could collide.
