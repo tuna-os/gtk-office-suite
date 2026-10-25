@@ -137,7 +137,7 @@ Proposed additions to **8.4** (and one to 4.3); the spec file itself was not edi
 | Correctness matrix, first attempt | [40177622859](https://github.com/tuna-os/gtk-office-suite/actions/runs/40177622859) | `02af576` | failed in the openssl step (a negative probe exits non-zero under `bash -e`), fixed |
 | Measurements (4 jobs) | [40178415302](https://github.com/tuna-os/gtk-office-suite/actions/runs/40178415302) | `63e0bf9` | `tls-measure` x4 **success**; its `tls` jobs failed on the same openssl step |
 | Correctness matrix, deps | [40179818637](https://github.com/tuna-os/gtk-office-suite/actions/runs/40179818637) | `8e4f228` | `deps` success; Node h1, Node h2, Go h1 **success**; Go h2 failed only in the final SSE probe step (the probe started a second Caddy with another CA than the run's; the journeys, openssl, log check passed) |
-| Correctness matrix, after the probe fix | [40182677787](https://github.com/tuna-os/gtk-office-suite/actions/runs/40182677787) | `167aa64` | queued when this was written; its conclusion is in the final report |
+| Correctness matrix, after the probe fix | [40182677787](https://github.com/tuna-os/gtk-office-suite/actions/runs/40182677787) | `167aa64` | `deps`, Node h1 and **Go h2 success** (the probe step now passes: Go h2 is green end to end); Node h2 and Go h1 were still queued when this was written (both passed in run 40179818637 at `8e4f228`) |
 
 ## Reproducing
 
