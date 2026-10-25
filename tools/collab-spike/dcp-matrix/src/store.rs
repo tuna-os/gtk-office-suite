@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::io::Cursor;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -40,6 +40,7 @@ use tokio::sync::{watch, Mutex};
 use crate::config::{ClockSource, MatrixConfig};
 use crate::error::{classify, to_store, Class};
 use crate::queue::{Job, RoomQueue, Stats, StatsSnapshot};
+use crate::levels::{self, Level, LevelStats, Levels, Mark, SenderCheck, SenderRule, Target};
 use crate::state::{self, Snapshot, ENCRYPTED, LEVEL_EDITOR, LEVEL_OWNER};
 use crate::synapse::{self, Registered};
 
@@ -68,6 +69,19 @@ pub struct ReadReport {
     /// DCP events from a sender below the editor level, in a room whose
     /// power-level table does not stop the server from accepting them.
     pub rejected_unauthorised: usize,
+    /// The ids of the events counted in `rejected_unauthorised`.
+    pub unauthorised_ids: Vec<String>,
+    /// Events dropped because the rule could not establish the power levels
+    /// at the event (no table before it in the history read, or no
+    /// state-at-event answer with one).
+    pub rejected_unresolved: usize,
+    /// What the rule found for every version and update it judged (none for
+    /// [`SenderRule::Trust`]).
+    pub checks: Vec<SenderCheck>,
+    /// Time spent establishing the senders' levels, milliseconds.
+    pub sender_check_ms: u64,
+    /// The state-at-event requests this read made.
+    pub level_stats: LevelStats,
     /// DCP events whose content failed validation or named another author.
     pub rejected_invalid: usize,
     /// DCP events sent unencrypted into an encrypted room.
@@ -82,6 +96,8 @@ struct Item {
     ty: String,
     content: Value,
     encrypted: bool,
+    /// 1 is the newest event of the pass; larger is older.
+    pos: usize,
 }
 
 struct Inner {
@@ -97,6 +113,9 @@ struct Inner {
     init_warnings: std::sync::Mutex<Vec<String>>,
     /// `(origin_server_ts of our newest own event, local instant we learned it)`.
     clock_sample: std::sync::Mutex<Option<(u64, Instant)>>,
+    levels: Levels,
+    /// `MatrixConfig::level_concurrency`, changeable with [`MatrixStore::set_level_concurrency`].
+    level_concurrency: AtomicUsize,
 }
 
 impl Drop for Inner {
@@ -154,6 +173,8 @@ impl MatrixStore {
             sync_ticks: ticks,
             init_warnings: std::sync::Mutex::new(Vec::new()),
             clock_sample: std::sync::Mutex::new(None),
+            levels: Levels::default(),
+            level_concurrency: AtomicUsize::new(cfg.level_concurrency),
             cfg,
         });
         let store = MatrixStore { inner };
@@ -262,17 +283,39 @@ impl MatrixStore {
     }
 
     /// Retry on `M_LIMIT_EXCEEDED` only, honouring `retry_after_ms`.
-    async fn retry_rl<T, E, F, Fut>(&self, mut f: F) -> std::result::Result<T, matrix_sdk::Error>
+    async fn retry_rl<T, E, F, Fut>(&self, f: F) -> std::result::Result<T, matrix_sdk::Error>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = std::result::Result<T, E>>,
+        E: Into<matrix_sdk::Error>,
+    {
+        self.retry_rl_counted(false, f).await
+    }
+
+    /// [`Self::retry_rl`]; with `level_request` every attempt is also counted in
+    /// the state-at-event counters (requests, 429s, waits, time in requests).
+    async fn retry_rl_counted<T, E, F, Fut>(
+        &self,
+        level_request: bool,
+        mut f: F,
+    ) -> std::result::Result<T, matrix_sdk::Error>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = std::result::Result<T, E>>,
         E: Into<matrix_sdk::Error>,
     {
         let cfg = &self.inner.cfg;
+        let lc = &self.inner.levels.counters;
         let start = Instant::now();
         let mut backoff = cfg.backoff_min;
         loop {
-            let e: matrix_sdk::Error = match f().await {
+            let attempt = Instant::now();
+            let outcome = f().await;
+            if level_request {
+                lc.requests.fetch_add(1, Ordering::Relaxed);
+                lc.request_ms.fetch_add(attempt.elapsed().as_millis() as u64, Ordering::Relaxed);
+            }
+            let e: matrix_sdk::Error = match outcome {
                 Ok(v) => return Ok(v),
                 Err(e) => e.into(),
             };
@@ -284,6 +327,10 @@ impl MatrixStore {
                 return Err(e);
             }
             self.inner.stats.waited_ms.fetch_add(wait.as_millis() as u64, Ordering::Relaxed);
+            if level_request {
+                lc.rate_limited.fetch_add(1, Ordering::Relaxed);
+                lc.waited_ms.fetch_add(wait.as_millis() as u64, Ordering::Relaxed);
+            }
             tokio::time::sleep(wait).await;
         }
     }
@@ -420,10 +467,14 @@ impl MatrixStore {
     }
 
     /// One backwards pass over the room timeline: every DCP item that could be
-    /// decrypted, plus how many encrypted events could not be.
-    async fn read_timeline(&self, room: &Room) -> Result<(Vec<Item>, usize)> {
+    /// decrypted, the `m.room.create` and `m.room.power_levels` events (the
+    /// tables the sender rules walk), and how many encrypted events could not
+    /// be decrypted.
+    async fn read_timeline(&self, room: &Room) -> Result<(Vec<Item>, Vec<Mark>, usize)> {
         let mut items = Vec::new();
+        let mut marks = Vec::new();
         let mut utd = 0usize;
+        let mut pos = 0usize;
         let mut from: Option<String> = None;
         for _ in 0..100_000 {
             let page = self
@@ -436,12 +487,17 @@ impl MatrixStore {
                 .await
                 .map_err(|e| to_store(e, "read history"))?;
             for ev in &page.chunk {
+                pos += 1;
                 if ev.kind.is_utd() {
                     utd += 1;
                     continue;
                 }
                 let Ok(raw) = serde_json::from_str::<Value>(ev.raw().json().get()) else { continue };
                 let Some(ty) = raw["type"].as_str() else { continue };
+                if (ty == levels::CREATE || ty == levels::POWER_LEVELS) && raw["state_key"].as_str() == Some("") {
+                    marks.push(Mark { pos, event: raw });
+                    continue;
+                }
                 if !ty.starts_with("org.tunaos.dcp.") {
                     continue;
                 }
@@ -454,6 +510,7 @@ impl MatrixStore {
                     ty: ty.to_owned(),
                     content: raw["content"].clone(),
                     encrypted: ev.encryption_info().is_some(),
+                    pos,
                 });
             }
             match page.end {
@@ -461,17 +518,17 @@ impl MatrixStore {
                 _ => break,
             }
         }
-        Ok((items, utd))
+        Ok((items, marks, utd))
     }
 
     /// `read_timeline`, waiting up to `utd_wait` for room keys that were sent
     /// but have not reached this device yet.
-    async fn read_timeline_waiting(&self, room: &Room) -> Result<(Vec<Item>, usize)> {
+    async fn read_timeline_waiting(&self, room: &Room) -> Result<(Vec<Item>, Vec<Mark>, usize)> {
         let end = Instant::now() + self.inner.cfg.utd_wait;
         loop {
-            let (items, utd) = self.read_timeline(room).await?;
+            let (items, marks, utd) = self.read_timeline(room).await?;
             if utd == 0 || Instant::now() >= end {
-                return Ok((items, utd));
+                return Ok((items, marks, utd));
             }
             if !self.inner.cfg.background_sync {
                 let _ = self.inner.client.sync_once(SyncSettings::new().timeout(Duration::ZERO)).await;
@@ -480,17 +537,205 @@ impl MatrixStore {
         }
     }
 
-    /// Read versions and updates in one pass and say what was filtered out.
+    /// The room state at `event_id` as the homeserver reports it
+    /// (`GET /rooms/{id}/context/{eventId}?limit=0`, its `state`); with
+    /// `filtered` only the create and power-levels events are asked for. One
+    /// HTTP request, counted in [`Self::level_stats`]; a 429 is waited out.
+    /// Public for tests and measurements.
+    pub async fn state_at_event(&self, doc: &DocId, event_id: &str, filtered: bool) -> Result<Vec<Value>> {
+        let room = self.room_for(doc).await?;
+        self.context_raw(room.room_id().as_str(), event_id, filtered).await
+    }
+
+    async fn context_raw(&self, room_id: &str, event_id: &str, filtered: bool) -> Result<Vec<Value>> {
+        let cfg = &self.inner.cfg;
+        let lc = &self.inner.levels.counters;
+        let mut url = reqwest::Url::parse(&cfg.homeserver).map_err(|e| StoreError::Invalid(format!("homeserver url: {e}")))?;
+        url.path_segments_mut()
+            .map_err(|_| StoreError::Invalid("homeserver url cannot take a path".into()))?
+            .extend(["_matrix", "client", "v3", "rooms", room_id, "context", event_id]);
+        url.query_pairs_mut().append_pair("limit", "0");
+        if filtered {
+            url.query_pairs_mut().append_pair("filter", &json!({ "types": [levels::POWER_LEVELS, levels::CREATE] }).to_string());
+        }
+        let token = self.inner.client.access_token().ok_or_else(|| StoreError::Invalid("no access token".into()))?;
+        let start = Instant::now();
+        let mut backoff = cfg.backoff_min;
+        loop {
+            let attempt = Instant::now();
+            let resp = self
+                .inner
+                .http
+                .get(url.clone())
+                .bearer_auth(&token)
+                .send()
+                .await
+                .map_err(|e| StoreError::Transport(format!("context: {e}")))?;
+            let status = resp.status();
+            let body = resp.bytes().await.map_err(|e| StoreError::Transport(format!("context body: {e}")))?;
+            lc.requests.fetch_add(1, Ordering::Relaxed);
+            lc.request_ms.fetch_add(attempt.elapsed().as_millis() as u64, Ordering::Relaxed);
+            lc.bytes.fetch_add(body.len() as u64, Ordering::Relaxed);
+            let parsed: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+            if status.is_success() {
+                return Ok(parsed["state"].as_array().cloned().unwrap_or_default());
+            }
+            match status.as_u16() {
+                429 => {
+                    lc.rate_limited.fetch_add(1, Ordering::Relaxed);
+                    self.inner.stats.rate_limited.fetch_add(1, Ordering::Relaxed);
+                    let wait = parsed["retry_after_ms"].as_u64().map(Duration::from_millis).unwrap_or(backoff);
+                    backoff = (backoff * 2).min(cfg.backoff_max);
+                    if start.elapsed() + wait > cfg.send_deadline {
+                        return Err(StoreError::RateLimited { retry_after_ms: Some(wait.as_millis() as u64) });
+                    }
+                    lc.waited_ms.fetch_add(wait.as_millis() as u64, Ordering::Relaxed);
+                    self.inner.stats.waited_ms.fetch_add(wait.as_millis() as u64, Ordering::Relaxed);
+                    tokio::time::sleep(wait).await;
+                }
+                403 => return Err(StoreError::Forbidden(format!("context of {event_id}: {parsed}"))),
+                404 => return Err(StoreError::NotFound(format!("context of {event_id}: {parsed}"))),
+                s => return Err(StoreError::Transport(format!("context of {event_id}: HTTP {s}: {parsed}"))),
+            }
+        }
+    }
+
+    /// The state at `event_id` through matrix-sdk's `Room::event_with_context`.
+    async fn context_sdk(&self, room: &Room, event_id: &str) -> Result<Vec<Value>> {
+        let eid = EventId::parse(event_id).map_err(|e| StoreError::Invalid(format!("event id: {e}")))?;
+        let resp = self
+            .retry_rl_counted(true, || room.event_with_context(&eid, false, UInt::from(0u32), None))
+            .await
+            .map_err(|e| to_store(e, "event context"))?;
+        Ok(resp.state.iter().filter_map(|r| serde_json::from_str(r.json().get()).ok()).collect())
+    }
+
+    /// The power levels at each target for the context rules: from the cache
+    /// (state at an event never changes) or one request per event, up to
+    /// `level_concurrency` at a time.
+    async fn resolve_by_context(
+        &self,
+        room: &Room,
+        rule: SenderRule,
+        targets: &[Target],
+    ) -> Result<HashMap<String, Option<Level>>> {
+        let lv = &self.inner.levels;
+        let mut out = HashMap::new();
+        let mut todo: Vec<&Target> = Vec::new();
+        for t in targets {
+            match lv.get(rule, &t.id) {
+                Some(l) => {
+                    lv.counters.cache_hits.fetch_add(1, Ordering::Relaxed);
+                    out.insert(t.id.clone(), Some(l));
+                }
+                None => todo.push(t),
+            }
+        }
+        for chunk in todo.chunks(self.inner.level_concurrency.load(Ordering::Relaxed).max(1)) {
+            let mut set = tokio::task::JoinSet::new();
+            for t in chunk {
+                let (this, room, t) = (self.clone(), room.clone(), (*t).clone());
+                set.spawn(async move {
+                    let state = match rule {
+                        SenderRule::SdkContext => this.context_sdk(&room, &t.id).await,
+                        _ => this.context_raw(room.room_id().as_str(), &t.id, true).await,
+                    };
+                    (t, state)
+                });
+            }
+            while let Some(joined) = set.join_next().await {
+                let (t, state) = joined.map_err(|e| StoreError::Transport(format!("state-at-event task: {e}")))?;
+                let level = levels::power_from_state(&state?).map(|p| levels::level_in(&p, &t.sender, &t.wire_type));
+                if let Some(l) = level {
+                    lv.put(rule, &t.id, l);
+                }
+                out.insert(t.id, level);
+            }
+        }
+        Ok(out)
+    }
+
+    async fn resolve_levels(
+        &self,
+        room: &Room,
+        rule: SenderRule,
+        snap: &Snapshot,
+        marks: &[Mark],
+        targets: &[Target],
+    ) -> Result<HashMap<String, Option<Level>>> {
+        match rule {
+            SenderRule::Trust | SenderRule::CurrentTable => Ok(HashMap::new()),
+            SenderRule::TimelineWalk => Ok(levels::walk_forward(marks, targets, true)),
+            SenderRule::TimelineWalkUnverified => Ok(levels::walk_forward(marks, targets, false)),
+            SenderRule::PrevContentWalk => Ok(levels::walk_backward(marks, targets, &snap.power)),
+            SenderRule::Context | SenderRule::SdkContext => self.resolve_by_context(room, rule, targets).await,
+            SenderRule::Hybrid => {
+                // The walk is the server's own order only when every event came from this homeserver.
+                let mut out = if levels::non_federated(marks) {
+                    levels::walk_forward(marks, targets, true)
+                } else {
+                    HashMap::new()
+                };
+                let unplaced: Vec<Target> =
+                    targets.iter().filter(|t| out.get(&t.id).copied().flatten().is_none()).cloned().collect();
+                if !unplaced.is_empty() {
+                    out.extend(self.resolve_by_context(room, SenderRule::Context, &unplaced).await?);
+                }
+                Ok(out)
+            }
+        }
+    }
+
+    /// What the state-at-event requests of this store have cost so far.
+    pub fn level_stats(&self) -> LevelStats {
+        self.inner.levels.stats()
+    }
+
+    /// How many state-at-event requests one read may have in flight (the
+    /// context rules); 1 is one after the other.
+    pub fn set_level_concurrency(&self, n: usize) {
+        self.inner.level_concurrency.store(n.max(1), Ordering::Relaxed);
+    }
+
+    /// How many `(rule, event)` levels the store has cached.
+    pub fn cached_levels(&self) -> usize {
+        self.inner.levels.len()
+    }
+
+    /// Forget the cached levels (to measure a cold read again).
+    pub fn clear_level_cache(&self) {
+        self.inner.levels.clear();
+    }
+
+    /// Read versions and updates in one pass and say what was filtered out,
+    /// judging senders by the configured [`SenderRule`].
     pub async fn read_report(&self, doc: &DocId) -> Result<ReadReport> {
+        self.read_report_with(doc, self.inner.cfg.sender_rule).await
+    }
+
+    /// [`Self::read_report`] under `rule` instead of the configured one: the
+    /// same events judged by two rules, which is how the tests compare them.
+    pub async fn read_report_with(&self, doc: &DocId, rule: SenderRule) -> Result<ReadReport> {
         let room = self.room_for(doc).await?;
         let snap = self.snapshot_of(&room).await?;
-        let (items, utd) = self.read_timeline_waiting(&room).await?;
+        let (items, marks, utd) = self.read_timeline_waiting(&room).await?;
         let mut rep = ReadReport { undecryptable: utd, ..Default::default() };
-        // When the server gates `m.room.encrypted` at the editor level it has
-        // already refused unauthorised senders at send time, and a later
-        // demotion or removal must not hide what the member legitimately
-        // published. When it does not (the spec's table taken literally), the
-        // only defence is the reader's check against the *current* levels.
+        let wire_type = |it: &Item| if it.encrypted { ENCRYPTED.to_owned() } else { it.ty.clone() };
+        let targets: Vec<Target> = items
+            .iter()
+            .filter(|it| (it.ty == state::VERSION || it.ty == state::UPDATE) && !(snap.encrypted && !it.encrypted))
+            .map(|it| Target { pos: it.pos, id: it.id.clone(), sender: it.sender.clone(), wire_type: wire_type(it) })
+            .collect();
+        let before = self.inner.levels.stats();
+        let started = Instant::now();
+        let resolved = self.resolve_levels(&room, rule, &snap, &marks, &targets).await?;
+        rep.sender_check_ms = started.elapsed().as_millis() as u64;
+        rep.level_stats = self.inner.levels.stats().since(before);
+        // `CurrentTable` is draft 1's rule: when the server gates
+        // `m.room.encrypted` at the editor level it has already refused
+        // unauthorised senders at send time, so trust it; when it does not,
+        // judge by the room's current levels. Wrong in both directions once
+        // levels change (Spike F, Spike Q15).
         let gated = snap.power.server_gates_encrypted_timeline();
         for it in items {
             if it.ty != state::VERSION && it.ty != state::UPDATE {
@@ -500,9 +745,38 @@ impl MatrixStore {
                 rep.rejected_plaintext += 1;
                 continue;
             }
-            if self.inner.cfg.reader_checks_senders && !gated && snap.power.level_of(&it.sender) < LEVEL_EDITOR {
-                rep.rejected_unauthorised += 1;
-                continue;
+            match rule {
+                SenderRule::Trust => {}
+                SenderRule::CurrentTable => {
+                    let lv = levels::level_in(&snap.power, &it.sender, &wire_type(&it));
+                    rep.checks.push(SenderCheck { id: it.id.clone(), sender: it.sender.clone(), level: Some(lv) });
+                    if !gated && lv.level < LEVEL_EDITOR {
+                        rep.rejected_unauthorised += 1;
+                        rep.unauthorised_ids.push(it.id.clone());
+                        continue;
+                    }
+                }
+                SenderRule::Context
+                | SenderRule::SdkContext
+                | SenderRule::TimelineWalk
+                | SenderRule::PrevContentWalk
+                | SenderRule::Hybrid
+                | SenderRule::TimelineWalkUnverified => {
+                    let lv = resolved.get(&it.id).copied().flatten();
+                    rep.checks.push(SenderCheck { id: it.id.clone(), sender: it.sender.clone(), level: lv });
+                    match lv {
+                        Some(l) if l.permitted() => {}
+                        Some(_) => {
+                            rep.rejected_unauthorised += 1;
+                            rep.unauthorised_ids.push(it.id.clone());
+                            continue;
+                        }
+                        None => {
+                            rep.rejected_unresolved += 1;
+                            continue;
+                        }
+                    }
+                }
             }
             let mut invalid = false;
             if it.ty == state::VERSION {
@@ -724,7 +998,7 @@ impl DocumentStore for MatrixStore {
         let request = assign!(create_room::v3::Request::new(), {
             name: Some(meta.title.clone()),
             preset: Some(create_room::v3::RoomPreset::PrivateChat),
-            creation_content: Some(raw_json(json!({"type": state::ROOM_TYPE, "m.federate": false}))?),
+            creation_content: Some(raw_json(json!({"type": state::ROOM_TYPE, "m.federate": self.inner.cfg.federate}))?),
             initial_state: initial_state,
             power_level_content_override: Some(raw_json(self.power_level_override())?),
             room_version: room_version,

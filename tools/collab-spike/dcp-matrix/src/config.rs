@@ -4,6 +4,8 @@
 
 use std::time::Duration;
 
+use crate::levels::SenderRule;
+
 /// Where `now_ms` (spec lease rule 1) comes from.
 ///
 /// Matrix has no clock endpoint: `origin_server_ts` exists only on an event the
@@ -56,13 +58,23 @@ pub struct MatrixConfig {
     /// a kick made elsewhere reaches matrix-sdk only with the next /sync, and
     /// anything sent in between is encrypted for the removed device too.
     pub guard_stale_members: bool,
-    /// Reader rule of spec 8.1: when an encrypted room's power-levels table
-    /// does not gate `m.room.encrypted` at the editor level, drop DCP timeline
-    /// events (versions and updates) from senders below level 50. A test knob
-    /// like `guard_stale_members`: turn it off to see what a reader without the
-    /// rule accepts (the negative control of the forged-version journey). It
-    /// never disables the `created_by.principal == sender` check on versions.
-    pub reader_checks_senders: bool,
+    /// Reader rule of spec 8.1: which power level a DCP timeline event's sender
+    /// is judged by (versions and updates from a sender below the editor level
+    /// are dropped). [`SenderRule::default`] is the level in force AT the
+    /// event; the other rules are the alternatives measured in
+    /// `docs/rfc/0004-spike-q15-results.md` and the negative controls
+    /// ([`SenderRule::CurrentTable`] is draft 1's rule, [`SenderRule::Trust`]
+    /// checks nothing). A test knob like `guard_stale_members`. No rule
+    /// disables the `created_by.principal == sender` check on versions.
+    pub sender_rule: SenderRule,
+    /// How many state-at-event requests a read may have in flight at once
+    /// (the context rules only; 1 is one after the other).
+    pub level_concurrency: usize,
+    /// Create documents that other homeservers may join (`m.federate` true).
+    /// The default is `false`: every event of the room then comes from this
+    /// homeserver, its stream order is the order of its state, and a reader
+    /// may walk the room's own power-levels events (spec 8.1, question 15).
+    pub federate: bool,
     /// Room version for new documents; `None` takes the server default.
     pub room_version: Option<String>,
     /// Keep the SDK's state and crypto store in this directory (needs the
@@ -86,7 +98,9 @@ impl MatrixConfig {
             enforce_encrypted_pl: true,
             clock: ClockSource::Calibrated,
             guard_stale_members: true,
-            reader_checks_senders: true,
+            sender_rule: SenderRule::default(),
+            level_concurrency: 1,
+            federate: false,
             room_version: None,
             store_dir: None,
         }

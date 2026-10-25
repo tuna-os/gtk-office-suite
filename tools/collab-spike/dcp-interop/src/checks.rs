@@ -19,7 +19,6 @@ use dcp_conformance::{
 };
 use dcp_core::lease::{self, Acquire, Claim, Pause, Release, Settle, MATRIX_SETTLE_MS};
 use dcp_core::schema::{self, Kind};
-use dcp_core::view::Reason;
 use dcp_core::{graph, updates, Author, DocumentStore, LeaseState, Role, StoreError, Update, Version};
 use dcp_wopi::timefmt::iso8601_ms;
 use serde_json::Value;
@@ -1092,12 +1091,13 @@ pub async fn forged_update_from_a_viewer_is_dropped_by_readers(rig: &Rig) -> R {
 ///   it.
 /// * Reader side: in a room whose table does not gate `m.room.encrypted` the
 ///   server accepts the forged version and update, and every reader drops
-///   them. The reader rule judges a sender by the room's CURRENT power levels,
-///   so it also drops what the ex-editor legitimately published before the
-///   demotion, and the owner's save that was built on it then has an unknown
-///   parent and is rejected too: the readers fall back to the first version.
-///   That is what the code does and what this asserts; it is a finding (spec
-///   8.1 reader rule) and not what a demotion should do.
+///   them, and ONLY them: the reader judges a sender by the power level in
+///   force at the event (spec 8.1, Spike Q15), so what the ex-editor
+///   legitimately published before the demotion stays listed and the owner's
+///   save built on it is the head. (With draft 1's rule, the room's CURRENT
+///   levels, the readers dropped the earlier version too and fell back to the
+///   first one: Spike F. `tests/power_at_event.rs` keeps that rule as the
+///   negative control.)
 pub async fn a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through(rig: &Rig) -> R {
     let doc = &rig.doc;
     let owner = &rig.handles.owner;
@@ -1193,30 +1193,24 @@ pub async fn a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through
             );
             ensure!(report.rejected_unauthorised == 0, "{who:?}: a gated room has nothing for the readers to drop as unauthorised, got {}", report.rejected_unauthorised);
         } else {
-            // The finding: the current-levels rule also drops the earlier version.
+            // The level in force at each event: the earlier version and the
+            // owner's save stay, exactly what the ex-editor sent after the
+            // demotion is dropped.
             ensure!(
-                !listed.contains(&v2.id) && view.head_ids() == [rig.first.as_str()],
-                "{who:?}: expected the current-levels reader rule to drop the ex-editor's earlier version and fall back to the first version; listed {listed:?}, heads {:?}",
-                view.head_ids()
-            );
-            ensure!(
-                view.rejected.iter().any(|r| r.id == marker.id && matches!(r.reason, Reason::Parents(_))),
-                "{who:?}: expected the owner's save to be rejected for its unknown parent, rejected: {:?}",
+                listed.contains(&v2.id) && view.head_ids() == [marker.id.as_str()],
+                "{who:?}: the ex-editor's version from before the demotion must stay listed and the owner's save be the head; listed {listed:?}, heads {:?}, rejected {:?}",
+                view.head_ids(),
                 view.rejected
             );
             ensure!(
-                report.rejected_unauthorised == 1 + accepted.len(),
-                "{who:?}: expected {} events dropped as unauthorised (the earlier version and {accepted:?}), got {}",
-                1 + accepted.len(),
-                report.rejected_unauthorised
+                report.rejected_unauthorised == accepted.len() && report.rejected_unresolved == 0,
+                "{who:?}: expected exactly the {} events the ex-editor sent after the demotion ({accepted:?}) dropped as unauthorised, got {} (unresolved {}, ids {:?})",
+                accepted.len(),
+                report.rejected_unauthorised,
+                report.rejected_unresolved,
+                report.unauthorised_ids
             );
         }
-    }
-    if !gated {
-        println!(
-            "FINDING (draft-0 room): after the demotion every reader drops the ex-editor's pre-demotion version {} and so rejects the owner's later save {} (unknown parent): the document reads as its first version",
-            v2.id, marker.id
-        );
     }
     Ok(())
 }

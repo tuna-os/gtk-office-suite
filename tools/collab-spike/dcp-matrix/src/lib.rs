@@ -7,6 +7,7 @@
 
 mod config;
 mod error;
+pub mod levels;
 mod queue;
 pub mod state;
 mod store;
@@ -18,4 +19,5 @@ pub use matrix_sdk;
 
 pub use config::{ClockSource, MatrixConfig};
 pub use queue::{Stats, StatsSnapshot};
+pub use levels::{Level, LevelStats, SenderCheck, SenderRule};
 pub use store::{Credentials, MatrixStore, ReadReport};

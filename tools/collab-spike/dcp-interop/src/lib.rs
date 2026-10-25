@@ -22,6 +22,7 @@ pub mod common;
 
 pub mod checks;
 pub mod factories;
+pub mod power_at_event;
 pub mod profile;
 pub mod raw;
 pub mod rig;

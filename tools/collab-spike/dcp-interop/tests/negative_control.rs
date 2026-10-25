@@ -12,7 +12,7 @@
 //!
 //! The defects are `dcp-conformance`'s `Defective` stores, and, for forged
 //! versions, a room with the draft-0 power-level table plus readers that trust
-//! the sender (`MatrixConfig::reader_checks_senders = false`).
+//! the sender (`MatrixConfig::sender_rule = SenderRule::Trust`).
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -138,7 +138,7 @@ async fn forged_version_journey_fails_when_neither_server_nor_reader_gates() {
         syn,
         tweak: |c| {
             c.enforce_encrypted_pl = false;
-            c.reader_checks_senders = false;
+            c.sender_rule = dcp_matrix::SenderRule::Trust;
         },
         label: ", no m.room.encrypted power level, readers do not check senders",
     };
@@ -146,3 +146,35 @@ async fn forged_version_journey_fails_when_neither_server_nor_reader_gates() {
     println!("{result:?}");
     assert!(matches!(result.outcome, Outcome::Failed(_)), "the negative control must fail: {:?}", result.outcome);
 }
+
+/// The same journeys, in a draft-0 room (nothing gates the timeline), under each
+/// of the other at-event sender rules (Spike Q15). The default rule (the
+/// hybrid) runs in the two tests above.
+macro_rules! journeys_under_the_rule {
+    ($($test:ident => $rule:ident),+ $(,)?) => {
+        $(
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn $test() {
+                let Some(syn) = require_synapse!() else { return };
+                let factory = MatrixFactory {
+                    syn,
+                    tweak: |c| {
+                        c.enforce_encrypted_pl = false;
+                        c.sender_rule = dcp_matrix::SenderRule::$rule;
+                    },
+                    label: concat!(", no m.room.encrypted power level, sender rule ", stringify!($rule)),
+                };
+                let report = run_all(&factory).await;
+                println!("{report}");
+                report.assert_all_passed();
+            }
+        )+
+    };
+}
+
+journeys_under_the_rule!(
+    spec_section_12_journeys_in_a_draft0_room_under_the_context_rule => Context,
+    spec_section_12_journeys_in_a_draft0_room_under_the_sdk_context_rule => SdkContext,
+    spec_section_12_journeys_in_a_draft0_room_under_the_timeline_walk_rule => TimelineWalk,
+    spec_section_12_journeys_in_a_draft0_room_under_the_prev_content_walk_rule => PrevContentWalk,
+);
