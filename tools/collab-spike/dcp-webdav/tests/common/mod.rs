@@ -210,7 +210,7 @@ pub enum Topology {
 }
 
 /// The lease duration `lease_expiry_releases` claims over Nextcloud, one instance or a
-/// federation, in milliseconds (`Fixture::lease_ms`; the journey's default is 4 s).
+/// federation, in milliseconds (`Fixture::lease_ms`; the journey's default is 10 s).
 ///
 /// Why this long: after the renewal the journey lets `3/4 * D` pass and the lease must
 /// still be alive when it is read again, so the renewal's read-backs, the 500 ms settle
