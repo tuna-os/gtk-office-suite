@@ -1,0 +1,453 @@
+name: collab-spike-tls
+
+# RFC-0004, the TLS spike: the Durable Streams binding (`dcp-streams`) over TLS and HTTP/2
+# against both reference servers, results in docs/rfc/0004-spike-tls-results.md.
+#
+#   deps         the lockfile is the one that resolves, the TLS dependency tree is modest and
+#                has no OpenSSL, aws-lc, native-tls or built-in trust roots
+#   tls          the matrix {Node 0.3.9, Go v0.3.0} x {HTTP/1.1, HTTP/2}, each behind a Caddy
+#                v2.10.2 that terminates TLS with a generated test CA: the section-12 journeys,
+#                spike B's property, restart and upload tests, and the TLS-only tests (wrong CA,
+#                wrong host name, expired certificate, ALPN downgrade, https-to-http redirect)
+#   tls-measure  (release build; on workflow_dispatch or a push whose head commit message contains
+#                "[measure]") latency TLS against plain, handshake cost, bytes per request, 50
+#                streams on one client, a proxy that closes idle connections after 60 s
+#
+# A test that needs a TLS server FAILS when there is none; only DCP_SKIP_STREAMS_TLS=1 (and
+# DCP_SKIP_STREAMS=1 for the plain ones) skips, and the test says so. Each job checks both.
+on:
+  push:
+    branches: [spike/collab-tls]
+    paths:
+      - 'tools/collab-spike/dcp-streams/**'
+      - 'tools/collab-spike/dcp-core/**'
+      - 'tools/collab-spike/dcp-conformance/**'
+      - 'tools/collab-spike/scripts/streams-*'
+      - 'tools/collab-spike/Cargo.*'
+      - '.github/workflows/collab-spike-tls.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: collab-spike-tls-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+
+permissions:
+  contents: read
+
+jobs:
+  deps:
+    name: lockfile and TLS dependency tree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+
+      # The committed Cargo.lock must be the one this manifest resolves to.
+      - name: cargo metadata --locked (the whole workspace)
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      - name: The tree of dcp-streams (normal dependencies)
+        run: |
+          set -euo pipefail
+          cargo tree -p dcp-streams -e normal --locked --prefix none | sort -u > "$RUNNER_TEMP/tree.txt"
+          echo "crates in the normal dependency tree of dcp-streams (with TLS): $(wc -l < "$RUNNER_TEMP/tree.txt")"
+          grep -E '^(reqwest|rustls|rustls-webpki|hyper|h2|hyper-rustls|hyper-util|tokio-rustls|ring|rustls-pki-types|tokio|http) ' "$RUNNER_TEMP/tree.txt"
+          cargo tree -p dcp-streams -e normal --locked -f '{p} {f}' --prefix none | grep -E '^(reqwest|rustls|ring|hyper-rustls|tokio-rustls) ' | sort -u
+          # What must be there (this also proves the grep below can match) ...
+          for c in rustls ring h2 hyper-rustls rustls-webpki; do grep -q "^$c " "$RUNNER_TEMP/tree.txt" || { echo "::error::$c is not in the tree"; exit 1; }; done
+          # ... and what must not: a second TLS stack, a C TLS library, or a built-in trust store.
+          if grep -E '^(openssl|openssl-sys|native-tls|hyper-tls|aws-lc-rs|aws-lc-sys|webpki-roots|rustls-native-certs|rustls-platform-verifier|quinn|h3) ' "$RUNNER_TEMP/tree.txt"; then
+            echo "::error::an unwanted TLS crate is in the tree of dcp-streams"; exit 1
+          fi
+          # dev-dependencies (tests) add exactly the crates the transport tests speak directly
+          cargo tree -p dcp-streams -e dev --locked --prefix none | sort -u > "$RUNNER_TEMP/tree-dev.txt"
+          echo "with dev-dependencies: $(wc -l < "$RUNNER_TEMP/tree-dev.txt") crates"
+
+      # The same tree before: the manifest with TLS removed (edited in this checkout only).
+      - name: The tree without TLS, for comparison
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:tools/collab-spike/dcp-streams/Cargo.toml" > /dev/null
+          sed -i 's|^reqwest = .*|reqwest = { version = "0.12", default-features = false }|' dcp-streams/Cargo.toml
+          cargo tree -p dcp-streams -e normal --prefix none | sort -u > "$RUNNER_TEMP/tree-plain.txt"
+          echo "crates without TLS: $(wc -l < "$RUNNER_TEMP/tree-plain.txt")"
+          echo "added by TLS and HTTP/2:"
+          comm -13 "$RUNNER_TEMP/tree-plain.txt" "$RUNNER_TEMP/tree.txt"
+
+  tls:
+    name: dcp-streams over TLS - ${{ matrix.kind }} server, HTTP/${{ matrix.http }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: node, http: '1.1', proto: 'HTTP/1.1', other: 'HTTP/2.0', alpn: 'http/1.1' }
+          - { kind: node, http: '2', proto: 'HTTP/2.0', other: 'HTTP/1.1', alpn: 'h2' }
+          - { kind: go, http: '1.1', proto: 'HTTP/1.1', other: 'HTTP/2.0', alpn: 'http/1.1' }
+          - { kind: go, http: '2', proto: 'HTTP/2.0', other: 'HTTP/1.1', alpn: 'h2' }
+    env:
+      DCP_STREAMS_HTTP: ${{ matrix.http }}
+      DCP_STREAMS_LABEL: ${{ matrix.kind }} server behind TLS, HTTP/${{ matrix.http }}
+      # The one test that needs a server with access control has its own job in collab-spike.yml.
+      DCP_SKIP_STREAMS_AUTH: '1'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          openssl version
+          jq --version
+          uname -a
+          nproc
+          free -m
+
+      - name: Install the pinned Node reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+
+      - name: Fetch the pinned Caddy (Go server) and print its version
+        run: |
+          set -euo pipefail
+          bin="$(scripts/streams-caddy-fetch.sh)"
+          "$bin" version
+          "$bin" list-modules | grep -E '^(http.handlers.durable_streams|http.handlers.reverse_proxy|tls)$'
+
+      - name: Build tests
+        run: cargo test -p dcp-streams --no-run --locked
+
+      # ---------------------------------------------------------------- missing server: fail, or skip and say so
+      - name: TLS tests fail loudly without a server, and skip only when told to
+        run: |
+          set -u
+          unset DCP_STREAMS_URL DCP_SKIP_STREAMS_TLS DCP_SKIP_STREAMS || true
+          ct() { cargo test -p dcp-streams --locked --test streams "$@" -- --nocapture; }
+          # 1. no URL at all
+          if ct tls::the_negotiated > "$RUNNER_TEMP/none.log" 2>&1; then
+            cat "$RUNNER_TEMP/none.log"; echo "::error::a TLS test passed with no server"; exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/none.log"
+          # 2. a plain http:// server is not a TLS server
+          if DCP_STREAMS_URL=http://127.0.0.1:1/v1/stream/ ct tls::the_negotiated > "$RUNNER_TEMP/plain.log" 2>&1; then
+            cat "$RUNNER_TEMP/plain.log"; echo "::error::a TLS test passed against an http:// URL"; exit 1
+          fi
+          grep -q "is not https://" "$RUNNER_TEMP/plain.log"
+          # 3. an https:// URL without the CA of the run fails closed
+          if DCP_STREAMS_URL=https://localhost:1/v1/stream/ ct spec_section_12 > "$RUNNER_TEMP/noca.log" 2>&1; then
+            cat "$RUNNER_TEMP/noca.log"; echo "::error::the journeys passed with no CA"; exit 1
+          fi
+          grep -q "DCP_STREAMS_CA" "$RUNNER_TEMP/noca.log"
+          # 4. an https:// URL with no HTTP version named is refused: a run cannot test the wrong one by accident
+          if env -u DCP_STREAMS_HTTP DCP_STREAMS_CA=/dev/null DCP_STREAMS_URL=https://localhost:1/v1/stream/ cargo test -p dcp-streams --locked --test streams spec_section_12 -- --nocapture > "$RUNNER_TEMP/nover.log" 2>&1; then
+            cat "$RUNNER_TEMP/nover.log"; echo "::error::the journeys passed with no HTTP version named"; exit 1
+          fi
+          grep -q "DCP_STREAMS_HTTP must be" "$RUNNER_TEMP/nover.log"
+          # 5. explicit skip, and it says so
+          DCP_SKIP_STREAMS_TLS=1 DCP_STREAMS_URL=http://127.0.0.1:1/v1/stream/ ct tls:: 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          grep -q "SKIPPED .*(DCP_SKIP_STREAMS_TLS=1)" "$RUNNER_TEMP/skip.log"
+
+      # ---------------------------------------------------------------- the servers
+      # The main server (access log on: its log is what the server says it served), and two
+      # servers for controls: a certificate that expired yesterday, and a front end that offers
+      # http/1.1 only. They differ only in that; same Caddy, same CA.
+      - name: Start the servers behind TLS
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki"
+          scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+          STREAMS_TLS_PORT=4450 STREAMS_PLAIN_PORT=4451 STREAMS_ORIGIN_PORT=4447 STREAMS_CERT=expired STREAMS_EXPORT_PREFIX=DCP_STREAMS_EXPIRED \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_EXPIRED_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          STREAMS_TLS_PORT=4460 STREAMS_PLAIN_PORT=4461 STREAMS_ORIGIN_PORT=4457 STREAMS_SERVER_PROTOCOLS=h1 STREAMS_EXPORT_PREFIX=DCP_STREAMS_H1ONLY \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_H1ONLY_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+
+      # What openssl, which is not our code, says about the same listener.
+      - name: openssl s_client - ALPN, TLS version, chain and name verification, with controls
+        run: |
+          set -u
+          probe() { echo | openssl s_client -connect localhost:4440 -servername localhost "$@" 2>&1; }
+          ok="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname localhost -verify_return_error)"
+          echo "$ok" | grep -E "ALPN protocol|Protocol  :|Cipher is|Verification|Verify return code"
+          echo "$ok" | grep -q "Verify return code: 0 (ok)"
+          echo "$ok" | grep -q "ALPN protocol: ${{ matrix.alpn }}"
+          echo "$ok" | grep -q "Protocol  : TLSv1.3"
+          echo "--- control: the other CA must not verify"
+          bad="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_OTHER_CA" -verify_return_error)"
+          echo "$bad" | grep -E "Verify return code|verify error" || true
+          if echo "$bad" | grep -q "Verify return code: 0 (ok)"; then echo "::error::verified against the wrong CA"; exit 1; fi
+          echo "--- control: another host name must not verify"
+          name="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname other.example -verify_return_error)"
+          echo "$name" | grep -E "Verify return code|verify error" || true
+          if echo "$name" | grep -q "Verify return code: 0 (ok)"; then echo "::error::verified for the wrong host name"; exit 1; fi
+          echo "--- control: the expired certificate must not verify"
+          exp="$(echo | openssl s_client -connect localhost:4450 -servername localhost -CAfile "$DCP_STREAMS_CA" -verify_return_error 2>&1)"
+          echo "$exp" | grep -E "Verify return code|verify error" || true
+          if echo "$exp" | grep -q "Verify return code: 0 (ok)"; then echo "::error::an expired certificate verified"; exit 1; fi
+          echo "--- the http/1.1-only listener offers no h2"
+          h1="$(probe -connect localhost:4460 -alpn h2 -CAfile "$DCP_STREAMS_CA" 2>&1)"
+          echo "$h1" | grep -E "ALPN|alert" || true
+          if echo "$h1" | grep -q "ALPN protocol: h2"; then echo "::error::the http/1.1-only front end negotiated h2"; exit 1; fi
+
+      # ---------------------------------------------------------------- the tests
+      - name: Unit tests (crypto, wire, rules)
+        run: cargo test -p dcp-streams --locked --lib -- --nocapture
+
+      - name: Journeys, properties, restart and the TLS tests, over TLS (${{ matrix.kind }}, HTTP/${{ matrix.http }})
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/measure-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+        run: |
+          set -euo pipefail
+          echo "DCP_STREAMS_URL=$DCP_STREAMS_URL  HTTP=$DCP_STREAMS_HTTP  CA=$DCP_STREAMS_CA  expired=$DCP_STREAMS_EXPIRED_URL  h1only=$DCP_STREAMS_H1ONLY_URL"
+          cargo test -p dcp-streams --locked --test streams --no-fail-fast -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/tests-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: Nothing was skipped, and the tests that matter ran and passed
+        run: |
+          set -euo pipefail
+          log="$GITHUB_WORKSPACE/tls-logs/tests-${{ matrix.kind }}-h${{ matrix.http }}.log"
+          grep "test result" "$log"
+          # only the access-control test (its own job) may skip
+          if grep "SKIPPED" "$log" | grep -v "auth"; then echo "::error::a test skipped"; exit 1; fi
+          for t in \
+            tls::the_negotiated_version_is_the_one_under_test \
+            tls::a_client_that_does_not_trust_the_servers_ca_fails_closed \
+            tls::a_certificate_for_another_host_name_is_refused \
+            tls::an_expired_certificate_is_refused \
+            tls::a_client_that_requires_h2_does_not_fall_back_to_http_1_1 \
+            tls::plain_http_to_the_tls_port_and_a_client_that_requires_tls \
+            tls::a_redirect_from_https_to_http_is_not_followed \
+            conformance::spec_section_12_journeys_on_a_durable_streams_server \
+            conformance::the_forged_version_journey_fails_when_no_reader_checks_roles \
+            properties::a_tampered_record_is_dropped_and_never_shown \
+            properties::the_wrong_key_fails_closed \
+            properties::a_removed_member_with_every_key_it_ever_held_reads_nothing_published_afterwards \
+            properties::negative_control_without_rotating_the_key_the_removed_member_reads_everything \
+            properties::the_lease_is_a_compare_and_set_on_stream_seq \
+            properties::a_late_joiner_bootstraps_from_a_snapshot_and_reads_only_what_follows \
+            properties::an_upload_cut_off_on_the_wire_leaves_no_stream_behind \
+            restart::a_file_backed_server_keeps_every_acknowledged_record_across_sigterm \
+            restart::a_file_backed_server_keeps_every_acknowledged_record_across_sigkill \
+            restart::an_in_memory_server_forgets_everything_and_the_client_says_so ; do
+            grep -q "^test $t \.\.\. ok" "$log" || { echo "::error::$t did not pass"; exit 1; }
+          done
+          grep -E "PASS|11 passed" "$log" | head -20
+          grep -E "^(TLS-NEGOTIATED|AUTO-NEGOTIATED|LOCATION-HEADER|WRONG-CA|NO-CA|IP-MISMATCH|NAME-MISMATCH|EXPIRED|REQUIRE-H2|PLAIN-TO-TLS|REDIRECT)" "$log" || true
+
+      # What the server says it served, independent of the client's own counters.
+      - name: The server's access log - every TLS request was TLS 1.3 and of HTTP version ${{ matrix.http }}
+        run: |
+          set -euo pipefail
+          cp "$DCP_STREAMS_ACCESS_LOG" "$GITHUB_WORKSPACE/tls-logs/access-${{ matrix.kind }}-h${{ matrix.http }}.log"
+          scripts/streams-tls-check-log.sh "$DCP_STREAMS_ACCESS_LOG" ${{ matrix.proto }}
+          echo "--- control: the same check expecting the other protocol must fail"
+          if scripts/streams-tls-check-log.sh "$DCP_STREAMS_ACCESS_LOG" ${{ matrix.other }} > "$RUNNER_TEMP/neg.log" 2>&1; then
+            cat "$RUNNER_TEMP/neg.log"; echo "::error::the log check passed for the wrong protocol"; exit 1
+          fi
+          tail -3 "$RUNNER_TEMP/neg.log"
+
+      # Not asserted: what Caddy 2.10.2 does when told to serve h2 alone. Recorded for the results document.
+      - name: Probe - Caddy with protocols h2 only (recorded, not asserted)
+        if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
+        run: |
+          STREAMS_TLS_PORT=4470 STREAMS_PLAIN_PORT=4471 STREAMS_SERVER_PROTOCOLS=h2 STREAMS_EXPORT_PREFIX=PROBE scripts/streams-tls-up.sh go > "$RUNNER_TEMP/probe.env" 2> "$RUNNER_TEMP/probe.err" || { echo "caddy did not start with 'protocols h2':"; tail -20 "$RUNNER_TEMP/probe.err"; }
+          cat "$RUNNER_TEMP/probe.env" || true
+          echo | openssl s_client -connect localhost:4470 -servername localhost -alpn h2 -CAfile "$DCP_STREAMS_CA" 2>&1 | grep -E "ALPN|Verify return|alert|error" || true
+          curl -sS --cacert "$DCP_STREAMS_CA" --http2 -o /dev/null -w 'curl --http2: %{http_version} %{http_code}\n' https://localhost:4470/v1/stream/x || true
+          curl -sS --cacert "$DCP_STREAMS_CA" --http1.1 -o /dev/null -w 'curl --http1.1: %{http_version} %{http_code}\n' https://localhost:4470/v1/stream/x || true
+          p="$(sed -n 's/^export PROBE_PIDFILE=//p' "$RUNNER_TEMP/probe.env")"
+          [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+
+      - name: Stop the servers
+        if: always()
+        run: |
+          for p in "$DCP_STREAMS_PIDFILE" "${DCP_STREAMS_EXPIRED_PIDFILE:-}" "${DCP_STREAMS_H1ONLY_PIDFILE:-}" "${PROBE_PIDFILE:-}"; do
+            [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+          done
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server-${{ matrix.kind }}-h${{ matrix.http }}.log" 2>/dev/null || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tls-logs-${{ matrix.kind }}-h${{ matrix.http }}
+          path: tls-logs/
+          if-no-files-found: warn
+
+  tls-measure:
+    name: TLS measurements (release) - ${{ matrix.kind }} server, HTTP/${{ matrix.http }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[measure]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: node, http: '1.1' }
+          - { kind: node, http: '2' }
+          - { kind: go, http: '1.1' }
+          - { kind: go, http: '2' }
+    env:
+      DCP_STREAMS_HTTP: ${{ matrix.http }}
+      DCP_MEASURE_MAX_MB: '16'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls-release
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+
+      - name: Versions
+        run: |
+          rustc --version
+          node --version
+          openssl version
+          uname -a
+          nproc
+          free -m
+          lscpu | grep -E "Model name|MHz" || true
+
+      - name: Install the pinned Node reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the tests in release mode
+        run: cargo test --release --locked -p dcp-streams --test streams --no-run
+
+      # No access log here: with it the Go server's SSE answers 500 (see the script), and the
+      # logging costs a little on every request. The correctness job has the log.
+      - name: Start the servers behind TLS (default timeouts; and two with the timeouts of the idle test)
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_ACCESS_LOG=0
+          scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+          # server heartbeat shorter than a 60 s proxy timeout (Go: SSE lifetime 55 s, Node: SSE keep-alive 30 s)
+          STREAMS_TLS_PORT=4480 STREAMS_PLAIN_PORT=4481 STREAMS_ORIGIN_PORT=4477 STREAMS_LONG_POLL_S=30 STREAMS_SSE_RECONNECT_S=55 STREAMS_EXPORT_PREFIX=DCP_STREAMS_SHORT \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_SHORT_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          # server heartbeat longer than the proxy timeout
+          STREAMS_TLS_PORT=4490 STREAMS_PLAIN_PORT=4491 STREAMS_ORIGIN_PORT=4487 STREAMS_LONG_POLL_S=90 STREAMS_SSE_RECONNECT_S=120 STREAMS_EXPORT_PREFIX=DCP_STREAMS_LONG \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_LONG_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          # a front end that closes keep-alive connections idle for 5 s (what the Node origin does by itself)
+          STREAMS_TLS_PORT=4500 STREAMS_PLAIN_PORT=4501 STREAMS_ORIGIN_PORT=4497 STREAMS_IDLE_TIMEOUT_S=5 STREAMS_EXPORT_PREFIX=DCP_STREAMS_IDLE5 \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_IDLE5_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+
+      # Spike B's own latency tests, unchanged, against the same server three ways.
+      - name: Latency - spike B's tests over TLS, over plain HTTP through the same front end, and (Node) straight to the origin
+        run: |
+          set -euo pipefail
+          b() { # label, then env assignments
+            label="$1"; shift
+            env "$@" DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/latency-$label.jsonl" \
+              cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+                measure::latency_append_to_a_second_client measure::latency_of_the_server_alone_for_a_bare_append measure::lease_acquire_and_renew_latency \
+              2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/latency-$label.log"
+          }
+          b "tls-${{ matrix.kind }}-h${{ matrix.http }}" DCP_STREAMS_URL="$DCP_STREAMS_URL"
+          b "plain-front-${{ matrix.kind }}" DCP_STREAMS_URL="$DCP_STREAMS_PLAIN_URL"
+          if [ "${{ matrix.kind }}" = node ]; then b "plain-direct-node" DCP_STREAMS_URL="$DCP_STREAMS_DIRECT_URL"; fi
+
+      - name: Handshake and cold start, bytes per request, HTTP/2 settings, 50 streams on one client, bulk over a long path
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/transport-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            tls_measure:: --skip reconnecting_after 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/transport-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: The server closes an idle connection (front end idle timeout 5 s; the Node origin does the same by itself)
+        if: ${{ !cancelled() }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/reconnect-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_SERVER_IDLE_S: '5'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_IDLE5_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            tls_measure::reconnecting_after 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/reconnect-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: A proxy that closes idle connections after 60 s - the server's heartbeat is shorter than the proxy's timeout
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/idle-short-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_LONG_POLL_S: '30'
+          DCP_STREAMS_SSE_RECONNECT_S: '55'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_SHORT_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            idle:: 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/idle-short-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: A proxy that closes idle connections after 60 s - the server's heartbeat is longer than the proxy's timeout
+        if: ${{ !cancelled() }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/idle-long-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_LONG_POLL_S: '90'
+          DCP_STREAMS_SSE_RECONNECT_S: '120'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_LONG_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            idle:: 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/idle-long-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: Stop the servers
+        if: always()
+        run: |
+          for p in "$DCP_STREAMS_PIDFILE" "${DCP_STREAMS_SHORT_PIDFILE:-}" "${DCP_STREAMS_LONG_PIDFILE:-}" "${DCP_STREAMS_IDLE5_PIDFILE:-}"; do
+            [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+          done
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server-${{ matrix.kind }}-h${{ matrix.http }}.log" 2>/dev/null || true
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tls-measurements-${{ matrix.kind }}-h${{ matrix.http }}
+          path: tls-logs/
+          if-no-files-found: warn
