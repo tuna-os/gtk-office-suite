@@ -206,28 +206,33 @@ jobs:
       - name: openssl s_client - ALPN, TLS version, chain and name verification, with controls
         run: |
           set -u
-          probe() { echo | openssl s_client -connect localhost:4440 -servername localhost "$@" 2>&1; }
+          probe() { echo | openssl s_client -connect localhost:4440 -servername localhost "$@" 2>&1 | tr -d '\000'; }
+          has() { grep -qE "$1" <<<"$2"; }   # here-string: no SIGPIPE under pipefail
           ok="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname localhost -verify_return_error)"
-          echo "$ok" | grep -E "ALPN protocol|Protocol  :|Cipher is|Verification|Verify return code"
-          echo "$ok" | grep -q "Verify return code: 0 (ok)"
-          echo "$ok" | grep -q "ALPN protocol: ${{ matrix.alpn }}"
-          echo "$ok" | grep -q "Protocol  : TLSv1.3"
+          grep -E "ALPN protocol|Protocol  :|Cipher is|Verification|Verify return code" <<<"$ok"
+          has "Verify return code: 0 \(ok\)" "$ok"
+          has "ALPN protocol: ${{ matrix.alpn }}" "$ok"
+          has "Protocol  : TLSv1.3" "$ok"
           echo "--- control: the other CA must not verify"
-          bad="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_OTHER_CA" -verify_return_error)"
-          echo "$bad" | grep -E "Verify return code|verify error" || true
-          if echo "$bad" | grep -q "Verify return code: 0 (ok)"; then echo "::error::verified against the wrong CA"; exit 1; fi
+          bad="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_OTHER_CA" -verify_return_error || true)"
+          grep -E "Verify return code|verify error" <<<"$bad" || true
+          if has "Verify return code: 0 \(ok\)" "$bad"; then echo "::error::verified against the wrong CA"; exit 1; fi
+          has "verify error|Verify return code: [1-9]" "$bad" || { echo "::error::no verdict from openssl for the wrong CA"; exit 1; }
           echo "--- control: another host name must not verify"
-          name="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname other.example -verify_return_error)"
-          echo "$name" | grep -E "Verify return code|verify error" || true
-          if echo "$name" | grep -q "Verify return code: 0 (ok)"; then echo "::error::verified for the wrong host name"; exit 1; fi
+          name="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname other.example -verify_return_error || true)"
+          grep -E "Verify return code|verify error" <<<"$name" || true
+          if has "Verify return code: 0 \(ok\)" "$name"; then echo "::error::verified for the wrong host name"; exit 1; fi
+          has "verify error|Verify return code: [1-9]" "$name" || { echo "::error::no verdict from openssl for the wrong host name"; exit 1; }
           echo "--- control: the expired certificate must not verify"
-          exp="$(echo | openssl s_client -connect localhost:4450 -servername localhost -CAfile "$DCP_STREAMS_CA" -verify_return_error 2>&1)"
-          echo "$exp" | grep -E "Verify return code|verify error" || true
-          if echo "$exp" | grep -q "Verify return code: 0 (ok)"; then echo "::error::an expired certificate verified"; exit 1; fi
+          exp="$(echo | openssl s_client -connect localhost:4450 -servername localhost -CAfile "$DCP_STREAMS_CA" -verify_return_error 2>&1 | tr -d '\000' || true)"
+          grep -E "Verify return code|verify error" <<<"$exp" || true
+          if has "Verify return code: 0 \(ok\)" "$exp"; then echo "::error::an expired certificate verified"; exit 1; fi
+          has "certificate has expired" "$exp" || { echo "::error::openssl did not say the certificate expired"; exit 1; }
           echo "--- the http/1.1-only listener offers no h2"
-          h1="$(probe -connect localhost:4460 -alpn h2 -CAfile "$DCP_STREAMS_CA" 2>&1)"
-          echo "$h1" | grep -E "ALPN|alert" || true
-          if echo "$h1" | grep -q "ALPN protocol: h2"; then echo "::error::the http/1.1-only front end negotiated h2"; exit 1; fi
+          h1="$(probe -connect localhost:4460 -alpn h2 -CAfile "$DCP_STREAMS_CA" || true)"
+          grep -E "ALPN|alert" <<<"$h1" || true
+          if has "ALPN protocol: h2" "$h1"; then echo "::error::the http/1.1-only front end negotiated h2"; exit 1; fi
+          has "alert|No ALPN negotiated" "$h1" || { echo "::error::the http/1.1-only listener did not refuse h2"; exit 1; }
 
       # ---------------------------------------------------------------- the tests
       - name: Unit tests (crypto, wire, rules)
