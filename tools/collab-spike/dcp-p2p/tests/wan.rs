@@ -36,6 +36,7 @@ use dcp_conformance::{
 };
 use dcp_core::view::read_view;
 use dcp_core::{DocId, DocumentStore, Lease, Meta, NewFile, Role, Stamped, StoreError, Update, Version};
+use dcp_p2p::wire::{stamped_from_json, stamped_list_from_json, stamped_to_json};
 use iroh::{EndpointAddr, TransportAddr};
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
@@ -402,10 +403,10 @@ impl DocumentStore for Node {
         self.call("revoke", json!({"doc": doc, "principal": principal})).await.map(|_| ())
     }
     async fn versions(&self, doc: &DocId) -> Result<Vec<Stamped<Version>>, StoreError> {
-        dec(self.call("versions", json!({"doc": doc})).await?)
+        stamped_list_from_json(&self.call("versions", json!({"doc": doc})).await?).map_err(StoreError::Transport)
     }
     async fn fetch_file(&self, doc: &DocId, version: &Stamped<Version>) -> Result<Vec<u8>, StoreError> {
-        let h: String = dec(self.call("fetch_file", json!({"doc": doc, "version": version_json(version)})).await?)?;
+        let h: String = dec(self.call("fetch_file", json!({"doc": doc, "version": stamped_to_json(version)})).await?)?;
         hex::decode(h).map_err(|e| StoreError::Transport(e.to_string()))
     }
     async fn publish_version(
@@ -416,28 +417,26 @@ impl DocumentStore for Node {
         message: Option<String>,
     ) -> Result<Stamped<Version>, StoreError> {
         let f = json!({"mime": file.mime, "hex": hex::encode(file.bytes)});
-        dec(self.call("publish_version", json!({"doc": doc, "parents": parents, "file": f, "message": message})).await?)
+        stamped_from_json(&self.call("publish_version", json!({"doc": doc, "parents": parents, "file": f, "message": message})).await?).map_err(StoreError::Transport)
     }
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>, StoreError> {
-        dec(self.call("lease", json!({"doc": doc})).await?)
+        {
+            let v = self.call("lease", json!({"doc": doc})).await?;
+            if v.is_null() { Ok(None) } else { stamped_from_json(&v).map(Some).map_err(StoreError::Transport) }
+        }
     }
     async fn write_lease(&self, doc: &DocId, lease: Lease) -> Result<Stamped<Lease>, StoreError> {
-        dec(self.call("write_lease", json!({"doc": doc, "lease": lease})).await?)
+        stamped_from_json(&self.call("write_lease", json!({"doc": doc, "lease": lease})).await?).map_err(StoreError::Transport)
     }
     async fn now_ms(&self, doc: &DocId) -> Result<u64, StoreError> {
         dec(self.call("now_ms", json!({"doc": doc})).await?)
     }
     async fn publish_update(&self, doc: &DocId, update: Update) -> Result<Stamped<Update>, StoreError> {
-        dec(self.call("publish_update", json!({"doc": doc, "update": update})).await?)
+        stamped_from_json(&self.call("publish_update", json!({"doc": doc, "update": update})).await?).map_err(StoreError::Transport)
     }
     async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>, StoreError> {
-        dec(self.call("updates", json!({"doc": doc})).await?)
+        stamped_list_from_json(&self.call("updates", json!({"doc": doc})).await?).map_err(StoreError::Transport)
     }
-}
-
-fn version_json(v: &Stamped<Version>) -> Value {
-    // `Stamped<T>` is serialisable (it is what the node sent); a round trip keeps it unchanged.
-    serde_json::to_value(v).expect("a Stamped<Version> serialises")
 }
 
 struct EditorFaults(Arc<Node>);
@@ -483,7 +482,7 @@ async fn mesh(nodes: &[&Arc<Node>], how: Addrs) {
         addrs.push(n.addr().await);
     }
     for (i, a) in nodes.iter().enumerate() {
-        for (j, b) in nodes.iter().enumerate() {
+        for (j, _) in nodes.iter().enumerate() {
             if i != j {
                 a.add_peer(&shown(&addrs[j], how)).await;
             }
@@ -1097,7 +1096,7 @@ async fn path_control_udp_allowed_upgrades_and_the_relay_only_assertion_fails() 
     let mut failures = 0;
     for rep in 0..reps {
         let t_start = Instant::now();
-        let (a, b, doc) = pair(Addrs::RelayOnly, Role::Viewer).await;
+        let (a, b, _doc) = pair(Addrs::RelayOnly, Role::Viewer).await;
         let first_sync_ms = ms(t_start.elapsed());
         let up = wait_direct(&a, &b, secs(90)).await;
         let (ra, rb) = reports(&a, &b).await;
@@ -1296,7 +1295,7 @@ async fn direct_path_blocked_mid_session_falls_back_to_the_relay() {
     record(
         test,
         json!({"kind": "direct_blocked", "first_publish_visible_ms_after_block": first_ms, "relay_selected_ms_after_block": fallback, "second_publish_ms": second,
-               "ip_reselected_ms_after_unblock": reup, "third_publish_ms": third.map(ms), "secs_blocked_total": t_open.elapsed().as_secs().saturating_sub(0), "since_block_s": t_block.elapsed().as_secs()}),
+               "ip_reselected_ms_after_unblock": reup, "third_publish_ms": third, "secs_blocked_total": t_open.elapsed().as_secs().saturating_sub(0), "since_block_s": t_block.elapsed().as_secs()}),
     );
     assert!(first.is_some(), "no publish crossed after the direct path was blocked");
     assert!(second.is_some(), "the relay did not keep carrying the session");

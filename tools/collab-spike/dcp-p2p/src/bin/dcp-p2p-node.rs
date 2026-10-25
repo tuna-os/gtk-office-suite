@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dcp_core::{DocumentStore, Lease, Meta, NewFile, Role, Stamped, StoreError, Update, Version};
+use dcp_p2p::wire::{stamped_from_json, stamped_list_to_json, stamped_to_json};
 use dcp_p2p::{P2pConfig, P2pStore};
 use iroh::{EndpointAddr, RelayUrl};
 use serde::de::DeserializeOwned;
@@ -124,21 +125,21 @@ async fn dispatch(s: &P2pStore, relay: &Option<RelayUrl>, m: &str, a: &Value) ->
             s.revoke(&field::<String>(a, "doc")?, &field::<String>(a, "principal")?).await?;
             Ok(Value::Null)
         }
-        "versions" => to(&s.versions(&field::<String>(a, "doc")?).await?),
+        "versions" => Ok(stamped_list_to_json(&s.versions(&field::<String>(a, "doc")?).await?)),
         "fetch_file" => {
-            let v: Stamped<Version> = field(a, "version")?;
+            let v: Stamped<Version> = stamped_from_json(a.get("version").ok_or_else(|| bad("missing argument version"))?).map_err(bad)?;
             Ok(json!(hex::encode(s.fetch_file(&field::<String>(a, "doc")?, &v).await?)))
         }
         "publish_version" => {
             let parents: Vec<String> = field(a, "parents")?;
             let message: Option<String> = field(a, "message")?;
-            to(&s.publish_version(&field::<String>(a, "doc")?, parents, file(a, "file")?, message).await?)
+            Ok(stamped_to_json(&s.publish_version(&field::<String>(a, "doc")?, parents, file(a, "file")?, message).await?))
         }
-        "lease" => to(&s.lease(&field::<String>(a, "doc")?).await?),
-        "write_lease" => to(&s.write_lease(&field::<String>(a, "doc")?, field::<Lease>(a, "lease")?).await?),
+        "lease" => Ok(s.lease(&field::<String>(a, "doc")?).await?.map_or(Value::Null, |l| stamped_to_json(&l))),
+        "write_lease" => Ok(stamped_to_json(&s.write_lease(&field::<String>(a, "doc")?, field::<Lease>(a, "lease")?).await?)),
         "now_ms" => to(&s.now_ms(&field::<String>(a, "doc")?).await?),
-        "publish_update" => to(&s.publish_update(&field::<String>(a, "doc")?, field::<Update>(a, "update")?).await?),
-        "updates" => to(&s.updates(&field::<String>(a, "doc")?).await?),
+        "publish_update" => Ok(stamped_to_json(&s.publish_update(&field::<String>(a, "doc")?, field::<Update>(a, "update")?).await?)),
+        "updates" => Ok(stamped_list_to_json(&s.updates(&field::<String>(a, "doc")?).await?)),
         "join" => Ok(json!(hex::encode(s.join(&field::<String>(a, "doc")?, &field::<String>(a, "creator")?).await?))),
         "register_card" => {
             let card = hex::decode(field::<String>(a, "card")?).map_err(|e| bad(e.to_string()))?;
