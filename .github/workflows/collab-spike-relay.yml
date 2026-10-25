@@ -1,0 +1,97 @@
+name: collab-spike-relay
+
+# RFC-0004 spike C, round 2: dcp-p2p over a real iroh-relay, with the peers in separate Linux
+# network namespaces and the links shaped with tc netem. Results: docs/rfc/0004-spike-relay-results.md.
+# Not part of the product CI. Needs root on the runner (sudo) for namespaces, tc and iptables.
+#
+#   probe    can a hosted runner do namespaces, netem and iptables at all, and does the pinned
+#            iroh-relay binary run with a test CA?
+#
+# A test that needs the namespaces FAILS when they are missing; only DCP_SKIP_NETNS=1 skips
+# it, and the test says so.
+on:
+  push:
+    branches: ['spike/collab-relay']
+    paths:
+      - 'tools/collab-spike/dcp-p2p/**'
+      - 'tools/collab-spike/scripts/netns-wan.sh'
+      - '.github/workflows/collab-spike-relay.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: collab-spike-relay-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # The relay server binary matching the iroh in dcp-p2p/Cargo.lock (iroh 1.4.1).
+  IROH_RELAY_VERSION: 1.4.1
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe - namespaces, netem, iptables, iroh-relay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Runner
+        run: |
+          mkdir -p results
+          { uname -a; cat /etc/os-release | head -3; nproc; free -m; ip -V; tc -V; iptables --version; openssl version; } 2>&1 | tee results/runner.txt
+          sudo modprobe sch_netem 2>&1 | tee -a results/runner.txt || true
+          lsmod | grep -i netem | tee -a results/runner.txt || echo "sch_netem not listed by lsmod" | tee -a results/runner.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq tcpdump iptables 2>&1 | tail -2
+      - name: Cache iroh-relay
+        id: relay-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cargo/bin/iroh-relay
+          key: iroh-relay-${{ env.IROH_RELAY_VERSION }}-server-${{ runner.os }}
+      - name: Install iroh-relay (pinned, with its own lockfile)
+        if: steps.relay-cache.outputs.cache-hit != 'true'
+        run: cargo install iroh-relay --version "=$IROH_RELAY_VERSION" --features server --locked
+      - name: iroh-relay version
+        run: iroh-relay --version | tee results/iroh-relay-version.txt
+      - name: Topology, reachability, shaping
+        run: |
+          set -x
+          S=tools/collab-spike/scripts/netns-wan.sh
+          sudo $S up
+          sudo $S check
+          sudo $S mode relay-only
+          sudo $S check
+          sudo $S counters
+          sudo $S mode direct
+          sudo $S shape 150 0 -
+          ip netns exec dcp-a true 2>/dev/null || true
+          echo "-- ping a -> b, mode direct, shape 150 ms RTT (expect ~150 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.2.2
+          echo "-- ping a -> relay (expect ~75 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.0.1
+          sudo $S shape 0 5 -
+          echo "-- ping a -> b, 5% loss (expect ~10% loss round trip)"
+          sudo ip netns exec dcp-a ping -c 100 -i 0.05 -q 10.77.2.2 || true
+          sudo $S shape 0 0 1mbit
+          sudo $S relay-up
+          sudo ip netns exec dcp-a curl -sS --cacert /tmp/dcp-wan/ca.crt -o /dev/null -w 'a -> relay https: %{http_code} in %{time_total}s\n' https://10.77.0.1/generate_204
+          sudo $S relay-metrics | head -20
+          sudo $S relay-down
+          sudo $S down
+        shell: bash
+      - name: Relay log
+        if: always()
+        run: sudo cat /tmp/dcp-wan/relay.log | tail -40 | tee results/relay-log-tail.txt || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: relay-probe
+          path: results/
+          if-no-files-found: warn
