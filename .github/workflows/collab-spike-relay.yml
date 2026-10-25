@@ -80,7 +80,7 @@ jobs:
           echo "-- ping a -> b, 5% loss (expect ~10% loss round trip)"
           sudo ip netns exec dcp-a ping -c 100 -i 0.05 -q 10.77.2.2 || true
           sudo $S shape 0 0 1mbit
-          sudo $S relay-up
+          sudo env IROH_RELAY_BIN="$(command -v iroh-relay)" $S relay-up
           sudo ip netns exec dcp-a curl -sS --cacert /tmp/dcp-wan/ca.crt -o /dev/null -w 'a -> relay https: %{http_code} in %{time_total}s\n' https://10.77.0.1/generate_204
           sudo $S relay-metrics | head -20
           sudo $S relay-down

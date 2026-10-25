@@ -108,6 +108,10 @@ certs() {
 
 relay-up() {
   mkdir -p "$WORK"
+  if [ -f "$WORK/relay.pid" ] && kill -0 "$(cat "$WORK/relay.pid")" 2>/dev/null; then
+    echo "relay already up (pid $(cat "$WORK/relay.pid"))"
+    return 0
+  fi
   certs
   cat > "$WORK/relay.toml" <<EOF
 enable_relay = true
@@ -144,7 +148,7 @@ EOF
 relay-down() {
   [ -f "$WORK/relay.pid" ] || return 0
   pid=$(cat "$WORK/relay.pid")
-  # nohup + ip netns exec: the pid is the shell that exec'd the relay, so the signal goes to it.
+  # nohup and `ip netns exec` both exec the next program, so this pid is the relay itself.
   kill -KILL "$pid" 2>/dev/null || true
   # Wait until the port is gone.
   for _ in $(seq 1 50); do
