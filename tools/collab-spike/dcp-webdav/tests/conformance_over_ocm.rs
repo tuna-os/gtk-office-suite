@@ -25,7 +25,7 @@ async fn journeys_over_a_federation() {
         "update_stream_gap_recovery",
     ]);
     // Every journey passes, `lease_expiry_releases` included: the federated fixture sets
-    // `Fixture::lease_ms` to FEDERATED_LEASE_MS, because at the default 4 s two server hops per
+    // `Fixture::lease_ms` to NEXTCLOUD_LEASE_MS, because at the default 4 s two server hops per
     // operation do not fit the journey's clock (`tests/lease_timing.rs` measures both).
     report.assert_no_failures();
 }

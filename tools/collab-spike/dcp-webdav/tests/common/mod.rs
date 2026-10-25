@@ -209,8 +209,21 @@ pub enum Topology {
     Federated,
 }
 
-/// The lease duration of `lease_expiry_releases` over a federation, in milliseconds.
-pub const FEDERATED_LEASE_MS: u64 = 20_000;
+/// The lease duration `lease_expiry_releases` claims over Nextcloud, one instance or a
+/// federation, in milliseconds (`Fixture::lease_ms`; the journey's default is 4 s).
+///
+/// Why this long: after the renewal the journey lets `3/4 * D` pass and the lease must
+/// still be alive when it is read again, so the renewal's read-backs, the 500 ms settle
+/// interval of lease rule 3 and the final acquire's reads all have to fit in `D / 4`
+/// less 500 ms: 500 ms at 4 s, 4.5 s at 20 s. `docs/rfc/0004-spike-e-results.md` measured
+/// a Nextcloud request at 50 to 120 ms on one server and found the 4 s margin to be about
+/// 0.26 s by arithmetic, so a slow runner spends it: one instance on 35.0.2 failed
+/// ("renewal did not keep the lease alive") in CI run 40180662063 and passed on 34.0.5 and
+/// in the runs before. A federation (two server hops per operation) failed at 4 s in 7 of
+/// 8 runs. 20 s is the duration `tests/lease_timing.rs` measured to pass on both
+/// topologies and both builds in every run, and its margin is nine times that of 4 s.
+/// The journey is the same, only its clock is wider; no assertion is weakened.
+pub const NEXTCLOUD_LEASE_MS: u64 = 20_000;
 
 pub struct NcFactory {
     pub topology: Topology,
@@ -316,13 +329,9 @@ impl StoreFactory for NcFactory {
                 .await?
             }
         };
-        if self.topology == Topology::Federated {
-            // Spec test 5 needs the renewal, its read-backs and two more reads to fit inside
-            // the renewed lease, and every federated operation is two server hops. A 4 s
-            // lease failed in most federated runs (7 of 8; docs/rfc/0004-spike-e-results.md)
-            // and 20 s passed in every run on both Nextcloud versions (`lease_timing.rs`).
-            fx.lease_ms = FEDERATED_LEASE_MS;
-        }
+        // Spec test 5 needs the renewal, its read-backs and two more reads to fit inside the
+        // renewed lease; see NEXTCLOUD_LEASE_MS for why 4 s does not, on either topology.
+        fx.lease_ms = NEXTCLOUD_LEASE_MS;
         fx.forger = Some(Arc::new(NcForger { viewer }));
         Ok(fx)
     }

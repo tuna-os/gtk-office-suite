@@ -26,19 +26,33 @@ name: collab-spike
 #   webdav         dcp-webdav against two real Nextcloud instances (34.0.5 and
 #                  35.0.2): the journeys on one instance and across an OCM
 #                  federation, semantics, OCM receiver, lease timing
+#   streams-tls-deps, streams-tls, streams-tls-measure
+#                  the Durable Streams binding over TLS 1.3, HTTP/1.1 and HTTP/2, behind
+#                  a Caddy with a generated test CA, against both reference servers
+#                  (docs/rfc/0004-spike-tls-results.md). The plain-HTTP `streams` job
+#                  sets DCP_SKIP_STREAMS_TLS=1: the TLS tests fail without a TLS server
+#   q15            the Matrix power level at the event (spec 8.1, open question 15):
+#                  dcp-matrix levels, dcp-interop power_at_event, on the pinned Synapse
+#                  and on `latest` (docs/rfc/0004-spike-q15-results.md)
+#   p2p-relay      the unshaped in-process iroh relay test, with iroh's path data
+#   wan-plan, wan-probe, wan-build, wan, wan-footprint
+#                  dcp-p2p over a real iroh-relay with the peers in separate network
+#                  namespaces and the links shaped with tc netem (needs sudo; heavy;
+#                  docs/rfc/0004-spike-relay-results.md)
 #
-# Heavy jobs (collabora, the measure jobs) run on a schedule, on workflow_dispatch,
-# on a push whose head commit message contains "[collabora]" / "[measure]" (a
-# workflow can only be dispatched once it is on the default branch, so on a spike
-# branch the commit message is the switch), and, for collabora, on a pull request
-# that touches dcp-wopi or dcp-interop.
+# Heavy jobs (collabora, the measure jobs, the wan jobs) run on a schedule, on
+# workflow_dispatch, on a push whose head commit message contains "[collabora]" /
+# "[measure]" / "[wan]" (a workflow can only be dispatched once it is on the default
+# branch, so on a spike branch the commit message is the switch), and, for collabora,
+# on a pull request that touches dcp-wopi or dcp-interop. "[wan]" runs the whole WAN
+# matrix; "[smoke]", "[growth]" and "[footprint]" run a part (see wan-plan).
 #
 # Results and what is not verified: docs/rfc/0004-spike-*-results.md
 #
 # A test that needs a service (Synapse, Collabora, a Durable Streams server,
 # Nextcloud) FAILS when the service is missing; only DCP_SKIP_SYNAPSE=1 /
-# DCP_SKIP_COLLABORA=1 / DCP_SKIP_STREAMS=1 / DCP_SKIP_NEXTCLOUD=1 skip it, and the
-# test says so. Each job checks both behaviours.
+# DCP_SKIP_COLLABORA=1 / DCP_SKIP_STREAMS=1 / DCP_SKIP_STREAMS_TLS=1 /
+# DCP_SKIP_NEXTCLOUD=1 / DCP_SKIP_NETNS=1 skip it, and the test says so. Each job checks both behaviours.
 on:
   push:
     # main too: this workflow first ran on main 7 hours after the merge, and every
@@ -58,7 +72,7 @@ on:
   workflow_dispatch:
     inputs:
       measure:
-        description: 'Also run the measurements (spike A: about two hours; spikes B and C)'
+        description: 'Also run the measurements (spike A: about two hours; spikes B, C and TLS)'
         type: boolean
         default: false
 
@@ -77,6 +91,8 @@ env:
   # Pinned by tag and digest (docker hub, 2026-10-24); the Nextcloud images under test are
   # the matrix entries of the webdav jobs.
   POSTGRES_IMAGE: docker.io/library/postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+  # The relay server binary matching the iroh in dcp-p2p/Cargo.lock (iroh 1.4.1), used by the wan jobs.
+  IROH_RELAY_VERSION: 1.4.1
 
 permissions:
   contents: read
@@ -196,7 +212,8 @@ jobs:
           set -euo pipefail
           eval "$(scripts/synapse-up.sh relaxed)"
           trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-relaxed-journeys.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
-          cargo test -p dcp-matrix --locked --no-fail-fast -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"
+          # tests/levels.rs (the Q15 measurements, one thread) is the q15 job's
+          cargo test -p dcp-matrix --locked --no-fail-fast --lib --test journeys --test conformance -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"
 
       - name: Journeys and conformance under Synapse's default rate limits
         if: ${{ !cancelled() }}
@@ -585,6 +602,8 @@ jobs:
     env:
       # The one test that needs a server with access control has its own step below.
       DCP_SKIP_STREAMS_AUTH: '1'
+      # The TLS tests need a TLS server and fail without one: the streams-tls job runs them.
+      DCP_SKIP_STREAMS_TLS: '1'
     defaults:
       run:
         working-directory: tools/collab-spike
@@ -684,6 +703,9 @@ jobs:
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.measure) || contains(github.event.head_commit.message, '[measure]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 150
+    env:
+      # The `measure::` filter also matches tls_measure::, which needs a TLS server: streams-tls-measure runs those.
+      DCP_SKIP_STREAMS_TLS: '1'
     defaults:
       run:
         working-directory: tools/collab-spike
@@ -874,10 +896,9 @@ jobs:
           if-no-files-found: warn
 
   p2p-relay:
-    name: p2p - sync through an in-process iroh relay
+    name: p2p - sync through an in-process iroh relay (loopback, read with iroh's path API)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    continue-on-error: true
     defaults:
       run:
         working-directory: tools/collab-spike/dcp-p2p
@@ -891,11 +912,14 @@ jobs:
         with:
           workspaces: tools/collab-spike/dcp-p2p
           shared-key: collab-spike-p2p-relay
+      # Spike C's relay test (nodes given the relay URL and no direct address, iroh's in-process relay
+      # server) also reads iroh's path data: a relay path must have existed, and whether the
+      # connection upgraded to the loopback address is printed. The shaped, real-relay runs are the wan jobs.
       - name: Relay test
         run: |
           set -o pipefail
           mkdir -p "$GITHUB_WORKSPACE/results"
-          cargo test --locked --features relay-test --test relay -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/results/relay.log"
+          cargo test --locked --features relay-test --test relay -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/results/relay-inproc.log"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1101,4 +1125,838 @@ jobs:
         with:
           name: webdav-measurements-${{ matrix.version }}
           path: measurements/
+          if-no-files-found: warn
+
+  streams-tls-deps:
+    name: streams TLS - lockfile and TLS dependency tree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+
+      # The committed Cargo.lock must be the one this manifest resolves to.
+      - name: cargo metadata --locked (the whole workspace)
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      - name: The tree of dcp-streams (normal dependencies)
+        run: |
+          set -euo pipefail
+          cargo tree -p dcp-streams -e normal --locked --prefix none | sort -u > "$RUNNER_TEMP/tree.txt"
+          echo "crates in the normal dependency tree of dcp-streams (with TLS): $(wc -l < "$RUNNER_TEMP/tree.txt")"
+          grep -E '^(reqwest|rustls|rustls-webpki|hyper|h2|hyper-rustls|hyper-util|tokio-rustls|ring|rustls-pki-types|tokio|http) ' "$RUNNER_TEMP/tree.txt"
+          cargo tree -p dcp-streams -e normal --locked -f '{p} {f}' --prefix none | grep -E '^(reqwest|rustls|ring|hyper-rustls|tokio-rustls) ' | sort -u
+          # What must be there (this also proves the grep below can match) ...
+          for c in rustls ring h2 hyper-rustls rustls-webpki; do grep -q "^$c " "$RUNNER_TEMP/tree.txt" || { echo "::error::$c is not in the tree"; exit 1; }; done
+          # ... and what must not: a second TLS stack, a C TLS library, or a built-in trust store.
+          if grep -E '^(openssl|openssl-sys|native-tls|hyper-tls|aws-lc-rs|aws-lc-sys|webpki-roots|rustls-native-certs|rustls-platform-verifier|quinn|h3) ' "$RUNNER_TEMP/tree.txt"; then
+            echo "::error::an unwanted TLS crate is in the tree of dcp-streams"; exit 1
+          fi
+          # dev-dependencies (tests) add exactly the crates the transport tests speak directly
+          cargo tree -p dcp-streams -e dev --locked --prefix none | sort -u > "$RUNNER_TEMP/tree-dev.txt"
+          echo "with dev-dependencies: $(wc -l < "$RUNNER_TEMP/tree-dev.txt") crates"
+
+      # The same tree before: the manifest with TLS removed (edited in this checkout only).
+      - name: The tree without TLS, for comparison
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:tools/collab-spike/dcp-streams/Cargo.toml" > /dev/null
+          sed -i 's|^reqwest = .*|reqwest = { version = "0.12", default-features = false }|' dcp-streams/Cargo.toml
+          cargo tree -p dcp-streams -e normal --prefix none | sort -u > "$RUNNER_TEMP/tree-plain.txt"
+          echo "crates without TLS: $(wc -l < "$RUNNER_TEMP/tree-plain.txt")"
+          echo "added by TLS and HTTP/2:"
+          comm -13 "$RUNNER_TEMP/tree-plain.txt" "$RUNNER_TEMP/tree.txt"
+
+  streams-tls:
+    name: dcp-streams over TLS - ${{ matrix.kind }} server, HTTP/${{ matrix.http }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: node, http: '1.1', proto: 'HTTP/1.1', other: 'HTTP/2.0', alpn: 'http/1.1' }
+          - { kind: node, http: '2', proto: 'HTTP/2.0', other: 'HTTP/1.1', alpn: 'h2' }
+          - { kind: go, http: '1.1', proto: 'HTTP/1.1', other: 'HTTP/2.0', alpn: 'http/1.1' }
+          - { kind: go, http: '2', proto: 'HTTP/2.0', other: 'HTTP/1.1', alpn: 'h2' }
+    env:
+      DCP_STREAMS_HTTP: ${{ matrix.http }}
+      DCP_STREAMS_LABEL: ${{ matrix.kind }} server behind TLS, HTTP/${{ matrix.http }}
+      # The one test that needs a server with access control has its own step in the `streams` job.
+      DCP_SKIP_STREAMS_AUTH: '1'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          openssl version
+          jq --version
+          uname -a
+          nproc
+          free -m
+
+      - name: Install the pinned Node reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+
+      - name: Fetch the pinned Caddy (Go server) and print its version
+        run: |
+          set -euo pipefail
+          bin="$(scripts/streams-caddy-fetch.sh)"
+          "$bin" version
+          "$bin" list-modules | grep -E '^(http.handlers.durable_streams|http.handlers.reverse_proxy|tls)$'
+
+      - name: Build tests
+        run: cargo test -p dcp-streams --no-run --locked
+
+      # ---------------------------------------------------------------- missing server: fail, or skip and say so
+      - name: TLS tests fail loudly without a server, and skip only when told to
+        run: |
+          set -u
+          unset DCP_STREAMS_URL DCP_SKIP_STREAMS_TLS DCP_SKIP_STREAMS || true
+          ct() { cargo test -p dcp-streams --locked --test streams "$@" -- --nocapture; }
+          # 1. no URL at all
+          if ct tls::the_negotiated > "$RUNNER_TEMP/none.log" 2>&1; then
+            cat "$RUNNER_TEMP/none.log"; echo "::error::a TLS test passed with no server"; exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/none.log"
+          # 2. a plain http:// server is not a TLS server
+          if DCP_STREAMS_URL=http://127.0.0.1:1/v1/stream/ ct tls::the_negotiated > "$RUNNER_TEMP/plain.log" 2>&1; then
+            cat "$RUNNER_TEMP/plain.log"; echo "::error::a TLS test passed against an http:// URL"; exit 1
+          fi
+          grep -q "is not https://" "$RUNNER_TEMP/plain.log"
+          # 3. an https:// URL without the CA of the run fails closed
+          if DCP_STREAMS_URL=https://localhost:1/v1/stream/ ct spec_section_12 > "$RUNNER_TEMP/noca.log" 2>&1; then
+            cat "$RUNNER_TEMP/noca.log"; echo "::error::the journeys passed with no CA"; exit 1
+          fi
+          grep -q "DCP_STREAMS_CA" "$RUNNER_TEMP/noca.log"
+          # 4. an https:// URL with no HTTP version named is refused: a run cannot test the wrong one by accident
+          if env -u DCP_STREAMS_HTTP DCP_STREAMS_CA=/dev/null DCP_STREAMS_URL=https://localhost:1/v1/stream/ cargo test -p dcp-streams --locked --test streams spec_section_12 -- --nocapture > "$RUNNER_TEMP/nover.log" 2>&1; then
+            cat "$RUNNER_TEMP/nover.log"; echo "::error::the journeys passed with no HTTP version named"; exit 1
+          fi
+          grep -q "DCP_STREAMS_HTTP must be" "$RUNNER_TEMP/nover.log"
+          # 5. explicit skip, and it says so
+          DCP_SKIP_STREAMS_TLS=1 DCP_STREAMS_URL=http://127.0.0.1:1/v1/stream/ ct tls:: 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          grep -q "SKIPPED .*(DCP_SKIP_STREAMS_TLS=1)" "$RUNNER_TEMP/skip.log"
+
+      # ---------------------------------------------------------------- the servers
+      # The main server (access log on: its log is what the server says it served), and two
+      # servers for controls: a certificate that expired yesterday, and a front end that offers
+      # http/1.1 only. They differ only in that; same Caddy, same CA.
+      - name: Start the servers behind TLS
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki"
+          scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+          STREAMS_TLS_PORT=4450 STREAMS_PLAIN_PORT=4451 STREAMS_ORIGIN_PORT=4447 STREAMS_CERT=expired STREAMS_EXPORT_PREFIX=DCP_STREAMS_EXPIRED \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_EXPIRED_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          STREAMS_TLS_PORT=4460 STREAMS_PLAIN_PORT=4461 STREAMS_ORIGIN_PORT=4457 STREAMS_SERVER_PROTOCOLS=h1 STREAMS_EXPORT_PREFIX=DCP_STREAMS_H1ONLY \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_H1ONLY_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+
+      # What openssl, which is not our code, says about the same listener.
+      - name: openssl s_client - ALPN, TLS version, chain and name verification, with controls
+        run: |
+          set -u
+          probe() { echo | openssl s_client -connect localhost:4440 -servername localhost "$@" 2>&1 | tr -d '\000'; }
+          has() { grep -qE "$1" <<<"$2"; }   # here-string: no SIGPIPE under pipefail
+          ok="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname localhost -verify_return_error)"
+          grep -E "ALPN protocol|Protocol  :|Cipher is|Verification|Verify return code" <<<"$ok"
+          has "Verify return code: 0 \(ok\)" "$ok"
+          has "ALPN protocol: ${{ matrix.alpn }}" "$ok"
+          has "Protocol  : TLSv1.3" "$ok"
+          echo "--- control: the other CA must not verify"
+          bad="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_OTHER_CA" -verify_return_error || true)"
+          grep -E "Verify return code|verify error" <<<"$bad" || true
+          if has "Verify return code: 0 \(ok\)" "$bad"; then echo "::error::verified against the wrong CA"; exit 1; fi
+          has "verify error|Verify return code: [1-9]" "$bad" || { echo "::error::no verdict from openssl for the wrong CA"; exit 1; }
+          echo "--- control: another host name must not verify"
+          name="$(probe -alpn ${{ matrix.alpn }} -CAfile "$DCP_STREAMS_CA" -verify_hostname other.example -verify_return_error || true)"
+          grep -E "Verify return code|verify error" <<<"$name" || true
+          if has "Verify return code: 0 \(ok\)" "$name"; then echo "::error::verified for the wrong host name"; exit 1; fi
+          has "verify error|Verify return code: [1-9]" "$name" || { echo "::error::no verdict from openssl for the wrong host name"; exit 1; }
+          echo "--- control: the expired certificate must not verify"
+          exp="$(echo | openssl s_client -connect localhost:4450 -servername localhost -CAfile "$DCP_STREAMS_CA" -verify_return_error 2>&1 | tr -d '\000' || true)"
+          grep -E "Verify return code|verify error" <<<"$exp" || true
+          if has "Verify return code: 0 \(ok\)" "$exp"; then echo "::error::an expired certificate verified"; exit 1; fi
+          has "certificate has expired" "$exp" || { echo "::error::openssl did not say the certificate expired"; exit 1; }
+          echo "--- the http/1.1-only listener offers no h2"
+          h1="$(probe -connect localhost:4460 -alpn h2 -CAfile "$DCP_STREAMS_CA" || true)"
+          grep -E "ALPN|alert" <<<"$h1" || true
+          if has "ALPN protocol: h2" "$h1"; then echo "::error::the http/1.1-only front end negotiated h2"; exit 1; fi
+          has "alert|No ALPN negotiated" "$h1" || { echo "::error::the http/1.1-only listener did not refuse h2"; exit 1; }
+
+      # ---------------------------------------------------------------- the tests
+      - name: Unit tests (crypto, wire, rules)
+        run: cargo test -p dcp-streams --locked --lib -- --nocapture
+
+      - name: Journeys, properties, restart and the TLS tests, over TLS (${{ matrix.kind }}, HTTP/${{ matrix.http }})
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/measure-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+        run: |
+          set -euo pipefail
+          echo "DCP_STREAMS_URL=$DCP_STREAMS_URL  HTTP=$DCP_STREAMS_HTTP  CA=$DCP_STREAMS_CA  expired=$DCP_STREAMS_EXPIRED_URL  h1only=$DCP_STREAMS_H1ONLY_URL"
+          cargo test -p dcp-streams --locked --test streams --no-fail-fast -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/tests-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: Nothing was skipped, and the tests that matter ran and passed
+        run: |
+          set -euo pipefail
+          log="$GITHUB_WORKSPACE/tls-logs/tests-${{ matrix.kind }}-h${{ matrix.http }}.log"
+          grep "test result" "$log"
+          # only the access-control test (its own job) may skip
+          if grep "SKIPPED" "$log" | grep -v "auth"; then echo "::error::a test skipped"; exit 1; fi
+          for t in \
+            tls::the_negotiated_version_is_the_one_under_test \
+            tls::a_client_that_does_not_trust_the_servers_ca_fails_closed \
+            tls::a_certificate_for_another_host_name_is_refused \
+            tls::an_expired_certificate_is_refused \
+            tls::a_client_that_requires_h2_does_not_fall_back_to_http_1_1 \
+            tls::plain_http_to_the_tls_port_and_a_client_that_requires_tls \
+            tls::a_redirect_from_https_to_http_is_not_followed \
+            conformance::spec_section_12_journeys_on_a_durable_streams_server \
+            conformance::the_forged_version_journey_fails_when_no_reader_checks_roles \
+            properties::a_tampered_record_is_dropped_and_never_shown \
+            properties::the_wrong_key_fails_closed \
+            properties::a_removed_member_with_every_key_it_ever_held_reads_nothing_published_afterwards \
+            properties::negative_control_without_rotating_the_key_the_removed_member_reads_everything \
+            properties::the_lease_is_a_compare_and_set_on_stream_seq \
+            properties::a_late_joiner_bootstraps_from_a_snapshot_and_reads_only_what_follows \
+            properties::an_upload_cut_off_on_the_wire_leaves_no_stream_behind \
+            restart::a_file_backed_server_keeps_every_acknowledged_record_across_sigterm \
+            restart::a_file_backed_server_keeps_every_acknowledged_record_across_sigkill \
+            restart::an_in_memory_server_forgets_everything_and_the_client_says_so ; do
+            grep -q "^test $t \.\.\. ok" "$log" || { echo "::error::$t did not pass"; exit 1; }
+          done
+          grep -E "PASS|11 passed" "$log" | head -20
+          grep -E "^(TLS-NEGOTIATED|AUTO-NEGOTIATED|LOCATION-HEADER|WRONG-CA|NO-CA|IP-MISMATCH|NAME-MISMATCH|EXPIRED|REQUIRE-H2|PLAIN-TO-TLS|REDIRECT)" "$log" || true
+
+      # What the server says it served, independent of the client's own counters.
+      - name: The server's access log - every TLS request was TLS 1.3 and of HTTP version ${{ matrix.http }}
+        run: |
+          set -euo pipefail
+          cp "$DCP_STREAMS_ACCESS_LOG" "$GITHUB_WORKSPACE/tls-logs/access-${{ matrix.kind }}-h${{ matrix.http }}.log"
+          scripts/streams-tls-check-log.sh "$DCP_STREAMS_ACCESS_LOG" ${{ matrix.proto }}
+          echo "--- control: the same check expecting the other protocol must fail"
+          if scripts/streams-tls-check-log.sh "$DCP_STREAMS_ACCESS_LOG" ${{ matrix.other }} > "$RUNNER_TEMP/neg.log" 2>&1; then
+            cat "$RUNNER_TEMP/neg.log"; echo "::error::the log check passed for the wrong protocol"; exit 1
+          fi
+          tail -3 "$RUNNER_TEMP/neg.log"
+
+      # Not asserted: what Caddy 2.10.2 does when told to serve h2 alone. Recorded for the results document.
+      - name: Probe - Caddy with protocols h2 only (recorded, not asserted)
+        if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
+        run: |
+          export STREAMS_TLS_DIR="$DCP_STREAMS_TLS_DIR"
+          STREAMS_TLS_PORT=4470 STREAMS_PLAIN_PORT=4471 STREAMS_SERVER_PROTOCOLS=h2 STREAMS_EXPORT_PREFIX=PROBE scripts/streams-tls-up.sh go > "$RUNNER_TEMP/probe.env" 2> "$RUNNER_TEMP/probe.err" || { echo "caddy did not start with 'protocols h2':"; tail -20 "$RUNNER_TEMP/probe.err"; }
+          cat "$RUNNER_TEMP/probe.env" || true
+          echo | openssl s_client -connect localhost:4470 -servername localhost -alpn h2 -CAfile "$DCP_STREAMS_CA" 2>&1 | grep -E "ALPN|Verify return|alert|error" || true
+          curl -sS --cacert "$DCP_STREAMS_CA" --http2 -o /dev/null -w 'curl --http2: %{http_version} %{http_code}\n' https://localhost:4470/v1/stream/x || true
+          curl -sS --cacert "$DCP_STREAMS_CA" --http1.1 -o /dev/null -w 'curl --http1.1: %{http_version} %{http_code}\n' https://localhost:4470/v1/stream/x || true
+          p="$(sed -n 's/^export PROBE_PIDFILE=//p' "$RUNNER_TEMP/probe.env")"
+          [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+
+      # An observation about the Go server 0.3.0 behind Caddy 2.10.2, asserted so that the results
+      # document's claim stays tied to a run: with Caddy's `log` directive in front, SSE is refused.
+      - name: "Probe - SSE through Caddy's access log (Go server): refused with the log on, served with it off"
+        if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
+        run: |
+          set -u
+          export STREAMS_TLS_DIR="$DCP_STREAMS_TLS_DIR"
+          STREAMS_ACCESS_LOG=0 STREAMS_TLS_PORT=4510 STREAMS_PLAIN_PORT=4511 STREAMS_EXPORT_PREFIX=NOLOG scripts/streams-tls-up.sh go > "$RUNNER_TEMP/nolog.env"
+          sse() { # base URL: create a stream, ask for SSE for 3 s
+            curl -sS --cacert "$DCP_STREAMS_CA" -X PUT -H 'Content-Type: application/json' -o /dev/null "$1/v1/stream/sse-probe"
+            timeout 3 curl -sS -N --cacert "$DCP_STREAMS_CA" --http2 "$1/v1/stream/sse-probe?offset=-1&live=sse" 2>&1 | head -3 || true
+          }
+          on="$(sse https://localhost:4440)"; off="$(sse https://localhost:4510)"
+          echo "access log ON : $on"; echo "access log OFF: $off"
+          p="$(sed -n 's/^export NOLOG_PIDFILE=//p' "$RUNNER_TEMP/nolog.env")"; scripts/streams-tls-down.sh "$p" || true
+          grep -q "streaming not supported" <<<"$on"
+          grep -q "event: control" <<<"$off"
+
+      - name: Stop the servers
+        if: always()
+        run: |
+          for p in "$DCP_STREAMS_PIDFILE" "${DCP_STREAMS_EXPIRED_PIDFILE:-}" "${DCP_STREAMS_H1ONLY_PIDFILE:-}" "${PROBE_PIDFILE:-}"; do
+            [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+          done
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server-${{ matrix.kind }}-h${{ matrix.http }}.log" 2>/dev/null || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tls-logs-${{ matrix.kind }}-h${{ matrix.http }}
+          path: tls-logs/
+          if-no-files-found: warn
+
+  streams-tls-measure:
+    name: TLS measurements (release) - ${{ matrix.kind }} server, HTTP/${{ matrix.http }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.measure) || contains(github.event.head_commit.message, '[measure]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: node, http: '1.1' }
+          - { kind: node, http: '2' }
+          - { kind: go, http: '1.1' }
+          - { kind: go, http: '2' }
+    env:
+      DCP_STREAMS_HTTP: ${{ matrix.http }}
+      DCP_MEASURE_MAX_MB: '16'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls-release
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+
+      - name: Versions
+        run: |
+          rustc --version
+          node --version
+          openssl version
+          uname -a
+          nproc
+          free -m
+          lscpu | grep -E "Model name|MHz" || true
+
+      - name: Install the pinned Node reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the tests in release mode
+        run: cargo test --release --locked -p dcp-streams --test streams --no-run
+
+      # No access log here: with it the Go server's SSE answers 500 (see the script), and the
+      # logging costs a little on every request. The correctness job has the log.
+      - name: Start the servers behind TLS (default timeouts; and two with the timeouts of the idle test)
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_ACCESS_LOG=0
+          scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+          # server heartbeat shorter than a 60 s proxy timeout (Go: SSE lifetime 55 s, Node: SSE keep-alive 30 s)
+          STREAMS_TLS_PORT=4480 STREAMS_PLAIN_PORT=4481 STREAMS_ORIGIN_PORT=4477 STREAMS_LONG_POLL_S=30 STREAMS_SSE_RECONNECT_S=55 STREAMS_EXPORT_PREFIX=DCP_STREAMS_SHORT \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_SHORT_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          # server heartbeat longer than the proxy timeout
+          STREAMS_TLS_PORT=4490 STREAMS_PLAIN_PORT=4491 STREAMS_ORIGIN_PORT=4487 STREAMS_LONG_POLL_S=90 STREAMS_SSE_RECONNECT_S=120 STREAMS_EXPORT_PREFIX=DCP_STREAMS_LONG \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_LONG_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+          # a front end that closes keep-alive connections idle for 5 s (what the Node origin does by itself)
+          STREAMS_TLS_PORT=4500 STREAMS_PLAIN_PORT=4501 STREAMS_ORIGIN_PORT=4497 STREAMS_IDLE_TIMEOUT_S=5 STREAMS_EXPORT_PREFIX=DCP_STREAMS_IDLE5 \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' | grep -E '^DCP_STREAMS_IDLE5_(URL|PIDFILE)=' >> "$GITHUB_ENV"
+
+      # Spike B's own latency tests, unchanged, against the same server three ways.
+      - name: Latency - spike B's tests over TLS, over plain HTTP through the same front end, and (Node) straight to the origin
+        run: |
+          set -euo pipefail
+          b() { # label, then env assignments
+            label="$1"; shift
+            env "$@" DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/latency-$label.jsonl" \
+              cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+                measure::latency_append_to_a_second_client measure::latency_of_the_server_alone_for_a_bare_append measure::lease_acquire_and_renew_latency \
+              2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/latency-$label.log"
+          }
+          b "tls-${{ matrix.kind }}-h${{ matrix.http }}" DCP_STREAMS_URL="$DCP_STREAMS_URL"
+          b "plain-front-${{ matrix.kind }}" DCP_STREAMS_URL="$DCP_STREAMS_PLAIN_URL"
+          if [ "${{ matrix.kind }}" = node ]; then b "plain-direct-node" DCP_STREAMS_URL="$DCP_STREAMS_DIRECT_URL"; fi
+
+      - name: Handshake and cold start, bytes per request, HTTP/2 settings, 50 streams on one client, bulk over a long path
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/transport-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            tls_measure:: --skip reconnecting_after 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/transport-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: The server closes an idle connection (front end idle timeout 5 s; the Node origin does the same by itself)
+        if: ${{ !cancelled() }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/reconnect-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_SERVER_IDLE_S: '5'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_IDLE5_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            tls_measure::reconnecting_after 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/reconnect-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: A proxy that closes idle connections after 60 s - the server's heartbeat is shorter than the proxy's timeout
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/idle-short-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_LONG_POLL_S: '30'
+          DCP_STREAMS_SSE_RECONNECT_S: '55'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_SHORT_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            idle:: 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/idle-short-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: A proxy that closes idle connections after 60 s - the server's heartbeat is longer than the proxy's timeout
+        if: ${{ !cancelled() }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/tls-logs/idle-long-${{ matrix.kind }}-h${{ matrix.http }}.jsonl
+          DCP_STREAMS_LONG_POLL_S: '90'
+          DCP_STREAMS_SSE_RECONNECT_S: '120'
+        run: |
+          set -euo pipefail
+          DCP_STREAMS_URL="$DCP_STREAMS_LONG_URL" cargo test --release --locked -p dcp-streams --test streams -- --ignored --test-threads=1 --nocapture \
+            idle:: 2>&1 | tee "$GITHUB_WORKSPACE/tls-logs/idle-long-${{ matrix.kind }}-h${{ matrix.http }}.log"
+
+      - name: Stop the servers
+        if: always()
+        run: |
+          for p in "$DCP_STREAMS_PIDFILE" "${DCP_STREAMS_SHORT_PIDFILE:-}" "${DCP_STREAMS_LONG_PIDFILE:-}" "${DCP_STREAMS_IDLE5_PIDFILE:-}"; do
+            [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
+          done
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server-${{ matrix.kind }}-h${{ matrix.http }}.log" 2>/dev/null || true
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tls-measurements-${{ matrix.kind }}-h${{ matrix.http }}
+          path: tls-logs/
+          if-no-files-found: warn
+
+  # RFC-0004 open question 15 (spec 8.1): a Matrix reader judges a DCP event's sender by the
+  # power level in force AT the event. The reader side is dcp-matrix (src/levels.rs, src/store.rs
+  # `read_report_with`); the five scenarios with their negative controls are dcp-interop
+  # (src/power_at_event.rs); what each way of learning the level costs is measured in
+  # dcp-matrix/tests/levels.rs. Results: docs/rfc/0004-spike-q15-results.md. Run on the pinned
+  # Synapse (relaxed, default, default with every budget drained) and once on `latest`. The
+  # conformance suites of this spike (run_all through MatrixStore and WopiHost<MatrixStore>, every
+  # reader rule) are the `matrix` and `interop` jobs.
+  q15:
+    name: Q15 power level at the event - ${{ matrix.tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tag: relaxed,        profile: relaxed, image: 'docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02', threads: 3 }
+          - { tag: default,        profile: default, image: 'docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02', threads: 3 }
+          - { tag: relaxed-latest, profile: relaxed, image: 'docker.io/matrixdotorg/synapse:latest', threads: 3 }
+          # Every principal's message budget spent first (DCP_DRAIN_BURST, read by the dcp-interop rig): each event the scenarios send is then paced by the homeserver.
+          - { tag: default-drained, profile: default, image: 'docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02', threads: 3, drain: '1' }
+    env:
+      # The Synapse the earlier spikes measured (1.163.2), by tag and digest (docker hub, 2026-10-25); one entry runs `latest`.
+      SYNAPSE_IMAGE: ${{ matrix.image }}
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-q15
+      - name: Output directory and versions
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          rustc --version
+          cargo --version
+          docker --version
+          echo "git $(git rev-parse HEAD)"
+          echo "Synapse image: $SYNAPSE_IMAGE"
+          nproc
+          free -m
+      - name: Build tests
+        run: cargo test -p dcp-matrix -p dcp-interop --no-run --locked
+      # A test that needs Synapse must fail without one, and skip only when told to, saying so.
+      - name: Fails loudly without a Synapse
+        if: ${{ matrix.tag == 'relaxed' }}
+        run: |
+          for t in "dcp-matrix levels" "dcp-interop power_at_event"; do
+            set -- $t
+            if env -u DCP_SYNAPSE_URL -u DCP_SKIP_SYNAPSE cargo test -p "$1" --locked --test "$2" -- --nocapture > "$RUNNER_TEMP/nosyn-$2.log" 2>&1; then
+              cat "$RUNNER_TEMP/nosyn-$2.log"
+              echo "::error::$1 --test $2 passed with no Synapse"
+              exit 1
+            fi
+            grep -q "DCP_SYNAPSE_URL is not set" "$RUNNER_TEMP/nosyn-$2.log"
+          done
+      - name: DCP_SKIP_SYNAPSE=1 skips explicitly and says so
+        if: ${{ matrix.tag == 'relaxed' }}
+        env:
+          DCP_SKIP_SYNAPSE: '1'
+        run: |
+          env -u DCP_SYNAPSE_URL cargo test -p dcp-matrix --locked --test levels -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-levels.log"
+          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-levels.log")" -eq 5
+          env -u DCP_SYNAPSE_URL cargo test -p dcp-interop --locked --test power_at_event -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-q15.log"
+          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-q15.log")" -eq 7
+      - name: Measurements, scenarios with their controls, the demoted-editor check (Synapse, ${{ matrix.tag }})
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/out/${{ matrix.tag }}.jsonl
+          DCP_DRAIN_BURST: ${{ matrix.drain }}
+        run: |
+          set -uo pipefail
+          set +e
+          eval "$(scripts/synapse-up.sh ${{ matrix.profile }})"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/out/synapse-${{ matrix.tag }}.log" 2>&1 || true; scripts/synapse-down.sh ${{ matrix.profile }}' EXIT
+          echo "Synapse $DCP_SYNAPSE_VERSION, profile $DCP_SYNAPSE_PROFILE, image $DCP_SYNAPSE_IMAGE_ID"
+          rc=0
+          run() { # run <log name> <command...>
+            name=$1; shift
+            echo "::group::$name"
+            "$@" 2>&1 | tee "$GITHUB_WORKSPACE/out/${{ matrix.tag }}-$name.log"
+            s=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if [ "$s" -ne 0 ]; then echo "::error::$name failed ($s)"; rc=1; fi
+          }
+          run levels cargo test -p dcp-matrix --locked --test levels --no-fail-fast -- --nocapture --test-threads=1
+          run scenarios cargo test -p dcp-interop --locked --test power_at_event --no-fail-fast -- --nocapture --test-threads=${{ matrix.threads }}
+          run demoted-editor cargo test -p dcp-interop --locked --test cross_binding --no-fail-fast -- a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through a_draft0_server_accepts_a_demoted_editors_events_and_readers_drop_them --nocapture --test-threads=2
+          if [ "${{ matrix.profile }}" = relaxed ]; then
+            # The controls of the existing checks: they must still fail where they are meant to (relaxed only, as in the `interop` job).
+            run controls cargo test -p dcp-interop --locked --test negative_control --no-fail-fast -- --nocapture --test-threads=2
+          fi
+          exit $rc
+      - name: What was measured
+        if: ${{ !cancelled() }}
+        run: |
+          grep -h "^MEASURE" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-*.log | grep -v q15_reading | cut -c1-1500 || true
+          echo "--- READING lines"
+          grep -h "^READING" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-scenarios.log | cut -c1-400 || true
+          echo "--- TIMING lines"
+          grep -h "^TIMING" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-*.log || true
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: q15-levels-${{ matrix.tag }}
+          path: out/
+          if-no-files-found: warn
+
+  wan-probe:
+    name: wan probe - namespaces, netem, iptables, iroh-relay
+    needs: wan-plan
+    if: ${{ needs.wan-plan.outputs.wan == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Runner
+        run: |
+          mkdir -p results
+          { uname -a; cat /etc/os-release | head -3; nproc; free -m; ip -V; tc -V; iptables --version; openssl version; } 2>&1 | tee results/runner.txt
+          sudo modprobe sch_netem 2>&1 | tee -a results/runner.txt || true
+          lsmod | grep -i netem | tee -a results/runner.txt || echo "sch_netem not listed by lsmod" | tee -a results/runner.txt
+      - name: Cache iroh-relay
+        id: relay-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cargo/bin/iroh-relay
+          key: iroh-relay-${{ env.IROH_RELAY_VERSION }}-server-${{ runner.os }}
+      - name: Install iroh-relay (pinned, with its own lockfile)
+        if: steps.relay-cache.outputs.cache-hit != 'true'
+        run: cargo install iroh-relay --version "=$IROH_RELAY_VERSION" --features server --locked
+      - name: iroh-relay version
+        run: iroh-relay --version | tee results/iroh-relay-version.txt
+      - name: Topology, reachability, shaping
+        run: |
+          set -x
+          S=tools/collab-spike/scripts/netns-wan.sh
+          sudo $S up
+          sudo $S check
+          sudo $S mode relay-only
+          sudo $S check
+          sudo $S counters
+          sudo $S mode direct
+          sudo $S shape 150 0 -
+          echo "-- ping a -> b, mode direct, shape 150 ms RTT (expect ~150 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.2.2
+          echo "-- ping a -> relay (expect ~75 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.0.1
+          sudo $S shape 0 5 -
+          echo "-- ping a -> b, 5% loss (expect ~10% loss round trip)"
+          sudo ip netns exec dcp-a ping -c 100 -i 0.05 -q 10.77.2.2 || true
+          sudo $S shape 0 0 1mbit
+          sudo env IROH_RELAY_BIN="$(command -v iroh-relay)" $S relay-up
+          sudo ip netns exec dcp-a curl -sS --cacert /tmp/dcp-wan/ca.crt -o /dev/null -w 'a -> relay https: %{http_code} in %{time_total}s\n' https://10.77.0.1/generate_204
+          sudo $S relay-metrics | head -20
+          sudo $S relay-down
+          sudo $S down
+        shell: bash
+      - name: Relay log
+        if: always()
+        run: sudo cat /tmp/dcp-wan/relay.log | tail -40 | tee results/relay-log-tail.txt || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: relay-probe
+          path: results/
+          if-no-files-found: warn
+
+  # Which of the WAN jobs run (heavy, netns + tc netem, needs sudo): a schedule, a dispatch, or a push
+  # whose head commit message contains "[wan]" runs the whole
+  # matrix, "[smoke]" runs one condition with the path tests only, "[growth]" the state-growth
+  # test in two conditions, "[footprint]" the footprint probe (a workflow can only be dispatched once it is on the default branch, so on a spike
+  # branch the commit message is the switch; a schedule and workflow_dispatch run everything).
+  wan-plan:
+    name: wan plan - which of the WAN jobs run
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      wan: ${{ steps.p.outputs.wan }}
+      footprint: ${{ steps.p.outputs.footprint }}
+      smoke: ${{ steps.p.outputs.smoke }}
+      only: ${{ steps.p.outputs.only }}
+    steps:
+      - id: p
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          full='{"cond":[
+            {"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"1"},
+            {"name":"rtt50","rtt":50,"loss":0,"rate":"-","scale":1.5,"big":"0"},
+            {"name":"rtt150","rtt":150,"loss":0,"rate":"-","scale":2,"big":"1"},
+            {"name":"loss1","rtt":0,"loss":1,"rate":"-","scale":1.5,"big":"0"},
+            {"name":"loss5","rtt":0,"loss":5,"rate":"-","scale":3,"big":"0"},
+            {"name":"rate1m","rtt":0,"loss":0,"rate":"1mbit","scale":3,"big":"1"},
+            {"name":"worst","rtt":150,"loss":5,"rate":"1mbit","scale":5,"big":"1"}],
+            "group":["journeys","rest"]}'
+          smoke='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"0"}],"group":["rest"]}'
+          growth='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"1"},{"name":"rate1m","rtt":0,"loss":0,"rate":"1mbit","scale":3,"big":"1"}],"group":["rest"]}'
+          wan=false; footprint=false; smoke_on=false; only=; matrix=$full
+          case "$MSG" in *"[wan]"*) wan=true ;; esac
+          case "$MSG" in *"[smoke]"*) wan=true; smoke_on=true; matrix=$smoke ;; esac
+          case "$MSG" in *"[growth]"*) wan=true; only=growth; matrix=$growth ;; esac
+          case "$MSG" in *"[footprint]"*) footprint=true ;; esac
+          if [ "$EVENT" = workflow_dispatch ] || [ "$EVENT" = schedule ]; then wan=true; footprint=true; fi
+          echo "matrix=$(echo "$matrix" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+          echo "wan=$wan" >> "$GITHUB_OUTPUT"
+          echo "footprint=$footprint" >> "$GITHUB_OUTPUT"
+          echo "smoke=$smoke_on" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+
+  wan-build:
+    name: wan build - peer process, driver, footprint probe, iroh-relay (release)
+    needs: [check, wan-plan]
+    if: ${{ needs.wan-plan.outputs.wan == 'true' || needs.wan-plan.outputs.footprint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: tools/collab-spike/dcp-p2p
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike/dcp-p2p
+          shared-key: collab-spike-relay-build
+      - name: Cache iroh-relay
+        id: relay-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cargo/bin/iroh-relay
+          key: iroh-relay-${{ env.IROH_RELAY_VERSION }}-server-${{ runner.os }}
+      - name: Install iroh-relay (pinned, with its own lockfile)
+        if: steps.relay-cache.outputs.cache-hit != 'true'
+        run: cargo install iroh-relay --version "=$IROH_RELAY_VERSION" --features server --locked
+      - name: Build the driver, the peer process and the footprint probe (release, --locked)
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/wanbin"
+          WAN=$(cargo test --release --locked --test wan --no-run --message-format=json 2>/dev/null | jq -r 'select(.profile.test==true and .target.name=="wan") | .executable' | tail -1)
+          cp "$WAN" "$GITHUB_WORKSPACE/wanbin/wan"
+          cp target/release/dcp-p2p-node target/release/dcp-p2p-footprint "$GITHUB_WORKSPACE/wanbin/"
+          cp ~/.cargo/bin/iroh-relay "$GITHUB_WORKSPACE/wanbin/"
+          ls -l "$GITHUB_WORKSPACE/wanbin"
+          { rustc --version; cargo --version; "$GITHUB_WORKSPACE/wanbin/iroh-relay" --version; } | tee "$GITHUB_WORKSPACE/wanbin/versions.txt"
+          grep -A1 -E 'name = "(iroh|iroh-relay|iroh-blobs|noq|p2panda-core|p2panda-spaces)"' Cargo.lock | grep -v '^--' | paste - - | tee -a "$GITHUB_WORKSPACE/wanbin/versions.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: wan-bin
+          path: wanbin/
+          if-no-files-found: error
+
+  wan:
+    name: wan ${{ matrix.cond.name }} / ${{ matrix.group }}
+    needs: [wan-plan, wan-build]
+    if: ${{ needs.wan-plan.outputs.wan == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      # rtt: peer-to-peer round trip (ms); loss: per direction, peer to peer (%); rate: per link.
+      # scale multiplies the timeouts inside the tests; it never changes what is asserted.
+      matrix: ${{ fromJSON(needs.wan-plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: wan-bin
+          path: wanbin
+      - name: Tools
+        run: |
+          chmod +x wanbin/*
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tcpdump tshark iptables 2>&1 | tail -2
+      - name: Namespaces, shaping, relay, the tests
+        env:
+          COND: ${{ matrix.cond.name }}
+          GROUP: ${{ matrix.group }}
+          RTT: ${{ matrix.cond.rtt }}
+          LOSS: ${{ matrix.cond.loss }}
+          RATE: ${{ matrix.cond.rate }}
+          SCALE: ${{ matrix.cond.scale }}
+          BIG: ${{ matrix.cond.big }}
+          SMOKE: ${{ needs.wan-plan.outputs.smoke }}
+          ONLY: ${{ needs.wan-plan.outputs.only }}
+        run: |
+          set -uo pipefail
+          W=$GITHUB_WORKSPACE
+          BIN=$W/wanbin
+          OUT=$W/results/$COND-$GROUP
+          S=$W/tools/collab-spike/scripts/netns-wan.sh
+          mkdir -p "$OUT"
+          T() { sudo env DCP_WAN_CONDITION="$COND" DCP_WAN_SCALE="$SCALE" DCP_WAN_BIG="$BIG" DCP_WAN_OUT="$OUT" DCP_WAN_SCRIPT="$S" \
+                DCP_WAN_NODE_BIN="$BIN/dcp-p2p-node" IROH_RELAY_BIN="$BIN/iroh-relay" "$@"; }
+          {
+            echo "condition $COND group $GROUP: rtt=$RTT ms loss=$LOSS % rate=$RATE scale=$SCALE big=$BIG"
+            nproc; free -m | head -2; lscpu | grep 'Model name'; uname -r; getconf CLK_TCK
+            cat "$BIN/versions.txt"
+          } 2>&1 | tee "$OUT/setup.txt"
+          T "$S" up 2>&1 | tee -a "$OUT/setup.txt"
+          T "$S" shape "$RTT" "$LOSS" "$RATE" 2>&1 | tee -a "$OUT/setup.txt"
+          {
+            echo "-- measured shaping (mode direct): ping a -> b (peer to peer), a -> relay"
+            sudo ip netns exec dcp-a ping -c 30 -i 0.2 -q 10.77.2.2 | tail -3
+            sudo ip netns exec dcp-a ping -c 30 -i 0.2 -q 10.77.0.1 | tail -3
+            T "$S" mode relay-only
+            T "$S" check
+            T "$S" mode direct
+            T "$S" relay-up
+          } 2>&1 | tee -a "$OUT/setup.txt"
+          sudo ip netns exec dcp-a tcpdump -i vn-a -s 128 -U -w "$OUT/dcp-a.pcap" >/dev/null 2>&1 &
+          sleep 1
+          rc=0
+          run() { # run <log name> <test filters...>
+            name=$1; shift
+            echo "=== $name: $*"
+            T "$BIN/wan" "$@" --test-threads=1 --nocapture > "$OUT/$name.log" 2>&1 || { echo "FAILED: $name"; rc=1; }
+            grep -E '^(test |SKIP|MEASURE|test result)' "$OUT/$name.log" | cut -c1-400
+          }
+          case "$GROUP" in
+            journeys) run journeys journeys_ ;;
+            rest)
+              if [ "$ONLY" = growth ]; then
+                run growth state_growth
+              elif [ "$SMOKE" = true ]; then
+                run paths path_ ports_ relay_killed direct_path_blocked
+                run scenarios catch_up_direct lease_latency_direct
+                run growth state_growth_direct
+              else
+              run paths path_ ports_ relay_killed direct_path_blocked
+              run scenarios catch_up concurrent_heads lease_latency connect_and_files
+              run growth state_growth
+              fi
+              ;;
+          esac
+          sudo pkill tcpdump || true
+          sleep 1
+          T "$S" relay-metrics > "$OUT/relay-metrics.txt" 2>&1 || true
+          sudo cp /tmp/dcp-wan/relay.log "$OUT/relay.log" 2>/dev/null || true
+          {
+            echo "-- what node a sent on the wire (all tests of this job): protocol, destination, port"
+            "$W/tools/collab-spike/scripts/pcap-summary.sh" "$OUT/dcp-a.pcap" 10.77.1.2
+            echo "-- relay metrics (cumulative over this job)"
+            grep -E '^relayserver_(bytes_sent|bytes_recv|send_packets_sent|send_packets_dropped|accepts|disconnects|unique_client_keys|connections)' "$OUT/relay-metrics.txt" | grep -v '^#' || true
+            echo "-- FORWARD rule counters (mode direct at the end)"
+            T "$S" counters
+          } 2>&1 | tee "$OUT/wire-summary.txt"
+          sudo chmod -R a+r "$OUT" || true
+          rm -f "$OUT/dcp-a.pcap" 
+          exit $rc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: wan-${{ matrix.cond.name }}-${{ matrix.group }}
+          path: results/
+          if-no-files-found: warn
+
+  wan-footprint:
+    name: wan footprint - what an iroh endpoint contacts by itself
+    needs: [wan-plan, wan-build]
+    if: ${{ needs.wan-plan.outputs.footprint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: wan-bin
+          path: wanbin
+      - name: Tools
+        run: |
+          chmod +x wanbin/*
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tcpdump tshark iptables 2>&1 | tail -2
+      - name: Capture the probe variants
+        run: |
+          mkdir -p results
+          sudo tools/collab-spike/scripts/netns-footprint.sh "$PWD/wanbin/dcp-p2p-footprint" "$PWD/results" 2>&1 | tee results/footprint-run.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: footprint
+          path: results/
           if-no-files-found: warn
