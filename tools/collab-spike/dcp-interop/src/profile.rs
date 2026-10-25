@@ -132,6 +132,25 @@ pub async fn send_unchecked_patiently(
     Err(dcp_core::StoreError::RateLimited { retry_after_ms: None })
 }
 
+/// [`send_unchecked_patiently`] for a state event (`MatrixStore::send_state_unchecked`).
+pub async fn send_state_unchecked_patiently(
+    store: &MatrixStore,
+    doc: &dcp_core::DocId,
+    event_type: &str,
+    state_key: &str,
+    content: serde_json::Value,
+) -> Result<String, dcp_core::StoreError> {
+    for _ in 0..60 {
+        match store.send_state_unchecked(doc, event_type, state_key, content.clone()).await {
+            Err(dcp_core::StoreError::RateLimited { retry_after_ms }) => {
+                tokio::time::sleep(Duration::from_millis(retry_after_ms.unwrap_or(5_000).clamp(500, 30_000))).await
+            }
+            other => return other,
+        }
+    }
+    Err(dcp_core::StoreError::RateLimited { retry_after_ms: None })
+}
+
 fn is_rate_limited(text: &str) -> bool {
     text.contains("M_LIMIT_EXCEEDED") || text.contains("LimitExceeded") || text.contains("Too Many Requests") || text.contains("429")
 }

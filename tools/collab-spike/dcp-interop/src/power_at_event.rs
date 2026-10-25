@@ -584,7 +584,7 @@ pub async fn a_hidden_power_levels_change_does_not_mislead_the_readers_that_chec
     let file = first_file(rig).await?;
 
     // From here on an event is visible only to the members who were joined when it was sent.
-    owner.send_state_unchecked(&rig.doc, "m.room.history_visibility", "", json!({ "history_visibility": "joined" })).await?;
+    profile::send_state_unchecked_patiently(owner, &rig.doc, "m.room.history_visibility", "", json!({ "history_visibility": "joined" })).await?;
     // Before the window: an editor's version, then the demotion (hidden from the late joiner), then a forgery.
     let a1 = publish(rig, Who::Editor, vec![rig.first.clone()], "a1, before the window").await?;
     set_role(rig, &editor_id, Role::Viewer).await?;
