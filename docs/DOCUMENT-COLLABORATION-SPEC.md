@@ -11,7 +11,11 @@
 > the **Durable Streams binding** (8.4) against **`@durable-streams/server` 0.3.9 and the Go server
 > v0.3.0** ([Spike B](rfc/0004-spike-b-results.md)); the **iroh and p2panda binding** (8.5) with
 > **iroh 1.4.1 and p2panda 0.7.1** ([Spike C](rfc/0004-spike-c-results.md)). All ran in CI on
-> loopback or one docker network, none over TLS except where a section says so, and each section
+> loopback or one docker network, except where a section says so (Durable Streams was also run
+> over TLS 1.3 with HTTP/1.1 and HTTP/2, [TLS spike](rfc/0004-spike-tls-results.md); the iroh
+> binding was also run through a real `iroh-relay` in network namespaces on shaped links, [relay
+> spike](rfc/0004-spike-relay-results.md); the Matrix reader rule was measured in [Spike
+> Q15](rfc/0004-spike-q15-results.md)), and each section
 > states its limits and what was not run. **L3 presence and any update algorithm profile are
 > unmeasured**, nothing in them has been built, and no binding has had a second implementation read
 > its bytes. The namespace `org.tunaos.dcp` is a placeholder and MUST be replaced by a registered
@@ -207,7 +211,8 @@ carries the WOPI lock token. It is not an access control mechanism (section 11).
    session acquire in 200 of 200 rounds on each of those two profiles, and in none of 1 200 rounds
    across three runs did two sessions acquire** (8.1). The settle interval MUST be at least as long
    as the gap between competing writes the binding must tolerate; section 8.1 gives the Matrix
-   value and the measured boundary, and rule 13 says what a delayed write does to it. The loser
+   value and the measured boundary, section 8.5 the value for iroh on a WAN, and rule 13 says what
+   a delayed write does to it. The loser
    learns of its loss at the second read-back and MUST NOT save as the holder. A binding with an
    atomic compare-and-set is covered by rule 9.
 4. The holder MUST renew at or before half of `duration_ms` has elapsed while it keeps editing, and
@@ -454,19 +459,59 @@ timeline types only take effect in an unencrypted room and are kept for that cas
 literal draft-0 table (no `m.room.encrypted` entry) a viewer's forged version was accepted by the
 server (reproduced); with the entry it was refused `403`. The state-event levels (`lease` 50, `meta`
 100) are enforced as written (`403` tested). `invite` is set because Synapse's default of 0 lets
-anyone invite. A reader MUST check the room's power-levels event on joining. **In a room whose
-table lacks the `m.room.encrypted` entry** a reader SHOULD drop DCP timeline events from senders
-that were below the editor level (50) **at the time of the event**, whatever the server accepted.
-The level is the one in force at the event and not the room's current one: in a room with the
-draft-0 table, demoting an editor made every reader drop that editor's earlier legitimate
-versions and then reject the owner's later save built on one of them (unknown parent, version rule
-6), so the document read as its first version (3 of 3 runs, Spike F). In a room with the entry the
-server refuses the ex-editor and history stays, so a reader trusts the server there; that also
-means a forged event a server accepted would be accepted, which no test can produce on one
-Synapse. How a reader obtains the power levels at an event (Matrix's
-`GET /rooms/{id}/context/{eventId}` returns the state at an event) was not tried (section 13,
-question 15). A forged update is treated like a forged version: refused `403` in a room with the
-entry, accepted by the server and dropped by every reader (2 of 2) in a draft-0 room, where a
+anyone invite. A reader MUST judge a version or an update by its sender's power level **in force
+at the event**, never by the room's current table. The level is `users[sender]`, else
+`users_default` (a room version 12 creator has unbounded power), from the room's power-levels
+state at the event; the event is accepted only if that level is at least 50 and at least what the
+same table asks for the event type the server saw (`events[type]`, else `events_default`;
+`m.room.encrypted` in an encrypted room). This applies whether or not the table gates
+`m.room.encrypted`: with the entry the server has already refused an unauthorised sender at send
+time and the rule changes nothing; without it the server accepts the event and only the reader
+stands between it and the document. A demotion MUST NOT hide what the editor published before it,
+and a promotion MUST NOT validate what the user sent before it. Measured: the draft 1 rule (the
+room's current table) dropped the ex-editor's earlier versions and then the owner's save built on
+one of them in a draft-0 room, so the document read as its first version (3 of 3 runs, Spike F),
+and accepted a viewer's earlier forgery after a promotion; a reader that judges by the level at the
+event got every verdict right in all six scenarios, 65 reader runs, 0 wrong, while the current-table
+reader got 24 verdicts wrong in 10 runs and a reader that trusts senders 20 in 8
+([Spike Q15](rfc/0004-spike-q15-results.md), scenarios 1 to 6).
+
+A reader obtains the power levels at an event in one of two ways, and uses the second for every
+event the first cannot place:
+
+1. **From the room's own events.** Page the room's timeline (`/messages`): it carries
+   `m.room.create` and every `m.room.power_levels` event in order. Walk them from the oldest;
+   judge each event by the table held when the walk reaches it. The walk MUST trust a table only
+   while the next power-levels event it meets names it in `unsigned.replaces_state`: a change the
+   reader cannot see (history visibility `joined`, a reader who joined after it) would otherwise
+   leave it judging by a table that is no longer in force, silently (Spike Q15 scenario 6: the
+   unlinked walk accepted the ex-editor's forged event). It MAY read the pass from the newest
+   event backwards instead, undoing each power-levels event through its `unsigned.prev_content`.
+   This needs no request and works from cached events; it is exact only in a room created with
+   `m.federate: false` (all events come from one homeserver, so stream order is state order). The
+   owner SHOULD create a document room with `m.federate: false`, as the measured binding does.
+2. **From the server.** `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}?limit=0`, whose
+   `state` is the room state at the event; a `filter` of
+   `{"types":["m.room.power_levels","m.room.create"]}` keeps the answer to about 4 KB however many
+   members the room has. The answer for an event never changes: cache it by event ID. Use it for
+   every event of a room that federates. Honour `retry_after_ms` on a `429` as for any request.
+   (`GET /rooms/{id}/state?at=` is not a substitute: Synapse ignores `at` and answers the
+   current table.)
+
+An event whose level at the event cannot be established MUST be dropped; a reader MUST NOT fall
+back to the current table. The measured reader (the hybrid: the linked forward walk in a room
+created with `m.federate: false`, `/context` for each event the walk cannot place and for every
+event of a room that federates) made 0 extra requests in the usual case and 2 in the scenario
+where a late joiner could not see a demotion. **Costs, Synapse 1.163.2 only**: `/context` was not
+rate limited (0 of 620 requests per job on the default profile, and a user who made 300 requests
+had the same `rc_message` send budget left), and took 2.7 to 5.6 ms and about 4 KB per event on a
+loopback server (listing 30 versions: 84 to 173 ms over a reader that checks nothing, in 31
+requests, 134 KB; a warm read makes none). **Not tested**: another homeserver (the walks rely on
+`unsigned.replaces_state` and `unsigned.prev_content` being present on `/messages`, a server
+without them leaves every event to `/context`), a room across two homeservers, a `429` on
+`/context`, a real network (31 round trips of 80 ms would be 2.5 s, derived), room version 12
+against a server. A forged update is treated like a forged version: refused `403` in a room with
+the entry, accepted by the server and dropped by every reader (2 of 2) in a draft-0 room, where a
 control that trusts senders fails.
 
 A level of 50 on `m.room.encrypted` also stops any member below 50 from sending any encrypted event,
@@ -922,7 +967,10 @@ growth; the desktop and mobile Nextcloud clients syncing the two folders of a do
 **Measured once**, against two servers of the Durable Streams protocol, the Node reference server
 `@durable-streams/server` **0.3.9** and the Go server (a Caddy plugin) release **v0.3.0**, with one
 client implementation, in CI run 40137430958 at commit `0c99551`, client and server on one
-GitHub-hosted machine over loopback, plain `http` (no TLS). [Spike B results](rfc/0004-spike-b-results.md).
+GitHub-hosted machine over loopback, plain `http`; and again over TLS 1.3 with HTTP/1.1 and
+HTTP/2 behind Caddy v2.10.2 (correctness run 40182677787, commit `167aa64`, all four server and
+version jobs green; measurements run 40178415302, commit `63e0bf9`; [TLS spike
+results](rfc/0004-spike-tls-results.md)). [Spike B results](rfc/0004-spike-b-results.md).
 They describe those two builds and that client, not Durable Streams in general. Verdict: **go,
 with conditions, for L0, L1 and L2; no-go for "the server enforces roles"** on both servers; L3
 was not built. All 11 journeys of section 12 pass on both servers, with nothing skipped.
@@ -1039,9 +1087,59 @@ reader of 5 000 updates took 11 ms against 266 ms without (Node, release build).
 
 **Failure.** `404` on a document the client has known is data loss, not an empty document. A server
 in memory mode (the Node server's default) loses everything on restart and MUST NOT be used. A
-file-backed server kept every acknowledged record across `kill -9` (4 runs; the Node server only;
-the Go server's restart, power loss and a full disk were not run). `410` on a read (retention) was
+file-backed server kept every acknowledged record across `kill -9` (4 runs, Node), and the Go
+server across SIGTERM and SIGKILL (behind TLS; power loss and a full disk were not run). `410` on a read (retention) was
 not exercised, and there is no recovery from a lost stream.
+
+**Transport.** A client MUST reach a Durable Streams server over `https` and MUST verify the
+server certificate chain against a trust anchor configured for that deployment (a CA the
+deployment names, or the platform's roots) and MUST verify that the certificate covers the host
+name of the URL; a client MUST NOT disable verification, MUST NOT fall back to `http` or to a
+lower TLS version (TLS 1.2 is the minimum, 1.3 is expected), and MUST fail closed, reporting a
+transport error and never an empty document, when verification fails. `http` MAY be used for a
+server on the loopback interface in development. Measured with a client that has no built-in
+roots: a wrong CA (`UnknownIssuer`), a wrong name (by IP address, or by another host name), and an
+expired certificate were each refused with no response accepted, with the right CA, name and
+dates as the control, and `openssl s_client` agreed in each case. Only TLS 1.3 was exercised
+(the platform trust store and TLS 1.2-only servers were not).
+
+**No redirects, no `Location`.** A client MUST NOT follow a redirect that leaves the origin or that
+goes from `https` to `http`, and SHOULD NOT follow any; it MUST NOT take the address of a stream
+from a response header (`Location`): a server behind a proxy may name its internal plaintext
+origin there (observed: the Node server's `Location` on a `PUT` through a TLS proxy named the
+origin's `http` address). A `307` from `https` to `http` was returned as an error and the plain
+listener saw 0 connections; a stock client with default redirects followed it.
+
+**HTTP version.** HTTP/1.1 and HTTP/2 are both valid. A client that requires one MUST offer only
+that one in ALPN and MUST fail if the response is of another; a client that requires none takes
+what ALPN gives (HTTP/2 when offered) and cannot tell it was downgraded (measured: it silently ran
+HTTP/1.1 against a server offering only that). With HTTP/2 a client SHOULD use one connection per
+origin (50 live streams used one, against 50 connections on HTTP/1.1), MUST NOT assume more than
+100 concurrent streams unless the server's `SETTINGS` say so (both servers measured allow 250),
+and SHOULD enable adaptive flow-control windows for large file transfers (but see the
+measurement below: in one emulated setup the adaptive window was slower).
+
+**Live reads and idle connections.** A server's long-poll timeout and its SSE keep-alive interval
+MUST be shorter than the shortest idle timeout of any proxy on the path; 60 s is common, so a
+server SHOULD use 30 s or less (both reference servers default to 30 s for long poll; the Go
+server's SSE sends nothing while idle and ends the response after 60 s by default, which equals
+a 60 s proxy). A client MUST treat any transport error on a live read as "resume from the last
+offset" (never as a fatal error and never as an empty document) and MUST bound consecutive
+failures with a back-off: a long poll that a proxy always cuts at 60 s never completes, and the
+binding's request retry (3 attempts) gives up after about 3 minutes with a transport error to the
+caller, while the record is delivered 3 to 9 ms after its append once the reader resumes from its
+offset (both servers, both HTTP versions, FIN and RST). A client SHOULD apply a response timeout
+to every live read and, on HTTP/2, SHOULD send keep-alive PING frames at no more than a quarter
+of the shortest idle timeout it must survive (15 s for 60 s): pings keep an idle rule from firing
+and replace a silently dead connection within about 10 s (measured), whereas without them a
+silent loss costs 30 s on HTTP/1.1, 90 s for a request and 120 s for a long poll on HTTP/2, and
+an SSE stream never recovers. An idle connection closed by the server or by a proxy with FIN or
+RST is not an error: the next request opens a new one (about 3 ms on loopback plus a round trip).
+Retrying a request after a transport error includes an append, so a lost reply can store a record
+twice; readers drop the second copy (see **Records**). Servers: the Go server 0.3.0 behind
+Caddy's `log` directive answers SSE with `500` (long poll is unaffected), and the reference Node
+server closes idle keep-alive connections at 5 s, which a proxy with a longer upstream keep-alive
+would race (not measured).
 
 **What the server can do.** It can refuse, delete, close, slow or lose streams (and so can anyone
 with the document id); show a reader a stale prefix, including the epoch record of a revocation
@@ -1060,9 +1158,32 @@ Node and 32 MiB on Go, the largest closed stream at least 512 MiB (the cap tried
 published through the binding in 431 ms (Node) and 257 ms (Go); a file over what a server takes
 needs chunking, which is not defined. The 11 journeys pass with no skips.
 
-**Not measured.** TLS and HTTP/2; a real network, proxies in front of a long poll, CDN caching of
-`ctl`; SSE and long-poll reconnection; retention, expiry, TTL and forks; the Go server's restart;
-a malicious server that withholds, reorders or rolls back (reasoned, not run); more than 50
+**Measured over TLS** (the same two servers behind Caddy 2.10.2, loopback, one run, release
+build, 4 vCPU): the 11 journeys and the other tests of Spike B pass over TLS 1.3 on HTTP/1.1 and
+HTTP/2 (32 passed, 0 failed in run 40179818637 at `8e4f228`; the run at `167aa64` is green in all
+four jobs), and the server's own access log shows the version under test for
+every request. An update to a second client's verified read took 4.5 to 6.7 ms p50 on Node and
+2.6 to 2.8 ms on Go, no measurable difference from plain HTTP through the same proxy (a single
+sample of 200, so differences under 1 ms are noise); a full TLS 1.3 handshake 0.3 to 0.6 ms
+(resumed 0.2 to 0.4 ms) and 1.3 kB on the wire; per request, HTTP framing of 98 bytes on HTTP/2
+against 162 on HTTP/1.1 (the repeated response headers fall from about 790 to about 81 bytes);
+both servers allow 250 concurrent streams per connection. With 50 live readers on one client no
+head-of-line blocking was seen at the HTTP/2 level; a large download under delay was limited by
+the fixed 64 KiB HTTP/2 window (8 MiB at 12.6 MiB/s at 100 ms RTT in an emulation that does not
+model TCP), and the adaptive window was worse in that setup. The lease `409` compare-and-set
+behaved identically over TLS (20 rounds of 8 races). The client's dependency tree grew by 23 crates
+(rustls with `ring`; no OpenSSL).
+
+**Not measured.** A TLS terminator other than Caddy 2.10.2 (nginx, Envoy, a cloud load balancer,
+a CDN), a server with native TLS, mutual TLS, revocation checking, pinning, a chain with an
+intermediate CA, TLS 1.2-only servers, 0-RTT, HTTP/3; the platform trust store (a product needs a
+decision) and certificate rotation; a real network (the TLS runs were on loopback, a userspace
+forwarder emulated delay, stalls and the proxy idle rules, and nothing lost packets, so TCP
+head-of-line blocking was not measured); a real load balancer's idle rules; more than 50 streams on
+one connection and servers allowing fewer; large files over a long-RTT HTTP/2 path beyond one
+emulated 8 MiB; the Go server with HTTP/2 only and its SSE behind a logging front end (which
+fails); CDN caching of `ctl`; retention, expiry, TTL and forks; the Go server's power loss; a
+malicious server that withholds, reorders or rolls back (reasoned, not run); more than 50
 members, more than two concurrent owners, more than 8 concurrent appenders, more than 5 000
 updates; clock drift over minutes; multiple devices for one principal, key backup, identity key
 compromise and rotation; a gate that follows the roster; another client implementation (the Rust
@@ -1074,8 +1195,13 @@ code is the only specification of the signed byte strings besides this text); pr
 push blobs into a provider's store) and p2panda-core, -store, -sync, -auth, -encryption and -spaces
 **0.7.1** (pre-1.0; "APIs are not yet considered stable"), three or fewer nodes on loopback in one
 process or one sandbox on a shared 4-vCPU GitHub-hosted runner, CI run 40139997921.
-[Spike C results](rfc/0004-spike-c-results.md). No WAN, no NAT, no n0 relay: every timing below is
-loopback. Verdict: a **conditional go for L0 and the version-carrying half of L1, and a go with a
+[Spike C results](rfc/0004-spike-c-results.md). The timings in this section are loopback unless a
+paragraph names the second run ([relay spike results](rfc/0004-spike-relay-results.md), CI run
+40179059127): the peers in separate Linux network namespaces behind `iroh-relay` 1.4.1 with a
+test CA, links shaped by `tc netem` to 50 and 150 ms RTT, 1 % and 5 % loss and 1 Mbit/s, where
+all 11 journeys passed in both modes in all 7 conditions. There is still no NAT, no jitter, no
+real WAN and no n0 relay carrying dcp-p2p traffic. Verdict: a **conditional go for L0 and the
+version-carrying half of L1, and a go with a
 size limit for L2; a no-go for the `commenter` role and for exclusive leases**, and for using
 p2panda-net, p2panda-blobs or p2panda-spaces' role-change API as published. All 11 journeys of
 section 12 pass with nothing skipped and with a negative control (reader authorisation off) that
@@ -1152,6 +1278,25 @@ creator it joined through), and MUST take the membership check and the read of t
 lock so that a removal is never served before the gate knows it. Anti-entropy (every 200 ms in the
 tests) and every local publish start sessions with the document's other members.
 
+**Paths and relays.** A connection is direct or relayed as iroh's `Connection::paths()` says
+(`is_selected`, `is_ip`, `is_relay`); an implementation MUST NOT infer it from the addresses it
+was given. (Spike C's relay test gave each node only the other's relay URL and called it
+relay-only; iroh's path data shows it synced over a direct IP path with a relay path beside it,
+so its comparison of "relay-only" and direct latency compared two direct connections and
+nothing may be quoted from it.) With UDP reachable between the peers, a connection given only a
+relay URL upgraded to a direct path about three round trips after the handshake (median 156 ms
+at 50 ms RTT, 463 ms at 150 ms; 5 of 5 pairs in each of 7 conditions). With peer-to-peer UDP
+dropped by a firewall, no IP path was ever opened (1,515 connections, 0 bytes on IP paths; the
+same assertion failed in 35 of 35 runs with UDP allowed). An established direct connection
+survived the relay being killed (7 of 7 conditions); a relay-only connection delivers nothing
+while the relay is down, is closed by QUIC after 30 s (iroh's `RELAY_PATH_MAX_IDLE_TIMEOUT`),
+and recovered 3.5 to 22.6 s after the relay returned: **a relay is needed to start and to
+recover, not to continue**. A direct path that is cut silently is abandoned after 15 s (iroh's
+`PATH_MAX_IDLE_TIMEOUT`) and traffic moves to the relay (15.0 to 19.9 s in the runs; the next
+publish was visible after 15.6 to 21.2 s). A binding MUST therefore treat 20 s as the time to
+notice a lost path and MUST NOT assume faster fail-over in L3. These are one run per condition
+on routed namespaces: NAT traversal was not measured.
+
 **Ordering and failures.** Operations are applied in dependency order, from a pending set. An
 operation that fails to decode is dropped and ends its session; operations received earlier in the
 session are kept (a tampered header, one bit flipped, was refused on decode by signature, the
@@ -1176,11 +1321,17 @@ after it first sees it, never longer. The author's `ts_us` in an entry orders th
 only; it is not authenticated. **The lease is advisory and not exclusive across a partition** (lease
 rule 13): both partitioned sessions ran `lease::acquire` with two read-backs and a 500 ms settle and
 both returned `Acquired`; after they reconnected exactly one still held it 254 ms (debug) or 52 ms
-(release) later and both named the same record. Propagation of a lease write between two nodes on
-loopback was 13.8 ms median (min 9.6, p95 16.0, max 17.3); the settle interval SHOULD be at least
-500 ms, which must also cover a lost round (a session every anti-entropy interval) and was not
-measured on a WAN. Version rule 5 (two heads are shown, never silently merged) is what makes this
-safe.
+(release) later and both named the same record. Propagation of a lease write between two nodes
+on loopback was 13.8 ms median (min 9.6, p95 16.0, max 17.3). **On a WAN it is not 500 ms**
+(relay spike, 30 writes per cell, relayed and direct alike): a median of 110 ms at 50 ms RTT,
+437 to 507 ms at 150 ms RTT (maximum 525 ms; 11 to 15 of 30 writes exceeded 500 ms), up to
+662 ms at 5 % loss with no delay, and up to 955 ms at 150 ms, 5 % loss and 1 Mbit/s; a write
+triggers a session of about two to three round trips, and a session that loses a packet waits
+for loss recovery (1.0 s in the runs, with an anti-entropy interval of 200 ms). The settle
+interval SHOULD be at least 2 s unless every member is on one low-latency, loss-free network;
+500 ms is enough only there. (The conformance journeys pass with 500 ms at 150 ms RTT because
+they wait on the fixture's own bound, so a passing lease journey is not evidence for the value.)
+Version rule 5 (two heads are shown, never silently merged) is what makes this safe.
 
 **Availability.** There is no server. A document's data is available while members that hold it are
 online with the members that want it; no particular peer is required. A version published by a
@@ -1188,9 +1339,12 @@ member who then goes offline reaches another member through any third member tha
 both (51 ms in release); if its only holder is offline it reaches nobody until the holder returns
 (measured: neither of two returning members had it for the 3 s asserted, both got it 102 ms after
 the editor returned). A peer that is a `Pull` member would hold ciphertext and no key and would
-remove the dependency; it was not built. A peer that was offline caught up in 52 ms after
 reconnecting (693 ms in debug), and two offline writers' divergent versions were visible as two
-heads at all three nodes 55 ms after reconnecting (372 ms in debug).
+heads at all three nodes 55 ms after reconnecting (372 ms in debug). On shaped links (relay
+spike, relayed and direct alike) an offline catch-up of five versions took 53 ms unshaped, 363 ms
+at 50 ms RTT, 877 ms at 150 ms and 1.4 to 2.5 s at 1 Mbit/s; two divergent heads were visible
+everywhere 54 ms to 2.5 s after reconnecting (1.0 s where one lost round was needed); a 1 MiB
+file was fetched in 0.5 s at 50 ms RTT, 1.4 s at 150 ms and 9 to 21 s at 1 Mbit/s.
 
 **Updates (L2) and scale.** The 34 000-byte inline update was exercised and works. **p2panda-spaces
 0.7.1 does not scale in entries**: a reader needed 0.59 s for 100 inline entries, 6.1 s for 300 and
@@ -1199,17 +1353,38 @@ rewrites per message (2.1 MB at 1 000). Inline updates therefore stay usable to 
 entries per document on this library; versions are fine. A 100-byte inline update costs about
 2 170 bytes on the wire (cbor-core writes a byte string of 24 or more bytes as an array of
 integers, a factor of 2.0).
+The reader is CPU-bound without a rate limit (at 300 and 1 000 entries its CPU time was 79 to
+102 % of the wait, 95 % of it in the store's own thread) and network-bound at 1 Mbit/s (the wait
+within 4 % of the transfer time of the bytes received); delay and loss alone did not change that.
+At 1 000 entries the reader needed 49 s (150 ms RTT) to 64 s (no shaping) and 60 to 99 s at
+1 Mbit/s. On an unshaped link it **received 438 MB for 1 000 entries whose state is 2.1 MB**: a
+counters run showed each operation received 171 times (768 sync sessions for 1 000 publishes;
+the mechanism, a session re-sending the backlog the receiver has not yet applied, is an inference,
+not traced), and absolute seconds differed by CPU model (44 s and 64 s for the same test on two
+runners), so only ratios inside one job are comparable.
 
 **Measured** (release build, loopback): connect plus first sync 27.3 ms median, a sync session over
 an open connection 6.6 ms; a 32 MiB file written in 176 ms and fetched in 59 ms (reader decrypt and
-read 52 ms); a relay test synced a document, but whether the traffic stayed on the relay was not
-observed. **Flatpak**: three nodes on `127.0.0.1` passed in a `flatpak build` sandbox with
-`--unshare=network` and with `--share=network`, so a two-window test needs no network permission;
-reaching another device needs a UDP socket and, when peers are not directly reachable, a relay,
-both of which need `--share=network` in `finish-args`, which the repository's manifests do not
-grant to the app (only to the build).
+read 52 ms). **Flatpak**: three nodes on `127.0.0.1` passed in a `flatpak build` sandbox with
+`--unshare=network` and with `--share=network`, so a two-window test needs no network permission.
+**What a client needs outbound** (captured in the relay spike, outside Flatpak): TCP 443 to the
+relay (required to start, and for every peer not reachable directly) and, to be direct, UDP to its
+peers' addresses on any port (each endpoint binds one UDP socket; the operating system chooses the
+port unless the application sets one). UDP 7842 (address discovery) and TCP 80 to the relay are
+optional: with them blocked a node was ready after 3.0 to 3.6 s instead of under 0.5 s, and with
+everything else dropped a node did not come online. With a relay URL given as an IP address no DNS
+is needed (a host name needs the system resolver; not tested). In Flatpak the permission is
+`--share=network` in `finish-args`, which cannot be limited to ports and which the repository's
+manifests do not grant to the app (only to the build); a site firewall, not Flatpak, enforces the
+port list. **Discovery**: the endpoint MUST be built with iroh's `Minimal` preset and a
+configured relay (as dcp-p2p is): it then put 0 packets on the wire in a capture, while the `N0`
+preset contacted `dns.iroh.link` and four n0 relays and **published the endpoint id and home relay
+URL** there (374 packets). Do not use `presets::N0` in a private deployment.
 
-**Not measured.** A WAN, NAT traversal, hole punching, production relays and address discovery; two
+**Not measured.** NAT traversal (every hole punch in the relay spike crossed a routed network,
+not a NAT), jitter, a real WAN, production relays carrying dcp-p2p traffic, host-name relay
+URLs, IPv6, more than one relay and fail-over between relays, a fresh process that never knew the
+peer's address after the relay died; HTTP-proxy (`proxy_url`) relay access (read, not run); two
 devices in Flatpak; three or more writers on one document, concurrent membership changes by two
 owners, nested groups, key-bundle expiry, more than 1 000 entries, restart (all state of a store is
 in memory) and the filesystem blob store; the `unimplemented!()` panics and the one-auth-graph
@@ -1391,12 +1566,17 @@ Results of the journeys of this section, each from the run its section cites:
     against its own server or mount). That is why 4.2.1 says so, but a locator type naming a file
     relative to the document would need no unfetched URL. It would be an additive enum value
     like the two added in this revision; it was not added because no spike needs it to run.
-15. **For the coordinator, a narrowing of existing behaviour (not a wire change).** 8.1 said a
-    reader SHOULD drop DCP timeline events from senders below the editor level. This revision
-    makes that the level *in force at the event*, because judging by the room's current table made
-    every reader drop an ex-editor's earlier legitimate versions and then reject the owner's later
-    save (3 of 3 runs, draft-0 table). How a reader obtains the level at an event (the Matrix
-    `GET /rooms/{id}/context/{eventId}` call returns state at an event) was not tried.
+15. **Answered by [Spike Q15](rfc/0004-spike-q15-results.md) (8.1); the rest stays open.** A reader
+    judges a sender by the level in force at the event, obtained from the room's own
+    `m.room.power_levels` events in the `/messages` pass (linked through
+    `unsigned.replaces_state`; exact in a room created with `m.federate: false`) or from
+    `GET /rooms/{id}/context/{eventId}?limit=0` (any room, cached by event ID); an event whose level
+    cannot be established is dropped, never judged by the current table. Neither way costs a
+    rate-limit token on Synapse 1.163.2, the only server tried. Open: a room that federates across
+    real homeservers, other homeservers (the walks need `unsigned.replaces_state` and
+    `unsigned.prev_content` on `/messages`), the path when a server answers `429` to `/context`,
+    incremental `/sync` readers and a persistent event cache, room version 12 against a server, and
+    the in-memory reference store (`MemoryStore`), which still judges by the current role.
 16. Epoch bindings (8.4). Every roster change is a new epoch with a new key; a roster of 50 members
     is 50 epochs, and a cold reader read 55 epochs in 79 ms (Node, 33 to 113 requests for 15 to 55
     epochs). Whether a role change can take effect inside an epoch without letting a viewer's earlier
@@ -1405,9 +1585,40 @@ Results of the journeys of this section, each from the run its section cites:
     it are online with the members that want it; an always-on member that holds ciphertext and no key
     (a p2panda-auth `Pull` member) was not built. Both 8.4's signed byte strings and 8.5's wire are
     specified only by one Rust implementation each; neither has been read by another.
+18. The trust anchor of a Durable Streams client (8.4). The TLS spike used a configured CA and no
+    built-in roots; whether a product uses the platform's roots (and on Windows and macOS what
+    that does to certificate rotation and to a deployment's own CA) is a decision, not a
+    measurement. Behind a real load balancer or CDN the idle and age rules of 8.4 were emulated.
+19. Settle interval and path loss on iroh (8.5). A settle interval of 2 s is a SHOULD on the
+    strength of 30 writes per condition on routed namespaces; whether any value covers a NATed
+    WAN, and whether a 15 to 20 s fail-over from a cut direct path is acceptable for lease
+    renewal, are not known.
 
 ## Changelog
 
+- Draft 1, update 3 (2026-10-25): three CI verification spikes, each measured once and each green in
+  its own workflow: [TLS](rfc/0004-spike-tls-results.md) (8.4 over TLS 1.3, HTTP/1.1 and HTTP/2),
+  [Q15](rfc/0004-spike-q15-results.md) (the power level at an event, 8.1) and
+  [relay](rfc/0004-spike-relay-results.md) (8.5 through a real `iroh-relay` on shaped links).
+  **`dcp` stays `1`: nothing here changes an object or a schema; no schema, example or validator
+  case changed.**
+  - 8.1: the reader rule judges a sender by the power level at the event, says how a reader
+    obtains it (linked walk of the `/messages` pass, `/context` for what the walk cannot place),
+    drops an event whose level cannot be established, and recommends `m.federate: false`; question
+    15 is answered and its remainder stays open.
+  - 8.4: new text on transport (certificate chain and host name verification, no downgrade, no
+    plaintext fallback), redirects and `Location`, the HTTP version, and live reads (server
+    heartbeat below the shortest proxy idle timeout, resume from the offset on any transport error,
+    HTTP/2 keep-alive PING), with the measured TLS figures; the Go server's restart across SIGTERM
+    and SIGKILL is now verified.
+  - 8.5: the loopback-only and relay sentences are replaced by the measured **Paths and relays**
+    paragraph; Spike C's "relay-only" latency comparison is withdrawn (it compared two direct
+    connections); the lease settle interval SHOULD be at least 2 s on a WAN (lease rule 3 points
+    to it); WAN availability figures, the state-growth CPU and network note, the port list for
+    Flatpak and the discovery presets are added.
+  - Behaviour changes that are not wire changes: the TLS verification MUSTs and the live-read rules
+    (8.4), the 8.1 reader rule above, and the 8.5 MUST NOT infer a path from the addresses given.
+    Lease rule numbers and section numbers are unchanged. Questions 18 and 19 are new.
 - Draft 1, update 2 (2026-10-24): four more spikes, each measured once and each green in its own CI
   run: [Spike B](rfc/0004-spike-b-results.md) (Durable Streams), [Spike C](rfc/0004-spike-c-results.md)
   (iroh and p2panda), [Spike E](rfc/0004-spike-e-results.md) (Nextcloud WebDAV and OCM) and
