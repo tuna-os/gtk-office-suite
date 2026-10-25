@@ -39,10 +39,12 @@ impl Inner {
             .get(&peer)
             .cloned()
             .ok_or_else(|| format!("no address known for {}", principal_of(&peer)))?;
+        let started = crate::pathlog::now_us();
         let conn = tokio::time::timeout(CONNECT_TIMEOUT, self.net.endpoint.connect(addr, alpn))
             .await
             .map_err(|_| "connecting timed out".to_string())?
             .map_err(|e| e.to_string())?;
+        crate::pathlog::track(&self.pathlog, &conn, "dial", started);
         if cacheable {
             self.conns.borrow_mut().insert(peer, conn.clone());
         }
@@ -72,6 +74,7 @@ impl Inner {
 
     async fn serve_connection(self: Rc<Self>, conn: Connection) {
         let remote = conn.remote_id();
+        crate::pathlog::track(&self.pathlog, &conn, "accept", crate::pathlog::now_us());
         loop {
             let (send, recv) = match conn.accept_bi().await {
                 Ok(p) => p,

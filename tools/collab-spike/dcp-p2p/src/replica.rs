@@ -54,6 +54,9 @@ pub struct P2pConfig {
     pub bind: String,
     /// `None`: no relay. A relay map makes the node dialable through that relay.
     pub relay: Option<iroh::RelayMap>,
+    /// DER certificates the relay's TLS certificate may chain to (a private CA). Empty: the
+    /// embedded Mozilla roots. Only read when `relay` is set.
+    pub relay_ca_der: Vec<Vec<u8>>,
     /// The clock the store reads: lease stamps, `now_ms`, entry timestamps.
     pub clock: Arc<dyn Clock>,
     /// How often the anti-entropy loop asks every peer of every document for news.
@@ -78,6 +81,7 @@ impl Default for P2pConfig {
         P2pConfig {
             bind: "127.0.0.1:0".into(),
             relay: None,
+            relay_ca_der: Vec::new(),
             clock: Arc::new(SystemClock),
             sync_interval: Duration::from_millis(500),
             enforce_acl: true,
@@ -293,6 +297,8 @@ pub struct Inner {
     pub changed: Notify,
     pub truncate_next: Arc<AtomicBool>,
     pub online: Cell<bool>,
+    /// What iroh reports about the paths of each connection (observation only).
+    pub pathlog: crate::pathlog::SharedLog,
 }
 
 impl Inner {
@@ -315,6 +321,7 @@ impl Inner {
             &NetOptions {
                 bind: cfg.bind.clone(),
                 relay: cfg.relay.clone(),
+                relay_ca_der: cfg.relay_ca_der.clone(),
             },
             acl.clone(),
             incoming_tx,
@@ -338,6 +345,7 @@ impl Inner {
             changed: Notify::new(),
             truncate_next: Arc::new(AtomicBool::new(false)),
             online: Cell::new(true),
+            pathlog: Rc::default(),
         });
         tokio::task::spawn_local(inner.clone().accept_loop(incoming_rx));
         tokio::task::spawn_local(inner.clone().anti_entropy());

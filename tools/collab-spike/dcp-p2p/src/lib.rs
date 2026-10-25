@@ -14,6 +14,7 @@ pub mod ext;
 pub mod msg;
 pub mod net;
 pub mod ops;
+pub mod pathlog;
 pub mod replica;
 pub mod signed;
 pub mod store;

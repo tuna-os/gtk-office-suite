@@ -184,6 +184,23 @@ impl P2pStore {
         .await
     }
 
+    /// What iroh reports about the paths of every connection this node has dialled or accepted
+    /// (initiator side of iroh-blobs fetches and both sides of sync connections), the paths open
+    /// now, and iroh's socket counters. Observation only.
+    pub async fn net_report(&self) -> Result<crate::pathlog::NetReport> {
+        self.run(move |i| Box::pin(async move { Ok(crate::pathlog::report(&i.pathlog, &i.net.endpoint)) }))
+            .await
+    }
+
+    /// Wait until the endpoint has a home relay (`Endpoint::online`), at most `max`. `false` on
+    /// timeout.
+    pub async fn wait_online(&self, max: std::time::Duration) -> Result<bool> {
+        self.run(move |i| {
+            Box::pin(async move { Ok(tokio::time::timeout(max, i.net.endpoint.online()).await.is_ok()) })
+        })
+        .await
+    }
+
     /// Run a sync with `peer` now and return what moved each way.
     pub async fn sync_now(&self, doc: &DocId, peer: &str) -> Result<crate::net::SessionStats> {
         let (doc, peer) = (doc.clone(), peer.to_owned());
