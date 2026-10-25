@@ -27,9 +27,10 @@ on:
       - '.github/workflows/collab-spike-tls.yml'
   workflow_dispatch:
 
+# Runs are queued for a long time here: a newer push does not cancel an older run (cancel by hand).
 concurrency:
-  group: collab-spike-tls-${{ github.ref }}
-  cancel-in-progress: true
+  group: collab-spike-tls-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
