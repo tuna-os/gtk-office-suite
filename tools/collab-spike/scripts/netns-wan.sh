@@ -15,6 +15,8 @@
 #   netns-wan.sh shape <rtt_ms> <loss_pct> <rate>   (rate: e.g. 1mbit, or - for none; 0 0 - clears)
 #   netns-wan.sh relay-up | relay-down | relay-metrics
 #   netns-wan.sh counters                     (FORWARD rule hit counters on dcp-r)
+#   netns-wan.sh egress open|tcp443-only|none (what the peers may send out; OUTPUT rules in dcp-a/b/c)
+#   netns-wan.sh egress-counters              (hit counters of those rules: what was tried and refused)
 #   netns-wan.sh check                        (ping and TCP reachability matrix)
 #
 # Shaping: netem on both ends of every veth. With R the requested peer-to-peer RTT, every
@@ -71,6 +73,39 @@ mode() {
 }
 
 counters() { r iptables -L FORWARD -v -n -x | tail -n +2; }
+
+# Outbound rules in every peer namespace. tcp443-only: TCP to the relay's port 443 and nothing else
+# (named DROP rules in front of the catch-all so the counters say what was tried).
+egress() {
+  for n in $NODES; do
+    ns="dcp-$n"
+    ip netns exec "$ns" iptables -F OUTPUT
+    case "$1" in
+      open) ;;
+      tcp443-only)
+        ip netns exec "$ns" iptables -A OUTPUT -o lo -j ACCEPT
+        ip netns exec "$ns" iptables -A OUTPUT -p tcp -d "$RELAY_IP" --dport 443 -j ACCEPT
+        ip netns exec "$ns" iptables -A OUTPUT -p tcp -d "$RELAY_IP" --dport 80 -j DROP
+        ip netns exec "$ns" iptables -A OUTPUT -p udp -d "$RELAY_IP" --dport 7842 -j DROP
+        ip netns exec "$ns" iptables -A OUTPUT -p udp -j DROP
+        ip netns exec "$ns" iptables -A OUTPUT -j DROP
+        ;;
+      none)
+        ip netns exec "$ns" iptables -A OUTPUT -o lo -j ACCEPT
+        ip netns exec "$ns" iptables -A OUTPUT -j DROP
+        ;;
+      *) echo "egress: open|tcp443-only|none" >&2; exit 2 ;;
+    esac
+  done
+  echo "egress $1"
+}
+
+egress-counters() {
+  for n in $NODES; do
+    echo "-- dcp-$n OUTPUT"
+    ip netns exec "dcp-$n" iptables -L OUTPUT -v -n -x | tail -n +2
+  done
+}
 
 shape() {
   local rtt=$1 loss=$2 rate=${3:--}
@@ -176,6 +211,6 @@ check() {
 
 cmd=${1:-}; shift || true
 case "$cmd" in
-  up|down|mode|shape|relay-up|relay-down|relay-metrics|counters|check) "$cmd" "$@" ;;
-  *) sed -n '2,25p' "$0"; exit 2 ;;
+  up|down|mode|shape|relay-up|relay-down|relay-metrics|counters|egress|egress-counters|check) "$cmd" "$@" ;;
+  *) sed -n '2,28p' "$0"; exit 2 ;;
 esac

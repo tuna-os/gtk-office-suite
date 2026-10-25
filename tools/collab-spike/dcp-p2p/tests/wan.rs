@@ -169,6 +169,8 @@ struct Node {
     idx: usize,
     principal: String,
     device: String,
+    /// From starting the process until it printed `ready` (startup plus reaching the relay).
+    ready_ms: u64,
     child: Mutex<Child>,
     stdin: Mutex<ChildStdin>,
     pending: Arc<Mutex<HashMap<u64, Waiter>>>,
@@ -197,8 +199,18 @@ fn dec<T: DeserializeOwned>(v: Value) -> Result<T, StoreError> {
 }
 
 impl Node {
-    /// Start peer `idx` (0, 1, 2 = namespace dcp-a, dcp-b, dcp-c).
+    /// Start peer `idx` (0, 1, 2 = namespace dcp-a, dcp-b, dcp-c); panics when it cannot.
     async fn spawn(idx: usize, label: &str) -> Arc<Node> {
+        match Node::try_spawn(idx, label).await {
+            Ok(n) => n,
+            Err(e) => panic!("{e}"),
+        }
+    }
+
+    /// Like `spawn`, but says why instead of panicking: the process did not become ready, or
+    /// could not reach the relay within 30 s.
+    async fn try_spawn(idx: usize, label: &str) -> Result<Arc<Node>, String> {
+        let t_spawn = Instant::now();
         let e = env();
         let ns = ["dcp-a", "dcp-b", "dcp-c"][idx];
         let ip = format!("10.77.{}.2", idx + 1);
@@ -249,25 +261,31 @@ impl Node {
             Ok(Ok(v)) => v,
             other => {
                 let tail = std::fs::read_to_string(&log_path).unwrap_or_default();
-                panic!("node {label} in {ns} did not become ready ({other:?}); its log:\n{tail}")
+                let _ = child.kill();
+                return Err(format!("node {label} in {ns} did not become ready ({other:?}); its log:\n{tail}"));
             }
         };
-        assert!(
-            ready["online"].as_bool() == Some(true),
-            "node {label} in {ns} did not reach the relay {} within 30 s; its log:\n{}",
-            e.relay_url,
-            std::fs::read_to_string(&log_path).unwrap_or_default()
-        );
-        Arc::new(Node {
+        let ready_ms = ms(t_spawn.elapsed());
+        if ready["online"].as_bool() != Some(true) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!(
+                "node {label} in {ns} did not reach the relay {} within 30 s (ready line after {ready_ms} ms); its log:\n{}",
+                e.relay_url,
+                std::fs::read_to_string(&log_path).unwrap_or_default()
+            ));
+        }
+        Ok(Arc::new(Node {
             label: label.to_string(),
             idx,
             principal: ready["principal"].as_str().unwrap().to_string(),
             device: ready["device"].as_str().unwrap().to_string(),
+            ready_ms,
             child: Mutex::new(child),
             stdin: Mutex::new(stdin),
             pending,
             next: AtomicU64::new(1),
-        })
+        }))
     }
 
     fn send(&self, m: &str, a: Value, w: Waiter) -> u64 {
@@ -621,20 +639,21 @@ impl Rep {
             .sum();
         live + closed
     }
-    fn first_selected_ip_us(&self, peer: &str) -> Option<u64> {
-        self.arr("events")
-            .into_iter()
-            .filter(|e| e["peer"] == peer && e["event"] == "selected" && e["transport"] == "ip")
-            .filter_map(|e| e["t_us"].as_u64())
-            .min()
-    }
-    /// The first connection this node dialled to `peer`: (start, handshake done).
-    fn first_dial(&self, peer: &str) -> Option<(u64, u64)> {
+    /// The dial-side connections to `peer`: (id, start, handshake done).
+    fn dials(&self, peer: &str) -> Vec<(u64, u64, u64)> {
         self.arr("conns")
             .into_iter()
             .filter(|c| c["peer"] == peer && c["side"] == "dial")
-            .filter_map(|c| Some((c["start_us"].as_u64()?, c["connected_us"].as_u64()?)))
-            .min()
+            .filter_map(|c| Some((c["id"].as_u64()?, c["start_us"].as_u64()?, c["connected_us"].as_u64()?)))
+            .collect()
+    }
+    /// An IP path was already open on connection `id` when tracking began (right after the handshake).
+    fn conn_ip_at_handshake(&self, id: u64) -> bool {
+        self.arr("events").into_iter().any(|e| e["conn"] == id && e["event"] == "initial" && e["transport"] == "ip")
+    }
+    /// When IP was first selected on connection `id`.
+    fn conn_first_selected_ip_us(&self, id: u64) -> Option<u64> {
+        self.arr("events").into_iter().filter(|e| e["conn"] == id && e["event"] == "selected" && e["transport"] == "ip").filter_map(|e| e["t_us"].as_u64()).min()
     }
     fn conn_closed(&self, id: u64) -> bool {
         self.arr("conns").into_iter().any(|c| c["id"] == id && !c["closed_us"].is_null())
@@ -1105,21 +1124,28 @@ async fn path_control_udp_allowed_upgrades_and_the_relay_only_assertion_fails() 
             dump("path_control-b", &rb.0);
         }
         let control = relay_only(&ra, &rb, &a.principal, &b.principal);
-        // Time from the handshake of the first connection until iroh selected an IP path, from the
-        // side that dialled it (iroh's own event timestamps taken in the node process).
-        let mut after_handshake = None;
-        let mut after_dial = None;
+        // The first connection of the pair (earliest dial start over both nodes): when did iroh select
+        // an IP path on it, from iroh's own event timestamps taken in the node process?
+        let mut first: Option<(u64, u64, u64, &Rep)> = None;
         for (r, peer) in [(&ra, &b.principal), (&rb, &a.principal)] {
-            if let (Some((start, connected)), Some(sel)) = (r.first_dial(peer), r.first_selected_ip_us(peer)) {
+            for (id, start, connected) in r.dials(peer) {
+                if first.map_or(true, |f| start < f.1) {
+                    first = Some((id, start, connected, r));
+                }
+            }
+        }
+        let (mut after_handshake, mut after_dial, mut ip_open_at_handshake) = (None, None, None);
+        if let Some((id, start, connected, r)) = first {
+            ip_open_at_handshake = Some(r.conn_ip_at_handshake(id));
+            if let Some(sel) = r.conn_first_selected_ip_us(id) {
                 after_handshake = Some(sel.saturating_sub(connected) / 1000);
                 after_dial = Some(sel.saturating_sub(start) / 1000);
-                break;
             }
         }
         record(
             test,
             json!({"kind": "upgrade", "rep": rep, "upgraded": up.is_some(), "poll_ms_from_first_sync": up.map(ms), "first_sync_ms_after_spawn": first_sync_ms,
-                   "ip_selected_ms_after_handshake": after_handshake, "ip_selected_ms_after_dial_start": after_dial,
+                   "ip_selected_ms_after_handshake": after_handshake, "ip_selected_ms_after_dial_start": after_dial, "ip_path_open_when_the_handshake_finished": ip_open_at_handshake,
                    "relay_only_assertion_on_this_run": format!("{control:?}"), "a": ra.summary(), "b": rb.summary()}),
         );
         match up {
@@ -1299,4 +1325,72 @@ async fn direct_path_blocked_mid_session_falls_back_to_the_relay() {
     );
     assert!(first.is_some(), "no publish crossed after the direct path was blocked");
     assert!(second.is_some(), "the relay did not keep carrying the session");
+}
+
+// ------------------------------------------------------------------------------ tests: ports
+
+/// Restores `egress open` when dropped, so a failing test does not leave the namespaces closed.
+struct EgressGuard;
+impl Drop for EgressGuard {
+    fn drop(&mut self) {
+        let _ = Command::new(&env().script).args(["egress", "open"]).output();
+    }
+}
+
+/// Item 5: what a client needs outbound. With the peers' namespaces allowed only TCP 443 to the
+/// relay (no UDP at all, no TCP 80, no UDP 7842), the node still reaches the relay and the pair
+/// syncs. The firewall counters say what iroh tried and was refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ports_tcp_443_to_the_relay_is_enough() {
+    let test = "ports_tcp_443_to_the_relay_is_enough";
+    begin!(test, "relay-only");
+    let _guard = EgressGuard;
+    script(&["egress", "tcp443-only"]);
+    let t = Instant::now();
+    let (na, nb) = tokio::join!(Node::try_spawn(0, "a"), Node::try_spawn(1, "b"));
+    let (a, b) = match (na, nb) {
+        (Ok(a), Ok(b)) => (a, b),
+        (a, b) => {
+            let why = format!("{:?} / {:?}", a.err(), b.err());
+            let counters = script(&["egress-counters"]);
+            record(test, json!({"kind": "ports", "case": "tcp 443 to the relay only", "reached_relay": false, "why": why.chars().take(1500).collect::<String>(), "egress_counters": counters}));
+            panic!("a node could not come online with only TCP 443 to the relay allowed: {why}");
+        }
+    };
+    let ready = (a.ready_ms, b.ready_ms);
+    mesh(&[&a, &b], Addrs::RelayOnly).await;
+    let doc = a.create_document(&standard_meta(), Some(new_file(b"tcp 443 only"))).await.expect("create_document");
+    invite(&a, &b, &doc).await;
+    a.grant(&doc, &b.principal(), Role::Editor).await.expect("grant");
+    wait_for("b has its role and the first version", secs(120), || async {
+        if b.role(&doc).await.ok()? != Role::Editor {
+            return None;
+        }
+        (b.versions(&doc).await.ok()?.len() == 1).then_some(())
+    })
+    .await;
+    let took = push_one(&a, &b, &doc, "over tcp 443 only", secs(60)).await;
+    let (ra, rb) = reports(&a, &b).await;
+    let verdict = relay_only(&ra, &rb, &a.principal, &b.principal);
+    let counters = script(&["egress-counters"]);
+    record(
+        test,
+        json!({"kind": "ports", "case": "tcp 443 to the relay only", "reached_relay": true, "ready_ms_a_b": [ready.0, ready.1], "setup_to_first_sync_ms": ms(t.elapsed()),
+               "publish_visible_ms": took.map(ms), "relay_only_verdict": format!("{verdict:?}"), "a": ra.summary(), "egress_counters": counters}),
+    );
+    assert!(took.is_some(), "a publish did not cross with only TCP 443 open");
+    verdict.expect("relay-only");
+}
+
+/// The negative control of the test above: with nothing allowed out, a node cannot come online.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ports_control_nothing_allowed_out_means_no_relay() {
+    let test = "ports_control_nothing_allowed_out";
+    begin!(test, "relay-only");
+    let _guard = EgressGuard;
+    script(&["egress", "none"]);
+    let r = Node::try_spawn(0, "a").await;
+    let counters = script(&["egress-counters"]);
+    record(test, json!({"kind": "ports", "case": "nothing allowed out", "node_came_online": r.is_ok(), "egress_counters": counters}));
+    assert!(r.is_err(), "negative control: a node came online with every outbound packet dropped, so the TCP-443-only result proves nothing");
 }

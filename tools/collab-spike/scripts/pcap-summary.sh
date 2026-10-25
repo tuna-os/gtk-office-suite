@@ -3,7 +3,7 @@
 # One line per (protocol, destination, port): packet count, bytes, DNS names asked, TLS SNI.
 set -euo pipefail
 pcap=$1 src=$2
-tshark -r "$pcap" -Y "ip.src==$src" -T fields -E separator=, \
+tshark -r "$pcap" -Y "ip.src==$src && (tcp || udp)" -T fields -E separator=, \
   -e ip.proto -e ip.dst -e udp.dstport -e tcp.dstport -e frame.len -e dns.qry.name -e tls.handshake.extensions_server_name 2>/dev/null |
 awk -F, '
   { proto = ($1==6) ? "tcp" : ($1==17) ? "udp" : ($1==1) ? "icmp" : $1

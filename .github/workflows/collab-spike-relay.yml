@@ -275,11 +275,11 @@ jobs:
             journeys) run journeys journeys_ ;;
             rest)
               if [ "$SMOKE" = true ]; then
-                run paths path_ relay_killed direct_path_blocked
+                run paths path_ ports_ relay_killed direct_path_blocked
                 run scenarios catch_up_direct lease_latency_direct
                 run growth state_growth_direct
               else
-              run paths path_ relay_killed direct_path_blocked
+              run paths path_ ports_ relay_killed direct_path_blocked
               run scenarios catch_up concurrent_heads lease_latency connect_and_files
               run growth state_growth
               fi
