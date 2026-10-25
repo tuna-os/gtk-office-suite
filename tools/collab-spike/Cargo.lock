@@ -849,7 +849,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "httpdate",
- "parking_lot",
+ "parking_lot 0.12.5",
  "quick-xml",
  "reqwest 0.12.28",
  "serde",
