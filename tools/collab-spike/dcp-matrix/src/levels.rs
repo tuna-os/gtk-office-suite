@@ -281,6 +281,16 @@ pub(crate) fn walk_backward(marks: &[Mark], targets: &[Target], current: &Power)
     out
 }
 
+/// The pass shows the room's `m.room.create` with `m.federate` false: every
+/// event of the room came from the creator's homeserver, so the order of the
+/// pass is the order of the room's state and a walk of it is exact. For a room
+/// other homeservers can join (or when the create event is not in the pass) the
+/// state at an event is the result of state resolution and only the server
+/// can say what it was.
+pub(crate) fn non_federated(marks: &[Mark]) -> bool {
+    marks.iter().any(|m| is_state(&m.event, CREATE) && m.event["content"]["m.federate"].as_bool() == Some(false))
+}
+
 /// The walks over a cached `/messages` pass, with no client and no network: the
 /// raw events of the pass, newest first (state and timeline events alike, as
 /// the server returned them), and for each timeline event (judged by the type
@@ -545,6 +555,17 @@ mod tests {
         current.creators = vec![OWNER.to_owned()];
         let back = walk_backward(&marks, &targets, &current);
         assert_eq!(back["o"].map(|l| l.level), Some(i64::MAX));
+    }
+
+    #[test]
+    fn only_a_room_that_does_not_federate_may_be_walked() {
+        let mut c = create("10");
+        assert!(!non_federated(&[Mark { pos: 1, event: c.clone() }]), "m.federate absent means true");
+        c["content"]["m.federate"] = json!(false);
+        assert!(non_federated(&[Mark { pos: 1, event: c.clone() }]));
+        c["content"]["m.federate"] = json!(true);
+        assert!(!non_federated(&[Mark { pos: 1, event: c }]));
+        assert!(!non_federated(&[]), "no create event in the pass");
     }
 
     #[test]

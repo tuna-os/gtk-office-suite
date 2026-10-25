@@ -70,6 +70,11 @@ pub struct MatrixConfig {
     /// How many state-at-event requests a read may have in flight at once
     /// (the context rules only; 1 is one after the other).
     pub level_concurrency: usize,
+    /// Create documents that other homeservers may join (`m.federate` true).
+    /// The default is `false`: every event of the room then comes from this
+    /// homeserver, its stream order is the order of its state, and a reader
+    /// may walk the room's own power-levels events (spec 8.1, question 15).
+    pub federate: bool,
     /// Room version for new documents; `None` takes the server default.
     pub room_version: Option<String>,
     /// Keep the SDK's state and crypto store in this directory (needs the
@@ -95,6 +100,7 @@ impl MatrixConfig {
             guard_stale_members: true,
             sender_rule: SenderRule::default(),
             level_concurrency: 1,
+            federate: false,
             room_version: None,
             store_dir: None,
         }

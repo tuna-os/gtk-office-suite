@@ -128,7 +128,7 @@ jobs:
           DCP_SKIP_SYNAPSE: '1'
         run: |
           env -u DCP_SYNAPSE_URL cargo test -p dcp-matrix --locked --test levels -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-levels.log"
-          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-levels.log")" -eq 4
+          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-levels.log")" -eq 5
           env -u DCP_SYNAPSE_URL cargo test -p dcp-interop --locked --test power_at_event -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-q15.log"
           test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-q15.log")" -eq 7
       - name: Measurements, scenarios with their controls, the demoted-editor check (Synapse, ${{ matrix.tag }})

@@ -670,7 +670,12 @@ impl MatrixStore {
             SenderRule::PrevContentWalk => Ok(levels::walk_backward(marks, targets, &snap.power)),
             SenderRule::Context | SenderRule::SdkContext => self.resolve_by_context(room, rule, targets).await,
             SenderRule::Hybrid => {
-                let mut out = levels::walk_forward(marks, targets, true);
+                // The walk is the server's own order only when every event came from this homeserver.
+                let mut out = if levels::non_federated(marks) {
+                    levels::walk_forward(marks, targets, true)
+                } else {
+                    HashMap::new()
+                };
                 let unplaced: Vec<Target> =
                     targets.iter().filter(|t| out.get(&t.id).copied().flatten().is_none()).cloned().collect();
                 if !unplaced.is_empty() {
@@ -993,7 +998,7 @@ impl DocumentStore for MatrixStore {
         let request = assign!(create_room::v3::Request::new(), {
             name: Some(meta.title.clone()),
             preset: Some(create_room::v3::RoomPreset::PrivateChat),
-            creation_content: Some(raw_json(json!({"type": state::ROOM_TYPE, "m.federate": false}))?),
+            creation_content: Some(raw_json(json!({"type": state::ROOM_TYPE, "m.federate": self.inner.cfg.federate}))?),
             initial_state: initial_state,
             power_level_content_override: Some(raw_json(self.power_level_override())?),
             room_version: room_version,

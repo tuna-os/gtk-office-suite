@@ -458,3 +458,62 @@ async fn the_walks_judge_a_cached_transcript_offline() {
         json!({ "events_in_cache": events.len(), "cache_bytes": cache.len(), "judged": ids.len(), "forged_dropped": true }),
     );
 }
+
+/// The hybrid walks the room's own power-levels events only when the room does
+/// not federate (`m.federate` false, what the binding creates by default). In a
+/// room other homeservers may join, the state at an event is the result of state
+/// resolution and the hybrid asks the server for every event; the verdicts are
+/// the same ones (this room has one homeserver, so the walk is right here too:
+/// the test shows which source the hybrid chose, not that the walk is wrong).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_room_that_federates_is_judged_by_the_server_and_not_by_the_walk() {
+    let Some(syn) = require_synapse!() else { return };
+    let owner = syn
+        .user_with("owner", |c| {
+            c.enforce_encrypted_pl = false;
+            c.federate = true;
+        })
+        .await;
+    let editor = syn.user("editor").await;
+    let doc = owner.create_document(&meta("Federating"), Some(file(b"v1"))).await.unwrap();
+    let http = reqwest::Client::new();
+    let token = owner.client().access_token().unwrap();
+    let (status, create, _) = get_json(&http, &token, url(&syn, &["rooms", &doc, "state", "m.room.create"], &[])).await;
+    assert_eq!(status, 200);
+    assert_eq!(create["m.federate"], json!(true), "the room was created to federate: {create}");
+
+    owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    let first = owner.versions(&doc).await.unwrap()[0].id.clone();
+    let v2 = editor.publish_version(&doc, vec![first.clone()], file(b"v2"), None).await.unwrap();
+    owner.grant(&doc, &editor.principal(), Role::Viewer).await.unwrap();
+    let forged = Version {
+        dcp: 1,
+        parents: vec![v2.id.clone()],
+        file: v2.body.file.clone(),
+        created_by: Author { principal: editor.principal(), device: editor.device() },
+        message: Some("forged by the ex-editor".into()),
+        covers: None,
+    };
+    let f = editor.send_unchecked(&doc, dcp_matrix::state::VERSION, serde_json::to_value(&forged).unwrap()).await.unwrap();
+
+    let ids = [first, v2.id.clone(), f.clone()];
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let r = owner.read_report_with(&doc, SenderRule::TimelineWalk).await.unwrap();
+        if ids.iter().all(|i| r.checks.iter().any(|c| &c.id == i)) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the owner never judged all three events");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    owner.clear_level_cache();
+    let hybrid = owner.read_report_with(&doc, SenderRule::Hybrid).await.unwrap();
+    let walk = owner.read_report_with(&doc, SenderRule::TimelineWalk).await.unwrap();
+    assert_eq!(hybrid.level_stats.requests as usize, ids.len(), "the hybrid asked the server for each event of a federating room");
+    assert_eq!(walk.level_stats.requests, 0);
+    let by_id = |r: &dcp_matrix::ReadReport| -> std::collections::BTreeMap<String, Option<dcp_matrix::Level>> {
+        r.checks.iter().filter(|c| ids.contains(&c.id)).map(|c| (c.id.clone(), c.level)).collect()
+    };
+    assert_eq!(by_id(&hybrid), by_id(&walk), "the server and the walk agree on every level");
+    assert!(hybrid.unauthorised_ids.contains(&f) && !hybrid.unauthorised_ids.contains(&v2.id), "the ex-editor's forged event is dropped, the earlier version kept");
+}
