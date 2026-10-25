@@ -2,8 +2,10 @@
 
 Date: 2026-10-25 · Tracks: [RFC-0004](0004-interoperable-document-collaboration.md), DCP draft 1 [§8.1](../DOCUMENT-COLLABORATION-SPEC.md) (reader rule) and §13 question 15 · Code: [`tools/collab-spike/dcp-matrix/`](../../tools/collab-spike/dcp-matrix/) (`src/levels.rs`, `read_report_with` in `src/store.rs`, `tests/levels.rs`), [`dcp-interop/src/power_at_event.rs`](../../tools/collab-spike/dcp-interop/src/power_at_event.rs) and `tests/power_at_event.rs` · Workflow: [`collab-spike-q15.yml`](../../.github/workflows/collab-spike-q15.yml) · Input: [Spike F](0004-spike-f-results.md), section "The previously unverified items" (the finding this closes)
 
-**Every number below is from one CI run, [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967)
-(workflow `collab-spike-q15`, branch `spike/collab-q15`, commit `92c7466`), 7 of 7 jobs green, unless another run is named.**
+**Every number below is from one CI run ("run A"), [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967)
+(workflow `collab-spike-q15`, branch `spike/collab-q15`, commit `92c7466`), 7 of 7 jobs green, unless another run is named. The whole workflow was run again on the
+final code ("run B", [40192035297](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192035297), commit `fb2dfa4`, which only adds `level_for`/`state_default`): 7 of 7 green, the same verdicts, and costs given
+beside run A's where they differ.**
 Synapse 1.163.2, started by `scripts/synapse-up.sh` from `docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02`
 (image ID `sha256:260cd9c0…`; SQLite, one homeserver, no federation, loopback), and once from `matrixdotorg/synapse:latest`
 (also 1.163.2, image ID `sha256:e0d446e9…`, the one Spike F used); matrix-sdk 0.19.1; `ubuntu-24.04` runner (image 20261012.334.1,
@@ -26,10 +28,11 @@ federation, or release builds.
    `default-drained` (and on `relaxed`); every cold read of 31 versions made 31 requests and met 0. On `default` a user who made 300 `/context` requests had
    the same send budget left as one who made none (9 sends before the first 429 for a fresh user; 3 sends, 300 requests, then 6 more; control: 3 + 5 sends, then 1 more).
    Source (read, not the measured image): Synapse's `RoomEventContextServlet` on `develop`, fetched 2026-10-25, makes no rate-limit call; ruma-client-api 0.25.1's `get_context` is `rate_limited: false`.
-3. **The cost is small and per event.** Listing 30 versions (31 with the first), cold cache, adds a median of **106 ms (3.4 ms a version) on `relaxed`, 152 ms (4.9 ms)
-   on `default`, 162 ms (5.2 ms) on `default-drained`** over a reader that checks nothing, in 31 requests and 134 KB (4.3 KB each, state filtered to the two events that
-   matter). matrix-sdk's own call is 3.6 to 4.8 times slower per event (16.2, 17.6, 18.8 ms) for the same request. A warm read (the cache is keyed by event ID, state at an
-   event never changes) makes 0 requests. The walks add 0.0 to 4.9 ms for all 31 versions, which is run-to-run noise: in the same job the current-table reader, which does no extra work, shows 4.8 ms.
+3. **The cost is small and per event, and the profile does not change it.** Listing 30 versions (31 with the first), cold cache, adds a median of **84 to 173 ms (2.7 to 5.6 ms a version) over a reader that checks nothing, in 31
+   requests and 134 KB (4.3 KB each, state filtered to the two events that matter)**: run A 106 / 152 / 162 ms on `relaxed` / `default` / `default-drained` (86 on `latest`), run B 142 / 105 / 84 (173 on `latest`). The same job
+   differs by up to 1.9 times between the two runs and the profiles do not order consistently, so the spread is the runner's, not the rate limit's. matrix-sdk's own call is 3.6 to 4.8 times slower per event for the same request
+   (11 to 20 ms a version). A warm read (the cache is keyed by event ID, state at an event never changes) makes 0 requests. The walks add 0.0 to 4.9 ms for all 31 versions, which is noise: the current-table reader, which does
+   no extra work, shows 4.8 ms in the same job of run A.
 4. **A walk is exact only if the reader can see every power-levels change, and a plain walk fails silently when it cannot** (scenario 6, not in the brief, found
    while choosing the default). With `history_visibility: joined` a late joiner does not see the demotion sent before it joined; the plain forward walk then judges the
    ex-editor's forged event by the table that demotion had replaced and **accepts it**. Linking each table to the next through `unsigned.replaces_state` leaves those
@@ -63,20 +66,21 @@ test). `cargo check --locked` passes: no dependency was added. The runs on this 
 (`00c56df`) all green, four rules, five scenarios; [40178500692](https://github.com/tuna-os/gtk-office-suite/actions/runs/40178500692) (`626094b`, with the hybrid and scenario 6) failed
 only in scenario 6, my test counted the hybrid's requests against a cache the previous reading had filled; [40181742542](https://github.com/tuna-os/gtk-office-suite/actions/runs/40181742542)
 (`c11f5c4`) failed only in `levels default-drained`, scenario 6 sent its history-visibility change without waiting out a 429 (a spent budget answers 429 before anything else,
-Spike F); the final run is green. Both failures were defects of the new test.
+Spike F); [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967) (`92c7466`, run A) and [40192035297](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192035297)
+(`fb2dfa4`, run B) are green. Both failures were defects of the new test. In run B the `/context` requests met 0 `M_LIMIT_EXCEEDED` again (620 per job, four jobs; 6 more sends after 3 + 300 requests, 1 more after 3 + 5 sends, on `default` and `default-drained`).
 
 ## 1. The ways to get the level at an event
 
 What each costs and needs (costs: median of 5 cold reads of a room with 31 versions and 4 power-level changes made between them, `levels::listing_30_versions`; "extra" is over a
-read with `SenderRule::Trust`, which took 343.7 / 382.6 / 385.4 ms on relaxed / default / default-drained):
+read with `SenderRule::Trust`, which took 343.7 / 382.6 / 385.4 / 229.8 ms on relaxed / default / default-drained / `latest` in run A and 380.0 / 348.0 / 235.7 / 390.2 ms in run B: that is the runner noise the extras sit in. Extras are run A, run B):
 
 | Way | Requests for 31 versions | Extra ms, relaxed / default / default-drained (per version) | Offline from cached events | Needs the history back to the room's creation | Right in a federating room |
 |---|---|---|---|---|---|
-| `GET /rooms/{id}/context/{eventId}?limit=0&filter={"types":["m.room.power_levels","m.room.create"]}`, one after the other | 31 (134 KB) | 105.8 / 152.1 / 161.8 (3.4 / 4.9 / 5.2) | only for event IDs already cached | no | yes (the server's own state) |
-| the same, 4 / 8 in flight | 31 | 100.2 / 130.9 / 142.2 and 90.0 / 128.8 / 159.1 (about 3 to 5) | as above | no | yes |
-| matrix-sdk 0.19.1 `Room::event_with_context(id, false, 0, None)` | 31 | 502.6 / 545.6 / 581.1 (16.2 / 17.6 / 18.8) | as above | no | yes |
-| forward walk of `m.room.create` and `m.room.power_levels` in the `/messages` pass | 0 | 0.0 / 2.3 / 4.9 (noise) | **yes** | **yes**, and every change visible | not claimed [INFERENCE: stream order is not state resolution; not run] |
-| backward walk through `unsigned.prev_content` from the newest table | 0 | 0.0 / 1.2 / 0.0 (noise) | **yes** | no: only back to the oldest event judged | not claimed [INFERENCE, not run] |
+| `GET /rooms/{id}/context/{eventId}?limit=0&filter={"types":["m.room.power_levels","m.room.create"]}`, one after the other | 31 (134 KB) | A 105.8 / 152.1 / 161.8 / 86.2 (2.8 to 5.2 a version); B 142.2 / 104.9 / 83.5 / 172.9 (2.7 to 5.6) | only for event IDs already cached | no | yes (the server's own state) |
+| the same, 4 / 8 in flight | 31 | A 100.2 / 130.9 / 142.2 / 73.0 and 90.0 / 128.8 / 159.1 / 73.3; B 127.4 / 90.6 / 72.6 / 151.3 and 121.7 / 89.9 / 67.5 / 136.2 | as above | no | yes |
+| matrix-sdk 0.19.1 `Room::event_with_context(id, false, 0, None)` | 31 | A 502.6 / 545.6 / 581.1 / 338.4 (10.9 to 18.8); B 548.2 / 464.7 / 342.9 / 609.7 (11.1 to 19.7) | as above | no | yes |
+| forward walk of `m.room.create` and `m.room.power_levels` in the `/messages` pass | 0 | A 0.0 to 4.9, B 0.0 (noise) | **yes** | **yes**, and every change visible | not claimed [INFERENCE: stream order is not state resolution; not run] |
+| backward walk through `unsigned.prev_content` from the newest table | 0 | A 0.0 to 2.4, B 0.0 to 0.5 (noise) | **yes** | no: only back to the oldest event judged | not claimed [INFERENCE, not run] |
 | `GET /rooms/{id}/state` snapshots | 1 per read | n/a | n/a | n/a | the CURRENT table: draft 1's rule, wrong |
 | `GET /rooms/{id}/state?at=<token>` | 1 | n/a | n/a | n/a | **ignores `at`**: returns the current table (probe below) |
 
@@ -128,8 +132,9 @@ Measured by `levels::state_at_event_requests_are_not_rate_limited` and `levels::
 | 300 `/context` one after the other: 429s / s / requests per second | 0 / 0.94 / 318 | 0 / 1.33 / 226 | 0 / 1.64 / 183 | 0 / 0.72 / 416 |
 | 320 from 8 tasks: 429s / s / requests per second | 0 / 0.84 / 379 | 0 / 1.22 / 263 | 0 / 1.44 / 223 | 0 / 0.71 / 449 |
 | cold read of 31 versions: 429s met | 0 (5 reads × 9 cases) | 0 | 0 | 0 |
-| cold read, `/context`: extra over trust-sender | 105.8 ms | 152.1 ms | 161.8 ms | 86.2 ms |
-| cold read, `/context`: median total (trust-sender) | 449.6 (343.7) | 534.7 (382.6) | 547.3 (385.4) | 315.9 (229.8) |
+| cold read, `/context`: extra over trust-sender, run A | 105.8 ms | 152.1 ms | 161.8 ms | 86.2 ms |
+| the same, run B | 142.2 ms | 104.9 ms | 83.5 ms | 172.9 ms |
+| cold read, `/context`: median total (trust-sender), run A | 449.6 (343.7) | 534.7 (382.6) | 547.3 (385.4) | 315.9 (229.8) |
 | warm read (cache): requests / cache hits | 0 / 31 | 0 / 31 | 0 / 31 | 0 / 31 |
 | sends before the first 429: fresh user / after 3 + 300 `/context` / control after 3 + 5 sends | not run (no limit) | 9 / 6 more / 1 more | 9 / 6 more / 1 more | not run |
 
@@ -137,8 +142,8 @@ Measured by `levels::state_at_event_requests_are_not_rate_limited` and `levels::
   5 fewer (1 against 6), so the comparison can see spent tokens. `rc_message` is the only limit tried; `rc_joins`, `rc_invites` and the others are unrelated to this call.
 - **The 429 path of the new requests was never taken** (0 of 620 per job), so the retry on `retry_after_ms` in `MatrixStore::context_raw` and the SDK path is [untested]; it
   is the same logic as the binding's other reads (`retry_rl`) in the SDK path and a copy of it for the raw request.
-- **Concurrency saves little on a loopback server** (extra over trust-sender with 1 / 4 / 8 requests in flight: relaxed 106 / 100 / 90 ms, default 152 / 131 / 129, default-drained 162 / 142 / 159, `latest` 86 / 73 / 73): a 2 to 5 ms
-  request is mostly server time. On a real network, where a request is dominated by its round trip, it would matter (31 sequential round trips of, say, 80 ms are 2.5 s: derived, not run).
+- **Concurrency saves little on a loopback server** (extra over trust-sender with 1 / 4 / 8 requests in flight, run A: relaxed 106 / 100 / 90 ms, default 152 / 131 / 129, default-drained 162 / 142 / 159, `latest` 86 / 73 / 73;
+  run B: 142 / 127 / 122, 105 / 91 / 90, 84 / 73 / 68, 173 / 151 / 136): 2 to 21 % in these eight pairs of series, and run A's `default-drained` 8-in-flight series is slower than 4; a 2 to 5 ms request is mostly server time. On a real network, where a request is dominated by its round trip, it would matter (31 sequential round trips of, say, 80 ms are 2.5 s: derived, not run).
 - A reader that pages the room's history **already** pays for `/messages`; the walks reuse that pass, which is why they cost nothing.
 
 ## 4. A power-levels change the reader cannot see (scenario 6)
