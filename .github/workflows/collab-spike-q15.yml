@@ -82,6 +82,8 @@ jobs:
           - { tag: relaxed,        profile: relaxed, latest: false, threads: 3 }
           - { tag: default,        profile: default, latest: false, threads: 3 }
           - { tag: relaxed-latest, profile: relaxed, latest: true,  threads: 3 }
+          # Every principal's message budget spent first (DCP_DRAIN_BURST, read by the dcp-interop rig): each event the scenarios send is then paced by the homeserver.
+          - { tag: default-drained, profile: default, latest: false, threads: 3, drain: '1' }
     env:
       SYNAPSE_IMAGE: ${{ matrix.latest && 'docker.io/matrixdotorg/synapse:latest' || 'docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02' }}
     defaults:
@@ -134,6 +136,7 @@ jobs:
       - name: Measurements, scenarios with their controls, the demoted-editor check (Synapse, ${{ matrix.tag }})
         env:
           DCP_MEASURE_OUT: ${{ github.workspace }}/out/${{ matrix.tag }}.jsonl
+          DCP_DRAIN_BURST: ${{ matrix.drain }}
         run: |
           set -uo pipefail
           set +e

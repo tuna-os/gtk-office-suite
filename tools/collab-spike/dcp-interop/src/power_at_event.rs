@@ -632,6 +632,8 @@ pub async fn a_hidden_power_levels_change_does_not_mislead_the_readers_that_chec
     .await?;
 
     for rule in [SenderRule::Context, SenderRule::SdkContext, SenderRule::PrevContentWalk, SenderRule::Hybrid] {
+        // Each rule asks (or does not ask) for itself: the hybrid's requests are counted from a cold cache.
+        late.clear_level_cache();
         let r = reading(&late, &rig.doc, rule).await?;
         log_reading(rig, scenario, "late joiner (window)", rule, &r, &[]);
         let got = in_window(sender_verdicts(&r.report));
