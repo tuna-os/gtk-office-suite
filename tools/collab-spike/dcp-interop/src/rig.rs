@@ -123,7 +123,7 @@ impl RigOptions {
     pub fn draft0_power_levels_and_readers_that_trust_senders(mut self) -> Self {
         self.config = |c| {
             c.enforce_encrypted_pl = false;
-            c.reader_checks_senders = false;
+            c.sender_rule = dcp_matrix::SenderRule::Trust;
         };
         self
     }

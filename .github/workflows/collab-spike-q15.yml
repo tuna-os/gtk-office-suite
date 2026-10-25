@@ -1,0 +1,239 @@
+name: collab-spike-q15
+
+# RFC-0004 open question 15 (spec 8.1): a Matrix reader judges a DCP event's sender
+# by the power level in force AT the event. The reader side is in
+# tools/collab-spike/dcp-matrix (src/levels.rs, src/store.rs `read_report_with`);
+# the five scenarios with their negative controls are in
+# tools/collab-spike/dcp-interop (src/power_at_event.rs); what each way of learning
+# the level costs is measured in dcp-matrix/tests/levels.rs. Results and what is not
+# verified: docs/rfc/0004-spike-q15-results.md
+#
+#   check        cargo check --all-targets --locked on the workspace, the unit tests of the
+#                pure parts (the two walks, the level arithmetic)
+#   levels       the measurements (/context rate limit, 30 versions, the alternatives
+#                probed), the five scenarios with their controls, and the demoted-editor
+#                check, on Synapse 1.163.2 with relaxed and with default rate limits, and
+#                once on relaxed with whatever `latest` is
+#   conformance  dcp_conformance::run_all through MatrixStore (dcp-matrix) and through
+#                MatrixStore and WopiHost<MatrixStore> (dcp-interop), the draft-0 room under
+#                every rule, relaxed and default: nothing regressed
+#
+# A test that needs Synapse FAILS when it is missing; only DCP_SKIP_SYNAPSE=1 skips it,
+# and the test says so. The `levels` job checks both behaviours.
+on:
+  push:
+    branches: [spike/collab-q15]
+    paths:
+      - 'tools/collab-spike/**'
+      - '.github/workflows/collab-spike-q15.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: collab-spike-q15-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+  # The Synapse the earlier spikes measured (1.163.2), by tag and digest (docker hub, 2026-10-25).
+  SYNAPSE_PINNED: docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: cargo check --all-targets --locked, unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-q15
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # --locked: the committed Cargo.lock must be the one the workspace resolves to. This spike adds no dependency.
+      - name: cargo check --workspace --all-targets --locked
+        run: cargo check --workspace --all-targets --locked
+      - name: Unit tests of dcp-matrix (the walks, the level arithmetic, the power-levels parser)
+        run: cargo test -p dcp-matrix --lib --locked -- --nocapture
+
+  levels:
+    name: levels ${{ matrix.tag }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { tag: relaxed,        profile: relaxed, latest: false, threads: 3 }
+          - { tag: default,        profile: default, latest: false, threads: 3 }
+          - { tag: relaxed-latest, profile: relaxed, latest: true,  threads: 3 }
+    env:
+      SYNAPSE_IMAGE: ${{ matrix.latest && 'docker.io/matrixdotorg/synapse:latest' || 'docker.io/matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322f74d177a43bce8031adc81ef839ddd117a8dd03cfec350e76e02' }}
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-q15
+      - name: Output directory and versions
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          rustc --version
+          cargo --version
+          docker --version
+          echo "git $(git rev-parse HEAD)"
+          echo "Synapse image: $SYNAPSE_IMAGE"
+          nproc
+          free -m
+      - name: Build tests
+        run: cargo test -p dcp-matrix -p dcp-interop --no-run --locked
+      # A test that needs Synapse must fail without one, and skip only when told to, saying so.
+      - name: Fails loudly without a Synapse
+        if: ${{ matrix.tag == 'relaxed' }}
+        run: |
+          for t in "dcp-matrix levels" "dcp-interop power_at_event"; do
+            set -- $t
+            if env -u DCP_SYNAPSE_URL -u DCP_SKIP_SYNAPSE cargo test -p "$1" --locked --test "$2" -- --nocapture > "$RUNNER_TEMP/nosyn-$2.log" 2>&1; then
+              cat "$RUNNER_TEMP/nosyn-$2.log"
+              echo "::error::$1 --test $2 passed with no Synapse"
+              exit 1
+            fi
+            grep -q "DCP_SYNAPSE_URL is not set" "$RUNNER_TEMP/nosyn-$2.log"
+          done
+      - name: DCP_SKIP_SYNAPSE=1 skips explicitly and says so
+        if: ${{ matrix.tag == 'relaxed' }}
+        env:
+          DCP_SKIP_SYNAPSE: '1'
+        run: |
+          env -u DCP_SYNAPSE_URL cargo test -p dcp-matrix --locked --test levels -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-levels.log"
+          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-levels.log")" -eq 3
+          env -u DCP_SYNAPSE_URL cargo test -p dcp-interop --locked --test power_at_event -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip-q15.log"
+          test "$(grep -c 'SKIPPED (DCP_SKIP_SYNAPSE=1)' "$RUNNER_TEMP/skip-q15.log")" -eq 6
+      - name: Measurements, scenarios with their controls, the demoted-editor check (Synapse, ${{ matrix.tag }})
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/out/${{ matrix.tag }}.jsonl
+        run: |
+          set -uo pipefail
+          set +e
+          eval "$(scripts/synapse-up.sh ${{ matrix.profile }})"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/out/synapse-${{ matrix.tag }}.log" 2>&1 || true; scripts/synapse-down.sh ${{ matrix.profile }}' EXIT
+          echo "Synapse $DCP_SYNAPSE_VERSION, profile $DCP_SYNAPSE_PROFILE, image $DCP_SYNAPSE_IMAGE_ID"
+          rc=0
+          run() { # run <log name> <command...>
+            name=$1; shift
+            echo "::group::$name"
+            "$@" 2>&1 | tee "$GITHUB_WORKSPACE/out/${{ matrix.tag }}-$name.log"
+            s=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if [ "$s" -ne 0 ]; then echo "::error::$name failed ($s)"; rc=1; fi
+          }
+          run levels cargo test -p dcp-matrix --locked --test levels --no-fail-fast -- --nocapture --test-threads=1
+          run scenarios cargo test -p dcp-interop --locked --test power_at_event --no-fail-fast -- --nocapture --test-threads=${{ matrix.threads }}
+          run demoted-editor cargo test -p dcp-interop --locked --test cross_binding --no-fail-fast -- a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through a_draft0_server_accepts_a_demoted_editors_events_and_readers_drop_them --nocapture --test-threads=2
+          if [ "${{ matrix.profile }}" = relaxed ]; then
+            # The controls of the existing checks: they must still fail where they are meant to (relaxed only, as in collab-spike.yml).
+            run controls cargo test -p dcp-interop --locked --test negative_control --no-fail-fast -- --nocapture --test-threads=2
+          fi
+          exit $rc
+      - name: What was measured
+        if: ${{ !cancelled() }}
+        run: |
+          grep -h "^MEASURE" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-*.log | grep -v q15_reading | cut -c1-1500 || true
+          echo "--- READING lines"
+          grep -h "^READING" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-scenarios.log | cut -c1-400 || true
+          echo "--- TIMING lines"
+          grep -h "^TIMING" "$GITHUB_WORKSPACE"/out/${{ matrix.tag }}-*.log || true
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: q15-levels-${{ matrix.tag }}
+          path: out/
+          if-no-files-found: warn
+
+  conformance:
+    name: conformance ${{ matrix.profile }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { profile: relaxed, threads: 2 }
+          - { profile: default, threads: 4 }
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-q15
+      - name: Output directory and versions
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          rustc --version
+          echo "git $(git rev-parse HEAD)"
+          echo "Synapse image: $SYNAPSE_PINNED"
+      - name: Build tests
+        run: cargo test -p dcp-matrix -p dcp-interop --no-run --locked
+      - name: dcp_conformance::run_all through MatrixStore and WopiHost<MatrixStore>, every reader rule (Synapse, ${{ matrix.profile }})
+        env:
+          SYNAPSE_IMAGE: ${{ env.SYNAPSE_PINNED }}
+          DCP_MEASURE_OUT: ${{ github.workspace }}/out/${{ matrix.profile }}.jsonl
+        run: |
+          set -uo pipefail
+          set +e
+          eval "$(scripts/synapse-up.sh ${{ matrix.profile }})"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/out/synapse-${{ matrix.profile }}.log" 2>&1 || true; scripts/synapse-down.sh ${{ matrix.profile }}' EXIT
+          echo "Synapse $DCP_SYNAPSE_VERSION, profile $DCP_SYNAPSE_PROFILE, image $DCP_SYNAPSE_IMAGE_ID"
+          rc=0
+          run() { # run <log name> <command...>
+            name=$1; shift
+            echo "::group::$name"
+            "$@" 2>&1 | tee "$GITHUB_WORKSPACE/out/${{ matrix.profile }}-$name.log"
+            s=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            if [ "$s" -ne 0 ]; then echo "::error::$name failed ($s)"; rc=1; fi
+          }
+          run matrix-conformance cargo test -p dcp-matrix --locked --test conformance --no-fail-fast -- --nocapture --test-threads=2
+          run matrix-journeys cargo test -p dcp-matrix --locked --test journeys --no-fail-fast -- --nocapture --test-threads=2
+          run interop-conformance cargo test -p dcp-interop --locked --test conformance --no-fail-fast -- --nocapture --test-threads=${{ matrix.threads }}
+          exit $rc
+      - name: Timings
+        if: ${{ !cancelled() }}
+        run: grep -h "^TIMING" "$GITHUB_WORKSPACE"/out/${{ matrix.profile }}-*.log | sort -k2,3 || true
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: q15-conformance-${{ matrix.profile }}
+          path: out/
+          if-no-files-found: warn
