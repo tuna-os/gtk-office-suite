@@ -180,7 +180,17 @@ handshake's end to the first selected IP path of that connection; no NAT, so hol
 
 So the upgrade takes about three round trips of the peer-to-peer path after the relay handshake (3.1 × RTT at 50 and 150 ms).
 At 1 Mbit/s it took 430 ms with a 3 ms round trip, so the rate limit, not the delay, set it there. Spike C's in-process relay
-test is now read with the same API (`tests/relay.rs`): see "In-process relay test" below.
+test, read with the same API, is next.
+
+**Spike C's in-process relay test, read with the path API** (`tests/relay.rs`, job `relay-inproc`, run
+[40192160497](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192160497), commit `f45846ac`, debug build, loopback, no
+firewall, iroh's in-process relay server). The nodes were given the relay URL and no direct address, as in Spike C. iroh reports,
+for the connections of both nodes: a relay path existed (`Relay(https://127.0.0.1:44763/)`, not selected) **and an IP path to the
+peer's loopback address existed and was selected** (`Ip(127.0.0.1:60447)`, `selected: true`, rtt 0.6 to 2.0 ms against 4.3 to
+14 ms for the relay path); the test asserts the relay path existed and prints the rest. So Spike C's "relay-only addresses" run
+synced over a **direct** path (a relay path existed alongside it), and its measured "20.9 ms with relay-only addresses
+against 20.5 ms with direct addresses" compared two direct connections (this run: 25.5 against 25.4 ms, same debug build). What it did not
+show is relay-only operation; the firewall-enforced test above does.
 
 ### 2. The conformance journeys on shaped links, both modes (item 3)
 
@@ -399,6 +409,8 @@ Proposed; not applied (`docs/DOCUMENT-COLLABORATION-SPEC.md` is not owned by thi
    (iroh `PATH_MAX_IDLE_TIMEOUT`) and traffic moves to the relay (15.0 to 19.9 s in the runs; the next publish was visible
    after 15.6 to 21.2 s); a relay that stays dead for 30 s (`RELAY_PATH_MAX_IDLE_TIMEOUT`) closes relay-only connections. A
    binding MUST therefore treat 20 s as the time to notice a lost path and MUST NOT assume faster fail-over in L3."*
+3b. **8.5 "Measured"**: Spike C's "20.9 ms with relay-only addresses against 20.5 ms with direct addresses" (spike-c-results.md, the
+   latency table) compared two direct connections; drop the comparison from any text that quotes it.
 4. **8.5 "Leases and time", the settle-interval sentence** ("the settle interval SHOULD be at least 500 ms ... not measured on a WAN"):
    replace with *"Propagation of a lease write between two nodes was a median of 110 ms at 50 ms RTT, 437 to 507 ms at 150 ms
    RTT (maximum 525 ms; 11 to 15 of 30 writes exceeded 500 ms), up to 662 ms at 5 % loss with no delay, and up to 955 ms at 150 ms,
