@@ -122,13 +122,23 @@ impl Level {
     }
 }
 
-/// `power`'s verdict on a sender and an event of `wire_type` (what the
-/// homeserver sees: `m.room.encrypted` in an encrypted room).
+/// What `power` asks of an event of `event_type` (`events[event_type]`, else
+/// `events_default` for a timeline event and `state_default` for a state event).
+pub fn required_level(power: &Power, event_type: &str, is_state: bool) -> i64 {
+    power.events.get(event_type).copied().unwrap_or(if is_state { power.state_default } else { power.events_default })
+}
+
+/// `power`'s verdict on a sender and an event of `event_type` (a state event or
+/// not): the sender's level (`users[sender]`, else `users_default`) and what the
+/// table asks for the event type.
+pub fn level_for(power: &Power, sender: &str, event_type: &str, is_state: bool) -> Level {
+    Level { level: power.level_of(sender), required: required_level(power, event_type, is_state) }
+}
+
+/// [`level_for`] for a timeline event, which is what a DCP version or update is
+/// (`wire_type` is what the homeserver sees: `m.room.encrypted` in an encrypted room).
 pub fn level_in(power: &Power, sender: &str, wire_type: &str) -> Level {
-    Level {
-        level: power.level_of(sender),
-        required: power.events.get(wire_type).copied().unwrap_or(power.events_default),
-    }
+    level_for(power, sender, wire_type, false)
 }
 
 /// One judged event, for tests and logs.
@@ -534,6 +544,21 @@ mod tests {
         assert!(level_in(&p, OWNER, "m.room.encrypted").permitted());
         assert!(level_in(&p, ED, "org.tunaos.dcp.version").permitted());
         assert!(!level_in(&p, VW, "org.tunaos.dcp.version").permitted());
+    }
+
+    #[test]
+    fn a_state_event_is_asked_for_state_default_unless_the_table_names_its_type() {
+        let mut t = table(json!({ OWNER: 100, ED: 50 }));
+        t["state_default"] = json!(75);
+        t["events_default"] = json!(10);
+        t["events"] = json!({ "org.tunaos.dcp.lease": 50 });
+        let p = power_from_content(&t, &[]);
+        assert_eq!(level_for(&p, ED, "m.room.topic", true).required, 75, "state_default");
+        assert_eq!(level_for(&p, ED, "m.room.encrypted", false).required, 10, "events_default");
+        assert_eq!(level_for(&p, ED, "org.tunaos.dcp.lease", true).required, 50, "the table names the type");
+        assert_eq!(level_for(&p, VW, "org.tunaos.dcp.lease", true).level, 0, "users_default");
+        assert!(level_for(&p, ED, "org.tunaos.dcp.lease", true).permitted());
+        assert!(!level_for(&p, ED, "m.room.topic", true).permitted(), "50 is below the state_default of 75");
     }
 
     #[test]
