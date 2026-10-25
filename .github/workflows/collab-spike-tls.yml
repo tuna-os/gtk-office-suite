@@ -296,6 +296,23 @@ jobs:
           p="$(sed -n 's/^export PROBE_PIDFILE=//p' "$RUNNER_TEMP/probe.env")"
           [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true
 
+      # An observation about the Go server 0.3.0 behind Caddy 2.10.2, asserted so that the results
+      # document's claim stays tied to a run: with Caddy's `log` directive in front, SSE is refused.
+      - name: "Probe - SSE through Caddy's access log (Go server): refused with the log on, served with it off"
+        if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
+        run: |
+          set -u
+          STREAMS_ACCESS_LOG=0 STREAMS_TLS_PORT=4510 STREAMS_PLAIN_PORT=4511 STREAMS_EXPORT_PREFIX=NOLOG scripts/streams-tls-up.sh go > "$RUNNER_TEMP/nolog.env"
+          sse() { # base URL: create a stream, ask for SSE for 3 s
+            curl -sS --cacert "$DCP_STREAMS_CA" -X PUT -H 'Content-Type: application/json' -o /dev/null "$1/v1/stream/sse-probe"
+            timeout 3 curl -sS -N --cacert "$DCP_STREAMS_CA" --http2 "$1/v1/stream/sse-probe?offset=-1&live=sse" 2>&1 | head -3 || true
+          }
+          on="$(sse https://localhost:4440)"; off="$(sse https://localhost:4510)"
+          echo "access log ON : $on"; echo "access log OFF: $off"
+          p="$(sed -n 's/^export NOLOG_PIDFILE=//p' "$RUNNER_TEMP/nolog.env")"; scripts/streams-tls-down.sh "$p" || true
+          grep -q "streaming not supported" <<<"$on"
+          grep -q "event: control" <<<"$off"
+
       - name: Stop the servers
         if: always()
         run: |
