@@ -194,7 +194,7 @@ pub fn track(log: &SharedLog, conn: &Connection, side: &'static str, start_us: u
                     tx_bytes: Some(last_stats.udp_tx.bytes),
                     rx_bytes: Some(last_stats.udp_rx.bytes),
                 },
-                PathEvent::Lagged { missed } => PathEv {
+                PathEvent::Lagged { missed, .. } => PathEv {
                     t_us,
                     conn: id,
                     peer: peer.clone(),

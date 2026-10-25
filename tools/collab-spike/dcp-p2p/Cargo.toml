@@ -53,3 +53,5 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 
 [dev-dependencies]
 dcp-conformance = { path = "../dcp-conformance" }
+# The same version dcp-core and dcp-conformance use.
+parking_lot = "0.13"

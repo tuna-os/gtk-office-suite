@@ -971,6 +971,7 @@ dependencies = [
  "p2panda-spaces",
  "p2panda-store",
  "p2panda-sync",
+ "parking_lot 0.13.0",
  "petgraph",
  "postcard",
  "rustls-pki-types",
