@@ -43,6 +43,14 @@ document turns green. Real documents mix many features, so the way to
 move one is to reduce its defect to a single-feature fixture, which gets
 its own `render-parity` issue; a regression fails the ratchet instead.
 
+Tables references can omit printed row and column headings and paginate
+wide sheets across multiple horizontal pages. In that case the scorer
+stitches the consecutive horizontal continuation tiles and aligns ink
+bounding boxes after removing screen header bands, provided the
+reference is unruled and the capture does not clip ink.
+`tables/wide-unprinted-sheet` is the reduced fixture for this case
+(Available data and their modes of access, #1341).
+
 ## Licences and attribution
 
 Every document is published under an open government licence that
