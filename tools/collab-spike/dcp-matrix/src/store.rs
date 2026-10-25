@@ -665,9 +665,19 @@ impl MatrixStore {
     ) -> Result<HashMap<String, Option<Level>>> {
         match rule {
             SenderRule::Trust | SenderRule::CurrentTable => Ok(HashMap::new()),
-            SenderRule::TimelineWalk => Ok(levels::walk_forward(marks, targets)),
+            SenderRule::TimelineWalk => Ok(levels::walk_forward(marks, targets, true)),
+            SenderRule::TimelineWalkUnverified => Ok(levels::walk_forward(marks, targets, false)),
             SenderRule::PrevContentWalk => Ok(levels::walk_backward(marks, targets, &snap.power)),
             SenderRule::Context | SenderRule::SdkContext => self.resolve_by_context(room, rule, targets).await,
+            SenderRule::Hybrid => {
+                let mut out = levels::walk_forward(marks, targets, true);
+                let unplaced: Vec<Target> =
+                    targets.iter().filter(|t| out.get(&t.id).copied().flatten().is_none()).cloned().collect();
+                if !unplaced.is_empty() {
+                    out.extend(self.resolve_by_context(room, SenderRule::Context, &unplaced).await?);
+                }
+                Ok(out)
+            }
         }
     }
 
@@ -741,7 +751,12 @@ impl MatrixStore {
                         continue;
                     }
                 }
-                SenderRule::Context | SenderRule::SdkContext | SenderRule::TimelineWalk | SenderRule::PrevContentWalk => {
+                SenderRule::Context
+                | SenderRule::SdkContext
+                | SenderRule::TimelineWalk
+                | SenderRule::PrevContentWalk
+                | SenderRule::Hybrid
+                | SenderRule::TimelineWalkUnverified => {
                     let lv = resolved.get(&it.id).copied().flatten();
                     rep.checks.push(SenderCheck { id: it.id.clone(), sender: it.sender.clone(), level: lv });
                     match lv {

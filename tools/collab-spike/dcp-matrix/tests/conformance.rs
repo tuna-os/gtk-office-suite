@@ -148,8 +148,8 @@ async fn forged_version_journey_fails_when_neither_server_nor_reader_gates() {
 }
 
 /// The same journeys, in a draft-0 room (nothing gates the timeline), under each
-/// of the other at-event sender rules (Spike Q15). The default rule
-/// (`/context`) runs in the two tests above.
+/// of the other at-event sender rules (Spike Q15). The default rule (the
+/// hybrid) runs in the two tests above.
 macro_rules! journeys_under_the_rule {
     ($($test:ident => $rule:ident),+ $(,)?) => {
         $(
@@ -173,6 +173,7 @@ macro_rules! journeys_under_the_rule {
 }
 
 journeys_under_the_rule!(
+    spec_section_12_journeys_in_a_draft0_room_under_the_context_rule => Context,
     spec_section_12_journeys_in_a_draft0_room_under_the_sdk_context_rule => SdkContext,
     spec_section_12_journeys_in_a_draft0_room_under_the_timeline_walk_rule => TimelineWalk,
     spec_section_12_journeys_in_a_draft0_room_under_the_prev_content_walk_rule => PrevContentWalk,

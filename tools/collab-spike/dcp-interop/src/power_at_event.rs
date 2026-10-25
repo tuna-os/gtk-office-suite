@@ -14,7 +14,7 @@
 //!   reader and a reader that trusts the sender must get the specific events
 //!   of the scenario WRONG (a control that does not fail fails the check).
 //!
-//! Scenarios 2 to 5 need a room whose table does not gate `m.room.encrypted`
+//! Scenarios 2 to 6 need a room whose table does not gate `m.room.encrypted`
 //! (`RigOptions::draft0_power_levels`): that is where Synapse accepts the
 //! forged events and only the reader can drop them (each forgery's acceptance
 //! by the server is asserted, so the check cannot pass vacuously).
@@ -48,6 +48,7 @@ scenarios!(
     a_later_promotion_does_not_validate_an_earlier_forged_event,
     a_late_joiner_sees_the_verdicts_of_a_live_reader,
     power_levels_changed_several_times_in_a_burst,
+    a_hidden_power_levels_change_does_not_mislead_the_readers_that_check,
 );
 
 pub fn by_name(name: &str) -> &'static Check {
@@ -198,6 +199,14 @@ async fn at_event_readers_are_right(
             rule.name(),
             r.report.rejected_unresolved
         );
+        if rule == SenderRule::Hybrid {
+            // The whole history is visible and every table replaces the one before it: the walk places everything.
+            ensure!(
+                r.report.level_stats.requests == 0,
+                "{scenario}: reader {reader}: the hybrid made {} /context requests although the walk could place every event",
+                r.report.level_stats.requests
+            );
+        }
         ensure!(r.heads == heads, "{scenario}: reader {reader}, {}: heads {:?}, expected {heads:?}", rule.name(), r.heads);
         out.insert(rule.name(), r);
     }
@@ -521,5 +530,154 @@ pub async fn a_late_joiner_sees_the_verdicts_of_a_live_reader(rig: &Rig) -> R {
     }
     control_fails(rig, scenario, "late joiner", &late, &ledger, SenderRule::CurrentTable, BURST_LEGITIMATE).await?;
     control_fails(rig, scenario, "late joiner", &late, &ledger, SenderRule::Trust, BURST_FORGERIES).await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------- scenario 6
+
+/// What `report` says about the events it judged, by event ID: `Some(true)` the
+/// sender had the level, `Some(false)` it had not, `None` the rule could not
+/// tell. (A reader that sees only part of the history cannot run the version
+/// graph: the parents of what it sees may be outside what it sees.)
+fn sender_verdicts(report: &ReadReport) -> BTreeMap<String, Option<bool>> {
+    report.checks.iter().map(|c| (c.id.clone(), c.level.map(|l| l.permitted()))).collect()
+}
+
+/// `user` is a joined member of the room as `store`'s own view has it.
+async fn wait_joined(rig: &Rig, store: &MatrixStore, user: &str) -> R {
+    use dcp_matrix::matrix_sdk::ruma::events::room::member::MembershipState;
+    use dcp_matrix::matrix_sdk::ruma::{RoomId, UserId};
+    let rid = RoomId::parse(&rig.doc).map_err(|e| Failure::new(e.to_string()))?;
+    let uid = UserId::parse(user).map_err(|e| Failure::new(e.to_string()))?;
+    rig.until(&format!("{} to know that {user} has joined", store.principal()), || async {
+        let joined = match store.client().get_room(&rid) {
+            Some(room) => matches!(room.get_member_no_sync(&uid).await, Ok(Some(m)) if *m.membership() == MembershipState::Join),
+            None => false,
+        };
+        Ok(if joined { Ok(()) } else { Err("not joined yet".to_string()) })
+    })
+    .await
+}
+
+/// Scenario 6: a power-levels change the reader cannot see. The room's history
+/// visibility is `joined` before anything else is sent, so a user who joins
+/// late sees only the events from their own join on: the demotion of the
+/// editor, sent before, is hidden from them, and so are the events around it.
+/// In their window the ex-editor forges (f1b) and the owner publishes (o0)
+/// BEFORE the first power-levels change the late joiner can see (the editor is
+/// promoted again), and then the editor publishes (a2), is demoted, forges
+/// (f2), and the owner saves (o1).
+///
+/// The forward walk holds the last table it could see, in which the editor is
+/// still an editor, and WITHOUT the check that each table replaces the one
+/// before it would accept f1b silently (the control). With the check it places
+/// nothing between the two visible tables: f1b and o0 are unresolved (dropped,
+/// safe, and o0 is lost). `/context`, the SDK's call, the backward walk (it
+/// reads the hidden table out of the next event's `prev_content`) and the
+/// hybrid (the walk, then `/context` for the two it could not place) get all
+/// five right.
+pub async fn a_hidden_power_levels_change_does_not_mislead_the_readers_that_check(rig: &Rig) -> R {
+    let scenario = "S6 hidden power-levels change";
+    needs_draft0(rig, scenario).await?;
+    let editor_id = rig.principal(Who::Editor);
+    let owner = &rig.handles.owner;
+    let file = first_file(rig).await?;
+
+    // From here on an event is visible only to the members who were joined when it was sent.
+    owner.send_state_unchecked(&rig.doc, "m.room.history_visibility", "", json!({ "history_visibility": "joined" })).await?;
+    // Before the window: an editor's version, then the demotion (hidden from the late joiner), then a forgery.
+    let a1 = publish(rig, Who::Editor, vec![rig.first.clone()], "a1, before the window").await?;
+    set_role(rig, &editor_id, Role::Viewer).await?;
+    forge_version(rig, Who::Editor, vec![a1.id.clone()], file.clone(), "f1, before the window").await?;
+
+    let late = rig.syn.user("window").await;
+    let late_id = late.principal();
+    owner.grant(&rig.doc, &late_id, Role::Viewer).await?;
+    late.role(&rig.doc).await?;
+    // The senders' devices know the late joiner before they send to it.
+    for who in [Who::Owner, Who::Editor] {
+        wait_joined(rig, rig.handles.get(who), &late_id).await?;
+    }
+
+    // The window, before any power-levels change the late joiner can see.
+    let f1b = forge_version(rig, Who::Editor, vec![a1.id.clone()], file.clone(), "f1b, in the window, before any visible change").await?;
+    let o0 = publish(rig, Who::Owner, vec![a1.id.clone()], "o0, in the window").await?;
+    // The first visible change, and what follows it.
+    set_role(rig, &editor_id, Role::Editor).await?;
+    let a2 = publish(rig, Who::Editor, vec![a1.id.clone()], "a2, in the window, an editor again").await?;
+    set_role(rig, &editor_id, Role::Viewer).await?;
+    let f2 = forge_version(rig, Who::Editor, vec![a2.id.clone()], file, "f2, in the window, a viewer").await?;
+    let o1 = publish(rig, Who::Owner, vec![a2.id.clone()], "o1, the owner's save").await?;
+
+    // What a correct reader says about the five events of the window. (The first version, sent before the
+    // history became `joined`, may be visible too and is not judged here.)
+    let want: BTreeMap<String, Option<bool>> = [
+        (f1b.clone(), Some(false)),
+        (o0.id.clone(), Some(true)),
+        (a2.id.clone(), Some(true)),
+        (f2.clone(), Some(false)),
+        (o1.id.clone(), Some(true)),
+    ]
+    .into_iter()
+    .collect();
+    let in_window = |m: BTreeMap<String, Option<bool>>| -> BTreeMap<String, Option<bool>> {
+        m.into_iter().filter(|(id, _)| want.contains_key(id)).collect()
+    };
+
+    rig.until("the late joiner to have decrypted the five events of its window", || async {
+        let rep = late.read_report_with(&rig.doc, SenderRule::Context).await?;
+        let got = in_window(sender_verdicts(&rep));
+        Ok(if got.len() == want.len() { Ok(()) } else { Err(format!("judged {} of the 5 events of the window ({} undecryptable)", got.len(), rep.undecryptable)) })
+    })
+    .await?;
+
+    for rule in [SenderRule::Context, SenderRule::SdkContext, SenderRule::PrevContentWalk, SenderRule::Hybrid] {
+        let r = reading(&late, &rig.doc, rule).await?;
+        log_reading(rig, scenario, "late joiner (window)", rule, &r, &[]);
+        let got = in_window(sender_verdicts(&r.report));
+        ensure!(got == want, "{scenario}: under the {} rule the late joiner's verdicts are {got:?}, expected {want:?}", rule.name());
+        ensure!(r.report.rejected_unresolved == 0, "{scenario}: {}: {} events unresolved", rule.name(), r.report.rejected_unresolved);
+        if rule == SenderRule::Hybrid {
+            ensure!(
+                r.report.level_stats.requests == 2,
+                "{scenario}: the hybrid should have asked the server for exactly the 2 events the walk could not place (f1b, o0), made {} requests",
+                r.report.level_stats.requests
+            );
+        }
+    }
+
+    // The forward walk with the check: f1b and o0 are not placed, the other three are right.
+    let walk = reading(&late, &rig.doc, SenderRule::TimelineWalk).await?;
+    log_reading(rig, scenario, "late joiner (window)", SenderRule::TimelineWalk, &walk, &[]);
+    let got = in_window(sender_verdicts(&walk.report));
+    let walk_want: BTreeMap<String, Option<bool>> =
+        [(f1b.clone(), None), (o0.id.clone(), None), (a2.id.clone(), Some(true)), (f2.clone(), Some(false)), (o1.id.clone(), Some(true))]
+            .into_iter()
+            .collect();
+    ensure!(got == walk_want, "{scenario}: the forward walk was expected to leave f1b and o0 unplaced and get the rest right: {got:?}, expected {walk_want:?}");
+    ensure!(!walk.report.versions.iter().any(|v| v.id == f1b), "{scenario}: the forward walk accepted the forged f1b");
+
+    // The controls.
+    let unverified = reading(&late, &rig.doc, SenderRule::TimelineWalkUnverified).await?;
+    log_reading(rig, &format!("{scenario} CONTROL"), "late joiner (window)", SenderRule::TimelineWalkUnverified, &unverified, &[]);
+    ensure!(
+        unverified.report.versions.iter().any(|v| v.id == f1b),
+        "{scenario}: NEGATIVE CONTROL: the forward walk without the chain check was expected to accept the forged f1b (judged by a table the hidden demotion had replaced), accepted {:?}",
+        unverified.report.versions.iter().map(|v| v.id.clone()).collect::<Vec<_>>()
+    );
+    let current = reading(&late, &rig.doc, SenderRule::CurrentTable).await?;
+    log_reading(rig, &format!("{scenario} CONTROL"), "late joiner (window)", SenderRule::CurrentTable, &current, &[]);
+    ensure!(
+        current.report.unauthorised_ids.contains(&a2.id) && current.report.unauthorised_ids.contains(&o0.id) == false,
+        "{scenario}: NEGATIVE CONTROL: the current-table reader was expected to drop the editor's legitimate a2 (the editor is a viewer now), dropped {:?}",
+        current.report.unauthorised_ids
+    );
+    let trust = reading(&late, &rig.doc, SenderRule::Trust).await?;
+    log_reading(rig, &format!("{scenario} CONTROL"), "late joiner (window)", SenderRule::Trust, &trust, &[]);
+    ensure!(
+        trust.report.versions.iter().any(|v| v.id == f2) && trust.report.versions.iter().any(|v| v.id == f1b),
+        "{scenario}: NEGATIVE CONTROL: the trusting reader was expected to accept the forged f1b and f2, accepted {:?}",
+        trust.report.versions.iter().map(|v| v.id.clone()).collect::<Vec<_>>()
+    );
     Ok(())
 }

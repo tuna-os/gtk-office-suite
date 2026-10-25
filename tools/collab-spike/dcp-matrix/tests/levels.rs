@@ -215,11 +215,12 @@ async fn listing_30_versions() {
 
     const REPS: usize = 5;
     let mut baseline_total = 0.0;
-    let cases: [(&str, SenderRule, usize); 8] = [
+    let cases: [(&str, SenderRule, usize); 9] = [
         ("trust-sender", SenderRule::Trust, 1),
         ("current-table", SenderRule::CurrentTable, 1),
         ("timeline-walk", SenderRule::TimelineWalk, 1),
         ("prev-content-walk", SenderRule::PrevContentWalk, 1),
+        ("hybrid", SenderRule::Hybrid, 1),
         ("context", SenderRule::Context, 1),
         ("sdk-context", SenderRule::SdkContext, 1),
         ("context, 4 in flight", SenderRule::Context, 4),
@@ -375,4 +376,85 @@ async fn the_alternatives_to_context_probed() {
         }),
     );
     assert_eq!(sdk_level, Some(50), "the SDK's event_with_context returns the state at the event");
+}
+
+/// The walks judge a cached `/messages` pass with no client: the raw events the
+/// server returned, kept as a string (a cache on disk would hold the same),
+/// judged by `levels::judge_transcript`, which has no network to ask. Its
+/// verdicts equal the online ones. In a draft-0 room, so that the ex-editor's
+/// forged event exists: the offline verdicts say no to it and yes to the
+/// editor's earlier version. The controls: a cache without the power-levels
+/// events judges nothing, and the cache does not hold what `/context` would
+/// have returned for an event that is not in it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_walks_judge_a_cached_transcript_offline() {
+    let Some(syn) = require_synapse!() else { return };
+    let owner = syn.user_with("owner", |c| c.enforce_encrypted_pl = false).await;
+    let editor = syn.user("editor").await;
+    let doc = owner.create_document(&meta("Offline"), Some(file(b"v1"))).await.unwrap();
+    owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    let first = owner.versions(&doc).await.unwrap()[0].id.clone();
+    let v2 = editor.publish_version(&doc, vec![first.clone()], file(b"v2"), None).await.unwrap();
+    owner.grant(&doc, &editor.principal(), Role::Viewer).await.unwrap();
+    let forged = Version {
+        dcp: 1,
+        parents: vec![v2.id.clone()],
+        file: v2.body.file.clone(),
+        created_by: Author { principal: editor.principal(), device: editor.device() },
+        message: Some("forged by the ex-editor".into()),
+        covers: None,
+    };
+    let f = editor
+        .send_unchecked(&doc, dcp_matrix::state::VERSION, serde_json::to_value(&forged).unwrap())
+        .await
+        .expect("a draft-0 room accepts the ex-editor's event");
+    let v3 = owner.publish_version(&doc, vec![v2.id.clone()], file(b"v3"), None).await.unwrap();
+
+    // Online: what the store says under the forward walk.
+    let ids = [first.clone(), v2.id.clone(), f.clone(), v3.id.clone()];
+    let mut online = std::collections::BTreeMap::new();
+    for _ in 0..30 {
+        let r = owner.read_report_with(&doc, SenderRule::TimelineWalk).await.unwrap();
+        online = r.checks.iter().map(|c| (c.id.clone(), c.level)).collect();
+        if ids.iter().all(|i| online.contains_key(i)) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    assert!(ids.iter().all(|i| online.contains_key(i)), "the owner never judged all four events: {online:?}");
+
+    // The cache: the raw pass, newest first, through a string.
+    let http = reqwest::Client::new();
+    let token = owner.client().access_token().unwrap();
+    let (status, body, _) = get_json(&http, &token, url(&syn, &["rooms", &doc, "messages"], &[("dir", "b"), ("limit", "200")])).await;
+    assert_eq!(status, 200);
+    let cache = serde_json::to_string(&body["chunk"]).unwrap();
+    drop(body);
+
+    // Offline: no store, no client, no request.
+    let events: Vec<Value> = serde_json::from_str(&cache).unwrap();
+    assert!(events.len() > 4, "the cache holds the whole pass: {} events", events.len());
+    for rule in [SenderRule::TimelineWalk, SenderRule::PrevContentWalk] {
+        let offline = dcp_matrix::levels::judge_transcript(rule, &events);
+        for id in &ids {
+            assert_eq!(offline.get(id).copied().flatten(), online[id], "{rule:?}: the offline level of {id} differs from the online one");
+        }
+        let permitted = |id: &String| offline[id].map(|l| l.permitted());
+        assert_eq!(permitted(&first), Some(true), "{rule:?}");
+        assert_eq!(permitted(&v2.id), Some(true), "{rule:?}: the editor's version from before the demotion");
+        assert_eq!(permitted(&f), Some(false), "{rule:?}: the ex-editor's forged event");
+        assert_eq!(permitted(&v3.id), Some(true), "{rule:?}");
+    }
+
+    // Controls: nothing judged without the power-levels events, and nothing guessed.
+    let stripped: Vec<Value> = events.iter().filter(|e| e["type"] != "m.room.power_levels").cloned().collect();
+    let none = dcp_matrix::levels::judge_transcript(SenderRule::TimelineWalk, &stripped);
+    assert!(ids.iter().all(|i| none[i].is_none()), "a cache without power-levels events must judge nothing: {none:?}");
+    let unknown = dcp_matrix::levels::judge_transcript(SenderRule::TimelineWalk, &events);
+    assert!(!unknown.contains_key("$not-in-the-cache"), "an event the cache does not hold is not judged");
+    record(
+        &syn,
+        "q15_offline_transcript",
+        json!({ "events_in_cache": events.len(), "cache_bytes": cache.len(), "judged": ids.len(), "forged_dropped": true }),
+    );
 }

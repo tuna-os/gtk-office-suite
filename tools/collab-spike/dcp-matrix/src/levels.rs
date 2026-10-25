@@ -4,7 +4,7 @@
 //! levels drops what a since-demoted editor legitimately published (and then
 //! the owner's later save built on it), and accepts what a since-promoted user
 //! forged earlier (Spike F; Spike Q15 in `docs/rfc/0004-spike-q15-results.md`).
-//! The level has to be the one in force at the event. Four ways to get it are
+//! The level has to be the one in force at the event. Five ways to get it are
 //! implemented here and measured against a real Synapse:
 //!
 //! * [`SenderRule::Context`]: `GET /rooms/{id}/context/{eventId}?limit=0`, whose
@@ -15,18 +15,22 @@
 //! * [`SenderRule::TimelineWalk`]: the reader already pages `/messages`, which
 //!   carries `m.room.create` and every `m.room.power_levels` event in stream
 //!   order; walk them oldest to newest and judge each DCP event by the table
-//!   the walk holds when it reaches it. No extra request.
+//!   the walk holds when it reaches it. No extra request. Needs the pass to
+//!   reach back to the room's creation.
 //! * [`SenderRule::PrevContentWalk`]: the same stream read newest to oldest,
 //!   starting from the newest table and undoing each `m.room.power_levels`
 //!   event through its `unsigned.prev_content`. Needs no history older than the
 //!   event being judged.
+//! * [`SenderRule::Hybrid`] (the default): the forward walk, and `/context` for
+//!   the events the walk cannot place (a window of the history that does not
+//!   reach back to the room's creation).
 //!
-//! And the two rules it replaces, kept as negative controls:
+//! And the two rules they replace, kept as negative controls:
 //! [`SenderRule::CurrentTable`] (draft 1's rule) and [`SenderRule::Trust`] (no
 //! check).
 //!
 //! The walks and [`power_from_state`] are pure functions of events: they run
-//! offline from a cached transcript.
+//! offline from a cached transcript ([`judge_transcript`]).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -56,18 +60,30 @@ pub enum SenderRule {
     TimelineWalk,
     /// Backward walk of the same pass through `unsigned.prev_content`.
     PrevContentWalk,
+    /// [`SenderRule::TimelineWalk`], then [`SenderRule::Context`] for each event
+    /// the walk could not place.
+    Hybrid,
+    /// [`SenderRule::TimelineWalk`] without the check that each power-levels event
+    /// replaces the one before it in the pass (negative control: silently wrong
+    /// when the reader cannot see a power-levels change).
+    TimelineWalkUnverified,
 }
 
 impl Default for SenderRule {
     fn default() -> Self {
-        SenderRule::Context
+        SenderRule::Hybrid
     }
 }
 
 impl SenderRule {
     /// The rules that judge by the level in force at the event.
-    pub const AT_EVENT: [SenderRule; 4] =
-        [SenderRule::Context, SenderRule::SdkContext, SenderRule::TimelineWalk, SenderRule::PrevContentWalk];
+    pub const AT_EVENT: [SenderRule; 5] = [
+        SenderRule::Context,
+        SenderRule::SdkContext,
+        SenderRule::TimelineWalk,
+        SenderRule::PrevContentWalk,
+        SenderRule::Hybrid,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -77,6 +93,8 @@ impl SenderRule {
             SenderRule::SdkContext => "sdk-context",
             SenderRule::TimelineWalk => "timeline-walk",
             SenderRule::PrevContentWalk => "prev-content-walk",
+            SenderRule::Hybrid => "hybrid",
+            SenderRule::TimelineWalkUnverified => "timeline-walk-unverified",
         }
     }
 
@@ -184,19 +202,50 @@ fn prev_content(ev: &Value) -> Option<&Value> {
 /// Oldest to newest: `m.room.create` then each `m.room.power_levels` replaces
 /// the table, and every target is judged by the table held at its position.
 /// `None` for a target that no create plus power-levels pair precedes.
-pub(crate) fn walk_forward(marks: &[Mark], targets: &[Target]) -> HashMap<String, Option<Level>> {
+///
+/// With `verify_chain` a table is also trusted only while the NEXT
+/// power-levels event of the pass says it replaced exactly this one
+/// (`unsigned.replaces_state` is this event's ID): when the history the reader
+/// may see hides a power-levels change (a room whose history visibility is
+/// `joined`, a reader who joined after it), the walk would otherwise judge the
+/// events between the two visible tables by a table that was no longer in
+/// force, silently. The events between them are `None`. Without `verify_chain`
+/// (a negative control) they are judged by the stale table.
+pub(crate) fn walk_forward(marks: &[Mark], targets: &[Target], verify_chain: bool) -> HashMap<String, Option<Level>> {
+    let mut pls: Vec<&Mark> = marks.iter().filter(|m| is_state(&m.event, POWER_LEVELS)).collect();
+    pls.sort_by(|a, b| b.pos.cmp(&a.pos));
+    // Positions of the power-levels events whose successor in the pass does not replace them.
+    let mut stale_after: Vec<usize> = Vec::new();
+    if verify_chain {
+        for pair in pls.windows(2) {
+            let (this, next) = (pair[0], pair[1]);
+            let linked = match (this.event["event_id"].as_str(), next.event["unsigned"]["replaces_state"].as_str()) {
+                (Some(id), Some(replaces)) => id == replaces,
+                _ => false,
+            };
+            if !linked {
+                stale_after.push(this.pos);
+            }
+        }
+    }
     let mut all = steps(marks, targets);
     all.sort_by(|a, b| b.0.cmp(&a.0));
     let mut create: Option<&Value> = None;
     let mut table: Option<Power> = None;
+    // False between two visible tables when the later one does not replace the earlier one.
+    let mut trusted = true;
     let mut out = HashMap::new();
-    for (_, step) in all {
+    for (pos, step) in all {
         match step {
             Step::Mark(ev) if is_state(ev, CREATE) => create = Some(ev),
-            Step::Mark(ev) if is_state(ev, POWER_LEVELS) => table = create.map(|c| power_from_events(c, ev)),
+            Step::Mark(ev) if is_state(ev, POWER_LEVELS) => {
+                table = create.map(|c| power_from_events(c, ev));
+                trusted = !stale_after.contains(&pos);
+            }
             Step::Mark(_) => {}
             Step::Target(t) => {
-                out.insert(t.id.clone(), table.as_ref().map(|p| level_in(p, &t.sender, &t.wire_type)));
+                let level = table.as_ref().filter(|_| trusted).map(|p| level_in(p, &t.sender, &t.wire_type));
+                out.insert(t.id.clone(), level);
             }
         }
     }
@@ -230,6 +279,40 @@ pub(crate) fn walk_backward(marks: &[Mark], targets: &[Target], current: &Power)
         }
     }
     out
+}
+
+/// The walks over a cached `/messages` pass, with no client and no network: the
+/// raw events of the pass, newest first (state and timeline events alike, as
+/// the server returned them), and for each timeline event (judged by the type
+/// the server saw, `m.room.encrypted` in an encrypted room) the level its
+/// sender had at it, or `None` when the cache does not hold what is needed
+/// (never a guess from some other table). `rule` is
+/// [`SenderRule::PrevContentWalk`] or, for any other value, the forward walk.
+pub fn judge_transcript(rule: SenderRule, events: &[Value]) -> HashMap<String, Option<Level>> {
+    let mut marks = Vec::new();
+    let mut targets = Vec::new();
+    for (i, ev) in events.iter().enumerate() {
+        let pos = i + 1;
+        let ty = ev["type"].as_str().unwrap_or("");
+        if ev.get("state_key").is_some() {
+            if ev["state_key"].as_str() == Some("") && (ty == CREATE || ty == POWER_LEVELS) {
+                marks.push(Mark { pos, event: ev.clone() });
+            }
+        } else if let (Some(id), Some(sender)) = (ev["event_id"].as_str(), ev["sender"].as_str()) {
+            targets.push(Target { pos, id: id.to_owned(), sender: sender.to_owned(), wire_type: ty.to_owned() });
+        }
+    }
+    if rule == SenderRule::PrevContentWalk {
+        let create = marks.iter().find(|m| is_state(&m.event, CREATE));
+        let newest = marks.iter().filter(|m| is_state(&m.event, POWER_LEVELS)).min_by_key(|m| m.pos);
+        let current = match (create, newest) {
+            (Some(c), Some(p)) => power_from_events(&c.event, &p.event),
+            _ => Power::default(),
+        };
+        walk_backward(&marks, &targets, &current)
+    } else {
+        walk_forward(&marks, &targets, true)
+    }
 }
 
 /// Counters of the state-at-event requests of one store.
@@ -332,10 +415,13 @@ mod tests {
         json!({ "users": users, "users_default": 0, "events_default": 0, "state_default": 100, "events": {} })
     }
 
+    /// A power-levels event whose ID is derived from its content, so that the one
+    /// built with `prev` = the earlier content `replaces_state` the earlier one.
     fn pl(content: Value, prev: Option<Value>) -> Value {
-        let mut ev = json!({ "type": POWER_LEVELS, "state_key": "", "sender": OWNER, "content": content });
+        let id = |c: &Value| format!("$pl-{c}");
+        let mut ev = json!({ "type": POWER_LEVELS, "state_key": "", "sender": OWNER, "event_id": id(&content), "content": content });
         if let Some(p) = prev {
-            ev["unsigned"] = json!({ "prev_content": p });
+            ev["unsigned"] = json!({ "prev_content": p, "replaces_state": id(&p) });
         }
         ev
     }
@@ -376,7 +462,7 @@ mod tests {
             ("f".to_owned(), Some(false)),
             ("never".to_owned(), None),
         ];
-        assert_eq!(verdicts(&walk_forward(&marks, &targets)), want);
+        assert_eq!(verdicts(&walk_forward(&marks, &targets, true)), want);
         assert_eq!(verdicts(&walk_backward(&marks, &targets, &current)), want);
     }
 
@@ -400,7 +486,7 @@ mod tests {
         let targets = vec![target(3, "forged", VW), target(1, "legit", VW)];
         let current = power_from_content(&t1, &[]);
         let want = vec![("forged".to_owned(), Some(false)), ("legit".to_owned(), Some(true))];
-        assert_eq!(verdicts(&walk_forward(&marks, &targets)), want);
+        assert_eq!(verdicts(&walk_forward(&marks, &targets, true)), want);
         assert_eq!(verdicts(&walk_backward(&marks, &targets, &current)), want);
     }
 
@@ -408,7 +494,7 @@ mod tests {
     fn a_pass_without_the_create_event_is_unresolved_forward_but_not_backward() {
         let (marks, targets, current) = history("10");
         let no_create: Vec<Mark> = marks.into_iter().filter(|m| m.pos != 7).collect();
-        let fwd = walk_forward(&no_create, &targets);
+        let fwd = walk_forward(&no_create, &targets, true);
         assert!(fwd.values().all(|l| l.is_none()), "{fwd:?}");
         let back = walk_backward(&no_create, &targets, &current);
         assert_eq!(back["a"].map(|l| l.permitted()), Some(true));
@@ -453,7 +539,7 @@ mod tests {
         let t = table(json!({ ED: 50 }));
         let marks = vec![Mark { pos: 3, event: create("12") }, Mark { pos: 2, event: pl(t.clone(), None) }];
         let targets = vec![target(1, "o", OWNER)];
-        let fwd = walk_forward(&marks, &targets);
+        let fwd = walk_forward(&marks, &targets, true);
         assert_eq!(fwd["o"].map(|l| l.level), Some(i64::MAX));
         let mut current = power_from_content(&t, &[]);
         current.creators = vec![OWNER.to_owned()];
@@ -469,5 +555,59 @@ mod tests {
         assert!(l.get(SenderRule::SdkContext, "$e").is_none());
         l.clear();
         assert_eq!(l.len(), 0);
+    }
+
+    #[test]
+    fn a_cached_transcript_is_judged_offline_and_without_power_levels_it_is_not_judged() {
+        // Newest first, as /messages returns it: ed, demoted, then ed's event; create and the tables before.
+        let t1 = table(json!({ OWNER: 100, ED: 50 }));
+        let t2 = table(json!({ OWNER: 100 }));
+        let ev = |id: &str, sender: &str| json!({ "type": "m.room.encrypted", "event_id": id, "sender": sender, "content": {} });
+        let transcript = vec![
+            ev("$late", ED),
+            pl(t2.clone(), Some(t1.clone())),
+            ev("$early", ED),
+            pl(t1, None),
+            create("10"),
+        ];
+        // Through a string, as a cache on disk would hold it.
+        let cached = serde_json::to_string(&transcript).unwrap();
+        let events: Vec<Value> = serde_json::from_str(&cached).unwrap();
+        for rule in [SenderRule::TimelineWalk, SenderRule::PrevContentWalk] {
+            let v = judge_transcript(rule, &events);
+            assert_eq!(v["$early"].map(|l| l.permitted()), Some(true), "{rule:?}");
+            assert_eq!(v["$late"].map(|l| l.permitted()), Some(false), "{rule:?}");
+        }
+        // The control: drop the power-levels events from the cache and nothing can be judged.
+        let stripped: Vec<Value> = events.into_iter().filter(|e| e["type"] != POWER_LEVELS).collect();
+        let v = judge_transcript(SenderRule::TimelineWalk, &stripped);
+        assert!(v.values().all(|l| l.is_none()), "{v:?}");
+    }
+
+    #[test]
+    fn a_power_levels_change_the_reader_cannot_see_breaks_the_forward_walk_but_not_the_backward_one() {
+        // PL0 is visible (ed is an editor), PL1 (ed demoted) is NOT in the pass, PL2 is visible and replaces PL1.
+        let t0 = table(json!({ OWNER: 100, ED: 50 }));
+        let t1 = table(json!({ OWNER: 100 }));
+        let t2 = table(json!({ OWNER: 100, VW: 50 }));
+        let marks = vec![
+            Mark { pos: 6, event: create("10") },
+            Mark { pos: 5, event: pl(t0, None) },
+            Mark { pos: 2, event: pl(t2.clone(), Some(t1)) },
+        ];
+        // "between" is sent by the demoted ed, after PL1 and before PL2.
+        let targets = vec![target(3, "between", ED), target(1, "after", OWNER)];
+        let current = power_from_content(&t2, &[]);
+
+        let checked = walk_forward(&marks, &targets, true);
+        assert_eq!(checked["between"], None, "the walk must not judge it by PL0, which PL1 had replaced");
+        assert_eq!(checked["after"].map(|l| l.permitted()), Some(true));
+        // The control: without the chain check the same walk accepts the demoted editor's event.
+        let unchecked = walk_forward(&marks, &targets, false);
+        assert_eq!(unchecked["between"].map(|l| l.permitted()), Some(true), "the unverified walk is silently wrong here");
+        // The backward walk has PL1 in PL2's prev_content and needs nothing else.
+        let back = walk_backward(&marks, &targets, &current);
+        assert_eq!(back["between"].map(|l| l.permitted()), Some(false));
+        assert_eq!(back["after"].map(|l| l.permitted()), Some(true));
     }
 }

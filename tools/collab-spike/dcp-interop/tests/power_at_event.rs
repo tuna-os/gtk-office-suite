@@ -1,5 +1,5 @@
 //! Spike Q15 (spec 8.1, question 15): a Matrix reader judges a DCP event's
-//! sender by the power level at the event. Five scenarios on a real Synapse,
+//! sender by the power level at the event. Six scenarios on a real Synapse,
 //! relaxed or default rate limits (`DCP_SYNAPSE_PROFILE`), each with negative
 //! controls inside it (`dcp_interop::power_at_event` says which). Needs
 //! `DCP_SYNAPSE_URL`; fails without it unless `DCP_SKIP_SYNAPSE=1`, which
@@ -35,6 +35,7 @@ draft0!(
     s3_a_later_promotion_does_not_validate_an_earlier_forgery => a_later_promotion_does_not_validate_an_earlier_forged_event,
     s4_a_late_joiner_sees_the_verdicts_of_a_live_reader => a_late_joiner_sees_the_verdicts_of_a_live_reader,
     s5_power_levels_changed_several_times_in_a_burst => power_levels_changed_several_times_in_a_burst,
+    s6_a_hidden_power_levels_change_does_not_mislead_the_readers_that_check => a_hidden_power_levels_change_does_not_mislead_the_readers_that_check,
 );
 
 /// Scenario 1 again in a room with the spec's table (the server gates
