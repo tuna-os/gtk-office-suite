@@ -123,8 +123,8 @@ jobs:
           if-no-files-found: warn
 
   # Which of the heavy jobs run: a push whose head commit message contains "[wan]" runs the whole
-  # matrix, "[smoke]" runs one condition with the path tests only, "[footprint]" the footprint
-  # probe (a workflow can only be dispatched once it is on the default branch, so on a spike
+  # matrix, "[smoke]" runs one condition with the path tests only, "[growth]" the state-growth
+  # test in two conditions, "[footprint]" the footprint probe (a workflow can only be dispatched once it is on the default branch, so on a spike
   # branch the commit message is the switch; workflow_dispatch runs everything).
   plan:
     name: plan
@@ -134,6 +134,7 @@ jobs:
       wan: ${{ steps.p.outputs.wan }}
       footprint: ${{ steps.p.outputs.footprint }}
       smoke: ${{ steps.p.outputs.smoke }}
+      only: ${{ steps.p.outputs.only }}
     steps:
       - id: p
         env:
@@ -150,15 +151,18 @@ jobs:
             {"name":"worst","rtt":150,"loss":5,"rate":"1mbit","scale":5,"big":"1"}],
             "group":["journeys","rest"]}'
           smoke='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"0"}],"group":["rest"]}'
-          wan=false; footprint=false; smoke_on=false; matrix=$full
+          growth='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"1"},{"name":"rate1m","rtt":0,"loss":0,"rate":"1mbit","scale":3,"big":"1"}],"group":["rest"]}'
+          wan=false; footprint=false; smoke_on=false; only=; matrix=$full
           case "$MSG" in *"[wan]"*) wan=true ;; esac
           case "$MSG" in *"[smoke]"*) wan=true; smoke_on=true; matrix=$smoke ;; esac
+          case "$MSG" in *"[growth]"*) wan=true; only=growth; matrix=$growth ;; esac
           case "$MSG" in *"[footprint]"*) footprint=true ;; esac
           if [ "$EVENT" = workflow_dispatch ]; then wan=true; footprint=true; fi
           echo "matrix=$(echo "$matrix" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
           echo "wan=$wan" >> "$GITHUB_OUTPUT"
           echo "footprint=$footprint" >> "$GITHUB_OUTPUT"
           echo "smoke=$smoke_on" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
 
   build:
     name: build - peer process, driver, footprint probe, iroh-relay (release)
@@ -237,6 +241,7 @@ jobs:
           SCALE: ${{ matrix.cond.scale }}
           BIG: ${{ matrix.cond.big }}
           SMOKE: ${{ needs.plan.outputs.smoke }}
+          ONLY: ${{ needs.plan.outputs.only }}
         run: |
           set -uo pipefail
           W=$GITHUB_WORKSPACE
@@ -274,7 +279,9 @@ jobs:
           case "$GROUP" in
             journeys) run journeys journeys_ ;;
             rest)
-              if [ "$SMOKE" = true ]; then
+              if [ "$ONLY" = growth ]; then
+                run growth state_growth
+              elif [ "$SMOKE" = true ]; then
                 run paths path_ ports_ relay_killed direct_path_blocked
                 run scenarios catch_up_direct lease_latency_direct
                 run growth state_growth_direct

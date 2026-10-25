@@ -69,12 +69,12 @@ def main():
                     [[r["condition"], r["reps"], r["not_upgraded"], r["median_after_handshake_ms"], r["median_after_dial_ms"], r["ip_selected_after_handshake_ms"]] for r in sorted(up, key=key)]))
         print()
 
-    for kind, title in [("relay_killed", "Relay killed"), ("direct_blocked", "Direct path blocked mid-session"), ("path_proof", "Path proofs"), ("upgrade", "Upgrade runs")]:
+    for kind, title in [("relay_killed", "Relay killed"), ("direct_blocked", "Direct path blocked mid-session"), ("path_proof", "Path proofs"), ("upgrade", "Upgrade runs"), ("ports", "Ports")]:
         rs = by_kind(kind)
         if rs:
             print(f"### {title}\n")
             for r in sorted(rs, key=key):
-                d = {k: v for k, v in r.items() if k not in ("kind", "test", "a", "b", "firewall_forward_counters", "per_node")}
+                d = {k: v for k, v in r.items() if k not in ("kind", "test", "a", "b", "firewall_forward_counters", "per_node", "egress_counters")}
                 print(f"- `{json.dumps(d)}`")
             print()
 
@@ -97,7 +97,8 @@ def main():
     simple(
         "state_growth",
         ["n", "complete", "total_ms", "reader_complete_ms_after_last_publish", "reader_cpu_ms_total", "reader_store_thread_cpu_ms",
-         "reader_cpu_ms_after_last_publish", "reader_store_thread_cpu_ms_after_last_publish", "reader_veth_rx_bytes", "reader_state_bytes"],
+         "reader_cpu_ms_after_last_publish", "reader_store_thread_cpu_ms_after_last_publish", "reader_veth_rx_bytes", "reader_state_bytes",
+         "reader_ops_received", "reader_ops_applied", "reader_sync_sessions", "writer_sync_sessions"],
         "State growth",
     )
 

@@ -1053,6 +1053,8 @@ async fn state_growth(test: &str, mode: &str, how: Addrs) {
         let (cpu_a1, thr_a1, _) = a.cpu().await;
         let (rx1, tx1) = b.iface_bytes();
         let (arx1, atx1) = a.iface_bytes();
+        let cb = b.call("counters", json!({"doc": doc})).await.unwrap_or(Value::Null);
+        let ca = a.call("counters", json!({"doc": doc})).await.unwrap_or(Value::Null);
         let state_b = b.call("space_state_bytes", json!({"doc": doc})).await.ok().and_then(|v| v.as_u64()).unwrap_or(0);
         let state_a = a.call("space_state_bytes", json!({"doc": doc})).await.ok().and_then(|v| v.as_u64()).unwrap_or(0);
         let rx = rx1 - rx0;
@@ -1067,7 +1069,9 @@ async fn state_growth(test: &str, mode: &str, how: Addrs) {
                    "reader_cpu_ms_after_last_publish": tail_cpu_ms, "reader_store_thread_cpu_ms_after_last_publish": tail_thr_ms,
                    "writer_cpu_ms_total": (cpu_a1 - cpu_a0) / 1000, "writer_store_thread_cpu_ms": (thr_a1 - thr_a0) / 1000,
                    "reader_veth_rx_bytes": rx, "reader_veth_tx_bytes": tx1 - tx0, "writer_veth_rx_bytes": arx1 - arx0, "writer_veth_tx_bytes": atx1 - atx0,
-                   "reader_state_bytes": state_b, "writer_state_bytes": state_a, "reader_rss_kb": rss_b}),
+                   "reader_state_bytes": state_b, "writer_state_bytes": state_a, "reader_rss_kb": rss_b,
+                   "reader_ops_received": cb["ops_received"], "reader_ops_applied": cb["ops_applied"], "reader_sync_sessions": cb["sync_sessions"], "reader_sync_failures": cb["sync_failures"],
+                   "writer_ops_received": ca["ops_received"], "writer_sync_sessions": ca["sync_sessions"]}),
         );
         assert!(seen.is_some(), "the reader never received all {n} entries in {:?}", secs(1800));
     }
@@ -1267,6 +1271,7 @@ async fn relay_killed_while_the_connection_is_relay_only() {
     let during = wait_soft(secs(20), Duration::from_millis(250), || async { b.versions(&doc).await.ok()?.iter().any(|x| x.id == v.id).then_some(()) }).await;
     let (ra_mid, _) = reports(&a, &b).await;
     let closed_during = ids0.iter().filter(|id| ra_mid.conn_closed(**id)).count();
+    let dead_s = t_kill.elapsed().as_secs();
     script(&["relay-up"]);
     let t_back = Instant::now();
     let recovered = wait_soft(secs(300), Duration::from_millis(250), || async { b.versions(&doc).await.ok()?.iter().any(|x| x.id == v.id).then_some(()) }).await.map(|_| t_back.elapsed());
@@ -1277,7 +1282,7 @@ async fn relay_killed_while_the_connection_is_relay_only() {
     record(
         test,
         json!({"kind": "relay_killed", "case": "relay-only connection", "visible_at_b_while_relay_dead": during.is_some(), "sync_connections_closed_while_dead": closed_during,
-               "seconds_dead_before_restart": t_kill.elapsed().as_secs() - t_back.elapsed().as_secs().min(t_kill.elapsed().as_secs()),
+               "seconds_dead_before_restart": dead_s,
                "recovered_after_relay_returned_ms": recovered.map(ms), "same_connection_survived": !survivors.is_empty(), "sync_conn_ids_before": ids0, "sync_conn_ids_after": ids1,
                "relay_conns_success_a": ra1.metric("relay_conns_success"), "relay_conns_failed_a": ra1.metric("relay_conns_failed"), "relay_conns_closed_a": ra1.metric("relay_conns_closed"),
                "b_relay_conns_failed": rb1.metric("relay_conns_failed")}),
