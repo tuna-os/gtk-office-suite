@@ -294,6 +294,7 @@ jobs:
       - name: Probe - Caddy with protocols h2 only (recorded, not asserted)
         if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
         run: |
+          export STREAMS_TLS_DIR="$DCP_STREAMS_TLS_DIR"
           STREAMS_TLS_PORT=4470 STREAMS_PLAIN_PORT=4471 STREAMS_SERVER_PROTOCOLS=h2 STREAMS_EXPORT_PREFIX=PROBE scripts/streams-tls-up.sh go > "$RUNNER_TEMP/probe.env" 2> "$RUNNER_TEMP/probe.err" || { echo "caddy did not start with 'protocols h2':"; tail -20 "$RUNNER_TEMP/probe.err"; }
           cat "$RUNNER_TEMP/probe.env" || true
           echo | openssl s_client -connect localhost:4470 -servername localhost -alpn h2 -CAfile "$DCP_STREAMS_CA" 2>&1 | grep -E "ALPN|Verify return|alert|error" || true
@@ -308,6 +309,7 @@ jobs:
         if: ${{ matrix.kind == 'go' && matrix.http == '2' }}
         run: |
           set -u
+          export STREAMS_TLS_DIR="$DCP_STREAMS_TLS_DIR"
           STREAMS_ACCESS_LOG=0 STREAMS_TLS_PORT=4510 STREAMS_PLAIN_PORT=4511 STREAMS_EXPORT_PREFIX=NOLOG scripts/streams-tls-up.sh go > "$RUNNER_TEMP/nolog.env"
           sse() { # base URL: create a stream, ask for SSE for 3 s
             curl -sS --cacert "$DCP_STREAMS_CA" -X PUT -H 'Content-Type: application/json' -o /dev/null "$1/v1/stream/sse-probe"
