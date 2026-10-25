@@ -43,6 +43,8 @@ pub struct NetOptions {
     pub bind: String,
     /// `None`: no relay at all (direct addresses only). `Some`: use these relays.
     pub relay: Option<iroh::RelayMap>,
+    /// DER trust anchors for the relay's TLS certificate; empty means the embedded web roots.
+    pub relay_ca_der: Vec<Vec<u8>>,
 }
 
 pub struct Net {
@@ -77,9 +79,17 @@ impl Net {
             None => builder.relay_mode(RelayMode::Disabled),
             Some(map) => {
                 let b = builder.relay_mode(RelayMode::Custom(map.clone()));
-                #[cfg(feature = "relay-test")]
-                let b = b.ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
-                b
+                if !opts.relay_ca_der.is_empty() {
+                    let roots = opts
+                        .relay_ca_der
+                        .iter()
+                        .map(|d| rustls_pki_types::CertificateDer::from(d.clone()));
+                    b.ca_tls_config(iroh::tls::CaTlsConfig::custom_roots(roots))
+                } else {
+                    #[cfg(feature = "relay-test")]
+                    let b = b.ca_tls_config(iroh_relay::tls::CaTlsConfig::insecure_skip_verify());
+                    b
+                }
             }
         };
         let endpoint = builder

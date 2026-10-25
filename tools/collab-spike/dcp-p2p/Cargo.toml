@@ -34,8 +34,12 @@ serde_bytes = "0.11"
 
 # iroh 1.x transport and blobs. iroh-blobs 0.103.1 is the fixed release (0.103.0 is yanked:
 # push-request bug, https://www.iroh.computer/blog/iroh-blobs-push-fix).
-iroh = { version = "1.4", default-features = false, features = ["tls-ring"] }
 iroh-blobs = "=0.103.1"
+# `metrics`: iroh's own socket counters (bytes by transport, hole-punch attempts), which the
+# relay spike reads (src/pathlog.rs).
+iroh = { version = "1.4", default-features = false, features = ["tls-ring", "metrics"] }
+# DER trust anchors for a private relay's CA (P2pConfig::relay_ca_der).
+rustls-pki-types = "1"
 iroh-relay = { version = "1", optional = true }
 
 # Wire framing for the sync sessions (the same codec p2panda-net uses, copied: see codec.rs).
@@ -44,7 +48,10 @@ postcard = { version = "1", default-features = false, features = ["alloc", "use-
 futures-util = { version = "0.3", features = ["sink"] }
 bytes = "1"
 tracing = "0.1"
+# The node binary logs to stderr when RUST_LOG is set; the tests use it too.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
 
 [dev-dependencies]
 dcp-conformance = { path = "../dcp-conformance" }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
+# The same version dcp-core and dcp-conformance use.
+parking_lot = "0.13"

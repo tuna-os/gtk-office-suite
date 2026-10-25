@@ -36,6 +36,30 @@ async fn nodes_reach_each_other_through_a_relay_and_sync_a_document() {
     eprintln!("MEASURE relay-only addresses: from the grant until the viewer lists the version: {} ms", t.elapsed().as_millis());
     let v = b.versions(&doc).await.unwrap().remove(0);
     assert_eq!(b.fetch_file(&doc, &v).await.unwrap(), b"through a relay");
+    // What iroh itself says about the paths (src/pathlog.rs). Spike C only showed that the document
+    // synced; here the relay path must have existed, and whether the connection then upgraded to the
+    // loopback address (UDP is reachable here) is reported, not assumed. The firewall-enforced
+    // relay-only proof is tests/wan.rs.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let (mut relay_seen, mut ip_seen, mut ip_selected) = (false, false, false);
+    for n in [&a, &b] {
+        let rep = serde_json::to_value(n.net_report().await.unwrap()).unwrap();
+        for e in rep["events"].as_array().unwrap() {
+            match e["transport"].as_str() {
+                Some("relay") => relay_seen = true,
+                Some("ip") => ip_seen = true,
+                _ => {}
+            }
+            if e["event"] == "selected" && e["transport"] == "ip" {
+                ip_selected = true;
+            }
+        }
+        eprintln!("MEASURE relay test, one node's paths: live {} metrics {}", rep["live"], rep["metrics"]);
+    }
+    eprintln!(
+        "MEASURE relay test, nodes given the relay URL and no direct address: a relay path existed: {relay_seen}; an IP path to the peer existed: {ip_seen}; an IP path was selected: {ip_selected}"
+    );
+    assert!(relay_seen, "iroh reported no relay path although the nodes were only given the relay URL");
     // A session over the open connection, timed, and the same on a pair with direct addresses in
     // this same build and process.
     let mut via = Vec::new();

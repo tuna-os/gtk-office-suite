@@ -1,0 +1,376 @@
+name: collab-spike-relay
+
+# RFC-0004 spike C, round 2: dcp-p2p over a real iroh-relay, with the peers in separate Linux
+# network namespaces and the links shaped with tc netem. Results: docs/rfc/0004-spike-relay-results.md.
+# Not part of the product CI. Needs root on the runner (sudo) for namespaces, tc and iptables.
+#
+#   check      cargo check --all-targets --locked
+#   probe      can a hosted runner do namespaces, netem and iptables at all, and does the pinned
+#              iroh-relay binary run with a test CA? (shaping verified with ping)
+#   build      release build of the peer process, the driver and the footprint probe, and the
+#              pinned iroh-relay; uploaded as the artifact wan-bin
+#   wan        the driver, one job per (shaping condition, group): see the matrix
+#   footprint  what an iroh endpoint contacts by itself, captured in a namespace behind NAT
+#
+# A test that needs the namespaces FAILS when they are missing; only DCP_SKIP_NETNS=1 skips
+# it, and the test says so.
+on:
+  push:
+    branches: ['spike/collab-relay']
+    paths:
+      - 'tools/collab-spike/dcp-p2p/**'
+      - 'tools/collab-spike/scripts/netns-wan.sh'
+      - '.github/workflows/collab-spike-relay.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: collab-spike-relay-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # The relay server binary matching the iroh in dcp-p2p/Cargo.lock (iroh 1.4.1).
+  IROH_RELAY_VERSION: 1.4.1
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: cargo check --all-targets --locked (dcp-p2p)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: tools/collab-spike/dcp-p2p
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike/dcp-p2p
+          shared-key: collab-spike-relay-check
+      # The committed Cargo.lock must be the one the manifest resolves to.
+      - name: cargo check --all-targets --locked
+        run: cargo check --all-targets --locked
+      - name: cargo check --all-targets --features relay-test --locked
+        run: cargo check --all-targets --features relay-test --locked
+
+  relay-inproc:
+    name: in-process relay test, read with iroh's path API (loopback, no firewall)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: tools/collab-spike/dcp-p2p
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike/dcp-p2p
+          shared-key: collab-spike-relay-check
+      # Spike C's relay test (nodes given the relay URL and no direct address, iroh's in-process relay
+      # server) now also reads iroh's path data: a relay path must have existed, and whether the
+      # connection upgraded to the loopback address is printed.
+      - name: relay test
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/results"
+          cargo test --locked --features relay-test --test relay -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/results/relay-inproc.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: relay-inproc
+          path: results/
+          if-no-files-found: warn
+
+  probe:
+    name: probe - namespaces, netem, iptables, iroh-relay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Runner
+        run: |
+          mkdir -p results
+          { uname -a; cat /etc/os-release | head -3; nproc; free -m; ip -V; tc -V; iptables --version; openssl version; } 2>&1 | tee results/runner.txt
+          sudo modprobe sch_netem 2>&1 | tee -a results/runner.txt || true
+          lsmod | grep -i netem | tee -a results/runner.txt || echo "sch_netem not listed by lsmod" | tee -a results/runner.txt
+      - name: Cache iroh-relay
+        id: relay-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cargo/bin/iroh-relay
+          key: iroh-relay-${{ env.IROH_RELAY_VERSION }}-server-${{ runner.os }}
+      - name: Install iroh-relay (pinned, with its own lockfile)
+        if: steps.relay-cache.outputs.cache-hit != 'true'
+        run: cargo install iroh-relay --version "=$IROH_RELAY_VERSION" --features server --locked
+      - name: iroh-relay version
+        run: iroh-relay --version | tee results/iroh-relay-version.txt
+      - name: Topology, reachability, shaping
+        run: |
+          set -x
+          S=tools/collab-spike/scripts/netns-wan.sh
+          sudo $S up
+          sudo $S check
+          sudo $S mode relay-only
+          sudo $S check
+          sudo $S counters
+          sudo $S mode direct
+          sudo $S shape 150 0 -
+          echo "-- ping a -> b, mode direct, shape 150 ms RTT (expect ~150 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.2.2
+          echo "-- ping a -> relay (expect ~75 ms)"
+          sudo ip netns exec dcp-a ping -c 5 -i 0.3 10.77.0.1
+          sudo $S shape 0 5 -
+          echo "-- ping a -> b, 5% loss (expect ~10% loss round trip)"
+          sudo ip netns exec dcp-a ping -c 100 -i 0.05 -q 10.77.2.2 || true
+          sudo $S shape 0 0 1mbit
+          sudo env IROH_RELAY_BIN="$(command -v iroh-relay)" $S relay-up
+          sudo ip netns exec dcp-a curl -sS --cacert /tmp/dcp-wan/ca.crt -o /dev/null -w 'a -> relay https: %{http_code} in %{time_total}s\n' https://10.77.0.1/generate_204
+          sudo $S relay-metrics | head -20
+          sudo $S relay-down
+          sudo $S down
+        shell: bash
+      - name: Relay log
+        if: always()
+        run: sudo cat /tmp/dcp-wan/relay.log | tail -40 | tee results/relay-log-tail.txt || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: relay-probe
+          path: results/
+          if-no-files-found: warn
+
+  # Which of the heavy jobs run: a push whose head commit message contains "[wan]" runs the whole
+  # matrix, "[smoke]" runs one condition with the path tests only, "[growth]" the state-growth
+  # test in two conditions, "[footprint]" the footprint probe (a workflow can only be dispatched once it is on the default branch, so on a spike
+  # branch the commit message is the switch; workflow_dispatch runs everything).
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      wan: ${{ steps.p.outputs.wan }}
+      footprint: ${{ steps.p.outputs.footprint }}
+      smoke: ${{ steps.p.outputs.smoke }}
+      only: ${{ steps.p.outputs.only }}
+    steps:
+      - id: p
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          full='{"cond":[
+            {"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"1"},
+            {"name":"rtt50","rtt":50,"loss":0,"rate":"-","scale":1.5,"big":"0"},
+            {"name":"rtt150","rtt":150,"loss":0,"rate":"-","scale":2,"big":"1"},
+            {"name":"loss1","rtt":0,"loss":1,"rate":"-","scale":1.5,"big":"0"},
+            {"name":"loss5","rtt":0,"loss":5,"rate":"-","scale":3,"big":"0"},
+            {"name":"rate1m","rtt":0,"loss":0,"rate":"1mbit","scale":3,"big":"1"},
+            {"name":"worst","rtt":150,"loss":5,"rate":"1mbit","scale":5,"big":"1"}],
+            "group":["journeys","rest"]}'
+          smoke='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"0"}],"group":["rest"]}'
+          growth='{"cond":[{"name":"unshaped","rtt":0,"loss":0,"rate":"-","scale":1,"big":"1"},{"name":"rate1m","rtt":0,"loss":0,"rate":"1mbit","scale":3,"big":"1"}],"group":["rest"]}'
+          wan=false; footprint=false; smoke_on=false; only=; matrix=$full
+          case "$MSG" in *"[wan]"*) wan=true ;; esac
+          case "$MSG" in *"[smoke]"*) wan=true; smoke_on=true; matrix=$smoke ;; esac
+          case "$MSG" in *"[growth]"*) wan=true; only=growth; matrix=$growth ;; esac
+          case "$MSG" in *"[footprint]"*) footprint=true ;; esac
+          if [ "$EVENT" = workflow_dispatch ]; then wan=true; footprint=true; fi
+          echo "matrix=$(echo "$matrix" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+          echo "wan=$wan" >> "$GITHUB_OUTPUT"
+          echo "footprint=$footprint" >> "$GITHUB_OUTPUT"
+          echo "smoke=$smoke_on" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build - peer process, driver, footprint probe, iroh-relay (release)
+    needs: [check, plan]
+    if: ${{ needs.plan.outputs.wan == 'true' || needs.plan.outputs.footprint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: tools/collab-spike/dcp-p2p
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike/dcp-p2p
+          shared-key: collab-spike-relay-build
+      - name: Cache iroh-relay
+        id: relay-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cargo/bin/iroh-relay
+          key: iroh-relay-${{ env.IROH_RELAY_VERSION }}-server-${{ runner.os }}
+      - name: Install iroh-relay (pinned, with its own lockfile)
+        if: steps.relay-cache.outputs.cache-hit != 'true'
+        run: cargo install iroh-relay --version "=$IROH_RELAY_VERSION" --features server --locked
+      - name: Build the driver, the peer process and the footprint probe (release, --locked)
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/wanbin"
+          WAN=$(cargo test --release --locked --test wan --no-run --message-format=json 2>/dev/null | jq -r 'select(.profile.test==true and .target.name=="wan") | .executable' | tail -1)
+          cp "$WAN" "$GITHUB_WORKSPACE/wanbin/wan"
+          cp target/release/dcp-p2p-node target/release/dcp-p2p-footprint "$GITHUB_WORKSPACE/wanbin/"
+          cp ~/.cargo/bin/iroh-relay "$GITHUB_WORKSPACE/wanbin/"
+          ls -l "$GITHUB_WORKSPACE/wanbin"
+          { rustc --version; cargo --version; "$GITHUB_WORKSPACE/wanbin/iroh-relay" --version; } | tee "$GITHUB_WORKSPACE/wanbin/versions.txt"
+          grep -A1 -E 'name = "(iroh|iroh-relay|iroh-blobs|noq|p2panda-core|p2panda-spaces)"' Cargo.lock | grep -v '^--' | paste - - | tee -a "$GITHUB_WORKSPACE/wanbin/versions.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: wan-bin
+          path: wanbin/
+          if-no-files-found: error
+
+  wan:
+    name: wan ${{ matrix.cond.name }} / ${{ matrix.group }}
+    needs: [plan, build]
+    if: ${{ needs.plan.outputs.wan == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      # rtt: peer-to-peer round trip (ms); loss: per direction, peer to peer (%); rate: per link.
+      # scale multiplies the timeouts inside the tests; it never changes what is asserted.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: wan-bin
+          path: wanbin
+      - name: Tools
+        run: |
+          chmod +x wanbin/*
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tcpdump tshark iptables 2>&1 | tail -2
+      - name: Namespaces, shaping, relay, the tests
+        env:
+          COND: ${{ matrix.cond.name }}
+          GROUP: ${{ matrix.group }}
+          RTT: ${{ matrix.cond.rtt }}
+          LOSS: ${{ matrix.cond.loss }}
+          RATE: ${{ matrix.cond.rate }}
+          SCALE: ${{ matrix.cond.scale }}
+          BIG: ${{ matrix.cond.big }}
+          SMOKE: ${{ needs.plan.outputs.smoke }}
+          ONLY: ${{ needs.plan.outputs.only }}
+        run: |
+          set -uo pipefail
+          W=$GITHUB_WORKSPACE
+          BIN=$W/wanbin
+          OUT=$W/results/$COND-$GROUP
+          S=$W/tools/collab-spike/scripts/netns-wan.sh
+          mkdir -p "$OUT"
+          T() { sudo env DCP_WAN_CONDITION="$COND" DCP_WAN_SCALE="$SCALE" DCP_WAN_BIG="$BIG" DCP_WAN_OUT="$OUT" DCP_WAN_SCRIPT="$S" \
+                DCP_WAN_NODE_BIN="$BIN/dcp-p2p-node" IROH_RELAY_BIN="$BIN/iroh-relay" "$@"; }
+          {
+            echo "condition $COND group $GROUP: rtt=$RTT ms loss=$LOSS % rate=$RATE scale=$SCALE big=$BIG"
+            nproc; free -m | head -2; lscpu | grep 'Model name'; uname -r; getconf CLK_TCK
+            cat "$BIN/versions.txt"
+          } 2>&1 | tee "$OUT/setup.txt"
+          T "$S" up 2>&1 | tee -a "$OUT/setup.txt"
+          T "$S" shape "$RTT" "$LOSS" "$RATE" 2>&1 | tee -a "$OUT/setup.txt"
+          {
+            echo "-- measured shaping (mode direct): ping a -> b (peer to peer), a -> relay"
+            sudo ip netns exec dcp-a ping -c 30 -i 0.2 -q 10.77.2.2 | tail -3
+            sudo ip netns exec dcp-a ping -c 30 -i 0.2 -q 10.77.0.1 | tail -3
+            T "$S" mode relay-only
+            T "$S" check
+            T "$S" mode direct
+            T "$S" relay-up
+          } 2>&1 | tee -a "$OUT/setup.txt"
+          sudo ip netns exec dcp-a tcpdump -i vn-a -s 128 -U -w "$OUT/dcp-a.pcap" >/dev/null 2>&1 &
+          sleep 1
+          rc=0
+          run() { # run <log name> <test filters...>
+            name=$1; shift
+            echo "=== $name: $*"
+            T "$BIN/wan" "$@" --test-threads=1 --nocapture > "$OUT/$name.log" 2>&1 || { echo "FAILED: $name"; rc=1; }
+            grep -E '^(test |SKIP|MEASURE|test result)' "$OUT/$name.log" | cut -c1-400
+          }
+          case "$GROUP" in
+            journeys) run journeys journeys_ ;;
+            rest)
+              if [ "$ONLY" = growth ]; then
+                run growth state_growth
+              elif [ "$SMOKE" = true ]; then
+                run paths path_ ports_ relay_killed direct_path_blocked
+                run scenarios catch_up_direct lease_latency_direct
+                run growth state_growth_direct
+              else
+              run paths path_ ports_ relay_killed direct_path_blocked
+              run scenarios catch_up concurrent_heads lease_latency connect_and_files
+              run growth state_growth
+              fi
+              ;;
+          esac
+          sudo pkill tcpdump || true
+          sleep 1
+          T "$S" relay-metrics > "$OUT/relay-metrics.txt" 2>&1 || true
+          sudo cp /tmp/dcp-wan/relay.log "$OUT/relay.log" 2>/dev/null || true
+          {
+            echo "-- what node a sent on the wire (all tests of this job): protocol, destination, port"
+            "$W/tools/collab-spike/scripts/pcap-summary.sh" "$OUT/dcp-a.pcap" 10.77.1.2
+            echo "-- relay metrics (cumulative over this job)"
+            grep -E '^relayserver_(bytes_sent|bytes_recv|send_packets_sent|send_packets_dropped|accepts|disconnects|unique_client_keys|connections)' "$OUT/relay-metrics.txt" | grep -v '^#' || true
+            echo "-- FORWARD rule counters (mode direct at the end)"
+            T "$S" counters
+          } 2>&1 | tee "$OUT/wire-summary.txt"
+          sudo chmod -R a+r "$OUT" || true
+          rm -f "$OUT/dcp-a.pcap" 
+          exit $rc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: wan-${{ matrix.cond.name }}-${{ matrix.group }}
+          path: results/
+          if-no-files-found: warn
+
+  footprint:
+    name: footprint - what an iroh endpoint contacts by itself
+    needs: [plan, build]
+    if: ${{ needs.plan.outputs.footprint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: wan-bin
+          path: wanbin
+      - name: Tools
+        run: |
+          chmod +x wanbin/*
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tcpdump tshark iptables 2>&1 | tail -2
+      - name: Capture the probe variants
+        run: |
+          mkdir -p results
+          sudo tools/collab-spike/scripts/netns-footprint.sh "$PWD/wanbin/dcp-p2p-footprint" "$PWD/results" 2>&1 | tee results/footprint-run.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: footprint
+          path: results/
+          if-no-files-found: warn
+

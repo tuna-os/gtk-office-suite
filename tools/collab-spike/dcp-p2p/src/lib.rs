@@ -14,10 +14,12 @@ pub mod ext;
 pub mod msg;
 pub mod net;
 pub mod ops;
+pub mod pathlog;
 pub mod replica;
 pub mod signed;
 pub mod store;
 pub mod sync;
+pub mod wire;
 
 pub use clock::{Clock, SkewedClock, SystemClock};
 pub use replica::{Counters, P2pConfig};
