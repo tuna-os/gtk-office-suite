@@ -78,3 +78,8 @@ doc = false
 bench = false
 
 [workspace]
+
+# Mirror the product's collaboration security backports (#1043).
+[patch.crates-io]
+loro-internal = { path = "../vendor/loro-internal" }
+serde_columnar = { path = "../vendor/serde_columnar" }
