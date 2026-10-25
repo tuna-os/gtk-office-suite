@@ -74,6 +74,12 @@ pub struct Stats {
     pub requests: AtomicU64,
     pub bytes_sent: AtomicU64,
     pub bytes_received: AtomicU64,
+    /// Responses that arrived as HTTP/1.1.
+    pub responses_h1: AtomicU64,
+    /// Responses that arrived as HTTP/2.
+    pub responses_h2: AtomicU64,
+    /// Attempts that failed below HTTP (connect, TLS, reset, timeout).
+    pub transport_errors: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -81,33 +87,141 @@ pub struct StatsSnapshot {
     pub requests: u64,
     pub bytes_sent: u64,
     pub bytes_received: u64,
+    pub responses_h1: u64,
+    pub responses_h2: u64,
+    pub transport_errors: u64,
+}
+
+/// Which HTTP version a client insists on. With `Some`, the client offers only that
+/// version in ALPN (TLS) and refuses a response of any other version, so a
+/// downgrade cannot go unnoticed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HttpVersion {
+    Http1,
+    Http2,
+}
+
+impl HttpVersion {
+    fn matches(self, v: reqwest::Version) -> bool {
+        match self {
+            HttpVersion::Http1 => v == reqwest::Version::HTTP_11,
+            HttpVersion::Http2 => v == reqwest::Version::HTTP_2,
+        }
+    }
+}
+
+/// How the client reaches the server: what it trusts, which HTTP version it requires.
+///
+/// There are **no built-in trust roots** (no `webpki-roots`, no platform store): a
+/// `https://` server is trusted only if its chain ends at one of `ca_pem`. With no
+/// CA every `https://` connection fails (fail closed). Redirects are never followed.
+#[derive(Clone, Debug)]
+pub struct Transport {
+    /// PEM of the CA certificate(s) that may sign the server's certificate.
+    pub ca_pem: Option<Vec<u8>>,
+    /// `Some`: offer and accept only this version. `None`: ALPN offers `h2`, `http/1.1`.
+    pub version: Option<HttpVersion>,
+    /// Refuse any request to a base URL that is not `https://`.
+    pub require_tls: bool,
+    /// How long an idle pooled connection is kept.
+    pub pool_idle: Duration,
+    /// Connect `host` to this address whatever DNS says (the name is still what the
+    /// certificate is checked against and what is sent as SNI).
+    pub resolve: Vec<(String, std::net::SocketAddr)>,
+    /// HTTP/2: send PING frames this often, also while idle, and drop the connection if one
+    /// is not answered within 10 s. `None`: none are sent (reqwest's default).
+    pub h2_keep_alive: Option<Duration>,
+    /// HTTP/2: let the receive windows grow with the bandwidth-delay product. `false` is
+    /// reqwest's default, a fixed 64 KiB per stream.
+    pub h2_adaptive_window: bool,
+}
+
+impl Default for Transport {
+    fn default() -> Self {
+        Transport {
+            ca_pem: None,
+            version: None,
+            require_tls: false,
+            // The reference server closes idle keep-alive connections after 5 s;
+            // drop ours first so that an append never goes down a dead socket.
+            pool_idle: Duration::from_secs(2),
+            resolve: Vec::new(),
+            h2_keep_alive: None,
+            h2_adaptive_window: false,
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct Http {
     client: reqwest::Client,
     base: String,
+    require_tls: bool,
+    required: Option<HttpVersion>,
     headers: Vec<(String, String)>,
     pub clock: Arc<ServerClock>,
     pub stats: Arc<Stats>,
 }
 
+/// The error and every error under it: reqwest's own text is only "error sending
+/// request", the certificate verdict is two sources down.
+fn chain(e: &dyn std::error::Error) -> String {
+    let mut s = e.to_string();
+    let mut cur = e.source();
+    while let Some(c) = cur {
+        s.push_str(": ");
+        s.push_str(&c.to_string());
+        cur = c.source();
+    }
+    s
+}
+
 fn transport(e: reqwest::Error) -> HttpError {
-    HttpError::Transport(e.to_string())
+    HttpError::Transport(chain(&e))
 }
 
 impl Http {
     /// `base` is the URL under which stream paths are appended, for the
-    /// reference server `http://127.0.0.1:4437/v1/stream/`.
+    /// reference server `http://127.0.0.1:4437/v1/stream/`. Plain `http://` is
+    /// allowed (a local server); an `https://` base needs [`Http::with_transport`]
+    /// to say which CA to trust, otherwise every request fails closed.
     pub fn new(base: &str) -> Self {
-        let client = reqwest::Client::builder()
-            // The reference server closes idle keep-alive connections after 5 s;
-            // drop ours first so that an append never goes down a dead socket.
-            .pool_idle_timeout(Duration::from_secs(2))
+        Self::with_transport(base, Transport::default())
+    }
+
+    pub fn with_transport(base: &str, t: Transport) -> Self {
+        let mut b = reqwest::Client::builder()
+            .use_rustls_tls()
+            .tls_built_in_root_certs(false)
+            .https_only(base.starts_with("https://"))
+            // A redirect is a server telling the client to go elsewhere, possibly to a
+            // plain-text URL; a stream binding has no use for one.
+            .redirect(reqwest::redirect::Policy::none())
+            .pool_idle_timeout(t.pool_idle)
             .tcp_nodelay(true)
-            .connect_timeout(Duration::from_secs(10))
-            .build()
-            .expect("reqwest client");
+            .connect_timeout(Duration::from_secs(10));
+        if let Some(pem) = &t.ca_pem {
+            let cert = reqwest::Certificate::from_pem(pem).expect("the CA is not a PEM certificate");
+            b = b.add_root_certificate(cert);
+        }
+        for (name, addr) in &t.resolve {
+            b = b.resolve(name, *addr);
+        }
+        if let Some(every) = t.h2_keep_alive {
+            b = b
+                .http2_keep_alive_interval(every)
+                .http2_keep_alive_timeout(Duration::from_secs(10))
+                .http2_keep_alive_while_idle(true);
+        }
+        if t.h2_adaptive_window {
+            b = b.http2_adaptive_window(true);
+        }
+        b = match t.version {
+            Some(HttpVersion::Http1) => b.http1_only(),
+            Some(HttpVersion::Http2) => b.http2_prior_knowledge(),
+            None => b,
+        };
+        let client = b.build().expect("reqwest client");
         let mut base = base.to_owned();
         if !base.ends_with('/') {
             base.push('/');
@@ -115,10 +229,18 @@ impl Http {
         Http {
             client,
             base,
+            require_tls: t.require_tls,
+            required: t.version,
             headers: Vec::new(),
             clock: Arc::new(ServerClock::default()),
             stats: Arc::new(Stats::default()),
         }
+    }
+
+    /// The underlying client, for requests the binding does not make (SSE, raw
+    /// long polls in the transport tests). It shares the connection pool.
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
     }
 
     /// Send this header on every request (an `Authorization` token for a
@@ -150,6 +272,9 @@ impl Http {
             requests: self.stats.requests.load(Ordering::Relaxed),
             bytes_sent: self.stats.bytes_sent.load(Ordering::Relaxed),
             bytes_received: self.stats.bytes_received.load(Ordering::Relaxed),
+            responses_h1: self.stats.responses_h1.load(Ordering::Relaxed),
+            responses_h2: self.stats.responses_h2.load(Ordering::Relaxed),
+            transport_errors: self.stats.transport_errors.load(Ordering::Relaxed),
         }
     }
 
@@ -162,6 +287,12 @@ impl Http {
         body: Option<Vec<u8>>,
         timeout: Option<Duration>,
     ) -> Result<reqwest::Response, HttpError> {
+        if self.require_tls && !self.base.starts_with("https://") {
+            return Err(HttpError::Protocol(format!(
+                "this client requires TLS and the base URL is not https: {}",
+                self.base
+            )));
+        }
         let mut last = HttpError::Transport("no attempt made".into());
         for attempt in 0..3 {
             let mut rb = self.client.request(method.clone(), self.url(path));
@@ -185,6 +316,23 @@ impl Http {
             self.stats.bytes_sent.fetch_add(sent, Ordering::Relaxed);
             match rb.send().await {
                 Ok(resp) => {
+                    match resp.version() {
+                        reqwest::Version::HTTP_2 => {
+                            self.stats.responses_h2.fetch_add(1, Ordering::Relaxed)
+                        }
+                        _ => self.stats.responses_h1.fetch_add(1, Ordering::Relaxed),
+                    };
+                    // Never accept a response of another HTTP version than the one
+                    // under test: with `required` set the ALPN offer already
+                    // excludes it, this is the second check.
+                    if let Some(want) = self.required {
+                        if !want.matches(resp.version()) {
+                            return Err(HttpError::Protocol(format!(
+                                "required {want:?}, the server answered {:?}",
+                                resp.version()
+                            )));
+                        }
+                    }
                     if let Some(d) = resp
                         .headers()
                         .get(header::DATE)
@@ -195,6 +343,7 @@ impl Http {
                     return Ok(resp);
                 }
                 Err(e) => {
+                    self.stats.transport_errors.fetch_add(1, Ordering::Relaxed);
                     last = transport(e);
                     // Reads, creates and deletes are idempotent in the
                     // protocol. An append that is retried after a lost reply

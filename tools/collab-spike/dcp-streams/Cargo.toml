@@ -18,8 +18,10 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "io-util", "time", "sync"] }
 getrandom = "0.3"
 httpdate = "1"
-# HTTP only: no TLS stack is built (see the results document: TLS is not verified).
-reqwest = { version = "0.12", default-features = false }
+# rustls with the ring provider and NO built-in trust roots (`rustls-tls-manual-roots`): the
+# client trusts only the CA it is given (`http::Transport::ca_pem`). `http2` adds ALPN `h2`.
+# Features pinned so the tree stays: rustls, hyper-rustls, tokio-rustls, rustls-webpki, ring, h2.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-manual-roots", "http2"] }
 # The vetted RustCrypto primitives.
 chacha20poly1305 = "0.11"
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "fast", "zeroize"] }
@@ -30,3 +32,10 @@ zeroize = "1"
 [dev-dependencies]
 dcp-conformance = { path = "../dcp-conformance" }
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "io-util", "macros", "time", "sync", "process"] }
+# The transport tests speak TLS and HTTP/2 themselves (handshake timing, the server's SETTINGS,
+# a request cut off mid-body); the same versions reqwest resolves, no other TLS stack.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+bytes = "1"
+h2 = "0.4"
+http = "1"

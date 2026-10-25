@@ -9,7 +9,6 @@ use dcp_conformance::{new_file, standard_meta, ALGORITHM, BASE_FILE, DOC_MODEL};
 use dcp_core::updates::StreamWriter;
 use dcp_core::{DocumentStore, Lease, LeaseState, Role, StoreError};
 use dcp_streams::http::{HttpError, JSON};
-use dcp_streams::Http;
 
 use crate::common::*;
 use crate::require_streams;
@@ -134,7 +133,7 @@ async fn file_backed_restart(stop: Stop) {
     // Stream-Seq state survived: a duplicate sequence number is still refused,
     // and the lease continues from where it was.
     let lease_path = editor.stream_path(&doc, 1, "lease").await.unwrap();
-    let dup = Http::new(&base)
+    let dup = crate::common::http(&base)
         .append(
             &lease_path,
             JSON,

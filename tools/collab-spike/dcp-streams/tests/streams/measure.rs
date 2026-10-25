@@ -11,14 +11,14 @@ use dcp_conformance::{new_file, standard_meta, ALGORITHM, BASE_FILE, DOC_MODEL};
 use dcp_core::updates::StreamWriter;
 use dcp_core::{DocumentStore, Role};
 use dcp_streams::http::{HttpError, JSON, OCTETS, START};
-use dcp_streams::{crypto, Http, Identity, StreamsConfig, StreamsStore};
+use dcp_streams::{crypto, Identity, StreamsConfig, StreamsStore};
 use serde_json::json;
 
 use crate::common::*;
 use crate::properties::{raw, Rig};
 use crate::require_streams;
 
-fn emit(name: &str, v: serde_json::Value) {
+pub fn emit(name: &str, v: serde_json::Value) {
     let line = format!("MEASURE {name} {v}");
     println!("{line}");
     if let Ok(path) = std::env::var("DCP_MEASURE_OUT") {
@@ -32,7 +32,7 @@ fn emit(name: &str, v: serde_json::Value) {
     }
 }
 
-fn pct(sorted: &[f64], p: f64) -> f64 {
+pub fn pct(sorted: &[f64], p: f64) -> f64 {
     if sorted.is_empty() {
         return f64::NAN;
     }
@@ -40,7 +40,7 @@ fn pct(sorted: &[f64], p: f64) -> f64 {
     sorted[i]
 }
 
-fn summary(mut v: Vec<f64>) -> serde_json::Value {
+pub fn summary(mut v: Vec<f64>) -> serde_json::Value {
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
     json!({
         "n": v.len(),
@@ -49,7 +49,7 @@ fn summary(mut v: Vec<f64>) -> serde_json::Value {
     })
 }
 
-fn ms(d: Duration) -> f64 {
+pub fn ms(d: Duration) -> f64 {
     d.as_secs_f64() * 1000.0
 }
 
@@ -173,7 +173,7 @@ async fn latency_append_to_a_second_client() {
 #[ignore = "measurement"]
 async fn latency_of_the_server_alone_for_a_bare_append() {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     let path = format!("dcp/bare-{}/s", hex::encode(crypto::random::<6>()));
     http.create(&path, JSON, None, false).await.unwrap();
     let mut v = Vec::new();
@@ -238,7 +238,7 @@ async fn catch_up_time_for_n_updates_with_and_without_a_snapshot() {
                 let mut cfg = StreamsConfig::new("COLD");
                 cfg.use_snapshots = snapshots;
                 let s = Arc::new(StreamsStore::new(
-                    Http::new(&base),
+                    crate::common::http(&base),
                     Identity::generate(),
                     cfg,
                 ));
@@ -301,7 +301,7 @@ async fn catch_up_time_for_n_versions() {
         let mut cost = None;
         for _ in 0..5 {
             let s = Arc::new(StreamsStore::new(
-                Http::new(&base),
+                crate::common::http(&base),
                 Identity::generate(),
                 StreamsConfig::new("COLD"),
             ));
@@ -322,7 +322,7 @@ async fn catch_up_time_for_n_versions() {
         }
         // plus opening the head: one file fetch and decrypt
         let s = Arc::new(StreamsStore::new(
-            Http::new(&base),
+            crate::common::http(&base),
             Identity::generate(),
             StreamsConfig::new("COLD"),
         ));
@@ -375,7 +375,7 @@ async fn catch_up_across_many_epochs() {
         let mut cost = None;
         for _ in 0..5 {
             let s = Arc::new(StreamsStore::new(
-                Http::new(&base),
+                crate::common::http(&base),
                 Identity::generate(),
                 StreamsConfig::new("COLD"),
             ));
@@ -506,7 +506,7 @@ async fn record_overhead_in_bytes() {
 // ------------------------------------------------------------------ limits
 
 async fn alive(base: &str) -> bool {
-    Http::new(base)
+    crate::common::http(base)
         .head("dcp/nothing-here")
         .await
         .map(|_| true)
@@ -517,7 +517,7 @@ async fn alive(base: &str) -> bool {
 #[ignore = "measurement"]
 async fn the_largest_record_and_file_the_server_accepts() {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     let cap = max_mb();
     let mut rows = Vec::new();
     // A JSON message of this many bytes (a string field), then a closed octet stream of the same size.

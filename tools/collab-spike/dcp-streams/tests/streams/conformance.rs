@@ -10,7 +10,7 @@ use dcp_conformance::{
 };
 use dcp_core::{DocId, Version};
 use dcp_streams::wire::{Inner, Kind};
-use dcp_streams::{Http, Identity, StreamsConfig, StreamsStore};
+use dcp_streams::{Identity, StreamsConfig, StreamsStore};
 
 use crate::common::*;
 use crate::require_streams;
@@ -81,7 +81,7 @@ impl StoreFactory for StreamsFactory {
             let mut cfg = StreamsConfig::new(device);
             cfg.lenient_roles = self.lenient;
             Arc::new(StreamsStore::new(
-                Http::new(&self.base),
+                crate::common::http(&self.base),
                 Identity::generate(),
                 cfg,
             ))

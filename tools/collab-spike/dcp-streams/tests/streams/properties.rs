@@ -12,7 +12,7 @@ use dcp_streams::crypto::{self, b64, unb64, Identity};
 use dcp_streams::doc::DropReason;
 use dcp_streams::http::{HttpError, JSON, START};
 use dcp_streams::wire::{Kind, Record};
-use dcp_streams::{Http, StreamsConfig, StreamsStore};
+use dcp_streams::{StreamsConfig, StreamsStore};
 use serde_json::Value;
 
 use crate::common::*;
@@ -34,7 +34,7 @@ impl Rig {
 
     pub async fn build(base: &str, owner_cfg: StreamsConfig) -> Rig {
         let owner = Arc::new(StreamsStore::new(
-            Http::new(base),
+            crate::common::http(base),
             Identity::generate(),
             owner_cfg,
         ));
@@ -615,7 +615,7 @@ async fn negative_control_a_reader_that_skips_the_role_check_accepts_the_viewers
         let mut cfg = StreamsConfig::new("LENIENT");
         cfg.lenient_roles = true;
         let s = Arc::new(StreamsStore::new(
-            Http::new(&base),
+            crate::common::http(&base),
             Identity::generate(),
             cfg,
         ));
@@ -885,7 +885,7 @@ async fn replaying_an_offset_is_idempotent_and_a_fresh_reader_agrees_with_an_inc
 
     // A fresh client (same identity, empty cache) and the incremental one agree.
     let fresh = Arc::new(StreamsStore::new(
-        Http::new(&base),
+        crate::common::http(&base),
         rig.owner.identity().clone(),
         StreamsConfig::new("FRESH"),
     ));
@@ -934,7 +934,7 @@ async fn replaying_an_offset_is_idempotent_and_a_fresh_reader_agrees_with_an_inc
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn concurrent_appends_are_all_kept_once_and_every_reader_sees_one_order() {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     let path = format!("dcp/order-{}/s", hex::encode(crypto::random::<6>()));
     http.create(&path, JSON, None, false).await.unwrap();
     let mut joins = Vec::new();
@@ -959,7 +959,7 @@ async fn concurrent_appends_are_all_kept_once_and_every_reader_sees_one_order() 
         j.await.unwrap();
     }
     let a = http.read_all(&path, START).await.unwrap().0;
-    let b = Http::new(&base).read_all(&path, START).await.unwrap().0;
+    let b = crate::common::http(&base).read_all(&path, START).await.unwrap().0;
     assert_eq!(a.len(), 400, "no append was lost or doubled");
     assert_eq!(a, b, "two readers see the same order");
     // Each writer's own appends are in the order it sent them.
@@ -977,7 +977,7 @@ async fn concurrent_appends_are_all_kept_once_and_every_reader_sees_one_order() 
 async fn idempotent_producer_headers_deduplicate_a_retried_append_though_the_binding_does_not_need_them(
 ) {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     let path = format!("dcp/idem-{}/s", hex::encode(crypto::random::<6>()));
     http.create(&path, JSON, None, false).await.unwrap();
     let h = |seq: u64| {
@@ -1022,7 +1022,7 @@ async fn idempotent_producer_headers_deduplicate_a_retried_append_though_the_bin
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_lease_is_a_compare_and_set_on_stream_seq() {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     // Raw: 8 appenders send the same sequence number; the server lets exactly one in. 20 rounds.
     let path = format!("dcp/cas-{}/lease", hex::encode(crypto::random::<6>()));
     http.create(&path, JSON, None, false).await.unwrap();
@@ -1194,7 +1194,7 @@ async fn on_the_reference_server_anyone_with_a_url_can_delete_and_close_streams(
         .next()
         .unwrap()
         .to_owned();
-    let stranger = Http::new(&base); // no identity, no key, no token
+    let stranger = crate::common::http(&base); // no identity, no key, no token
                                      // A removed member, or anyone who learned the document id.
     stranger
         .delete(&format!("dcp/{}/f/{id}", rig.doc))
@@ -1278,7 +1278,7 @@ async fn a_late_joiner_bootstraps_from_a_snapshot_and_reads_only_what_follows() 
     let mut full_cfg = StreamsConfig::new("FULL");
     full_cfg.use_snapshots = false;
     let full = Arc::new(StreamsStore::new(
-        Http::new(&base),
+        crate::common::http(&base),
         Identity::generate(),
         full_cfg,
     ));
@@ -1338,7 +1338,7 @@ async fn a_late_joiner_bootstraps_from_a_snapshot_and_reads_only_what_follows() 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_snapshot_hint_cannot_be_checked_by_the_server_so_the_reader_bounds_it() {
     let base = require_streams!();
-    let http = Http::new(&base);
+    let http = crate::common::http(&base);
     // What the server says to an offset past the tail (a measurement, whichever server this is).
     let path = format!("dcp/hint-{}/s", hex::encode(crypto::random::<6>()));
     http.create(&path, JSON, Some(b"[{\"a\":1},{\"a\":2}]".to_vec()), false)
@@ -1427,39 +1427,24 @@ async fn the_server_clock_estimate_is_a_lower_bound_within_the_poll_interval() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_upload_cut_off_on_the_wire_leaves_no_stream_behind() {
-    use tokio::io::AsyncWriteExt;
     let base = require_streams!();
-    let url = reqwest_free_host_port(&base);
-    let path = format!(
-        "{}dcp/cut-{}/f/x",
-        url.1,
-        hex::encode(crypto::random::<6>())
-    );
-    let mut sock = tokio::net::TcpStream::connect(&url.0).await.unwrap();
-    sock.write_all(
-        format!(
-            "PUT {path} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/octet-stream\r\nStream-Closed: true\r\nContent-Length: 200000\r\n\r\n",
-            url.0
-        )
-        .as_bytes(),
-    )
-    .await
-    .unwrap();
-    sock.write_all(&vec![7u8; 5000]).await.unwrap();
-    drop(sock);
+    let tag = hex::encode(crypto::random::<6>());
+    let http = crate::common::http(&base);
+
+    // Control: the same hand-written request, finished, makes a stream. Without it "no stream"
+    // could just mean the request was malformed.
+    let whole = format!("dcp/whole-{tag}/f/x");
+    crate::rawtls::cut_upload(&base, &whole, 5000, 5000, true).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let http = Http::new(&base);
-    let tail = path.strip_prefix(&url.1).unwrap();
-    let r = http.head(tail).await;
+    let h = http.head(&whole).await;
+    assert!(h.is_ok(), "the control upload did not create a stream: {h:?}");
+
+    let cut = format!("dcp/cut-{tag}/f/x");
+    crate::rawtls::cut_upload(&base, &cut, 200_000, 5000, false).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let r = http.head(&cut).await;
     assert!(
         matches!(r, Err(HttpError::NotFound)),
         "a half-received upload became a stream: {r:?}"
     );
-}
-
-/// `(host:port, path-prefix)` of a plain `http://` base URL.
-fn reqwest_free_host_port(base: &str) -> (String, String) {
-    let rest = base.strip_prefix("http://").expect("an http:// base URL");
-    let (hp, path) = rest.split_once('/').unwrap_or((rest, ""));
-    (hp.to_owned(), format!("/{path}"))
 }
