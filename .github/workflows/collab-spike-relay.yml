@@ -60,6 +60,38 @@ jobs:
       - name: cargo check --all-targets --features relay-test --locked
         run: cargo check --all-targets --features relay-test --locked
 
+  relay-inproc:
+    name: in-process relay test, read with iroh's path API (loopback, no firewall)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: tools/collab-spike/dcp-p2p
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike/dcp-p2p
+          shared-key: collab-spike-relay-check
+      # Spike C's relay test (nodes given the relay URL and no direct address, iroh's in-process relay
+      # server) now also reads iroh's path data: a relay path must have existed, and whether the
+      # connection upgraded to the loopback address is printed.
+      - name: relay test
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/results"
+          cargo test --locked --features relay-test --test relay -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/results/relay-inproc.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: relay-inproc
+          path: results/
+          if-no-files-found: warn
+
   probe:
     name: probe - namespaces, netem, iptables, iroh-relay
     runs-on: ubuntu-24.04
