@@ -182,12 +182,12 @@ one names it in `unsigned.replaces_state`; whatever it cannot place (a window, a
 honouring `retry_after_ms`. In a room created to federate it asks the server for every event (`levels::a_room_that_federates_is_judged_by_the_server_and_not_by_the_walk`: 3 events, 3 requests, the same levels as
 the walk, the forged event dropped; not tested across two homeservers).
 
-Why not the others as the default: `/context` for everything costs 3 to 5 ms and 4 KB an event for what the pass already holds; matrix-sdk's call is the same request at 3.6 to 4.8 times the local cost; the plain forward walk
+Why not the others as the default: `/context` for everything costs 3 to 6 ms and 4 KB an event for what the pass already holds; matrix-sdk's call is the same request at 3.6 to 4.8 times the local cost; the plain forward walk
 is silently wrong in scenario 6; the backward walk is sound there but depends on `prev_content` being present on every event and gives up older history for nothing the hybrid does not also cover. All four stay as rules
 because the tests compare them (and the negative controls are rules too); `SenderRule::CurrentTable`, `Trust` and `TimelineWalkUnverified` exist only for the controls.
 
 The fallback the brief asks for if every approach failed (trust only events after the last observed change, clients re-publish) is **not needed**: nothing failed, and the cost on `default` and `default-drained`
-is the same as on `relaxed`.
+is not distinguishable from `relaxed`'s (the two runs differ more from each other than the profiles do).
 
 ## 6. What changed in the code and the existing suites
 
@@ -196,7 +196,7 @@ is the same as on `relaxed`.
   `draft0_power_levels_and_readers_that_trust_senders` and `dcp-matrix/tests/conformance.rs`) now set `sender_rule = Trust`.
 - **The existing check `a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through` changed its draft-0 branch.** It asserted Spike F's finding (the earlier version dropped, the owner's save
   rejected, the readers showing the first version); it now asserts the corrected behaviour (the earlier version listed, the owner's save the head, exactly the events sent after the demotion dropped).
-  Passes on the four jobs, and its negative control (`readers_that_trust_the_sender_fail_the_demoted_editor_check`, 13 of 13 controls) still fails the check as it must.
+  Passes on the four jobs, and its negative control (`readers_that_trust_the_sender_fail_the_demoted_editor_check`; 13 of 13 controls, run on `relaxed` and `relaxed-latest`) still fails the check as it must.
 - **`tools/collab-spike/Cargo.lock` on main was stale**: `dcp-webdav` asks for `parking_lot` 0.12 and `dcp-core` for 0.13, and the lock named one unqualified `"parking_lot"` in
   `dcp-webdav`'s entry, so every `cargo ... --locked` of the workspace failed ("cannot update the lock file", run 40175835722). One line is changed (`"parking_lot 0.12.5"`), produced by
   `cargo metadata --offline` without any version bump; the integration branch will meet the same line. **`dcp-p2p/Cargo.lock` is stale the same way** (`collab-spike.yml`'s `check` job, run
@@ -233,8 +233,8 @@ dcp-wopi, not touched here, cause not investigated). Skipped by the workflow's o
 >    and is exact only in a room created with `m.federate: false` (all events come from one homeserver, so stream order is state order); a DCP room SHOULD be created that way.
 > 2. **From the server.** `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}?limit=0`, whose `state` is the room state at the event; a `filter` of
 >    `{"types":["m.room.power_levels","m.room.create"]}` keeps the answer to about 4 KB however many members the room has. The answer for an event never changes: cache it by event ID. The call was
->    not rate limited on Synapse 1.163.2 (0 of 620 requests per run on the default profile) and spends none of the sender's `rc_message` budget; it costs 3 to 5 ms and 4 KB per event on a loopback server
->    (listing 30 versions: 105 to 162 ms extra). Honour `retry_after_ms` on a `429` as for any request.
+>    not rate limited on Synapse 1.163.2 (0 of 620 requests per run on the default profile) and spends none of the sender's `rc_message` budget; it costs 2.7 to 5.6 ms and 4 KB per event on a loopback server
+>    (listing 30 versions: 84 to 173 ms extra in eight job runs). Honour `retry_after_ms` on a `429` as for any request.
 >
 > An event whose level at the event cannot be established MUST be dropped; a reader MUST NOT fall back to the current table.
 
@@ -255,7 +255,7 @@ rate-limit token; see [Spike Q15](rfc/0004-spike-q15-results.md). Open: a room t
   Synapse 1.163.2 (two image builds of it). Dendrite, Conduit and others: not run. A server without `replaces_state` would make the linked walk place nothing, and the hybrid would ask for every event.
 - **Rate limits beyond `rc_message`, and any 429 on `/context`.** None was met, so the retry path of the new requests (raw and SDK) never ran. A homeserver or proxy that does limit it is not covered.
 - **Real network.** All requests were loopback and 2 to 5 ms; the cost per event on a WAN is derived (round trips), not measured, and so is the benefit of requests in flight.
-- **Large rooms and long histories.** The rooms had 3 to 5 members, 31 versions at most and 4 to 7 power-levels changes; the size of an unfiltered answer (grows with membership), the 100-event page loop of a long
+- **Large rooms and long histories.** The rooms had 3 to 5 members, 31 versions at most and at most 7 power-levels changes (scenario 5); the size of an unfiltered answer (grows with membership), the 100-event page loop of a long
   history, and a table with thousands of entries were not measured (rooms of 3 to 5 members).
 - **Room version 12.** Creators with unbounded power are handled and unit-tested (both walks, `m.room.create` as the source), not run against a v12 room (the room version of the CI Synapse's default was not recorded).
 - **Reader paths other than a fresh `/messages` pass.** Incremental `/sync` or sliding-sync readers keeping the table up to date as it changes, a reader with a persistent event cache on disk (`judge_transcript` was
