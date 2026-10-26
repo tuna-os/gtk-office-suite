@@ -450,6 +450,7 @@ impl Daemon {
                     role: DcpRole::Owner,
                     session,
                     genesis_id,
+                    mine: vec![base.clone()],
                     opened: Some(base),
                     mime,
                 });
@@ -521,6 +522,7 @@ impl Daemon {
                     genesis_id: None,
                     opened: None,
                     mime: meta.mime,
+                    mine: Vec::new(),
                 });
             }
             Err(e) => self.fail(req, code_of(&e), e.to_string()),

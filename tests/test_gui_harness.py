@@ -24,6 +24,13 @@ _spec = importlib.util.spec_from_file_location("owned_processes", _MODULE)
 owned_processes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(owned_processes)
 
+_INSTANCES = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "gui", "framework", "instances.py"
+)
+_spec = importlib.util.spec_from_file_location("gui_instances", _INSTANCES)
+instances = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(instances)
+
 
 def _executable(directory, name):
     """A copy of /bin/sleep under `name`, so name-based killing would be
@@ -393,6 +400,255 @@ class InjectedSetupFailures(unittest.TestCase):
             )
             time.sleep(0.1)
         self.assertEqual(self._leftovers(), [])
+
+
+    def test_an_unknown_window_manager_is_reported(self):
+        """GUI_TEST_WINDOW_MANAGER picks the window manager the journeys run
+        under (openbox for two windows side by side). A name the runner does
+        not know is a typo, and falling back to matchbox would put the
+        journey on a window manager that cannot do what it asked for."""
+        finished = self._run_setup(GUI_TEST_WINDOW_MANAGER="no-such-wm")
+        self.assertNotEqual(finished.returncode, 0, finished.output)
+        self.assertIn("GUI_TEST_WINDOW_MANAGER=no-such-wm is not one of", finished.output)
+        self.assertEqual(self._leftovers(), [])
+
+
+GUI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui")
+
+
+class InstanceEnvironment(unittest.TestCase):
+    """Two instances of one app share the display and the session bus and
+    nothing else (framework/instances.py)."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="instances-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+
+    def _env(self, label, **kwargs):
+        return instances.instance_env(os.path.join(self.root, label), "/opt/collabd", **kwargs)
+
+    def test_no_store_is_shared(self):
+        a, b = self._env("a"), self._env("b")
+        stores = [k for k in a if k.startswith("XDG_") or k == "COLLABD_DATA_DIR"]
+        self.assertEqual(
+            sorted(stores),
+            ["COLLABD_DATA_DIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME",
+             "XDG_DATA_HOME", "XDG_STATE_HOME"])
+        for key in stores:
+            self.assertNotEqual(a[key], b[key], key)
+            self.assertTrue(a[key].startswith(os.path.join(self.root, "a")), a[key])
+            self.assertTrue(b[key].startswith(os.path.join(self.root, "b")), b[key])
+            self.assertTrue(os.path.isdir(a[key]), f"{key} was not created")
+
+    def test_the_sidecar_identity_lives_in_the_instances_own_directory(self):
+        env = self._env("a")
+        self.assertEqual(env["COLLABD_DATA_DIR"], os.path.join(self.root, "a", "collabd"))
+        self.assertEqual(env["COLLABD_BIN"], "/opt/collabd")
+
+    def test_both_variables_that_allow_a_second_process_are_set(self):
+        """suite-common adds NON_UNIQUE only when both are set."""
+        env = self._env("a")
+        self.assertEqual(env["GTK_OFFICE_TEST_MODE"], "1")
+        self.assertEqual(env["GTK_OFFICE_NON_UNIQUE"], "1")
+
+    def test_settings_do_not_go_to_the_shared_dconf_store(self):
+        self.assertEqual(self._env("a")["GSETTINGS_BACKEND"], "keyfile")
+
+    def test_nothing_is_created_when_not_asked_to(self):
+        env = self._env("lazy", create=False)
+        self.assertFalse(os.path.exists(env["XDG_DATA_HOME"]))
+
+    def test_the_sidecar_binary_is_the_environments_or_the_collab_workspaces(self):
+        self.assertEqual(instances.resolve_collabd({"COLLABD_BIN": "/x/collabd"}, "/repo"), "/x/collabd")
+        self.assertEqual(
+            instances.resolve_collabd({}, "/repo"), "/repo/collab/target/debug/collabd")
+
+
+class ProcessTree(unittest.TestCase):
+    """`descendants` reads /proc, so it is checked against real processes and
+    against a fabricated /proc whose names hold what a real one can."""
+
+    def test_a_grandchild_is_found_and_an_unrelated_process_is_not(self):
+        sleeper = shutil.which("sleep")
+        parent = subprocess.Popen(
+            ["sh", "-c", f"{sleeper} 30 & {sleeper} 31 & wait"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(parent.wait)
+        self.addCleanup(parent.kill)
+        unrelated = subprocess.Popen([sleeper, "32"])
+        self.addCleanup(unrelated.wait)
+        self.addCleanup(unrelated.kill)
+        deadline = time.time() + 30
+        found = []
+        while time.time() < deadline:
+            found = instances.descendants(parent.pid)
+            if len(found) >= 2:
+                break
+            time.sleep(0.05)
+        self.assertEqual(sorted(row["cmdline"].split()[-1] for row in found), ["30", "31"], found)
+        self.assertTrue(all(row["ppid"] == parent.pid for row in found))
+        self.assertNotIn(unrelated.pid, [row["pid"] for row in found])
+
+    def _fake_proc(self, processes):
+        root = tempfile.mkdtemp(prefix="fake-proc-")
+        self.addCleanup(shutil.rmtree, root, True)
+        for pid, comm, ppid, cmdline in processes:
+            os.mkdir(os.path.join(root, str(pid)))
+            with open(os.path.join(root, str(pid), "stat"), "w", encoding="utf-8") as handle:
+                handle.write(f"{pid} ({comm}) S {ppid} 1 1 0 -1 0\n")
+            with open(os.path.join(root, str(pid), "cmdline"), "wb") as handle:
+                handle.write(cmdline.replace(" ", "\0").encode())
+        os.mkdir(os.path.join(root, "self"))  # not a pid
+        return root
+
+    def test_a_name_with_spaces_and_parentheses_does_not_confuse_the_parse(self):
+        root = self._fake_proc([
+            (10, "letters", 1, "/bin/letters"),
+            (11, "my (odd) name", 10, "/x/collabd --stdio"),
+            (12, "child", 11, "/x/helper"),
+            (13, "other", 99, "/bin/other"),
+        ])
+        found = instances.descendants(10, proc_root=root)
+        self.assertEqual([(r["pid"], r["comm"]) for r in found],
+                         [(11, "my (odd) name"), (12, "child")])
+        self.assertEqual(found[0]["cmdline"], "/x/collabd --stdio")
+
+    def test_a_process_with_no_children_has_no_descendants(self):
+        root = self._fake_proc([(10, "letters", 1, "/bin/letters")])
+        self.assertEqual(instances.descendants(10, proc_root=root), [])
+
+
+class WindowPlacement(unittest.TestCase):
+    def test_columns_cover_the_screen_side_by_side(self):
+        self.assertEqual(instances.side_by_side(1920, 1080, 2),
+                         [(0, 0, 960, 1080), (960, 0, 960, 1080)])
+        self.assertEqual(instances.side_by_side(1000, 600, 3),
+                         [(0, 0, 333, 600), (333, 0, 333, 600), (666, 0, 333, 600)])
+
+    def test_there_is_no_zero_columns(self):
+        with self.assertRaises(ValueError):
+            instances.side_by_side(1920, 1080, 0)
+
+    def test_overlapping_windows_are_not_side_by_side(self):
+        full = (0, 0, 1920, 1080)
+        self.assertFalse(instances.rects_disjoint([full, full]))
+        self.assertFalse(instances.rects_disjoint([(0, 0, 1000, 1080), (960, 0, 960, 1080)]))
+
+    def test_touching_windows_are_side_by_side(self):
+        self.assertTrue(instances.rects_disjoint([(0, 0, 960, 1080), (960, 0, 960, 1080)]))
+        self.assertTrue(instances.rects_disjoint([(0, 0, 960, 500), (0, 500, 960, 500)]))
+
+    def test_xdotool_shell_geometry_is_parsed(self):
+        out = "WINDOW=94371847\nX=960\nY=0\nWIDTH=958\nHEIGHT=1077\nSCREEN=0\n"
+        self.assertEqual(instances.parse_shell_geometry(out), (960, 0, 958, 1077))
+
+    def test_geometry_without_a_size_is_an_error_not_a_guess(self):
+        with self.assertRaises(ValueError):
+            instances.parse_shell_geometry("WINDOW=1\nX=0\nY=0\n")
+
+
+class TextAttributes(unittest.TestCase):
+    """What a journey concludes about formatting from AT-SPI text attributes."""
+
+    def test_a_mapping_is_kept(self):
+        self.assertEqual(instances.attributes_dict({"weight": "700", "style": "italic"}),
+                         {"weight": "700", "style": "italic"})
+
+    def test_the_string_form_is_split_and_unescaped(self):
+        self.assertEqual(
+            instances.attributes_dict("weight:700;family-name:Foo\\; Bar;uri:http\\://x;"),
+            {"weight": "700", "family-name": "Foo; Bar", "uri": "http://x"})
+
+    def test_nothing_is_an_empty_set_of_attributes(self):
+        self.assertEqual(instances.attributes_dict(""), {})
+        self.assertEqual(instances.attributes_dict(None), {})
+
+    def test_runs_cover_the_text_and_are_clipped_to_it(self):
+        answers = {0: ({"weight": "400"}, 0, 7), 7: ({"weight": "700"}, 7, 99)}
+        runs = instances.text_runs(lambda offset: answers[offset], 12)
+        self.assertEqual(runs, [(0, 7, {"weight": "400"}), (7, 12, {"weight": "700"})])
+
+    def test_a_run_that_does_not_advance_cannot_loop(self):
+        asked = []
+
+        def stuck(offset):
+            asked.append(offset)
+            return {}, offset, offset
+
+        runs = instances.text_runs(stuck, 3)
+        self.assertEqual(asked, [0, 1, 2])
+        self.assertEqual([(s, e) for s, e, _ in runs], [(0, 1), (1, 2), (2, 3)])
+
+    def test_no_text_has_no_runs(self):
+        self.assertEqual(instances.text_runs(lambda offset: ({}, 0, 0), 0), [])
+
+
+class SecondInstanceContracts(unittest.TestCase):
+    """Source checks on what a journey cannot see go wrong: the base class
+    imports dogtail, so it is read, not imported."""
+
+    def _tree(self, *parts):
+        import ast
+        with open(os.path.join(GUI_DIR, *parts), encoding="utf-8") as handle:
+            return ast.parse(handle.read())
+
+    @staticmethod
+    def _function(tree, name, cls=None):
+        import ast
+        scope = tree
+        if cls:
+            scope = [n for n in ast.walk(tree)
+                     if isinstance(n, ast.ClassDef) and n.name == cls][0]
+        return [n for n in ast.walk(scope)
+                if isinstance(n, ast.FunctionDef) and n.name == name][0]
+
+    @staticmethod
+    def _calls(node, name):
+        import ast
+        return [c for c in ast.walk(node) if isinstance(c, ast.Call)
+                and ((isinstance(c.func, ast.Name) and c.func.id == name)
+                     or (isinstance(c.func, ast.Attribute) and c.func.attr == name))]
+
+    def test_the_sweep_that_kills_the_first_instance_is_skipped_for_the_same_name(self):
+        import ast
+        function = self._function(self._tree("framework", "base.py"), "launch_second_app")
+        arguments = [a.arg for a in function.args.args] + [a.arg for a in function.args.kwonlyargs]
+        self.assertEqual(arguments, ["self", "app_name", "launch_args", "env", "same_name"])
+        sweeps = self._calls(function, "_terminate_owned")
+        self.assertEqual(len(sweeps), 1)
+        guards = [ast.unparse(n.test) for n in ast.walk(function)
+                  if isinstance(n, ast.If) and sweeps[0] in list(ast.walk(n))]
+        self.assertEqual(guards, ["not same_name"], "the only sweep must sit under `if not same_name`")
+
+    def test_a_second_instance_is_registered_for_the_sweep_and_for_cleanup(self):
+        function = self._function(self._tree("framework", "base.py"), "launch_second_app")
+        self.assertTrue(self._calls(function, "_register_launched"))
+        self.assertTrue(self._calls(function, "addCleanup"))
+
+    def test_the_collab_journey_fails_without_a_server_and_skips_only_when_told_to(self):
+        import ast
+        setup = self._function(self._tree("test_collab_letters.py"), "setUp",
+                               cls="LettersCollabStreams")
+        skips = self._calls(setup, "skipTest")
+        fails = self._calls(setup, "fail")
+        self.assertEqual(len(skips), 1)
+        self.assertEqual(len(fails), 1)
+        self.assertIn("DCP_SKIP_STREAMS=1", ast.unparse(skips[0]), "the skip must say why")
+        # The skip sits inside the DCP_SKIP_STREAMS test and the failure does
+        # not, so an unset server variable cannot fall through to a pass.
+        guard = [n for n in ast.walk(setup)
+                 if isinstance(n, ast.If) and "DCP_SKIP_STREAMS" in ast.unparse(n.test)]
+        self.assertEqual(len(guard), 1)
+        self.assertIn(skips[0], list(ast.walk(guard[0])))
+        self.assertNotIn(fails[0], list(ast.walk(guard[0])))
+
+    def test_both_collab_journeys_exist_under_the_agreed_names(self):
+        import ast
+        tree = self._tree("test_collab_letters.py")
+        methods = {(c.name, f.name) for c in ast.walk(tree) if isinstance(c, ast.ClassDef)
+                   for f in c.body if isinstance(f, ast.FunctionDef)}
+        self.assertIn(("LettersCollabStreams", "test_two_instances_converge"), methods)
+        self.assertIn(("LettersCollabDefaultOff", "test_default_off"), methods)
 
 
 if __name__ == "__main__":

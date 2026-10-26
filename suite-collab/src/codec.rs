@@ -310,14 +310,36 @@ mod tests {
             },
             Event::Heads {
                 doc: "d".into(),
-                heads: vec![HeadInfo {
-                    id: "$v0".into(),
-                    author: author(),
-                    ts_ms: 2,
-                    message: None,
-                    covers: Some("u9".into()),
-                }],
-                conflict: false,
+                heads: vec![
+                    HeadInfo {
+                        id: "$v0".into(),
+                        author: author(),
+                        ts_ms: 2,
+                        message: None,
+                        covers: Some("u9".into()),
+                        mine: false,
+                        covered: true,
+                    },
+                    HeadInfo {
+                        id: "$v1".into(),
+                        author: author(),
+                        ts_ms: 3,
+                        message: Some("saved".into()),
+                        covers: None,
+                        mine: true,
+                        covered: true,
+                    },
+                    HeadInfo {
+                        id: "$v2".into(),
+                        author: author(),
+                        ts_ms: 4,
+                        message: None,
+                        covers: None,
+                        mine: false,
+                        covered: false,
+                    },
+                ],
+                conflict: true,
             },
             Event::VersionFile {
                 doc: "d".into(),
@@ -467,6 +489,20 @@ mod tests {
     fn unknown_extra_fields_are_ignored_so_a_newer_peer_can_add_them() {
         let r = decode_request(r#"{"cmd": "leave", "doc": "d", "since": "v2"}"#).unwrap();
         assert_eq!(r.command, Command::Leave { doc: "d".into() });
+    }
+
+    #[test]
+    fn a_head_without_mine_and_covered_decodes_as_neither_and_both_are_always_written() {
+        let old = r#"{"event":"heads","doc":"d","heads":[{"id":"$v","author":{"principal":"p","device":"d"},"ts_ms":1}],"conflict":true}"#;
+        let Message { event: Event::Heads { heads, .. }, .. } = decode_message(old).unwrap() else {
+            panic!("not heads")
+        };
+        assert!(!heads[0].mine && !heads[0].covered && heads[0].covers.is_none());
+        let line = encode_message(None, &Event::Heads { doc: "d".into(), heads, conflict: false });
+        let v: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(v["heads"][0]["mine"], serde_json::json!(false));
+        assert_eq!(v["heads"][0]["covered"], serde_json::json!(false));
+        assert!(v["heads"][0].get("covers").is_none());
     }
 
     #[test]

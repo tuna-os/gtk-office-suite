@@ -32,6 +32,7 @@ on:
       - 'tables-core/src/controller/collab*.rs'
       - 'tables-core/Cargo.toml'
       - 'letters-core/**'
+      - 'letters/**'
       - 'suite-common-core/src/ops.rs'
       - 'suite-common-core/src/ops/**'
       - 'tools/collab-spike/scripts/streams-*'
@@ -48,6 +49,7 @@ on:
       - 'tables-core/src/controller/collab*.rs'
       - 'tables-core/Cargo.toml'
       - 'letters-core/**'
+      - 'letters/**'
       - 'suite-common-core/src/ops.rs'
       - 'suite-common-core/src/ops/**'
       - 'tools/collab-spike/scripts/streams-*'
@@ -204,6 +206,119 @@ jobs:
         with:
           name: letters-core-collab-junit
           path: target/nextest/collab/junit.xml
+          if-no-files-found: warn
+
+  # The Letters shell with the feature (RFC-0005 P5): the live model in a session on real GtkTextBuffers
+  # and real Replicas (letters/src/live/collab_tests.rs: the caret and the selection under a peer's
+  # edits, bold from a peer, undo that stays mine, a refused edit), the shell's own logic, and the
+  # existing live-model tests with the feature on, since the feature changes apply_ops, undo and project.
+  letters-ui:
+    name: letters with the collab feature (clippy, buffer tests under a display)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install GTK4 + libadwaita dev libraries and Xvfb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@eaa248e7e83aa1d4f575fb2e231e8a5da93dabc3 # nextest
+        with:
+          tool: nextest
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: collab-apps-letters-ui
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # --locked: the committed root Cargo.lock must already be the one this resolves to.
+      - name: cargo clippy -p letters --features collab
+        run: cargo clippy -p letters --features collab --all-targets --locked -- -D warnings
+      - name: the buffer tests of the feature, and the live model's own, under a display
+        run: |
+          scripts/with-display.sh cargo nextest run -p letters --features collab --locked \
+            --profile collab --no-fail-fast -E 'test(collab) | test(live::)' --success-output final
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: letters-ui-collab-junit
+          path: target/nextest/collab/junit.xml
+          if-no-files-found: warn
+
+  # Two Letters replicas, two real collabd processes, one real Durable Streams server, no GTK: the
+  # journey of the GUI test (share, join, type in one paragraph, converge, bold, undo) and the covers
+  # rule (two live editors saving is not a conflict), at the protocol.
+  letters-headless:
+    name: two Letters replicas and two collabd processes through a real server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      COLLABD_BIN: ${{ github.workspace }}/collab/target/debug/collabd
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            .
+            collab
+          shared-key: collab-apps-letters-headless
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          npm --version
+      - name: Install the pinned reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+      - name: Build collabd
+        working-directory: collab
+        run: cargo build -p collabd --locked
+      - name: Build the test
+        run: cargo test -p letters-core --features collab --locked --test two_instances --no-run
+      # A test that needs a server must fail without one, and skip only when told to, saying so.
+      - name: Fails loudly without a server
+        run: |
+          if env -u DCP_STREAMS_URL -u DCP_SKIP_STREAMS cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture > "$RUNNER_TEMP/noserver.log" 2>&1; then
+            cat "$RUNNER_TEMP/noserver.log"
+            echo "::error::the letters headless test passed with no server"
+            exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/noserver.log"
+      - name: DCP_SKIP_STREAMS=1 skips explicitly and says so
+        env:
+          DCP_SKIP_STREAMS: '1'
+        run: |
+          env -u DCP_STREAMS_URL cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          test "$(grep -c 'SKIPPED .*(DCP_SKIP_STREAMS=1)' "$RUNNER_TEMP/skip.log")" -ge 2
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/logs"
+      - name: The journeys, against the Node reference server 0.3.9
+        run: |
+          set -euo pipefail
+          eval "$(tools/collab-spike/scripts/streams-up.sh node)"
+          trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server.log" 2>/dev/null || true; tools/collab-spike/scripts/streams-down.sh node' EXIT
+          cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/letters_two_instances.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: collab-apps-letters-headless-logs
+          path: logs/
           if-no-files-found: warn
 
   headless:

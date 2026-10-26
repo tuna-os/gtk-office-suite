@@ -138,8 +138,10 @@ What each app exposes through AT-SPI, and what automated tests check:
 
 - **Letters:** the page view is one text area that a screen reader reads
   through GTK's accessible-text interface, including after zooming and
-  scrolling. Headings, the outline, find and replace, and the dialogs are
-  named controls.
+  scrolling. It reports bold, italic, underline and strikethrough as text
+  attributes (`weight` 700, `style` italic, `underline` single,
+  `strikethrough` true) with the run each covers. Headings, the outline, find
+  and replace, and the dialogs are named controls.
 - **Tables:** every visible cell is an accessible cell with its column,
   row and value. The grid's description names the selected cell and its
   value (for example "cell B2: 42"), and follows the selection.
@@ -153,6 +155,19 @@ also walk each app's whole accessible tree the way a screen reader does,
 to make sure the walk can't crash the app. See
 [performance-accessibility.md](readiness-2026-09/performance-accessibility.md)
 for the details and the evidence.
+
+### Collaboration (Letters, built with the `collab` feature)
+
+Off by default, and a build without the feature has none of it. With it, the
+main menu has **Share This Document…**, **Join a Shared Document…** and
+**Stop Sharing**, and the command palette (Ctrl+K) lists them with **Copy
+Join Code** and **Resolve Two Versions…**. The Share and Join dialogs are
+forms of named entry rows (Server, People (public keys), Your Key, Join
+Code). A shared document's tab has a header-bar button whose accessible name
+says the state in words (`Sharing: online, 2 people`), and a banner (`Two
+versions of this document exist`, with a **Resolve…** button) that appears
+only when two versions exist that this document does not hold both of.
+Nothing is connected until you use one of them.
 
 ### Known limits
 

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use dcp_conformance::{new_file, standard_meta, ALGORITHM, BASE_FILE, DOC_MODEL};
 use dcp_core::updates::{Receiver, StreamWriter, Target};
-use dcp_core::{DocId, DocumentStore, Lease, LeaseState, Role, StoreError, Update};
+use dcp_core::{Covers, DocId, DocumentStore, Lease, LeaseState, Role, StoreError, Update};
 use dcp_streams::crypto::{self, b64, unb64, Identity};
 use dcp_streams::doc::DropReason;
 use dcp_streams::http::{HttpError, JSON, START};
@@ -1333,6 +1333,68 @@ async fn a_late_joiner_bootstraps_from_a_snapshot_and_reads_only_what_follows() 
     let mut want = truth.clone();
     want.extend_from_slice(&tail);
     assert_eq!(state.0, want);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_version_through_a_prefix_claims_the_prefix_and_writes_no_resume_hint() {
+    let base = require_streams!();
+    let rig = Rig::new(&base).await;
+    let mut w = StreamWriter::new(ALGORITHM, DOC_MODEL);
+    for i in 0..4 {
+        let p = format!("[{i}]");
+        rig.editor
+            .publish_update(&rig.doc, w.next(&rig.first, p.as_bytes()).unwrap())
+            .await
+            .unwrap();
+    }
+    let log = rig.editor.updates(&rig.doc).await.unwrap();
+    assert_eq!(log.len(), 4);
+    // The editor holds the first two updates only.
+    let claim = Covers {
+        algorithm: ALGORITHM.to_owned(),
+        through: log[1].id.clone(),
+    };
+    let v = rig
+        .editor
+        .publish_version_through(
+            &rig.doc,
+            vec![rig.first.clone()],
+            new_file(b"after two"),
+            None,
+            Some(claim.clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(v.body.covers, Some(claim.clone()));
+    let plain = rig
+        .editor
+        .publish_version_through(
+            &rig.doc,
+            vec![v.id.clone()],
+            new_file(b"no claim"),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(plain.body.covers, None);
+
+    // A late reader sees the claim as written and still reads the whole log: with
+    // no resume hint, nothing lets it skip the two updates the claim leaves out.
+    let late = store_at(&base, "LATE");
+    rig.owner
+        .grant(&rig.doc, &late.principal(), Role::Viewer)
+        .await
+        .unwrap();
+    let versions = late.versions(&rig.doc).await.unwrap();
+    let seen = versions.iter().find(|x| x.id == v.id).expect("the version");
+    assert_eq!(seen.body.covers, Some(claim));
+    let seen_log = late.updates(&rig.doc).await.unwrap();
+    assert_eq!(
+        seen_log.iter().map(|u| u.id.as_str()).collect::<Vec<_>>(),
+        log.iter().map(|u| u.id.as_str()).collect::<Vec<_>>(),
+        "the late reader reads every update, in the order the first reader saw"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

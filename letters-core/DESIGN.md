@@ -93,6 +93,20 @@ and redo steps over what a peer did to the text (`History::rebase`):
 offsets shift, a range skips text the peer inserted inside it, a step with
 nothing left is dropped, that step alone.
 
+### The live session (`collab/live.rs`)
+
+`Shared` is a `Replica` plus what has been sent: `record` puts one user
+action's ops into the replica all or none (`Replica::record_all`: a refused
+op leaves nothing half shared), `outgoing` is the delta to publish, and
+`import` dry-runs a peer's update and returns the document the replica now
+holds, with the `ImportReport` that moves the undo history. What a peer sent
+is never in `outgoing`, so it is never echoed back. `map_offset` and
+`map_selection` move a caret and a selection over the peer's `TextEdit`s, as
+offsets into the edit sequence; a peer's insert at exactly the caret goes
+before it (`Bias::After`), as in `Rebaser`, and a selection keeps text typed
+at its edges outside. Mapping buffer offsets to sequence offsets (list markers,
+a chip's label, a footnote's `[n]`) is the shell's (`letters::live`).
+
 ## GTK bridge (lives in `letters`, not here)
 
 `render_to_buffer(doc, buffer)` writes text + tags; `capture_from_buffer`

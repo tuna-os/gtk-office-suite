@@ -22,6 +22,33 @@ On failure, the base class retains the screenshot, AT-SPI tree, application
 log, input trace, and snapshot (when configured) under
 `tests/gui/failure_artifacts/`.
 
+## Two instances of one app
+
+A collaboration journey is two processes on one display and one session bus, so
+one AT-SPI tree holds both. `test_collab_letters.py` is the example:
+
+- Before `super().setUp()`, `prepare_instance_pair()` gives each instance its own
+  `XDG_*` directories, `GSETTINGS_BACKEND=keyfile`, `COLLABD_DATA_DIR` (the
+  sidecar's identity key, so they are two people), `COLLABD_BIN`,
+  `GTK_OFFICE_TEST_MODE=1` and `GTK_OFFICE_NON_UNIQUE=1`. The apps add
+  `ApplicationFlags::NON_UNIQUE` only when both of those variables are set
+  (`SuiteApp::new`), so a second process starts instead of forwarding to the
+  first; production launches never do.
+- After it, `launch_instance_pair()` starts the second instance
+  (`launch_second_app(..., env=..., same_name=True)`, which skips the sweep that
+  would terminate the first) and returns two handles. `focus_app(handle)`
+  activates that window and points the xdotool input at it, and
+  `wait_for_app(name, pid=...)` tells the instances apart in the registry.
+- Under `GUI_TEST_WINDOW_MANAGER=openbox` (`run_gui_tests.sh`; the default,
+  matchbox, gives every window the whole screen) the windows are tiled side by
+  side, so one `GUI_TEST_VIDEO` recording shows both people.
+- Pure logic (environments, process tree, tiling, text attribute runs) is in
+  `framework/instances.py` and tested in `tests/test_gui_harness.py`.
+
+A journey that needs a Durable Streams server fails without `DCP_STREAMS_URL`
+and skips, saying so, only with `DCP_SKIP_STREAMS=1`. CI is
+`.github/workflows/collab-letters-gui.yml`.
+
 ## Repeated campaigns
 
 `stress.py` answers a different question from the smoke gate. The gate runs

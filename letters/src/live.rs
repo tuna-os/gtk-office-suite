@@ -50,6 +50,10 @@ pub struct LiveModel {
     /// Track changes: the author edits are recorded as, or None when
     /// edits apply directly (`letters_core::track`).
     pub tracking: Option<String>,
+    /// The session this tab's document is part of, when it is shared
+    /// (RFC-0005 P5, feature `collab`).
+    #[cfg(feature = "collab")]
+    collab: Option<collab::Link>,
 }
 
 /// The live model's document at one revision: the document itself, its
@@ -128,6 +132,14 @@ impl LiveModel {
     /// Make `doc` the model's document, with no history, and render it
     /// into the buffer.
     fn show(&mut self, buf: &gtk::TextBuffer, doc: Document) {
+        // A document put in place of a shared one is not what the replica
+        // holds: the session ends, and the person is told.
+        #[cfg(feature = "collab")]
+        {
+            if let Some(link) = self.collab.take() {
+                (link.hooks.refused)(&collab::Refusal::Replaced);
+            }
+        }
         self.history.clear();
         // A fresh epoch: undo starts here, and so does the revision.
         self.revision = 0;
@@ -156,6 +168,13 @@ impl LiveModel {
     /// re-rendered; a change to a table or an inline object re-renders the
     /// whole buffer. The caret goes to the end of the change.
     fn project(&mut self, buf: &gtk::TextBuffer, old: &Document) {
+        self.project_with(buf, old, None);
+    }
+
+    /// [`LiveModel::project`], with the caret and the selection's other end
+    /// put at sequence offsets `keep` (insert, bound) instead of at the end
+    /// of the change.
+    fn project_with(&mut self, buf: &gtk::TextBuffer, old: &Document, keep: Option<(usize, usize)>) {
         crate::bridge::set_trailing_style(buf, &self.doc);
         // Comments live beside the text: keep the buffer's copy current.
         let comments_changed = old.comments != self.doc.comments;
@@ -239,7 +258,19 @@ impl LiveModel {
             self.starts.extend(rest);
         }
         buf.set_modified(true);
-        // The caret: after the change in the first changed paragraph.
+        // The caret: where the caller says (a peer's edit leaves it on its
+        // character), or after the change in the first changed paragraph.
+        if let Some((insert, bound)) = keep {
+            let at = |seq: usize| {
+                edit::locate(&self.doc, seq)
+                    .and_then(|(p, off)| Some(crate::bridge::buffer_offset(&self.doc.paragraphs[p], *self.starts.get(p)?, off)))
+                    .unwrap_or_else(|| buf.char_count().max(0) as usize) as i32
+            };
+            let (insert, bound) = (at(insert), at(bound));
+            buf.select_range(&buf.iter_at_offset(insert), &buf.iter_at_offset(bound));
+            self.projecting = false;
+            return;
+        }
         let (x, y) = (pa.get(caret_para), &pb[caret_para]);
         let chars = |p: &Paragraph| letters_core::layout::layout_text(&p.runs).chars().collect::<Vec<_>>();
         let cy = chars(y);
@@ -321,10 +352,22 @@ impl LiveModel {
         let old = self.doc.clone();
         match edit::apply_all(&mut self.doc, ops) {
             Ok(inverse) => {
+                // In a shared document the ops go into the replica first, all
+                // or none: one the encoding does not carry (a table, a
+                // footnote) is refused and the document stays as it was.
+                #[cfg(feature = "collab")]
+                {
+                    if !self.record_shared(&old, ops) {
+                        self.doc = old;
+                        return false;
+                    }
+                }
                 self.history.set_merge(typing);
                 self.history.record(inverse);
                 self.revision += 1;
                 self.project(buf, &old);
+                #[cfg(feature = "collab")]
+                self.publish_shared();
                 true
             }
             Err(_) => false,
@@ -388,6 +431,12 @@ impl LiveModel {
 
     /// Undo (or redo) the last step: on the model, then in the buffer.
     pub fn undo(&mut self, buf: &gtk::TextBuffer, redo: bool) -> bool {
+        #[cfg(feature = "collab")]
+        {
+            if self.collab.is_some() {
+                return self.undo_shared(buf, redo);
+            }
+        }
         let old = self.doc.clone();
         let done = if redo { self.history.redo(&mut self.doc) } else { self.history.undo(&mut self.doc) };
         if done.is_some() {
@@ -461,5 +510,9 @@ pub fn load(buf: &gtk::TextBuffer, doc: &Document) {
     sync_actions(buf);
 }
 
+#[cfg(feature = "collab")]
+pub(crate) mod collab;
+#[cfg(all(test, feature = "collab"))]
+mod collab_tests;
 #[cfg(test)]
 mod tests;

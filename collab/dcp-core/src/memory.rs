@@ -22,8 +22,8 @@ use crate::integrity;
 use crate::lease;
 use crate::schema::{self, Kind};
 use crate::{
-    Author, DocId, DocumentStore, Lease, LeaseState, Locator, Meta, NewFile, Result, Role, Stamped,
-    StoreError, Update, Version,
+    Author, Covers, DocId, DocumentStore, Lease, LeaseState, Locator, Meta, NewFile, Result, Role,
+    Stamped, StoreError, Update, Version,
 };
 
 /// The time source of a backend, in milliseconds. This is the "binding's own
@@ -295,8 +295,8 @@ impl MemoryStore {
         Stamped::new(id, self.now(), self.principal.clone(), body).with_device(self.device.clone())
     }
 
-    /// Version rule 2 and the role check, shared by `create_document` and
-    /// `publish_version`. The caller holds the lock.
+    /// Version rule 2 and the role check, shared by `create_document`,
+    /// `publish_version` and `publish_version_through`. The caller holds the lock.
     fn publish_locked(
         &self,
         state: &mut State,
@@ -304,6 +304,7 @@ impl MemoryStore {
         parents: Vec<String>,
         file: NewFile,
         message: Option<String>,
+        covers: Option<Covers>,
     ) -> Result<Stamped<Version>> {
         let config = self.backend.inner.config;
         {
@@ -337,7 +338,7 @@ impl MemoryStore {
                 device: self.device.clone(),
             },
             message,
-            covers: None,
+            covers,
         };
         schema::validate_typed(Kind::Version, &version)
             .map_err(|e| StoreError::Invalid(e.to_string()))?;
@@ -380,7 +381,7 @@ impl DocumentStore for MemoryStore {
             },
         );
         if let Some(file) = first {
-            if let Err(e) = self.publish_locked(&mut state, &id, Vec::new(), file, None) {
+            if let Err(e) = self.publish_locked(&mut state, &id, Vec::new(), file, None, None) {
                 state.docs.remove(&id);
                 return Err(e);
             }
@@ -477,7 +478,19 @@ impl DocumentStore for MemoryStore {
         message: Option<String>,
     ) -> Result<Stamped<Version>> {
         let mut state = self.lock();
-        self.publish_locked(&mut state, doc, parents, file, message)
+        self.publish_locked(&mut state, doc, parents, file, message, None)
+    }
+
+    async fn publish_version_through(
+        &self,
+        doc: &DocId,
+        parents: Vec<String>,
+        file: NewFile,
+        message: Option<String>,
+        covers: Option<Covers>,
+    ) -> Result<Stamped<Version>> {
+        let mut state = self.lock();
+        self.publish_locked(&mut state, doc, parents, file, message, covers)
     }
 
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
@@ -570,6 +583,9 @@ impl DocumentStore for MemoryStore {
         Ok(stamped)
     }
 
+    /// In publish order, which never changes: a later call returns this call's
+    /// list with the updates published meanwhile appended (`collabd` names a
+    /// prefix of this list in a version's `covers`).
     async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>> {
         let state = self.lock();
         let d = state.doc(doc)?;

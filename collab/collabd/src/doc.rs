@@ -10,6 +10,15 @@
 //!
 //! Nothing the shell sends is lost while the server is away: updates and versions
 //! wait in a `dcp_core::outbox::Outbox` and go out in order once it is back.
+//!
+//! Coverage (RFC-0005 2.5, loro/1 profile section 8.3): the task knows which updates the
+//! shell's replica holds (`Held::applied`: what it published, what the shell answered
+//! `applied`, and what it will never have: rejected, dropped, skipped), takes the longest
+//! prefix of the store's update log made of those, and writes its last update as the `covers`
+//! of every version it publishes. A head is `covered` when this session published it or the
+//! update it covers is in that prefix; `Heads.conflict` is more than one head with an
+//! uncovered one, and an ordinary save is a child of the opened version and every covered
+//! head (`dcp_core::graph::antichain`).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -22,8 +31,8 @@ use dcp_core::updates::{
     inline_payload, CrdtSession, Dropped, Files, Skip, Target, MAX_INLINE_BYTES,
 };
 use dcp_core::{
-    integrity, publish, view, DocumentStore, FileRef, NewFile, Payload, Role, Stamped, StoreError,
-    Update, Version,
+    graph, integrity, publish, view, Covers, DocumentStore, FileRef, NewFile, Payload, Role,
+    Stamped, StoreError, Update, Version,
 };
 use suite_collab::{
     Author, ConnState, DropKind, ErrorCode, Event, HeadInfo, PublishKind,
@@ -85,6 +94,9 @@ pub struct Start {
     pub opened: Option<String>,
     /// The document's MIME type (what a saved version's file is).
     pub mime: String,
+    /// Versions this session published before its task starts (the root version of a
+    /// document it created): they are `mine` and `covered`.
+    pub mine: Vec<String>,
 }
 
 pub fn spawn(start: Start) -> DocHandle {
@@ -173,7 +185,12 @@ struct Doc {
 
     versions: Vec<Stamped<Version>>,
     version_ids: Option<Vec<String>>,
-    head_ids: Option<Vec<String>>,
+    /// The heads of the last read (newest first), and what the shell was last told of them.
+    heads: Option<Vec<Stamped<Version>>>,
+    reported_heads: Option<(Vec<HeadInfo>, bool)>,
+    held: Mutex<Held>,
+    /// The ids of the update log as the last read listed it, in its order.
+    update_ids: Vec<String>,
     file_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
     reported_versions: HashSet<String>,
     reported_records: HashSet<(String, String, String)>,
@@ -192,6 +209,12 @@ const NEWS_WAIT: Duration = Duration::from_secs(20);
 
 impl Doc {
     fn new(s: Start) -> Self {
+        // A sharer's genesis and the root version of a document it created are its own.
+        let mut held = Held::default();
+        if s.session.is_some() {
+            held.applied.extend(s.genesis_id.iter().cloned());
+        }
+        held.versions.extend(s.mine);
         Doc {
             doc: s.doc,
             store: s.store,
@@ -204,7 +227,10 @@ impl Doc {
             mime: s.mime,
             versions: Vec::new(),
             version_ids: None,
-            head_ids: None,
+            heads: None,
+            reported_heads: None,
+            held: Mutex::new(held),
+            update_ids: Vec::new(),
             file_cache: Arc::new(Mutex::new(HashMap::new())),
             reported_versions: HashSet::new(),
             reported_records: HashSet::new(),
@@ -393,13 +419,20 @@ impl Doc {
                 false
             }
             DocMsg::Applied { id } => {
-                if !self.awaiting.remove(&id) {
+                if self.awaiting.remove(&id) {
+                    self.held.lock().applied.insert(id);
+                    self.emit_heads();
+                } else {
                     log!("{}: applied {id}, which was not waiting", self.doc);
                 }
                 false
             }
             DocMsg::Rejected { id, why } => {
-                if !self.awaiting.remove(&id) {
+                if self.awaiting.remove(&id) {
+                    // It will never be applied, so it must not stall the applied prefix.
+                    self.held.lock().applied.insert(id.clone());
+                    self.emit_heads();
+                } else {
                     log!("{}: rejected {id}, which was not waiting", self.doc);
                 }
                 // The shell's dry run failed: from the sidecar's side that is a drop.
@@ -416,6 +449,10 @@ impl Doc {
                     s.resync();
                 }
                 self.awaiting.clear();
+                // The shell rebuilds its replica from the latest version; the read
+                // that follows hands every update over again and the applied set is
+                // built anew (what this process wrote is applied from the log).
+                self.held.lock().applied.clear();
                 self.out.send(req, Event::Done { doc: Some(self.doc.clone()) });
                 true
             }
@@ -463,13 +500,16 @@ impl Doc {
     async fn flush(&mut self) -> Option<Instant> {
         loop {
             let now = now_ms();
-            let saved: Mutex<Option<String>> = Mutex::new(None);
+            let saved: Mutex<Option<Stamped<Version>>> = Mutex::new(None);
             let step = {
                 let wire = Wire {
                     store: &self.store,
                     doc: &self.doc,
                     mime: &self.mime,
                     out: &self.out,
+                    held: &self.held,
+                    versions: &self.versions,
+                    heads: self.heads.as_deref().unwrap_or(&[]),
                 };
                 let session = self.session.as_ref();
                 let opened = self.opened.as_deref();
@@ -483,8 +523,9 @@ impl Doc {
             match step {
                 Step::Idle => return None,
                 Step::Sent => {
-                    if let Some(id) = saved.into_inner() {
-                        self.opened = Some(id);
+                    if let Some(v) = saved.into_inner() {
+                        self.opened = Some(v.id.clone());
+                        self.saved_version(v);
                     }
                     self.set_online();
                 }
@@ -511,10 +552,19 @@ impl Doc {
         self.role = self.store.role(&self.doc).await?;
         let versions = self.store.versions(&self.doc).await?;
         self.on_versions(versions).await?;
-        let updates = self.store.updates(&self.doc).await?;
-        self.on_updates(updates).await?;
+        let read = self.read_updates().await;
+        // Heads are told once both lists are in, so a head whose update arrived with
+        // it is never shown as a conflict for the length of a read; and also when the
+        // update list failed, since the version list is in.
+        self.emit_heads();
+        read?;
         self.report_records().await;
         Ok(())
+    }
+
+    async fn read_updates(&mut self) -> Result<(), StoreError> {
+        let updates = self.store.updates(&self.doc).await?;
+        self.on_updates(updates).await
     }
 
     async fn on_versions(&mut self, versions: Vec<Stamped<Version>>) -> Result<(), StoreError> {
@@ -549,36 +599,72 @@ impl Doc {
                 });
             }
         }
-        let head_ids: Vec<String> = v.heads.iter().map(|h| h.version.id.clone()).collect();
+        let heads: Vec<Stamped<Version>> = v.heads.iter().map(|h| h.version.clone()).collect();
         if self.opened.is_none() {
-            self.opened = head_ids.first().cloned();
+            self.opened = heads.first().map(|h| h.id.clone());
         }
-        if self.head_ids.as_ref() != Some(&head_ids) {
-            self.head_ids = Some(head_ids);
-            let heads = v
-                .heads
-                .iter()
-                .map(|h| HeadInfo {
-                    id: h.version.id.clone(),
-                    author: Author {
-                        principal: h.version.body.created_by.principal.clone(),
-                        device: h.version.body.created_by.device.clone(),
-                    },
-                    ts_ms: h.version.ts_ms,
-                    message: h.version.body.message.clone(),
-                    covers: h.version.body.covers.as_ref().map(|c| c.through.clone()),
-                })
-                .collect();
-            self.event(Event::Heads {
-                doc: self.doc.clone(),
-                heads,
-                conflict: v.is_conflict(),
-            });
-        }
+        self.heads = Some(heads);
         Ok(())
     }
 
+    /// Tell the shell the heads when they, any head's `covered` flag or `conflict`
+    /// differ from what it was last told. `covered` says this session holds what the
+    /// head holds (it published it, or the update the head `covers` is inside the
+    /// applied prefix), so two covered heads are not a conflict (RFC-0005 2.5).
+    fn emit_heads(&mut self) {
+        let Some(heads) = &self.heads else { return };
+        let infos: Vec<HeadInfo> = {
+            let held = self.held.lock();
+            let prefix = Prefix::new(&self.update_ids, &held.applied);
+            heads
+                .iter()
+                .map(|v| HeadInfo {
+                    id: v.id.clone(),
+                    author: Author {
+                        principal: v.body.created_by.principal.clone(),
+                        device: v.body.created_by.device.clone(),
+                    },
+                    ts_ms: v.ts_ms,
+                    message: v.body.message.clone(),
+                    covers: v.body.covers.as_ref().map(|c| c.through.clone()),
+                    mine: held.versions.contains(&v.id),
+                    covered: held.covered(v, &prefix),
+                })
+                .collect()
+        };
+        let conflict = infos.len() > 1 && infos.iter().any(|h| !h.covered);
+        if self
+            .reported_heads
+            .as_ref()
+            .is_some_and(|(h, c)| *h == infos && *c == conflict)
+        {
+            return;
+        }
+        self.reported_heads = Some((infos.clone(), conflict));
+        self.event(Event::Heads {
+            doc: self.doc.clone(),
+            heads: infos,
+            conflict,
+        });
+    }
+
+    /// A version this session just published is a version and a head from now on,
+    /// before the next read of the store says so.
+    fn saved_version(&mut self, v: Stamped<Version>) {
+        if self.versions.iter().all(|x| x.id != v.id) {
+            self.versions.push(v.clone());
+        }
+        if let Some(heads) = self.heads.as_mut() {
+            if heads.iter().all(|h| h.id != v.id) {
+                heads.retain(|h| !v.body.parents.contains(&h.id));
+                heads.insert(0, v);
+            }
+        }
+        self.emit_heads();
+    }
+
     async fn on_updates(&mut self, updates: Vec<Stamped<Update>>) -> Result<(), StoreError> {
+        self.update_ids = updates.iter().map(|u| u.id.clone()).collect();
         if self.session.is_none() {
             let Some(g) = find_genesis(&updates, &self.versions) else {
                 return Ok(());
@@ -622,6 +708,22 @@ impl Doc {
             }
         }
 
+        // What the receiver skips (another algorithm, model or base) is never applied
+        // and, like a drop, must not stall the applied prefix. It does not report
+        // every such update (one older than the stream's start it passes over
+        // silently), so it is decided here from the same three fields it looks at.
+        {
+            let mut held = self.held.lock();
+            for u in &updates {
+                if u.body.algorithm != ALGORITHM
+                    || !DOC_MODELS.contains(&u.body.doc_model.as_str())
+                    || u.body.base_version != base
+                {
+                    held.applied.insert(u.id.clone());
+                }
+            }
+        }
+
         let mut target = Collect::default();
         let report = self
             .session
@@ -640,7 +742,9 @@ impl Doc {
             let u = by_id[id.as_str()];
             let device = u.device.clone().unwrap_or_default();
             if u.sender == self.me.principal && device == self.me.device {
-                continue; // this process wrote it; the replica has it
+                // This process wrote it; the replica has it.
+                self.held.lock().applied.insert(id);
+                continue;
             }
             let author = Author {
                 principal: u.sender.clone(),
@@ -666,6 +770,7 @@ impl Doc {
             self.awaiting.insert(id);
         }
         for (id, why) in &report.skipped {
+            self.held.lock().applied.insert(id.clone());
             let why = match why {
                 Skip::Unsupported => "an algorithm or document model this sidecar does not carry",
                 Skip::OtherBase => "based on another version than this session's",
@@ -674,6 +779,8 @@ impl Doc {
             log!("{}: skipped update {id}: {why}", self.doc);
         }
         for (id, d) in &report.dropped {
+            // Dropped for good: no replica will ever hold it (loro/1 profile section 9).
+            self.held.lock().applied.insert(id.clone());
             let reason = match d {
                 Dropped::BadPayload(e) => e.to_string(),
                 Dropped::Invalid(s) => s.clone(),
@@ -719,6 +826,52 @@ fn after(until_ms: u64, now: u64) -> Instant {
     Instant::now() + Duration::from_millis(until_ms.saturating_sub(now))
 }
 
+/// What this session holds, as the sidecar can tell (RFC-0005 2.5, loro/1
+/// profile section 8.3).
+#[derive(Default)]
+struct Held {
+    /// Updates the live replica has: those this session published, those the
+    /// shell answered `applied`, and those it will never have (the shell
+    /// `rejected` them, or the receiver dropped or skipped them), so that they
+    /// do not stall [`Prefix`].
+    applied: HashSet<String>,
+    /// Versions this session published.
+    versions: HashSet<String>,
+}
+
+impl Held {
+    /// This session holds the content of `v`: it published it, or the update its
+    /// `covers` names is inside the applied prefix.
+    fn covered(&self, v: &Stamped<Version>, prefix: &Prefix) -> bool {
+        self.versions.contains(&v.id)
+            || v.body
+                .covers
+                .as_ref()
+                .is_some_and(|c| c.algorithm == ALGORITHM && prefix.contains(&c.through))
+    }
+}
+
+/// The applied prefix: the longest prefix of the update log, in the order the
+/// store lists it (a stable append for every binding this sidecar carries, see
+/// `DocumentStore::updates`), in which every update is applied.
+struct Prefix<'a>(&'a [String]);
+
+impl<'a> Prefix<'a> {
+    fn new(order: &'a [String], applied: &HashSet<String>) -> Self {
+        let len = order.iter().take_while(|id| applied.contains(*id)).count();
+        Prefix(&order[..len])
+    }
+
+    /// The last update of the prefix; `None` when the prefix is empty.
+    fn through(&self) -> Option<&'a str> {
+        self.0.last().map(String::as_str)
+    }
+
+    fn contains(&self, id: &str) -> bool {
+        self.0.iter().any(|x| x.as_str() == id)
+    }
+}
+
 /// What a send needs from the document's task, borrowed.
 #[derive(Clone, Copy)]
 struct Wire<'a> {
@@ -726,6 +879,10 @@ struct Wire<'a> {
     doc: &'a String,
     mime: &'a str,
     out: &'a Output,
+    held: &'a Mutex<Held>,
+    /// Every version as of the last read, and its heads.
+    versions: &'a [Stamped<Version>],
+    heads: &'a [Stamped<Version>],
 }
 
 async fn send_one(
@@ -733,13 +890,16 @@ async fn send_one(
     session: Option<&CrdtSession>,
     opened: Option<&str>,
     item: &Outgoing,
-    saved: &Mutex<Option<String>>,
+    saved: &Mutex<Option<Stamped<Version>>>,
 ) -> Result<(), StoreError> {
     let Wire {
         store,
         doc,
         mime,
         out,
+        held,
+        versions,
+        heads,
     } = wire;
     match item {
         Outgoing::Update {
@@ -776,6 +936,8 @@ async fn send_one(
             let stamped = store
                 .publish_update(doc, session.update_at(*seq, payload))
                 .await?;
+            // The replica has what it just sent.
+            held.lock().applied.insert(stamped.id.clone());
             out.send(
                 *req,
                 Event::Published {
@@ -794,29 +956,56 @@ async fn send_one(
             message,
             resolve,
         } => {
-            // Spec 4.2 rule 4: a save is a child of the version the editor started
-            // from, however the head moved since. A merge names every head the
-            // user merged (spec 6.3).
-            let parents = if resolve.is_empty() {
-                publish::parents_for_save(opened.ok_or_else(|| {
-                    StoreError::Invalid("there is no version to save from yet".into())
-                })?)
-            } else {
-                resolve.clone()
+            // The prefix of the update log this session has applied, read from the
+            // store as it is now: what the version may claim to hold (`covers`,
+            // loro/1 profile section 8.3). Without a live session there is no log
+            // and the version claims nothing.
+            let order: Vec<String> = match session {
+                Some(_) => store.updates(doc).await?.into_iter().map(|u| u.id).collect(),
+                None => Vec::new(),
             };
-            let mime = mime.to_owned();
-            let v = publish::publish_checked(
+            let (covers, parents) = {
+                let held = held.lock();
+                let prefix = Prefix::new(&order, &held.applied);
+                let covers = prefix.through().map(|through| Covers {
+                    algorithm: ALGORITHM.to_owned(),
+                    through: through.to_owned(),
+                });
+                // Spec 4.2 rule 4: a save is a child of the version the editor started
+                // from, however the head moved since, and now also of every head this
+                // session already holds: such a head has nothing the editor lacks, so
+                // leaving it out would only make a second head the editor has already
+                // merged in. A merge names exactly the heads the user merged (spec 6.3).
+                let parents = if resolve.is_empty() {
+                    let opened = opened.ok_or_else(|| {
+                        StoreError::Invalid("there is no version to save from yet".into())
+                    })?;
+                    let mut members = vec![opened.to_owned()];
+                    for h in heads {
+                        if held.covered(h, &prefix) && !members.contains(&h.id) {
+                            members.push(h.id.clone());
+                        }
+                    }
+                    graph::antichain(versions, &members)
+                } else {
+                    resolve.clone()
+                };
+                (covers, parents)
+            };
+            let v = publish::publish_checked_through(
                 store.as_ref(),
                 doc,
                 parents,
                 NewFile {
-                    mime,
+                    mime: mime.to_owned(),
                     bytes: bytes.clone(),
                 },
                 message.clone(),
+                covers,
             )
             .await?;
-            *saved.lock() = Some(v.id.clone());
+            held.lock().versions.insert(v.id.clone());
+            *saved.lock() = Some(v.clone());
             out.send(
                 *req,
                 Event::Published {

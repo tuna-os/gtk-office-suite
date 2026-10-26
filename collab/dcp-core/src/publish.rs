@@ -2,7 +2,7 @@
 
 use crate::graph;
 use crate::integrity::{self, PackageError};
-use crate::{DocId, DocumentStore, NewFile, Stamped, StoreError, Version};
+use crate::{Covers, DocId, DocumentStore, NewFile, Stamped, StoreError, Version};
 
 /// Publish `file` only if the writer could open it (rule 3: for ODF and OOXML
 /// a ZIP package that parses). The upload-verify-publish sequence of rule 2 is
@@ -15,12 +15,32 @@ pub async fn publish_checked(
     file: NewFile,
     message: Option<String>,
 ) -> Result<Stamped<Version>, StoreError> {
+    check_openable(&file)?;
+    store.publish_version(doc, parents, file, message).await
+}
+
+fn check_openable(file: &NewFile) -> Result<(), StoreError> {
     integrity::check_package(&file.mime, &file.bytes).map_err(|e: PackageError| {
         StoreError::Invalid(format!(
             "refusing to publish a file that does not open: {e}"
         ))
-    })?;
-    store.publish_version(doc, parents, file, message).await
+    })
+}
+
+/// [`publish_checked`] for a version written from a live replica: the version
+/// carries `covers` ([`DocumentStore::publish_version_through`]).
+pub async fn publish_checked_through(
+    store: &dyn DocumentStore,
+    doc: &DocId,
+    parents: Vec<String>,
+    file: NewFile,
+    message: Option<String>,
+    covers: Option<Covers>,
+) -> Result<Stamped<Version>, StoreError> {
+    check_openable(&file)?;
+    store
+        .publish_version_through(doc, parents, file, message, covers)
+        .await
 }
 
 /// Rule 4 for a program that has the version list at hand: the parents for a
@@ -177,5 +197,71 @@ mod tests {
         let still = all.iter().find(|v| v.id == first).unwrap();
         assert_eq!(still, &before, "the version record is immutable (rule 1)");
         assert_eq!(o.fetch_file(&doc, still).await.unwrap(), bytes_before);
+    }
+
+    #[tokio::test]
+    async fn a_version_written_through_a_prefix_carries_that_claim_and_only_a_valid_one() {
+        let (o, doc, first) = doc().await;
+        let file = |c: &[u8]| NewFile {
+            mime: ODT.into(),
+            bytes: odt(c),
+        };
+        let claim = Covers {
+            algorithm: "loro/1".into(),
+            through: "$ev000007:mem".into(),
+        };
+        let v = publish_checked_through(
+            &o,
+            &doc,
+            parents_for_save(&first),
+            file(b"two"),
+            None,
+            Some(claim.clone()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v.body.covers, Some(claim.clone()));
+        let listed = o.versions(&doc).await.unwrap();
+        assert_eq!(listed.iter().find(|x| x.id == v.id).unwrap().body.covers, Some(claim));
+
+        // No claim: an ordinary version.
+        let plain = publish_checked_through(&o, &doc, vec![v.id.clone()], file(b"three"), None, None)
+            .await
+            .unwrap();
+        assert_eq!(plain.body.covers, None);
+
+        // A claim the schema refuses (spec 4.2: `algorithm` is `name/major`, `through`
+        // is not empty) publishes nothing.
+        for bad in [
+            Covers { algorithm: "Loro".into(), through: "u".into() },
+            Covers { algorithm: "loro/1".into(), through: String::new() },
+        ] {
+            let r = publish_checked_through(
+                &o,
+                &doc,
+                vec![plain.id.clone()],
+                file(b"four"),
+                None,
+                Some(bad),
+            )
+            .await;
+            assert!(matches!(r, Err(StoreError::Invalid(_))), "{r:?}");
+        }
+        assert_eq!(o.versions(&doc).await.unwrap().len(), 3);
+
+        // And the file must open, with or without a claim.
+        let mut cut = odt(b"five");
+        cut.truncate(cut.len() - 5);
+        let r = publish_checked_through(
+            &o,
+            &doc,
+            vec![plain.id.clone()],
+            NewFile { mime: ODT.into(), bytes: cut },
+            None,
+            Some(Covers { algorithm: "loro/1".into(), through: "u".into() }),
+        )
+        .await;
+        assert!(matches!(r, Err(StoreError::Invalid(_))), "{r:?}");
+        assert_eq!(o.versions(&doc).await.unwrap().len(), 3);
     }
 }

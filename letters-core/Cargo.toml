@@ -43,6 +43,9 @@ path = "src/lib.rs"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 proptest = "1"
+# The headless two-instance test (tests/two_instances.rs, feature `collab`) talks the
+# sidecar protocol of RFC-0005 to real collabd processes.
+suite-collab = { path = "../suite-collab" }
 
 [features]
 # The Pango shaper and Cairo renderer for layout::RenderTree (ADR 0010).

@@ -89,6 +89,9 @@ use crate::model::{Alignment, Document, PageGeometry, ParaStyle, Paragraph, Revi
 mod rebase;
 pub use rebase::Rebaser;
 
+mod live;
+pub use live::{map_offset, map_selection, same_text, Bias, Remote, Shared};
+
 const BODY: &str = "body";
 const DOC: &str = "doc";
 const FIRST: &str = "first";
@@ -567,6 +570,16 @@ impl Replica {
         self.doc.oplog_vv().encode()
     }
 
+    /// Whether this replica is exactly at `version` (from
+    /// [`Replica::version_bytes`]). The bytes of a version vector are not
+    /// canonical (the vector is a hash map), so two equal versions are
+    /// compared decoded, never as bytes.
+    pub fn is_at(&self, version: &[u8]) -> Result<bool, CollabError> {
+        let theirs = VersionVector::decode(version).map_err(|e| CollabError::Decode(format!("not a version: {e}")))?;
+        self.doc.commit();
+        Ok(self.doc.oplog_vv() == theirs)
+    }
+
     /// What this replica has that a peer at `version` (from its
     /// [`Replica::version_bytes`]) lacks: the delta one update carries.
     pub fn export_since(&self, version: &[u8]) -> Result<Vec<u8>, CollabError> {
@@ -642,11 +655,21 @@ impl Replica {
 
     // ---------------------------------------------------------------- local edits
 
-    /// Record local `op`, applied to the document that was `before` it (the
-    /// editor's model, in step with this replica), as one change. An op the
-    /// encoding does not replicate is refused ([`CollabError::Unsupported`])
-    /// before anything is written.
-    pub fn record(&mut self, before: &Document, op: &Op) -> Result<(), CollabError> {
+    /// Whether `doc` is one a session can start from, with nothing built:
+    /// the refusal [`Replica::new`] would give ([`CollabError::Unsupported`]
+    /// for a table, a footnote, a header or footer, sections, comments or
+    /// character formatting no mark carries).
+    pub fn check_document(doc: &Document) -> Result<(), CollabError> {
+        check_document_level(doc)?;
+        check_paragraphs(&doc.paragraphs)
+    }
+
+    /// Whether `op`, applied to `before`, is one the encoding replicates,
+    /// with nothing written: the refusal [`Replica::record`] would give
+    /// ([`CollabError::Unsupported`] for tables, comments, footnotes, headers
+    /// and footers, sections and unmarked formatting; [`CollabError::Invalid`]
+    /// for an offset past the end).
+    pub fn check_op(before: &Document, op: &Op) -> Result<(), CollabError> {
         match op {
             Op::Insert { at, content } => {
                 if content.is_empty() {
@@ -657,7 +680,6 @@ impl Replica {
                 if before.paragraphs[p].style.table_cell.is_some() {
                     return Err(CollabError::Unsupported(Unsupported::Tables));
                 }
-                self.insert(*at, content)?;
             }
             Op::Delete { at, len } => {
                 if *len == 0 {
@@ -669,7 +691,6 @@ impl Replica {
                 if before.paragraphs[a..=b].iter().any(|p| p.style.table_cell.is_some()) {
                     return Err(CollabError::Unsupported(Unsupported::Tables));
                 }
-                self.text.delete(*at, *len).map_err(loro_err)?;
             }
             Op::Mark { start, end, key, value } => {
                 if matches!(key, MarkKey::Comment(_)) {
@@ -679,23 +700,79 @@ impl Replica {
                     return Ok(());
                 }
                 edit::locate(before, *end).ok_or_else(out_of_range)?;
-                self.set_attr(*start..*end, Attr::Key(*key), value)?;
+                Attr::Key(*key).value(value)?;
             }
             Op::SetParaStyle { at, style } => {
                 let (p, _) = edit::locate(before, *at).ok_or_else(out_of_range)?;
                 if before.paragraphs[p].style.table_cell.is_some() || style.table_cell.is_some() {
                     return Err(CollabError::Unsupported(Unsupported::Tables));
                 }
-                self.set_para_style(p, edit::paragraph_start(before, p), style)?;
+                para_json(style)?;
             }
-            Op::SetPage { page } => self.meta.insert(PAGE, json(page)?).map_err(loro_err)?,
+            Op::SetPage { page } => {
+                json(page)?;
+            }
             Op::SetParagraphs { .. } => return Err(CollabError::Unsupported(Unsupported::Tables)),
             Op::SetComment { .. } => return Err(CollabError::Unsupported(Unsupported::Comments)),
             Op::SetFootnotes { .. } => return Err(CollabError::Unsupported(Unsupported::Footnotes)),
             Op::SetHeaderFooter { .. } => return Err(CollabError::Unsupported(Unsupported::HeadersFooters)),
             Op::SetSections { .. } => return Err(CollabError::Unsupported(Unsupported::Sections)),
         }
+        Ok(())
+    }
+
+    /// Record local `op`, applied to the document that was `before` it (the
+    /// editor's model, in step with this replica), as one change. An op the
+    /// encoding does not replicate is refused ([`CollabError::Unsupported`])
+    /// before anything is written.
+    pub fn record(&mut self, before: &Document, op: &Op) -> Result<(), CollabError> {
+        Self::check_op(before, op)?;
+        match op {
+            Op::Insert { at, content } => self.insert(*at, content)?,
+            Op::Delete { at, len } => {
+                if *len == 0 {
+                    return Ok(());
+                }
+                self.text.delete(*at, *len).map_err(loro_err)?;
+            }
+            Op::Mark { start, end, key, value } => {
+                if end <= start {
+                    return Ok(());
+                }
+                self.set_attr(*start..*end, Attr::Key(*key), value)?;
+            }
+            Op::SetParaStyle { at, style } => {
+                let (p, _) = edit::locate(before, *at).ok_or_else(out_of_range)?;
+                self.set_para_style(p, edit::paragraph_start(before, p), style)?;
+            }
+            Op::SetPage { page } => self.meta.insert(PAGE, json(page)?).map_err(loro_err)?,
+            // `check_op` refused these.
+            Op::SetParagraphs { .. } | Op::SetComment { .. } | Op::SetFootnotes { .. } | Op::SetHeaderFooter { .. } | Op::SetSections { .. } => {
+                return Err(CollabError::Unsupported(Unsupported::Tables));
+            }
+        }
         self.doc.commit();
+        Ok(())
+    }
+
+    /// Record the ops of one user action, each applied to the document the
+    /// one before it left (`before` for the first), as all or nothing: when
+    /// any of them is refused, or does not apply, nothing is written. One
+    /// change per op, so a delta exported afterwards carries the whole group.
+    pub fn record_all(&mut self, before: &Document, ops: &[Op]) -> Result<(), CollabError> {
+        if let [op] = ops {
+            return self.record(before, op);
+        }
+        let mut scratch = before.clone();
+        for op in ops {
+            Self::check_op(&scratch, op)?;
+            edit::apply(&mut scratch, op).map_err(|e| CollabError::Invalid(format!("an op does not apply: {e:?}")))?;
+        }
+        let mut doc = before.clone();
+        for op in ops {
+            self.record(&doc, op)?;
+            edit::apply(&mut doc, op).map_err(|e| CollabError::Invalid(format!("an op does not apply: {e:?}")))?;
+        }
         Ok(())
     }
 

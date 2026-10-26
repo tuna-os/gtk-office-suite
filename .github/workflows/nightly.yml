@@ -34,6 +34,9 @@ on:
       # tests/test_oracle_triggers.py now derives the required list from the
       # crates the oracle actually tests instead of trusting this one.
       - 'suite-common-core/**'
+      # letters-core's headless collaboration test (tests/two_instances.rs, feature
+      # `collab`) speaks this crate's protocol, so it is a dev-dependency.
+      - 'suite-collab/**'
       - 'suite-export/**'
       - 'interop/**'
       - 'Cargo.lock'

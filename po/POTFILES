@@ -2,6 +2,11 @@
 # Regenerate the template: scripts/update-pot.sh
 suite-common/src/lib.rs
 letters/src/chips_ui.rs
+letters/src/collab_actions.rs
+letters/src/collab_dialogs.rs
+letters/src/collab_logic.rs
+letters/src/collab_session.rs
+letters/src/collab_status.rs
 letters/src/dialogs.rs
 letters/src/doc_tab.rs
 letters/src/focus_mode.rs
