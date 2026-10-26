@@ -78,28 +78,25 @@ class _LettersAtspi:
             lambda node: node is not None, interval=0.25,
             description=f"the Main Menu button of {handle}")
 
+    # GTK 4.14 gives a popover menu's items no accessible names (the cells'
+    # context-menu journey in test_smoke.py says the same), so the items are
+    # found by position: the main menu ends with Preferences, Help, Keyboard
+    # Shortcuts and About, and the three Collaborate items sit just before them.
+    MENU_OFFSET = {"Share This Document" + ELLIPSIS: -7,
+                   "Join a Shared Document" + ELLIPSIS: -6,
+                   "Stop Sharing": -5}
+
     def _menu_item(self, handle, label, timeout=10.0, need_action=True):
-        """The node of the menu item labelled `label`. For pressing: the node
-        named so, or the nearest of its ancestors that has an action (GTK
-        names either the item or the label inside it, depending on the
-        version). For reading its state (`need_action=False`): the named node
-        itself, which an item that cannot be used may not offer an action on."""
+        """The Collaborate menu item labelled `label`, by its place in the open menu."""
         def find():
-            named = self._all(handle, lambda n: n.name == label and n.showing)
-            for node in named:
-                current = node
-                for _ in range(4):
-                    if current is None:
-                        break
-                    if _safe(lambda c=current: len(c.actions) > 0, False):
-                        return current
-                    current = _safe(lambda c=current: c.parent)
-            if not need_action and named:
-                return named[0]
-            return None
+            items = [n for n in self._all(handle, lambda n: n.roleName == "menu item" and n.showing)]
+            items.sort(key=lambda n: _safe(lambda n=n: n.position[1], 0))
+            if len(items) < 8:
+                return None
+            return items[self.MENU_OFFSET[label]]
         return self.wait_until(find, lambda node: node is not None, timeout=timeout,
                                interval=0.25,
-                               description=f"the menu item {label!r} of {handle}")
+                               description=f"the menu item {label!r} of {handle} (by position)")
 
     def _open_main_menu(self, handle):
         self.focus_app(handle)
@@ -119,19 +116,22 @@ class _LettersAtspi:
         self.focus_app(handle)
         rawinput.keyCombo("Escape")
         self.wait_until(
-            lambda: self._first(handle, lambda n: n.name == "Share This Document" + ELLIPSIS
-                                and n.showing),
+            lambda: self._first(handle, lambda n: n.roleName == "menu item" and n.showing),
             lambda node: node is None, interval=0.25,
             description=f"the Main Menu of {handle} to close")
 
     # ── dialogs ────────────────────────────────────────────────────────
 
+    # The rows in the order the dialogs show them (collab_dialogs.rs), for when
+    # the toolkit gives an entry row's field no accessible name.
+    ROW_INDEX = {"Server": 0, "People (public keys)": 1, "Your Key": 1, "Join Code": 3}
+
     def _row(self, handle, title):
         """The text field of the entry row titled `title`: the node with that
-        accessible name when it is the field, or the field inside the node
-        that has it."""
+        accessible name when it is the field (or holds it), else the field at the
+        row's place among the showing fields of the dialog (not the page view)."""
         def editable(node):
-            return node.roleName in EDITABLE_ROLES and node.showing
+            return node.roleName in EDITABLE_ROLES and node.showing and node.name != "Print Layout"
 
         def find():
             for node in self._all(handle, lambda n: n.name == title and n.showing):
@@ -142,6 +142,12 @@ class _LettersAtspi:
                     retry=False, requireResult=False))
                 if inner is not None:
                     return inner
+            fields = [n for n in self._all(handle, editable)]
+            fields.sort(key=lambda n: _safe(lambda n=n: n.position[1], 0))
+            index = self.ROW_INDEX[title]
+            # The Share dialog has three fields, the Join dialog four.
+            if len(fields) >= (4 if title in ("Your Key", "Join Code") else 3) and index < len(fields):
+                return fields[index]
             return None
         return self.wait_until(find, lambda node: node is not None, interval=0.25,
                                description=f"the row {title!r} of {handle}")
@@ -156,7 +162,7 @@ class _LettersAtspi:
         import pyatspi
         field = self._row(handle, title)
         self.focus_app(handle)
-        field.queryComponent().grabFocus()
+        _safe(lambda: field.queryComponent().grabFocus())
         self.wait_until(lambda: field.getState().contains(pyatspi.STATE_FOCUSED), bool,
                         description=f"the row {title!r} of {handle} to take the keyboard")
         _safe(lambda: field.queryEditableText().setTextContents(value))
@@ -225,7 +231,7 @@ class _LettersAtspi:
         import pyatspi
         self.focus_app(handle)
         page = self._wait_page(handle)
-        page.queryComponent().grabFocus()
+        _safe(lambda: page.queryComponent().grabFocus())
         self.wait_until(lambda: page.getState().contains(pyatspi.STATE_FOCUSED), bool,
                         description=f"the page view of {handle} to take the keyboard")
 
