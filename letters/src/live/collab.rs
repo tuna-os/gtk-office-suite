@@ -75,11 +75,6 @@ pub struct Imported {
 }
 
 impl LiveModel {
-    /// Whether this tab's document is part of a session.
-    pub fn is_shared(&self) -> bool {
-        self.collab.is_some()
-    }
-
     /// Make this tab's document part of the session `shared` belongs to (a
     /// `Shared::start` from this document, or a `Shared::join` whose document
     /// this model shows). The undo history starts over: a step recorded

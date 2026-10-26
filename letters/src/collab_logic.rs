@@ -44,6 +44,7 @@ pub(crate) fn people(field: &str) -> Vec<String> {
 /// part of its accessible name) and the whole name, `Sharing: online, 2 people`.
 pub(crate) struct Words {
     pub icon: &'static str,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub state: String,
     pub label: String,
 }

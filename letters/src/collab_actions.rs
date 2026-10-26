@@ -20,6 +20,9 @@ use libadwaita as adw;
 use crate::collab_session::Session;
 use crate::collab_status::{self, Status};
 
+/// Builds a tab for a joined document and selects it; given by the window.
+pub(crate) type OpenTab = Box<dyn Fn(&Document, &str) -> Option<gtk::TextBuffer>>;
+
 /// The actions whose sensitivity follows the selected tab's session.
 struct Actions {
     share: gio::SimpleAction,
@@ -38,7 +41,7 @@ pub(crate) struct Host {
     banner: adw::Banner,
     /// Open a document as a new tab and select it: what a join shows. Given
     /// by the window, which owns how a tab is built.
-    open: Box<dyn Fn(&Document, &str) -> Option<gtk::TextBuffer>>,
+    open: OpenTab,
     sessions: RefCell<Vec<Rc<Session>>>,
     actions: Actions,
 }
@@ -146,7 +149,7 @@ pub(crate) fn install(
     toasts: &adw::ToastOverlay,
     header: &adw::HeaderBar,
     add_banner: impl FnOnce(&adw::Banner),
-    open: Box<dyn Fn(&Document, &str) -> Option<gtk::TextBuffer>>,
+    open: OpenTab,
 ) {
     use suite_common::{i18n, menus::section};
     if let Some(menu) = suite_common::menus::primary_menu(header.upcast_ref()) {
