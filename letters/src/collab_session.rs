@@ -30,7 +30,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
-use gio::prelude::*;
 use gtk4::prelude::*;
 use gtk4::{self as gtk, gio, glib};
 use letters_core::collab::{same_text, CollabError, Shared};

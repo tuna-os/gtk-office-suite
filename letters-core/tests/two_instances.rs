@@ -392,7 +392,7 @@ fn dirs() -> (tempfile::TempDir, tempfile::TempDir) {
 /// The acceptance journey without the GUI: share, join, both type in one
 /// paragraph, the text converges on both, bold applied by one shows on the other.
 #[test]
-fn collab_two_letters_share_join_type_in_one_paragraph_and_converge() {
+fn two_letters_share_join_type_in_one_paragraph_and_converge() {
     let url = require_server!();
     let dirs = dirs();
     let (mut a, mut b) = two_sharers(&url, &dirs, Document::from_plain_text("Hello"));
@@ -426,7 +426,7 @@ fn collab_two_letters_share_join_type_in_one_paragraph_and_converge() {
 /// spurious conflict: each version covers what its writer had applied
 /// (`covers`), so the second is a child of the first and neither side shows two heads.
 #[test]
-fn collab_saves_by_two_live_editors_are_not_a_conflict() {
+fn saves_by_two_live_editors_are_not_a_conflict() {
     let url = require_server!();
     let dirs = dirs();
     let (mut a, mut b) = two_sharers(&url, &dirs, Document::from_plain_text("Hello"));

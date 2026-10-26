@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use adw::prelude::{AdwDialogExt as _, AlertDialogExt as _};
+use adw::prelude::{AdwDialogExt as _, AlertDialogExt as _, EntryRowExt as _, PreferencesGroupExt as _};
 use gtk4::prelude::*;
 use gtk4::{self as gtk};
 use letters_core::collab::{CollabError, Replica};
@@ -170,7 +170,9 @@ pub(crate) fn join(host: &Rc<Host>) {
                 Box::new(move |_, result| {
                     button.set_sensitive(true);
                     match result {
-                        Ok(_) => dialog.close(),
+                        Ok(_) => {
+                            dialog.close();
+                        }
                         // A join that fails leaves the dialog open, to fix the code or the server.
                         Err(e) => host.alert(&i18n("Could Not Join"), &e),
                     }
