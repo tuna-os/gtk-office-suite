@@ -120,7 +120,7 @@ jobs:
       # saying so. Neither run starts an application: the check is the first thing setUp does.
       - name: Fails loudly without a server
         env:
-          GUI_TEST_WINDOW_MANAGER: openbox
+          GUI_TEST_WINDOW_MANAGER: matchbox
         run: |
           if env -u DCP_STREAMS_URL -u DCP_SKIP_STREAMS tests/gui/run_gui_tests.sh test_collab_letters.py \
               -k test_two_instances_converge > "$RUNNER_TEMP/noserver.log" 2>&1; then
@@ -132,7 +132,7 @@ jobs:
       - name: DCP_SKIP_STREAMS=1 skips explicitly and says so
         env:
           DCP_SKIP_STREAMS: '1'
-          GUI_TEST_WINDOW_MANAGER: openbox
+          GUI_TEST_WINDOW_MANAGER: matchbox
         run: |
           env -u DCP_STREAMS_URL tests/gui/run_gui_tests.sh test_collab_letters.py \
             -k test_two_instances_converge -rs 2>&1 | tee "$RUNNER_TEMP/skip.log"
@@ -145,7 +145,7 @@ jobs:
         env:
           GUI_TEST_VIDEO: all
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
-          GUI_TEST_WINDOW_MANAGER: openbox
+          GUI_TEST_WINDOW_MANAGER: matchbox
           GUI_TEST_DIAGNOSTICS_LOG: ${{ github.workspace }}/gtk-diagnostics/collab-letters.jsonl
         run: |
           set -euo pipefail

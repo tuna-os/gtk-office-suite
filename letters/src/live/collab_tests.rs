@@ -62,6 +62,21 @@ fn deliver(from: &Tab, to: &Tab, what: &str) {
     check(&to.buf, &to.live, what);
 }
 
+/// `deliver` for a document with a chip: a chip's tag name carries a counter that
+/// every render advances, so the buffer cannot be compared tag for tag with a fresh
+/// render. The text, where each paragraph starts and the model are compared instead.
+fn deliver_chips(from: &Tab, to: &Tab, what: &str) {
+    for update in from.published.take() {
+        to.live.borrow_mut().import_remote(&to.buf, &update).expect("a peer's update is taken in");
+    }
+    let snap = to.live.borrow().snapshot();
+    let fresh = gtk::TextBuffer::new(Some(&to.buf.tag_table()));
+    let starts = crate::bridge::render_to_buffer(&snap.doc, &fresh);
+    assert_eq!(text(&to.buf), text(&fresh), "the buffer's text after {what}");
+    assert_eq!(snap.starts, starts, "starts after {what}");
+    assert_eq!(to.live.borrow().foreign_edits, 0, "{what}");
+}
+
 fn caret(buf: &gtk::TextBuffer) -> i32 {
     buf.iter_at_mark(&buf.get_insert()).offset()
 }
@@ -275,18 +290,18 @@ fn a_chip_and_a_list_marker_do_not_confuse_the_caret_mapping() {
         a.buf.place_cursor(&a.buf.iter_at_offset(after_chip));
         // B types at the very start (sequence offset 0).
         type_at(&b.buf, 0, ">> ");
-        deliver(&b, &a, "B typed before the chip");
+        deliver_chips(&b, &a, "B typed before the chip");
         assert_eq!(text(&a.buf), format!(">> {before}"));
         assert_eq!(caret(&a.buf), after_chip + 3, "the caret is still right after the chip");
         // The caret in the list item.
         a.buf.place_cursor(&a.buf.iter_at_offset(in_item + 3));
         type_at(&b.buf, 0, "# ");
-        deliver(&b, &a, "B typed again");
+        deliver_chips(&b, &a, "B typed again");
         assert_eq!(caret(&a.buf), in_item + 5);
         // B types inside the item, before A's caret.
         let in_b = at(&b.buf, "one");
         type_at(&b.buf, in_b, "NEW ");
-        deliver(&b, &a, "B typed in the item");
+        deliver_chips(&b, &a, "B typed in the item");
         assert_eq!(caret(&a.buf), in_item + 5 + 4);
         assert_eq!(a.live.borrow().document().paragraphs, b.live.borrow().document().paragraphs);
     });
