@@ -718,22 +718,42 @@ async fn latency_of_the_operations_a_binding_uses() {
 
 // --------------------------------------------------------- the lease log
 
-/// The lease log's compare-and-set under real concurrency: two handles that have
-/// read record `n` both try to create record `n + 1`.
+/// Lease rule 3's sleep, in real time.
+struct RealPause;
+
+#[async_trait::async_trait]
+impl dcp_core::lease::Pause for RealPause {
+    async fn pause(&self, ms: u64) {
+        tokio::time::sleep(Duration::from_millis(ms)).await;
+    }
+}
+
+/// The lease log under real concurrency: two handles that have read record `n` both try to
+/// create record `n + 1`, then both apply lease rule 3 (read back, settle, read back).
+///
+/// Creating a name with `If-None-Match: *` is NOT an atomic compare-and-set on Nextcloud: the
+/// precondition is checked by a lookup that is not under the file lock, so a creator that passed
+/// it before the other's record was visible can still replace that record and be answered `204`
+/// (RFC-0004 spike E results, "The lease"). Both writers are then told their write was accepted
+/// and the log holds the later one. What the binding guarantees is therefore the two-read rule,
+/// and that is what this asserts: after it, at most one session holds the lease, and when any
+/// write was accepted exactly one does. How often the server accepted both writes, and the
+/// whole exchange each time it did, are printed and measured, not asserted.
+///
+/// `DCP_LEASE_RACE_ROUNDS` (default 20) sets the rounds, `DCP_LEASE_RACE_EDITOR=alice` makes the
+/// second writer a second client of the owner's account instead of a sharee (bob).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn lease_log_is_a_compare_and_set_under_concurrency() {
+async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
     use dcp_conformance::{new_file, standard_meta};
-    use dcp_core::lease::{Claim, released};
-    use dcp_core::{DocumentStore, Role, StoreError};
-    if require("lease_log_is_a_compare_and_set_under_concurrency", &[url_a()]).await.is_none() {
+    use dcp_core::lease::{self, released, Claim, Settle, MATRIX_SETTLE_MS};
+    use dcp_core::{DocumentStore, Role};
+    if require("lease_log_create_race_leaves_one_holder_after_the_read_backs", &[url_a()]).await.is_none() {
         return;
     }
     let base = url_a();
     let clock = clock(&base).await;
     let fault = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let owner = store(&base, "alice", &clock, &fault);
-    // DCP_LEASE_RACE_EDITOR=alice makes both writers the owner's account (a stress run in CI);
-    // the default is a sharee, bob, writing through his mount of alice's folder.
     let editor_user = std::env::var("DCP_LEASE_RACE_EDITOR").unwrap_or_else(|_| "bob".into());
     let editor = store(&base, &editor_user, &clock, &fault);
     let doc = owner.create_document(&standard_meta(), Some(new_file(b"base"))).await.unwrap();
@@ -741,13 +761,17 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
         owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
     }
     let first = owner.versions(&doc).await.unwrap()[0].id.clone();
+    let settle = Settle::new(&RealPause, MATRIX_SETTLE_MS);
 
-    // DCP_LEASE_RACE_ROUNDS raises the number of rounds (default 20) for a stress run in CI.
     let rounds: usize = std::env::var("DCP_LEASE_RACE_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
-    let (mut one_won, mut both_won, mut none_won) = (0, 0, 0);
+    // Writes the server accepted (the store's `Ok`): none, one, both.
+    let (mut none_accepted, mut one_accepted, mut both_accepted) = (0, 0, 0);
+    // Sessions that held the lease after the read-backs, per round: 0 and 1 are expected.
+    let mut holders = std::collections::BTreeMap::<usize, u32>::new();
     let mut losers = std::collections::BTreeMap::<String, u32>::new();
     // The HTTP statuses of the two PUTs, as the server answered them.
     let mut status_pairs = std::collections::BTreeMap::<String, u32>::new();
+    let mut violations = Vec::<String>::new();
     for i in 0..rounds {
         // Both read the same latest record, as two sessions that looked at once.
         let seen_o = owner.lease(&doc).await.unwrap();
@@ -757,53 +781,65 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
         let co = Claim::new(owner.principal(), format!("o{i}"), "t", &first, 60_000);
         let ce = Claim::new(editor.principal(), format!("e{i}"), "t", &first, 60_000);
         dcp_webdav::dav::trace_begin();
-        let (wo, we) = tokio::join!(
-            owner.write_lease(&doc, co.lease_over(seen_o.as_ref())),
-            editor.write_lease(&doc, ce.lease_over(seen_e.as_ref()))
+        let (ao, ae) = tokio::join!(
+            lease::write_over(&owner, &doc, &co, seen_o.as_ref()),
+            lease::write_over(&editor, &doc, &ce, seen_e.as_ref())
         );
         let trace = dcp_webdav::dav::trace_take();
+        // Anything but a refusal (`Conflict`) propagates out of `write_over`: a loser must get Conflict.
+        let (ao, ae) = (ao.expect("the owner's write: a loser must get Conflict"), ae.expect("the editor's write: a loser must get Conflict"));
         let puts: Vec<&dcp_webdav::dav::Exchange> = trace.iter().filter(|e| e.method == "PUT").collect();
         let mut pair: Vec<String> = puts.iter().map(|e| e.status.map_or("none".to_owned(), |s| s.to_string())).collect();
         pair.sort();
         *status_pairs.entry(pair.join("+")).or_default() += 1;
-        match (wo.is_ok(), we.is_ok()) {
-            (true, false) | (false, true) => one_won += 1,
-            (true, true) => both_won += 1,
-            (false, false) => none_won += 1,
+        match (ao.result.is_ok(), ae.result.is_ok()) {
+            (false, false) => none_accepted += 1,
+            (true, true) => both_accepted += 1,
+            _ => one_accepted += 1,
         }
-        // Quote the whole exchange of every round in which the server did anything but the
-        // expected 201 + 412/423 (and of round 0, for what an ordinary round looks like),
-        // and then what the log holds.
-        let odd = puts.len() != 2 || puts.iter().any(|e| !matches!(e.status, Some(201 | 412 | 423))) || (wo.is_ok() && we.is_ok());
-        if odd || i == 0 {
-            let why = if odd { "UNEXPECTED" } else { "baseline" };
-            show_exchange(i, &format!("{why}; alice ok={}, bob ok={}", wo.is_ok(), we.is_ok()), &trace);
-            show_record_state(&base, &doc, next, &editor_user).await;
-        }
-        for r in [&wo, &we] {
+        for r in [&ao.result, &ae.result] {
             if let Err(e) = r {
-                assert!(matches!(e, StoreError::Conflict(_)), "the loser must get Conflict, got {e:?}");
                 *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1;
             }
         }
-        // And the log has one newest record: the winner's, when there is one.
-        if wo.is_ok() != we.is_ok() {
-            let now = owner.lease(&doc).await.unwrap().expect("a record exists after a win");
-            let winner_session = if wo.is_ok() { format!("o{i}") } else { format!("e{i}") };
-            assert_eq!(now.body.holder.as_ref().unwrap().session, winner_session);
+        // The server did something other than 201 + 412/423: quote the whole exchange, and then
+        // what the log holds.
+        if puts.len() != 2 || puts.iter().any(|e| !matches!(e.status, Some(201 | 412 | 423))) {
+            show_exchange(i, &format!("record {next}: the owner's write ok={}, the editor's ok={}", ao.result.is_ok(), ae.result.is_ok()), &trace);
+            show_record_state(&base, &doc, next, &editor_user).await;
         }
-        // A release keeps the chain going from the winner's record.
+
+        // Lease rule 3 for both, as two sessions would run it.
+        let (ro, re) = tokio::join!(
+            lease::confirm(&owner, &doc, &co, &ao, &settle),
+            lease::confirm(&editor, &doc, &ce, &ae, &settle)
+        );
+        let (ro, re) = (ro.unwrap(), re.unwrap());
+        let held = usize::from(ro.is_acquired()) + usize::from(re.is_acquired());
+        *holders.entry(held).or_default() += 1;
+        let accepted = usize::from(ao.result.is_ok()) + usize::from(ae.result.is_ok());
+        if held > 1 || (accepted > 0 && held != 1) {
+            // Counted and quoted, asserted below: a stress run reports every such round.
+            let line = format!("round {i}, record {next}: statuses {pair:?}, writes accepted {accepted}, sessions holding after the read-backs {held}: owner {ro:?}, editor {re:?}");
+            println!("LEASE-VIOLATION {line}");
+            violations.push(line);
+        }
+        // A release keeps the chain going from the holder's record.
         if i % 5 == 4 {
             owner.lease(&doc).await.unwrap();
             owner.write_lease(&doc, released()).await.unwrap();
         }
     }
-    measure("lease_log_concurrent_writers", json!({ "writers": format!("alice+{editor_user}"), "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "http_status_pairs": status_pairs, "loser_errors": losers }));
-    // Safety: never two winners. Liveness is not promised: when two different
-    // users create the same name at the same instant Nextcloud's file lock can
-    // refuse both (HTTP 423), and the caller reads back and tries again.
-    assert_eq!(both_won, 0, "two writers both created the same record number");
-    assert!(one_won >= 1, "no round had a winner");
+    measure(
+        "lease_log_create_race",
+        json!({
+            "writers": format!("alice+{editor_user}"), "rounds": rounds,
+            "no_write_accepted": none_accepted, "one_write_accepted": one_accepted, "both_writes_accepted": both_accepted,
+            "sessions_holding_after_the_read_backs": holders, "http_status_pairs": status_pairs, "loser_errors": losers
+        }),
+    );
+    assert!(violations.is_empty(), "lease rule 3 did not leave exactly one holder: {violations:#?}");
+    assert!(one_accepted + both_accepted >= 1, "no round had an accepted write");
 }
 
 /// Print every request of one race, in the order they were sent, with the headers both ways.
