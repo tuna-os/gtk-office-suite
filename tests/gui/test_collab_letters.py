@@ -235,6 +235,16 @@ class _LettersAtspi:
         self.focus_app(handle)
         page = self._wait_page(handle)
         _safe(lambda: page.queryComponent().grabFocus())
+        # After a dialog the keyboard is on whatever the dialog was opened from,
+        # and AT-SPI reports no extents for the page view, so click the middle of
+        # the window, where the page is, as a person would.
+        import subprocess
+        geometry = dict(line.split("=", 1) for line in subprocess.run(
+            ["xdotool", "getwindowgeometry", "--shell", str(handle.win_id)],
+            capture_output=True, text=True, timeout=5).stdout.split())
+        x = int(geometry["X"]) + int(geometry["WIDTH"]) // 2
+        y = int(geometry["Y"]) + int(geometry["HEIGHT"]) // 2
+        subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "1"], capture_output=True, timeout=5)
         deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline and not page.getState().contains(pyatspi.STATE_FOCUSED):
             time.sleep(0.1)  # settling: the toolkit may never report focus for the page view
