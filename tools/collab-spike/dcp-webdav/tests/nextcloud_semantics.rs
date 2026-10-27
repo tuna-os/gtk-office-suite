@@ -737,24 +737,43 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
     owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
     let first = owner.versions(&doc).await.unwrap()[0].id.clone();
 
-    let rounds = 20;
+    // DCP_LEASE_RACE_ROUNDS raises the number of rounds (default 20) for a stress run in CI.
+    let rounds: usize = std::env::var("DCP_LEASE_RACE_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
     let (mut one_won, mut both_won, mut none_won) = (0, 0, 0);
     let mut losers = std::collections::BTreeMap::<String, u32>::new();
+    // The HTTP statuses of the two PUTs, as the server answered them.
+    let mut status_pairs = std::collections::BTreeMap::<String, u32>::new();
     for i in 0..rounds {
         // Both read the same latest record, as two sessions that looked at once.
         let seen_o = owner.lease(&doc).await.unwrap();
         let seen_e = editor.lease(&doc).await.unwrap();
         assert_eq!(seen_o.as_ref().map(|l| l.id.clone()), seen_e.as_ref().map(|l| l.id.clone()));
+        let next = seen_o.as_ref().map_or(0, |l| l.id.parse::<u64>().unwrap() + 1);
         let co = Claim::new(owner.principal(), format!("o{i}"), "t", &first, 60_000);
         let ce = Claim::new(editor.principal(), format!("e{i}"), "t", &first, 60_000);
+        dcp_webdav::dav::trace_begin();
         let (wo, we) = tokio::join!(
             owner.write_lease(&doc, co.lease_over(seen_o.as_ref())),
             editor.write_lease(&doc, ce.lease_over(seen_e.as_ref()))
         );
+        let trace = dcp_webdav::dav::trace_take();
+        let puts: Vec<&dcp_webdav::dav::Exchange> = trace.iter().filter(|e| e.method == "PUT").collect();
+        let mut pair: Vec<String> = puts.iter().map(|e| e.status.map_or("none".to_owned(), |s| s.to_string())).collect();
+        pair.sort();
+        *status_pairs.entry(pair.join("+")).or_default() += 1;
         match (wo.is_ok(), we.is_ok()) {
             (true, false) | (false, true) => one_won += 1,
             (true, true) => both_won += 1,
             (false, false) => none_won += 1,
+        }
+        // Quote the whole exchange of every round in which the server did anything but the
+        // expected 201 + 412/423 (and of round 0, for what an ordinary round looks like),
+        // and then what the log holds.
+        let odd = puts.len() != 2 || puts.iter().any(|e| !matches!(e.status, Some(201 | 412 | 423))) || (wo.is_ok() && we.is_ok());
+        if odd || i == 0 {
+            let why = if odd { "UNEXPECTED" } else { "baseline" };
+            show_exchange(i, &format!("{why}; alice ok={}, bob ok={}", wo.is_ok(), we.is_ok()), &trace);
+            show_record_state(&base, &doc, next).await;
         }
         for r in [&wo, &we] {
             if let Err(e) = r {
@@ -774,12 +793,64 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
             owner.write_lease(&doc, released()).await.unwrap();
         }
     }
-    measure("lease_log_concurrent_writers", json!({ "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "loser_errors": losers }));
+    measure("lease_log_concurrent_writers", json!({ "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "http_status_pairs": status_pairs, "loser_errors": losers }));
     // Safety: never two winners. Liveness is not promised: when two different
     // users create the same name at the same instant Nextcloud's file lock can
     // refuse both (HTTP 423), and the caller reads back and tries again.
     assert_eq!(both_won, 0, "two writers both created the same record number");
     assert!(one_won >= 1, "no round had a winner");
+}
+
+/// Print every request of one race, in the order they were sent, with the headers both ways.
+fn show_exchange(round: usize, why: &str, trace: &[dcp_webdav::dav::Exchange]) {
+    let t0 = trace.iter().map(|e| e.sent_us).min().unwrap_or(0);
+    let rel = |us: u128| (us as f64 - t0 as f64) / 1000.0;
+    println!("RACE-EXCHANGE round {round}: {why}; times are ms after the first request was sent");
+    for e in trace {
+        println!("  [{:>9.3} .. {:>9.3}] {} {} {}", rel(e.sent_us), rel(e.done_us), e.user, e.method, e.path);
+        for (k, v) in &e.request_headers {
+            println!("      > {k}: {v}");
+        }
+        println!("      > (body: {} bytes)", e.request_bytes);
+        match (e.status, &e.error) {
+            (Some(s), _) => println!("      < HTTP {s}"),
+            (None, err) => println!("      < no response: {err:?}"),
+        }
+        for (k, v) in &e.response_headers {
+            println!("      < {k}: {v}");
+        }
+        if !e.response_body.is_empty() {
+            println!("      < body: {}", e.response_body.replace('\n', " "));
+        }
+    }
+}
+
+/// What the server holds for the contested record afterwards, seen by both users: the directory
+/// listing with file ids and ETags, and the record's bytes.
+async fn show_record_state(base: &str, doc: &str, next: u64) {
+    for user in ["alice", "bob"] {
+        let d = dav(base, user);
+        let dir = d.files_path(&format!("{doc}.l/"));
+        match d.propfind(&dir, 1, &["d:getetag", "d:getlastmodified", "d:getcontentlength", "oc:fileid", "oc:owner-id"]).await {
+            Ok((_, entries)) => {
+                for e in entries.iter().filter(|e| e.name().ends_with(".json")) {
+                    let n = e.name();
+                    // Only the contested record and its neighbours.
+                    if n.strip_suffix(".json").and_then(|s| s.parse::<u64>().ok()).is_some_and(|k| k + 2 >= next) {
+                        println!(
+                            "  STATE {user} sees {n}: fileid={:?} etag={:?} modified={:?} length={:?} owner={:?}",
+                            e.get(OC, "fileid"), e.get(DAV, "getetag"), e.get(DAV, "getlastmodified"), e.get(DAV, "getcontentlength"), e.get(OC, "owner-id")
+                        );
+                    }
+                }
+            }
+            Err(err) => println!("  STATE {user}: PROPFIND failed: {err}"),
+        }
+        match d.get(&format!("{doc}.l/{next:08}.json")).await {
+            Ok(r) => println!("  STATE {user} GET {next:08}.json -> HTTP {}: {}", r.status, r.text().replace('\n', " ")),
+            Err(err) => println!("  STATE {user}: GET failed: {err}"),
+        }
+    }
 }
 
 // ----------------------------------------------------- forged authorship

@@ -12,6 +12,64 @@ use serde_json::Value;
 
 use crate::xml::{self, Entry};
 
+/// The headers this client adds itself, plus the caller's, minus the credentials (`Authorization` is sent on every request).
+fn traced_request_headers(extra: &[(&str, &str)]) -> Vec<(String, String)> {
+    let mut v = vec![("OCS-APIRequest".to_owned(), "true".to_owned()), ("Authorization".to_owned(), "<redacted>".to_owned())];
+    v.extend(extra.iter().map(|(k, val)| ((*k).to_owned(), (*val).to_owned())));
+    v
+}
+
+/// One recorded HTTP exchange, kept only while a test has switched tracing on
+/// ([`trace_begin`]). Credentials are never recorded.
+#[derive(Debug, Clone)]
+pub struct Exchange {
+    /// The account the request was sent as.
+    pub user: String,
+    pub method: String,
+    pub path: String,
+    pub request_headers: Vec<(String, String)>,
+    pub request_bytes: usize,
+    /// Wall clock when the request was handed to the HTTP client / when the whole response had been read, in microseconds since the Unix epoch.
+    pub sent_us: u128,
+    pub done_us: u128,
+    pub status: Option<u16>,
+    pub response_headers: Vec<(String, String)>,
+    /// The first 400 bytes of the response body.
+    pub response_body: String,
+    pub error: Option<String>,
+}
+
+static TRACE: parking_lot::Mutex<Option<Vec<Exchange>>> = parking_lot::Mutex::new(None);
+
+/// Start (or restart, discarding what was recorded) recording every request this process sends.
+pub fn trace_begin() {
+    *TRACE.lock() = Some(Vec::new());
+}
+
+/// Stop recording and return what was recorded, ordered by send time.
+pub fn trace_take() -> Vec<Exchange> {
+    let mut v = TRACE.lock().take().unwrap_or_default();
+    v.sort_by_key(|e| e.sent_us);
+    v
+}
+
+fn trace_on() -> bool {
+    TRACE.lock().is_some()
+}
+
+fn trace_push(e: Exchange) {
+    if let Some(v) = TRACE.lock().as_mut() {
+        v.push(e);
+    }
+}
+
+fn unix_us() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_micros())
+        .unwrap_or(0)
+}
+
 /// One HTTP response, fully read.
 #[derive(Debug, Clone)]
 pub struct Resp {
@@ -183,6 +241,7 @@ impl Dav {
         headers: &[(&str, &str)],
         body: Option<Vec<u8>>,
     ) -> Result<Resp, StoreError> {
+        let method_name = method.to_owned();
         let method = Method::from_bytes(method.as_bytes())
             .map_err(|e| StoreError::Invalid(format!("method {method}: {e}")))?;
         let mut rb = self
@@ -196,24 +255,64 @@ impl Dav {
         for (k, v) in headers {
             rb = rb.header(*k, *v);
         }
+        let tracing = trace_on();
+        let request_bytes = body.as_ref().map_or(0, Vec::len);
         if let Some(b) = body {
             rb = rb.body(b);
         }
+        let sent_us = unix_us();
         let t0 = Instant::now();
-        let resp = rb
-            .send()
-            .await
-            .map_err(|e| StoreError::Transport(format!("{path}: {e}")))?;
+        let sent = rb.send().await;
+        let resp = match sent {
+            Ok(r) => r,
+            Err(e) => {
+                if tracing {
+                    trace_push(Exchange {
+                        user: self.user.clone(),
+                        method: method_name.clone(),
+                        path: path.to_owned(),
+                        request_headers: traced_request_headers(headers),
+                        request_bytes,
+                        sent_us,
+                        done_us: unix_us(),
+                        status: None,
+                        response_headers: Vec::new(),
+                        response_body: String::new(),
+                        error: Some(e.to_string()),
+                    });
+                }
+                return Err(StoreError::Transport(format!("{path}: {e}")));
+            }
+        };
         let status = resp.status().as_u16();
-        let headers = resp.headers().clone();
+        let headers_in = resp.headers().clone();
         let body = resp
             .bytes()
             .await
             .map_err(|e| StoreError::Transport(format!("{path}: reading the body: {e}")))?
             .to_vec();
+        if tracing {
+            trace_push(Exchange {
+                user: self.user.clone(),
+                method: method_name,
+                path: path.to_owned(),
+                request_headers: traced_request_headers(headers),
+                request_bytes,
+                sent_us,
+                done_us: unix_us(),
+                status: Some(status),
+                response_headers: headers_in
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != "set-cookie")
+                    .map(|(k, v)| (k.as_str().to_owned(), String::from_utf8_lossy(v.as_bytes()).into_owned()))
+                    .collect(),
+                response_body: String::from_utf8_lossy(&body[..body.len().min(400)]).into_owned(),
+                error: None,
+            });
+        }
         Ok(Resp {
             status,
-            headers,
+            headers: headers_in,
             body,
             elapsed: t0.elapsed(),
         })

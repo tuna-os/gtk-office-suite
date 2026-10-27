@@ -1,0 +1,115 @@
+name: flake-nc-census
+
+# TEMPORARY (branch spike/flake-nextcloud only; deleted before any PR). Repeats the
+# `dcp-webdav against Nextcloud 34.0.5` lease-log race test many times to count how often
+# `lease_log_is_a_compare_and_set_under_concurrency` sees two winners, with the raw HTTP exchange.
+on:
+  push:
+    branches: [spike/flake-nextcloud]
+    paths:
+      - '.github/workflows/flake-nc-census.yml'
+      - 'tools/collab-spike/dcp-webdav/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+  POSTGRES_IMAGE: docker.io/library/postgres:16-alpine@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+  NEXTCLOUD_IMAGE: docker.io/library/nextcloud:34.0.5-apache@sha256:1f9212adecae32010cdbf137d7e0db78d08c696dc3e77f1eddcbf902d10209b4
+
+jobs:
+  build:
+    name: build the test binaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-webdav
+          save-if: ${{ github.ref == 'refs/heads/spike/flake-nextcloud' }}
+      - run: cargo test -p dcp-webdav --locked --no-run
+
+  census:
+    name: nextcloud 34.0.5 semantics, copy ${{ matrix.copy }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        copy: [1]
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    env:
+      DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/measure.jsonl
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-webdav
+          save-if: false
+      - name: Versions
+        run: |
+          echo "git $(git rev-parse HEAD)"; nproc; free -m | head -2
+          mkdir -p "$GITHUB_WORKSPACE/measurements"
+      - name: Build
+        run: cargo test -p dcp-webdav --locked --no-run
+      - name: Start one Nextcloud (the one the failing job used as nc-a)
+        run: scripts/nextcloud-up.sh a 2>&1 | tee "$RUNNER_TEMP/up.log"
+      - name: Apache request log with start time and duration (microseconds) and the PUT's headers
+        continue-on-error: true
+        run: |
+          docker exec nc-a bash -c 'cat > /etc/apache2/conf-enabled/zz-dcp-timing.conf <<"EOF"
+          LogFormat "%{%Y-%m-%dT%H:%M:%S}t.%{usec_frac}t dur=%Dus pid=%P status=%>s \"%r\" reqid=%{X-Request-Id}o inm=%{If-None-Match}i" dcptiming
+          CustomLog /var/log/apache2/dcp-timing.log dcptiming
+          EOF
+          apache2ctl configtest && apache2ctl -k graceful'
+          sleep 3
+          curl -fsS http://nc-a/status.php
+          docker exec nc-a bash -c 'apache2ctl -M 2>&1 | grep -i -E "mpm|php"; php -v | head -1; ls -la /var/log/apache2/'
+      - name: Semantics as in the webdav job (all tests of the file, one thread, 20 rounds of the lease race)
+        run: cargo test -p dcp-webdav --locked --test nextcloud_semantics -- --nocapture --test-threads=1 2>&1 | tee "$GITHUB_WORKSPACE/measurements/semantics.log"
+      - name: Stress, same test, 300 more rounds of the same race (the failing job had 20)
+        if: ${{ !cancelled() }}
+        env:
+          DCP_LEASE_RACE_ROUNDS: '300'
+        run: cargo test -p dcp-webdav --locked --test nextcloud_semantics lease_log_is_a_compare_and_set_under_concurrency -- --nocapture --test-threads=1 2>&1 | tee "$GITHUB_WORKSPACE/measurements/stress.log"
+      - name: Container logs
+        if: always()
+        run: |
+          docker logs nc-a > "$GITHUB_WORKSPACE/measurements/nc-a.docker.log" 2>&1 || true
+          docker exec nc-a cat /var/www/html/data/nextcloud.log > "$GITHUB_WORKSPACE/measurements/nc-a.nextcloud.log" 2>&1 || true
+          docker exec nc-a cat /var/log/apache2/dcp-timing.log > "$GITHUB_WORKSPACE/measurements/nc-a.apache-timing.log" 2>&1 || true
+          cp "$RUNNER_TEMP/up.log" "$GITHUB_WORKSPACE/measurements/up.log" || true
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### copy ${{ matrix.copy }}"
+            grep -h '"measure":"lease_log_concurrent_writers"' "$GITHUB_WORKSPACE/measurements/measure.jsonl" || true
+            grep -c '^RACE-EXCHANGE round [0-9]*: UNEXPECTED' "$GITHUB_WORKSPACE/measurements/semantics.log" "$GITHUB_WORKSPACE/measurements/stress.log" || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: census-${{ matrix.copy }}
+          path: measurements/
+          if-no-files-found: warn
