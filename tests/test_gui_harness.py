@@ -627,8 +627,15 @@ class SecondInstanceContracts(unittest.TestCase):
 
     def test_the_collab_journey_fails_without_a_server_and_skips_only_when_told_to(self):
         import ast
-        setup = self._function(self._tree("test_collab_letters.py"), "setUp",
-                               cls="LettersCollabStreams")
+        tree = self._tree("test_collab_letters.py")
+        # Every journey that needs the server asks the one check first, before it
+        # launches anything; the check is what fails and what skips.
+        for cls in ("LettersCollabStreams", "LettersCollabTwoHeads"):
+            journey_setup = self._function(tree, "setUp", cls=cls)
+            first = journey_setup.body[0]
+            self.assertEqual(ast.unparse(first), "self._require_streams()",
+                             f"{cls}.setUp must open with the server check")
+        setup = self._function(tree, "_require_streams", cls="_LettersAtspi")
         skips = self._calls(setup, "skipTest")
         fails = self._calls(setup, "fail")
         self.assertEqual(len(skips), 1)
@@ -649,6 +656,9 @@ class SecondInstanceContracts(unittest.TestCase):
                    for f in c.body if isinstance(f, ast.FunctionDef)}
         self.assertIn(("LettersCollabStreams", "test_two_instances_converge"), methods)
         self.assertIn(("LettersCollabDefaultOff", "test_default_off"), methods)
+        for name in ("test_keep_mine_collapses_the_heads", "test_keep_theirs_takes_the_other_version_in",
+                     "test_open_both_leaves_the_shared_session_alone"):
+            self.assertIn(("LettersCollabTwoHeads", name), methods)
 
 
 if __name__ == "__main__":

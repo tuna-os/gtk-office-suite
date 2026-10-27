@@ -586,8 +586,8 @@ class LettersCollabTwoHeads(_LettersAtspi, BaseGUITestCase):
         self._resolve(a, "Open Both")
         # The other version is a document of its own, in a tab of A.
         self._text_is(a, self.THEIRS, "the other version opened")
-        # Settling window: nothing is published after the tab opens, and nothing
-        # observable says when "nothing" is certain.
+        # Nothing observable says when "nothing was published" is certain.
+        # settling: the check below is that the graph did not change after the tab opened
         time.sleep(3.0)
         self.assertEqual(sorted(peer.latest_heads()[0]), sorted(before),
                          "opening the other version changed the shared version graph")
