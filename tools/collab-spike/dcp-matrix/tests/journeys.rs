@@ -304,10 +304,14 @@ async fn renewal_counter_is_what_makes_a_renewal_a_new_event() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_editor_granted_right_after_creation_reads_the_first_version_at_once() {
     let Some(syn) = require_synapse!() else { return };
-    // Regression for a measured failure: the invite is followed at once by a
+    // Regression for two measured failures: the invite is followed at once by a
     // power-level event, and the invitee joins by room ID straight away. If the
-    // store joins before its own sync has delivered the invite, matrix-sdk never
-    // imports the shared history and the first version stays undecryptable.
+    // store joins before its own sync has delivered the invite, or while that
+    // sync is still storing it (the room is listed as invited but matrix-sdk
+    // cannot yet say who invited it), matrix-sdk never imports the shared
+    // history and the first version stays undecryptable. The second one is
+    // rare (13 of 760 runs of this test, 0 of 760 with the wait for the
+    // inviter), so a green run says little; see the results doc.
     for _ in 0..3 {
         let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
         let late = syn.user("late").await;

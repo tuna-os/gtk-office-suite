@@ -417,9 +417,19 @@ and update, files verified, only because of MSC4268 key-bundle sharing, which ne
 
 - the inviter has set up cross-signing (a DCP client that creates or invites into rooms MUST
   bootstrap it); and
-- the invitee's own sync has delivered the invite **before** it joins. A client MUST wait for the
-  invite before joining by room ID: joining early read 0 of 1 versions in 6 of 6 trials, and the wait
-  fixed it (the explanation, that the SDK had not yet recorded who invited it, is an inference).
+- the invitee's SDK can **name the inviter at the moment it sends the join**. matrix-sdk reads
+  `Room::invite_details().inviter` before the join request; with none it records no invite
+  acceptance, never fetches the key bundle that arrived before the invite, and does not try again
+  (reading `finish_join_room`, 0.19.1), so the history stays undecryptable. A client MUST wait,
+  before joining by room ID, until its own sync has delivered the invite **and the SDK has stored
+  it**: the sync that carries the invite lists the room as invited a few milliseconds before it has
+  stored the invite's state, and a join in that window lost the history. Measured on Synapse
+  1.163.2: joining at once read 0 of 1 versions in 6 of 6 trials; waiting only until the room was
+  listed as invited failed in 13 of 760 runs of the late-editor journey (8 of 380 on relaxed and 5
+  of 380 on default rate limits), and in the four failing trials traced the SDK logged
+  `Error fetching invite details for room: UnknownError(EventMissing)` and `inviter: None` at the
+  join; waiting until `invite_details().inviter` is `Some` failed in 0 of 760
+  ([Spike A](rfc/0004-spike-a-results.md), late joiner).
 
 **A new device of an existing member reads none of the room's history** (every event undecryptable
 in rooms of 11, 101, 301 and 1001 events). The spike tried neither key backup nor device
@@ -1598,6 +1608,11 @@ Results of the journeys of this section, each from the run its section cites:
 
 ## Changelog
 
+- Draft 1, update 5 (2026-10-27): **8.1 only, no wire change; `dcp` stays `1`.** The rule "wait for
+  the invite before joining" is tightened to "until the SDK can name the inviter": a join sent
+  while the sync that carries the invite is still storing it lost the history in 13 of 760 runs
+  of the late-editor journey (Spike A, late joiner). The Matrix binding waits for
+  `invite_details().inviter`; the journey went from 13 failures in 760 runs to 0 in 760.
 - Draft 1, update 4 (2026-10-25): the first algorithm profile, [`loro/1` with `tables/1`](collab-spec/profiles/loro-1.md)
   (RFC-0005 open question 1). **`dcp` stays `1`: no object or schema changes.** For a CRDT algorithm,
   `base_version` of an update names the version the session's replica started from (the genesis

@@ -47,8 +47,9 @@ The load-bearing results:
    exactly one holder. And renewing a lease with an unchanged record is
    silently ignored by Synapse.
 6. **History is readable by a late joiner only through matrix-sdk's key-bundle
-   sharing, and only if the joiner has seen the invite before it joins.** A new
-   *device* of an existing member reads none of it.
+   sharing, and only if the SDK can name the inviter when the joiner sends the join
+   (the invite delivered and stored, not merely listed).** A new *device* of an
+   existing member reads none of it.
 
 ## Method
 
@@ -182,18 +183,76 @@ cross-signing. `MatrixStore::connect` does that bootstrap.
 
 - A member invited after 2 versions and 1 update published read all of it, files
   verified, 150 ms after being granted (grant itself 209 ms).
-- **Joining by room ID before the SDK has seen the invite loses the history.**
+- **Joining by room ID when the SDK cannot yet name the inviter loses the history.**
   In the diagnostic run 40076572478, a store granted the editor role (invite, then a
   power-levels event) and read at once saw 0 of 1 versions in 6 of 6 trials (3
   with the client limiter, 3 without); the same flow as viewer, or with the
   power-levels event first, or after a 3 s pause, saw it in every trial (3/3 each).
   The SDK log shows the bundle arriving before the invite ("historic room key
   bundle for an unknown room"), and in the failing trials no later attempt to
-  accept it. The explanation, that the join came before the SDK had recorded who
-  invited it, is an inference; the fix built on it worked. The store now waits for
-  its own sync to deliver the invite before joining. After the fix (run
-  40079034176): 3/3 in all seven variants on `relaxed`, 1/1 on `default`, and a
-  regression journey.
+  accept it. The store was changed to wait for its own sync to list the room as
+  invited before joining (run 40079034176: 3/3 in all seven variants on `relaxed`,
+  1/1 on `default`, and a regression journey). **That wait was not enough**, and 3
+  trials per variant could not show it: the late-editor journey
+  (`an_editor_granted_right_after_creation_reads_the_first_version_at_once`, 3 trials
+  a run) failed with `undecryptable: 1` in 3 of the 73 CI runs of the matrix job
+  on `relaxed` that built and ran it (40132167797, 40151238187, 40245021774) and in
+  none of the 72 on `default`; the Synapse logs of the 75 `relaxed` and 74 `default`
+  runs that have them show the same signature (the invitee joins and no key-bundle
+  download follows) in exactly those three of 221 invitee joins on `relaxed` and in none
+  of 222 on `default`.
+  - **Census, run 40448298262** (the unchanged journeys binary, `matrix` job code at
+    57952920, Synapse 1.163.2 pinned by tag `v1.163.2`; a *run* is one invocation of
+    the journeys test binary, 10 tests in parallel as in the CI step, each test
+    registering fresh users): the late-editor journey failed in **13 of 760 runs**,
+    8 of 380 on `relaxed` and 5 of 380 on `default`. Per set: a fresh Synapse per run
+    (the CI step's conditions) 3 of 60 `relaxed`, 1 of 60 `default`; one Synapse, whole
+    binary 3 of 160 and 1 of 160; one Synapse, this test alone 2 of 160 and 3 of 160.
+    All 13 failed at `journeys.rs:318` with `undecryptable: 1`; each of the other nine
+    journeys failed in 0 of 440 runs. The two profiles do not differ measurably
+    (8 of 380 against 5 of 380, Fisher exact p = 0.58), and 3 of 73 against 0 of 72 CI
+    runs is consistent with chance (p = 0.24).
+  - **Cause, run 40446510990** (the same journey with the matrix-sdk log on, run beside
+    the other nine; each job stopped at its first failing run, so 78 runs on
+    `relaxed` and 39 on `default` completed): 4 failing runs (3 `relaxed`, 1
+    `default`), one failing trial each. In each, the failed trial's join logged
+    `WARN matrix_sdk::client: Error fetching invite details for room:
+    UnknownError(EventMissing)` and then `Completing room join ...
+    pre_join_room_info=Some(PreJoinRoomInfo { inviter: None })`; the passing trials
+    logged `inviter: Some(RoomMember { ... Stripped ... })` there. The failing call
+    lay inside the processing of a sync response, which the SDK logged as processed 1 ms
+    later in all four (13 to 29 ms of processing). The key bundle had arrived
+    earlier ("historic room key bundle for an unknown room", as in the first
+    diagnostic) and was never fetched: the failed trial's room has no
+    `maybe_accept_key_bundle` span (each passing trial's room has three log lines
+    from it), and in the Synapse logs of the three CI failures no
+    `/media/download` follows the failing join. In matrix-sdk 0.19.1
+    `update_invited_room` creates the room as `Invited` while it processes the sync
+    response and persists its stripped state (the member events `invite_details`
+    reads) only in `save_and_apply` at the end, so `get_room` can list the room as
+    invited while its inviter is still unknown. `Client::join_room_by_id` reads
+    `invite_details().inviter` before it sends the join (`prepare_join_room_by_id`);
+    with none, `finish_join_room` neither records the acceptance nor looks for the
+    stored bundle, and a bundle that arrives later is refused for want of that
+    record. The original failure (joining before the invite had arrived) is the same
+    cause: no invite, so no inviter.
+  - **Fix, run 40448430442** (the store waits until `Room::invite_details().inviter` is
+    `Some`, or the room is joined, before it joins; the same census on the same
+    Synapse image): **0 of 760 runs** (0 of 380 on each profile; the nine other
+    journeys 0 of 3 960 test runs). Against 13 of 760 unchanged: Fisher exact p =
+    0.0002; 0 of 760 is an upper 95 % bound of about 0.4 % per run. The fix is in
+    `MatrixStore::room_for`, in both copies of the binding (`tools/collab-spike` and
+    the sidecar's `collab/dcp-matrix`).
+  - Not verified: the viewer role (the journey is the editor case; the code path is
+    the same for every role); a different homeserver (Dendrite, conduwuit) or
+    matrix-sdk version; whether the census's Synapse is the build the CI failures ran
+    (they pulled `matrixdotorg/synapse:latest`, reported as Synapse/1.163.2 with image id
+    `e0d446e9d9f2...`; the census pulled the tag `v1.163.2`, also Synapse/1.163.2,
+    image id `260cd9c033b9...`; the two ids were not compared further); the SDK log of the three CI
+    failures (the 75 CI Synapse logs give outcomes only through the "no download after the
+    join" signature); the sidecar copy's own run (it is identical to the measured
+    copy apart from the path, and CI does not run its Synapse tests). The artifacts of
+    these runs expire after 7 days, so the quoted log lines and counts are the record.
 - **A new device of an existing member reads nothing.** A second login of the
   same user, fresh crypto store, sees 11, 101, 301 and 1001 undecryptable events
   of 11, 101, 301, 1001 (every one). matrix-sdk offers key backup or verification
@@ -390,7 +449,7 @@ in the application's outbox, which `dcp-core` provides.
 | One document is one room of type `org.tunaos.dcp.document` | **Go** | Synapse accepts the type; every journey ran on such rooms; a plain room is refused as `NotFound` |
 | Events `meta`, `lease` (state) and `version`, `update` (timeline); event ID is the version ID | **Go** | conformance 10/10; ids, timestamps and senders agree across two readers |
 | Power-level table gives `viewer 0 / editor 50 / owner 100` and gates the events | **No-go as written, go with one added entry** | literal table: viewer's forged encrypted version accepted by the server (reproduced); with `m.room.encrypted: 50`: 403. State-event levels (`lease` 50, `meta` 100) are enforced as written (403 tested) |
-| `history_visibility: shared` lets a new member read what they are invited to | **Conditional go** | needs MSC4268 bundle sharing, inviter cross-signing, and the invite seen before the join; not for a new device |
+| `history_visibility: shared` lets a new member read what they are invited to | **Conditional go** | needs MSC4268 bundle sharing, inviter cross-signing, and an invite the SDK has stored (can name the inviter) before the join; not for a new device |
 | Encrypted media, plaintext sha256 recorded and verified | **Go** | verify-after-upload and a truncated upload refused; ciphertext length equals plaintext length |
 | Queue per room, in order, back off on 429 | **Go** | 23 429s honoured, no drop or reorder; order kept across an outage |
 | **At most 3 timeline events per second per room** | **No-go** as a default; **go** as a ceiling only | stock Synapse allows 0.2/s per user (burst 10); the client sustained 25 to 35/s unconstrained |
