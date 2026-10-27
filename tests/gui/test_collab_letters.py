@@ -33,6 +33,8 @@ from framework import BaseGUITestCase, instances
 
 ELLIPSIS = "\u2026"
 EDITABLE_ROLES = ("text", "entry", "password text")
+BANNER = "Two versions of this document exist"
+RESOLVE_HEADING = "Two Versions of This Document"
 STATUS_ROLES = ("toggle button", "push button", "menu button")
 
 # Waits that involve the server (a stream created, a snapshot fetched, an
@@ -181,7 +183,8 @@ class _LettersAtspi:
         is found by its heading and the button inside it, so another
         `Close` or `Share` elsewhere in the window is not pressed."""
         def is_button(node):
-            return node.name == label and node.roleName == "push button" and node.showing
+            # A response button's mnemonic underscore may be in its name (`_Keep Mine`).
+            return (node.name or "").replace("_", "") == label and node.roleName == "push button" and node.showing
 
         def find():
             anchor = self._first(handle, lambda n: n.name == heading and n.showing)
@@ -268,6 +271,26 @@ class _LettersAtspi:
         return [(start, end, self._is_bold(attrs))
                 for start, end, attrs in self._runs(handle)]
 
+    def _require_streams(self):
+        """The server's URL, or the skip / failure the harness promises. Before
+        anything is launched, so a run with no server does not start two
+        applications to say so."""
+        self.streams_url = os.environ.get("DCP_STREAMS_URL")
+        if not self.streams_url:
+            if os.environ.get("DCP_SKIP_STREAMS") == "1":
+                self.skipTest(
+                    "SKIPPED (DCP_SKIP_STREAMS=1): DCP_STREAMS_URL is not set, "
+                    "so there is no Durable Streams server for the two instances")
+            self.fail(
+                "DCP_STREAMS_URL is not set: start the reference server "
+                "(eval \"$(tools/collab-spike/scripts/streams-up.sh node)\") or set "
+                "DCP_SKIP_STREAMS=1 to skip this journey explicitly")
+
+    # ── the banner and the Resolve dialog ──────────────────────────────
+
+    def _banner(self, handle):
+        return self._first(handle, lambda n: n.showing and BANNER in (n.name or ""))
+
     # ── sharing state ──────────────────────────────────────────────────
 
     def _status(self, handle):
@@ -289,18 +312,7 @@ class LettersCollabStreams(_LettersAtspi, BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        # Before anything is launched, so a run with no server does not start
-        # two applications to say so.
-        self.streams_url = os.environ.get("DCP_STREAMS_URL")
-        if not self.streams_url:
-            if os.environ.get("DCP_SKIP_STREAMS") == "1":
-                self.skipTest(
-                    "SKIPPED (DCP_SKIP_STREAMS=1): DCP_STREAMS_URL is not set, "
-                    "so there is no Durable Streams server for the two instances")
-            self.fail(
-                "DCP_STREAMS_URL is not set: start the reference server "
-                "(eval \"$(tools/collab-spike/scripts/streams-up.sh node)\") or set "
-                "DCP_SKIP_STREAMS=1 to skip this journey explicitly")
+        self._require_streams()
         self.prepare_instance_pair()
         super().setUp()
 
@@ -424,6 +436,167 @@ class LettersCollabStreams(_LettersAtspi, BaseGUITestCase):
                         timeout=30.0, interval=0.25,
                         description="A's status button to be hidden after Stop Sharing")
         self.assert_still_running(b)
+
+
+class LettersCollabTwoHeads(_LettersAtspi, BaseGUITestCase):
+    """Two versions nobody here has merged: the banner, and the three ways out.
+
+    A opens a .docx, shares it with B and with a third person (`CollabPeer`, a
+    real sidecar with no window); B joins. A edits and saves, which publishes a
+    version A holds. The third person then saves a different version made from
+    what they hold, which is nothing: a head that covers none of the live
+    document. Both windows say so in a banner. Each journey takes one way out
+    through the Resolve dialog and reads the outcome from AT-SPI on both
+    windows (the banner, the page's text), and the version graph from the
+    third person's own sidecar (its last `heads` event)."""
+
+    app_name = "letters"
+    BASE = "Base"
+    MINE = "Base mine"
+    THEIRS = "Theirs text"
+
+    def setUp(self):
+        self._require_streams()
+        from collab_peer import docx_bytes
+        self.path = os.path.join(self.temp_dir("collab-two-heads-"), "letter.docx")
+        with open(self.path, "wb") as f:
+            f.write(docx_bytes(self.BASE))
+        self.launch_args = [self.path]
+        self.prepare_instance_pair()
+        super().setUp()
+
+    def _text_is(self, handle, expected, description):
+        return self.wait_until(lambda: self._page_text(handle),
+                               lambda text: text.rstrip("\n") == expected,
+                               timeout=NETWORK_SECONDS, interval=0.25,
+                               description=f"{description}: the page of {handle} to hold {expected!r}")
+
+    def _two_heads(self):
+        """Share, join, save, and make the second head. Returns (a, b, peer)."""
+        from collab_peer import CollabPeer, docx_bytes
+
+        a, b = self.launch_instance_pair()
+        peer = CollabPeer(self._collabd_bin, self.temp_dir("collab-peer-"))
+        self.addCleanup(peer.close)
+        peer_key = peer.connect(self.streams_url)
+        self._text_is(a, self.BASE, "A opened the file")
+
+        # B: the Join dialog, for B's key.
+        self._choose_from_main_menu(b, "Join a Shared Document" + ELLIPSIS)
+        self._fill_row(b, "Server", self.streams_url)
+        rawinput.keyCombo("Return")
+        b_key = self.wait_until(
+            lambda: self._row_text(b, "Your Key"), lambda text: text.startswith("ed25519:"),
+            timeout=NETWORK_SECONDS, interval=0.25,
+            description="B's 'Your Key' row to show a public key (ed25519:...)")
+
+        # A: share with B and with the third person.
+        self._choose_from_main_menu(a, "Share This Document" + ELLIPSIS)
+        self._fill_row(a, "Server", self.streams_url)
+        self._fill_row(a, "People (public keys)", f"{b_key}, {peer_key}")
+        self._dialog_button(a, "Share This Document", "Share").do_action(0)
+        body = self.wait_until(
+            lambda: self._label_with(a, "streams:"), lambda text: bool(text),
+            timeout=NETWORK_SECONDS, interval=0.25,
+            description="A's 'Sharing Started' alert to show the join code (streams:...)")
+        code = re.search(r"streams:\S+", body).group(0)
+        self._dialog_button(a, "Sharing Started", "Close").do_action(0)
+        self.wait_until(lambda: self._label_with(a, "streams:"), lambda text: text is None,
+                        description="A's 'Sharing Started' alert to close")
+
+        self._fill_row(b, "Join Code", code)
+        self._dialog_button(b, "Join a Shared Document", "Join").do_action(0)
+        self._text_is(b, self.BASE, "B joined")
+        peer.join(code)
+        self._wait_online(a)
+        self._wait_online(b)
+
+        # A edits and saves: a version A holds, so no conflict yet.
+        self._focus_page(a)
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" mine")
+        self._text_is(a, self.MINE, "A typed")
+        self._text_is(b, self.MINE, "A's edit reached B")
+        rawinput.keyCombo("<Control>s")
+        self.wait_until(lambda: self._label_with(a, "Saved and shared"), bool,
+                        timeout=NETWORK_SECONDS, interval=0.1,
+                        description="A's 'Saved and shared' toast")
+        self.assertIsNone(self._banner(a), "the banner showed with a single version")
+        self.assertIsNone(self._banner(b), "the banner showed with a single version")
+
+        # The third person saves from what they hold, which is nothing.
+        peer.publish_version(docx_bytes(self.THEIRS), message="saved from an older copy")
+        for handle in (a, b):
+            self.wait_until(lambda h=handle: self._banner(h), lambda node: node is not None,
+                            timeout=NETWORK_SECONDS, interval=0.25,
+                            description=f"the two-versions banner on {handle}")
+        heads, conflict = self.wait_until(
+            peer.latest_heads, lambda state: state is not None and len(state[0]) == 2,
+            timeout=NETWORK_SECONDS, interval=0.25,
+            description="the third person's sidecar to report two heads")
+        self.assertTrue(conflict, "two heads, one of them uncovered, and no conflict reported")
+        return a, b, peer
+
+    def _resolve(self, handle, choice):
+        """Banner button, then `choice` in the dialog it opens."""
+        button = self._first(handle, lambda n: n.roleName == "push button" and n.showing
+                             and (n.name or "") == "Resolve" + ELLIPSIS)
+        self.assertIsNotNone(button, f"the banner of {handle} has no Resolve{ELLIPSIS} button")
+        button.do_action(0)
+        body = self.wait_until(
+            lambda: self._label_with(handle, "\u2022"), bool, interval=0.25,
+            description="the Resolve dialog to list the versions")
+        self.assertEqual(body.count("\u2022"), 2, f"the Resolve dialog lists {body!r}")
+        self._dialog_button(handle, RESOLVE_HEADING, choice).do_action(0)
+        self.wait_until(lambda: self._label_with(handle, "\u2022"), lambda text: text is None,
+                        description="the Resolve dialog to close")
+
+    def _one_head(self, a, b, peer, text):
+        """Both windows lost the banner, show `text`, and the graph has one head."""
+        for handle in (a, b):
+            self.wait_until(lambda h=handle: self._banner(h), lambda node: node is None,
+                            timeout=NETWORK_SECONDS, interval=0.25,
+                            description=f"the banner of {handle} to go")
+        self._text_is(a, text, "resolved")
+        self._text_is(b, text, "resolved")
+        heads, conflict = self.wait_until(
+            peer.latest_heads, lambda state: state is not None and len(state[0]) == 1,
+            timeout=NETWORK_SECONDS, interval=0.25,
+            description="the third person's sidecar to report one head")
+        self.assertFalse(conflict)
+        self.assert_still_running(a, b)
+
+    def test_keep_mine_collapses_the_heads(self):
+        a, b, peer = self._two_heads()
+        self._resolve(a, "Keep Mine")
+        self._one_head(a, b, peer, self.MINE)
+
+    def test_keep_theirs_takes_the_other_version_in(self):
+        a, b, peer = self._two_heads()
+        self._resolve(a, "Keep Theirs")
+        self._one_head(a, b, peer, self.THEIRS)
+
+    def test_open_both_leaves_the_shared_session_alone(self):
+        a, b, peer = self._two_heads()
+        before, _ = peer.latest_heads()
+        self._resolve(a, "Open Both")
+        # The other version is a document of its own, in a tab of A.
+        self._text_is(a, self.THEIRS, "the other version opened")
+        # Settling window: nothing is published after the tab opens, and nothing
+        # observable says when "nothing" is certain.
+        time.sleep(3.0)
+        self.assertEqual(sorted(peer.latest_heads()[0]), sorted(before),
+                         "opening the other version changed the shared version graph")
+        self.assertIsNotNone(self._banner(b), "B's banner went with nothing resolved")
+        self._text_is(b, self.MINE, "nothing was merged")
+        # Back on A's shared tab: still shared, still its own text, still two versions.
+        self.focus_app(a)
+        rawinput.keyCombo("<Control>Page_Up")
+        self._text_is(a, self.MINE, "A's shared tab")
+        self.wait_until(lambda: self._status(a), lambda name: bool(name),
+                        description="A's shared tab to show its sharing status")
+        self.assertIsNotNone(self._banner(a), "A's shared tab lost its banner with nothing resolved")
+        self.assert_still_running(a, b)
 
 
 class LettersCollabDefaultOff(_LettersAtspi, BaseGUITestCase):

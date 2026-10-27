@@ -6,7 +6,10 @@ name: collab-letters-gui
 #              own settings, data directory and sidecar (the real `collabd`), on one Xvfb
 #              display and one AT-SPI tree, edit one document through the Durable Streams
 #              Node reference server 0.3.9: share, join, type into one paragraph, make it
-#              bold, stop sharing (tests/gui/test_collab_letters.py). Every assertion is
+#              bold, stop sharing; and, with a third person (a windowless collabd,
+#              tests/gui/collab_peer.py) whose saved version covers nothing the others hold,
+#              the two-versions banner and each way out of it through the Resolve dialog:
+#              Keep Mine, Keep Theirs, Open Both (tests/gui/test_collab_letters.py). Every assertion is
 #              read from AT-SPI. The run is recorded (GUI_TEST_VIDEO=all) under openbox, so
 #              one recording shows both windows side by side.
 #
@@ -156,7 +159,7 @@ jobs:
 
       # Both journeys ran: a collected journey with no outcome, or one that skipped, did not
       # prove anything.
-      - name: Both journeys ran and none skipped
+      - name: Every journey ran and none skipped
         run: |
           python3 - <<'PY'
           import os
@@ -169,8 +172,12 @@ jobs:
           bad = [c.get("name") for c in cases if c.find("skipped") is not None
                  or c.find("failure") is not None or c.find("error") is not None]
           print("journeys:", names)
-          if names != ["test_default_off", "test_two_instances_converge"] or bad:
-              print("::error::expected both journeys to pass; got", names, "not passing:", bad)
+          expected = ["test_default_off", "test_keep_mine_collapses_the_heads",
+                      "test_keep_theirs_takes_the_other_version_in",
+                      "test_open_both_leaves_the_shared_session_alone",
+                      "test_two_instances_converge"]
+          if names != expected or bad:
+              print("::error::expected every journey to pass; got", names, "not passing:", bad)
               sys.exit(1)
           PY
 
