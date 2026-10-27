@@ -73,6 +73,112 @@ HTTP/2 (HPACK) cuts the repeated response headers from about 790 to about 81 byt
 - With emulated retransmission stalls (about 1 chunk in 200 held 250 ms, `fifty_*_when_the_connection_stalls`): paced max 265 ms for long poll in all four combinations; for SSE on Node h2 the paced max was 34 ms and on h1 266 ms. Burst p95 Node h2 292 (long poll) against h1 110; Go h2 46 against h1 71. **No consistent HTTP/2 versus HTTP/1.1 difference, in either direction, came out of this emulation**: the stall model (a pause of one direction of a connection) does not discriminate with 50 mostly idle streams. Real loss was not tested.
 - **Large transfers under latency, an HTTP/2 finding** (`a_large_download_over_a_long_path`, 8 MiB, forwarder delay; the forwarder does not model TCP, so the HTTP/1.1 numbers are optimistic and only the HTTP/2 rows are limited by their own flow control): HTTP/2 with reqwest's fixed 64 KiB window: 180 / 226 MiB/s at 0 ms RTT (Node / Go), **28 / 30 at 40 ms, 12.5 / 12.6 at 100 ms**. With `http2_adaptive_window`: 84 / 87, 14 / 14, 5.9 / 5.9: **worse** in this setup. HTTP/1.1 (optimistic): 105 / 316, 57 / 81, 30 / 36. At the measured 12.6 MiB/s a 32 MiB file at 100 ms RTT over HTTP/2 with the default window would take about 2.5 s [INFERENCE from the 8 MiB rate, not run]. Not measured against a real long-RTT path.
 
+### Long-poll lost-wake-up census (2026-10-27)
+
+**The Go server v0.3.0 can deliver an acknowledged record late, after a long-poll timeout,
+because its waiter registration races an append. This is a real server finding, not a
+TLS/HTTP connection-reuse harness artifact.** The latency samples above describe successful
+measurements, not a delivery-latency guarantee.
+
+The original `fifty_long_polls_when_the_connection_stalls` failure was
+[`40214460508`, attempt 1, job `121233701854`](https://github.com/tuna-os/gtk-office-suite/actions/runs/40214460508/job/121233701854):
+Go HTTP/1.1, `only 48 of 50 deliveries within 30 s`. Attempt 2 passed, as did run
+[40245021774](https://github.com/tuna-os/gtk-office-suite/actions/runs/40245021774).
+The old log contains no per-reader offsets, so the precise interleaving of those original two
+readers cannot be reconstructed. The same failure class now reproduces.
+
+**Unmodified-client census.** [Run 40445628538](https://github.com/tuna-os/gtk-office-suite/actions/runs/40445628538),
+commit `f060b2f7`, used a temporary `fail-fast: false` matrix of **30 fresh runner/server jobs
+per variant**. Each job ran the real measurement job's transport test selection
+(`tls_measure:: --skip reconnecting_after`, release, one test thread), then **15 separate
+invocations** of the target test against that server. The executable was built once and
+downloaded to each runner. Server setup used the existing TLS scripts and defaults, access
+logging off. This repeated the transport step, not the unrelated latency, idle-server and
+idle-proxy steps of the full job. The 15 invocations share one server and are not 15 independent
+deployments; counts below are observed outcomes, not a probability estimate.
+
+| Variant | Target failures in the transport selection | All transport-selection failures | Target failures in the additional isolated invocations | Fresh jobs with an isolated target failure |
+|---|---:|---:|---:|---:|
+| Go HTTP/1.1 | **0/30** | **1/30** | **8/450** | **7/30** |
+| Go HTTP/2 | **0/30** | **0/30** | **2/450** | **2/30** |
+| Node HTTP/1.1 | **0/30** | **0/30** | **0/450** | **0/30** |
+| Node HTTP/2 | **0/30** | **0/30** | **0/450** | **0/30** |
+
+The one transport-selection failure was the related `fifty_long_polls_at_40_ms_round_trip`
+test (`only 49 of 50`, Go h1 job
+[`121999635279`](https://github.com/tuna-os/gtk-office-suite/actions/runs/40445628538/job/121999635279),
+matrix repetition 27), not the target. The isolated failures were all `only 49 of 50
+deliveries within 30 s`: Go h1 repetitions 5, 12, 14, 16, 17, 25, 27 (twice in 27); Go h2
+repetitions 17 and 26. Artifacts `census-result-{kind}-h{http}-{rep}` contain every count;
+`census-logs-*` contain failing test logs. No skip, added retry or relaxed assertion was used.
+
+**Cause evidence.** Diagnostic [run 40448365019](https://github.com/tuna-os/gtk-office-suite/actions/runs/40448365019),
+commit `e3d269e5`, ran Go h1 with temporary per-reader offset/append diagnostics. Ten jobs per
+logging mode each alternated 40 invocations of each long-poll mux test:
+
+| Test | Access log off (real measurement configuration) | Access log on |
+|---|---:|---:|
+| Connection stalls | **3/400 failed** | **9/400 failed** |
+| 40 ms RTT | **9/400 failed** | **15/400 failed** |
+| No added delay or stalls | **1/400 failed** | **0/400 failed** |
+
+All 37 failures had one missing delivery in burst 11 or 12, all 50 append tasks already
+finished, and no assertion change. For example, artifact `diag-go-h1.1-logged-8`:
+
+```text
+stream dcp/mux-2a6bd311/s48, burst k=12:
+append answered after 28.146485 ms, next ...1103; server tail ...1103
+reader offset ...0882; direct read from that offset returns 1 item, next ...1103
+Caddy: GET long-poll start 1793074538.727, end 1793074568.749, status 204
+       duration 30.022 s; returned Stream-Next-Offset ...0882
+       POST to the same stream answered 204 at 1793074538.743
+```
+
+The append succeeded **16 ms after the poll began**, yet the server held the poll for
+**30.022 s**, returned no data and the old offset; the pending record was available to an
+offset read. This locates the delay inside the live-read handler, before TLS response delivery,
+not in client reconnect, HTTP/1.1 pool reuse or a Caddy idle close. Other logged examples have
+the same shape. Some readers had already recovered by the diagnostic read: these are **late
+notifications, not evidence of permanent record loss**.
+
+The pinned [Go `FileStore.WaitForMessages` source](https://github.com/durable-streams/durable-streams/blob/0483b435d30b6a60759df5ee2fe21983c7d65eba/packages/caddy-plugin/store/file_store.go#L979-L1056)
+checks `Read` before `longPoll.register`, with no re-check afterward.
+[`Append`](https://github.com/durable-streams/durable-streams/blob/0483b435d30b6a60759df5ee2fe21983c7d65eba/packages/caddy-plugin/store/file_store.go#L589-L745)
+notifies currently registered waiters. An append between the empty read and registration has
+nobody to notify. The poll then waits for its timeout (or another append); its empty response
+retains the old offset, so the next read can recover the record.
+
+**Source-patch A/B.** [Run 40451334852](https://github.com/tuna-os/gtk-office-suite/actions/runs/40451334852),
+commit `27e48909`, built unpatched and patched Go servers from the **same v0.3.0 source**
+(`0483b435d30b6a60759df5ee2fe21983c7d65eba`, Go 1.25.0, Caddy 2.10.2). The only patch re-read
+the stream **after registering the waiter** and returned immediately if messages were present.
+Ten fresh jobs per build alternated 50 invocations of each test, Go h1, logging off, using the
+same diagnostic Rust executable, unchanged 30 s assertion, no extra retry:
+
+| Server binary | Stalls failures | 40 ms RTT failures |
+|---|---:|---:|
+| Pinned release control | **7/500** | **9/500** |
+| Same-source unpatched build | **7/500** | **8/500** |
+| Same-source build with post-registration re-check | **0/500** | **0/500** |
+
+All **30 A/B measurement jobs completed successfully** (their loops report test failures as
+data); artifacts `ab-{release,unpatched,patched}-{1..10}` contain their summaries and failure
+logs. The enclosing workflow was cancelled only after these jobs finished: a separate raw-socket
+Python `race2` probe hung/time-limited and is **unverified and excluded**. An earlier independent
+Python stress run [40445824320](https://github.com/tuna-os/gtk-office-suite/actions/runs/40445824320)
+did not confirm a missed notification; it is not used to establish the cause. The source
+interleaving, server access logs and controlled source-patch contrast support the lost-wake-up
+explanation; no thread-level trace of the original failure exists.
+
+**Disposition.** Record this as a Go-server implementation/liveness finding in spec 8.4, not
+as TCP head-of-line blocking, packet loss, a general Durable Streams defect, or proof that
+HTTP/2 fixes it. Keep the pinned release and strict measurement assertion unchanged: changing
+the timeout or adding a retry would hide the finding. The experimental upstream patch is not
+a deployed fix, nor a complete upstream regression suite. Temporary workflows, probes and
+diagnostic instrumentation were removed before the PR; their exact versions remain in the
+linked run commits.
+
+
 ### Idle connections
 
 `tls_measure::reconnecting_after_the_server_closes_an_idle_connection`, front end with `timeouts { idle 5s }` (Node's own keep-alive timeout is 5 s): a request after an idle gap of 1 s or 3 s reuses the connection (2.8 to 4.6 ms); after 7 s or 12 s the server has closed it, the client opens a new one **with no error and no retry**, and the request takes 6.0 to 7.2 ms: **a reconnect costs about 3 ms, the TLS handshake and a TCP connect**, in all four combinations (the Node origin direct, plain: 3.0 against 3.1 for the reused one: no handshake). The idle server close is noticed by hyper before the next request on both HTTP versions.

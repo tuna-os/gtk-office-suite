@@ -305,7 +305,6 @@ async fn wake_one(
 
 async fn wake_burst(
     h: &Http,
-    direct: &Http,
     paths: &[String],
     rx: &mut UnboundedReceiver<Ev>,
     k: usize,
@@ -313,13 +312,11 @@ async fn wake_burst(
     let n = paths.len();
     let t0 = Instant::now();
     let mut set = JoinSet::new();
-    for (i, p) in paths.iter().enumerate() {
+    for p in paths {
         let (h, p) = (h.clone(), p.clone());
         set.spawn(async move {
-            let r = h
-                .append(&p, JSON, format!("{{\"k\":{k},\"pad\":\"{}\"}}", "z".repeat(200)).into_bytes(), None, false)
-                .await;
-            (i, Instant::now(), r.map(|a| a.next))
+            h.append(&p, JSON, format!("{{\"k\":{k},\"pad\":\"{}\"}}", "z".repeat(200)).into_bytes(), None, false)
+                .await
         });
     }
     let mut lat = vec![f64::NAN; n];
@@ -334,57 +331,13 @@ async fn wake_burst(
             }
             Ok(Some(Ev { kind: EvKind::Failed(m), .. })) => return Err(m),
             Ok(Some(_)) => {}
-            _ => {
-                let missing: Vec<usize> = (0..n).filter(|&i| lat[i].is_nan()).collect();
-                diagnose(direct, paths, &missing, &mut set, t0, k).await;
-                return Err(format!("only {got} of {n} deliveries within 30 s (missing streams {missing:?})"));
-            }
+            _ => return Err(format!("only {got} of {n} deliveries within 30 s")),
         }
     }
     while let Some(r) = set.join_next().await {
-        r.map_err(|e| e.to_string())?.2.map_err(|e| e.to_string())?;
+        r.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     }
     Ok(lat)
-}
-
-/// DIAG (temporary): for every stream whose reader got nothing: did its append finish, what is
-/// the stream's tail on the server (asked directly, not through the forwarder), what is the
-/// reader doing, and does a plain read from the reader's offset return the message.
-async fn diagnose(
-    direct: &Http,
-    paths: &[String],
-    missing: &[usize],
-    set: &mut JoinSet<(usize, Instant, Result<String, dcp_streams::http::HttpError>)>,
-    t0: Instant,
-    k: usize,
-) {
-    let mut done = std::collections::HashMap::new();
-    while let Some(r) = set.try_join_next() {
-        if let Ok((i, at, res)) = r {
-            done.insert(i, (at.duration_since(t0), res));
-        }
-    }
-    eprintln!("DIAG burst k={k}: {} of {} appends finished at the time of the timeout", done.len(), paths.len());
-    for &i in missing {
-        let st = crate::live::STATE.lock().unwrap().get(&i).cloned();
-        let append = match done.get(&i) {
-            Some((d, Ok(next))) => format!("append answered after {d:?}, next {next}"),
-            Some((d, Err(e))) => format!("append FAILED after {d:?}: {e}"),
-            None => "append NOT FINISHED".to_owned(),
-        };
-        let tail = direct.head(&paths[i]).await.map(|h| h.next).unwrap_or_else(|e| format!("head failed: {e}"));
-        let (reader, catch_up) = match &st {
-            Some((off, started, polls, last)) => {
-                let cu = match direct.read_chunk(&paths[i], off, true).await {
-                    Ok(r) => format!("a read from the reader's offset returns {} items, next {}", r.items.len(), r.next),
-                    Err(e) => format!("read failed: {e}"),
-                };
-                (format!("reader polls from {off} since {:?} ago (poll #{polls}); previous poll: {last}", started.elapsed()), cu)
-            }
-            None => ("no reader state".to_owned(), String::new()),
-        };
-        eprintln!("DIAG stream {i} ({}): {append}; server tail {tail}; {reader}; {catch_up}", paths[i]);
-    }
 }
 
 fn drain(rx: &mut UnboundedReceiver<Ev>) {
@@ -457,7 +410,7 @@ async fn mux(base: &str, o: &Mux) -> Value {
     // Burst: one message to every stream at once, over the one pool.
     let mut burst = Vec::new();
     for k in 10..13 {
-        match wake_burst(&h, &direct, &paths, &mut rx, k).await {
+        match wake_burst(&h, &paths, &mut rx, k).await {
             Ok(v) => burst.extend(v),
             Err(e) => failures.push(e),
         }

@@ -1143,6 +1143,18 @@ Caddy's `log` directive answers SSE with `500` (long poll is unaffected), and th
 server closes idle keep-alive connections at 5 s, which a proxy with a longer upstream keep-alive
 would race (not measured).
 
+**Long-poll wake-up latency is not guaranteed by an open connection.** In the Go server v0.3.0,
+concurrent appends can race the registration of a long-poll waiter: an acknowledged append was
+present on the server while its poll remained parked until the 30 s server timeout, answered
+`204` with the old offset, and a new offset read returned the pending record. This reproduced
+with HTTP/1.1 and HTTP/2; no such failure occurred in the Node controls. It is a server-side
+lost wake-up, not evidence of TLS record loss or a need to retry successful appends. Readers
+MUST resume from the last returned offset after an empty poll too; a deployment MUST NOT treat
+the millisecond latency samples below as an upper bound. See the
+[CI census, access-log evidence and source-patch A/B](rfc/0004-spike-tls-results.md#long-poll-lost-wake-up-census-2026-10-27).
+The tested re-check-after-registration patch eliminated failures in its sample; the pinned
+release in the spike remains unpatched and its strict measurement assertion is unchanged.
+
 **What the server can do.** It can refuse, delete, close, slow or lose streams (and so can anyone
 with the document id); show a reader a stale prefix, including the epoch record of a revocation
 *[INFERENCE]*; choose which of two competing valid epoch records is first; lie about time within the
