@@ -105,7 +105,7 @@ jobs:
           scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
           export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_ACCESS_LOG=0
           scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
-      - name: The real job's transport step, verbatim (all tls_measure:: tests)
+      - name: "The real job's transport step, verbatim (all tls_measure tests)"
         id: exact
         working-directory: tools/collab-spike/dcp-streams
         env:
@@ -121,10 +121,13 @@ jobs:
           set +e
           pass=0; fail=0; failed=""
           for i in $(seq 1 "$ITER"); do
-            DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/iter.jsonl" \
+            if DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/iter.jsonl" \
               "$RUNNER_TEMP/bin/streams-test" --ignored --test-threads=1 --nocapture --exact \
-              tls_measure::fifty_long_polls_when_the_connection_stalls > "$RUNNER_TEMP/iter-$i.log" 2>&1
-            if [ $? -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed="$failed $i"; cp "$RUNNER_TEMP/iter-$i.log" "$GITHUB_WORKSPACE/tls-logs/iter-FAILED-$i.log"; fi
+              tls_measure::fifty_long_polls_when_the_connection_stalls > "$RUNNER_TEMP/iter-$i.log" 2>&1; then
+              pass=$((pass+1))
+            else
+              fail=$((fail+1)); failed="$failed $i"; cp "$RUNNER_TEMP/iter-$i.log" "$GITHUB_WORKSPACE/tls-logs/iter-FAILED-$i.log"
+            fi
           done
           echo "iterations: pass=$pass fail=$fail failed:$failed"
           echo "ITER_PASS=$pass" >> "$GITHUB_ENV"; echo "ITER_FAIL=$fail" >> "$GITHUB_ENV"
@@ -137,7 +140,7 @@ jobs:
       - name: Stop the server, keep its log
         if: always()
         run: |
-          for p in "${DCP_STREAMS_PIDFILE:-}"; do [ -n "$p" ] && scripts/streams-tls-down.sh "$p" || true; done
+          if [ -n "${DCP_STREAMS_PIDFILE:-}" ]; then scripts/streams-tls-down.sh "$DCP_STREAMS_PIDFILE" || true; fi
           cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server-${{ matrix.kind }}-h${{ matrix.http }}.log" 2>/dev/null || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: ${{ always() }}
