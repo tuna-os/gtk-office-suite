@@ -732,9 +732,14 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
     let clock = clock(&base).await;
     let fault = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let owner = store(&base, "alice", &clock, &fault);
-    let editor = store(&base, "bob", &clock, &fault);
+    // DCP_LEASE_RACE_EDITOR=alice makes both writers the owner's account (a stress run in CI);
+    // the default is a sharee, bob, writing through his mount of alice's folder.
+    let editor_user = std::env::var("DCP_LEASE_RACE_EDITOR").unwrap_or_else(|_| "bob".into());
+    let editor = store(&base, &editor_user, &clock, &fault);
     let doc = owner.create_document(&standard_meta(), Some(new_file(b"base"))).await.unwrap();
-    owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    if editor_user != "alice" {
+        owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    }
     let first = owner.versions(&doc).await.unwrap()[0].id.clone();
 
     // DCP_LEASE_RACE_ROUNDS raises the number of rounds (default 20) for a stress run in CI.
@@ -773,7 +778,7 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
         if odd || i == 0 {
             let why = if odd { "UNEXPECTED" } else { "baseline" };
             show_exchange(i, &format!("{why}; alice ok={}, bob ok={}", wo.is_ok(), we.is_ok()), &trace);
-            show_record_state(&base, &doc, next).await;
+            show_record_state(&base, &doc, next, &editor_user).await;
         }
         for r in [&wo, &we] {
             if let Err(e) = r {
@@ -793,7 +798,7 @@ async fn lease_log_is_a_compare_and_set_under_concurrency() {
             owner.write_lease(&doc, released()).await.unwrap();
         }
     }
-    measure("lease_log_concurrent_writers", json!({ "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "http_status_pairs": status_pairs, "loser_errors": losers }));
+    measure("lease_log_concurrent_writers", json!({ "writers": format!("alice+{editor_user}"), "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "http_status_pairs": status_pairs, "loser_errors": losers }));
     // Safety: never two winners. Liveness is not promised: when two different
     // users create the same name at the same instant Nextcloud's file lock can
     // refuse both (HTTP 423), and the caller reads back and tries again.
@@ -827,8 +832,10 @@ fn show_exchange(round: usize, why: &str, trace: &[dcp_webdav::dav::Exchange]) {
 
 /// What the server holds for the contested record afterwards, seen by both users: the directory
 /// listing with file ids and ETags, and the record's bytes.
-async fn show_record_state(base: &str, doc: &str, next: u64) {
-    for user in ["alice", "bob"] {
+async fn show_record_state(base: &str, doc: &str, next: u64, editor_user: &str) {
+    let mut users = vec!["alice", editor_user];
+    users.dedup();
+    for user in users {
         let d = dav(base, user);
         let dir = d.files_path(&format!("{doc}.l/"));
         match d.propfind(&dir, 1, &["d:getetag", "d:getlastmodified", "d:getcontentlength", "oc:fileid", "oc:owner-id"]).await {
