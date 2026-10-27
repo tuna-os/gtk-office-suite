@@ -745,8 +745,8 @@ impl dcp_core::lease::Pause for RealPause {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
     use dcp_conformance::{new_file, standard_meta};
-    use dcp_core::lease::{self, released, Claim, Settle, MATRIX_SETTLE_MS};
-    use dcp_core::{DocumentStore, Role};
+    use dcp_core::lease::{self, released, Attempt, Claim, Settle, MATRIX_SETTLE_MS};
+    use dcp_core::{DocumentStore, Role, StoreError};
     if require("lease_log_create_race_leaves_one_holder_after_the_read_backs", &[url_a()]).await.is_none() {
         return;
     }
@@ -772,6 +772,7 @@ async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
     // The HTTP statuses of the two PUTs, as the server answered them.
     let mut status_pairs = std::collections::BTreeMap::<String, u32>::new();
     let mut violations = Vec::<String>::new();
+    let mut not_located = 0;
     for i in 0..rounds {
         // Both read the same latest record, as two sessions that looked at once.
         let seen_o = owner.lease(&doc).await.unwrap();
@@ -780,14 +781,11 @@ async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
         let next = seen_o.as_ref().map_or(0, |l| l.id.parse::<u64>().unwrap() + 1);
         let co = Claim::new(owner.principal(), format!("o{i}"), "t", &first, 60_000);
         let ce = Claim::new(editor.principal(), format!("e{i}"), "t", &first, 60_000);
+        let (lo, le) = (co.lease_over(seen_o.as_ref()), ce.lease_over(seen_e.as_ref()));
         dcp_webdav::dav::trace_begin();
-        let (ao, ae) = tokio::join!(
-            lease::write_over(&owner, &doc, &co, seen_o.as_ref()),
-            lease::write_over(&editor, &doc, &ce, seen_e.as_ref())
-        );
+        let (wo, we) = tokio::join!(owner.write_lease(&doc, lo.clone()), editor.write_lease(&doc, le.clone()));
         let trace = dcp_webdav::dav::trace_take();
-        // Anything but a refusal (`Conflict`) propagates out of `write_over`: a loser must get Conflict.
-        let (ao, ae) = (ao.expect("the owner's write: a loser must get Conflict"), ae.expect("the editor's write: a loser must get Conflict"));
+        let (ao, ae) = (Attempt { lease: lo, result: wo }, Attempt { lease: le, result: we });
         let puts: Vec<&dcp_webdav::dav::Exchange> = trace.iter().filter(|e| e.method == "PUT").collect();
         let mut pair: Vec<String> = puts.iter().map(|e| e.status.map_or("none".to_owned(), |s| s.to_string())).collect();
         pair.sort();
@@ -797,9 +795,20 @@ async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
             (true, true) => both_accepted += 1,
             _ => one_accepted += 1,
         }
-        for r in [&ao.result, &ae.result] {
-            if let Err(e) = r {
-                *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1;
+        // A write that was not accepted is a `Conflict` (412, 423). Nextcloud also answers a
+        // create `404`, "File with name ... could not be located", to one of two creators of
+        // one name while the other's `201` stands (RFC-0004 spike E results, "The lease"); the
+        // store maps a 404 on a write to `Forbidden`. It is counted and quoted, and the write
+        // is as lost as a conflict. Anything else is a failure.
+        for (who, a) in [("owner", &ao), ("editor", &ae)] {
+            match &a.result {
+                Ok(_) => {}
+                Err(e @ StoreError::Conflict(_)) => *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1,
+                Err(e @ StoreError::Forbidden(m)) if m.contains("HTTP 404") => {
+                    not_located += 1;
+                    *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1;
+                }
+                Err(e) => violations.push(format!("round {i}: the {who}'s write was neither accepted, a Conflict nor a 404: {e:?}")),
             }
         }
         // The server did something other than 201 + 412/423: quote the whole exchange, and then
@@ -835,10 +844,11 @@ async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
         json!({
             "writers": format!("alice+{editor_user}"), "rounds": rounds,
             "no_write_accepted": none_accepted, "one_write_accepted": one_accepted, "both_writes_accepted": both_accepted,
+            "writes_answered_404": not_located,
             "sessions_holding_after_the_read_backs": holders, "http_status_pairs": status_pairs, "loser_errors": losers
         }),
     );
-    assert!(violations.is_empty(), "lease rule 3 did not leave exactly one holder: {violations:#?}");
+    assert!(violations.is_empty(), "lease rule 3 did not leave exactly one holder, or a write failed in an unexpected way: {violations:#?}");
     assert!(one_accepted + both_accepted >= 1, "no round had an accepted write");
 }
 
