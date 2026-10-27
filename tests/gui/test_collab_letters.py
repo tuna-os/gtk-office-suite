@@ -289,7 +289,11 @@ class _LettersAtspi:
     # ── the banner and the Resolve dialog ──────────────────────────────
 
     def _banner(self, handle):
-        return self._first(handle, lambda n: n.showing and BANNER in (n.name or ""))
+        """The revealed banner. An unrevealed AdwBanner stays in the tree, named
+        and `showing`, with no height ((0, 0) (1910, 0) in a tree dump), so a
+        banner is there only when it has height."""
+        return self._first(handle, lambda n: n.showing and BANNER in (n.name or "")
+                           and n.size[1] > 0)
 
     # ── sharing state ──────────────────────────────────────────────────
 
