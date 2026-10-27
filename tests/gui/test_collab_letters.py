@@ -359,9 +359,16 @@ class LettersCollabStreams(_LettersAtspi, BaseGUITestCase):
         self._focus_page(a)
         rawinput.keyCombo("End")
         rawinput.typeText(" from A")
+        # What each typed lands in its own page first: wait for that before the
+        # keyboard moves to the other window, so a key that never arrived is
+        # reported as that (with the page's text), not as a failure to converge.
+        self.wait_until(lambda: self._page_text(a), lambda t: t.rstrip("\n").endswith(" from A"),
+                        description="A's own page to show what A typed")
         self._focus_page(b)
         rawinput.keyCombo("Home")
         rawinput.typeText("B says ")
+        self.wait_until(lambda: self._page_text(b), lambda t: "B says " in t,
+                        description="B's own page to show what B typed")
 
         def both():
             return self._page_text(a), self._page_text(b)
