@@ -103,7 +103,9 @@
       "workflow": ".github/workflows/gui-tests.yml",
       "collects": "pytest collection of the AT-SPI journeys",
       "namespaces": [
-        "tests/gui/"
+        "tests/gui/test_smoke.py::",
+        "tests/gui/test_edit_render.py::",
+        "tests/gui/test_harness_artifacts.py::"
       ],
       "triggers": [
         "pull_request",
@@ -113,6 +115,21 @@
       "runs_on_candidate": true,
       "selective": true,
       "selective_reason": "tests/gui/select_journeys.sh runs only the journeys of the apps a change can affect (#108), falling back to every app when unsure; schedule and dispatch runs take everything. The journeys it leaves out are listed as deselected in the inventory and printed by the validator, never counted as passing."
+    },
+    {
+      "job": "journeys",
+      "workflow": ".github/workflows/collab-letters-gui.yml",
+      "collects": "pytest collection and the JUnit report of the Letters collaboration journeys (two instances through a real Durable Streams server)",
+      "namespaces": [
+        "tests/gui/test_collab_letters.py::"
+      ],
+      "triggers": [
+        "pull_request",
+        "push"
+      ],
+      "runs_on_every_revision": false,
+      "runs_on_every_revision_reason": "Path-filtered to the Letters shell, letters-core, suite-collab, collab/ and the GUI harness (RFC-0005 P5): a revision that changes none of them has no run. It needs Node for the pinned Durable Streams reference server and two real collabd processes, so it is not part of the required smoke job.",
+      "runs_on_candidate": false
     },
     {
       "job": "python-checks",

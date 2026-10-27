@@ -527,6 +527,21 @@
           "tests/gui/test_edit_render.py::DecksRichTextEditRenderJourney::test_range_formatting_saves_and_reopens"
         ]
       }
+    },
+    {
+      "id": "letters.collab.two-instances-converge",
+      "app": "letters",
+      "issue": 1043,
+      "title": "Two Letters instances share, join and edit one paragraph live; bold applied by one shows on the other",
+      "scope": "Letters built with the off-by-default collab feature, over the Durable Streams binding (Node reference server 0.3.9), driven through AT-SPI by two real instances. Does not certify the two-heads banner and its Resolve choices, Matrix, tables/footnotes/headers (refused), or a side-by-side recording (the run uses matchbox, which shows one full-screen window at a time).",
+      "status": "verified",
+      "revision": "daf73131a017a0dfbcb8a7db7227682efab83a0c",
+      "requires": ["gui"],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_collab_letters.py::LettersCollabStreams::test_two_instances_converge"
+        ]
+      }
     }
   ],
   "waivers": []
