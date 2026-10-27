@@ -45,6 +45,7 @@ jobs:
   census:
     name: stage A (new test, old store), copy ${{ matrix.copy }}
     needs: build
+    if: ${{ contains(github.event.head_commit.message, '[census]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -101,3 +102,82 @@ jobs:
           name: stageA-${{ matrix.copy }}
           path: measurements/
           if-no-files-found: warn
+
+  # Is the cause the one the source says? Patch sabre's PUT handler in the running container
+  # so that a request carrying X-Dcp-Delay-Pre / X-Dcp-Delay-Post sleeps (ms) before / after its
+  # existence check, then race two creators of one name with a controlled gap.
+  mechanism:
+    name: mechanism, Nextcloud ${{ matrix.version }}
+    if: ${{ contains(github.event.head_commit.message, '[mech]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: '34.0.5'
+            image: docker.io/library/nextcloud:34.0.5-apache@sha256:1f9212adecae32010cdbf137d7e0db78d08c696dc3e77f1eddcbf902d10209b4
+          - version: '35.0.2'
+            image: docker.io/library/nextcloud:35.0.2-apache@sha256:89af7ee7a96ff5e9668280566209268ae6b2d02327f6ef6d56f6d68228cf9431
+    env:
+      NEXTCLOUD_IMAGE: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start Nextcloud
+        run: tools/collab-spike/scripts/nextcloud-up.sh a 2>&1 | tail -5
+      - name: Where the PUT handler is
+        run: |
+          docker exec nc-a bash -c 'grep -rn "sabre/dav" /var/www/html/3rdparty/composer/installed.json | head -2; grep -n "\"version\"" /var/www/html/3rdparty/sabre/dav/composer.json 2>/dev/null | head -2; ls /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php; grep -n "function httpPut" -A8 /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php; grep -n "resource didn.t exist yet" /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php'
+          docker exec nc-a bash -c 'grep -n "createFile\|nodeExists" /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php | head'
+      - name: Patch the handler (a sleep before the existence check, a sleep after it)
+        run: |
+          docker exec -i nc-a php <<'EOF'
+          <?php
+          $f = '/var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php';
+          $s = file_get_contents($f);
+          $re = '/(public function httpPut\(RequestInterface \$request, ResponseInterface \$response\)\s*\{)/';
+          $n = 0;
+          $s = preg_replace($re, '$1' . "\n        if ((\$dcpd = \$request->getHeader('X-Dcp-Delay-Pre'))) { usleep((int) \$dcpd * 1000); }", $s, 1, $n);
+          if ($n !== 1) { fwrite(STDERR, "pre anchor not found\n"); exit(1); }
+          $needle = "// If we got here, the resource didn't exist yet.";
+          if (substr_count($s, $needle) !== 1) { fwrite(STDERR, "post anchor not found\n"); exit(1); }
+          $s = str_replace($needle, $needle . "\n            if ((\$dcpd = \$request->getHeader('X-Dcp-Delay-Post'))) { usleep((int) \$dcpd * 1000); }", $s);
+          file_put_contents($f, $s);
+          echo "patched\n";
+          EOF
+          docker exec nc-a php -l /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php
+          docker exec nc-a grep -n "X-Dcp-Delay" /var/www/html/3rdparty/sabre/dav/lib/DAV/CorePlugin.php
+          docker exec nc-a apache2ctl -k restart || true
+          for i in $(seq 1 60); do curl -fsS http://nc-a/status.php 2>/dev/null | grep -q '"installed":true' && break; sleep 1; done
+          curl -fsS http://nc-a/status.php; echo
+      - name: The patch is live (a request asking for 1.5 s in the handler takes more than 1.5 s)
+        run: |
+          pw="${DCP_NC_USER_PASSWORD:-dcp-user-Passw0rd-spike}"
+          base=http://nc-a/remote.php/dav/files/alice
+          curl -sS -u "alice:$pw" -X MKCOL "$base/live/" -o /dev/null -w "MKCOL %{http_code}\n"
+          curl -sS -u "alice:$pw" -X PUT --data-binary x -o /dev/null -w "no delay: http=%{http_code} total=%{time_total}\n" "$base/live/a.json"
+          t=$(curl -sS -u "alice:$pw" -X PUT -H 'X-Dcp-Delay-Pre: 1500' --data-binary x -o /dev/null -w "%{time_total}" "$base/live/b.json")
+          echo "delay-pre 1500 ms: total=$t"
+          awk -v t="$t" 'BEGIN { exit !(t > 1.4) }'
+      - name: Two creators of one name, a controlled gap
+        run: |
+          pw="${DCP_NC_USER_PASSWORD:-dcp-user-Passw0rd-spike}"
+          base=http://nc-a/remote.php/dav/files/alice
+          curl -sS -u "alice:$pw" -X MKCOL "$base/mech/" -o /dev/null -w "MKCOL %{http_code}\n"
+          # writer one starts at t=0 and (for the delayed variants) sleeps in the handler for 3 s;
+          # writer two starts at t=1 s and needs well under 1 s.
+          run_variant() {
+            variant="$1"; hdr="$2"; i="$3"
+            name="$variant-$i.json"
+            args=(); if [ -n "$hdr" ]; then args=(-H "$hdr"); fi
+            ( curl -sS -u "alice:$pw" -X PUT -H 'If-None-Match: *' "${args[@]}" --data-binary 'writer-one' -D "$RUNNER_TEMP/h1" -o /dev/null -w "writer1 http=%{http_code} total=%{time_total}s\n" "$base/mech/$name"; ) > "$RUNNER_TEMP/o1" &
+            sleep 1
+            curl -sS -u "alice:$pw" -X PUT -H 'If-None-Match: *' --data-binary 'writer-two' -D "$RUNNER_TEMP/h2" -o /dev/null -w "writer2 http=%{http_code} total=%{time_total}s\n" "$base/mech/$name" > "$RUNNER_TEMP/o2"
+            wait
+            echo "--- $variant #$i: $(cat "$RUNNER_TEMP/o1") | $(cat "$RUNNER_TEMP/o2") | file now holds: $(curl -sS -u "alice:$pw" "$base/mech/$name")"
+            echo "    writer1 headers: $(grep -i -E '^(oc-fileid|etag)' "$RUNNER_TEMP/h1" | tr -d '\r' | tr '\n' ' ')"
+            echo "    writer2 headers: $(grep -i -E '^(oc-fileid|etag)' "$RUNNER_TEMP/h2" | tr -d '\r' | tr '\n' ' ')"
+          }
+          for i in 1 2 3; do run_variant control "" $i; done
+          for i in 1 2 3; do run_variant delay-before-existence-check "X-Dcp-Delay-Pre: 3000" $i; done
+          for i in 1 2 3; do run_variant delay-after-existence-check "X-Dcp-Delay-Post: 3000" $i; done
