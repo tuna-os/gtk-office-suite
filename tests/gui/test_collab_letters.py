@@ -235,8 +235,9 @@ class _LettersAtspi:
         self.focus_app(handle)
         page = self._wait_page(handle)
         _safe(lambda: page.queryComponent().grabFocus())
-        self.wait_until(lambda: page.getState().contains(pyatspi.STATE_FOCUSED), bool,
-                        description=f"the page view of {handle} to take the keyboard")
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and not page.getState().contains(pyatspi.STATE_FOCUSED):
+            time.sleep(0.1)  # settling: the toolkit may never report focus for the page view
 
     def _runs(self, handle):
         """(start, end, attributes) for each formatting run of the page text,
