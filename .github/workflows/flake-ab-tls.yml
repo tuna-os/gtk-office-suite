@@ -1,0 +1,221 @@
+name: flake-ab-tls
+
+# TEMPORARY (branch spike/flake-census only, never merged): the long-poll mux tests of
+# tls_measure, repeated, with client-side diagnostics (tests/streams/tls_measure.rs `diagnose`) and,
+# in the `logged` mode, the Go server's access log.
+#
+# One build job produces the release test binary once; each census job gets it, starts the same
+# Caddy (go | node behind Caddy) as the real job, runs EXACTLY the real job's transport step
+# (all tls_measure:: tests, one thread), and then runs the stalls test alone ITER times against
+# the same server. A job fails iff the exact step fails.
+on:
+  push:
+    branches: [spike/flake-census]
+
+concurrency:
+  group: flake-ab-tls-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  ITER: '50'
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[ab]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls-release
+      - name: Build the test binary (release)
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p dcp-streams --test streams --no-run --message-format=json \
+            | python3 -c '
+          import json, sys
+          for l in sys.stdin:
+              try: m = json.loads(l)
+              except Exception: continue
+              if m.get("reason") == "compiler-artifact" and m.get("executable") and m["target"]["name"] == "streams":
+                  print(m["executable"])
+          ' | tee "$RUNNER_TEMP/exe.txt"
+          test -s "$RUNNER_TEMP/exe.txt"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$(tail -n1 "$RUNNER_TEMP/exe.txt")" "$RUNNER_TEMP/out/streams-test"
+          ls -l "$RUNNER_TEMP/out"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: census-bin
+          path: ${{ runner.temp }}/out/streams-test
+          if-no-files-found: error
+          retention-days: 3
+
+  build-go:
+    if: contains(github.event.head_commit.message, '[ab]')
+    name: build the Go server v0.3.0 from source (${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [unpatched, patched]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Source of the release (tag v0.3.0), and the one-hunk patch for `patched`
+        run: |
+          set -euo pipefail
+          go version
+          git clone --quiet --depth 1 --branch v0.3.0 https://github.com/durable-streams/durable-streams.git "$RUNNER_TEMP/ds"
+          git -C "$RUNNER_TEMP/ds" rev-parse HEAD
+          if [ "${{ matrix.variant }}" = patched ]; then
+            patch -d "$RUNNER_TEMP/ds" -p1 < .github/flake-census/waitformessages-recheck.patch
+          fi
+      - name: Build
+        working-directory: ${{ runner.temp }}/ds/packages/caddy-plugin
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/out"
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/out/durable-streams-server" ./cmd/caddy
+          sha256sum "$RUNNER_TEMP/out/durable-streams-server"
+          "$RUNNER_TEMP/out/durable-streams-server" version
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: caddy-${{ matrix.variant }}
+          path: ${{ runner.temp }}/out/durable-streams-server
+          if-no-files-found: error
+          retention-days: 3
+
+  ab:
+    needs: [build, build-go]
+    name: ab ${{ matrix.variant }} #${{ matrix.rep }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        variant: [release, unpatched, patched]
+        rep: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    env:
+      DCP_STREAMS_HTTP: '1.1'
+      DCP_MEASURE_MAX_MB: '16'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: census-bin
+          path: ${{ runner.temp }}/bin
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: ${{ matrix.variant != 'release' }}
+        with:
+          name: caddy-${{ matrix.variant }}
+          path: ${{ runner.temp }}/caddy
+      - name: Versions
+        run: |
+          chmod +x "$RUNNER_TEMP/bin/streams-test"
+          mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+          if [ "${{ matrix.variant }}" != release ]; then chmod +x "$RUNNER_TEMP/caddy/durable-streams-server"; echo "STREAMS_CADDY_DIR=$RUNNER_TEMP/caddy" >> "$GITHUB_ENV"; fi
+          { uname -a; nproc; lscpu | grep -E "Model name" || true; } | tee "$GITHUB_WORKSPACE/tls-logs/versions.txt"
+      - name: Start the Go server behind TLS (no access log, like the real job)
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_ACCESS_LOG=0
+          scripts/streams-tls-up.sh go | sed 's/^export //' >> "$GITHUB_ENV"
+          sha256sum "$(scripts/streams-caddy-fetch.sh)" | tee -a "$GITHUB_WORKSPACE/tls-logs/versions.txt"
+      - name: The two failing long-poll mux tests, ITER times each, alternating, same server
+        working-directory: tools/collab-spike/dcp-streams
+        run: |
+          set +e
+          for i in $(seq 1 "$ITER"); do
+            for t in fifty_long_polls_when_the_connection_stalls fifty_long_polls_at_40_ms_round_trip; do
+              if DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/iter.jsonl" \
+                "$RUNNER_TEMP/bin/streams-test" --ignored --test-threads=1 --nocapture --exact \
+                "tls_measure::$t" > "$RUNNER_TEMP/iter.log" 2>&1; then
+                echo "iter $i $t PASS"
+              else
+                echo "iter $i $t FAIL"
+                cp "$RUNNER_TEMP/iter.log" "$GITHUB_WORKSPACE/tls-logs/FAILED-$i-$t.log"
+                grep -h "DIAG\|only .* of" "$RUNNER_TEMP/iter.log" | cut -c1-700
+              fi
+            done
+          done | tee "$GITHUB_WORKSPACE/tls-logs/loop.txt"
+          for t in fifty_long_polls_when_the_connection_stalls fifty_long_polls_at_40_ms_round_trip; do
+            echo "SUMMARY ${{ matrix.variant }} rep=${{ matrix.rep }} $t pass=$(grep -c "$t PASS" "$GITHUB_WORKSPACE/tls-logs/loop.txt") fail=$(grep -c "$t FAIL" "$GITHUB_WORKSPACE/tls-logs/loop.txt")"
+          done | tee "$GITHUB_WORKSPACE/tls-logs/summary.txt"
+      - name: Stop the server
+        if: always()
+        run: |
+          if [ -n "${DCP_STREAMS_PIDFILE:-}" ]; then scripts/streams-tls-down.sh "$DCP_STREAMS_PIDFILE" || true; fi
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server.log" 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: ab-${{ matrix.variant }}-${{ matrix.rep }}
+          path: tls-logs/
+          if-no-files-found: warn
+          retention-days: 7
+
+  race2:
+    needs: [build-go]
+    name: race2 ${{ matrix.variant }} #${{ matrix.rep }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        variant: [release, unpatched, patched]
+        rep: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: ${{ matrix.variant != 'release' }}
+        with:
+          name: caddy-${{ matrix.variant }}
+          path: ${{ runner.temp }}/caddy
+      - name: Start the Go server (long-poll timeout 2 s, no access log)
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          if [ "${{ matrix.variant }}" != release ]; then chmod +x "$RUNNER_TEMP/caddy/durable-streams-server"; export STREAMS_CADDY_DIR="$RUNNER_TEMP/caddy"; fi
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_ACCESS_LOG=0 STREAMS_LONG_POLL_S=2
+          scripts/streams-tls-up.sh go | sed 's/^export //' >> "$GITHUB_ENV"
+          sha256sum "$(scripts/streams-caddy-fetch.sh)" | tee "$GITHUB_WORKSPACE/out/binary.txt"
+      - name: Poll and append a few hundred microseconds apart, with the server kept busy
+        run: |
+          set -euo pipefail
+          TRIALS=400 DECOYS=3 LP=2 python3 "$GITHUB_WORKSPACE/.github/flake-census/lp_race2.py" "$DCP_STREAMS_PLAIN_URL" | tee "$GITHUB_WORKSPACE/out/race2.txt"
+      - name: Stop the server
+        if: always()
+        run: |
+          if [ -n "${DCP_STREAMS_PIDFILE:-}" ]; then scripts/streams-tls-down.sh "$DCP_STREAMS_PIDFILE" || true; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: race2-${{ matrix.variant }}-${{ matrix.rep }}
+          path: out/
+          retention-days: 7
