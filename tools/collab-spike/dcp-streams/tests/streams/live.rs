@@ -1,6 +1,8 @@
 //! Readers that follow a stream live, by long poll (what the binding does) or by SSE (what the
 //! protocol also offers and the binding does not use), for the transport tests.
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 
 use dcp_streams::Http;
@@ -33,6 +35,10 @@ pub struct Ev {
     pub kind: EvKind,
 }
 
+/// DIAG (temporary): what every long-poll reader is doing: (offset it polls from, when the poll
+/// started, polls issued, how the last poll ended).
+pub static STATE: LazyLock<Mutex<HashMap<usize, (String, Instant, u64, String)>>> = LazyLock::new(Default::default);
+
 /// Follow `path` from `offset` for ever, reporting to `tx`, until aborted or a hard failure.
 /// A long poll that fails is retried by `Http` itself; an SSE response that ends is reopened
 /// from the last offset the server reported.
@@ -49,10 +55,17 @@ pub fn follow(
         let ev = |kind| Ev { idx, at: Instant::now(), kind };
         let _ = tx.send(ev(EvKind::Connected));
         loop {
+            if live == Live::LongPoll {
+                let n = STATE.lock().unwrap().get(&idx).map_or(0, |e| e.2) + 1;
+                STATE.lock().unwrap().insert(idx, (off.clone(), Instant::now(), n, "in flight".into()));
+            }
             match live {
                 Live::LongPoll => match http.long_poll(&path, &off, true).await {
                     Ok(r) => {
                         let at = Instant::now();
+                        if let Some(e) = STATE.lock().unwrap().get_mut(&idx) {
+                            e.3 = format!("answered after {:?}: {} items, next {}", at.duration_since(e.1), r.items.len(), r.next);
+                        }
                         off = r.next;
                         if !r.items.is_empty() {
                             let _ = tx.send(Ev { idx, at, kind: EvKind::Data(r.items.len()) });

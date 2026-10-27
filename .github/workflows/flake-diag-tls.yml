@@ -1,0 +1,142 @@
+name: flake-diag-tls
+
+# TEMPORARY (branch spike/flake-census only, never merged): the long-poll mux tests of
+# tls_measure, repeated, with client-side diagnostics (tests/streams/tls_measure.rs `diagnose`) and,
+# in the `logged` mode, the Go server's access log.
+#
+# One build job produces the release test binary once; each census job gets it, starts the same
+# Caddy (go | node behind Caddy) as the real job, runs EXACTLY the real job's transport step
+# (all tls_measure:: tests, one thread), and then runs the stalls test alone ITER times against
+# the same server. A job fails iff the exact step fails.
+on:
+  push:
+    branches: [spike/flake-census]
+
+concurrency:
+  group: flake-diag-tls-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  ITER: '40'
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[diag]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-tls-release
+      - name: Build the test binary (release)
+        run: |
+          set -euo pipefail
+          cargo test --release --locked -p dcp-streams --test streams --no-run --message-format=json \
+            | python3 -c '
+          import json, sys
+          for l in sys.stdin:
+              try: m = json.loads(l)
+              except Exception: continue
+              if m.get("reason") == "compiler-artifact" and m.get("executable") and m["target"]["name"] == "streams":
+                  print(m["executable"])
+          ' | tee "$RUNNER_TEMP/exe.txt"
+          test -s "$RUNNER_TEMP/exe.txt"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "$(tail -n1 "$RUNNER_TEMP/exe.txt")" "$RUNNER_TEMP/out/streams-test"
+          ls -l "$RUNNER_TEMP/out"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: census-bin
+          path: ${{ runner.temp }}/out/streams-test
+          if-no-files-found: error
+          retention-days: 3
+
+  diag:
+    needs: build
+    name: diag ${{ matrix.kind }} h${{ matrix.http }} ${{ matrix.mode }} #${{ matrix.rep }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        kind: [go]
+        http: ['1.1']
+        mode: [logged, quiet]
+        rep: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    env:
+      DCP_STREAMS_HTTP: ${{ matrix.http }}
+      DCP_MEASURE_MAX_MB: '16'
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: census-bin
+          path: ${{ runner.temp }}/bin
+      - name: Versions
+        run: |
+          chmod +x "$RUNNER_TEMP/bin/streams-test"
+          mkdir -p "$GITHUB_WORKSPACE/tls-logs"
+          { node --version; uname -a; nproc; lscpu | grep -E "Model name" || true; } | tee "$GITHUB_WORKSPACE/tls-logs/versions.txt"
+      - name: Start the server behind TLS
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki"
+          if [ "${{ matrix.mode }}" = logged ]; then export STREAMS_ACCESS_LOG=1; else export STREAMS_ACCESS_LOG=0; fi
+          scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+      - name: The three long-poll mux tests, ITER times each, alternating, same server
+        working-directory: tools/collab-spike/dcp-streams
+        run: |
+          set +e
+          for t in fifty_long_polls_when_the_connection_stalls fifty_long_polls_at_40_ms_round_trip fifty_long_polls_on_one_client; do echo "$t pass=0 fail=0" > "$RUNNER_TEMP/count-$t"; done
+          for i in $(seq 1 "$ITER"); do
+            for t in fifty_long_polls_when_the_connection_stalls fifty_long_polls_at_40_ms_round_trip fifty_long_polls_on_one_client; do
+              if DCP_MEASURE_OUT="$GITHUB_WORKSPACE/tls-logs/iter.jsonl" \
+                "$RUNNER_TEMP/bin/streams-test" --ignored --test-threads=1 --nocapture --exact \
+                "tls_measure::$t" > "$RUNNER_TEMP/iter.log" 2>&1; then
+                echo "iter $i $t PASS"
+              else
+                echo "iter $i $t FAIL"
+                cp "$RUNNER_TEMP/iter.log" "$GITHUB_WORKSPACE/tls-logs/FAILED-$i-$t.log"
+                grep -h "DIAG\|only .* of" "$RUNNER_TEMP/iter.log" | cut -c1-700
+              fi
+            done
+          done | tee "$GITHUB_WORKSPACE/tls-logs/loop.txt"
+          for t in fifty_long_polls_when_the_connection_stalls fifty_long_polls_at_40_ms_round_trip fifty_long_polls_on_one_client; do
+            echo "SUMMARY $t pass=$(grep -c "$t PASS" "$GITHUB_WORKSPACE/tls-logs/loop.txt") fail=$(grep -c "$t FAIL" "$GITHUB_WORKSPACE/tls-logs/loop.txt")"
+          done | tee "$GITHUB_WORKSPACE/tls-logs/summary.txt"
+      - name: Stop the server, keep its logs, analyse the access log
+        if: always()
+        run: |
+          if [ -n "${DCP_STREAMS_PIDFILE:-}" ]; then scripts/streams-tls-down.sh "$DCP_STREAMS_PIDFILE" || true; fi
+          cp "${DCP_STREAMS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/tls-logs/server.log" 2>/dev/null || true
+          if [ "${{ matrix.mode }}" = logged ]; then
+            cp "$DCP_STREAMS_ACCESS_LOG" "$GITHUB_WORKSPACE/tls-logs/access.log" 2>/dev/null || true
+            python3 "$GITHUB_WORKSPACE/.github/flake-census/analyze_log.py" "$GITHUB_WORKSPACE/tls-logs/access.log" 30 | tee "$GITHUB_WORKSPACE/tls-logs/access-analysis.txt" || true
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: diag-${{ matrix.kind }}-h${{ matrix.http }}-${{ matrix.mode }}-${{ matrix.rep }}
+          path: tls-logs/
+          if-no-files-found: warn
+          retention-days: 7
