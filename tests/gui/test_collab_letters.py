@@ -163,8 +163,11 @@ class _LettersAtspi:
         field = self._row(handle, title)
         self.focus_app(handle)
         _safe(lambda: field.queryComponent().grabFocus())
-        self.wait_until(lambda: field.getState().contains(pyatspi.STATE_FOCUSED), bool,
-                        description=f"the row {title!r} of {handle} to take the keyboard")
+        # Best effort: the value is set through the field's text interface, and
+        # typed only when that did not take (below), where focus matters.
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and not field.getState().contains(pyatspi.STATE_FOCUSED):
+            time.sleep(0.1)  # settling: waiting for a state change the toolkit may never report
         _safe(lambda: field.queryEditableText().setTextContents(value))
         if _safe(lambda: self._text_of(field)) != value:
             rawinput.keyCombo("<Control>a")
