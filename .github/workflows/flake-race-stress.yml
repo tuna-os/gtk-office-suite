@@ -1,0 +1,79 @@
+name: flake-race-stress
+
+# TEMPORARY (branch spike/flake-census only, never merged): does a long poll that arrives at the
+# same moment as an append get parked until its timeout?  Plain protocol (python, no Rust, no
+# forwarder), the Go server and the Node server behind the same Caddy as the spike's TLS jobs.
+on:
+  push:
+    branches: [spike/flake-census]
+
+concurrency:
+  group: flake-race-stress-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  race:
+    if: contains(github.event.head_commit.message, '[race]')
+    name: race ${{ matrix.kind }} #${{ matrix.rep }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        kind: [go, node]
+        rep: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Versions
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          { python3 --version; node --version; uname -a; nproc; lscpu | grep -E "Model name" || true; } | tee "$GITHUB_WORKSPACE/out/versions.txt"
+      - name: Install the pinned Node reference server (npm ci)
+        if: ${{ matrix.kind == 'node' }}
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: npm ci --no-audit --no-fund
+      - name: Start two servers, long-poll timeout 3 s (one with the access log, one without)
+        run: |
+          set -euo pipefail
+          scripts/streams-tls-certs.sh "$RUNNER_TEMP/pki" 2>&1
+          export STREAMS_TLS_DIR="$RUNNER_TEMP/pki" STREAMS_LONG_POLL_S=3
+          STREAMS_ACCESS_LOG=1 STREAMS_EXPORT_PREFIX=LOGGED STREAMS_TLS_PORT=4440 STREAMS_PLAIN_PORT=4441 STREAMS_ORIGIN_PORT=4437 \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+          STREAMS_ACCESS_LOG=0 STREAMS_EXPORT_PREFIX=QUIET STREAMS_TLS_PORT=4450 STREAMS_PLAIN_PORT=4451 STREAMS_ORIGIN_PORT=4447 \
+            scripts/streams-tls-up.sh ${{ matrix.kind }} | sed 's/^export //' >> "$GITHUB_ENV"
+      - name: Stress - plain HTTP, access log on
+        run: |
+          set -euo pipefail
+          TAG=${{ matrix.kind }}-plain-logged LP=3 python3 "$GITHUB_WORKSPACE/.github/flake-census/lp_race.py" "$LOGGED_PLAIN_URL" | tee "$GITHUB_WORKSPACE/out/plain-logged.txt"
+          python3 "$GITHUB_WORKSPACE/.github/flake-census/analyze_log.py" "$LOGGED_ACCESS_LOG" 3 | tee "$GITHUB_WORKSPACE/out/plain-logged-analysis.txt"
+      - name: Stress - plain HTTP, no access log
+        if: ${{ !cancelled() }}
+        run: |
+          TAG=${{ matrix.kind }}-plain-quiet LP=3 python3 "$GITHUB_WORKSPACE/.github/flake-census/lp_race.py" "$QUIET_PLAIN_URL" | tee "$GITHUB_WORKSPACE/out/plain-quiet.txt"
+      - name: Stress - TLS 1.3 HTTP/1.1, no access log
+        if: ${{ !cancelled() }}
+        run: |
+          TAG=${{ matrix.kind }}-tls-quiet LP=3 python3 "$GITHUB_WORKSPACE/.github/flake-census/lp_race.py" "$QUIET_URL" "$RUNNER_TEMP/pki/ca.pem" | tee "$GITHUB_WORKSPACE/out/tls-quiet.txt"
+      - name: Collect
+        if: always()
+        run: |
+          cp "${LOGGED_ACCESS_LOG:-/dev/null}" "$GITHUB_WORKSPACE/out/access.log" 2>/dev/null || true
+          cp "${LOGGED_LOG:-/dev/null}" "$GITHUB_WORKSPACE/out/server.log" 2>/dev/null || true
+          echo "RACE-RESULT kind=${{ matrix.kind }} rep=${{ matrix.rep }}" > "$GITHUB_WORKSPACE/out/summary.txt"
+          for f in plain-logged plain-quiet tls-quiet; do
+            if [ -f "$GITHUB_WORKSPACE/out/$f.txt" ]; then echo "$f $(sed -n 's/^RESULT //p' "$GITHUB_WORKSPACE/out/$f.txt" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print("pairs=%d lost=%d polls_204=%d rounds=%d" % (d["pairs_poll_vs_append"], d["lost_wakeups"], d["polls_answered_204"], d["rounds_done"]))')" >> "$GITHUB_WORKSPACE/out/summary.txt"; fi
+          done
+          cat "$GITHUB_WORKSPACE/out/summary.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: race-${{ matrix.kind }}-${{ matrix.rep }}
+          path: out/
+          retention-days: 7
