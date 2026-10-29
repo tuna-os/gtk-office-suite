@@ -1186,13 +1186,23 @@ impl Typeset {
                         cr.rectangle(*x_pt, *y_pt, *width_pt, *height_pt);
                         let _ = cr.fill();
                     }
-                    // The rule's outer edge is the box's.
+                    // The rule's outer edge is the box's; a box thinner than
+                    // its rule is a line (a form's rule), drawn along its
+                    // middle.
                     if let Some(rule) = &text_box.border {
                         let (r, g, b) = parse_hex(&rule.color).unwrap_or((0, 0, 0));
                         let lw = emu(rule.width_emu).max(0.25);
                         cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
                         cr.set_line_width(lw);
-                        cr.rectangle(x_pt + lw / 2.0, y_pt + lw / 2.0, width_pt - lw, height_pt - lw);
+                        if *height_pt < lw {
+                            cr.move_to(*x_pt, y_pt + height_pt / 2.0);
+                            cr.line_to(x_pt + width_pt, y_pt + height_pt / 2.0);
+                        } else if *width_pt < lw {
+                            cr.move_to(x_pt + width_pt / 2.0, *y_pt);
+                            cr.line_to(x_pt + width_pt / 2.0, y_pt + height_pt);
+                        } else {
+                            cr.rectangle(x_pt + lw / 2.0, y_pt + lw / 2.0, width_pt - lw, height_pt - lw);
+                        }
                         let _ = cr.stroke();
                     }
                     // Its text inside its padding, a paragraph per line, in
