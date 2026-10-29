@@ -1236,7 +1236,7 @@ impl Typeset {
                     let _ = cr.stroke();
                     let _ = cr.restore();
                 }
-                Item::Cell { x_pt, y_pt, width_pt, height_pt, fill, ruled, open, .. } => {
+                Item::Cell { table, x_pt, y_pt, width_pt, height_pt, fill, ruled, open, .. } => {
                     // The cell's shading first, under its rule and text.
                     if let Some((r, g, b)) = fill.as_deref().and_then(parse_hex) {
                         let _ = cr.save();
@@ -1264,7 +1264,10 @@ impl Typeset {
                     let (x0, y0) = snap(*x_pt, *y_pt);
                     let (x1, y1) = snap(*x_pt + *width_pt, *y_pt + *height_pt);
                     let _ = cr.save();
-                    cr.set_source_rgb(0.0, 0.0, 0.0);
+                    // In the table's rule colour (a light grid's grey), else
+                    // black.
+                    let (r, g, b) = self.doc.table_rule_colors.get(table).and_then(|c| parse_hex(c)).unwrap_or((0, 0, 0));
+                    cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
                     cr.set_line_width(lw);
                     if open.any() {
                         // Only the sides the cell rules; a neighbour draws

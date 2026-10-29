@@ -1348,6 +1348,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let table_padding = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_padding(t)?))).collect();
     let table_unruled: std::collections::BTreeSet<u32> = tables.iter().enumerate().filter(|(_, t)| !table_ruled(t)).map(|(ti, _)| ti as u32).collect();
     let table_valign = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_valign(t)?))).collect();
+    let table_rule_colors = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).filter_map(|(ti, t)| Some((ti as u32, table_rule_color(t)?))).collect();
     // The rows kept on one page (`w:cantSplit`).
     let table_whole_rows = tables
         .iter()
@@ -1394,6 +1395,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_padding,
         table_indent,
         table_unruled,
+        table_rule_colors,
         table_whole_rows,
         table_relative,
         table_open_edges,
@@ -2077,7 +2079,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if doc.table_unruled.contains(&tc0.table) {
                 tbl.set_borders(rdocx::BorderStyle::None, 0, "auto");
             } else {
-                tbl.set_borders(rdocx::BorderStyle::Single, 4, "000000");
+                tbl.set_borders(rdocx::BorderStyle::Single, 4, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
@@ -3598,6 +3600,9 @@ struct StyleFonts {
     styles: std::collections::HashMap<String, (Option<String>, Option<FontRef>)>,
     /// Table styles whose own `w:tblBorders` has a visible edge.
     ruled_table_styles: std::collections::HashSet<String>,
+    /// The colour of the first visible edge a table style's own
+    /// `w:tblBorders` gives one (not "auto").
+    table_style_rule_colors: std::collections::HashMap<String, String>,
     default_para: Option<String>,
     doc_default: Option<FontRef>,
 }
@@ -3652,6 +3657,9 @@ fn style_fonts(path: &str) -> StyleFonts {
                     if let (Some(id), Some(val)) = (&style, attr(&e, "w:val")) {
                         if !matches!(val.as_str(), "none" | "nil") {
                             out.ruled_table_styles.insert(id.clone());
+                            if let Some(color) = attr(&e, "w:color").and_then(|c| rule_color(&c)) {
+                                out.table_style_rule_colors.entry(id.clone()).or_insert(color);
+                            }
                         }
                     }
                 }
@@ -3725,6 +3733,40 @@ thread_local! {
 }
 
 /// Whether table style `id`, or one it is based on, has a visible rule.
+/// A border colour worth keeping: six hex digits, upper case; "auto" and
+/// black (the rule drawn when none is given) are none.
+fn rule_color(c: &str) -> Option<String> {
+    let c = c.to_ascii_uppercase();
+    (c.len() == 6 && c.bytes().all(|b| b.is_ascii_hexdigit()) && c != "000000").then_some(c)
+}
+
+/// The colour a ruled table's rules are drawn in, when not black: its own
+/// first visible border's (`w:tblBorders`), else its style's, through
+/// `w:basedOn` (Word's "Table Grid Light" is BFBFBF).
+fn table_rule_color(table: &rdocx::TableRef<'_>) -> Option<String> {
+    use rdocx::TableBorderEdge as E;
+    let own = [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(|b| !matches!(b.style(), "none" | "nil"));
+    if let Some(b) = own {
+        return b.color().and_then(rule_color);
+    }
+    let id = table.style_id()?;
+    STYLE_FONTS.with(|sf| {
+        let sf = sf.borrow();
+        let mut cur = Some(id.to_string());
+        for _ in 0..32 {
+            let c = cur?;
+            if sf.ruled_table_styles.contains(&c) {
+                return sf.table_style_rule_colors.get(&c).cloned();
+            }
+            cur = sf.styles.get(&c).and_then(|(based_on, _)| based_on.clone());
+        }
+        None
+    })
+}
+
 fn table_style_ruled(id: &str) -> bool {
     STYLE_FONTS.with(|sf| {
         let sf = sf.borrow();
