@@ -16,7 +16,7 @@ sha2.workspace = true
 thiserror.workspace = true
 parking_lot = "0.13"
 # The schemas are local, so no HTTP retriever is wanted (and reqwest is heavy).
-jsonschema = { version = "0.30", default-features = false }
+jsonschema = { version = "0.60", default-features = false }
 
 [dev-dependencies]
 tokio.workspace = true
