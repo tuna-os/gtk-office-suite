@@ -171,7 +171,7 @@ impl PangoShaper {
                     let (_, logical) = label.extents();
                     pango::Rectangle::new(0, -label.baseline(), 0, logical.height())
                 } else {
-                    let (w, h) = if run.style.image.is_some() { super::inline_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
+                    let (w, h) = if run.style.image.is_some() { super::inline_size_pt(run) } else { (0.0, 0.0) };
                     pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h))
                 };
                 let mut a: pango::Attribute = pango::AttrShape::new(&rect, &rect).into();
@@ -361,6 +361,7 @@ fn line_boxes(layout: &pango::Layout, hang: f64) -> Vec<LineBox> {
                 width_pt: to_pt(logical.width()),
                 ascent_pt: to_pt(baseline - logical.y()),
                 descent_pt: to_pt(logical.y() + logical.height() - baseline),
+                text_pt: None,
             });
         }
         if !iter.next_line() {
@@ -395,6 +396,11 @@ impl Shaper for PangoShaper {
             let gap = to_pt(m.height() - m.ascent() - m.descent()).max(0.0);
             for l in &mut lines {
                 l.descent_pt += gap;
+                // A line holding an inline picture: its text's own height,
+                // which proportional spacing scales (`LineBox::text_height`).
+                if l.objects.iter().any(|&(ch, _)| super::run_at(req.runs, ch).is_some_and(|r| r.style.image.is_some() && r.style.image_anchor.is_none())) {
+                    l.text_pt = Some(to_pt(m.height()));
+                }
             }
         }
         // Raised or lowered text (`position_hp`) grows its line by as much,
@@ -1481,6 +1487,31 @@ mod tests {
         // Ink inside the first line's box, none above the top margin.
         assert!(dark(72, 72, 160, 86), "no text drawn in the first line box");
         assert!(!dark(0, 0, w as usize, 70), "ink above the top margin");
+    }
+
+    /// Proportional line spacing scales a line's text, not an inline
+    /// picture on it: at 150% a line holding a 100pt chart is the chart and
+    /// half a line of text tall, as Writer lays it out (measured: 6.9pt more
+    /// than at 100% for 12pt text), not half as tall again as the chart.
+    #[test]
+    fn proportional_spacing_scales_the_text_not_an_inline_picture() {
+        use crate::model::{Run, RunStyle};
+        let heights = |spacing: f32| {
+            let mut d = doc(3, "x");
+            d.paragraphs[1].style.line_spacing = spacing;
+            d.paragraphs[1].runs = vec![Run { text: String::new(), style: RunStyle { image: Some("/nonexistent.png".into()), image_extent_emu: Some((914_400, 100 * 12_700)), ..Default::default() } }];
+            let t = Typeset::new(d, LayoutOptions::default());
+            let tops: Vec<f64> = t.tree().pages[0].lines().map(|l| match l { Item::Line { top_pt, .. } => *top_pt, _ => 0.0 }).collect();
+            tops[2] - tops[1]
+        };
+        let text_line = {
+            let t = Typeset::new(doc(2, "x"), LayoutOptions::default());
+            let tops: Vec<f64> = t.tree().pages[0].lines().map(|l| match l { Item::Line { top_pt, .. } => *top_pt, _ => 0.0 }).collect();
+            tops[1] - tops[0]
+        };
+        let (single, half_again) = (heights(1.0), heights(1.5));
+        assert!(single >= 100.0, "the picture's line is at least the picture: {single}");
+        assert!((half_again - single - text_line / 2.0).abs() < 0.01, "150% adds half a text line ({}), not half the picture: {single} -> {half_again}", text_line / 2.0);
     }
 
     /// A paragraph holding only a floating picture or text box is as tall
