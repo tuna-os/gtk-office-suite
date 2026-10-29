@@ -15,7 +15,7 @@ serde_json.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 getrandom = "0.4"

@@ -14,7 +14,7 @@ serde_json.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "io-util"] }
 # Plain HTTP only: the instances in CI are on a private docker network. No TLS
 # stack is built, which is also why nothing here is evidence about HTTPS.
-reqwest = { version = "0.12", default-features = false }
+reqwest = { version = "0.13", default-features = false }
 quick-xml = "0.37"
 getrandom = "0.3"
 httpdate = "1"

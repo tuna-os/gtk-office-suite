@@ -21,7 +21,7 @@ httpdate = "1"
 # rustls with the ring provider and NO built-in trust roots (`rustls-tls-manual-roots`): the
 # client trusts only the CA it is given (`http::Transport::ca_pem`). `http2` adds ALPN `h2`.
 # Features pinned so the tree stays: rustls, hyper-rustls, tokio-rustls, rustls-webpki, ring, h2.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-manual-roots", "http2"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-tls-manual-roots", "http2"] }
 # The vetted RustCrypto primitives.
 chacha20poly1305 = "0.11"
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "fast", "zeroize"] }
