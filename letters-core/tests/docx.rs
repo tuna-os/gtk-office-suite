@@ -2419,3 +2419,33 @@ fn a_blank_paragraph_keeps_its_marks_size() {
     assert!(doctored.paragraphs[1].runs.is_empty(), "a blank line in the body font: {:?}", doctored.paragraphs[1].runs);
     assert_eq!(doctored.paragraphs[2].text(), "title");
 }
+
+/// A list whose definition only links a numbering style (`w:numStyleLink`)
+/// and gives its levels in the instance's own `w:lvlOverride` is numbered
+/// as those levels say. Its items were read as bullets: the Ofsted
+/// minutes' "6.1." item took a bullet's room, and moved its next page.
+#[test]
+fn a_list_numbered_by_its_level_overrides_is_numbered() {
+    let mut d = Document::from_plain_text("first\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("<w:numId w:val=\"").expect("fixture shape changed");
+        let end = at + body[at..].find("/>").unwrap() + 2;
+        body.replace_range(at..end, "<w:numId w:val=\"90\"/>");
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"90\"><w:multiLevelType w:val=\"multilevel\"/><w:numStyleLink w:val=\"OutlineNumbered\"/></w:abstractNum>",
+        );
+        *numbering = numbering.replace(
+            "</w:numbering>",
+            "<w:num w:numId=\"90\"><w:abstractNumId w:val=\"90\"/><w:lvlOverride w:ilvl=\"0\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/>\
+             <w:lvlText w:val=\"6.%1.\"/><w:lvlJc w:val=\"left\"/><w:pPr><w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr></w:lvl></w:lvlOverride></w:num></w:numbering>",
+        );
+    });
+    assert_eq!(rt.paragraphs[0].style.list, ListKind::Numbered);
+    let label = rt.paragraphs[0].style.list_label.as_ref().expect("its level text");
+    assert_eq!((label.prefix.as_str(), label.suffix.as_str()), ("6.", "."));
+}
