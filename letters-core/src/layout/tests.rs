@@ -979,21 +979,29 @@ fn an_inline_image_keeps_its_room_beside_it() {
     let t = lay(&d);
     let x = t.pages[0].items.iter().find_map(|i| match i { Item::Image { x_pt, .. } => Some(*x_pt), _ => None }).unwrap();
     assert_eq!(x, 72.0 + 9.0, "9pt in from the margin");
-    assert_eq!(inline_size_pt(&pic(Some((114_300, 114_300))), 400.0), (90.0, 72.0), "the line keeps 9pt each side");
-    assert_eq!(inline_size_pt(&pic(None), 400.0), (72.0, 72.0));
+    assert_eq!(inline_size_pt(&pic(Some((114_300, 114_300)))), (90.0, 72.0), "the line keeps 9pt each side");
+    assert_eq!(inline_size_pt(&pic(None)), (72.0, 72.0));
 }
 
+/// A picture wider than the text keeps its size and runs into the margin,
+/// as Writer and Word draw it: it is not shrunk to the column, which drew
+/// a chart a little wider than the text shorter than Writer does.
 #[test]
-fn an_image_wider_than_the_text_box_is_scaled_to_fit() {
+fn an_image_wider_than_the_text_keeps_its_size() {
     let run = Run {
         text: String::new(),
         style: crate::model::RunStyle {
             image: Some("x".into()),
-            image_extent_emu: Some((12700 * 900, 12700 * 300)),
+            image_extent_emu: Some((12700 * 500, 12700 * 200)),
             ..Default::default()
         },
     };
-    assert_eq!(image_size_pt(&run, 450.0), (450.0, 150.0));
+    assert_eq!(image_size_pt(&run), (500.0, 200.0));
+    let mut d = doc_of(2, "text");
+    d.paragraphs[0].runs = vec![run];
+    let t = lay(&d);
+    let size = t.pages[0].items.iter().find_map(|i| match i { Item::Image { width_pt, height_pt, .. } => Some((*width_pt, *height_pt)), _ => None });
+    assert_eq!(size, Some((500.0, 200.0)), "wider than the {}pt column, drawn at its own size", t.pages[0].width_pt - 144.0);
 }
 
 #[test]
