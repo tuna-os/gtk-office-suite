@@ -1348,12 +1348,14 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let table_padding = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_padding(t)?))).collect();
     let table_unruled: std::collections::BTreeSet<u32> = tables.iter().enumerate().filter(|(_, t)| !table_ruled(t)).map(|(ti, _)| ti as u32).collect();
     let table_valign = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_valign(t)?))).collect();
-    // The rows kept on one page (`w:cantSplit`).
+    // The rows kept on one page (`w:cantSplit`), and heading rows
+    // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
         .iter()
         .enumerate()
         .filter_map(|(ti, t)| {
-            let rows: std::collections::BTreeSet<u32> = (0..t.row_count()).filter(|&r| t.row(r).and_then(|row| row.cant_split_value()) == Some(true)).map(|r| r as u32).collect();
+            let rows: std::collections::BTreeSet<u32> =
+                (0..t.row_count()).filter(|&r| t.row(r).is_some_and(|row| row.cant_split_value() == Some(true) || row.is_header())).map(|r| r as u32).collect();
             (!rows.is_empty()).then_some((ti as u32, rows))
         })
         .collect();
