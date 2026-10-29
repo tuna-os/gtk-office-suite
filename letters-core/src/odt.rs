@@ -2491,6 +2491,121 @@ fn first_master_page(content: &str, styles: &str) -> Option<String> {
         .or_else(|| masters.first().cloned())
 }
 
+/// styles.xml with the first page's master (`master`) made to read as
+/// Writer lays it out when it names a different `style:next-style-name`:
+/// the next master's header and footer run on the pages after the first,
+/// and the first master's own become the first page's
+/// (`style:header-first`/`style:footer-first`). A first master without a
+/// header or footer gives a first page without one.
+fn follow_next_master(styles: &str, master: &str) -> Option<String> {
+    #[derive(Default)]
+    struct Master {
+        next: Option<String>,
+        content: Option<(usize, usize)>,
+        // Its own header and footer elements, and whether it has a first
+        // page's one already.
+        header: Option<(usize, usize)>,
+        footer: Option<(usize, usize)>,
+        has_first: bool,
+    }
+    let mut masters: std::collections::HashMap<String, Master> = Default::default();
+    let mut reader = Reader::from_str(styles);
+    let mut cur: Option<String> = None;
+    let mut content_start = 0;
+    // The master's child element being read: its name, start and depth.
+    let mut child: Option<(String, usize)> = None;
+    let mut depth = 0usize;
+    loop {
+        let before = reader.buffer_position() as usize;
+        match reader.read_event() {
+            Ok(Event::Start(e)) if cur.is_none() && e.name().as_ref() == "style:master-page" => {
+                let name = attr_val(&e, "style:name").unwrap_or_default();
+                masters.insert(name.clone(), Master { next: attr_val(&e, "style:next-style-name"), ..Default::default() });
+                cur = Some(name);
+                content_start = reader.buffer_position() as usize;
+                depth = 0;
+            }
+            Ok(Event::Empty(e)) if cur.is_none() && e.name().as_ref() == "style:master-page" => {
+                let name = attr_val(&e, "style:name").unwrap_or_default();
+                masters.insert(name, Master { next: attr_val(&e, "style:next-style-name"), ..Default::default() });
+            }
+            Ok(Event::End(e)) if depth == 0 && e.name().as_ref() == "style:master-page" => {
+                if let Some(m) = cur.take().and_then(|n| masters.get_mut(&n)) {
+                    m.content = Some((content_start, before));
+                }
+            }
+            Ok(Event::Start(e)) if cur.is_some() => {
+                if depth == 0 {
+                    child = Some((e.name().as_ref().to_string(), before));
+                }
+                depth += 1;
+            }
+            Ok(Event::End(_)) if cur.is_some() => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    if let Some((name, start)) = child.take() {
+                        let span = (start, reader.buffer_position() as usize);
+                        let m = cur.as_ref().and_then(|n| masters.get_mut(n)).expect("the master being read");
+                        match name.as_str() {
+                            "style:header" => m.header = Some(span),
+                            "style:footer" => m.footer = Some(span),
+                            "style:header-first" | "style:footer-first" => m.has_first = true,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(Event::Empty(e)) if cur.is_some() && depth == 0 => {
+                let span = (before, reader.buffer_position() as usize);
+                let m = cur.as_ref().and_then(|n| masters.get_mut(n)).expect("the master being read");
+                match e.name().as_ref() {
+                    "style:header" => m.header = Some(span),
+                    "style:footer" => m.footer = Some(span),
+                    "style:header-first" | "style:footer-first" => m.has_first = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    let first = masters.get(master)?;
+    let next = masters.get(first.next.as_deref().filter(|n| *n != master)?)?;
+    let (start, end) = first.content?;
+    if first.has_first {
+        return None;
+    }
+    let part = |span: Option<(usize, usize)>| span.map_or("", |(s, e)| &styles[s..e]);
+    // The first master's own part, renamed to the first page's.
+    // One the first master lacks is a first page without, where the
+    // pages after have one.
+    let as_first = |span: Option<(usize, usize)>, after: Option<(usize, usize)>, tag: &str| -> String {
+        match span {
+            None if after.is_none() => String::new(),
+            None => format!("<style:{tag}-first/>"),
+            Some((s, e)) => {
+                let text = &styles[s..e];
+                let open = format!("<style:{tag}");
+                let mut out = format!("<style:{tag}-first{}", &text[open.len()..]);
+                let close = format!("</style:{tag}>");
+                if out.ends_with(&close) {
+                    out.truncate(out.len() - close.len());
+                    out.push_str(&format!("</style:{tag}-first>"));
+                }
+                out
+            }
+        }
+    };
+    let mut merged = String::with_capacity(styles.len());
+    merged.push_str(&styles[..start]);
+    merged.push_str(part(next.header));
+    merged.push_str(part(next.footer));
+    merged.push_str(&as_first(first.header, next.header, "header"));
+    merged.push_str(&as_first(first.footer, next.footer, "footer"));
+    merged.push_str(&styles[end..]);
+    Some(merged)
+}
+
 /// The master page a body block whose style is `name` starts a new page
 /// on (LET-005S): the style's `style:master-page-name`, else the one a
 /// parent style names. None where no style in the chain names one, or the
@@ -3146,6 +3261,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // to its outer cell.
     let mut table: Option<(u32, i64, i64, usize, bool)> = None;
     let mut table_depth = 0usize;
+    // Inside the outermost table's heading rows (`table:table-header-rows`),
+    // which Writer never splits across pages: read as rows kept whole.
+    let mut in_header_rows = false;
     let mut tables_read = 0u32;
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
@@ -3441,11 +3559,12 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         tables_read += 1;
                     }
                 }
+                "table:table-header-rows" if table.as_ref().is_some_and(|t| t.3 == table_depth) => in_header_rows = true,
                 "table:table-row" => {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.1 += 1;
                         t.2 = -1;
-                        if attr_val(&e, "table:style-name").is_some_and(|n| auto.row_whole.contains(&n) || named.row_whole.contains(&n)) {
+                        if in_header_rows || attr_val(&e, "table:style-name").is_some_and(|n| auto.row_whole.contains(&n) || named.row_whole.contains(&n)) {
                             doc.table_whole_rows.entry(t.0).or_default().insert(t.1 as u32);
                         }
                         if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
@@ -3883,6 +4002,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
+                "table:table-header-rows" if table.as_ref().is_some_and(|t| t.3 == table_depth) => in_header_rows = false,
                 "svg:title" | "svg:desc" => {
                     if let Some(f) = frame.as_mut() {
                         f.in_alt = false;
@@ -4063,7 +4183,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // sections a body that changes master makes (`master_sections`).
     if !styles.is_empty() {
         let master = first_master_page(&content, &styles);
-        let mut reader = Reader::from_str(&styles);
+        let followed = master.as_deref().and_then(|m| follow_next_master(&styles, m));
+        let mut reader = Reader::from_str(followed.as_deref().unwrap_or(&styles));
         let mut in_header = false;
         let mut in_footer = false;
         // The master page being read, and whether it is the first page's.
@@ -4522,6 +4643,20 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 *t = (t.is_some() && !lines.is_empty() && pictures.is_empty()).then(|| "\n".repeat(lines.len() - 1));
             }
         }
+        // The first page's own the same way: one of only pictures in the
+        // line is their row. A picture set against the page takes none,
+        // so the blank lines it floats over keep theirs.
+        for s in [&mut doc.first_header, &mut doc.first_footer].into_iter().flatten() {
+            if s.text.trim().is_empty() {
+                let inline = !s.pictures.is_empty() && s.pictures.iter().all(|p| p.style.image_anchor.is_none());
+                if s.lines.is_empty() || inline {
+                    s.text.clear();
+                    s.lines.clear();
+                } else {
+                    s.text = "\n".repeat(s.lines.len() - 1);
+                }
+            }
+        }
         for t in master_pages.values_mut().flat_map(|m| [&mut m.header, &mut m.footer]) {
             if blank(t) {
                 *t = None;
@@ -4530,7 +4665,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         // A master page's header and footer areas sit between its page
         // layout's margins and the body: each one it shows adds to its
         // margin. Its page is that layout so grown.
-        let grown = |layout: &str, m: Option<&MasterReading>| -> Option<PageGeometry> {
+        // A first page with its own header or footer (`first`) places it
+        // at that distance too, though the pages after show none.
+        let grown = |layout: &str, m: Option<&MasterReading>, first: (bool, bool)| -> Option<PageGeometry> {
             let mut page = layouts.get(layout).copied()?;
             let (header, footer) = hf_areas.get(layout).copied().unwrap_or_default();
             // The page margin a header or footer area grows is how far it
@@ -4538,19 +4675,23 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             if let Some(header) = header.filter(|_| m.is_some_and(|m| m.has_header)) {
                 page.header_pt = Some(page.margin_top_pt);
                 page.margin_top_pt += header;
+            } else if header.is_some() && first.0 {
+                page.header_pt = Some(page.margin_top_pt);
             }
             if let Some(footer) = footer.filter(|_| m.is_some_and(|m| m.has_footer)) {
                 page.footer_pt = Some(page.margin_bottom_pt);
                 page.margin_bottom_pt += footer;
+            } else if footer.is_some() && first.1 {
+                page.footer_pt = Some(page.margin_bottom_pt);
             }
             Some(page)
         };
         let master_geometry: std::collections::HashMap<String, PageGeometry> =
-            master_pages.iter().filter_map(|(n, m)| Some((n.clone(), grown(m.layout.as_deref()?, Some(m))?))).collect();
+            master_pages.iter().filter_map(|(n, m)| Some((n.clone(), grown(m.layout.as_deref()?, Some(m), (false, false))?))).collect();
         // The first page's layout; without a master page naming one that
         // exists, the last one read, as before.
         doc.page = match master_layout.filter(|n| layouts.contains_key(n)) {
-            Some(layout) => grown(&layout, master.as_ref().and_then(|n| master_pages.get(n))),
+            Some(layout) => grown(&layout, master.as_ref().and_then(|n| master_pages.get(n)), (doc.first_header.is_some(), doc.first_footer.is_some())),
             None => last_layout.and_then(|n| layouts.get(&n).copied()),
         };
         // A body that changes master page is several sections, the first
@@ -5225,6 +5366,40 @@ mod tests {
         assert!(round_trip(&d).table_unruled.is_empty());
         d.table_unruled.insert(table);
         assert_eq!(round_trip(&d).table_unruled.len(), 1);
+    }
+
+    /// A table's heading rows (`table:table-header-rows`) are read as rows
+    /// kept whole, as Writer never splits one across pages; the rows after
+    /// them are not.
+    #[test]
+    fn heading_rows_are_kept_whole() {
+        let content = "<office:document-content><office:body><office:text><table:table table:name=\"T\">\
+            <table:table-column/><table:table-header-rows><table:table-row><table:table-cell><text:p>head</text:p></table:table-cell></table:table-row></table:table-header-rows>\
+            <table:table-row><table:table-cell><text:p>body</text:p></table:table-cell></table:table-row></table:table>\
+            <text:p>after</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let id = d.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(d.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
+    }
+
+    /// A first page's master that names a different next master gives
+    /// the first page its own header and footer and the pages after it
+    /// the next master's, as Writer lays it out: a form's logo header and
+    /// version footer showed on every page (render-lab
+    /// `real-expression-of-interest-form`).
+    #[test]
+    fn a_first_master_hands_on_to_its_next_style() {
+        let styles = "<office:document-styles><office:master-styles>\
+            <style:master-page style:name=\"MP0\" style:page-layout-name=\"pm1\"><style:footer><text:p>later</text:p></style:footer></style:master-page>\
+            <style:master-page style:name=\"MPF0\" style:page-layout-name=\"pm1\" style:next-style-name=\"MP0\">\
+            <style:header><text:p>logo</text:p></style:header><style:footer><text:p>V1.2</text:p></style:footer></style:master-page>\
+            </office:master-styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles><style:style style:name=\"P1\" style:family=\"paragraph\" style:master-page-name=\"MPF0\"/></office:automatic-styles>\
+            <office:body><office:text><text:p text:style-name=\"P1\">body</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        assert_eq!((d.header.as_deref(), d.footer.as_deref()), (None, Some("later")));
+        assert_eq!(d.first_header.as_ref().map(|s| s.text.as_str()), Some("logo"));
+        assert_eq!(d.first_footer.as_ref().map(|s| s.text.as_str()), Some("V1.2"));
     }
 
     /// An .odt made of these `content.xml` and `styles.xml`, read.

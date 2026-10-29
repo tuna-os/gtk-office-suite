@@ -477,6 +477,48 @@ fn a_tall_row_splits_across_pages() {
     assert_eq!(b.first().map(String::as_str), Some(format!("line {n}").as_str()), "the next line, not a repeat or a gap");
 }
 
+/// A cell continued on the next page starts with its next line, at the
+/// same depth below the cell's top as its first line: the space after the
+/// paragraph before the break stays on the page before, as Writer lays it
+/// out. Carried over, it pushed an annual report form's page down 8pt
+/// (render-lab `real-annex-a-annual-report-form`).
+#[test]
+fn a_continued_cell_does_not_open_with_paragraph_spacing() {
+    // Short lines of filler move where the page breaks, so that some
+    // break falls on the space between two of the cell's paragraphs.
+    let mut on_a_gap = 0;
+    for filler in 1..12 {
+        let mut d = doc_of(filler, "filler");
+        let table = d.insert_table_at(filler, 1, 1);
+        let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+        let lines: Vec<Paragraph> = (0..80)
+            .map(|n| Paragraph {
+                style: ParaStyle { table_cell: Some(TableCell { table, row: 0, col: 0 }), space_after_pt: 8.0, ..Default::default() },
+                runs: vec![Run::plain(format!("line {n}"))],
+            })
+            .collect();
+        d.paragraphs.splice(at..=at, lines);
+        let t = lay(&d);
+        // How far below its cell's top the page's first line of the cell
+        // sits, and the foot of the page's last line.
+        let inset = |page: usize| -> (f64, f64) {
+            let items = &t.pages[page].items;
+            let cell = items.iter().find_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).unwrap();
+            let tops: Vec<(f64, f64)> = items.iter().filter_map(|i| match i { Item::Line { text, top_pt, height_pt, .. } if text.starts_with("line ") => Some((*top_pt, *height_pt)), _ => None }).collect();
+            (tops[0].0 - cell, tops.last().map_or(0.0, |l| l.0 + l.1))
+        };
+        assert!(t.pages.len() > 1, "the row splits");
+        let (first, foot) = inset(0);
+        let foot_room = 841.9 - 72.0 - foot;
+        // The last line's paragraph space did not fit above the foot.
+        if foot_room < 8.0 - 1e-6 && foot_room > 1e-6 {
+            on_a_gap += 1;
+        }
+        assert!((inset(1).0 - first).abs() < 1e-6, "{filler} lines of filler: first page {first}, next {}", inset(1).0);
+    }
+    assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
+}
+
 /// A row kept on one page that does not fit what is left of a page
 /// starts the next, as Writer moves the social housing dictionary's long
 /// rows whole; one not kept so splits there; and one taller than a page
