@@ -2433,6 +2433,86 @@ fn a_blank_paragraph_keeps_its_marks_size() {
     assert_eq!(doctored.paragraphs[2].text(), "title");
 }
 
+/// A list whose definition only links a numbering style (`w:numStyleLink`)
+/// and gives its levels in the instance's own `w:lvlOverride` is numbered
+/// as those levels say. Its items were read as bullets: the Ofsted
+/// minutes' "6.1." item took a bullet's room, and moved its next page.
+#[test]
+fn a_list_numbered_by_its_level_overrides_is_numbered() {
+    let mut d = Document::from_plain_text("first\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("<w:numId w:val=\"").expect("fixture shape changed");
+        let end = at + body[at..].find("/>").unwrap() + 2;
+        body.replace_range(at..end, "<w:numId w:val=\"90\"/>");
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"90\"><w:multiLevelType w:val=\"multilevel\"/><w:numStyleLink w:val=\"OutlineNumbered\"/></w:abstractNum>",
+        );
+        *numbering = numbering.replace(
+            "</w:numbering>",
+            "<w:num w:numId=\"90\"><w:abstractNumId w:val=\"90\"/><w:lvlOverride w:ilvl=\"0\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/>\
+             <w:lvlText w:val=\"6.%1.\"/><w:lvlJc w:val=\"left\"/><w:pPr><w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr></w:lvl></w:lvlOverride></w:num></w:numbering>",
+        );
+    });
+    assert_eq!(rt.paragraphs[0].style.list, ListKind::Numbered);
+    let label = rt.paragraphs[0].style.list_label.as_ref().expect("its level text");
+    assert_eq!((label.prefix.as_str(), label.suffix.as_str()), ("6.", "."));
+}
+
+/// A list item numbered by its own `w:numPr` takes its level's indent
+/// over its paragraph style's, as Word and Writer resolve it: a "List
+/// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One
+/// whose paragraph gives its own indent keeps that.
+#[test]
+fn a_directly_numbered_item_takes_its_levels_indent_over_its_styles() {
+    let mut d = Document::from_plain_text("first\nsecond\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    d.paragraphs[1].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"91\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/>\
+             <w:pPr><w:ind w:left=\"360\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>",
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"91\"><w:abstractNumId w:val=\"91\"/></w:num></w:numbering>");
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        *st = st.replace(
+            "</w:styles>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"ListParagraph\"><w:name w:val=\"List Paragraph\"/><w:pPr><w:ind w:left=\"720\"/></w:pPr></w:style></w:styles>",
+        );
+        let body = parts.get_mut("word/document.xml").unwrap();
+        // The writer's own indents off, so the style and level decide.
+        while let Some(at) = body.find("<w:ind ") {
+            let end = at + body[at..].find("/>").unwrap() + 2;
+            body.replace_range(at..end, "");
+        }
+        let mut out = String::new();
+        let mut rest = body.as_str();
+        let mut n = 0;
+        while let Some(at) = rest.find("<w:numPr>") {
+            let end = at + rest[at..].find("</w:numPr>").unwrap() + "</w:numPr>".len();
+            out.push_str(&rest[..at]);
+            let own = if n == 1 { "<w:ind w:left=\"1080\" w:hanging=\"360\"/>" } else { "" };
+            out.push_str(&format!("<w:pStyle w:val=\"ListParagraph\"/><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"91\"/></w:numPr>{own}"));
+            rest = &rest[end..];
+            n += 1;
+        }
+        out.push_str(rest);
+        assert_eq!(n, 2, "fixture shape changed: {body}");
+        *body = out;
+    });
+    let text = letters_core::lists::text_indent_pt(0);
+    let at = |i: usize| rt.paragraphs[i].style.left_indent_pt + text;
+    assert!((at(0) - 18.0).abs() < 1e-6, "its level's 0.25in, not the style's 0.5in: {}", at(0));
+    assert!((at(1) - 54.0).abs() < 1e-6, "its own 0.75in: {}", at(1));
+}
+
 /// A table's rules keep their colour and width: Word's "Table Grid Light"
 /// style draws its grid light grey (BFBFBF), which was drawn black, and a
 /// table whose own borders say a colour and width keeps them through a

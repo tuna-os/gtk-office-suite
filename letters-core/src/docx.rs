@@ -3025,10 +3025,7 @@ impl WordCounter {
 /// level text. The instance's own replacement of the level (a
 /// `w:lvlOverride` holding a `w:lvl`) wins over its definition's.
 fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u32, NumberFormat, Option<String>)> {
-    let replaced = doc.numbering_instance(num_id).and_then(|n| {
-        n.level_overrides.into_iter().find(|o| o.level == level).and_then(|o| o.replacement)
-    });
-    if let Some(l) = replaced {
+    if let Some(l) = level_replacement(doc, num_id, level) {
         let format = match l.format {
             rdocx::ListNumberFormat::LowerLetter => NumberFormat::LowerLetter,
             rdocx::ListNumberFormat::UpperLetter => NumberFormat::UpperLetter,
@@ -3041,6 +3038,35 @@ fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u3
     }
     let l = doc.numbering_level(num_id, level)?;
     Some((l.start, number_format(l.format_name), l.level_text.map(str::to_string)))
+}
+
+/// List instance `num_id`'s own replacement of level `level` (a
+/// `w:lvlOverride` holding a `w:lvl`), which wins over its definition's:
+/// a list whose definition only links a numbering style (`w:numStyleLink`)
+/// gives its levels this way, "6.%2." numbered minutes among them.
+fn level_replacement(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<rdocx::ListLevel> {
+    doc.numbering_instance(num_id)?.level_overrides.into_iter().find(|o| o.level == level)?.replacement
+}
+
+/// Whether level `level` of list instance `num_id` is bulleted: its
+/// replacement's format, else its definition's.
+fn level_is_bullet(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<bool> {
+    match level_replacement(doc, num_id, level) {
+        Some(l) => Some(l.format == rdocx::ListNumberFormat::Bullet),
+        None => doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet"),
+    }
+}
+
+/// Level `level`'s left and hanging indents, in points: its replacement's,
+/// else its definition's.
+fn level_indents(doc: &rdocx::Document, num_id: u32, level: u32) -> (Option<f64>, Option<f64>) {
+    match level_replacement(doc, num_id, level) {
+        Some(l) => {
+            let (left, hanging, _) = l.indentation_value();
+            (left.map(twips_pt), hanging.map(twips_pt))
+        }
+        None => doc.numbering_level(num_id, level).map_or((None, None), |l| (l.indent_left.map(twips_pt), l.indent_hanging.map(twips_pt))),
+    }
 }
 
 /// A numbering format name (`w:numFmt`) as this model draws it; the many
@@ -3162,16 +3188,24 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     if style.list == ListKind::None {
         return;
     }
-    let Some((num_id, level)) = p.numbering().filter(|&(id, _)| id != 0) else { return };
+    // The paragraph's own numbering, else its style's ("6.1." minutes
+    // items numbered by their paragraph style).
+    let direct = p.numbering().is_some_and(|(id, _)| id != 0);
+    let Some((num_id, level)) = paragraph_numbering(doc, p) else { return };
     let text = crate::lists::text_indent_pt(style.list_level);
     // The paragraph's own indent, a zero one too: the business appointment
     // rules' items set `w:left="0"` over their level's 0.5in, and stand at
-    // the margin.
+    // the margin. Else, as Word and Writer resolve it, a paragraph numbered
+    // by its own `w:numPr` takes its level's indent over its style's (a
+    // "List Paragraph" item at its level's 0.25in, not the style's 0.5in),
+    // and one numbered by its style takes the style's own indent first.
     let own = p.indent_left().or_else(|| p.indent_start()).map(|l| l.to_pt());
+    let of_style = Some(style.left_indent_pt).filter(|v| *v != 0.0);
+    let of_level = level_indents(doc, num_id, level).0;
     let declared = match own {
         Some(v) => v,
-        None if style.left_indent_pt != 0.0 => style.left_indent_pt,
-        None => doc.numbering_level(num_id, level).and_then(|l| l.indent_left).map(twips_pt).unwrap_or(text),
+        None if direct => of_level.or(of_style).unwrap_or(text),
+        None => of_style.or(of_level).unwrap_or(text),
     };
     // Left of the list's own indent as far as the margin.
     style.left_indent_pt = (declared - text).max(-text);
@@ -3179,7 +3213,7 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     let hanging = if style.first_line_indent_pt < 0.0 {
         Some(-style.first_line_indent_pt)
     } else {
-        doc.numbering_level(num_id, level).and_then(|l| l.indent_hanging).map(twips_pt)
+        level_indents(doc, num_id, level).1
     };
     style.list_hanging_pt = hanging.filter(|h| h.is_finite() && *h > 0.0 && (h - crate::lists::HANGING_PT).abs() > 0.5);
     if style.first_line_indent_pt < 0.0 {
@@ -3267,7 +3301,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     let (list, list_level) = match numbering {
         // The item's own level says bullet or number: a numbered list's
         // second level is often bulleted, and the reverse.
-        Some((num_id, level)) => (match doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet").or_else(|| doc.numbering_is_bullet(num_id)) {
+        Some((num_id, level)) => (match level_is_bullet(doc, num_id, level).or_else(|| doc.numbering_is_bullet(num_id)) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,

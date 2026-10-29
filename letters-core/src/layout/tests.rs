@@ -323,6 +323,26 @@ fn a_marker_wider_than_its_hanging_tabs_its_text_to_the_next_stop() {
     assert!((lines[0] - margin - DEFAULT_TAB_PT).abs() < 1e-6, "the first line at the first stop: {lines:?}");
 }
 
+/// Word's default tab stops run from the margin, not the indent: an item
+/// indented 0.25in tabs to 0.5in, as the Ofsted minutes' "2.1" items do.
+#[test]
+fn default_tab_stops_run_from_the_margin_not_the_indent() {
+    let st = ParaStyle { left_indent_pt: 18.0, ..ParaStyle::default() };
+    let stops: Vec<f64> = request_tabs(&st, paragraph_box_x(&Paragraph { style: st.clone(), runs: Vec::new() }), 200.0)
+        .iter()
+        .map(|t| t.pos_pt)
+        .collect();
+    assert_eq!(stops[..3], [18.0, 54.0, 90.0], "{stops:?}");
+}
+
+/// A "2.1" label at 11pt (15pt in Arial) fits a quarter-inch hanging, so
+/// its text starts at the indent rather than a tab stop past it.
+#[test]
+fn a_short_numbered_label_fits_a_quarter_inch_hanging() {
+    let w: f64 = "2.1".chars().map(label_char_em).sum::<f64>() * 11.0;
+    assert!(w > 14.0 && w < 18.0, "{w}");
+}
+
 #[test]
 fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
     let mut d = doc_of(1, "after");
@@ -494,7 +514,9 @@ fn a_tall_row_splits_across_pages() {
 /// A cell continued on the next page starts with its next line, at the
 /// same depth below the cell's top as its first line: the space after the
 /// paragraph before the break stays on the page before, as Writer lays it
-/// out. Carried over, it pushed an annual report form's page down 8pt
+/// out, and the cell's top padding opens the new piece again. Carried
+/// over, the space pushed an annual report form's page down 8pt; without
+/// the padding a padded form's continued answer box stood 5.6pt short
 /// (render-lab `real-annex-a-annual-report-form`).
 #[test]
 fn a_continued_cell_does_not_open_with_paragraph_spacing() {
@@ -504,6 +526,7 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
     for filler in 1..12 {
         let mut d = doc_of(filler, "filler");
         let table = d.insert_table_at(filler, 1, 1);
+        d.table_padding.insert(table, CellPadding { top_pt: 6.0, ..Default::default() });
         let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
         let lines: Vec<Paragraph> = (0..80)
             .map(|n| Paragraph {
@@ -528,6 +551,7 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
         if foot_room < 8.0 - 1e-6 && foot_room > 1e-6 {
             on_a_gap += 1;
         }
+        assert!((first - 6.0).abs() < 1e-6, "{filler} lines of filler: the first line below the padding: {first}");
         assert!((inset(1).0 - first).abs() < 1e-6, "{filler} lines of filler: first page {first}, next {}", inset(1).0);
     }
     assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
