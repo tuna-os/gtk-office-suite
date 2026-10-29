@@ -2512,3 +2512,39 @@ fn a_directly_numbered_item_takes_its_levels_indent_over_its_styles() {
     assert!((at(0) - 18.0).abs() < 1e-6, "its level's 0.25in, not the style's 0.5in: {}", at(0));
     assert!((at(1) - 54.0).abs() < 1e-6, "its own 0.75in: {}", at(1));
 }
+
+/// A table's rules keep their colour and width: Word's "Table Grid Light"
+/// style draws its grid light grey (BFBFBF), which was drawn black, and a
+/// table whose own borders say a colour and width keeps them through a
+/// save.
+#[test]
+fn a_table_keeps_its_rule_colour() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_rule_colors.insert(table, "BFBFBF".into());
+    d.table_rule_widths.insert(table, 0.75);
+    let rt = round_trip(&d);
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "its own borders' colour");
+    assert_eq!(rt.table_rule_widths.get(&id).copied(), Some(0.75), "and width");
+    d.table_rule_widths.clear();
+
+    d.table_rule_colors.clear();
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let start = body.find("<w:tblBorders>").expect("fixture shape changed");
+        let end = body.find("</w:tblBorders>").unwrap() + "</w:tblBorders>".len();
+        body.replace_range(start..end, "");
+        *body = body.replacen("<w:tblPr>", "<w:tblPr><w:tblStyle w:val=\"TableGridLight\"/>", 1);
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        *st = st.replace(
+            "</w:styles>",
+            "<w:style w:type=\"table\" w:styleId=\"TableGridLight\"><w:name w:val=\"Grid Table Light\"/><w:tblPr><w:tblBorders>\
+             <w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\" w:themeColor=\"background1\" w:themeShade=\"BF\"/>\
+             <w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/></w:tblBorders></w:tblPr></w:style></w:styles>",
+        );
+    });
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(!rt.table_unruled.contains(&id), "the style rules it");
+    assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "in its style's colour");
+}

@@ -797,6 +797,16 @@ pub struct Document {
     /// answer box). A table not listed (any made here) is ruled.
     #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub table_unruled: std::collections::BTreeSet<u32>,
+    /// The colour of a ruled table's rules (six hex digits), by table id:
+    /// Word's "Table Grid Light" and Writer's grey borders. A ruled table
+    /// not listed (any made here) is ruled in black.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_rule_colors: std::collections::BTreeMap<u32, String>,
+    /// The width of a ruled table's rules in points, by table id, when not
+    /// the 0.5pt a table made here has: a form whose grid is 0.75pt stands
+    /// each row that much taller.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_rule_widths: std::collections::BTreeMap<u32, f64>,
     /// Each table's rows kept on one page, by table id (Word's
     /// `w:cantSplit`, ODF's row `fo:keep-together="always"`): a row that
     /// does not fit what is left of a page starts the next, unless it is
@@ -1062,6 +1072,8 @@ impl Document {
             table_padding: Default::default(),
             table_indent: Default::default(),
             table_unruled: Default::default(),
+            table_rule_colors: Default::default(),
+            table_rule_widths: Default::default(),
             table_whole_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
@@ -1341,6 +1353,8 @@ impl Document {
         self.table_padding.remove(&table);
         self.table_indent.remove(&table);
         self.table_unruled.remove(&table);
+        self.table_rule_colors.remove(&table);
+        self.table_rule_widths.remove(&table);
         self.table_whole_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);

@@ -1376,7 +1376,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     let pad = doc.table_padding.get(&first.table).copied().unwrap_or_default();
     // A table without rules has no rule in its rows' height either.
     let ruled = !doc.table_unruled.contains(&first.table);
-    let rule_pt = if ruled { CELL_RULE_PT } else { 0.0 };
+    let rule_pt = if ruled { doc.table_rule_widths.get(&first.table).copied().unwrap_or(CELL_RULE_PT) } else { 0.0 };
     let opts = flow.opts.clone();
     flow.y += std::mem::take(&mut flow.pending_after);
 
