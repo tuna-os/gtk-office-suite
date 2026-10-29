@@ -1467,6 +1467,16 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         let mut min_left = file_h.map_or(0.0, |h| h.pt).max(tall_need);
         let mut first_piece = true;
         loop {
+            // A cell continued on a new page starts with its next line: the
+            // space between paragraphs at the break stays on the page
+            // before, as Writer lays it out.
+            if !first_piece {
+                for (c, n) in slices.iter().zip(next.iter_mut()) {
+                    while c.get(*n).is_some_and(|s| matches!(s, Slice::Gap(_))) {
+                        *n += 1;
+                    }
+                }
+            }
             // How many of each cell's remaining slices fit in `room`.
             let fit = |cell: &[Slice], from: usize, room: f64| -> (usize, f64) {
                 let mut h = 0.0;

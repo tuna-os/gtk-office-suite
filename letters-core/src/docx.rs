@@ -1351,12 +1351,14 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let rule_looks: Vec<(u32, RuleLook)> = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).map(|(ti, t)| (ti as u32, table_rule_look(t))).collect();
     let table_rule_colors = rule_looks.iter().filter_map(|(ti, (c, _))| Some((*ti, c.clone()?))).collect();
     let table_rule_widths = rule_looks.iter().filter_map(|(ti, (_, w))| Some((*ti, (*w)?))).collect();
-    // The rows kept on one page (`w:cantSplit`).
+    // The rows kept on one page (`w:cantSplit`), and heading rows
+    // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
         .iter()
         .enumerate()
         .filter_map(|(ti, t)| {
-            let rows: std::collections::BTreeSet<u32> = (0..t.row_count()).filter(|&r| t.row(r).and_then(|row| row.cant_split_value()) == Some(true)).map(|r| r as u32).collect();
+            let rows: std::collections::BTreeSet<u32> =
+                (0..t.row_count()).filter(|&r| t.row(r).is_some_and(|row| row.cant_split_value() == Some(true) || row.is_header())).map(|r| r as u32).collect();
             (!rows.is_empty()).then_some((ti as u32, rows))
         })
         .collect();
