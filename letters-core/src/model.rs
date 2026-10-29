@@ -285,6 +285,14 @@ pub struct HfLine {
     pub space_before_pt: f64,
     #[serde(default, skip_serializing_if = "is_no_space")]
     pub space_after_pt: f64,
+    /// The padding inside the paragraph above and below its text, in
+    /// points: its top and bottom borders' gaps (`w:pBdr` `w:space`, an
+    /// invisible border's too, as Writer keeps it). Unlike the space
+    /// after, the last paragraph's padding below is inside the part.
+    #[serde(default, skip_serializing_if = "is_no_space")]
+    pub pad_above_pt: f64,
+    #[serde(default, skip_serializing_if = "is_no_space")]
+    pub pad_below_pt: f64,
     /// How tall the line is, when its paragraph fixes it (exactly or at
     /// least); None is its text's own height.
     #[serde(default, skip_serializing_if = "Option::is_none")]

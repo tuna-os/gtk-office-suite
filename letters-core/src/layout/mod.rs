@@ -2330,8 +2330,8 @@ fn hf_line_boxes(text: &str, lines: &[LineBox], story: &[HfLine]) -> (Vec<(f64, 
             continue;
         }
         if prev != Some(n) {
-            y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.space_after_pt.max(0.0));
-            y += line.map_or(0.0, |l| l.space_before_pt.max(0.0));
+            y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.pad_below_pt.max(0.0) + p.space_after_pt.max(0.0));
+            y += line.map_or(0.0, |l| l.space_before_pt.max(0.0) + l.pad_above_pt.max(0.0));
             prev = Some(n);
         }
         let (h, ascent) = match line.and_then(|l| l.line_height) {
@@ -2343,7 +2343,8 @@ fn hf_line_boxes(text: &str, lines: &[LineBox], story: &[HfLine]) -> (Vec<(f64, 
         y += h;
     }
     // The last paragraph's space after is outside the part, as Writer
-    // sizes a header to its text.
+    // sizes a header to its text; its padding is inside.
+    y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.pad_below_pt.max(0.0));
     (out, y)
 }
 

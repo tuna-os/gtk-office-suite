@@ -2,7 +2,7 @@
 // line, so an A4 page with 1in margins holds 75 chars × 46 lines.
 
 use super::*;
-use crate::model::{Alignment, BorderStyle, CellFill, HfStory, LineHeight, ParaBorder, ParaBorders, ParaStyle, RowHeight, TabAlign, TabLeader, TabStop, TableCell, CellPadding};
+use crate::model::{Alignment, BorderStyle, CellFill, HfLine, HfStory, LineHeight, ParaBorder, ParaBorders, ParaStyle, RowHeight, TabAlign, TabLeader, TabStop, TableCell, CellPadding};
 
 const LINE: f64 = 15.0;
 const LINES_PER_PAGE: usize = 46;
@@ -321,6 +321,18 @@ fn a_marker_wider_than_its_hanging_tabs_its_text_to_the_next_stop() {
     let margin = lines[1];
     assert!((marker - margin).abs() < 1e-6, "the marker at the margin: {marker} {margin}");
     assert!((lines[0] - margin - DEFAULT_TAB_PT).abs() < 1e-6, "the first line at the first stop: {lines:?}");
+}
+
+/// A header's or footer's paragraph padding (its border gaps) is inside
+/// the part, the last paragraph's below too, unlike its space after.
+#[test]
+fn a_footer_lines_padding_is_inside_the_footer() {
+    let line = |pad: f64| HfLine { pad_above_pt: pad, pad_below_pt: pad, space_after_pt: 10.0, ..Default::default() };
+    let lb = LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: 12.0, descent_pt: 3.0, objects: Vec::new(), text_pt: None };
+    let (boxes, h) = hf_line_boxes("", std::slice::from_ref(&lb), &[line(0.0)]);
+    let (padded, ph) = hf_line_boxes("", &[lb], &[line(31.0)]);
+    assert!((ph - h - 62.0).abs() < 1e-6, "{h} {ph}");
+    assert!((padded[0].0 - boxes[0].0 - 31.0).abs() < 1e-6, "the text below its padding: {boxes:?} {padded:?}");
 }
 
 #[test]

@@ -2064,6 +2064,29 @@ fn floating_header_and_footer_lines_survive() {
     assert_eq!((&rt.header_lines, &rt.footer_lines), (&d.header_lines, &d.footer_lines));
 }
 
+/// A footer paragraph's border gaps pad it above and below, an invisible
+/// (`none`) border's too, as Writer keeps them: the questionnaire's Normal
+/// style pads every side 31pt that way, and its one empty footer line
+/// stands 62pt taller, moving the page's text up with it.
+#[test]
+fn a_footer_paragraphs_border_gaps_pad_it() {
+    let mut d = Document::from_plain_text("body");
+    d.footer = Some("foot".into());
+    let rt = doctor_parts(&d, |parts| {
+        let name = parts.keys().find(|k| k.starts_with("word/footer")).expect("a footer part").clone();
+        let part = parts.get_mut(&name).unwrap();
+        let at = part.find("<w:p>").map(|i| i + "<w:p>".len()).or_else(|| part.find("<w:p ").map(|i| i + part[i..].find('>').unwrap() + 1)).expect("a paragraph");
+        let pbdr = "<w:pBdr><w:top w:val=\"none\" w:sz=\"96\" w:space=\"31\" w:color=\"FFFFFF\"/><w:bottom w:val=\"single\" w:sz=\"8\" w:space=\"4\" w:color=\"000000\"/></w:pBdr>";
+        if part[at..].starts_with("<w:pPr>") {
+            part.insert_str(at + "<w:pPr>".len(), pbdr);
+        } else {
+            part.insert_str(at, &format!("<w:pPr>{pbdr}</w:pPr>"));
+        }
+    });
+    let line = rt.footer_lines.first().expect("the footer's line");
+    assert_eq!((line.pad_above_pt, line.pad_below_pt), (31.0, 5.0), "the invisible gap, and the drawn one with its width");
+}
+
 /// An inline picture's room beside it survives a save and reopen: a .docx
 /// says it by leaving `distL`/`distR` out, which Writer takes as its own
 /// 3.19mm a side; a value the file gives takes no room, as Writer and
