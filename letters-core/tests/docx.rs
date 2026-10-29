@@ -2420,17 +2420,21 @@ fn a_blank_paragraph_keeps_its_marks_size() {
     assert_eq!(doctored.paragraphs[2].text(), "title");
 }
 
-/// A table's rules keep their colour: Word's "Table Grid Light" style
-/// draws its grid light grey (BFBFBF), which was drawn black, and a table
-/// whose own borders say a colour keeps it through a save.
+/// A table's rules keep their colour and width: Word's "Table Grid Light"
+/// style draws its grid light grey (BFBFBF), which was drawn black, and a
+/// table whose own borders say a colour and width keeps them through a
+/// save.
 #[test]
 fn a_table_keeps_its_rule_colour() {
     let mut d = Document::from_plain_text("after");
     let table = d.insert_table_at(0, 2, 2);
     d.table_rule_colors.insert(table, "BFBFBF".into());
+    d.table_rule_widths.insert(table, 0.75);
     let rt = round_trip(&d);
     let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
     assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "its own borders' colour");
+    assert_eq!(rt.table_rule_widths.get(&id).copied(), Some(0.75), "and width");
+    d.table_rule_widths.clear();
 
     d.table_rule_colors.clear();
     let rt = doctor_parts(&d, |parts| {

@@ -438,6 +438,20 @@ fn a_table_row_takes_the_files_height() {
     assert!((rows[1].0 + rows[1].1 - foot).abs() < 1e-6, "{rows:?}");
 }
 
+/// A table's rules take their own width in each row: a 0.75pt grid's
+/// rows stand a quarter point taller than a 0.5pt one's, as Writer draws
+/// them (render-lab `real-annex-a-annual-report-form` drifted down its
+/// pages otherwise).
+#[test]
+fn a_rows_rule_is_as_wide_as_its_table_says() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 1, 1);
+    let height = |d: &Document| lay(d).pages[0].items.iter().find_map(|i| match i { Item::Cell { height_pt, .. } => Some(*height_pt), _ => None }).unwrap();
+    let thin = height(&d);
+    d.table_rule_widths.insert(table, 0.75);
+    assert!((height(&d) - (thin - CELL_RULE_PT + 0.75)).abs() < 1e-9, "{thin} -> {}", height(&d));
+}
+
 /// A row taller than the space left splits at the foot of the page, as
 /// Word and LibreOffice split it: the lines that fit stay, the rest
 /// continue at the top of the next page in the same cell, and nothing is

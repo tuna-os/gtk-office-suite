@@ -1251,7 +1251,7 @@ impl Typeset {
                     // cell text. (On paper and PDF a device unit is tiny,
                     // so this changes nothing there.)
                     let (px, _) = cr.device_to_user_distance(1.0, 0.0).unwrap_or((0.5, 0.0));
-                    let lw = 0.5f64.max(px.abs());
+                    let lw = self.doc.table_rule_widths.get(table).copied().unwrap_or(super::CELL_RULE_PT).max(px.abs());
                     let snap = |x: f64, y: f64| {
                         let (dx, dy) = cr.user_to_device(x, y);
                         let (dw, _) = cr.user_to_device_distance(lw, 0.0).unwrap_or((lw, 0.0));
