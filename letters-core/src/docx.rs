@@ -1348,6 +1348,9 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let table_padding = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_padding(t)?))).collect();
     let table_unruled: std::collections::BTreeSet<u32> = tables.iter().enumerate().filter(|(_, t)| !table_ruled(t)).map(|(ti, _)| ti as u32).collect();
     let table_valign = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_valign(t)?))).collect();
+    let rule_looks: Vec<(u32, RuleLook)> = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).map(|(ti, t)| (ti as u32, table_rule_look(t))).collect();
+    let table_rule_colors = rule_looks.iter().filter_map(|(ti, (c, _))| Some((*ti, c.clone()?))).collect();
+    let table_rule_widths = rule_looks.iter().filter_map(|(ti, (_, w))| Some((*ti, (*w)?))).collect();
     // The rows kept on one page (`w:cantSplit`), and heading rows
     // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
@@ -1396,6 +1399,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_padding,
         table_indent,
         table_unruled,
+        table_rule_colors,
+        table_rule_widths,
         table_whole_rows,
         table_relative,
         table_open_edges,
@@ -2079,7 +2084,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if doc.table_unruled.contains(&tc0.table) {
                 tbl.set_borders(rdocx::BorderStyle::None, 0, "auto");
             } else {
-                tbl.set_borders(rdocx::BorderStyle::Single, 4, "000000");
+                let eighths = doc.table_rule_widths.get(&tc0.table).map_or(4, |w| (w * 8.0).round().clamp(1.0, 96.0) as u32);
+                tbl.set_borders(rdocx::BorderStyle::Single, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
@@ -3600,6 +3606,10 @@ struct StyleFonts {
     styles: std::collections::HashMap<String, (Option<String>, Option<FontRef>)>,
     /// Table styles whose own `w:tblBorders` has a visible edge.
     ruled_table_styles: std::collections::HashSet<String>,
+    /// The colour (not "auto" or black) and width (`w:sz`, eighths of a
+    /// point) of the first visible edge of a table style's own
+    /// `w:tblBorders`.
+    table_style_rules: std::collections::HashMap<String, (Option<String>, Option<u32>)>,
     default_para: Option<String>,
     doc_default: Option<FontRef>,
 }
@@ -3654,6 +3664,8 @@ fn style_fonts(path: &str) -> StyleFonts {
                     if let (Some(id), Some(val)) = (&style, attr(&e, "w:val")) {
                         if !matches!(val.as_str(), "none" | "nil") {
                             out.ruled_table_styles.insert(id.clone());
+                            let size = attr(&e, "w:sz").and_then(|s| s.parse().ok());
+                            out.table_style_rules.entry(id.clone()).or_insert((attr(&e, "w:color").and_then(|c| rule_color(&c)), size));
                         }
                     }
                 }
@@ -3727,6 +3739,46 @@ thread_local! {
 }
 
 /// Whether table style `id`, or one it is based on, has a visible rule.
+/// A border colour worth keeping: six hex digits, upper case; "auto" and
+/// black (the rule drawn when none is given) are none.
+fn rule_color(c: &str) -> Option<String> {
+    let c = c.to_ascii_uppercase();
+    (c.len() == 6 && c.bytes().all(|b| b.is_ascii_hexdigit()) && c != "000000").then_some(c)
+}
+
+/// A ruled table's rule colour and width, each when not the default.
+type RuleLook = (Option<String>, Option<f64>);
+
+/// The colour a ruled table's rules are drawn in, when not black, and
+/// their width in points, when not 0.5pt: its own first visible border's
+/// (`w:tblBorders`), else its style's, through `w:basedOn` (Word's "Table
+/// Grid Light" is BFBFBF).
+fn table_rule_look(table: &rdocx::TableRef<'_>) -> RuleLook {
+    use rdocx::TableBorderEdge as E;
+    let width = |sz: Option<u32>| sz.map(|s| f64::from(s) / 8.0).filter(|w| *w > 0.0 && (w - crate::layout::CELL_RULE_PT).abs() > 1e-6);
+    let own = [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(|b| !matches!(b.style(), "none" | "nil"));
+    if let Some(b) = own {
+        return (b.color().and_then(rule_color), width(b.size_eighths_pt()));
+    }
+    let Some(id) = table.style_id() else { return (None, None) };
+    STYLE_FONTS.with(|sf| {
+        let sf = sf.borrow();
+        let mut cur = Some(id.to_string());
+        for _ in 0..32 {
+            let Some(c) = cur else { break };
+            if sf.ruled_table_styles.contains(&c) {
+                let (color, size) = sf.table_style_rules.get(&c).cloned().unwrap_or_default();
+                return (color, width(size));
+            }
+            cur = sf.styles.get(&c).and_then(|(based_on, _)| based_on.clone());
+        }
+        (None, None)
+    })
+}
+
 fn table_style_ruled(id: &str) -> bool {
     STYLE_FONTS.with(|sf| {
         let sf = sf.borrow();
