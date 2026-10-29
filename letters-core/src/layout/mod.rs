@@ -837,10 +837,9 @@ fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions) -> f64 {
     let st = &p.style;
     let Some(marker) = lists::marker_for(st, 1) else { return 0.0 };
     let hanging = st.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x);
-    // Measured without a shaper, as every renderer rebuilds this request:
-    // a body-text glyph is about 0.6em wide.
+    // Measured without a shaper, as every renderer rebuilds this request.
     let size = p.runs.first().and_then(|r| r.style.font_size_hp).map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
-    let label_end = box_x - hanging + marker.chars().count() as f64 * size * 0.6;
+    let label_end = box_x - hanging + marker.chars().map(label_char_em).sum::<f64>() * size;
     if label_end <= box_x {
         return 0.0;
     }
@@ -852,6 +851,23 @@ fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions) -> f64 {
         .fold(f64::INFINITY, f64::min)
         .min(((label_end / DEFAULT_TAB_PT).floor() + 1.0) * DEFAULT_TAB_PT);
     stop - box_x
+}
+
+/// About how wide a list label's character is, in ems: a sans body face's
+/// (Arial's and its metric twins') advances. A "2.1" label is 15pt at
+/// 11pt and fits a quarter-inch hanging, as the Ofsted minutes' do; a
+/// flat 0.6em made it 20pt and pushed the text a tab stop on.
+fn label_char_em(c: char) -> f64 {
+    match c {
+        '.' | ',' | ':' | ';' | ' ' | 'i' | 'j' | 'l' | 'I' => 0.278,
+        '(' | ')' | '[' | ']' | '-' | 'f' | 't' | 'r' => 0.333,
+        'm' | 'M' | 'W' => 0.833,
+        'w' => 0.722,
+        '0'..='9' | 'a'..='z' => 0.556,
+        'A'..='Z' => 0.667,
+        '•' | '·' | '◦' | '▪' => 0.35,
+        _ => 0.6,
+    }
 }
 
 /// How far a block quote is indented from the left, in points (the Draft
@@ -899,8 +915,10 @@ pub fn paragraph_look(st: &crate::model::ParaStyle) -> Look {
 
 /// The tab stops a shaping request carries: the paragraph's own stops,
 /// relative to its text box, then Word's default grid past the last of
-/// them. An explicit stop keeps its alignment and leader; a grid stop is
-/// plain left-aligned.
+/// them. The grid runs from the column's (or cell's) left edge, not the
+/// indent: an item indented 0.25in tabs to 0.5in, as the Ofsted minutes'
+/// "2.1" items do. An explicit stop keeps its alignment and leader; a
+/// grid stop is plain left-aligned.
 fn request_tabs(
     st: &crate::model::ParaStyle,
     box_x: f64,
@@ -915,9 +933,9 @@ fn request_tabs(
         .collect();
     stops.sort_by(|a, b| a.pos_pt.partial_cmp(&b.pos_pt).unwrap_or(std::cmp::Ordering::Equal));
     let last = stops.iter().map(|t| t.pos_pt).fold(0.0f64, f64::max);
-    let mut grid = (last / DEFAULT_TAB_PT).floor() * DEFAULT_TAB_PT + DEFAULT_TAB_PT;
-    while grid < box_w {
-        stops.push(TabStop::left(grid));
+    let mut grid = ((last + box_x) / DEFAULT_TAB_PT).floor() * DEFAULT_TAB_PT + DEFAULT_TAB_PT;
+    while grid - box_x < box_w {
+        stops.push(TabStop::left(grid - box_x));
         grid += DEFAULT_TAB_PT;
     }
     stops
