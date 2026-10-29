@@ -3182,16 +3182,24 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     if style.list == ListKind::None {
         return;
     }
-    let Some((num_id, level)) = p.numbering().filter(|&(id, _)| id != 0) else { return };
+    // The paragraph's own numbering, else its style's ("6.1." minutes
+    // items numbered by their paragraph style).
+    let direct = p.numbering().is_some_and(|(id, _)| id != 0);
+    let Some((num_id, level)) = paragraph_numbering(doc, p) else { return };
     let text = crate::lists::text_indent_pt(style.list_level);
     // The paragraph's own indent, a zero one too: the business appointment
     // rules' items set `w:left="0"` over their level's 0.5in, and stand at
-    // the margin.
+    // the margin. Else, as Word and Writer resolve it, a paragraph numbered
+    // by its own `w:numPr` takes its level's indent over its style's (a
+    // "List Paragraph" item at its level's 0.25in, not the style's 0.5in),
+    // and one numbered by its style takes the style's own indent first.
     let own = p.indent_left().or_else(|| p.indent_start()).map(|l| l.to_pt());
+    let of_style = Some(style.left_indent_pt).filter(|v| *v != 0.0);
+    let of_level = level_indents(doc, num_id, level).0;
     let declared = match own {
         Some(v) => v,
-        None if style.left_indent_pt != 0.0 => style.left_indent_pt,
-        None => level_indents(doc, num_id, level).0.unwrap_or(text),
+        None if direct => of_level.or(of_style).unwrap_or(text),
+        None => of_style.or(of_level).unwrap_or(text),
     };
     // Left of the list's own indent as far as the margin.
     style.left_indent_pt = (declared - text).max(-text);
