@@ -2937,15 +2937,25 @@ fn read_base_font(styles: &str) -> crate::model::BaseFont {
 /// None where no style in the chain sets one.
 fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Option<f64>, Option<f64>, Option<f32>) {
     let (mut before, mut after, mut line) = (None, None, None);
+    // Writer keeps a style's contextual spacing in the same setting as its
+    // space above and below: a style that sets the one and not the others
+    // takes the document default's spacing, not its parent's. The W1
+    // notes' List Paragraph sets contextual spacing under a Normal of 6pt
+    // above, and Writer opens its lists with no space above and closes
+    // them with the default's 8pt below.
+    let mut spacing_settled = false;
     let mut cur = Some(name.to_string());
     for _ in 0..16 {
         let Some(n) = cur else { break };
         if let Some(st) = auto.para.get(&n).or_else(|| named.para.get(&n)) {
-            if st.sets[0] && before.is_none() {
-                before = Some(st.space_before_pt);
-            }
-            if st.sets[1] && after.is_none() {
-                after = Some(st.space_after_pt);
+            if !spacing_settled {
+                if st.sets[0] && before.is_none() {
+                    before = Some(st.space_before_pt);
+                }
+                if st.sets[1] && after.is_none() {
+                    after = Some(st.space_after_pt);
+                }
+                spacing_settled = auto.contextual.contains_key(&n) || named.contextual.contains_key(&n);
             }
             if st.sets[2] && line.is_none() {
                 line = Some(st.line_spacing);
@@ -6372,10 +6382,14 @@ mod tests {
     /// (`style:contextual-spacing`) have no space between them, though
     /// each names its own automatic style; a paragraph of another style
     /// keeps its own. The screening committee form's list items stood a
-    /// blank line and Normal's 12pt apart.
+    /// blank line and Normal's 12pt apart. A style that sets contextual
+    /// spacing and no spacing of its own takes the document default's
+    /// (8pt after here), not its parent's, as Writer keeps the two in one
+    /// setting.
     #[test]
     fn contextual_spacing_drops_the_space_between_paragraphs_of_one_style() {
         let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"8pt\"/></style:default-style>\
              <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"12pt\"/></style:style>\
              <style:style style:name=\"ListParagraph\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:paragraph-properties style:contextual-spacing=\"true\"/></style:style>\
              </office:styles></office:document-styles>";
@@ -6387,7 +6401,7 @@ mod tests {
              </office:text></office:body></office:document-content>";
         let d = read_package(content, styles);
         let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
-        assert_eq!(after, [0.0, 12.0, 12.0], "only between the two list paragraphs");
+        assert_eq!(after, [0.0, 8.0, 12.0], "only between the two list paragraphs, the last with the default's");
     }
 
     /// A line break within a paragraph (`text:line-break`, Shift+Enter)
