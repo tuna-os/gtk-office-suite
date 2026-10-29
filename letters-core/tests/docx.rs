@@ -2468,3 +2468,30 @@ fn a_table_keeps_its_rule_colour() {
     assert!(!rt.table_unruled.contains(&id), "the style rules it");
     assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "in its style's colour");
 }
+
+/// A cell's own borders (`w:tcBorders`) win over its table's: the
+/// questionnaire's respondent table rules itself white and each of its
+/// cells black, and Word and Writer draw it black, not white.
+#[test]
+fn a_cells_own_border_colour_wins_over_its_tables() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 2, 2);
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let start = body.find("<w:tblBorders>").expect("fixture shape changed");
+        let end = body.find("</w:tblBorders>").unwrap() + "</w:tblBorders>".len();
+        body.replace_range(
+            start..end,
+            "<w:tblBorders><w:top w:val=\"single\" w:sz=\"8\" w:space=\"0\" w:color=\"FFFFFF\"/>\
+             <w:insideH w:val=\"single\" w:sz=\"8\" w:space=\"0\" w:color=\"FFFFFF\"/></w:tblBorders>",
+        );
+        let cell = "<w:tcBorders><w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"000000\"/></w:tcBorders>";
+        *body = match body.find("<w:tcPr>") {
+            Some(at) => format!("{}{cell}{}", &body[..at + "<w:tcPr>".len()], &body[at + "<w:tcPr>".len()..]),
+            None => body.replacen("<w:tc>", &format!("<w:tc><w:tcPr>{cell}</w:tcPr>"), 1),
+        };
+    });
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(!rt.table_unruled.contains(&id), "ruled");
+    assert_eq!(rt.table_rule_colors.get(&id), None, "black, as its cells say: {:?}", rt.table_rule_colors);
+}

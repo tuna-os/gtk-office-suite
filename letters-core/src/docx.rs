@@ -3755,11 +3755,30 @@ type RuleLook = (Option<String>, Option<f64>);
 /// Grid Light" is BFBFBF).
 fn table_rule_look(table: &rdocx::TableRef<'_>) -> RuleLook {
     use rdocx::TableBorderEdge as E;
+    use rdocx::CellBorderEdge as C;
     let width = |sz: Option<u32>| sz.map(|s| f64::from(s) / 8.0).filter(|w| *w > 0.0 && (w - crate::layout::CELL_RULE_PT).abs() > 1e-6);
+    let visible = |b: &rdocx::TableBorderRef<'_>| !matches!(b.style(), "none" | "nil");
+    // A cell's own borders (`w:tcBorders`) win over the table's: the
+    // questionnaire's respondent table rules itself white and each of its
+    // cells black, and Word and Writer draw it black.
+    let mut cells = None;
+    'rows: for r in 0..table.row_count() {
+        let Some(row) = table.row(r) else { continue };
+        for c in 0..row.cell_count() {
+            let Some(cell) = row.cell(c) else { continue };
+            if let Some(b) = [C::Top, C::Left, C::Bottom, C::Right].into_iter().filter_map(|e| cell.border(e)).find(visible) {
+                cells = Some((b.color().and_then(rule_color), width(b.size_eighths_pt())));
+                break 'rows;
+            }
+        }
+    }
+    if let Some(look) = cells {
+        return look;
+    }
     let own = [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
         .into_iter()
         .filter_map(|e| table.border(e))
-        .find(|b| !matches!(b.style(), "none" | "nil"));
+        .find(visible);
     if let Some(b) = own {
         return (b.color().and_then(rule_color), width(b.size_eighths_pt()));
     }
