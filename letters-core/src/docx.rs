@@ -810,7 +810,7 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
         .ok()
         .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
         .is_some();
-    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\") || xml.contains("<w:txbxContent")) {
+    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\") || xml.contains("<w:txbxContent") || xml.contains("<wps:cNvCnPr") || xml.contains("prst=\"line\"")) {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new(), Vec::new())));
     }
     // A table of contents first: it lifts the paragraphs out of their
@@ -3439,7 +3439,10 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     // its style's), as Word and Writer size it: the screening checklist
     // opens with two blank 22pt Title lines above its title, which drawn
     // at the body size stood it 32px high.
-    if runs.is_empty() && heading.is_none() {
+    // So is one holding nothing but floating text boxes (a form's rule
+    // under its title), whatever its anchoring run's own size.
+    let floating_only = !runs.is_empty() && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text));
+    if (runs.is_empty() || floating_only) && heading.is_none() {
         let mark = p.mark();
         let styled = doc.resolve_run_properties(p.style_id(), None);
         let size_hp = mark
@@ -3448,7 +3451,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             .or_else(|| styled.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16))
             .filter(|hp| Some(*hp) != base.size_hp);
         let family = mark.font_name().map(str::to_string).or_else(|| style_family(p.style_id())).filter(|f| Some(f) != base.family.as_ref());
-        if size_hp.is_some() || family.is_some() {
+        if floating_only {
+            for r in &mut runs {
+                (r.style.font_size_hp, r.style.font_family) = (size_hp, family.clone());
+            }
+        } else if size_hp.is_some() || family.is_some() {
             runs.push(Run { text: String::new(), style: RunStyle { font_size_hp: size_hp, font_family: family, ..Default::default() } });
         }
     }
