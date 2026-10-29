@@ -1469,7 +1469,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         loop {
             // A cell continued on a new page starts with its next line: the
             // space between paragraphs at the break stays on the page
-            // before, as Writer lays it out.
+            // before, as Writer lays it out. Its top padding opens the new
+            // piece again, as Writer opens a continued cell.
+            let pad_top = if first_piece { 0.0 } else { pad.top_pt.max(0.0) };
             if !first_piece {
                 for (c, n) in slices.iter().zip(next.iter_mut()) {
                     while c.get(*n).is_some_and(|s| matches!(s, Slice::Gap(_))) {
@@ -1491,7 +1493,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             // the footnotes they reference: take less until they fit.
             let mut notes_h = 0.0;
             let takes: Vec<(usize, f64)> = loop {
-                let room = flow.bottom() - flow.y - rule_pt - notes_h;
+                let room = flow.bottom() - flow.y - rule_pt - notes_h - pad_top;
                 let takes: Vec<(usize, f64)> = slices.iter().zip(&next).map(|(c, &from)| fit(c, from, room)).collect();
                 let notes: Vec<usize> = row_cells
                     .iter()
@@ -1518,7 +1520,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 takes
             };
             let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
-            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + rule_pt;
+            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + rule_pt + pad_top;
             let height = if done {
                 content.max(min_left.min((flow.bottom() - flow.y).max(content)))
             } else {
@@ -1536,7 +1538,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 // A row placed in one piece sets each cell's content where
                 // the cell says; a row split across pages fills from the top.
                 let drop = valign(*col).filter(|_| whole && done).map_or(0.0, |v| (height - rule_pt - used).max(0.0) * v.share());
-                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + drop);
+                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + pad_top + drop);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
                 *n = *to;

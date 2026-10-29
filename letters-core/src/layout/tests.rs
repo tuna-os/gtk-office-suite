@@ -480,7 +480,9 @@ fn a_tall_row_splits_across_pages() {
 /// A cell continued on the next page starts with its next line, at the
 /// same depth below the cell's top as its first line: the space after the
 /// paragraph before the break stays on the page before, as Writer lays it
-/// out. Carried over, it pushed an annual report form's page down 8pt
+/// out, and the cell's top padding opens the new piece again. Carried
+/// over, the space pushed an annual report form's page down 8pt; without
+/// the padding a padded form's continued answer box stood 5.6pt short
 /// (render-lab `real-annex-a-annual-report-form`).
 #[test]
 fn a_continued_cell_does_not_open_with_paragraph_spacing() {
@@ -490,6 +492,7 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
     for filler in 1..12 {
         let mut d = doc_of(filler, "filler");
         let table = d.insert_table_at(filler, 1, 1);
+        d.table_padding.insert(table, CellPadding { top_pt: 6.0, ..Default::default() });
         let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
         let lines: Vec<Paragraph> = (0..80)
             .map(|n| Paragraph {
@@ -514,6 +517,7 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
         if foot_room < 8.0 - 1e-6 && foot_room > 1e-6 {
             on_a_gap += 1;
         }
+        assert!((first - 6.0).abs() < 1e-6, "{filler} lines of filler: the first line below the padding: {first}");
         assert!((inset(1).0 - first).abs() < 1e-6, "{filler} lines of filler: first page {first}, next {}", inset(1).0);
     }
     assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
