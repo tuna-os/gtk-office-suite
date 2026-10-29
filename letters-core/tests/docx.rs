@@ -1996,6 +1996,19 @@ fn a_row_kept_whole_survives() {
     assert_eq!(rt.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![1]));
 }
 
+/// A heading row (`w:tblHeader`) is read as a row kept whole: Writer
+/// never splits one across pages (measured: a six-line heading row at a
+/// page's foot moves whole to the next page, where the same row without
+/// `w:tblHeader` splits).
+#[test]
+fn a_heading_row_is_kept_whole() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 3, 1);
+    let rt = doctor_document_xml(&d, |xml| xml.replacen("<w:tr>", "<w:tr><w:trPr><w:tblHeader/></w:trPr>", 1));
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
+}
+
 /// A table sized as a share of the text's width stays so through a save
 /// and reopen (`w:tblW w:type="pct"`); one with the file's widths does not
 /// become one.
