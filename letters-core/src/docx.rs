@@ -1351,6 +1351,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let rule_looks: Vec<(u32, RuleLook)> = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).map(|(ti, t)| (ti as u32, table_rule_look(t))).collect();
     let table_rule_colors = rule_looks.iter().filter_map(|(ti, (c, _))| Some((*ti, c.clone()?))).collect();
     let table_rule_widths = rule_looks.iter().filter_map(|(ti, (_, w))| Some((*ti, (*w)?))).collect();
+    let table_rule_double = tables.iter().enumerate().filter(|(ti, t)| !table_unruled.contains(&(*ti as u32)) && table_rule_double(t)).map(|(ti, _)| ti as u32).collect();
     // The rows kept on one page (`w:cantSplit`), and heading rows
     // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
@@ -1401,6 +1402,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_unruled,
         table_rule_colors,
         table_rule_widths,
+        table_rule_double,
         table_whole_rows,
         table_relative,
         table_open_edges,
@@ -2085,7 +2087,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 tbl.set_borders(rdocx::BorderStyle::None, 0, "auto");
             } else {
                 let eighths = doc.table_rule_widths.get(&tc0.table).map_or(4, |w| (w * 8.0).round().clamp(1.0, 96.0) as u32);
-                tbl.set_borders(rdocx::BorderStyle::Single, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
+                let line = if doc.table_rule_double.contains(&tc0.table) { rdocx::BorderStyle::Double } else { rdocx::BorderStyle::Single };
+                tbl.set_borders(line, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
@@ -3789,6 +3792,28 @@ fn rule_color(c: &str) -> Option<String> {
 
 /// A ruled table's rule colour and width, each when not the default.
 type RuleLook = (Option<String>, Option<f64>);
+
+/// Whether a ruled table's rules are double lines: its cells' first
+/// visible border's line, else its own (`w:tblBorders`).
+fn table_rule_double(table: &rdocx::TableRef<'_>) -> bool {
+    use rdocx::CellBorderEdge as C;
+    use rdocx::TableBorderEdge as E;
+    let visible = |b: &rdocx::TableBorderRef<'_>| !matches!(b.style(), "none" | "nil");
+    for r in 0..table.row_count() {
+        let Some(row) = table.row(r) else { continue };
+        for c in 0..row.cell_count() {
+            let Some(cell) = row.cell(c) else { continue };
+            if let Some(b) = [C::Top, C::Left, C::Bottom, C::Right].into_iter().filter_map(|e| cell.border(e)).find(visible) {
+                return b.style() == "double";
+            }
+        }
+    }
+    [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(visible)
+        .is_some_and(|b| b.style() == "double")
+}
 
 /// The colour a ruled table's rules are drawn in, when not black, and
 /// their width in points, when not 0.5pt: its own first visible border's

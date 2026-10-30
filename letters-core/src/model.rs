@@ -815,6 +815,11 @@ pub struct Document {
     /// each row that much taller.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_rule_widths: std::collections::BTreeMap<u32, f64>,
+    /// The ruled tables whose rules are double lines, by table id (Word's
+    /// `w:val="double"`, ODF's "double" border): the crime supervisor
+    /// form's tables, drawn single.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub table_rule_double: std::collections::BTreeSet<u32>,
     /// Each table's rows kept on one page, by table id (Word's
     /// `w:cantSplit`, ODF's row `fo:keep-together="always"`): a row that
     /// does not fit what is left of a page starts the next, unless it is
@@ -1082,6 +1087,7 @@ impl Document {
             table_unruled: Default::default(),
             table_rule_colors: Default::default(),
             table_rule_widths: Default::default(),
+            table_rule_double: Default::default(),
             table_whole_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
@@ -1363,6 +1369,7 @@ impl Document {
         self.table_unruled.remove(&table);
         self.table_rule_colors.remove(&table);
         self.table_rule_widths.remove(&table);
+        self.table_rule_double.remove(&table);
         self.table_whole_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);

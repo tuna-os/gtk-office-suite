@@ -2572,6 +2572,20 @@ fn a_table_keeps_its_rule_colour() {
     assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "in its style's colour");
 }
 
+/// A table ruled in double lines (`w:val="double"`) keeps them through a
+/// save: the crime supervisor form's tables were drawn single.
+#[test]
+fn a_table_keeps_its_double_rules() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_rule_double.insert(table);
+    let rt = round_trip(&d);
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(rt.table_rule_double.contains(&id), "{:?}", rt.table_rule_double);
+    d.table_rule_double.clear();
+    assert!(round_trip(&d).table_rule_double.is_empty(), "single rules stay single");
+}
+
 /// A cell's own borders (`w:tcBorders`) win over its table's: the
 /// questionnaire's respondent table rules itself white and each of its
 /// cells black, and Word and Writer draw it black, not white.

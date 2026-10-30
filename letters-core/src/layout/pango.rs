@@ -1088,6 +1088,18 @@ impl Typeset {
     pub fn draw_page(&self, cr: &cairo::Context, index: usize) {
         let Some(page) = self.tree.pages.get(index) else { return };
         cr.set_source_rgb(0.0, 0.0, 0.0);
+        // Each double-ruled table's outline on this page: its outer edges
+        // are drawn double, its inner ones as one rule twice as wide, as
+        // Writer draws two touching lines between cells.
+        let mut outline: HashMap<u32, (f64, f64, f64, f64)> = HashMap::new();
+        for item in &page.items {
+            if let Item::Cell { table, x_pt, y_pt, width_pt, height_pt, .. } = item {
+                if self.doc.table_rule_double.contains(table) {
+                    let b = outline.entry(*table).or_insert((f64::MAX, f64::MAX, f64::MIN, f64::MIN));
+                    *b = (b.0.min(*x_pt), b.1.min(*y_pt), b.2.max(x_pt + width_pt), b.3.max(y_pt + height_pt));
+                }
+            }
+        }
         for item in &page.items {
             match item {
                 Item::Line { source: Source::Paragraph(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
@@ -1279,7 +1291,40 @@ impl Typeset {
                     let (r, g, b) = self.doc.table_rule_colors.get(table).and_then(|c| parse_hex(c)).unwrap_or((0, 0, 0));
                     cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
                     cr.set_line_width(lw);
-                    if open.any() {
+                    if let Some(&(left, top, right, bottom)) = outline.get(table) {
+                        // A double rule: two lines of the rule's width, a
+                        // width apart, either side of an outer edge; an
+                        // inner edge one rule twice as wide.
+                        let near = |a: f64, b: f64| (a - b).abs() < 0.5;
+                        let sides = [
+                            (!open.top, near(*y_pt, top), (x0, y0), (x1, y0), (0.0, 1.0)),
+                            (!open.right, near(*x_pt + *width_pt, right), (x1, y0), (x1, y1), (1.0, 0.0)),
+                            (!open.bottom, near(*y_pt + *height_pt, bottom), (x0, y1), (x1, y1), (0.0, 1.0)),
+                            (!open.left, near(*x_pt, left), (x0, y0), (x0, y1), (1.0, 0.0)),
+                        ];
+                        cr.set_line_cap(cairo::LineCap::Square);
+                        for (shut, outer, (ax, ay), (bx, by), (nx, ny)) in sides {
+                            if !shut {
+                                continue;
+                            }
+                            if outer {
+                                cr.set_line_width(lw);
+                                for d in [-lw, lw] {
+                                    cr.move_to(ax + nx * d, ay + ny * d);
+                                    cr.line_to(bx + nx * d, by + ny * d);
+                                }
+                            } else {
+                                // Two touching lines: at least two whole
+                                // device pixels, on a pixel boundary.
+                                let w = (2.0 * lw).max(2.0 * px.abs());
+                                let shift = px.abs() / 2.0;
+                                cr.set_line_width(w);
+                                cr.move_to(ax + nx * shift, ay + ny * shift);
+                                cr.line_to(bx + nx * shift, by + ny * shift);
+                            }
+                            let _ = cr.stroke();
+                        }
+                    } else if open.any() {
                         // Only the sides the cell rules; a neighbour draws
                         // a shared side it rules itself.
                         for (shut, (ax, ay), (bx, by)) in [
