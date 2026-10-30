@@ -2460,6 +2460,33 @@ fn a_regular_run_in_a_heading_survives_writer_both_ways() {
     close(&rt, "odt → Writer → docx");
 }
 
+/// A heading's run set back upright stays upright through Writer, both
+/// ways: the W1 notes' "For alcohol", a Heading 4 italic by its style.
+#[test]
+fn an_upright_run_in_a_heading_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("For alcohol\nafter");
+    d.paragraphs[0].style.heading = Some(4);
+    d.heading_styles = (1..=6).map(|n| RunStyle { italic: n == 4, ..Default::default() }).collect();
+    d.paragraphs[0].runs[0].style.upright = true;
+    let close = |got: &Document, how: &str| {
+        let p = para_with_text(got, "For alcohol");
+        assert!(p.style.heading.is_some(), "{how}: still a heading");
+        assert!(p.runs.iter().all(|r| r.style.upright && !r.style.italic), "{how}: {:?}", p.runs);
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("upright.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("upright.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "upright") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
 /// Capitals through Writer both ways, the text in its own case: the crime
 /// supervisor form's title.
 #[test]

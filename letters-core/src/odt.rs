@@ -84,6 +84,8 @@ fn run_style_props(st: &RunStyle) -> String {
     }
     if st.italic {
         props.push_str(" fo:font-style=\"italic\"");
+    } else if st.upright {
+        props.push_str(" fo:font-style=\"normal\"");
     }
     if st.caps {
         props.push_str(" fo:text-transform=\"uppercase\"");
@@ -1968,8 +1970,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 Some("normal") => st.regular = true,
                                 _ => {}
                             }
-                            if attr_val(&e, "fo:font-style").as_deref() == Some("italic") {
-                                st.italic = true;
+                            match attr_val(&e, "fo:font-style").as_deref() {
+                                Some("italic" | "oblique") => st.italic = true,
+                                // Undoes a parent's italic, and a heading's.
+                                Some("normal") => st.upright = true,
+                                _ => {}
                             }
                             if attr_val(&e, "fo:text-transform").as_deref() == Some("uppercase") {
                                 st.caps = true;
@@ -3072,7 +3077,12 @@ fn para_text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyl
         }
         if let Some(own) = auto.para_text.get(&n).or_else(|| named.para_text.get(&n)) {
             style.bold |= own.bold;
-            style.italic |= own.italic;
+            if !style.upright {
+                style.italic |= own.italic;
+            }
+            if !style.italic {
+                style.upright |= own.upright;
+            }
             style.caps |= own.caps;
             style.font_size_hp = style.font_size_hp.or(own.font_size_hp);
             style.color = style.color.clone().or_else(|| own.color.clone());
@@ -4787,6 +4797,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         if !bold_look {
             p.runs.iter_mut().for_each(|r| r.style.regular = false);
         }
+        // Likewise upright: only a heading's look is italic.
+        if p.style.heading.is_none() {
+            p.runs.iter_mut().for_each(|r| r.style.upright = false);
+        }
     }
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
@@ -4866,7 +4880,8 @@ fn inherit(outer: Option<&RunStyle>, own: RunStyle) -> RunStyle {
     RunStyle {
         bold: own.bold || (outer.bold && !own.regular),
         regular: own.regular || (outer.regular && !own.bold),
-        italic: own.italic || outer.italic,
+        italic: own.italic || (outer.italic && !own.upright),
+        upright: own.upright || (outer.upright && !own.italic),
         caps: own.caps || outer.caps,
         underline: own.underline || outer.underline,
         strikethrough: own.strikethrough || outer.strikethrough,
@@ -6016,6 +6031,28 @@ mod tests {
             assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
             assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
         }
+    }
+
+    /// A heading paragraph whose style says `fo:font-style="normal"` is
+    /// drawn upright, as Writer draws it: the W1 notes' "For alcohol" is a
+    /// Heading 4, italic by its style, set back upright, and came out
+    /// italic. Elsewhere "normal" is the default and is not kept. The
+    /// style survives a save.
+    #[test]
+    fn a_normal_style_undoes_a_headings_italic() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Heading4\" style:family=\"paragraph\"><style:text-properties fo:font-style=\"italic\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:parent-style-name=\"Heading4\"><style:text-properties fo:font-style=\"normal\"/></style:style>\
+             <style:style style:name=\"P2\" style:family=\"paragraph\"><style:text-properties fo:font-style=\"normal\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:h text:style-name=\"P1\" text:outline-level=\"4\">For alcohol</text:h><text:h text:style-name=\"Heading4\" text:outline-level=\"4\">Italic</text:h><text:p text:style-name=\"P2\">Body</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let upright: Vec<(bool, bool)> = d.paragraphs.iter().map(|p| (p.runs[0].style.italic, p.runs[0].style.upright)).collect();
+        assert_eq!(upright, [(false, true), (false, false), (false, false)], "Heading 4 itself stays italic by its look");
+        assert!(round_trip(&d).paragraphs[0].runs[0].style.upright);
     }
 
     /// A heading paragraph whose style says `fo:font-weight="normal"` is

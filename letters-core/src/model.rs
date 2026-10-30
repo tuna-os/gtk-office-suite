@@ -22,6 +22,12 @@ pub struct RunStyle {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub regular: bool,
     pub italic: bool,
+    /// Drawn upright where the paragraph's look is italic (a heading whose
+    /// level's style is italic): ODF's `fo:font-style="normal"`, OOXML's
+    /// `<w:i w:val="0"/>`. The W1 notes' "For alcohol" is a Heading 4,
+    /// italic by its style, set back upright.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub upright: bool,
     /// Drawn in capitals, whatever case the text is stored in: OOXML's
     /// `<w:caps/>`, ODF's `fo:text-transform="uppercase"` (a form's title
     /// style). The text keeps its own case.

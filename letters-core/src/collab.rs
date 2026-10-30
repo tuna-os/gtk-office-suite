@@ -181,6 +181,7 @@ fn out_of_range() -> CollabError {
 enum Attr {
     Key(MarkKey),
     Regular,
+    Upright,
     Caps,
     Spacing,
     Position,
@@ -188,7 +189,7 @@ enum Attr {
 
 /// Every attribute, in a fixed order.
 fn attrs() -> impl Iterator<Item = Attr> {
-    MarkKey::ALL.into_iter().map(Attr::Key).chain([Attr::Regular, Attr::Caps, Attr::Spacing, Attr::Position])
+    MarkKey::ALL.into_iter().map(Attr::Key).chain([Attr::Regular, Attr::Upright, Attr::Caps, Attr::Spacing, Attr::Position])
 }
 
 fn json<T: Serialize>(value: &T) -> Result<String, CollabError> {
@@ -218,6 +219,7 @@ impl Attr {
             Attr::Key(MarkKey::Revision) => "revision",
             Attr::Key(MarkKey::Comment(_)) => "comment",
             Attr::Regular => "regular",
+            Attr::Upright => "upright",
             Attr::Caps => "caps",
             Attr::Spacing => "spacing",
             Attr::Position => "position",
@@ -266,6 +268,7 @@ impl Attr {
             // A comment is a mark of its own per id, which is refused.
             Attr::Key(MarkKey::Comment(_)) => None,
             Attr::Regular => flag(style.regular),
+            Attr::Upright => flag(style.upright),
             Attr::Caps => flag(style.caps),
             Attr::Spacing => style.letter_spacing_tw.map(|tw| LoroValue::I64(i64::from(tw))),
             Attr::Position => style.position_hp.map(|hp| LoroValue::I64(i64::from(hp))),
@@ -310,6 +313,7 @@ impl Attr {
             Attr::Key(MarkKey::Revision) => style.revision = Some(parse::<Revision>(&text()?, "a tracked change")?),
             Attr::Key(MarkKey::Comment(_)) => return Err(CollabError::Unsupported(Unsupported::Comments)),
             Attr::Regular => style.regular = flag()?,
+            Attr::Upright => style.upright = flag()?,
             Attr::Caps => style.caps = flag()?,
             Attr::Spacing => style.letter_spacing_tw = Some(i32::try_from(int()?).map_err(|_| wrong("a spacing"))?),
             Attr::Position => style.position_hp = Some(i32::try_from(int()?).map_err(|_| wrong("a position"))?),

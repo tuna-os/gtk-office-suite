@@ -2188,6 +2188,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         let Some(run) = run else { break };
                         let mut r = broken_run(&mut cp, &run.text);
                         if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
+                        if !run.style.italic && run.style.upright { r = r.italic(false); }
                         if run.style.italic { r = r.italic(true); }
                         if run.style.caps { r = r.all_caps(true); }
                         if run.style.underline { r = r.underline(true); }
@@ -2501,6 +2502,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let text = bracketed(&mut revisions, run);
             let mut r = broken_run(&mut p, &text);
             if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
+            if !run.style.italic && run.style.upright { r = r.italic(false); }
             if run.style.italic { r = r.italic(true); }
             if run.style.caps { r = r.all_caps(true); }
             if run.style.underline { r = r.underline(true); }
@@ -3437,6 +3439,8 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 // Not bold in a heading, which is drawn bold.
                 regular: heading.is_some() && r.bold_value().or(eff.bold) == Some(false),
                 italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
+                // Not italic in a heading, which may be drawn italic.
+                upright: heading.is_some() && r.italic_value().or(eff.italic) == Some(false),
                 caps: r.all_caps_value().unwrap_or(eff.caps == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),

@@ -198,6 +198,8 @@ impl PangoShaper {
             }
             if st.italic {
                 add(pango::AttrInt::new_style(pango::Style::Italic).into());
+            } else if st.upright {
+                add(pango::AttrInt::new_style(pango::Style::Normal).into());
             }
             if st.caps {
                 add(pango::AttrInt::new_text_transform(pango::TextTransform::Uppercase).into());
