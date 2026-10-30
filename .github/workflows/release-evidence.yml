@@ -57,7 +57,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@d042af60014eb018fcd01f57f4f62118b69e3ea6 # nextest
+      - uses: taiki-e/install-action@040ce91a9a9db140750a142d8c3e66f94ce198bd # nextest
         with:
           tool: nextest
       - name: LibreOffice round trips and the LibreOffice-authored corpus
