@@ -47,6 +47,21 @@ impl Default for PangoShaper {
     }
 }
 
+/// A family as Pango is asked for it: a fixed-pitch East Asian face
+/// (MS Gothic and its kin) falls back to the monospace face where it is
+/// not installed, as Writer substitutes it by its pitch. The opt-out
+/// form's ☐ boxes are 20pt MS Gothic: Writer draws them in DejaVu Sans
+/// Mono, and fontconfig's own pick, a proportional face, drew them half
+/// as large again.
+fn with_fallback(family: &str) -> std::borrow::Cow<'_, str> {
+    const FIXED: [&str; 6] = ["ms gothic", "ms mincho", "nsimsun", "mingliu", "gulimche", "batangche"];
+    if FIXED.contains(&family.to_ascii_lowercase().as_str()) {
+        format!("{family},monospace").into()
+    } else {
+        family.into()
+    }
+}
+
 impl PangoShaper {
     pub fn new() -> Self {
         let font_map = pangocairo::FontMap::new();
@@ -95,7 +110,7 @@ impl PangoShaper {
                     size = f64::from(hp) / 2.0;
                 }
                 if let Some(f) = &st.font_family {
-                    base.set_family(f);
+                    base.set_family(&with_fallback(f));
                 }
             }
         }
@@ -209,7 +224,7 @@ impl PangoShaper {
                 add(pango::AttrInt::new_strikethrough(true).into());
             }
             if let Some(family) = &st.font_family {
-                add(pango::AttrString::new_family(family).into());
+                add(pango::AttrString::new_family(&with_fallback(family)).into());
             }
             if st.code {
                 add(pango::AttrString::new_family("Liberation Mono").into());
@@ -386,7 +401,7 @@ impl Shaper for PangoShaper {
             let text = req.runs.iter().find(|r| !r.text.is_empty() && !super::is_object(r));
             if let Some(run) = text.or_else(|| req.runs.iter().find(|r| !super::is_object(r))) {
                 if let Some(f) = &run.style.font_family {
-                    desc.set_family(f);
+                    desc.set_family(&with_fallback(f));
                 }
                 if let Some(hp) = run.style.font_size_hp {
                     desc.set_size(to_units(f64::from(hp) / 2.0));
@@ -1312,6 +1327,17 @@ impl Typeset {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    /// A fixed-pitch East Asian face falls back to the monospace face, as
+    /// Writer substitutes it: the opt-out form's 20pt MS Gothic boxes. A
+    /// proportional face asks for itself alone.
+    #[test]
+    fn a_fixed_pitch_east_asian_face_falls_back_to_monospace() {
+        assert_eq!(with_fallback("MS Gothic"), "MS Gothic,monospace");
+        assert_eq!(with_fallback("ms mincho"), "ms mincho,monospace");
+        assert_eq!(with_fallback("Arial"), "Arial");
+    }
     use crate::layout::layout;
     use crate::model::{Paragraph, Run};
 
