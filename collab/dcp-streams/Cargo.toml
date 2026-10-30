@@ -24,7 +24,7 @@ httpdate = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-manual-roots", "http2"] }
 # The vetted RustCrypto primitives.
 chacha20poly1305 = "0.11"
-ed25519-dalek = { version = "2", default-features = false, features = ["std", "fast", "zeroize"] }
+ed25519-dalek = { version = "3", default-features = false, features = ["std", "fast", "zeroize"] }
 x25519-dalek = { version = "2", default-features = false, features = ["static_secrets", "zeroize"] }
 hkdf = "0.13"
 zeroize = "1"
