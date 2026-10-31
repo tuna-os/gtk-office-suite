@@ -657,7 +657,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -666,7 +666,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -676,6 +676,62 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from Service reservoir panel engineers: contact list (#1346):
+    # a 15-column unheaded contact directory (A through O) spanning 74 cm in width
+    # paginates horizontally across multiple portrait A4 pages in LibreOffice Calc
+    # when headings are disabled (print_options.headings = False). Tables captures
+    # the continuous unpaginated on-screen viewport (columns A through G). In
+    # compare.py, without printed heading boxes, lo_cell_box(ref) returns None,
+    # align() skips cropping on-screen header bands (ox=40, oy=20), and candidate page
+    # picking selects page 1 only (columns A through D), squashing columns A through G
+    # onto columns A through D (a 1.45× horizontal squeeze, displacement 79.5pt, SSIM 0.22).
+    wb, ws = book()
+    ws["A1"] = "Service Reservoir Panel Engineers Contact Directory"
+    ws["A1"].font = Font(name="Arial", size=14, bold=True)
+    ws["A2"] = "Panel engineers contact directory with assignments and address details"
+    ws["A2"].font = Font(name="Arial", size=10, italic=True)
+    ws["A3"] = "Columns D through L and O may contain blank contact fields"
+    ws["A3"].font = Font(name="Arial", size=9)
+
+    contact_headers = [
+        "Surname", "Forename", "Title", "Company name", "Address line 2",
+        "Address line 3", "Town", "Post Town", "County", "Post Code",
+        "Phone Number", "Mobile Number", "Email Address", "Existing panel",
+        "Joint corresponding panel",
+    ]
+    col_letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"]
+    col_widths = [16, 18, 10, 22, 20, 22, 16, 18, 16, 14, 18, 18, 26, 22, 26]
+    for c_idx, (header, width) in enumerate(zip(contact_headers, col_widths), start=1):
+        cell = ws.cell(5, c_idx, header)
+        cell.font = Font(name="Arial", size=11, bold=True)
+        col_letter = col_letters[c_idx - 1]
+        ws.column_dimensions[col_letter].width = width
+
+    sample_engineers = [
+        ("Cavanagh", "Stephen Paul", "Mr", "Binnies UK Ltd", "One City Place", "Queens Road",
+         "Chester", "Cheshire", "Cheshire", "CH1 3BQ", "01244 304125", "07795 542996",
+         "cavanaghsp@example.org", "Service Reservoirs Panel", "Joint Technical Panel"),
+        ("Hawley", "Robin William", "Mr", "Independent Consultant", "10 London Road", "Trent Valley",
+         "Lichfield", "Staffordshire", "Staffordshire", "WS14 9EJ", "01543 256618", "07887 896476",
+         "robin.hawley@example.org", "Service Reservoirs Panel", "Supervising Panel"),
+        ("Morgan", "Claire Louise", "Dr", "Arup Engineering", "4 Pierhead Street", "Capital Waterside",
+         "Cardiff", "Cardiff", "Glamorgan", "CF10 4QP", "02920 473727", "07712 345678",
+         "claire.morgan@example.org", "Service Reservoirs Panel", "All Reservoirs Panel"),
+        ("Thurston", "David George", "Eur Ing", "Stantec UK Ltd", "Buckingham Court", "Kingsmead Business Park",
+         "High Wycombe", "High Wycombe", "Buckinghamshire", "HP11 1JU", "01494 526240", "07801 987654",
+         "david.thurston@example.org", "Service Reservoirs Panel", "Service Reservoirs Panel"),
+    ]
+    for r_idx, engineer in enumerate(sample_engineers, start=6):
+        for c_idx, val in enumerate(engineer, start=1):
+            ws.cell(r_idx, c_idx, val)
+
+    save(
+        wb,
+        "wide-unheaded-contact-list",
+        "A 15-column unheaded contact directory spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
