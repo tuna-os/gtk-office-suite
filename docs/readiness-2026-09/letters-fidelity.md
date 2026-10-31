@@ -561,3 +561,19 @@ content as a newline, which arrived merged into the preceding run — so
 `"first page"` read back as `"first page\n"`, in a model whose
 paragraphs never contain a newline. The break is not content, and is
 stripped with the flag it produced.
+
+### W1 notes reductions (#1366)
+
+The ODT importer now treats explicit vertical margins as replacing inherited
+contextual spacing. Continued table cells repeat the continuing paragraph's
+space before, and a bullet's character-style font participates in its first
+line's metrics. The three independent `letters/odt-*` fixtures in
+`tools/render-lab/fixtures.py` cover these separately; core tests cover the
+spacing arithmetic and the bullet font's preservation through ODT saves.
+
+Local Pango/Cairo captures compared with LibreOffice 7.4 are green for all
+three reductions. Against the issue's saved LibreOffice reference, W1 pages
+1–7 are green after matching font substitutions. The contact paragraph still
+falls on page 7 rather than page 8, so the real-document baseline remains
+amber. Full GTK/Broadway captures and the complete real-corpus ratchet remain
+CI evidence; these headless measurements do not establish those results.

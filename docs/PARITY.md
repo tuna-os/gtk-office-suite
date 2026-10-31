@@ -69,7 +69,7 @@ are not all green, and any fixture name the baseline does not have.
 | Font family round-trip | ✅ | I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) | ✅ letters/font-families |
 | Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | ✅ letters/block-quote |
 | Line spacing round-trip | ✅ | I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both | ✅ letters/line-spacing |
-| ODT read/write | ✅ | I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
+| ODT read/write | ✅ | Contextual margin overrides, continued-cell space before, and bullet character-style font metrics have core regressions and independent `letters/odt-*` render fixtures (#1366). I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
 
