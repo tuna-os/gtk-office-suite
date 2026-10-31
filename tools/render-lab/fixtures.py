@@ -232,6 +232,33 @@ def letters(img):
     p.add_run(" before you start.")
     save(x, "hyperlink", "One sentence whose words 'project guide' are a blue, underlined link")
 
+    # Reduced from real-social-housing-sales-data-dictionary (#1367):
+    # slashes must not let a URL prefix fit beside the preceding prose.
+    # Writer moves it to the next line and wraps the path at hyphens.
+    x = doc()
+    x.sections[0].page_width = Inches(4.9527)
+    x.sections[0].page_height = Inches(6)
+    x.sections[0].left_margin = x.sections[0].right_margin = Inches(1.075)
+    x.styles["Normal"].font.name = "Calibri"
+    x.styles["Normal"].font.size = Pt(11)
+    url = "https://www.gov.uk/guidance/housing-statistics-and-england-housing-survey-glossary/a-to-z"
+    p = x.add_paragraph("glossary ")
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), p.part.relate_to(url, RT.HYPERLINK, is_external=True))
+    run = OxmlElement("w:r")
+    props = OxmlElement("w:rPr")
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    props.append(underline)
+    run.append(props)
+    text = OxmlElement("w:t")
+    text.text = url
+    run.append(text)
+    link.append(run)
+    p._p.append(link)
+    x.add_paragraph("glossary " + url)
+    save(x, "url-path-wrapping", "In a narrow column, URL paths stay together at slashes and wrap at hyphens, with or without a hyperlink")
+
     x = doc()
     from docx.enum.style import WD_STYLE_TYPE
     pre = x.styles.add_style("HTML Preformatted", WD_STYLE_TYPE.PARAGRAPH)

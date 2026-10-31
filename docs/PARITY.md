@@ -69,6 +69,7 @@ are not all green, and any fixture name the baseline does not have.
 | Font family round-trip | ✅ | I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) | ✅ letters/font-families |
 | Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | ✅ letters/block-quote |
 | Line spacing round-trip | ✅ | I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both | ✅ letters/line-spacing |
+| URL path wrapping | Partial | `layout::pango::tests::url_paths_wrap_at_hyphens_instead_of_slashes` checks slash, hyphen and emergency breaks without changing text offsets | Full render-lab validation pending; real social housing dictionary remains amber (#1367) |
 | ODT read/write | ✅ | I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
