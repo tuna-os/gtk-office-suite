@@ -55,7 +55,7 @@ def score_export(app, d, ref_words_cache):
         ref, ours, scale = compare.align(app, lo, ours_pages[i])
         key = (lo, ref.size)
         if key not in ref_words_cache:
-            ref_words_cache[key] = compare.ocr_words(ref, app == "tables")
+            ref_words_cache[key] = compare.reference_words(lo, ref, app)
         per_page.append(dict(compare.compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))
     m = {k: compare.mean([p.get(k) for p in per_page]) for k in compare.METRICS}
     m["ref_words"] = sum(p["ref_words"] or 0 for p in per_page)
