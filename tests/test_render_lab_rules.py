@@ -270,5 +270,53 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class TallUnheadedPostcodesFixtureTest(unittest.TestCase):
+    """The Hampshire postcodes reduction isolates vertical multipage split
+    and unprinted headings (#1347)."""
+
+    def test_tall_unheaded_postcodes_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "tall-unheaded-postcodes")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/tall-unheaded-postcodes.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 75)
+            self.assertEqual(sheet.max_column, 2)
+            self.assertEqual(sheet.cell(1, 1).value, "Postcode")
+            self.assertEqual(sheet.cell(1, 2).value, "No of Premises Impacted")
+            self.assertIsInstance(sheet.cell(2, 1).value, str)
+            self.assertIsInstance(sheet.cell(2, 2).value, int)
+            self.assertIsInstance(sheet.cell(75, 1).value, str)
+            self.assertIsInstance(sheet.cell(75, 2).value, int)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()
