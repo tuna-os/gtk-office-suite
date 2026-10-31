@@ -40,6 +40,13 @@ What is checked, and why each is separate:
       because a check that cannot run must say so rather than pass.
 - C4  The core crate list is derived from the workspace, not restated here,
       so adding `slides-core` without this test knowing is not possible.
+- C5  Sibling application core crates cannot depend on one another
+      (ADR 0012, issue #284). `letters-core`, `tables-core`, and
+      `decks-core` are peer persistence adapters that may depend on
+      `suite-common-core`, never on each other. The two legacy edges
+      (`tables-core -> letters-core`, `decks-core -> letters-core`) are
+      ratcheted as known debt awaiting migration under ADR 0012; no other
+      sibling dependency may exist.
 
 The one documented exception is `letters-core`'s `render` feature (ADR-0010):
 Pango is the production text shaper and the crate may use it *behind that
@@ -79,6 +86,18 @@ DOCUMENTED_OPTIONAL = {"letters-core": {"render"}}
 # suite-export, which ADR-0001 places on the same side of the split.
 CORE_SUFFIX = "-core"
 EXTRA_CORE = ("suite-export",)
+
+# Sibling application core crates (ADR 0012, issue #284): peer persistence
+# adapters that must remain mutually independent.
+APPLICATION_CORE_CRATES = ("letters-core", "tables-core", "decks-core")
+
+# ADR 0012 / Issue #284: Known legacy sibling edges awaiting extraction of shared
+# document primitives into suite-common-core. No other sibling core dependency is
+# permitted, and these must be removed as migration phases complete.
+KNOWN_SIBLING_EDGES = {
+    ("tables-core", "letters-core"),
+    ("decks-core", "letters-core"),
+}
 
 
 def workspace_members() -> list[str]:
@@ -310,6 +329,38 @@ class CoreCratesAreGtkFree(unittest.TestCase):
                     "exception from DOCUMENTED_OPTIONAL rather than leaving a "
                     "permission nothing needs.",
                 )
+
+    def test_c5_sibling_core_dependency_invariant(self):
+        """Sibling application cores cannot depend on one another (ADR 0012).
+
+        letters-core, tables-core, and decks-core are peer persistence
+        adapters. Cross-suite document primitives belong in suite-common-core.
+        Only the documented legacy migration edges in KNOWN_SIBLING_EDGES
+        are permitted, and no new sibling dependencies may be introduced.
+        """
+        for crate in APPLICATION_CORE_CRATES:
+            declared_deps = {name for name, _ in dependency_lines(manifest(crate))}
+            for other in APPLICATION_CORE_CRATES:
+                if crate == other:
+                    continue
+                with self.subTest(crate=crate, target=other):
+                    if (crate, other) in KNOWN_SIBLING_EDGES:
+                        self.assertIn(
+                            other,
+                            declared_deps,
+                            f"{crate} no longer depends on {other}. The debt "
+                            f"in KNOWN_SIBLING_EDGES has cleared and must be "
+                            "removed from the ratchet list (ADR 0012).",
+                        )
+                    else:
+                        self.assertNotIn(
+                            other,
+                            declared_deps,
+                            f"{crate} declares a dependency on sibling core "
+                            f"{other}, violating ADR 0012. Sibling core crates "
+                            "must remain mutually independent peer persistence "
+                            "adapters. Primitives belong in suite-common-core.",
+                        )
 
 
 def _module_gate(crate: str, rel: str) -> str:
