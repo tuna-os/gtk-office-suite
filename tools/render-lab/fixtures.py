@@ -748,6 +748,22 @@ def tables():
     ws.column_dimensions["A"].width = 12
     save(wb, "wrap-text", "A1 text wraps onto several lines; row 1 grows")
 
+    # The MenB real workbook (#1325) uses a wide column with Arial 12 as
+    # the *workbook default*, not the Calibri 11 assumed by the XLSX width
+    # conversion. The Tables capture wraps its heading and shifts the later
+    # rows; Calc's printed page clips the heading at the right edge. This
+    # isolates the default-font/column-width hypothesis; it does not model
+    # the source's stored row heights. Keep the text synthetic.
+    wb, ws = book()
+    wb._fonts[0] = Font(name="Arial", size=12)
+    ws.column_dimensions["A"].width = 100.6640625
+    ws["A1"] = "Young adult programme coverage for participating regions up to the end of September"
+    ws["A1"].font = Font(name="Arial", size=16, bold=True)
+    ws["A1"].alignment = Alignment(wrap_text=True)
+    ws["A2"] = "Following section"
+    ws["A2"].font = Font(name="Arial", size=12)
+    save(wb, "wrap-wide-default-font", "A bold wrapped heading in a wide Arial 12 workbook, followed by a section label")
+
     wb, ws = book()
     ws["A1"] = "A merged cell with wrapped text needs the combined width of its columns to fit its row."
     ws.merge_cells("A1:B1")
