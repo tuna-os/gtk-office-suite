@@ -387,6 +387,35 @@ def letters(img):
             t.cell(r, c).text = f"R{r + 1}C{c + 1}"
     save(x, "table", "A 3x3 table with visible grid borders and cell text")
 
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    # Reduced from the Crime Supervisor Declaration Form (#1353): a table row
+    # with a declared minimum height (w:trHeight) that exceeds the remaining space
+    # on the page moves to the next page in LibreOffice Writer, rather than being
+    # clamped to the page foot or overflowing into the bottom margin.
+    x = doc()
+    s = x.sections[0]
+    s.top_margin = Inches(1)
+    s.bottom_margin = Inches(1)
+    s.left_margin = Inches(1)
+    s.right_margin = Inches(1)
+    t = x.add_table(rows=2, cols=2)
+    t.style = "Table Grid"
+    t.rows[0].cells[0].paragraphs[0].text = "Page 1 tall row"
+    t.rows[0].cells[1].paragraphs[0].text = "Content filling upper portion of page 1"
+    tr0_pr = t.rows[0]._tr.get_or_add_trPr()
+    tr0_pr.append(parse_xml(f'<w:trHeight {nsdecls("w")} w:val="10800"/>'))
+    t.rows[1].cells[0].paragraphs[0].text = "Page 2 row with minimum height"
+    t.rows[1].cells[1].paragraphs[0].text = "Short text inside a row with 180pt declared minimum height"
+    tr1_pr = t.rows[1]._tr.get_or_add_trPr()
+    tr1_pr.append(parse_xml(f'<w:trHeight {nsdecls("w")} w:val="3600"/>'))
+    save(
+        x,
+        "table-row-min-height-page-break",
+        "A table where a row with a declared minimum height that exceeds the page's remaining space starts on page 2",
+    )
+
     x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
