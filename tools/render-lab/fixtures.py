@@ -678,6 +678,18 @@ def tables():
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
     wb, ws = book()
+    # Reduced from the Planning Inspectorate workbook (#1328): blank rows
+    # have no <row> element and must inherit sheetFormatPr's height.
+    ws.sheet_format.defaultRowHeight = 14.5
+    for row, text in ((1, "Heading"), (4, "Notes"), (7, "Other information"),
+                      (11, "Contacts")):
+        ws.cell(row, 1, text)
+    ws.column_dimensions["A"].width = 28
+    ws.row_dimensions[7].height = 36
+    save(wb, "default-row-height",
+         "14.5pt default rows, including blank rows; row 7 overrides with 36pt")
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
