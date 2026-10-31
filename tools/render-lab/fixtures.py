@@ -387,6 +387,31 @@ def letters(img):
             t.cell(r, c).text = f"R{r + 1}C{c + 1}"
     save(x, "table", "A 3x3 table with visible grid borders and cell text")
 
+    # Reduced from real-sma-positive-result-call-checklist (#1365):
+    # In table cells containing bullet list items, LibreOffice Writer aligns
+    # continuation lines with the first line's text indent (bullet hanging
+    # in front). In Letters, table cell paragraphs did not have
+    # list_indent_from_declared applied, resulting in an extra 18pt indent
+    # on wrapped lines and premature line wrapping.
+    x = doc()
+    t = x.add_table(rows=2, cols=1)
+    t.style = "Table Grid"
+    c0 = t.cell(0, 0)
+    c0.paragraphs[0].text = "Points to cover"
+    c0.add_paragraph(
+        "We need to see you and your baby as soon as possible to discuss "
+        "the screening test results, treatment options and next steps.",
+        style="List Bullet",
+    )
+    c0.add_paragraph(
+        "Confirm baby details and provide contact information for the clinical "
+        "team with the days and times someone will be available.",
+        style="List Bullet",
+    )
+    c1 = t.cell(1, 0)
+    c1.paragraphs[0].text = "Signed: ___________________________"
+    save(x, "table-cell-list-indent", "A table cell containing wrapping bullet list items: wrapped lines align with first-line text")
+
     x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
