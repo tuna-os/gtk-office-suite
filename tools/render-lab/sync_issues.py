@@ -34,11 +34,9 @@ LABEL_REAL = "render-real"
 MARK_REAL = "<!-- render-real:{} -->"
 REAL_CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "real_corpus", "manifest.json")
 RANK = {"missing": 0, "red": 1, "amber": 2, "green": 3}
-NEEDS_TEXT = {
-    "letters-page-layout": "Phase 1 Letters page layout engine: a render tree that lays out pages, used for screen, print and PDF",
-    "tables-cell-style-model": "Phase 1 Tables cell-style model: font, fill, alignment and wrap in tables-core, with xlsx/ods I/O",
-    "decks-shape-style-model": "Phase 1 Decks shape-style model: fill, stroke, placeholders and inherited text styles in decks-core",
-}
+# Architecture item -> what it is, for fixtures.py NEEDS (empty since
+# Phase 1 landed).
+NEEDS_TEXT = {}
 WHERE = {
     "letters": "`letters/src/bridge.rs` (model to buffer tags), `letters/src/page_container.rs`, `letters/src/layout.rs`",
     "tables": "`tables/src/grid_render.rs` (draw_grid), `tables-core/src/sheet.rs` (model), the xlsx/ods readers in tables-core",

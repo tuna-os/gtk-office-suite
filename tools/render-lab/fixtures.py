@@ -24,21 +24,9 @@ MANIFEST = []
 # Fixtures that cannot go green until a Phase 1 architecture item exists
 # (docs/RENDER-PARITY-ROADMAP.md). Their issues are labelled blocked so
 # agents pick unblocked work first instead of hacking around the gap.
-NEEDS = {
-    "letters/page-margins": "letters-page-layout",
-    "letters/landscape": "letters-page-layout",
-    "letters/header-footer": "letters-page-layout",
-    "letters/page-break": "letters-page-layout",
-    "letters/pagination": "letters-page-layout",
-    "tables/cell-fonts": "tables-cell-style-model",
-    "tables/fills": "tables-cell-style-model",
-    "tables/alignment": "tables-cell-style-model",
-    "tables/wrap-text": "tables-cell-style-model",
-    "decks/shapes": "decks-shape-style-model",
-    "decks/title-layout": "decks-shape-style-model",
-    "decks/bullets": "decks-shape-style-model",
-    "decks/table": "decks-shape-style-model",
-}
+# Empty: every Phase 1 item (Letters page layout, Tables cell-style model,
+# Decks shape-style model) has landed, so no fixture waits on one.
+NEEDS = {}
 
 
 # Fixtures whose own PDF export is pixel-compared against LibreOffice's PDF
