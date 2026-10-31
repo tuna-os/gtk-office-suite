@@ -2,7 +2,10 @@
 
 This document defines the admitted review scope for issue #111. It is a
 contract for the editor, import/export adapters, and LibreOffice-authored
-fixtures—not a claim that every office annotation is editable.
+fixtures—not a claim that every office annotation is editable. It supersedes
+only the original comments and tracked-changes exclusions in
+[ADR 0003 §2](adr/0003-later-tier-scope.md); that ADR remains the historical
+record of the earlier decision. Other later-tier exclusions are unaffected.
 
 ## Canonical semantics
 
