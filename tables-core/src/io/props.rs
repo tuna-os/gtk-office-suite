@@ -24,9 +24,9 @@ pub struct SheetXlsxProps {
     pub hidden_rows: std::collections::HashSet<usize>,
     pub hidden_cols: std::collections::HashSet<usize>,
     pub page_setup: Option<suite_common_core::print::PageSetup>,
-    /// Explicitly-sized columns and rows, in pixels, 0-based — only the
-    /// ones the file marks as custom, so a sheet of default-width columns
-    /// produces an empty map rather than a row of defaults.
+    /// Saved column widths and row heights, in pixels, 0-based. Columns
+    /// are marked custom; rows may carry a cached automatic height without
+    /// customHeight, which still determines their geometry on open.
     pub col_widths: std::collections::HashMap<usize, f64>,
     pub row_heights: std::collections::HashMap<usize, f64>,
     /// `(frozen_rows, frozen_cols)` from a frozen `<pane>`, absent when
@@ -543,8 +543,11 @@ pub fn read_sheet_props_from_xlsx(
             for tag in data_block.split("<row ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
                 let hidden = xml_bool_attr(tag, "hidden");
-                let custom_height = xml_bool_attr(tag, "customHeight");
-                if !hidden && !custom_height {
+                let height = xml_attr(tag, "ht")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|h| h.is_finite() && *h >= 0.0)
+                    .map(height_points_to_pixels);
+                if !hidden && height.is_none() {
                     continue;
                 }
                 if let Some(r) = xml_attr(tag, "r").and_then(|v| v.parse::<usize>().ok()) {
@@ -554,14 +557,11 @@ pub fn read_sheet_props_from_xlsx(
                         if hidden {
                             props.hidden_rows.insert(r - 1); // 1-based → 0-based
                         }
-                        if custom_height {
-                            if let Some(px) = xml_attr(tag, "ht")
-                                .and_then(|v| v.parse::<f64>().ok())
-                                .filter(|h| h.is_finite() && *h >= 0.0)
-                                .map(height_points_to_pixels)
-                            {
-                                props.row_heights.insert(r - 1, px);
-                            }
+                        // customHeight records whether the user fixed the height;
+                        // it does not determine whether ht is present. Excel also
+                        // saves automatic heights (forecast report, #1333).
+                        if let Some(px) = height {
+                            props.row_heights.insert(r - 1, px);
                         }
                     }
                 }
@@ -1176,6 +1176,42 @@ pub fn read_sheet_props_from_ods(
 #[cfg(test)]
 mod odf_tests {
     use super::*;
+
+    #[test]
+    fn xlsx_saved_row_heights_do_not_require_custom_height() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("heights.xlsx");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for (name, xml) in [
+            ("xl/workbook.xml", r#"<workbook><sheets><sheet name="S" r:id="rId1"/></sheets></workbook>"#),
+            ("xl/_rels/workbook.xml.rels", r#"<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>"#),
+            ("xl/worksheets/sheet1.xml", r#"<worksheet><sheetData>
+                <row r="1" ht="47.25"/>
+                <row r="2" ht="15.75" customHeight="0"/>
+                <row r="3" ht="69" customHeight="1"/>
+                <row r="4" hidden="1" ht="16.5"/>
+                <row r="5"/>
+                <row r="6" ht="NaN"/>
+                <row r="7" ht="-1"/>
+                <row r="8" ht="inf"/>
+                <row r="0" ht="20"/>
+                <row r="1048577" ht="20"/>
+            </sheetData></worksheet>"#),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        let props = read_sheet_props_from_xlsx(path.to_str().unwrap(), &["S".to_string()]);
+        let s = &props["S"];
+        assert_eq!(s.row_heights.len(), 4);
+        assert_eq!(s.row_heights[&0], 63.0);
+        assert_eq!(s.row_heights[&1], 21.0);
+        assert_eq!(s.row_heights[&2], 92.0);
+        assert_eq!(s.row_heights[&3], 22.0);
+        assert!(s.hidden_rows.contains(&3));
+    }
 
     #[test]
     fn lengths_convert_from_every_unit_odf_uses() {

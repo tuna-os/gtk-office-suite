@@ -12,6 +12,11 @@ accounting, calculation/edit consistency, accessible interaction, and measured
 performance. ODS is import-only; neither an Excel-compatible UI nor preferred
 ODF wording can substitute for a working writer.
 
+The #1333 forecast-report reduction isolates saved automatic XLSX row heights:
+`ht` must be read even without `customHeight`. A core regression test and
+`tables/saved-row-height` fixture cover that case. The real-document baseline
+remains amber; this reduction does not establish full rendering parity.
+
 ## Architecture and scope
 WorkbookController remains the sole mutation gateway. Stable sheet identities bind formulas, selection and undo. IronCalc owns calculation/dependency semantics; the view projects sparse state and does not implement a second formula engine. Format capability is explicit in the session: imported read-only formats require Save As to a writable format until their writers exist.
 
