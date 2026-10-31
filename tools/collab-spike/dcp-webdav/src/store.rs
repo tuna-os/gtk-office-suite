@@ -25,12 +25,17 @@
 //! editor therefore cannot overwrite or delete a version: the server enforces
 //! version rules 1 and 4 for a well-behaved client and a hostile one alike.
 //!
-//! ## Compare-and-set
+//! ## Create-if-absent is not a compare-and-set
 //!
-//! The only atomic primitive measured is creating a name that is free. The lease
-//! log uses it: a writer that last read record `n` creates record `n + 1`; of two
-//! writers one gets `201`, the other `412` or `423`, and that is
-//! [`StoreError::Conflict`].
+//! The lease log creates a name that is free: a writer that last read record `n`
+//! creates record `n + 1` with `If-None-Match: *`. Of two writers one usually gets
+//! `201`, the other `412` or `423` (that is [`StoreError::Conflict`]), and sometimes
+//! both get `423`. It is NOT atomic: Nextcloud checks the precondition with a lookup
+//! that is not under the file lock, so a creator that passed it just before the
+//! other's record became visible can replace that record (answered `204`, or `201`)
+//! while the first still holds its `201`. A write the server accepted is therefore
+//! not an acquisition: lease rule 3's read-backs decide, and `lease()` reads the
+//! newest record from the server every time.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -219,14 +224,20 @@ impl WebdavStore {
 
     /// The newest lease record, with its number.
     ///
-    /// Records are never changed or deleted, so a handle that has read record `n`
-    /// only asks for `n + 1`, then `n + 2`, until the server says there is none: one
-    /// request when nothing changed. The first read of a document lists the folder.
-    /// (A member whose share was removed gets `404` for `n + 1` as well, so a
-    /// removed member's `lease()` keeps answering with what it last saw.)
+    /// A handle that has read record `n` asks for `n + 1`, then `n + 2`, until the server
+    /// says there is none, and then reads the newest record again: two requests when
+    /// nothing changed. The first read of a document lists the folder. The newest record
+    /// is read every time, not remembered, because creating a name is not atomic on
+    /// Nextcloud: a creator that lost the race can replace the winner's record and be
+    /// answered `204` (spike E, "The lease"), so a copy of the newest record, a handle's
+    /// own write included, says nothing about what the log holds now. (A member whose
+    /// share was removed gets `404` for `n + 1` and for `n`, so a removed member's
+    /// `lease()` keeps answering with what it last saw.)
     async fn lease_read(&self, doc: &str) -> Result<Option<(u64, Stamped<Lease>)>> {
         let dir = l_dir(doc);
         let cached = self.seen_lease.lock().get(doc).cloned();
+        // Whether the newest record in `cache` was read from the server by this call.
+        let mut fresh = cached.is_none();
         let mut cache = match cached {
             Some(c) => c,
             None => {
@@ -262,7 +273,17 @@ impl WebdavStore {
                 404 => break,
                 200..=299 => {
                     cache = LeaseCache { seq: Some(next), record: Some(self.parse_lease(&r, next)?) };
+                    fresh = true;
                 }
+                _ => return Err(status_error("read the lease", &r)),
+            }
+        }
+        if let (false, Some(seq)) = (fresh, cache.seq) {
+            let r = self.dav.get(&format!("{dir}/{}", Self::lease_name(seq))).await?;
+            match r.status {
+                // A removed member: what it last saw.
+                404 => {}
+                200..=299 => cache.record = Some(self.parse_lease(&r, seq)?),
                 _ => return Err(status_error("read the lease", &r)),
             }
         }
@@ -664,6 +685,8 @@ impl DocumentStore for WebdavStore {
             .await?;
         self.last_put_ms.store(r.elapsed.as_millis() as u64, Ordering::Relaxed);
         match r.status {
+            // `204` on a create-only `PUT` is a creator that replaced a record another
+            // creator had just made: its write landed, the read-backs say who holds it.
             201 | 204 => {
                 let record = Stamped::new(format!("{next:08}"), at_ms, self.principal(), lease);
                 self.seen_lease.lock().insert(

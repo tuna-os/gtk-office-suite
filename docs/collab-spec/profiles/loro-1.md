@@ -1,11 +1,12 @@
-# DCP update profile `loro/1` with document model `tables/1`
+# DCP update profile `loro/1` with document models `tables/1` and `letters/1`
 
 Status: **draft 1**. This is the algorithm profile that [DCP draft 1, section 7](../../DOCUMENT-COLLABORATION-SPEC.md#7-update-profile-l2)
 says "none exists yet" for. It fixes what section 7 leaves to a profile: the envelope, the
 meaning of `base_version`, the genesis, determinism, and what a receiver does when an update
-fails its dry run. It is written for the Tables workbook; a different document model under the
-same algorithm (`decks/1`, `letters/1`) differs only in section 8 and in its own
-`doc_model` string.
+fails its dry run. It was written for the Tables workbook and has a second document model,
+`letters/1`; a different document model under the same algorithm (`decks/1`) differs only in
+section 8 and in its own `doc_model` string. Where this text says "workbook", "cell" or "row" for
+an example, a `letters/1` document has its paragraphs and characters.
 
 The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
@@ -14,7 +15,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 | Field | Value |
 |---|---|
 | `algorithm` | `loro/1`: Loro (the `loro` crate, major version 1) as the CRDT, its binary export formats as the payload |
-| `doc_model` | `tables/1`: a workbook, mapped onto Loro containers as in section 8 |
+| `doc_model` | `tables/1`: a workbook, or `letters/1`: a word-processor document, each mapped onto Loro containers as in section 8 |
 | `meta.algorithms` | MUST contain `loro/1` when `meta.levels` contains `L2` |
 
 A receiver that does not carry both strings applies nothing (spec 7 rule 1) and uses versions.
@@ -25,7 +26,7 @@ An update is a DCP update object ([`update.schema.json`](../schemas/update.schem
 
 | Field | Value |
 |---|---|
-| `algorithm`, `doc_model` | `loro/1`, `tables/1` |
+| `algorithm`, `doc_model` | `loro/1`, and `tables/1` or `letters/1` (section 8) |
 | `seq` | 0, 1, 2, ... per `(principal, device)` stream (spec 4.4). A writer MUST take a number for every update it means to send and MUST send it, in order; a number it takes and does not send is a lost update (spec 7 rule 2) that stops every reader's view of that stream. |
 | `base_version` | The **session base**, section 3. Never the head. |
 | `payload` | Loro bytes (section 5). Inline `base64` when at most 34,000 bytes, otherwise `file` (spec 7 rule 5). The genesis is always `file` (section 4). |
@@ -64,9 +65,11 @@ and these rules hold:
    `covers.through` held, and starts a replica from it. A receiver restarts when its program
    does; from then on the session base is that version and only updates based on it count.
    The reference implementation is `dcp_core::updates::CrdtSession::restart_from`, which
-   refuses a version that does not cover `loro/1`. No program writes `covers` yet (RFC-0005
+   refuses a version that does not cover `loro/1`. No program restarts a session yet (RFC-0005
    2.3 point 7: compaction is out of scope), so in practice the session base is the genesis
-   version for the life of the document.
+   version for the life of the document. The versions a live session writes with `covers`
+   (section 8.3) are claims about a prefix of the log, not restart points: a program MUST NOT
+   restart from one unless every writer of the session does too.
 
 The reference implementation is `dcp_core::updates::CrdtSession`: its writer has no way to stamp
 anything but the session base, and its receiver is a `Receiver` that is never `reload`ed on a
@@ -128,10 +131,10 @@ back) and needs no re-send. A delta of one cell is about 100 bytes (RFC-0005 3.7
 
 Spec 7 rule 2 applies unchanged. A gap in `seq` of one `(principal, device)` stream means a
 lost update: the receiver stops applying that stream, tells the user that what it shows may be
-incomplete, and recovers from the latest version. How a program recovers is its own (it loads the
-newest version and restarts the session from it, rule 5 of section 3, when that version covers
-`loro/1`; until a program writes `covers`, it shows the state it has and says it may be
-incomplete). A dropped update (section 7) counts toward `seq`, so a drop is not a gap.
+incomplete, and recovers from the latest version. How a program recovers is its own (it shows the
+state it has and says it may be incomplete; it does not restart the session from a version of
+section 8.3, which is not a restart point, rule 5 of section 3). A dropped update (section 7)
+counts toward `seq`, so a drop is not a gap.
 
 ## 7. Determinism
 
@@ -154,7 +157,9 @@ rule (the later by Lamport timestamp, then by peer identifier), the same on ever
 is deterministic, and the other write is lost, as in any last-writer-wins register. Which of the
 two survives is not for a program to choose.
 
-## 8. The document model `tables/1`
+## 8. The document models
+
+### 8.1 `tables/1`
 
 The mapping of a workbook onto Loro containers is the one documented at the top of
 `tables-core/src/controller/collab.rs` (the `Replica` of the `collab` feature): sheets as a
@@ -163,6 +168,93 @@ cells as registers keyed `<row id>|<col id>|<field>`, sizes and names as maps. O
 replicated. A change to that layout that an older program would misread is a new document model,
 `tables/2`, not a change of `tables/1`; and a program that reads a `tables/1` container it does
 not know MUST ignore it, not fail.
+
+### 8.2 `letters/1`
+
+The mapping of a word-processor document onto Loro is the one documented at the top of
+`letters-core/src/collab.rs` (the `Replica` of the `collab` feature):
+
+* One Loro `Text`, `body`, holds exactly the edit sequence: the text of the paragraphs, one
+  `OBJECT` character for every inline object (image, text box, smart chip) and one `\n` between
+  two paragraphs. An offset is an offset into it, counted in Unicode scalar values.
+* Character formatting is Peritext marks, one Loro mark key per character attribute (bold, italic,
+  size, colour, link, ...), each with the expand rule the attribute has (bold, italic, size and
+  colour continue when text is typed at their end; a link, inline code, raw HTML and a tracked
+  change do not).
+* An inline object is its `OBJECT` character with an `obj` mark holding the whole run.
+* A paragraph's style is a `p` mark on the `\n` that starts the paragraph; the first paragraph's
+  is `first` in the `doc` map. Deleting a break joins two paragraphs, and the joined one keeps the
+  first one's style.
+* The page (size, margins) is `page` in the `doc` map, one last-writer-wins value.
+
+What the encoding does not replicate is **refused**, never silently left out, by the program that
+shares a document and by the dry run of section 9 (an update that would put it into a replica
+fails it): tables, footnotes, headers and footers, sections and comments, and character
+formatting that has no mark. A document that holds any of them is not shared as `letters/1`; a
+change to the layout that an older program would misread is a new document model, `letters/2`.
+The genesis (section 4) is a Loro snapshot of the sharer's replica, which the sharer built from
+the document it saved as the root version; section 4 step 3 applies with the paragraphs of the
+document in place of the cells of a workbook.
+
+### 8.3 `covers` for `loro/1`
+
+A version's `covers` (spec 4.2, 7 rule 4) is `{algorithm: "loro/1", through: <id of an update>}`.
+For `loro/1` it is a claim by the writer and means exactly this:
+
+> The file of this version holds every update of `loro/1` up to and including `through`, in the
+> order the binding lists the update log (`DocumentStore::updates`).
+
+An update that every receiver drops or skips (section 9, section 3 rule 3) is part of no replica;
+it holds nothing for the claim to name, so the claim neither includes nor needs it.
+
+**What a writer may claim.** A live session (the `collabd` sidecar, for a program that sent
+`publish_update`) knows which updates its program's replica holds: those it published itself,
+those the program answered `applied`, and those it will never have (the program answered
+`rejected`, or the receiver dropped or skipped them). The **applied prefix** is the longest prefix
+of the log, in the order the binding lists it, in which every update is one of those. A version
+saved from the live replica (the `publish_version` command, with or without `resolve`) carries
+`covers` naming the last update of the applied prefix, and none when the prefix is empty. That is
+true by construction: the replica the file was written from holds the whole prefix. It is not
+the end of the log: an update that has arrived and that the program has not applied yet is not
+named, and neither is anything after the first such update, even when the program has applied
+later ones. The program MUST send the `publish_version` of a save in the turn it serialises the
+file, with no `publish_update` or `applied` between the two that the file does not contain.
+The order of the log is a stable append in both stores `collabd` carries: the in-memory reference
+store lists updates in publish order; Durable Streams lists them epoch by epoch and, within an
+epoch, in the order the server appended them to its `upd` stream. A binding whose order can
+change (Matrix) MUST NOT be used for this claim before it documents its own.
+
+A version written with `covers` has no resume hint (the Durable Streams `hint`): a reader that
+started after the prefix would skip updates the file does not hold.
+
+**What a reader may conclude.** A sidecar tells the program, for every head, `mine` (this
+session published it) and `covered` (it is `mine`, or the update its `covers.through` names is in
+the applied prefix). A head that is `covered` holds nothing that the program's replica does not
+hold: the replica was merged with it already, by the updates, and what the file adds to those is
+only what the saving program made of them. Therefore:
+
+1. Two heads that are both `covered` are **not a conflict**: nothing is lost by showing the
+   document the replica has, and the program SHOULD NOT ask the user. The `heads` event's
+   `conflict` is true only when there are two heads and at least one is not `covered`: a head
+   whose writer had no live session (no `covers`), or whose `through` this replica has not
+   applied (it may hold edits this replica lacks). That is a real second version of the document
+   (spec 6, 4.2 rule 5) and is shown.
+2. An ordinary save (no `resolve`) is a child of the version the program started from **and of
+   every head that is `covered`**, minus any of them that another descends from (the antichain,
+   `dcp_core::graph::antichain`). That is what stops two live editors that save a moment apart
+   from showing each other a spurious second head: each one's save already has the other's as a
+   parent once it has seen it. A head that is not `covered` is never made a parent by a plain save:
+   the user has not seen what it holds. A save with `resolve` has exactly the parents the user
+   chose (spec 6.3).
+3. `covered` is a statement about this replica **now**: it changes when updates arrive or the
+   program answers `applied`, and the sidecar sends `heads` again whenever the heads, any head's
+   `covered` or `conflict` change.
+
+**What a reader must not conclude.** A version with `covers` is not a restart point (section 3
+rule 5): it holds a prefix, other writers go on with the session base and a replica started from
+it would skip their later updates. The claim also says nothing about the order or the authors
+of what it holds, and nothing about versions: a head that is `covered` can still be a different
+text than the replica's (two saves of one replica; the user may have edited since).
 
 ## 9. Validation: the dry run, and what a receiver does when it fails
 
@@ -195,6 +287,11 @@ its binding refuses: wrong signature, will not decrypt, an author whose role may
 dropped by the sidecar before the shell sees it. The sidecar does not parse Loro bytes, so its
 own dry run (`Target::dry_run`) is a pass-through and the real one is the shell's.
 
+Both answers (and a drop by the sidecar) end the update's wait: an update the program rejected,
+or the receiver dropped or skipped, will never be in the replica and so counts as applied for the
+applied prefix of section 8.3; without that, one bad update would keep every later version from
+covering anything.
+
 ## 10. Roles
 
 A principal with a role below `editor` MUST NOT publish updates, and a receiver MUST drop an
@@ -216,7 +313,8 @@ refuses them again.
 
 ## 11. Conformance
 
-A program claims `loro/1` for `tables/1` when it passes:
+A program claims `loro/1` for a document model of section 8 when it passes (the tests named for
+one program are that program's; the rest are the profile's):
 
 | Test | Where |
 |---|---|
@@ -224,7 +322,12 @@ A program claims `loro/1` for `tables/1` when it passes:
 | Convergence and replay equality; deltas equal a replay; a joiner from a snapshot equals a fork | `tables-core` `collab_tests` |
 | Determinism of the computed values | `tables-core/tests/determinism.rs` |
 | Two processes and two replicas converge through a real Durable Streams server: concurrent edits to different cells and to one cell, a one-cell delta is small, an offline gap catches up, a tampered record is dropped and reported, a viewer cannot publish | `collab/headless` `two_instances` |
+| `covers` (section 8.3): a version names the end of the applied prefix, not an update the shell has not applied; a rejected or dropped update does not stall the prefix; two live editors that save after exchanging updates are not in conflict, a writer with no session next to a covered head is; an ordinary save is a child of the version it started from and of every covered head | `collab/collabd` `tests/daemon.rs`; `collab/dcp-core` `graph::tests` and `publish::tests`; `collab/dcp-streams` `a_version_through_a_prefix_claims_the_prefix_and_writes_no_resume_hint` |
 
 ## Changelog
 
 * Draft 1: the profile, with the ruling of RFC-0005 open question 1 (section 3).
+* Draft 1, `letters/1` and `covers`: the document model `letters/1` (section 8.2) and what `covers` means for
+  `loro/1` (section 8.3): a claim about the prefix of the update log the writer's replica has
+  applied, written by every live save, which the readers use to tell a second head they already
+  hold from a conflict. Section 3 rule 5 and section 6 say that such a version is not a restart point.

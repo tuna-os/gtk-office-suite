@@ -47,6 +47,26 @@ impl Default for PangoShaper {
     }
 }
 
+/// `pt` to the nearest twip (1/20pt), Writer's layout unit.
+fn twips(pt: f64) -> f64 {
+    (pt * 20.0).round() / 20.0
+}
+
+/// A family as Pango is asked for it: a fixed-pitch East Asian face
+/// (MS Gothic and its kin) falls back to the monospace face where it is
+/// not installed, as Writer substitutes it by its pitch. The opt-out
+/// form's ☐ boxes are 20pt MS Gothic: Writer draws them in DejaVu Sans
+/// Mono, and fontconfig's own pick, a proportional face, drew them half
+/// as large again.
+fn with_fallback(family: &str) -> std::borrow::Cow<'_, str> {
+    const FIXED: [&str; 6] = ["ms gothic", "ms mincho", "nsimsun", "mingliu", "gulimche", "batangche"];
+    if FIXED.contains(&family.to_ascii_lowercase().as_str()) {
+        format!("{family},monospace").into()
+    } else {
+        family.into()
+    }
+}
+
 impl PangoShaper {
     pub fn new() -> Self {
         let font_map = pangocairo::FontMap::new();
@@ -95,7 +115,7 @@ impl PangoShaper {
                     size = f64::from(hp) / 2.0;
                 }
                 if let Some(f) = &st.font_family {
-                    base.set_family(f);
+                    base.set_family(&with_fallback(f));
                 }
             }
         }
@@ -165,13 +185,19 @@ impl PangoShaper {
                     // line, but holds the line open as an empty one is: a
                     // paragraph holding only one is a line tall in Writer
                     // and Word, not none (the opt-out form's answer boxes
-                    // each sit in a paragraph of their own).
+                    // each sit in a paragraph of their own). The line is
+                    // the paragraph mark's, whose size and font the reader
+                    // gives the run.
                     let run_size = run.style.font_size_hp.map_or(size, |hp| f64::from(hp) / 2.0);
-                    let label = self.label(" ", &base, run_size);
+                    let mut desc = base.clone();
+                    if let Some(family) = &run.style.font_family {
+                        desc.set_family(&with_fallback(family));
+                    }
+                    let label = self.label(" ", &desc, run_size);
                     let (_, logical) = label.extents();
                     pango::Rectangle::new(0, -label.baseline(), 0, logical.height())
                 } else {
-                    let (w, h) = if run.style.image.is_some() { super::inline_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
+                    let (w, h) = if run.style.image.is_some() { super::inline_size_pt(run) } else { (0.0, 0.0) };
                     pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h))
                 };
                 let mut a: pango::Attribute = pango::AttrShape::new(&rect, &rect).into();
@@ -198,9 +224,15 @@ impl PangoShaper {
             }
             if st.italic {
                 add(pango::AttrInt::new_style(pango::Style::Italic).into());
+            } else if st.upright {
+                add(pango::AttrInt::new_style(pango::Style::Normal).into());
             }
             if st.caps {
                 add(pango::AttrInt::new_text_transform(pango::TextTransform::Uppercase).into());
+            }
+            // Writer and Word kern only what asks for it.
+            if !st.kerned {
+                add(pango::AttrFontFeatures::new("kern 0").into());
             }
             if st.underline || st.link.is_some() {
                 add(pango::AttrInt::new_underline(pango::Underline::Single).into());
@@ -209,7 +241,7 @@ impl PangoShaper {
                 add(pango::AttrInt::new_strikethrough(true).into());
             }
             if let Some(family) = &st.font_family {
-                add(pango::AttrString::new_family(family).into());
+                add(pango::AttrString::new_family(&with_fallback(family)).into());
             }
             if st.code {
                 add(pango::AttrString::new_family("Liberation Mono").into());
@@ -309,7 +341,36 @@ impl PangoShaper {
             }
             layout.set_tabs(Some(&tabs));
         }
+        carry_line_end_tabs(&layout, &attrs);
         layout
+    }
+}
+
+/// A tab that would reach past the margin starts the next line, as Writer
+/// and Word lay one out: the text after it then starts at the next line's
+/// first stop. Pango never breaks before a tab (a tab only allows a break
+/// after it), so it hangs the tab at the end of the line instead. Where a
+/// wrapped line ends in a tab after a space, that space becomes a line
+/// separator (U+2028), which breaks before the tab: one char for one, so
+/// char offsets are unchanged, and every reader of the layout maps its
+/// byte offsets through its own text. The audit-committee minutes'
+/// "appointed on 1 <tab>February" wrapped each line after it a word late.
+fn carry_line_end_tabs(layout: &pango::Layout, attrs: &pango::AttrList) {
+    const SEP: char = '\u{2028}';
+    for _ in 0..64 {
+        let text = layout.text().to_string();
+        let lines = layout.lines_readonly();
+        let space = lines.iter().take(lines.len().saturating_sub(1)).find_map(|line| {
+            let end = (line.start_index() + line.length()) as usize;
+            let body = text.get(..end)?.strip_suffix('\t')?;
+            (body.len() > line.start_index() as usize && body.ends_with(' ')).then(|| body.len() - 1)
+        });
+        let Some(at) = space else { return };
+        let mut carried = text;
+        carried.replace_range(at..at + 1, SEP.encode_utf8(&mut [0; 4]));
+        attrs.update(at as i32, 1, SEP.len_utf8() as i32);
+        layout.set_text(&carried);
+        layout.set_attributes(Some(attrs));
     }
 }
 
@@ -361,6 +422,7 @@ fn line_boxes(layout: &pango::Layout, hang: f64) -> Vec<LineBox> {
                 width_pt: to_pt(logical.width()),
                 ascent_pt: to_pt(baseline - logical.y()),
                 descent_pt: to_pt(logical.y() + logical.height() - baseline),
+                text_pt: None,
             });
         }
         if !iter.next_line() {
@@ -381,11 +443,14 @@ impl Shaper for PangoShaper {
         // the text's own font's: a paragraph of 14pt Arial in a Calibri
         // document has Arial's (render-lab `real-salary-template`).
         if let Some(mut desc) = layout.font_description() {
-            // A blank paragraph's is its empty run's, as its height is.
+            // A blank paragraph's is its empty run's, as its height is; one
+            // holding only floating objects, the mark's its runs carry.
             let text = req.runs.iter().find(|r| !r.text.is_empty() && !super::is_object(r));
-            if let Some(run) = text.or_else(|| req.runs.iter().find(|r| !super::is_object(r))) {
+            let blank = || req.runs.iter().find(|r| !super::is_object(r));
+            let floating = || req.runs.iter().find(|r| r.style.image_anchor.is_some());
+            if let Some(run) = text.or_else(blank).or_else(floating) {
                 if let Some(f) = &run.style.font_family {
-                    desc.set_family(f);
+                    desc.set_family(&with_fallback(f));
                 }
                 if let Some(hp) = run.style.font_size_hp {
                     desc.set_size(to_units(f64::from(hp) / 2.0));
@@ -395,6 +460,11 @@ impl Shaper for PangoShaper {
             let gap = to_pt(m.height() - m.ascent() - m.descent()).max(0.0);
             for l in &mut lines {
                 l.descent_pt += gap;
+                // A line holding an inline picture: its text's own height,
+                // which proportional spacing scales (`LineBox::text_height`).
+                if l.objects.iter().any(|&(ch, _)| super::run_at(req.runs, ch).is_some_and(|r| r.style.image.is_some() && r.style.image_anchor.is_none())) {
+                    l.text_pt = Some(to_pt(m.height()));
+                }
             }
         }
         // Raised or lowered text (`position_hp`) grows its line by as much,
@@ -416,6 +486,13 @@ impl Shaper for PangoShaper {
             let (up, down) = on.fold((0.0f64, 0.0f64), |(u, d), &(_, _, pt)| (u.max(pt), d.max(-pt)));
             l.ascent_pt += up;
             l.descent_pt += down;
+            // Writer lays a line out in whole twips: its height is rounded
+            // to the nearest 1/20pt (Inter 12pt: 290.4 twips drawn 14.5pt,
+            // Carlito 11pt: 268.6 drawn 13.45pt). Unrounded, a page of
+            // 12pt Inter ran 0.02pt a line long, and the audit-committee
+            // minutes' 7.1 missed the foot of page 2 by 0.29pt.
+            let height = l.ascent_pt + l.descent_pt;
+            l.descent_pt += twips(height) - height;
         }
         lines
     }
@@ -1082,6 +1159,18 @@ impl Typeset {
     pub fn draw_page(&self, cr: &cairo::Context, index: usize) {
         let Some(page) = self.tree.pages.get(index) else { return };
         cr.set_source_rgb(0.0, 0.0, 0.0);
+        // Each double-ruled table's outline on this page: its outer edges
+        // are drawn double, its inner ones as one rule twice as wide, as
+        // Writer draws two touching lines between cells.
+        let mut outline: HashMap<u32, (f64, f64, f64, f64)> = HashMap::new();
+        for item in &page.items {
+            if let Item::Cell { table, x_pt, y_pt, width_pt, height_pt, .. } = item {
+                if self.doc.table_rule_double.contains(table) {
+                    let b = outline.entry(*table).or_insert((f64::MAX, f64::MAX, f64::MIN, f64::MIN));
+                    *b = (b.0.min(*x_pt), b.1.min(*y_pt), b.2.max(x_pt + width_pt), b.3.max(y_pt + height_pt));
+                }
+            }
+        }
         for item in &page.items {
             match item {
                 Item::Line { source: Source::Paragraph(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
@@ -1180,13 +1269,23 @@ impl Typeset {
                         cr.rectangle(*x_pt, *y_pt, *width_pt, *height_pt);
                         let _ = cr.fill();
                     }
-                    // The rule's outer edge is the box's.
+                    // The rule's outer edge is the box's; a box thinner than
+                    // its rule is a line (a form's rule), drawn along its
+                    // middle.
                     if let Some(rule) = &text_box.border {
                         let (r, g, b) = parse_hex(&rule.color).unwrap_or((0, 0, 0));
                         let lw = emu(rule.width_emu).max(0.25);
                         cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
                         cr.set_line_width(lw);
-                        cr.rectangle(x_pt + lw / 2.0, y_pt + lw / 2.0, width_pt - lw, height_pt - lw);
+                        if *height_pt < lw {
+                            cr.move_to(*x_pt, y_pt + height_pt / 2.0);
+                            cr.line_to(x_pt + width_pt, y_pt + height_pt / 2.0);
+                        } else if *width_pt < lw {
+                            cr.move_to(x_pt + width_pt / 2.0, *y_pt);
+                            cr.line_to(x_pt + width_pt / 2.0, y_pt + height_pt);
+                        } else {
+                            cr.rectangle(x_pt + lw / 2.0, y_pt + lw / 2.0, width_pt - lw, height_pt - lw);
+                        }
                         let _ = cr.stroke();
                     }
                     // Its text inside its padding, a paragraph per line, in
@@ -1230,7 +1329,7 @@ impl Typeset {
                     let _ = cr.stroke();
                     let _ = cr.restore();
                 }
-                Item::Cell { x_pt, y_pt, width_pt, height_pt, fill, ruled, open, .. } => {
+                Item::Cell { table, x_pt, y_pt, width_pt, height_pt, fill, ruled, open, .. } => {
                     // The cell's shading first, under its rule and text.
                     if let Some((r, g, b)) = fill.as_deref().and_then(parse_hex) {
                         let _ = cr.save();
@@ -1245,7 +1344,7 @@ impl Typeset {
                     // cell text. (On paper and PDF a device unit is tiny,
                     // so this changes nothing there.)
                     let (px, _) = cr.device_to_user_distance(1.0, 0.0).unwrap_or((0.5, 0.0));
-                    let lw = 0.5f64.max(px.abs());
+                    let lw = self.doc.table_rule_widths.get(table).copied().unwrap_or(super::CELL_RULE_PT).max(px.abs());
                     let snap = |x: f64, y: f64| {
                         let (dx, dy) = cr.user_to_device(x, y);
                         let (dw, _) = cr.user_to_device_distance(lw, 0.0).unwrap_or((lw, 0.0));
@@ -1258,9 +1357,45 @@ impl Typeset {
                     let (x0, y0) = snap(*x_pt, *y_pt);
                     let (x1, y1) = snap(*x_pt + *width_pt, *y_pt + *height_pt);
                     let _ = cr.save();
-                    cr.set_source_rgb(0.0, 0.0, 0.0);
+                    // In the table's rule colour (a light grid's grey), else
+                    // black.
+                    let (r, g, b) = self.doc.table_rule_colors.get(table).and_then(|c| parse_hex(c)).unwrap_or((0, 0, 0));
+                    cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
                     cr.set_line_width(lw);
-                    if open.any() {
+                    if let Some(&(left, top, right, bottom)) = outline.get(table) {
+                        // A double rule: two lines of the rule's width, a
+                        // width apart, either side of an outer edge; an
+                        // inner edge one rule twice as wide.
+                        let near = |a: f64, b: f64| (a - b).abs() < 0.5;
+                        let sides = [
+                            (!open.top, near(*y_pt, top), (x0, y0), (x1, y0), (0.0, 1.0)),
+                            (!open.right, near(*x_pt + *width_pt, right), (x1, y0), (x1, y1), (1.0, 0.0)),
+                            (!open.bottom, near(*y_pt + *height_pt, bottom), (x0, y1), (x1, y1), (0.0, 1.0)),
+                            (!open.left, near(*x_pt, left), (x0, y0), (x0, y1), (1.0, 0.0)),
+                        ];
+                        cr.set_line_cap(cairo::LineCap::Square);
+                        for (shut, outer, (ax, ay), (bx, by), (nx, ny)) in sides {
+                            if !shut {
+                                continue;
+                            }
+                            if outer {
+                                cr.set_line_width(lw);
+                                for d in [-lw, lw] {
+                                    cr.move_to(ax + nx * d, ay + ny * d);
+                                    cr.line_to(bx + nx * d, by + ny * d);
+                                }
+                            } else {
+                                // Two touching lines: at least two whole
+                                // device pixels, on a pixel boundary.
+                                let w = (2.0 * lw).max(2.0 * px.abs());
+                                let shift = px.abs() / 2.0;
+                                cr.set_line_width(w);
+                                cr.move_to(ax + nx * shift, ay + ny * shift);
+                                cr.line_to(bx + nx * shift, by + ny * shift);
+                            }
+                            let _ = cr.stroke();
+                        }
+                    } else if open.any() {
                         // Only the sides the cell rules; a neighbour draws
                         // a shared side it rules itself.
                         for (shut, (ax, ay), (bx, by)) in [
@@ -1293,6 +1428,17 @@ impl Typeset {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    /// A fixed-pitch East Asian face falls back to the monospace face, as
+    /// Writer substitutes it: the opt-out form's 20pt MS Gothic boxes. A
+    /// proportional face asks for itself alone.
+    #[test]
+    fn a_fixed_pitch_east_asian_face_falls_back_to_monospace() {
+        assert_eq!(with_fallback("MS Gothic"), "MS Gothic,monospace");
+        assert_eq!(with_fallback("ms mincho"), "ms mincho,monospace");
+        assert_eq!(with_fallback("Arial"), "Arial");
+    }
     use crate::layout::layout;
     use crate::model::{Paragraph, Run};
 
@@ -1483,6 +1629,122 @@ mod tests {
         assert!(!dark(0, 0, w as usize, 70), "ink above the top margin");
     }
 
+    /// Proportional line spacing scales a line's text, not an inline
+    /// picture on it: at 150% a line holding a 100pt chart is the chart and
+    /// half a line of text tall, as Writer lays it out (measured: 6.9pt more
+    /// than at 100% for 12pt text), not half as tall again as the chart.
+    #[test]
+    fn proportional_spacing_scales_the_text_not_an_inline_picture() {
+        use crate::model::{Run, RunStyle};
+        let heights = |spacing: f32| {
+            let mut d = doc(3, "x");
+            d.paragraphs[1].style.line_spacing = spacing;
+            d.paragraphs[1].runs = vec![Run { text: String::new(), style: RunStyle { image: Some("/nonexistent.png".into()), image_extent_emu: Some((914_400, 100 * 12_700)), ..Default::default() } }];
+            let t = Typeset::new(d, LayoutOptions::default());
+            let tops: Vec<f64> = t.tree().pages[0].lines().map(|l| match l { Item::Line { top_pt, .. } => *top_pt, _ => 0.0 }).collect();
+            tops[2] - tops[1]
+        };
+        let text_line = {
+            let t = Typeset::new(doc(2, "x"), LayoutOptions::default());
+            let tops: Vec<f64> = t.tree().pages[0].lines().map(|l| match l { Item::Line { top_pt, .. } => *top_pt, _ => 0.0 }).collect();
+            tops[1] - tops[0]
+        };
+        let (single, half_again) = (heights(1.0), heights(1.5));
+        assert!(single >= 100.0, "the picture's line is at least the picture: {single}");
+        assert!((half_again - single - text_line / 2.0).abs() < 0.01, "150% adds half a text line ({}), not half the picture: {single} -> {half_again}", text_line / 2.0);
+    }
+
+    /// Only a run that asks for kerning is kerned, as Writer and Word draw
+    /// it: "AVAVAV" in Liberation Sans is narrower kerned.
+    #[test]
+    fn only_a_kerned_run_is_kerned() {
+        let opts = LayoutOptions::default();
+        let shaper = PangoShaper::new();
+        let width = |kerned: bool| {
+            let style = crate::model::RunStyle { kerned, font_family: Some("Liberation Sans".into()), ..Default::default() };
+            let runs = [Run { text: "AVAVAV".into(), style }];
+            let req = ShapeRequest {
+                runs: &runs,
+                heading: None,
+                code: false,
+                look: Look::Body,
+                alignment: Alignment::Left,
+                width_pt: 400.0,
+                first_line_indent_pt: 0.0,
+                tab_stops: Vec::new(),
+                right_tab: false,
+                defaults: &opts,
+            };
+            line_boxes(&shaper.layout(&req), 0.0)[0].width_pt
+        };
+        assert!(width(true) + 1.0 < width(false), "kerned {} unkerned {}", width(true), width(false));
+    }
+
+    /// A tab that would reach the margin starts the next line, as Writer
+    /// and Word lay it out, rather than hanging at the end of this one: the
+    /// audit-committee minutes' "appointed on 1 <tab>February" wrapped each
+    /// line after it a word late. However far along the tab falls, no
+    /// wrapped line ends in it, and some placement moves it down a line.
+    #[test]
+    fn a_tab_that_reaches_the_margin_starts_the_next_line() {
+        let opts = LayoutOptions::default();
+        let shaper = PangoShaper::new();
+        let mut carried = 0;
+        for n in 1..40 {
+            let text = format!("{}\tafter the tab", "word ".repeat(n));
+            let runs = [Run::plain(text.clone())];
+            let stops = (1..6).map(|i| crate::model::TabStop::left(36.0 * f64::from(i))).collect();
+            let req = ShapeRequest {
+                runs: &runs,
+                heading: None,
+                code: false,
+                look: Look::Body,
+                alignment: Alignment::Left,
+                width_pt: 200.0,
+                first_line_indent_pt: 0.0,
+                tab_stops: stops,
+                right_tab: false,
+                defaults: &opts,
+            };
+            let lines = line_boxes(&shaper.layout(&req), 0.0);
+            let chars: Vec<char> = text.chars().collect();
+            for l in &lines[..lines.len() - 1] {
+                assert_ne!(chars[l.end - 1], '\t', "a wrapped line ends in the tab ({n} words): {lines:?}");
+            }
+            carried += lines.iter().skip(1).filter(|l| chars[l.start] == '\t').count();
+        }
+        assert!(carried > 0, "no placement carried the tab to the next line");
+    }
+
+    /// A line is a whole number of twips tall, rounded as Writer rounds it:
+    /// 10pt DejaVu Sans (232.8 twips) is drawn 11.65pt, as LibreOffice
+    /// spaces its lines.
+    #[test]
+    fn a_line_is_a_whole_number_of_twips() {
+        let opts = LayoutOptions::default();
+        let mut shaper = PangoShaper::new();
+        let style = crate::model::RunStyle { font_family: Some("DejaVu Sans".into()), font_size_hp: Some(20), ..Default::default() };
+        let runs = [Run { text: "word ".repeat(80), style }];
+        let req = ShapeRequest {
+            runs: &runs,
+            heading: None,
+            code: false,
+            look: Look::Body,
+            alignment: Alignment::Left,
+            width_pt: 300.0,
+            first_line_indent_pt: 0.0,
+            tab_stops: Vec::new(),
+            right_tab: false,
+            defaults: &opts,
+        };
+        let lines = Shaper::shape(&mut shaper, &req);
+        assert!(lines.len() > 2);
+        for l in &lines {
+            let h = l.ascent_pt + l.descent_pt;
+            assert!((h - 11.65).abs() < 1e-9, "{h}");
+        }
+    }
+
     /// A paragraph holding only a floating picture or text box is as tall
     /// as an empty one, as in Writer and Word: it used to be half a point
     /// tall, which drew the opt-out form's labels up against the answer
@@ -1500,7 +1762,12 @@ mod tests {
         let boxed = Run { text: String::new(), style: RunStyle { text_box: Some(Box::new(TextBox { extent_emu: (914_400, 914_400), ..Default::default() })), image_anchor: Some(ImageAnchor::default()), ..Default::default() } };
         let picture = Run { text: String::new(), style: RunStyle { image: Some("/nonexistent.png".into()), image_extent_emu: Some((914_400, 914_400)), image_anchor: Some(ImageAnchor::default()), ..Default::default() } };
         assert_eq!(heights(vec![boxed]), empty, "a text box's paragraph");
-        assert_eq!(heights(vec![picture]), empty, "a floating picture's");
+        assert_eq!(heights(vec![picture.clone()]), empty, "a floating picture's");
+        // Sized by its mark, the line is that mark's blank line: font too.
+        let mark = RunStyle { font_size_hp: Some(56), font_family: Some("Liberation Mono".into()), ..Default::default() };
+        let blank = heights(vec![Run { text: String::new(), style: mark.clone() }]);
+        let marked = Run { style: RunStyle { font_size_hp: mark.font_size_hp, font_family: mark.font_family.clone(), ..picture.style }, ..picture };
+        assert_eq!(heights(vec![marked]), blank, "a picture's paragraph with a 28pt mono mark");
     }
 
     /// A text box is drawn as Writer draws one: its fill, its rule and its

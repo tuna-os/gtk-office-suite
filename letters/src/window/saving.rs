@@ -73,6 +73,10 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     if let Some(warning) = commit.recovery_warning {
         show_message(page, "Document saved; recovery cleanup failed", &warning);
     }
+    // A shared document's save is also published as a version (RFC-0005 2.3);
+    // a failed publish never fails the save.
+    #[cfg(feature = "collab")]
+    crate::collab_session::after_save(&buf, path);
     SaveOutcome::Saved
 }
 

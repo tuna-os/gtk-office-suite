@@ -2,7 +2,7 @@
 // line, so an A4 page with 1in margins holds 75 chars × 46 lines.
 
 use super::*;
-use crate::model::{Alignment, BorderStyle, CellFill, HfStory, LineHeight, ParaBorder, ParaBorders, ParaStyle, RowHeight, TabAlign, TabLeader, TabStop, TableCell, CellPadding};
+use crate::model::{Alignment, BorderStyle, CellFill, HfLine, HfStory, LineHeight, ParaBorder, ParaBorders, ParaStyle, RowHeight, TabAlign, TabLeader, TabStop, TableCell, CellPadding};
 
 const LINE: f64 = 15.0;
 const LINES_PER_PAGE: usize = 46;
@@ -323,6 +323,38 @@ fn a_marker_wider_than_its_hanging_tabs_its_text_to_the_next_stop() {
     assert!((lines[0] - margin - DEFAULT_TAB_PT).abs() < 1e-6, "the first line at the first stop: {lines:?}");
 }
 
+/// A header's or footer's paragraph padding (its border gaps) is inside
+/// the part, the last paragraph's below too, unlike its space after.
+#[test]
+fn a_footer_lines_padding_is_inside_the_footer() {
+    let line = |pad: f64| HfLine { pad_above_pt: pad, pad_below_pt: pad, space_after_pt: 10.0, ..Default::default() };
+    let lb = LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: 12.0, descent_pt: 3.0, objects: Vec::new(), text_pt: None };
+    let (boxes, h) = hf_line_boxes("", std::slice::from_ref(&lb), &[line(0.0)]);
+    let (padded, ph) = hf_line_boxes("", &[lb], &[line(31.0)]);
+    assert!((ph - h - 62.0).abs() < 1e-6, "{h} {ph}");
+    assert!((padded[0].0 - boxes[0].0 - 31.0).abs() < 1e-6, "the text below its padding: {boxes:?} {padded:?}");
+}
+
+/// Word's default tab stops run from the margin, not the indent: an item
+/// indented 0.25in tabs to 0.5in, as the Ofsted minutes' "2.1" items do.
+#[test]
+fn default_tab_stops_run_from_the_margin_not_the_indent() {
+    let st = ParaStyle { left_indent_pt: 18.0, ..ParaStyle::default() };
+    let stops: Vec<f64> = request_tabs(&st, paragraph_box_x(&Paragraph { style: st.clone(), runs: Vec::new() }), 200.0)
+        .iter()
+        .map(|t| t.pos_pt)
+        .collect();
+    assert_eq!(stops[..3], [18.0, 54.0, 90.0], "{stops:?}");
+}
+
+/// A "2.1" label at 11pt (15pt in Arial) fits a quarter-inch hanging, so
+/// its text starts at the indent rather than a tab stop past it.
+#[test]
+fn a_short_numbered_label_fits_a_quarter_inch_hanging() {
+    let w: f64 = "2.1".chars().map(label_char_em).sum::<f64>() * 11.0;
+    assert!(w > 14.0 && w < 18.0, "{w}");
+}
+
 #[test]
 fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
     let mut d = doc_of(1, "after");
@@ -438,6 +470,20 @@ fn a_table_row_takes_the_files_height() {
     assert!((rows[1].0 + rows[1].1 - foot).abs() < 1e-6, "{rows:?}");
 }
 
+/// A table's rules take their own width in each row: a 0.75pt grid's
+/// rows stand a quarter point taller than a 0.5pt one's, as Writer draws
+/// them (render-lab `real-annex-a-annual-report-form` drifted down its
+/// pages otherwise).
+#[test]
+fn a_rows_rule_is_as_wide_as_its_table_says() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 1, 1);
+    let height = |d: &Document| lay(d).pages[0].items.iter().find_map(|i| match i { Item::Cell { height_pt, .. } => Some(*height_pt), _ => None }).unwrap();
+    let thin = height(&d);
+    d.table_rule_widths.insert(table, 0.75);
+    assert!((height(&d) - (thin - CELL_RULE_PT + 0.75)).abs() < 1e-9, "{thin} -> {}", height(&d));
+}
+
 /// A row taller than the space left splits at the foot of the page, as
 /// Word and LibreOffice split it: the lines that fit stay, the rest
 /// continue at the top of the next page in the same cell, and nothing is
@@ -475,6 +521,52 @@ fn a_tall_row_splits_across_pages() {
     let n = a.iter().filter(|l| l.starts_with("line ")).count();
     assert!(n > 10 && n < 80, "{n} lines on the first page");
     assert_eq!(b.first().map(String::as_str), Some(format!("line {n}").as_str()), "the next line, not a repeat or a gap");
+}
+
+/// A cell continued on the next page starts with its next line, at the
+/// same depth below the cell's top as its first line: the space after the
+/// paragraph before the break stays on the page before, as Writer lays it
+/// out, and the cell's top padding opens the new piece again. Carried
+/// over, the space pushed an annual report form's page down 8pt; without
+/// the padding a padded form's continued answer box stood 5.6pt short
+/// (render-lab `real-annex-a-annual-report-form`).
+#[test]
+fn a_continued_cell_does_not_open_with_paragraph_spacing() {
+    // Short lines of filler move where the page breaks, so that some
+    // break falls on the space between two of the cell's paragraphs.
+    let mut on_a_gap = 0;
+    for filler in 1..12 {
+        let mut d = doc_of(filler, "filler");
+        let table = d.insert_table_at(filler, 1, 1);
+        d.table_padding.insert(table, CellPadding { top_pt: 6.0, ..Default::default() });
+        let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+        let lines: Vec<Paragraph> = (0..80)
+            .map(|n| Paragraph {
+                style: ParaStyle { table_cell: Some(TableCell { table, row: 0, col: 0 }), space_after_pt: 8.0, ..Default::default() },
+                runs: vec![Run::plain(format!("line {n}"))],
+            })
+            .collect();
+        d.paragraphs.splice(at..=at, lines);
+        let t = lay(&d);
+        // How far below its cell's top the page's first line of the cell
+        // sits, and the foot of the page's last line.
+        let inset = |page: usize| -> (f64, f64) {
+            let items = &t.pages[page].items;
+            let cell = items.iter().find_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).unwrap();
+            let tops: Vec<(f64, f64)> = items.iter().filter_map(|i| match i { Item::Line { text, top_pt, height_pt, .. } if text.starts_with("line ") => Some((*top_pt, *height_pt)), _ => None }).collect();
+            (tops[0].0 - cell, tops.last().map_or(0.0, |l| l.0 + l.1))
+        };
+        assert!(t.pages.len() > 1, "the row splits");
+        let (first, foot) = inset(0);
+        let foot_room = 841.9 - 72.0 - foot;
+        // The last line's paragraph space did not fit above the foot.
+        if foot_room < 8.0 - 1e-6 && foot_room > 1e-6 {
+            on_a_gap += 1;
+        }
+        assert!((first - 6.0).abs() < 1e-6, "{filler} lines of filler: the first line below the padding: {first}");
+        assert!((inset(1).0 - first).abs() < 1e-6, "{filler} lines of filler: first page {first}, next {}", inset(1).0);
+    }
+    assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
 }
 
 /// A row kept on one page that does not fit what is left of a page
@@ -979,21 +1071,29 @@ fn an_inline_image_keeps_its_room_beside_it() {
     let t = lay(&d);
     let x = t.pages[0].items.iter().find_map(|i| match i { Item::Image { x_pt, .. } => Some(*x_pt), _ => None }).unwrap();
     assert_eq!(x, 72.0 + 9.0, "9pt in from the margin");
-    assert_eq!(inline_size_pt(&pic(Some((114_300, 114_300))), 400.0), (90.0, 72.0), "the line keeps 9pt each side");
-    assert_eq!(inline_size_pt(&pic(None), 400.0), (72.0, 72.0));
+    assert_eq!(inline_size_pt(&pic(Some((114_300, 114_300)))), (90.0, 72.0), "the line keeps 9pt each side");
+    assert_eq!(inline_size_pt(&pic(None)), (72.0, 72.0));
 }
 
+/// A picture wider than the text keeps its size and runs into the margin,
+/// as Writer and Word draw it: it is not shrunk to the column, which drew
+/// a chart a little wider than the text shorter than Writer does.
 #[test]
-fn an_image_wider_than_the_text_box_is_scaled_to_fit() {
+fn an_image_wider_than_the_text_keeps_its_size() {
     let run = Run {
         text: String::new(),
         style: crate::model::RunStyle {
             image: Some("x".into()),
-            image_extent_emu: Some((12700 * 900, 12700 * 300)),
+            image_extent_emu: Some((12700 * 500, 12700 * 200)),
             ..Default::default()
         },
     };
-    assert_eq!(image_size_pt(&run, 450.0), (450.0, 150.0));
+    assert_eq!(image_size_pt(&run), (500.0, 200.0));
+    let mut d = doc_of(2, "text");
+    d.paragraphs[0].runs = vec![run];
+    let t = lay(&d);
+    let size = t.pages[0].items.iter().find_map(|i| match i { Item::Image { width_pt, height_pt, .. } => Some((*width_pt, *height_pt)), _ => None });
+    assert_eq!(size, Some((500.0, 200.0)), "wider than the {}pt column, drawn at its own size", t.pages[0].width_pt - 144.0);
 }
 
 #[test]

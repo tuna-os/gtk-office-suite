@@ -34,7 +34,7 @@ serde_bytes = "0.11"
 
 # iroh 1.x transport and blobs. iroh-blobs 0.103.1 is the fixed release (0.103.0 is yanked:
 # push-request bug, https://www.iroh.computer/blog/iroh-blobs-push-fix).
-iroh-blobs = "=0.103.1"
+iroh-blobs = "=0.104.0"
 # `metrics`: iroh's own socket counters (bytes by transport, hole-punch attempts), which the
 # relay spike reads (src/pathlog.rs).
 iroh = { version = "1.4", default-features = false, features = ["tls-ring", "metrics"] }

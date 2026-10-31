@@ -556,8 +556,32 @@ fn line_of(part_xml: &str, at: usize, styles_xml: &str) -> crate::model::HfLine 
             apply_run_properties(&mut look, &run[p..p + run[p..].find("</w:rPr>").unwrap_or(0)]);
         }
     }
-    let (space_before_pt, space_after_pt, line_height) = line_spacing(ppr_own, if ppr.contains("<w:pStyle ") { chain } else { style_chain(styles_xml, default_paragraph_style(styles_xml)) }, styles_xml);
-    HfLine { alignment, look, tab_stops, space_before_pt, space_after_pt, line_height, ..Default::default() }
+    let chain = if ppr.contains("<w:pStyle ") { chain } else { style_chain(styles_xml, default_paragraph_style(styles_xml)) };
+    let (gap_above, gap_below) = (border_gap(ppr_own, &chain, "top"), border_gap(ppr_own, &chain, "bottom"));
+    let (space_before_pt, space_after_pt, line_height) = line_spacing(ppr_own, chain, styles_xml);
+    HfLine { alignment, look, tab_stops, space_before_pt, space_after_pt, pad_above_pt: gap_above, pad_below_pt: gap_below, line_height, ..Default::default() }
+}
+
+/// How far a header or footer paragraph's `side` border (`w:pBdr`) stands
+/// off its text, in points, by its own properties or its style's: the
+/// border's gap and, when it is drawn, its width. Writer keeps the gap of
+/// an invisible (`none`) border as padding: the questionnaire's Normal
+/// style pads every side 31pt that way, and its empty footer stands 62pt
+/// taller than its one line, pushing the page's text up with it.
+fn border_gap(ppr_own: &str, chain: &[&str], side: &str) -> f64 {
+    for x in std::iter::once(ppr_own).chain(chain.iter().copied()) {
+        let Some(open) = x.find("<w:pBdr>") else { continue };
+        let pbdr = &x[open..open + x[open..].find("</w:pBdr>").unwrap_or(0)];
+        let Some(e) = pbdr.find(&format!("<w:{side} ")) else { continue };
+        let val = attr(pbdr, e, "w:val").unwrap_or_default();
+        if val == "nil" {
+            return 0.0;
+        }
+        let space = attr(pbdr, e, "w:space").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(0.0).clamp(0.0, 31.0);
+        let width = if val == "none" { 0.0 } else { attr(pbdr, e, "w:sz").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(4.0).max(0.0) / 8.0 };
+        return space + width;
+    }
+    0.0
 }
 
 /// A header or footer paragraph's space before and after, in points, and

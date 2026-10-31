@@ -188,8 +188,11 @@ pub fn capabilities() -> Capabilities {
         revocation: true,
         // The lease log takes any record.
         arbitrary_lease_writes: true,
-        // Creating a free name is atomic on Nextcloud, so the log is a real
-        // compare-and-set.
+        // Writes made one after the other get a compare-and-set: a taken name is
+        // refused (412/423), which is all the journeys write. Under real concurrency
+        // creating a name is not atomic on Nextcloud (a late creator can replace the
+        // record: `lease_log_create_race_leaves_one_holder_after_the_read_backs`), so
+        // `false` here does not license skipping lease rule 3's read-backs.
         racy_lease: false,
         history: true,
         arbitrary_parents: true,

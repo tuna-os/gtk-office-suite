@@ -348,16 +348,31 @@ impl MatrixStore {
             }
         }
         // Joining by room ID works as soon as the server has the invite, but
-        // matrix-sdk imports the inviter's shared history only if it had seen the
-        // invite by /sync *before* the join (it records who invited us then).
-        // Join too early and every version published before the invite stays
-        // undecryptable (measured, see the results doc). So wait for our own
-        // sync to deliver the invite. A room we already know we left is given
-        // a short wait (re-invite), an unknown one a longer one.
+        // matrix-sdk imports the inviter's shared history only if it knew, when
+        // it sent the join, who invited us (`Client::join_room_by_id` reads
+        // `Room::invite_details().inviter` before the request; with none it
+        // neither records the invite acceptance nor looks for the key bundle,
+        // and never retries). Join too early and every version published
+        // before the invite stays undecryptable (measured, see the results doc).
+        // "Too early" is not "before `get_room` lists the room as invited": the
+        // sync that carries the invite creates the room as `Invited` first and
+        // stores its invite state (the member events `invite_details` reads)
+        // only once it has processed the whole response, so for those few
+        // milliseconds the room is invited and its inviter unknown (measured:
+        // 13 of 760 runs of the late-editor journey joined in that window).
+        // So wait until the SDK can name the inviter. A room we already know
+        // we left is given a short wait (re-invite), an unknown one a longer one.
         let known_left = client.get_room(&rid).is_some();
         let wait = if known_left { Duration::from_secs(2) } else { Duration::from_secs(10) };
         self.poll_until(wait, || async {
-            client.get_room(&rid).is_some_and(|r| matches!(r.state(), RoomState::Invited | RoomState::Joined))
+            match client.get_room(&rid) {
+                Some(r) => match r.state() {
+                    RoomState::Joined => true,
+                    RoomState::Invited => r.invite_details().await.is_ok_and(|d| d.inviter.is_some()),
+                    _ => false,
+                },
+                None => false,
+            }
         })
         .await;
         if let Some(room) = client.get_room(&rid) {

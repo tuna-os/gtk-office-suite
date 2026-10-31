@@ -85,10 +85,21 @@ impl SuiteApp {
     pub fn new(app_id: &str) -> Self {
         crash_report::install();
         init_i18n();
+        // Apps open documents from the CLI / file manager ("Open with…").
+        let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
+        // Test-only: the GUI harness runs two instances of one app on one
+        // session bus (so one AT-SPI tree) to test live collaboration. A
+        // unique application would forward the second process to the first
+        // and exit. Both variables have to be set, so GTK_OFFICE_TEST_MODE
+        // alone, which other test-only code already reads, changes nothing.
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some()
+            && std::env::var_os("GTK_OFFICE_NON_UNIQUE").is_some()
+        {
+            flags |= gio::ApplicationFlags::NON_UNIQUE;
+        }
         let app = adw::Application::builder()
             .application_id(app_id)
-            // Apps open documents from the CLI / file manager ("Open with…").
-            .flags(gio::ApplicationFlags::HANDLES_OPEN)
+            .flags(flags)
             .build();
 
         // The suite's own icons, before any window asks for one.

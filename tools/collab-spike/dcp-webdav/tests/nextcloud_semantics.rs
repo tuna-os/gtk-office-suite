@@ -718,68 +718,192 @@ async fn latency_of_the_operations_a_binding_uses() {
 
 // --------------------------------------------------------- the lease log
 
-/// The lease log's compare-and-set under real concurrency: two handles that have
-/// read record `n` both try to create record `n + 1`.
+/// Lease rule 3's sleep, in real time.
+struct RealPause;
+
+#[async_trait::async_trait]
+impl dcp_core::lease::Pause for RealPause {
+    async fn pause(&self, ms: u64) {
+        tokio::time::sleep(Duration::from_millis(ms)).await;
+    }
+}
+
+/// The lease log under real concurrency: two handles that have read record `n` both try to
+/// create record `n + 1`, then both apply lease rule 3 (read back, settle, read back).
+///
+/// Creating a name with `If-None-Match: *` is NOT an atomic compare-and-set on Nextcloud: the
+/// precondition is checked by a lookup that is not under the file lock, so a creator that passed
+/// it before the other's record was visible can still replace that record and be answered `204`
+/// (RFC-0004 spike E results, "The lease"). Both writers are then told their write was accepted
+/// and the log holds the later one. What the binding guarantees is therefore the two-read rule,
+/// and that is what this asserts: after it, at most one session holds the lease, and when any
+/// write was accepted exactly one does. How often the server accepted both writes, and the
+/// whole exchange each time it did, are printed and measured, not asserted.
+///
+/// `DCP_LEASE_RACE_ROUNDS` (default 20) sets the rounds, `DCP_LEASE_RACE_EDITOR=alice` makes the
+/// second writer a second client of the owner's account instead of a sharee (bob).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn lease_log_is_a_compare_and_set_under_concurrency() {
+async fn lease_log_create_race_leaves_one_holder_after_the_read_backs() {
     use dcp_conformance::{new_file, standard_meta};
-    use dcp_core::lease::{Claim, released};
+    use dcp_core::lease::{self, released, Attempt, Claim, Settle, MATRIX_SETTLE_MS};
     use dcp_core::{DocumentStore, Role, StoreError};
-    if require("lease_log_is_a_compare_and_set_under_concurrency", &[url_a()]).await.is_none() {
+    if require("lease_log_create_race_leaves_one_holder_after_the_read_backs", &[url_a()]).await.is_none() {
         return;
     }
     let base = url_a();
     let clock = clock(&base).await;
     let fault = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let owner = store(&base, "alice", &clock, &fault);
-    let editor = store(&base, "bob", &clock, &fault);
+    let editor_user = std::env::var("DCP_LEASE_RACE_EDITOR").unwrap_or_else(|_| "bob".into());
+    let editor = store(&base, &editor_user, &clock, &fault);
     let doc = owner.create_document(&standard_meta(), Some(new_file(b"base"))).await.unwrap();
-    owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    if editor_user != "alice" {
+        owner.grant(&doc, &editor.principal(), Role::Editor).await.unwrap();
+    }
     let first = owner.versions(&doc).await.unwrap()[0].id.clone();
+    let settle = Settle::new(&RealPause, MATRIX_SETTLE_MS);
 
-    let rounds = 20;
-    let (mut one_won, mut both_won, mut none_won) = (0, 0, 0);
+    let rounds: usize = std::env::var("DCP_LEASE_RACE_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
+    // Writes the server accepted (the store's `Ok`): none, one, both.
+    let (mut none_accepted, mut one_accepted, mut both_accepted) = (0, 0, 0);
+    // Sessions that held the lease after the read-backs, per round: 0 and 1 are expected.
+    let mut holders = std::collections::BTreeMap::<usize, u32>::new();
     let mut losers = std::collections::BTreeMap::<String, u32>::new();
+    // The HTTP statuses of the two PUTs, as the server answered them.
+    let mut status_pairs = std::collections::BTreeMap::<String, u32>::new();
+    let mut violations = Vec::<String>::new();
+    let mut not_located = 0;
     for i in 0..rounds {
         // Both read the same latest record, as two sessions that looked at once.
         let seen_o = owner.lease(&doc).await.unwrap();
         let seen_e = editor.lease(&doc).await.unwrap();
         assert_eq!(seen_o.as_ref().map(|l| l.id.clone()), seen_e.as_ref().map(|l| l.id.clone()));
+        let next = seen_o.as_ref().map_or(0, |l| l.id.parse::<u64>().unwrap() + 1);
         let co = Claim::new(owner.principal(), format!("o{i}"), "t", &first, 60_000);
         let ce = Claim::new(editor.principal(), format!("e{i}"), "t", &first, 60_000);
-        let (wo, we) = tokio::join!(
-            owner.write_lease(&doc, co.lease_over(seen_o.as_ref())),
-            editor.write_lease(&doc, ce.lease_over(seen_e.as_ref()))
-        );
-        match (wo.is_ok(), we.is_ok()) {
-            (true, false) | (false, true) => one_won += 1,
-            (true, true) => both_won += 1,
-            (false, false) => none_won += 1,
+        let (lo, le) = (co.lease_over(seen_o.as_ref()), ce.lease_over(seen_e.as_ref()));
+        dcp_webdav::dav::trace_begin();
+        let (wo, we) = tokio::join!(owner.write_lease(&doc, lo.clone()), editor.write_lease(&doc, le.clone()));
+        let trace = dcp_webdav::dav::trace_take();
+        let (ao, ae) = (Attempt { lease: lo, result: wo }, Attempt { lease: le, result: we });
+        let puts: Vec<&dcp_webdav::dav::Exchange> = trace.iter().filter(|e| e.method == "PUT").collect();
+        let mut pair: Vec<String> = puts.iter().map(|e| e.status.map_or("none".to_owned(), |s| s.to_string())).collect();
+        pair.sort();
+        *status_pairs.entry(pair.join("+")).or_default() += 1;
+        match (ao.result.is_ok(), ae.result.is_ok()) {
+            (false, false) => none_accepted += 1,
+            (true, true) => both_accepted += 1,
+            _ => one_accepted += 1,
         }
-        for r in [&wo, &we] {
-            if let Err(e) = r {
-                assert!(matches!(e, StoreError::Conflict(_)), "the loser must get Conflict, got {e:?}");
-                *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1;
+        // A write that was not accepted is a `Conflict` (412, 423). Nextcloud also answers a
+        // create `404`, "File with name ... could not be located", to one of two creators of
+        // one name while the other's `201` stands (RFC-0004 spike E results, "The lease"); the
+        // store maps a 404 on a write to `Forbidden`. It is counted and quoted, and the write
+        // is as lost as a conflict. Anything else is a failure.
+        for (who, a) in [("owner", &ao), ("editor", &ae)] {
+            match &a.result {
+                Ok(_) => {}
+                Err(e @ StoreError::Conflict(_)) => *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1,
+                Err(e @ StoreError::Forbidden(m)) if m.contains("HTTP 404") => {
+                    not_located += 1;
+                    *losers.entry(e.to_string().chars().take(60).collect()).or_default() += 1;
+                }
+                Err(e) => violations.push(format!("round {i}: the {who}'s write was neither accepted, a Conflict nor a 404: {e:?}")),
             }
         }
-        // And the log has one newest record: the winner's, when there is one.
-        if wo.is_ok() != we.is_ok() {
-            let now = owner.lease(&doc).await.unwrap().expect("a record exists after a win");
-            let winner_session = if wo.is_ok() { format!("o{i}") } else { format!("e{i}") };
-            assert_eq!(now.body.holder.as_ref().unwrap().session, winner_session);
+        // The server did something other than 201 + 412/423: quote the whole exchange, and then
+        // what the log holds.
+        if puts.len() != 2 || puts.iter().any(|e| !matches!(e.status, Some(201 | 412 | 423))) {
+            show_exchange(i, &format!("record {next}: the owner's write ok={}, the editor's ok={}", ao.result.is_ok(), ae.result.is_ok()), &trace);
+            show_record_state(&base, &doc, next, &editor_user).await;
         }
-        // A release keeps the chain going from the winner's record.
+
+        // Lease rule 3 for both, as two sessions would run it.
+        let (ro, re) = tokio::join!(
+            lease::confirm(&owner, &doc, &co, &ao, &settle),
+            lease::confirm(&editor, &doc, &ce, &ae, &settle)
+        );
+        let (ro, re) = (ro.unwrap(), re.unwrap());
+        let held = usize::from(ro.is_acquired()) + usize::from(re.is_acquired());
+        *holders.entry(held).or_default() += 1;
+        let accepted = usize::from(ao.result.is_ok()) + usize::from(ae.result.is_ok());
+        if held > 1 || (accepted > 0 && held != 1) {
+            // Counted and quoted, asserted below: a stress run reports every such round.
+            let line = format!("round {i}, record {next}: statuses {pair:?}, writes accepted {accepted}, sessions holding after the read-backs {held}: owner {ro:?}, editor {re:?}");
+            println!("LEASE-VIOLATION {line}");
+            violations.push(line);
+        }
+        // A release keeps the chain going from the holder's record.
         if i % 5 == 4 {
             owner.lease(&doc).await.unwrap();
             owner.write_lease(&doc, released()).await.unwrap();
         }
     }
-    measure("lease_log_concurrent_writers", json!({ "rounds": rounds, "exactly_one_won": one_won, "both_won": both_won, "neither_won": none_won, "loser_errors": losers }));
-    // Safety: never two winners. Liveness is not promised: when two different
-    // users create the same name at the same instant Nextcloud's file lock can
-    // refuse both (HTTP 423), and the caller reads back and tries again.
-    assert_eq!(both_won, 0, "two writers both created the same record number");
-    assert!(one_won >= 1, "no round had a winner");
+    measure(
+        "lease_log_create_race",
+        json!({
+            "writers": format!("alice+{editor_user}"), "rounds": rounds,
+            "no_write_accepted": none_accepted, "one_write_accepted": one_accepted, "both_writes_accepted": both_accepted,
+            "writes_answered_404": not_located,
+            "sessions_holding_after_the_read_backs": holders, "http_status_pairs": status_pairs, "loser_errors": losers
+        }),
+    );
+    assert!(violations.is_empty(), "lease rule 3 did not leave exactly one holder, or a write failed in an unexpected way: {violations:#?}");
+    assert!(one_accepted + both_accepted >= 1, "no round had an accepted write");
+}
+
+/// Print every request of one race, in the order they were sent, with the headers both ways.
+fn show_exchange(round: usize, why: &str, trace: &[dcp_webdav::dav::Exchange]) {
+    let t0 = trace.iter().map(|e| e.sent_us).min().unwrap_or(0);
+    let rel = |us: u128| (us as f64 - t0 as f64) / 1000.0;
+    println!("RACE-EXCHANGE round {round}: {why}; times are ms after the first request was sent");
+    for e in trace {
+        println!("  [{:>9.3} .. {:>9.3}] {} {} {}", rel(e.sent_us), rel(e.done_us), e.user, e.method, e.path);
+        for (k, v) in &e.request_headers {
+            println!("      > {k}: {v}");
+        }
+        println!("      > (body: {} bytes)", e.request_bytes);
+        match (e.status, &e.error) {
+            (Some(s), _) => println!("      < HTTP {s}"),
+            (None, err) => println!("      < no response: {err:?}"),
+        }
+        for (k, v) in &e.response_headers {
+            println!("      < {k}: {v}");
+        }
+        if !e.response_body.is_empty() {
+            println!("      < body: {}", e.response_body.replace('\n', " "));
+        }
+    }
+}
+
+/// What the server holds for the contested record afterwards, seen by both users: the directory
+/// listing with file ids and ETags, and the record's bytes.
+async fn show_record_state(base: &str, doc: &str, next: u64, editor_user: &str) {
+    let mut users = vec!["alice", editor_user];
+    users.dedup();
+    for user in users {
+        let d = dav(base, user);
+        let dir = d.files_path(&format!("{doc}.l/"));
+        match d.propfind(&dir, 1, &["d:getetag", "d:getlastmodified", "d:getcontentlength", "oc:fileid", "oc:owner-id"]).await {
+            Ok((_, entries)) => {
+                for e in entries.iter().filter(|e| e.name().ends_with(".json")) {
+                    let n = e.name();
+                    // Only the contested record and its neighbours.
+                    if n.strip_suffix(".json").and_then(|s| s.parse::<u64>().ok()).is_some_and(|k| k + 2 >= next) {
+                        println!(
+                            "  STATE {user} sees {n}: fileid={:?} etag={:?} modified={:?} length={:?} owner={:?}",
+                            e.get(OC, "fileid"), e.get(DAV, "getetag"), e.get(DAV, "getlastmodified"), e.get(DAV, "getcontentlength"), e.get(OC, "owner-id")
+                        );
+                    }
+                }
+            }
+            Err(err) => println!("  STATE {user}: PROPFIND failed: {err}"),
+        }
+        match d.get(&format!("{doc}.l/{next:08}.json")).await {
+            Ok(r) => println!("  STATE {user} GET {next:08}.json -> HTTP {}: {}", r.status, r.text().replace('\n', " ")),
+            Err(err) => println!("  STATE {user}: GET failed: {err}"),
+        }
+    }
 }
 
 // ----------------------------------------------------- forged authorship

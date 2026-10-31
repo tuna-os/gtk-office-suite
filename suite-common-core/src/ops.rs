@@ -168,10 +168,47 @@ impl<O: Op> History<O> {
         }
     }
 
+    /// Rewrite the stored steps after the document changed under them: a
+    /// peer's edit arrived (ADR 0011, "Stored inverses are rebased on
+    /// remote events"). `step` gets one step's ops and returns them as they
+    /// apply to the changed document, or `None` to drop that step, that
+    /// step alone; the others stay.
+    ///
+    /// Steps are visited in the order undo, and then redo, would apply
+    /// them: the top one first, because a step lower down addresses the
+    /// document as it is once the ones above it are undone. The group still
+    /// open (if any) comes before the undo steps. `start` makes the state
+    /// that `step` carries from one step to the next along a chain, once for
+    /// the undo chain and once for the redo chain.
+    pub fn rebase<S>(&mut self, start: impl Fn() -> S, mut step: impl FnMut(&mut S, &[O]) -> Option<Vec<O>>) {
+        // A remote edit between two typed characters ends the typing run.
+        self.word = false;
+        let mut state = start();
+        if let Some(group) = self.open.take() {
+            let ops: Vec<O> = group.into_iter().rev().flatten().collect();
+            // One entry, so the group's step, once closed, is these ops.
+            self.open = Some(match step(&mut state, &ops) {
+                Some(rebased) if !rebased.is_empty() => vec![rebased],
+                _ => Vec::new(),
+            });
+        }
+        self.undo = rebase_chain(std::mem::take(&mut self.undo), &mut state, &mut step);
+        let mut state = start();
+        self.redo = rebase_chain(std::mem::take(&mut self.redo), &mut state, &mut step);
+    }
+
     /// Forget everything (a document was replaced wholesale).
     pub fn clear(&mut self) {
         *self = Self::default();
     }
+}
+
+/// Rebase `steps` (oldest first) through `step`, top first; the ones it
+/// drops, and the ones it leaves empty, are gone.
+fn rebase_chain<O, S>(steps: Vec<Vec<O>>, state: &mut S, step: &mut impl FnMut(&mut S, &[O]) -> Option<Vec<O>>) -> Vec<Vec<O>> {
+    let mut kept: Vec<Vec<O>> = steps.into_iter().rev().filter_map(|ops| step(state, &ops)).filter(|ops| !ops.is_empty()).collect();
+    kept.reverse();
+    kept
 }
 
 #[cfg(test)]

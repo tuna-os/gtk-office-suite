@@ -235,15 +235,22 @@ carries the WOPI lock token. It is not an access control mechanism (section 11).
    returns the old event ID and timestamp), so without a changed field a renewal extends nothing. A
    session treats a renewal as done only when the record it reads back carries the new `renewal`.
 9. **Atomic compare-and-set.** A binding whose write is atomic and admits one of several writers
-   that name the same predecessor (a server-side sequence number: 8.4 `Stream-Seq`; creating the
-   next record only if absent: 8.3) makes the accepted write the acquisition. A session on such a
-   binding MAY use a settle interval of 0 and need not read back to acquire. It MUST still treat a
-   refused write as lost, and MUST NOT infer from a refusal that another writer won, because a
-   binding may refuse every writer in a round (8.3: both got `423` in some rounds, so a loser
-   retries). Rule 8 still applies and is checked against the record just read. Measured: 20 rounds
-   of 8 concurrent appends of one sequence number gave exactly one accepted in every round, on both
-   Durable Streams servers; 10 rounds of two editors racing through the store gave one accepted
-   and one conflict; no double win in 280 concurrent create-if-absent rounds on Nextcloud.
+   that name the same predecessor (a server-side sequence number: 8.4 `Stream-Seq`) makes the
+   accepted write the acquisition. A session on such a binding MAY use a settle interval of 0 and
+   need not read back to acquire. It MUST still treat a refused write as lost, and MUST NOT infer
+   from a refusal that another writer won, because a binding may refuse every writer in a round
+   (8.3: both got `423` in some rounds, so a loser retries). Rule 8 still applies and is checked
+   against the record just read. Measured: 20 rounds of 8 concurrent appends of one sequence number
+   gave exactly one accepted in every round, on both Durable Streams servers; 10 rounds of two
+   editors racing through the store gave one accepted and one conflict. **Creating the next record
+   only if absent (8.3) is not such a binding.** Nextcloud checks `If-None-Match: *` before it takes
+   the file lock, so a second creator that passed the check before the first record was visible
+   replaced it: in 12 of 9 216 concurrent rounds (and 6 of 2 240 in earlier CI runs) both writers
+   were told their write was accepted (`201` and `204`) and the log kept the second record. A
+   session on such a binding follows rule 3 in full, and its read-backs MUST read the newest record
+   from the server, not a copy of what the session wrote: with the copy, both sessions held the
+   lease in 5 of the 5 such rounds of one run; reading the record, exactly one session held it in
+   each of the 19 such rounds of another (9 600 rounds).
 10. **Poisoning.** A compare-and-set that is a server-side sequence refuses every later writer once
     anyone who may append has written a high number (8.4: one junk append blocked all lease writes
     for the rest of the epoch). A binding like that MUST give its owner a remedy, which is a new
@@ -417,9 +424,19 @@ and update, files verified, only because of MSC4268 key-bundle sharing, which ne
 
 - the inviter has set up cross-signing (a DCP client that creates or invites into rooms MUST
   bootstrap it); and
-- the invitee's own sync has delivered the invite **before** it joins. A client MUST wait for the
-  invite before joining by room ID: joining early read 0 of 1 versions in 6 of 6 trials, and the wait
-  fixed it (the explanation, that the SDK had not yet recorded who invited it, is an inference).
+- the invitee's SDK can **name the inviter at the moment it sends the join**. matrix-sdk reads
+  `Room::invite_details().inviter` before the join request; with none it records no invite
+  acceptance, never fetches the key bundle that arrived before the invite, and does not try again
+  (reading `finish_join_room`, 0.19.1), so the history stays undecryptable. A client MUST wait,
+  before joining by room ID, until its own sync has delivered the invite **and the SDK has stored
+  it**: the sync that carries the invite lists the room as invited a few milliseconds before it has
+  stored the invite's state, and a join in that window lost the history. Measured on Synapse
+  1.163.2: joining at once read 0 of 1 versions in 6 of 6 trials; waiting only until the room was
+  listed as invited failed in 13 of 760 runs of the late-editor journey (8 of 380 on relaxed and 5
+  of 380 on default rate limits), and in the four failing trials traced the SDK logged
+  `Error fetching invite details for room: UnknownError(EventMissing)` and `inviter: None` at the
+  join; waiting until `invite_details().inviter` is `Some` failed in 0 of 760
+  ([Spike A](rfc/0004-spike-a-results.md), late joiner).
 
 **A new device of an existing member reads none of the room's history** (every event undecryptable
 in rooms of 11, 101, 301 and 1001 events). The spike tried neither key backup nor device
@@ -866,18 +883,29 @@ the owner's `https` path; **a reader MUST NOT fetch it** and resolves `<vid>.bin
 **Lease (`<id>.l`).** A lease record is the file `<n>.json`, `<n>` a zero-padded 8-digit decimal,
 holding `{by, at_ms, lease}`: the writer, its estimate of the server's time in milliseconds, and
 the lease (4.3). The newest record (highest `<n>`) is the lease. A writer that last read `<n>` MUST
-create `<n+1>` with `If-None-Match: *`; `201` means it won, and `412` or `423` is a lost write and
-the writer MUST read back (lease rules 3 and 9). Writers MUST NOT change or delete records. A
-reader that holds `<n>` asks for `<n+1>` and so on until `404`: one request (about 52 ms) when
-nothing changed. WebDAV `LOCK` MUST NOT be used as the lease: it is absent unless the `files_lock`
-app is enabled, is authorised by its token alone, changes the ETag, and is not honoured across a
-federation (below). Measured: creating one name with `If-None-Match: *`, six batches of 20 rounds
-of two writers of one account: in 115 of 120 rounds exactly one got `201` and the other `423` (once
-`412`), in 5 rounds both got `423`, and in none did both succeed. Two different users creating the
-next lease record: a winner in 6 to 12 of 20 rounds, `423` for both in the others, 0 double wins in
-every batch (eight batches). The log is **safe and not live**, so a loser retries. One file per
-write is a growing cost: a holder renewing every 15 minutes writes about 100 files a day per
-document. Compaction by the owner was not implemented.
+create `<n+1>` with `If-None-Match: *`. `412` or `423` is a lost write. **`201` and `204` are only
+an accepted write, not the lease**: Nextcloud checks `If-None-Match: *` before it takes the file
+lock, so a second creator that passed the check before the first record was visible replaces it and
+is answered `204`, while the first keeps its `201`. The writer MUST read back (lease rules 3 and
+9), and the read-backs MUST read the newest record from the server, not a copy of what the writer
+wrote. Writers MUST NOT change or delete records. A reader that holds `<n>` asks for `<n+1>` and so
+on until `404` and then reads `<n>` again: two requests (about 110 ms) when nothing changed. WebDAV
+`LOCK` MUST NOT be used as the lease: it is absent unless the `files_lock` app is enabled, is
+authorised by its token alone, changes the ETag, and is not honoured across a federation (below).
+Measured: two writers creating the next lease record at once, the owner and an editor (a sharee):
+a winner in about half of the rounds, `423` for both in most of the others, and in 12 of 9 216
+rounds both writes were accepted, `201` for the owner and `204` for the editor, with one file id
+and one ETag in both answers and the editor's record in the file (the editor's answer came 30 to
+53 ms after the owner's); two clients of one account: 16 of 7 806 rounds; 6 of 2 240 rounds in
+earlier CI runs. In 4 of 9 216 rounds (5 of 7 806 for one account) one writer was answered `404`
+("File with name … could not be located") while the other's `201` stood: a lost write too, but the
+answer a removed member gets as well (below), so a writer that gets it reads the log back before
+it decides (the spike's store reports it as `forbidden` and its test counts it as a lost write).
+The cause is in Nextcloud, not in the test: delaying its `PUT` handler between the precondition
+check and the existence check gave `201` and `204` every time on both builds. The log is **safe
+only with the read-backs, and not live**: a loser
+retries. One file per write is a growing cost: a holder renewing every 15 minutes writes about 100
+files a day per document. Compaction by the owner was not implemented.
 
 **Time.** WebDAV times (`Date`, `Last-Modified`, `getlastmodified`) are whole seconds. A binding
 MUST estimate the server's clock to the millisecond (find the instant `Date` ticks over, polling
@@ -1142,6 +1170,18 @@ twice; readers drop the second copy (see **Records**). Servers: the Go server 0.
 Caddy's `log` directive answers SSE with `500` (long poll is unaffected), and the reference Node
 server closes idle keep-alive connections at 5 s, which a proxy with a longer upstream keep-alive
 would race (not measured).
+
+**Long-poll wake-up latency is not guaranteed by an open connection.** In the Go server v0.3.0,
+concurrent appends can race the registration of a long-poll waiter: an acknowledged append was
+present on the server while its poll remained parked until the 30 s server timeout, answered
+`204` with the old offset, and a new offset read returned the pending record. This reproduced
+with HTTP/1.1 and HTTP/2; no such failure occurred in the Node controls. It is a server-side
+lost wake-up, not evidence of TLS record loss or a need to retry successful appends. Readers
+MUST resume from the last returned offset after an empty poll too; a deployment MUST NOT treat
+the millisecond latency samples below as an upper bound. See the
+[CI census, access-log evidence and source-patch A/B](rfc/0004-spike-tls-results.md#long-poll-lost-wake-up-census-2026-10-27).
+The tested re-check-after-registration patch eliminated failures in its sample; the pinned
+release in the spike remains unpatched and its strict measurement assertion is unchanged.
 
 **What the server can do.** It can refuse, delete, close, slow or lose streams (and so can anyone
 with the document id); show a reader a stale prefix, including the epoch record of a revocation
@@ -1598,6 +1638,11 @@ Results of the journeys of this section, each from the run its section cites:
 
 ## Changelog
 
+- Draft 1, update 5 (2026-10-27): **8.1 only, no wire change; `dcp` stays `1`.** The rule "wait for
+  the invite before joining" is tightened to "until the SDK can name the inviter": a join sent
+  while the sync that carries the invite is still storing it lost the history in 13 of 760 runs
+  of the late-editor journey (Spike A, late joiner). The Matrix binding waits for
+  `invite_details().inviter`; the journey went from 13 failures in 760 runs to 0 in 760.
 - Draft 1, update 4 (2026-10-25): the first algorithm profile, [`loro/1` with `tables/1`](collab-spec/profiles/loro-1.md)
   (RFC-0005 open question 1). **`dcp` stays `1`: no object or schema changes.** For a CRDT algorithm,
   `base_version` of an update names the version the session's replica started from (the genesis

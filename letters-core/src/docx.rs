@@ -810,7 +810,7 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
         .ok()
         .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
         .is_some();
-    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\") || xml.contains("<w:txbxContent")) {
+    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\") || xml.contains("<w:txbxContent") || xml.contains("<wps:cNvCnPr") || xml.contains("prst=\"line\"")) {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new(), Vec::new())));
     }
     // A table of contents first: it lifts the paragraphs out of their
@@ -1348,12 +1348,18 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let table_padding = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_padding(t)?))).collect();
     let table_unruled: std::collections::BTreeSet<u32> = tables.iter().enumerate().filter(|(_, t)| !table_ruled(t)).map(|(ti, _)| ti as u32).collect();
     let table_valign = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_valign(t)?))).collect();
-    // The rows kept on one page (`w:cantSplit`).
+    let rule_looks: Vec<(u32, RuleLook)> = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).map(|(ti, t)| (ti as u32, table_rule_look(t))).collect();
+    let table_rule_colors = rule_looks.iter().filter_map(|(ti, (c, _))| Some((*ti, c.clone()?))).collect();
+    let table_rule_widths = rule_looks.iter().filter_map(|(ti, (_, w))| Some((*ti, (*w)?))).collect();
+    let table_rule_double = tables.iter().enumerate().filter(|(ti, t)| !table_unruled.contains(&(*ti as u32)) && table_rule_double(t)).map(|(ti, _)| ti as u32).collect();
+    // The rows kept on one page (`w:cantSplit`), and heading rows
+    // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
         .iter()
         .enumerate()
         .filter_map(|(ti, t)| {
-            let rows: std::collections::BTreeSet<u32> = (0..t.row_count()).filter(|&r| t.row(r).and_then(|row| row.cant_split_value()) == Some(true)).map(|r| r as u32).collect();
+            let rows: std::collections::BTreeSet<u32> =
+                (0..t.row_count()).filter(|&r| t.row(r).is_some_and(|row| row.cant_split_value() == Some(true) || row.is_header())).map(|r| r as u32).collect();
             (!rows.is_empty()).then_some((ti as u32, rows))
         })
         .collect();
@@ -1394,6 +1400,9 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_padding,
         table_indent,
         table_unruled,
+        table_rule_colors,
+        table_rule_widths,
+        table_rule_double,
         table_whole_rows,
         table_relative,
         table_open_edges,
@@ -2077,7 +2086,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if doc.table_unruled.contains(&tc0.table) {
                 tbl.set_borders(rdocx::BorderStyle::None, 0, "auto");
             } else {
-                tbl.set_borders(rdocx::BorderStyle::Single, 4, "000000");
+                let eighths = doc.table_rule_widths.get(&tc0.table).map_or(4, |w| (w * 8.0).round().clamp(1.0, 96.0) as u32);
+                let line = if doc.table_rule_double.contains(&tc0.table) { rdocx::BorderStyle::Double } else { rdocx::BorderStyle::Single };
+                tbl.set_borders(line, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
@@ -2180,8 +2191,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         let Some(run) = run else { break };
                         let mut r = broken_run(&mut cp, &run.text);
                         if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
+                        if !run.style.italic && run.style.upright { r = r.italic(false); }
                         if run.style.italic { r = r.italic(true); }
                         if run.style.caps { r = r.all_caps(true); }
+                        if run.style.kerned { r.set_kern_value(Some(1.0)); }
                         if run.style.underline { r = r.underline(true); }
                         if run.style.strikethrough { r = r.strike(true); }
                         if run.style.highlight { r = r.highlight("yellow"); }
@@ -2493,8 +2506,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let text = bracketed(&mut revisions, run);
             let mut r = broken_run(&mut p, &text);
             if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
+            if !run.style.italic && run.style.upright { r = r.italic(false); }
             if run.style.italic { r = r.italic(true); }
             if run.style.caps { r = r.all_caps(true); }
+            if run.style.kerned { r.set_kern_value(Some(1.0)); }
             if run.style.underline { r = r.underline(true); }
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
@@ -3017,10 +3032,7 @@ impl WordCounter {
 /// level text. The instance's own replacement of the level (a
 /// `w:lvlOverride` holding a `w:lvl`) wins over its definition's.
 fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u32, NumberFormat, Option<String>)> {
-    let replaced = doc.numbering_instance(num_id).and_then(|n| {
-        n.level_overrides.into_iter().find(|o| o.level == level).and_then(|o| o.replacement)
-    });
-    if let Some(l) = replaced {
+    if let Some(l) = level_replacement(doc, num_id, level) {
         let format = match l.format {
             rdocx::ListNumberFormat::LowerLetter => NumberFormat::LowerLetter,
             rdocx::ListNumberFormat::UpperLetter => NumberFormat::UpperLetter,
@@ -3033,6 +3045,35 @@ fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u3
     }
     let l = doc.numbering_level(num_id, level)?;
     Some((l.start, number_format(l.format_name), l.level_text.map(str::to_string)))
+}
+
+/// List instance `num_id`'s own replacement of level `level` (a
+/// `w:lvlOverride` holding a `w:lvl`), which wins over its definition's:
+/// a list whose definition only links a numbering style (`w:numStyleLink`)
+/// gives its levels this way, "6.%2." numbered minutes among them.
+fn level_replacement(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<rdocx::ListLevel> {
+    doc.numbering_instance(num_id)?.level_overrides.into_iter().find(|o| o.level == level)?.replacement
+}
+
+/// Whether level `level` of list instance `num_id` is bulleted: its
+/// replacement's format, else its definition's.
+fn level_is_bullet(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<bool> {
+    match level_replacement(doc, num_id, level) {
+        Some(l) => Some(l.format == rdocx::ListNumberFormat::Bullet),
+        None => doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet"),
+    }
+}
+
+/// Level `level`'s left and hanging indents, in points: its replacement's,
+/// else its definition's.
+fn level_indents(doc: &rdocx::Document, num_id: u32, level: u32) -> (Option<f64>, Option<f64>) {
+    match level_replacement(doc, num_id, level) {
+        Some(l) => {
+            let (left, hanging, _) = l.indentation_value();
+            (left.map(twips_pt), hanging.map(twips_pt))
+        }
+        None => doc.numbering_level(num_id, level).map_or((None, None), |l| (l.indent_left.map(twips_pt), l.indent_hanging.map(twips_pt))),
+    }
 }
 
 /// A numbering format name (`w:numFmt`) as this model draws it; the many
@@ -3154,16 +3195,24 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     if style.list == ListKind::None {
         return;
     }
-    let Some((num_id, level)) = p.numbering().filter(|&(id, _)| id != 0) else { return };
+    // The paragraph's own numbering, else its style's ("6.1." minutes
+    // items numbered by their paragraph style).
+    let direct = p.numbering().is_some_and(|(id, _)| id != 0);
+    let Some((num_id, level)) = paragraph_numbering(doc, p) else { return };
     let text = crate::lists::text_indent_pt(style.list_level);
     // The paragraph's own indent, a zero one too: the business appointment
     // rules' items set `w:left="0"` over their level's 0.5in, and stand at
-    // the margin.
+    // the margin. Else, as Word and Writer resolve it, a paragraph numbered
+    // by its own `w:numPr` takes its level's indent over its style's (a
+    // "List Paragraph" item at its level's 0.25in, not the style's 0.5in),
+    // and one numbered by its style takes the style's own indent first.
     let own = p.indent_left().or_else(|| p.indent_start()).map(|l| l.to_pt());
+    let of_style = Some(style.left_indent_pt).filter(|v| *v != 0.0);
+    let of_level = level_indents(doc, num_id, level).0;
     let declared = match own {
         Some(v) => v,
-        None if style.left_indent_pt != 0.0 => style.left_indent_pt,
-        None => doc.numbering_level(num_id, level).and_then(|l| l.indent_left).map(twips_pt).unwrap_or(text),
+        None if direct => of_level.or(of_style).unwrap_or(text),
+        None => of_style.or(of_level).unwrap_or(text),
     };
     // Left of the list's own indent as far as the margin.
     style.left_indent_pt = (declared - text).max(-text);
@@ -3171,7 +3220,7 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     let hanging = if style.first_line_indent_pt < 0.0 {
         Some(-style.first_line_indent_pt)
     } else {
-        doc.numbering_level(num_id, level).and_then(|l| l.indent_hanging).map(twips_pt)
+        level_indents(doc, num_id, level).1
     };
     style.list_hanging_pt = hanging.filter(|h| h.is_finite() && *h > 0.0 && (h - crate::lists::HANGING_PT).abs() > 0.5);
     if style.first_line_indent_pt < 0.0 {
@@ -3259,7 +3308,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     let (list, list_level) = match numbering {
         // The item's own level says bullet or number: a numbered list's
         // second level is often bulleted, and the reverse.
-        Some((num_id, level)) => (match doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet").or_else(|| doc.numbering_is_bullet(num_id)) {
+        Some((num_id, level)) => (match level_is_bullet(doc, num_id, level).or_else(|| doc.numbering_is_bullet(num_id)) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,
@@ -3395,6 +3444,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 // Not bold in a heading, which is drawn bold.
                 regular: heading.is_some() && r.bold_value().or(eff.bold) == Some(false),
                 italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
+                // Not italic in a heading, which may be drawn italic.
+                upright: heading.is_some() && r.italic_value().or(eff.italic) == Some(false),
+                // Any threshold: Writer kerns whatever the size. A heading
+                // takes its style's (Heading 1's 16pt).
+                kerned: r.kern().or_else(|| doc.resolve_run_properties(p.style_id(), r.style_id()).kern.map(|k| k.to_pt())).is_some_and(|k| k > 0.0),
                 caps: r.all_caps_value().unwrap_or(eff.caps == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
@@ -3431,7 +3485,13 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     // its style's), as Word and Writer size it: the screening checklist
     // opens with two blank 22pt Title lines above its title, which drawn
     // at the body size stood it 32px high.
-    if runs.is_empty() && heading.is_none() {
+    // So is one holding nothing but floating text boxes (a form's rule
+    // under its title) or floating pictures (the audit committee minutes'
+    // logo, above three blank 14pt lines), whatever its anchoring run's
+    // own size.
+    let floating_only = !runs.is_empty()
+        && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text) || (r.style.image.is_some() && r.style.image_anchor.is_some()));
+    if (runs.is_empty() || floating_only) && heading.is_none() {
         let mark = p.mark();
         let styled = doc.resolve_run_properties(p.style_id(), None);
         let size_hp = mark
@@ -3440,7 +3500,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             .or_else(|| styled.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16))
             .filter(|hp| Some(*hp) != base.size_hp);
         let family = mark.font_name().map(str::to_string).or_else(|| style_family(p.style_id())).filter(|f| Some(f) != base.family.as_ref());
-        if size_hp.is_some() || family.is_some() {
+        if floating_only {
+            for r in &mut runs {
+                (r.style.font_size_hp, r.style.font_family) = (size_hp, family.clone());
+            }
+        } else if size_hp.is_some() || family.is_some() {
             runs.push(Run { text: String::new(), style: RunStyle { font_size_hp: size_hp, font_family: family, ..Default::default() } });
         }
     }
@@ -3598,6 +3662,10 @@ struct StyleFonts {
     styles: std::collections::HashMap<String, (Option<String>, Option<FontRef>)>,
     /// Table styles whose own `w:tblBorders` has a visible edge.
     ruled_table_styles: std::collections::HashSet<String>,
+    /// The colour (not "auto" or black) and width (`w:sz`, eighths of a
+    /// point) of the first visible edge of a table style's own
+    /// `w:tblBorders`.
+    table_style_rules: std::collections::HashMap<String, (Option<String>, Option<u32>)>,
     default_para: Option<String>,
     doc_default: Option<FontRef>,
 }
@@ -3652,6 +3720,8 @@ fn style_fonts(path: &str) -> StyleFonts {
                     if let (Some(id), Some(val)) = (&style, attr(&e, "w:val")) {
                         if !matches!(val.as_str(), "none" | "nil") {
                             out.ruled_table_styles.insert(id.clone());
+                            let size = attr(&e, "w:sz").and_then(|s| s.parse().ok());
+                            out.table_style_rules.entry(id.clone()).or_insert((attr(&e, "w:color").and_then(|c| rule_color(&c)), size));
                         }
                     }
                 }
@@ -3725,6 +3795,87 @@ thread_local! {
 }
 
 /// Whether table style `id`, or one it is based on, has a visible rule.
+/// A border colour worth keeping: six hex digits, upper case; "auto" and
+/// black (the rule drawn when none is given) are none.
+fn rule_color(c: &str) -> Option<String> {
+    let c = c.to_ascii_uppercase();
+    (c.len() == 6 && c.bytes().all(|b| b.is_ascii_hexdigit()) && c != "000000").then_some(c)
+}
+
+/// A ruled table's rule colour and width, each when not the default.
+type RuleLook = (Option<String>, Option<f64>);
+
+/// Whether a ruled table's rules are double lines: its cells' first
+/// visible border's line, else its own (`w:tblBorders`).
+fn table_rule_double(table: &rdocx::TableRef<'_>) -> bool {
+    use rdocx::CellBorderEdge as C;
+    use rdocx::TableBorderEdge as E;
+    let visible = |b: &rdocx::TableBorderRef<'_>| !matches!(b.style(), "none" | "nil");
+    for r in 0..table.row_count() {
+        let Some(row) = table.row(r) else { continue };
+        for c in 0..row.cell_count() {
+            let Some(cell) = row.cell(c) else { continue };
+            if let Some(b) = [C::Top, C::Left, C::Bottom, C::Right].into_iter().filter_map(|e| cell.border(e)).find(visible) {
+                return b.style() == "double";
+            }
+        }
+    }
+    [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(visible)
+        .is_some_and(|b| b.style() == "double")
+}
+
+/// The colour a ruled table's rules are drawn in, when not black, and
+/// their width in points, when not 0.5pt: its own first visible border's
+/// (`w:tblBorders`), else its style's, through `w:basedOn` (Word's "Table
+/// Grid Light" is BFBFBF).
+fn table_rule_look(table: &rdocx::TableRef<'_>) -> RuleLook {
+    use rdocx::TableBorderEdge as E;
+    use rdocx::CellBorderEdge as C;
+    let width = |sz: Option<u32>| sz.map(|s| f64::from(s) / 8.0).filter(|w| *w > 0.0 && (w - crate::layout::CELL_RULE_PT).abs() > 1e-6);
+    let visible = |b: &rdocx::TableBorderRef<'_>| !matches!(b.style(), "none" | "nil");
+    // A cell's own borders (`w:tcBorders`) win over the table's: the
+    // questionnaire's respondent table rules itself white and each of its
+    // cells black, and Word and Writer draw it black.
+    let mut cells = None;
+    'rows: for r in 0..table.row_count() {
+        let Some(row) = table.row(r) else { continue };
+        for c in 0..row.cell_count() {
+            let Some(cell) = row.cell(c) else { continue };
+            if let Some(b) = [C::Top, C::Left, C::Bottom, C::Right].into_iter().filter_map(|e| cell.border(e)).find(visible) {
+                cells = Some((b.color().and_then(rule_color), width(b.size_eighths_pt())));
+                break 'rows;
+            }
+        }
+    }
+    if let Some(look) = cells {
+        return look;
+    }
+    let own = [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(visible);
+    if let Some(b) = own {
+        return (b.color().and_then(rule_color), width(b.size_eighths_pt()));
+    }
+    let Some(id) = table.style_id() else { return (None, None) };
+    STYLE_FONTS.with(|sf| {
+        let sf = sf.borrow();
+        let mut cur = Some(id.to_string());
+        for _ in 0..32 {
+            let Some(c) = cur else { break };
+            if sf.ruled_table_styles.contains(&c) {
+                let (color, size) = sf.table_style_rules.get(&c).cloned().unwrap_or_default();
+                return (color, width(size));
+            }
+            cur = sf.styles.get(&c).and_then(|(based_on, _)| based_on.clone());
+        }
+        (None, None)
+    })
+}
+
 fn table_style_ruled(id: &str) -> bool {
     STYLE_FONTS.with(|sf| {
         let sf = sf.borrow();

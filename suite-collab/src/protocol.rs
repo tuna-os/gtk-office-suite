@@ -129,8 +129,11 @@ pub enum Command {
         bytes: Vec<u8>,
     },
     /// The saved file. Parents: the version this session last saved or started
-    /// from, or every version in `resolve` when the user merges heads.
-    /// Answered by `published`.
+    /// from together with every head this session already holds (`covered`), minus
+    /// any that another of them descends from; or exactly the versions in
+    /// `resolve` when the user merges heads. In a live session the version
+    /// carries `covers` (loro/1 profile section 8.3): the last update of the
+    /// prefix of the update log this session has applied. Answered by `published`.
     PublishVersion {
         doc: String,
         #[serde(with = "b64::bytes")]
@@ -235,8 +238,17 @@ pub struct HeadInfo {
     pub ts_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// The `covers.through` update id of this version, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub covers: Option<String>,
+    /// This sidecar session published this version.
+    #[serde(default)]
+    pub mine: bool,
+    /// This session already holds the version's content: it is `mine`, or the
+    /// update named by `covers` is inside the prefix of the update log this
+    /// session has applied (so it has nothing the live replica lacks).
+    #[serde(default)]
+    pub covered: bool,
 }
 
 /// What a `dropped` event is about.
@@ -350,11 +362,15 @@ pub enum Event {
         #[serde(with = "b64::bytes")]
         bytes: Vec<u8>,
     },
-    /// The version graph changed.
+    /// The version graph changed, or a head became `covered` (updates arrived
+    /// or the shell answered `applied`): sent again whenever the heads, any
+    /// head's `covered` flag or `conflict` changes.
     Heads {
         doc: String,
         heads: Vec<HeadInfo>,
-        /// More than one head: show it, never pick one silently (DCP spec 4.2 rule 5).
+        /// More than one head and at least one of them is not `covered`: show it,
+        /// never pick one silently (DCP spec 4.2 rule 5). Two heads whose content
+        /// this live replica already holds are not a conflict (RFC-0005 2.5).
         conflict: bool,
     },
     /// The answer to `fetch_version`.

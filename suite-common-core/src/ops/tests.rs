@@ -179,6 +179,57 @@ fn a_redo_that_no_longer_fits_drops_that_step_and_keeps_the_ones_after_it() {
 }
 
 #[test]
+fn rebase_visits_each_chain_top_first_and_drops_one_step_alone() {
+    let mut doc = Vec::new();
+    let mut h = History::default();
+    type_chars(&mut doc, &mut h, "ab cd");
+    h.undo(&mut doc).unwrap();
+    assert_eq!(text(&doc), "ab ");
+    let starts = std::cell::Cell::new(0);
+    let mut visited = Vec::new();
+    let mut indexes = Vec::new();
+    h.rebase(
+        || {
+            starts.set(starts.get() + 1);
+            0usize
+        },
+        |index, ops| {
+            visited.push(ops.to_vec());
+            indexes.push(*index);
+            *index += 1;
+            match ops {
+                // The space step: dropped.
+                [TextOp::Delete { at: 2, len: 1 }] => None,
+                // A peer typed one character at the start: shift by one.
+                [TextOp::Delete { at, len }] => Some(vec![TextOp::Delete { at: at + 1, len: *len }]),
+                [TextOp::Insert { at, text }] => Some(vec![TextOp::Insert { at: at + 1, text: text.clone() }]),
+                other => panic!("unexpected step {other:?}"),
+            }
+        },
+    );
+    assert_eq!(starts.get(), 2, "one state for the undo chain, one for the redo chain");
+    assert_eq!(
+        visited,
+        [
+            vec![TextOp::Delete { at: 2, len: 1 }],
+            vec![TextOp::Delete { at: 0, len: 2 }],
+            vec![TextOp::Insert { at: 3, text: "cd".into() }],
+        ],
+        "the top step of each chain first"
+    );
+    assert_eq!(indexes, [0, 1, 0]);
+
+    doc.insert(0, 'X');
+    h.undo(&mut doc).unwrap();
+    assert_eq!(text(&doc), "X ", "the 'ab' step, rebased, takes back 'ab' and not the peer's X");
+    assert!(!h.can_undo(), "the space step was dropped alone; 'ab' went with its own undo");
+    h.redo(&mut doc).unwrap();
+    assert_eq!(text(&doc), "Xab ");
+    h.redo(&mut doc).unwrap();
+    assert_eq!(text(&doc), "Xab cd", "and the rebased redo step is still there");
+}
+
+#[test]
 fn a_group_that_fails_part_way_is_dropped_whole() {
     let mut doc: Vec<char> = "hello".chars().collect();
     let mut h = History::default();

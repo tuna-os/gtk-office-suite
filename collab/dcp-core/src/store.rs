@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 
-use crate::model::{Lease, Meta, Role, Stamped, Update, Version};
+use crate::model::{Covers, Lease, Meta, Role, Stamped, Update, Version};
 
 pub type DocId = String;
 
@@ -95,7 +95,10 @@ pub trait DocumentStore: Send + Sync {
     /// L2. Publish an update (spec 4.4).
     async fn publish_update(&self, doc: &DocId, update: Update) -> Result<Stamped<Update>>;
 
-    /// L2. Every retained update, in any order.
+    /// L2. Every retained update, in any order. A binding whose order is a stable
+    /// append (a later call returns this call's list with newer updates added at
+    /// the end) says so in its own docs; `collabd` names a prefix of the list in a
+    /// version's `covers` and so needs that of the bindings it carries.
     async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>>;
 
     // The methods below are not in the spike's trait. `collabd` needs them and every
@@ -132,6 +135,30 @@ pub trait DocumentStore: Send + Sync {
     /// decrypt, author without the role, malformed), so a program can report them.
     async fn dropped_records(&self, _doc: &DocId) -> Vec<DroppedRecord> {
         Vec::new()
+    }
+
+    /// [`Self::publish_version`] for a program that holds a live replica: the
+    /// version carries `covers` (spec 4.4 / 7 rule 4), the claim that this file
+    /// holds every update of `covers.algorithm` up to and including
+    /// `covers.through`. The caller is responsible for the claim being true (the
+    /// sidecar names the end of the prefix of the log its replica has applied);
+    /// nothing in the binding is told that a later reader may start from the end
+    /// of the log, so no resume hint is written. With `covers: None` this is
+    /// `publish_version`. A binding that cannot store `covers` refuses it.
+    async fn publish_version_through(
+        &self,
+        doc: &DocId,
+        parents: Vec<String>,
+        file: NewFile,
+        message: Option<String>,
+        covers: Option<Covers>,
+    ) -> Result<Stamped<Version>> {
+        match covers {
+            None => self.publish_version(doc, parents, file, message).await,
+            Some(_) => Err(StoreError::Invalid(
+                "this binding cannot write covers".into(),
+            )),
+        }
     }
 }
 

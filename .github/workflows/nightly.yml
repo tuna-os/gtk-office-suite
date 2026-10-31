@@ -34,6 +34,9 @@ on:
       # tests/test_oracle_triggers.py now derives the required list from the
       # crates the oracle actually tests instead of trusting this one.
       - 'suite-common-core/**'
+      # letters-core's headless collaboration test (tests/two_instances.rs, feature
+      # `collab`) speaks this crate's protocol, so it is a dev-dependency.
+      - 'suite-collab/**'
       - 'suite-export/**'
       - 'interop/**'
       - 'Cargo.lock'
@@ -68,7 +71,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             libreoffice-writer libreoffice-calc libreoffice-impress
-      - uses: taiki-e/install-action@eaa248e7e83aa1d4f575fb2e231e8a5da93dabc3 # nextest
+      - uses: taiki-e/install-action@040ce91a9a9db140750a142d8c3e66f94ce198bd # nextest
         with:
           tool: nextest
       # One nextest run over both targets, so the lane leaves one JUnit

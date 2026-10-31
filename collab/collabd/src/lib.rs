@@ -23,8 +23,9 @@ pub mod output;
 /// The DCP update algorithm this sidecar carries (docs/collab-spec/profiles/loro-1.md).
 pub const ALGORITHM: &str = "loro/1";
 
-/// The document models it carries under that algorithm.
-pub const DOC_MODELS: &[&str] = &["tables/1"];
+/// The document models it carries under that algorithm: `tables/1` (Tables) and
+/// `letters/1` (Letters), both in docs/collab-spec/profiles/loro-1.md section 8.
+pub const DOC_MODELS: &[&str] = &["tables/1", "letters/1"];
 
 /// Log to stderr. Never to stdout: stdout is the protocol.
 #[macro_export]

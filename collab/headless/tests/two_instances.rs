@@ -688,8 +688,12 @@ fn an_offline_gap_catches_up_in_order_and_what_was_typed_offline_is_not_lost() {
         .any(|m| matches!(m.event, Event::State { state: ConnState::Online, doc: Some(_) }));
     assert!(online_again, "B reports it is online again");
     assert!(b.gaps().is_empty() && a.gaps().is_empty(), "catching up is not a gap");
-    let saved = b.seen.iter().any(|m| matches!(&m.event, Event::Heads { heads, .. } if heads.iter().any(|h| h.message.as_deref() == Some("saved while B was away"))));
-    assert!(saved, "B also sees the version A saved while it was away");
+    // `heads` is told once the version list and the update list of a read are both in (so that a head
+    // whose update arrived with it is never shown as a conflict for the length of a read), which is
+    // after the updates it came with: wait for it rather than expecting it before the cells.
+    b.until("B to see the version A saved while it was away", |s| {
+        s.seen.iter().any(|m| matches!(&m.event, Event::Heads { heads, .. } if heads.iter().any(|h| h.message.as_deref() == Some("saved while B was away"))))
+    });
     a.sc.close();
     b.sc.close();
 }

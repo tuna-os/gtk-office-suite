@@ -2,7 +2,9 @@
 """Render every fixture in a manifest with LibreOffice: document -> PDF ->
 one PNG per page/slide at 96 DPI (the density our apps draw at 100% zoom).
 
-Output: <out>/<app>/<feature>/lo-<page>.png
+Output: <out>/<app>/<feature>/lo-<page>.png, and lo-<page>.txt beside it:
+the page's text layer, which tells the scorer what LibreOffice printed so it
+can set aside what OCR misreads in the reference (compare.reference_words).
 
 Usage: lo_render.py <fixtures-dir> <out-dir> [--app APP]
 """
@@ -54,7 +56,7 @@ def to_pdf(src, outdir, profile):
 
 def rasterize(pdf, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
-    for old in glob.glob(os.path.join(dest_dir, "lo-*.png")):
+    for old in glob.glob(os.path.join(dest_dir, "lo-*.png")) + glob.glob(os.path.join(dest_dir, "lo-*.txt")):
         os.remove(old)
     subprocess.run(
         ["pdftoppm", "-r", str(DPI), "-png", pdf, os.path.join(dest_dir, "lo")],
@@ -67,6 +69,11 @@ def rasterize(pdf, dest_dir):
         os.rename(p, os.path.join(dest_dir, f"lo-{i}.tmp"))
     for i in range(1, len(pages) + 1):
         os.rename(os.path.join(dest_dir, f"lo-{i}.tmp"), os.path.join(dest_dir, f"lo-{i}.png"))
+        # Best effort: without it the scorer keeps every OCR read.
+        subprocess.run(
+            ["pdftotext", "-f", str(i), "-l", str(i), "-enc", "UTF-8", pdf, os.path.join(dest_dir, f"lo-{i}.txt")],
+            capture_output=True,
+        )
     return len(pages)
 
 

@@ -95,6 +95,17 @@ fn is_sealed(e: &HttpError) -> bool {
     matches!(e, HttpError::Conflict { closed: true })
 }
 
+/// What a published version says about the update log.
+enum Covering<'a> {
+    /// Nothing: an ordinary version.
+    No,
+    /// Every update now in the latest epoch's `upd` stream, with a resume hint
+    /// (`publish_covering_version`, the client snapshot).
+    WholeLog(&'a str),
+    /// The caller's claim, as given (`publish_version_through`), no hint.
+    Through(Covers),
+}
+
 fn new_prefix(n: u64) -> String {
     format!("e{n}-{}", hex::encode(crypto::random::<6>()))
 }
@@ -732,7 +743,7 @@ impl StreamsStore {
         message: Option<String>,
         algorithm: &str,
     ) -> Result<Stamped<Version>> {
-        self.publish_inner(doc, parents, file, message, Some(algorithm))
+        self.publish_inner(doc, parents, file, message, Covering::WholeLog(algorithm))
             .await
     }
 
@@ -742,7 +753,7 @@ impl StreamsStore {
         parents: Vec<String>,
         file: NewFile,
         message: Option<String>,
-        covering: Option<&str>,
+        covering: Covering<'_>,
     ) -> Result<Stamped<Version>> {
         let mut docs = self.docs.lock().await;
         let c = self.cache_of(&mut docs, doc);
@@ -780,21 +791,28 @@ impl StreamsStore {
         for _ in 0..4 {
             let idx = self.current(c, Role::Editor, "publish a version").await?;
             let mut hint = None;
-            if let Some(alg) = covering {
-                self.refresh_upd(c, idx).await?;
-                let es = &c.epochs[idx];
-                let through =
-                    es.updates.last().map(|u| u.id.clone()).ok_or_else(|| {
-                        StoreError::Invalid("there are no updates to cover".into())
-                    })?;
-                version.covers = Some(Covers {
-                    algorithm: alg.to_owned(),
-                    through,
-                });
-                hint = Some(UpdHint {
-                    epoch: es.n(),
-                    offset: es.upd.offset.clone(),
-                });
+            match &covering {
+                Covering::No => {}
+                Covering::WholeLog(alg) => {
+                    self.refresh_upd(c, idx).await?;
+                    let es = &c.epochs[idx];
+                    let through =
+                        es.updates.last().map(|u| u.id.clone()).ok_or_else(|| {
+                            StoreError::Invalid("there are no updates to cover".into())
+                        })?;
+                    version.covers = Some(Covers {
+                        algorithm: (*alg).to_owned(),
+                        through,
+                    });
+                    hint = Some(UpdHint {
+                        epoch: es.n(),
+                        offset: es.upd.offset.clone(),
+                    });
+                }
+                // The caller's claim, about a prefix of the log and not the whole
+                // of it: no resume hint, since a reader that skipped to the end of
+                // the stream would miss the updates after the prefix.
+                Covering::Through(covers) => version.covers = Some(covers.clone()),
             }
             schema::validate_typed(SchemaKind::Version, &version)
                 .map_err(|e| StoreError::Invalid(e.to_string()))?;
@@ -888,7 +906,8 @@ impl DocumentStore for StreamsStore {
             .map_err(conv)?;
         self.docs.lock().await.insert(doc.clone(), cache);
         if let Some(f) = first {
-            self.publish_inner(&doc, Vec::new(), f, None, None).await?;
+            self.publish_inner(&doc, Vec::new(), f, None, Covering::No)
+                .await?;
         }
         Ok(doc)
     }
@@ -976,7 +995,24 @@ impl DocumentStore for StreamsStore {
         file: NewFile,
         message: Option<String>,
     ) -> Result<Stamped<Version>> {
-        self.publish_inner(doc, parents, file, message, None).await
+        self.publish_inner(doc, parents, file, message, Covering::No)
+            .await
+    }
+
+    async fn publish_version_through(
+        &self,
+        doc: &DocId,
+        parents: Vec<String>,
+        file: NewFile,
+        message: Option<String>,
+        covers: Option<Covers>,
+    ) -> Result<Stamped<Version>> {
+        let covering = match covers {
+            Some(c) => Covering::Through(c),
+            None => Covering::No,
+        };
+        self.publish_inner(doc, parents, file, message, covering)
+            .await
     }
 
     async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
@@ -1120,6 +1156,13 @@ impl DocumentStore for StreamsStore {
         Err(last_err)
     }
 
+    /// Epoch by epoch (oldest first), and within an epoch in the order the server
+    /// appended the records to that epoch's `upd` stream (`refresh_upd` reads from
+    /// the stored offset and appends; nothing is reordered or removed). A later
+    /// call therefore returns this call's list with newer updates added at the end,
+    /// which is what lets `collabd` name a prefix of it in a version's `covers`.
+    /// One exception: a reader that starts from a covering version's resume hint
+    /// (`use_snapshots`) has no updates before the hint at all, in any call.
     async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>> {
         let mut docs = self.docs.lock().await;
         let c = self.cache_of(&mut docs, doc);

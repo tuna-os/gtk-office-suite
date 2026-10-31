@@ -70,3 +70,9 @@ threads-required = "num-cpus"
 
 [profile.collab.junit]
 path = "junit.xml"
+
+# The Letters buffer tests of the `collab` feature run in the `letters` binary, whose widget tests
+# are confined to one at a time for the reason above; the profile that runs them says so too.
+[[profile.collab.overrides]]
+filter = 'binary_id(=letters::bin/letters)'
+test-group = 'letters-widgets'

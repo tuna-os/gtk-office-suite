@@ -307,6 +307,76 @@ fn a_floating_image_keeps_its_paragraph_and_placement() {
     assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
 }
 
+/// A run is kerned where its own properties or its styles carry a
+/// `w:kern` (any threshold: Writer kerns whatever the size), and only
+/// there: the audit-committee minutes' Heading 1 kerns, its body text
+/// does not.
+#[test]
+fn a_run_is_kerned_only_where_its_styles_say() {
+    let d = Document::from_plain_text("styled\nplain\nzero");
+    let doctored = doctor_parts(&d, |parts| {
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        let at = styles.rfind("</w:styles>").unwrap();
+        styles.insert_str(at, "<w:style w:type=\"paragraph\" w:styleId=\"Kerned\"><w:name w:val=\"Kerned\"/><w:rPr><w:kern w:val=\"32\"/></w:rPr></w:style>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        *body = body
+            .replacen("<w:p>", "<w:p><w:pPr><w:pStyle w:val=\"Kerned\"/></w:pPr>", 1)
+            .replacen("<w:t>zero</w:t>", "<w:rPr><w:kern w:val=\"0\"/></w:rPr><w:t>zero</w:t>", 1);
+        assert!(body.contains("w:pStyle w:val=\"Kerned\"") && body.contains("w:kern w:val=\"0\""), "{body}");
+    });
+    let kerned: Vec<(String, bool)> = doctored.paragraphs.iter().map(|p| (p.text(), p.runs.iter().all(|r| r.style.kerned))).collect();
+    assert_eq!(kerned, [("styled".into(), true), ("plain".into(), false), ("zero".into(), false)]);
+    assert!(round_trip(&doctored).paragraphs[0].runs[0].style.kerned, "written back");
+}
+
+/// A paragraph holding only a floating picture is a line of its mark's
+/// font, as a blank one is: the audit-committee minutes float their logo
+/// from a paragraph whose mark is 14pt, and Writer sizes that line by the
+/// mark whatever the drawing run's own size. Read at the body size, it
+/// stood the title 3.5pt high and pulled the next page's first paragraph,
+/// with its rule, onto the first.
+#[test]
+fn a_floating_pictures_paragraph_keeps_its_marks_size() {
+    use letters_core::model::ImageAnchor;
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("logo.png");
+    std::fs::write(&img_path, png).unwrap();
+    let mut d = Document::from_plain_text("\nMinutes");
+    d.paragraphs[0].runs = vec![Run {
+        text: "logo".into(),
+        style: RunStyle {
+            image: Some(img_path.to_string_lossy().into_owned()),
+            image_extent_emu: Some((914_400, 914_400)),
+            image_anchor: Some(ImageAnchor::default()),
+            ..Default::default()
+        },
+    }];
+    let doctored = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let p = body.find("<w:body>").expect("a body") + body[body.find("<w:body>").unwrap()..].find("<w:p").unwrap();
+        let open = p + body[p..].find('>').unwrap() + 1;
+        let mark = "<w:rPr><w:rFonts w:ascii=\"Tahoma\" w:hAnsi=\"Tahoma\"/><w:sz w:val=\"28\"/></w:rPr>";
+        if body[open..].starts_with("<w:pPr>") {
+            let close = open + body[open..].find("</w:pPr>").unwrap();
+            body.insert_str(close, mark);
+        } else {
+            body.insert_str(open, &format!("<w:pPr>{mark}</w:pPr>"));
+        }
+    });
+    let logo = doctored.paragraphs[0].runs.iter().find(|r| r.style.image_anchor.is_some()).expect("the floating logo");
+    assert_eq!(logo.style.font_size_hp, Some(28), "its line is the 14pt mark's");
+    assert_eq!(logo.style.font_family.as_deref(), Some("Tahoma"));
+    assert_eq!(doctored.paragraphs[1].text(), "Minutes");
+}
+
 /// A letterhead's logo comes back in the header, above its text with its
 /// page field, and a footer's floating picture keeps its place.
 #[test]
@@ -1996,6 +2066,19 @@ fn a_row_kept_whole_survives() {
     assert_eq!(rt.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![1]));
 }
 
+/// A heading row (`w:tblHeader`) is read as a row kept whole: Writer
+/// never splits one across pages (measured: a six-line heading row at a
+/// page's foot moves whole to the next page, where the same row without
+/// `w:tblHeader` splits).
+#[test]
+fn a_heading_row_is_kept_whole() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 3, 1);
+    let rt = doctor_document_xml(&d, |xml| xml.replacen("<w:tr>", "<w:tr><w:trPr><w:tblHeader/></w:trPr>", 1));
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
+}
+
 /// A table sized as a share of the text's width stays so through a save
 /// and reopen (`w:tblW w:type="pct"`); one with the file's widths does not
 /// become one.
@@ -2049,6 +2132,29 @@ fn floating_header_and_footer_lines_survive() {
     let rt = round_trip(&d);
     assert_eq!((rt.header.as_deref(), rt.footer.as_deref()), (d.header.as_deref(), d.footer.as_deref()));
     assert_eq!((&rt.header_lines, &rt.footer_lines), (&d.header_lines, &d.footer_lines));
+}
+
+/// A footer paragraph's border gaps pad it above and below, an invisible
+/// (`none`) border's too, as Writer keeps them: the questionnaire's Normal
+/// style pads every side 31pt that way, and its one empty footer line
+/// stands 62pt taller, moving the page's text up with it.
+#[test]
+fn a_footer_paragraphs_border_gaps_pad_it() {
+    let mut d = Document::from_plain_text("body");
+    d.footer = Some("foot".into());
+    let rt = doctor_parts(&d, |parts| {
+        let name = parts.keys().find(|k| k.starts_with("word/footer")).expect("a footer part").clone();
+        let part = parts.get_mut(&name).unwrap();
+        let at = part.find("<w:p>").map(|i| i + "<w:p>".len()).or_else(|| part.find("<w:p ").map(|i| i + part[i..].find('>').unwrap() + 1)).expect("a paragraph");
+        let pbdr = "<w:pBdr><w:top w:val=\"none\" w:sz=\"96\" w:space=\"31\" w:color=\"FFFFFF\"/><w:bottom w:val=\"single\" w:sz=\"8\" w:space=\"4\" w:color=\"000000\"/></w:pBdr>";
+        if part[at..].starts_with("<w:pPr>") {
+            part.insert_str(at + "<w:pPr>".len(), pbdr);
+        } else {
+            part.insert_str(at, &format!("<w:pPr>{pbdr}</w:pPr>"));
+        }
+    });
+    let line = rt.footer_lines.first().expect("the footer's line");
+    assert_eq!((line.pad_above_pt, line.pad_below_pt), (31.0, 5.0), "the invisible gap, and the drawn one with its width");
 }
 
 /// An inline picture's room beside it survives a save and reopen: a .docx
@@ -2418,4 +2524,161 @@ fn a_blank_paragraph_keeps_its_marks_size() {
     assert_eq!(blank.runs.iter().map(|r| r.style.font_size_hp).collect::<Vec<_>>(), [Some(44)], "a 22pt blank line");
     assert!(doctored.paragraphs[1].runs.is_empty(), "a blank line in the body font: {:?}", doctored.paragraphs[1].runs);
     assert_eq!(doctored.paragraphs[2].text(), "title");
+}
+
+/// A list whose definition only links a numbering style (`w:numStyleLink`)
+/// and gives its levels in the instance's own `w:lvlOverride` is numbered
+/// as those levels say. Its items were read as bullets: the Ofsted
+/// minutes' "6.1." item took a bullet's room, and moved its next page.
+#[test]
+fn a_list_numbered_by_its_level_overrides_is_numbered() {
+    let mut d = Document::from_plain_text("first\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("<w:numId w:val=\"").expect("fixture shape changed");
+        let end = at + body[at..].find("/>").unwrap() + 2;
+        body.replace_range(at..end, "<w:numId w:val=\"90\"/>");
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"90\"><w:multiLevelType w:val=\"multilevel\"/><w:numStyleLink w:val=\"OutlineNumbered\"/></w:abstractNum>",
+        );
+        *numbering = numbering.replace(
+            "</w:numbering>",
+            "<w:num w:numId=\"90\"><w:abstractNumId w:val=\"90\"/><w:lvlOverride w:ilvl=\"0\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/>\
+             <w:lvlText w:val=\"6.%1.\"/><w:lvlJc w:val=\"left\"/><w:pPr><w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr></w:lvl></w:lvlOverride></w:num></w:numbering>",
+        );
+    });
+    assert_eq!(rt.paragraphs[0].style.list, ListKind::Numbered);
+    let label = rt.paragraphs[0].style.list_label.as_ref().expect("its level text");
+    assert_eq!((label.prefix.as_str(), label.suffix.as_str()), ("6.", "."));
+}
+
+/// A list item numbered by its own `w:numPr` takes its level's indent
+/// over its paragraph style's, as Word and Writer resolve it: a "List
+/// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One
+/// whose paragraph gives its own indent keeps that.
+#[test]
+fn a_directly_numbered_item_takes_its_levels_indent_over_its_styles() {
+    let mut d = Document::from_plain_text("first\nsecond\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    d.paragraphs[1].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"91\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/>\
+             <w:pPr><w:ind w:left=\"360\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>",
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"91\"><w:abstractNumId w:val=\"91\"/></w:num></w:numbering>");
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        *st = st.replace(
+            "</w:styles>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"ListParagraph\"><w:name w:val=\"List Paragraph\"/><w:pPr><w:ind w:left=\"720\"/></w:pPr></w:style></w:styles>",
+        );
+        let body = parts.get_mut("word/document.xml").unwrap();
+        // The writer's own indents off, so the style and level decide.
+        while let Some(at) = body.find("<w:ind ") {
+            let end = at + body[at..].find("/>").unwrap() + 2;
+            body.replace_range(at..end, "");
+        }
+        let mut out = String::new();
+        let mut rest = body.as_str();
+        let mut n = 0;
+        while let Some(at) = rest.find("<w:numPr>") {
+            let end = at + rest[at..].find("</w:numPr>").unwrap() + "</w:numPr>".len();
+            out.push_str(&rest[..at]);
+            let own = if n == 1 { "<w:ind w:left=\"1080\" w:hanging=\"360\"/>" } else { "" };
+            out.push_str(&format!("<w:pStyle w:val=\"ListParagraph\"/><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"91\"/></w:numPr>{own}"));
+            rest = &rest[end..];
+            n += 1;
+        }
+        out.push_str(rest);
+        assert_eq!(n, 2, "fixture shape changed: {body}");
+        *body = out;
+    });
+    let text = letters_core::lists::text_indent_pt(0);
+    let at = |i: usize| rt.paragraphs[i].style.left_indent_pt + text;
+    assert!((at(0) - 18.0).abs() < 1e-6, "its level's 0.25in, not the style's 0.5in: {}", at(0));
+    assert!((at(1) - 54.0).abs() < 1e-6, "its own 0.75in: {}", at(1));
+}
+
+/// A table's rules keep their colour and width: Word's "Table Grid Light"
+/// style draws its grid light grey (BFBFBF), which was drawn black, and a
+/// table whose own borders say a colour and width keeps them through a
+/// save.
+#[test]
+fn a_table_keeps_its_rule_colour() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_rule_colors.insert(table, "BFBFBF".into());
+    d.table_rule_widths.insert(table, 0.75);
+    let rt = round_trip(&d);
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "its own borders' colour");
+    assert_eq!(rt.table_rule_widths.get(&id).copied(), Some(0.75), "and width");
+    d.table_rule_widths.clear();
+
+    d.table_rule_colors.clear();
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let start = body.find("<w:tblBorders>").expect("fixture shape changed");
+        let end = body.find("</w:tblBorders>").unwrap() + "</w:tblBorders>".len();
+        body.replace_range(start..end, "");
+        *body = body.replacen("<w:tblPr>", "<w:tblPr><w:tblStyle w:val=\"TableGridLight\"/>", 1);
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        *st = st.replace(
+            "</w:styles>",
+            "<w:style w:type=\"table\" w:styleId=\"TableGridLight\"><w:name w:val=\"Grid Table Light\"/><w:tblPr><w:tblBorders>\
+             <w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\" w:themeColor=\"background1\" w:themeShade=\"BF\"/>\
+             <w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/></w:tblBorders></w:tblPr></w:style></w:styles>",
+        );
+    });
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(!rt.table_unruled.contains(&id), "the style rules it");
+    assert_eq!(rt.table_rule_colors.get(&id).map(String::as_str), Some("BFBFBF"), "in its style's colour");
+}
+
+/// A table ruled in double lines (`w:val="double"`) keeps them through a
+/// save: the crime supervisor form's tables were drawn single.
+#[test]
+fn a_table_keeps_its_double_rules() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_rule_double.insert(table);
+    let rt = round_trip(&d);
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(rt.table_rule_double.contains(&id), "{:?}", rt.table_rule_double);
+    d.table_rule_double.clear();
+    assert!(round_trip(&d).table_rule_double.is_empty(), "single rules stay single");
+}
+
+/// A cell's own borders (`w:tcBorders`) win over its table's: the
+/// questionnaire's respondent table rules itself white and each of its
+/// cells black, and Word and Writer draw it black, not white.
+#[test]
+fn a_cells_own_border_colour_wins_over_its_tables() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 2, 2);
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let start = body.find("<w:tblBorders>").expect("fixture shape changed");
+        let end = body.find("</w:tblBorders>").unwrap() + "</w:tblBorders>".len();
+        body.replace_range(
+            start..end,
+            "<w:tblBorders><w:top w:val=\"single\" w:sz=\"8\" w:space=\"0\" w:color=\"FFFFFF\"/>\
+             <w:insideH w:val=\"single\" w:sz=\"8\" w:space=\"0\" w:color=\"FFFFFF\"/></w:tblBorders>",
+        );
+        let cell = "<w:tcBorders><w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"000000\"/></w:tcBorders>";
+        *body = match body.find("<w:tcPr>") {
+            Some(at) => format!("{}{cell}{}", &body[..at + "<w:tcPr>".len()], &body[at + "<w:tcPr>".len()..]),
+            None => body.replacen("<w:tc>", &format!("<w:tc><w:tcPr>{cell}</w:tcPr>"), 1),
+        };
+    });
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert!(!rt.table_unruled.contains(&id), "ruled");
+    assert_eq!(rt.table_rule_colors.get(&id), None, "black, as its cells say: {:?}", rt.table_rule_colors);
 }

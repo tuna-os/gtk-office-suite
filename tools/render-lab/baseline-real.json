@@ -5,7 +5,7 @@
   },
   "decks/real-2024-06-12-measures-to-improve-hr-and-pay": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2024-06-12-reporting-on-the-implementation-of-be": {
     "A": "amber",
@@ -28,7 +28,7 @@
     "B": "green"
   },
   "decks/real-2024-11-20-presentation-pay-centre-impact-assess": {
-    "A": "green",
+    "A": "amber",
     "B": "amber"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
@@ -89,7 +89,7 @@
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-dashboard-public-opinion-survey-pulse-check-janu": {
     "A": "amber",
@@ -129,7 +129,7 @@
   },
   "letters/real-audit-and-risk-assurance-committee-minutes-24-ja": {
     "A": "green",
-    "B": "amber"
+    "B": "green"
   },
   "letters/real-consultation-questions-downloadable-alternative": {
     "A": "green",
@@ -148,8 +148,8 @@
     "B": "green"
   },
   "letters/real-directions-relating-to-an-account-form-bp15": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/real-explanatory-note": {
     "A": "green",
@@ -160,7 +160,7 @@
     "B": "green"
   },
   "letters/real-expression-of-interest-form": {
-    "A": "amber",
+    "A": "green",
     "B": "green"
   },
   "letters/real-notes-on-the-completion-of-form-w1-excise-wareho": {
@@ -188,7 +188,7 @@
     "B": "green"
   },
   "letters/real-questionnaire": {
-    "A": "amber",
+    "A": "green",
     "B": "green"
   },
   "letters/real-questionnaire-2": {
@@ -216,7 +216,7 @@
     "B": "green"
   },
   "letters/real-statistical-release-october-to-december-2020": {
-    "A": "amber",
+    "A": "green",
     "B": "green"
   },
   "letters/real-terms-of-reference": {
@@ -244,8 +244,8 @@
     "B": "red"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/real-all-reservoir-panel-engineers-contact-list": {
     "A": "red",
@@ -300,8 +300,8 @@
     "B": "red"
   },
   "tables/real-july-2026-fiscal-risks-and-sustainability-charts": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/real-june-2026-forecast-evaluation-report-economic-mo": {
     "A": "amber",
@@ -352,8 +352,8 @@
     "B": "amber"
   },
   "tables/real-supervising-panel-engineers-contact-list": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/real-ukhsa-government-procurement-card-gpc-transactio": {
     "A": "amber",

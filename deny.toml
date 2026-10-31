@@ -61,6 +61,12 @@ ignore = [
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 SUID/SGID bits kept by extract(); never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink targets outside the destination; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() permissions through symlinks; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
+    # pulldown-cmark 0.13.4: rdocx (0.16.2 and the latest, 0.16.4) pins
+    # `=0.13.4`, so the lock cannot take 0.13.5. The flaw needs
+    # `Options::ENABLE_WIKILINKS` (or `Options::all()`); letters-core,
+    # decks and rdocx enable only tables and strikethrough. Remove once
+    # rdocx allows 0.13.5 (#1798).
+    { id = "RUSTSEC-2026-0414", reason = "pulldown-cmark wikilink event growth needs ENABLE_WIKILINKS, which nothing here or in rdocx sets; rdocx pins =0.13.4 so 0.13.5 cannot be locked (#1798); review by 2027-01-01" },
     # collab/Cargo.lock, the collabd sidecar's own lock (RFC-0005 option B; the product's
     # lock is unaffected: `tests/test_collab_defaults.py`). `collab-apps.yml` runs this
     # gate on it. These are matched only when that lock is read; the product's `advisories`

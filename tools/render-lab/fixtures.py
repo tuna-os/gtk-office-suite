@@ -107,23 +107,21 @@ EXPORT = {
     "tables/chart-scatter",
     "tables/conditional",
 }
-# NOTE (tables/chart-pie, documented amber): both-green on screenshots;
-# export sits in the amber band on Tesseract exact-match noise, not an
-# exporter gap — the Q4 legend glyph OCRs as "ma" in LibreOffice's PDF vs
-# "mq4" in ours (pixels equivalent), so word recall is 0.833 < 0.90 with
-# lost_lines 0. Same class as the letters/nested-list amber; covering it
-# keeps every eligible fixture inside the ratchet instead of outside it.
+# NOTE (tables/chart-pie): both-green on screenshots; its export sat in the
+# amber band on Tesseract exact-match noise, not an exporter gap — the Q4
+# legend glyph OCRs as "ma" in LibreOffice's PDF vs "mq4" in ours (pixels
+# equivalent). "ma" is in no text layer, so the scorer now leaves it out
+# (compare.mark_printed) and the export is green, as the letters ones
+# below are.
 #
-# NOTE (letters/nested-list #1127, letters/super-subscript #1115: accepted
-# OCR-artifact ambers, same class as render #904). Reduced to a layout/pango
-# cause per LET-004 and none found — the export pixels agree: nested-list
-# SSIM 0.9992 with disp 0.47pt, super-subscript SSIM 1.0000 with disp 0.0pt,
-# ink ~1.0 and lost_lines 0 on both (scorecard-export.json, main). Word
-# recall alone ambers them (0.889 / 0.75): the reference decodes misread a
-# bullet-adjacent "two" and the small raised/lowered "2" glyphs, while 4x
-# crops of ours-vs-LO are pixel-identical (indents, markers, super/subscript
-# shaping). There is no geometry miss to fix, so no thresholds are tuned and
-# no geometry is churned to chase the OCR: the ambers stand as documented.
+# NOTE (letters/nested-list #1127, letters/super-subscript #1115): their
+# export pixels always agreed with LibreOffice's (SSIM 0.9992 / 1.0000, 4x
+# crops identical); word recall alone ambered them, on reads of the
+# reference that LibreOffice never printed (a bullet read as "e", H2O read
+# as "ho"). The scorer now leaves out such reads, checked against the
+# reference's own text layer, where nothing on our side matches them
+# (compare.mark_printed, match_words), so they score green on what both
+# sides print. No threshold or geometry changed for it.
 
 
 def add(app, feature, path, expect):

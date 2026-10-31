@@ -312,6 +312,46 @@ pub fn check_new_parents(
     Ok(())
 }
 
+/// The members of `members` that no other member descends from, once each, in
+/// the order given: the smallest set of parents that has every one of them as
+/// an ancestor-or-self (a version already reachable through another parent is
+/// left out, so a child of `[b]` is not also a child of `a` when `b` descends
+/// from `a`). Identifiers not in `versions` are kept as they are (their own
+/// ancestors are unknown).
+pub fn antichain(versions: &[Stamped<Version>], members: &[String]) -> Vec<String> {
+    let parents: HashMap<&str, &[String]> = versions
+        .iter()
+        .map(|v| (v.id.as_str(), v.body.parents.as_slice()))
+        .collect();
+    let mut reachable: HashSet<&str> = HashSet::new();
+    for m in members {
+        // Every proper ancestor of `m`.
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut stack: Vec<&str> = parents
+            .get(m.as_str())
+            .map(|p| p.iter().map(String::as_str).collect())
+            .unwrap_or_default();
+        while let Some(a) = stack.pop() {
+            if !seen.insert(a) {
+                continue;
+            }
+            if let Some(ps) = parents.get(a) {
+                stack.extend(ps.iter().map(String::as_str));
+            }
+        }
+        reachable.extend(
+            seen.into_iter()
+                .filter(|a| *a != m.as_str()),
+        );
+    }
+    let mut seen = HashSet::new();
+    members
+        .iter()
+        .filter(|m| !reachable.contains(m.as_str()) && seen.insert(m.as_str()))
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -600,5 +640,40 @@ mod tests {
         // is not a child of anything, so it is shown as a conflict.
         let vs = [v("a", 1, &[]), v("z", 2, &[])];
         assert!(conflict(&vs).is_some());
+    }
+
+    fn strings(s: &[&str]) -> Vec<String> {
+        s.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn an_antichain_drops_every_member_another_member_descends_from() {
+        // a <- b <- c, a <- d, and e is a second root.
+        let vs = [
+            v("a", 1, &[]),
+            v("b", 2, &["a"]),
+            v("c", 3, &["b"]),
+            v("d", 4, &["a"]),
+            v("e", 5, &[]),
+        ];
+        assert_eq!(antichain(&vs, &strings(&["a", "c"])), ["c"]);
+        assert_eq!(antichain(&vs, &strings(&["a", "b", "c"])), ["c"]);
+        assert_eq!(antichain(&vs, &strings(&["c", "d"])), ["c", "d"]);
+        assert_eq!(antichain(&vs, &strings(&["a", "c", "d"])), ["c", "d"]);
+        assert_eq!(antichain(&vs, &strings(&["c", "e", "c"])), ["c", "e"]);
+        assert_eq!(antichain(&vs, &strings(&["a"])), ["a"]);
+        assert!(antichain(&vs, &[]).is_empty());
+        // An identifier the graph does not know has no known ancestors.
+        assert_eq!(antichain(&vs, &strings(&["x", "d"])), ["x", "d"]);
+    }
+
+    #[test]
+    fn an_antichain_of_a_long_chain_does_not_recurse() {
+        let mut vs = vec![v("n0", 0, &[])];
+        for i in 1..20_000u64 {
+            let (id, parent) = (format!("n{i}"), format!("n{}", i - 1));
+            vs.push(v(&id, i, &[parent.as_str()]));
+        }
+        assert_eq!(antichain(&vs, &strings(&["n0", "n19999"])), ["n19999"]);
     }
 }

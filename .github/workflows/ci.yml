@@ -108,6 +108,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
@@ -191,6 +192,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
@@ -289,7 +291,7 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@eaa248e7e83aa1d4f575fb2e231e8a5da93dabc3 # nextest
+        uses: taiki-e/install-action@040ce91a9a9db140750a142d8c3e66f94ce198bd # nextest
         with:
           tool: nextest
 
