@@ -708,6 +708,18 @@ def tables():
     save(wb, "cell-fonts", "Bold, italic, 20pt and red text in A1:A4; row 3 is taller")
 
     wb, ws = book()
+    # Reduced from the July 2026 fiscal-risks introduction (#1326): these
+    # font colours live after accent6 in the workbook's theme palette.
+    from openpyxl.styles import Color
+    ws.column_dimensions["A"].width = 44
+    for row, (text, theme) in enumerate(
+        (("Hyperlink theme colour", 10), ("Followed hyperlink theme colour", 11)), start=1
+    ):
+        cell = ws.cell(row, 1, text)
+        cell.font = font(color=Color(theme=theme), underline="single")
+    save(wb, "hyperlink-theme-colors", "Underlined hyperlink blue and followed-hyperlink purple text")
+
+    wb, ws = book()
     for i, color in enumerate(("FFC7CE", "C6EFCE", "FFEB9C", "BDD7EE"), start=1):
         ws.cell(i, 1, color).fill = PatternFill("solid", fgColor=color)
     save(wb, "fills", "Four cells with pink, green, yellow and blue backgrounds")
