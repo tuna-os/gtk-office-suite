@@ -199,28 +199,37 @@ The same rule applies to the existing oracle corpora.
 
 #### Known metric artifacts (left amber on purpose)
 
+Two scoring rules keep tesseract's misreads out of the word score without
+loosening any budget (`compare.match_words`, `compare.reference_words`):
+
+- Same-text words pair nearest first over the whole page. Pairing in
+  reading order let one word missed on our side shift every later repeat
+  of it a line down: `letters/font-sizes` read 14pt of displacement on a
+  page that matches LibreOffice's to within 2px.
+- A word OCR reads off LibreOffice's picture that LibreOffice did not print
+  (its PDF text layer, `lo-<n>.txt`) is left out where nothing on our side
+  matches it: "8pt" read as "spt", a bullet read as "e", H2O read as "ho".
+  No rendering can match a misread of the reference. Matched, it counts:
+  text inside a picture (a deck's "Government of Canada" logo) is in no
+  text layer but is on both pages. A misread of ours still counts against
+  us.
+
+That turned `letters/font-sizes` and `tables/number-formats` (render), and
+`letters/nested-list`, `letters/super-subscript` and `tables/chart-pie`
+(export) green; their pixels already agreed. Pairing nearest first also
+showed a real gap the old order hid: the pay-centre impact deck's page 5
+loses its "Since May 2024" callout, so its Tier A is amber.
+
 A fixture stays amber, rather than having a threshold tuned, when its
 images show our rendering matches LibreOffice's and the metric is what
 disagrees. Recorded here with the measurement, so nobody "fixes" them by
 loosening a budget:
 
-- **`letters/font-sizes`** (2026-10-16, #1606). Pixel comparison
-  (`pixel_diff.py`): within each line our ink matches LibreOffice's to the
-  pixel (band miss 0.000), and the page as a whole to 0.041 (the 40pt line
-  sits 2px high; the 8–28pt lines 0–1px). Tesseract reads the 8pt label
-  as "spt text" in LibreOffice's render and "bpetext" in ours, and "40pt"
-  as "aopt" against "a4opt", so 4 of 5 words match and the mismatched
-  word's displacement is 13.9pt. SSIM is 0.997.
 - **`letters/table`** (2026-09-25, re-measured 2026-09-26). Cell text sits
   within 0.2 pt of LibreOffice's; Tesseract misreads one cell label in ours
   ("R1C1" as "rici", unhinted glyphs at 12 px) and so 8 of 9 cell words
   match (up from 6 of 9 with the magnifier fallback below, which rescues
   "r1c2" and "r1c3" but not the "r1c1" cell).
-- **`tables/number-formats`** (2026-09-26). Both sides correctly show "###"
-  for the date and the 7-digit value that don't fit the narrow column (the
-  overflow display works). "###" is a non-word: Tesseract hallucinates it
-  as "HHH" in the reference and "HH"/nothing in ours, so 3 of 5 words
-  match.
 - **`tables/wrap-text`** (2026-09-26, #920). The fixture expectation holds
   on both sides: A1 wraps onto three lines and row 1 grows. Every metric
   but one is inside budget (words 1.0, lost lines 0, scale 1.03x against
@@ -564,9 +573,9 @@ Tier A and B, and the tiers agree on every fixture. The other three are
 amber in both tiers and accepted as metric artifacts, each recorded under
 "Known metric artifacts" with its measurement:
 
-- `letters/font-sizes`: OCR misreads the 8pt and 40pt labels differently on each side; the pixels match within 1px.
+- `letters/font-sizes`: OCR misreads the 8pt and 40pt labels differently on each side; the pixels match within 1px (green since the reference text-layer rule above).
 - `letters/table`: OCR misreads one 12 px cell label.
-- `tables/number-formats`: "###" is a non-word to OCR.
+- `tables/number-formats`: "###" is a non-word to OCR (green since the reference text-layer rule above).
 - `tables/wrap-text`: SSIM on a one-word line-break difference against the
   print-PDF oracle. Our break is the Excel-faithful one, so the fixture is
   accepted as amber rather than retuned to LibreOffice. A

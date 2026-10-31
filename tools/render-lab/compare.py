@@ -518,34 +518,111 @@ def match_words(ref, ours, reread=None):
     points, lost lines: `ref` lines of LOST_LINE_MIN_WORDS or more words
     with half or more of them not found).
 
+    Same-text pairs are taken nearest first over the whole page, not in
+    reading order: in reading order one word OCR missed on our side let
+    its line's twin take the next line's copy, and every later repeat of
+    that word ("text" on each line of letters/font-sizes) then took the
+    line below its own, a cascade that read as 14pt of displacement on a
+    page that agrees to a pixel.
+
+    A reference word marked unprinted (`mark_printed`) that nothing on our
+    side matches is left out altogether: a misread of the reference is
+    never held against us. Matched, it counts like any other.
+
     `reread`, when given, is called with an unmatched reference word's box
     and returns the word both sides read there on a closer look, or None;
     a rescued word counts as found where it stands (displacement 0)."""
     if ref is None or ours is None or not ref:
         return None, None, None
-    pool = list(ours)
-    found, disp = 0, []
+    pairs = sorted(
+        (((w[1] - o[1]) ** 2 + (w[2] - o[2]) ** 2) ** 0.5, i, j)
+        for i, w in enumerate(ref)
+        for j, o in enumerate(ours)
+        if o[0] == w[0]
+    )
+    dist, taken = {}, set()
+    for d, i, j in pairs:
+        if i not in dist and j not in taken:
+            dist[i] = d
+            taken.add(j)
+    found, counted, disp = 0, 0, []
     per_line = {}
-    for text, x, y, line, box in ref:
-        best, bi = None, None
-        for i, (t2, x2, y2, _, _) in enumerate(pool):
-            if t2 == text:
-                d = ((x - x2) ** 2 + (y - y2) ** 2) ** 0.5
-                if best is None or d < best:
-                    best, bi = d, i
-        rescued = bi is None and reread is not None and reread(box) is not None
-        total, hit = per_line.get(line, (0, 0))
-        per_line[line] = (total + 1, hit + (bi is not None or rescued))
-        if bi is not None:
+    for i, w in enumerate(ref):
+        line, box = w[3], w[4]
+        hit = i in dist
+        rescued = not hit and reread is not None and reread(box) is not None
+        if not (hit or rescued) and len(w) > 5 and not w[5]:
+            continue
+        counted += 1
+        total, hits = per_line.get(line, (0, 0))
+        per_line[line] = (total + 1, hits + (hit or rescued))
+        if hit:
             found += 1
-            disp.append(best)
-            pool.pop(bi)
+            disp.append(dist[i])
         elif rescued:
             found += 1
             disp.append(0.0)
     median = float(np.median(disp)) * PX_TO_PT if disp else None
-    lost = sum(1 for total, hit in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hit <= total)
-    return found / len(ref), median, lost
+    lost = sum(1 for total, hits in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hits <= total)
+    return (found / counted if counted else None), median, lost
+
+
+# A word tesseract reads off LibreOffice's own picture that LibreOffice did
+# not print may be a misread of the reference ("8pt" as "spt", a bullet as
+# "e"), which no rendering of ours can match. It may also be text inside a
+# picture (a logo's "Government of Canada"), which ours draws too. So an
+# unprinted read is marked, not dropped: match_words leaves it out only
+# where nothing on our side matches it. The reference's text layer
+# (lo-<n>.txt, lo_render.py) says what was printed.
+# The layer runs a raised or lowered digit into its word ("mc2", "h2o")
+# where OCR reads the letters alone, so printed words are also cut where
+# letters meet digits. A read may join neighbours ("8pttext") or, across a
+# hyphen or a tight kern, cut a word: up to TRUTH_JOIN printed pieces
+# joined, or TRUTH_PIECE_MIN or more characters of one word, still count.
+TRUTH_JOIN = 4
+TRUTH_PIECE_MIN = 4
+
+
+def norm_word(w):
+    return re.sub(r"[^0-9a-z]", "", w.lower())
+
+
+def printed_words(txt_path):
+    """The words of a reference page's text layer, normalized as OCR reads
+    are, in order; None when the layer is missing (an older reference)."""
+    try:
+        with open(txt_path, encoding="utf-8", errors="replace") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    return [w for w in (norm_word(t) for t in raw.split()) if w]
+
+
+def is_printed(text, printed, joined):
+    if text in joined:
+        return True
+    return len(text) >= TRUTH_PIECE_MIN and any(text in w for w in printed)
+
+
+def mark_printed(words, printed):
+    """`words` (OCR reads of the reference), each with a sixth field: did
+    LibreOffice print it. A page whose text layer is empty (a scan, text
+    drawn as curves) or missing marks every read printed: there is nothing
+    to check them against."""
+    if words is None:
+        return None
+    if not printed:
+        return [(*w[:5], True) for w in words]
+    pieces = [p for w in printed for p in re.findall(r"[0-9]+|[a-z]+", w)]
+    joined = {"".join(pieces[i : i + n]) for n in range(1, TRUTH_JOIN + 1) for i in range(len(pieces) - n + 1)}
+    return [(*w[:5], is_printed(w[0], printed, joined)) for w in words]
+
+
+def reference_words(lo_path, ref, app):
+    """OCR reads of the reference page `ref` (rendered from `lo_path`),
+    each marked with whether LibreOffice printed it (`mark_printed`)."""
+    words = ocr_words(ref, app == "tables")
+    return mark_printed(words, printed_words(os.path.splitext(lo_path)[0] + ".txt"))
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
@@ -590,7 +667,7 @@ def align(app, lo_path, ours_path):
 
 
 def compare_page(app, ref, ours, ref_words):
-    """`ref_words` is ocr_words(ref), cached by the caller."""
+    """`ref_words` is reference_words(...) of `ref`, cached by the caller."""
     ref_ink = ink_mask(np.asarray(ref)).sum()
     ink = float(ink_mask(np.asarray(ours)).sum() / ref_ink) if ref_ink else None
     ours_words = ocr_words(ours, app == "tables") if ref_words is not None else None
@@ -605,7 +682,9 @@ def compare_page(app, ref, ours, ref_words):
         "disp_pt": disp,
         "colors": color_presence(ref, ours),
         "ssim": ssim(ref, ours),
-        "ref_words": len(ref_words) if ref_words is not None else None,
+        # What LibreOffice printed: misreads of its page don't make it a
+        # page with text to recall.
+        "ref_words": sum(1 for w in ref_words if len(w) < 6 or w[5]) if ref_words is not None else None,
     }
 
 
@@ -710,7 +789,7 @@ def score_fixture(app, d, tier, ref_words_cache):
         ref, ours, scale = align(app, lo, ours_pages[i])
         key = (lo, ref.size)
         if key not in ref_words_cache:
-            ref_words_cache[key] = ocr_words(ref, app == "tables")
+            ref_words_cache[key] = reference_words(lo, ref, app)
         per_page.append(dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))
     m = {k: mean([p.get(k) for p in per_page]) for k in METRICS}
     m["ref_words"] = sum(p["ref_words"] or 0 for p in per_page)

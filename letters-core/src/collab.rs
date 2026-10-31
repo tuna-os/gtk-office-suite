@@ -182,6 +182,7 @@ enum Attr {
     Key(MarkKey),
     Regular,
     Upright,
+    Kerned,
     Caps,
     Spacing,
     Position,
@@ -189,7 +190,7 @@ enum Attr {
 
 /// Every attribute, in a fixed order.
 fn attrs() -> impl Iterator<Item = Attr> {
-    MarkKey::ALL.into_iter().map(Attr::Key).chain([Attr::Regular, Attr::Upright, Attr::Caps, Attr::Spacing, Attr::Position])
+    MarkKey::ALL.into_iter().map(Attr::Key).chain([Attr::Regular, Attr::Upright, Attr::Kerned, Attr::Caps, Attr::Spacing, Attr::Position])
 }
 
 fn json<T: Serialize>(value: &T) -> Result<String, CollabError> {
@@ -220,6 +221,7 @@ impl Attr {
             Attr::Key(MarkKey::Comment(_)) => "comment",
             Attr::Regular => "regular",
             Attr::Upright => "upright",
+            Attr::Kerned => "kerned",
             Attr::Caps => "caps",
             Attr::Spacing => "spacing",
             Attr::Position => "position",
@@ -269,6 +271,7 @@ impl Attr {
             Attr::Key(MarkKey::Comment(_)) => None,
             Attr::Regular => flag(style.regular),
             Attr::Upright => flag(style.upright),
+            Attr::Kerned => flag(style.kerned),
             Attr::Caps => flag(style.caps),
             Attr::Spacing => style.letter_spacing_tw.map(|tw| LoroValue::I64(i64::from(tw))),
             Attr::Position => style.position_hp.map(|hp| LoroValue::I64(i64::from(hp))),
@@ -314,6 +317,7 @@ impl Attr {
             Attr::Key(MarkKey::Comment(_)) => return Err(CollabError::Unsupported(Unsupported::Comments)),
             Attr::Regular => style.regular = flag()?,
             Attr::Upright => style.upright = flag()?,
+            Attr::Kerned => style.kerned = flag()?,
             Attr::Caps => style.caps = flag()?,
             Attr::Spacing => style.letter_spacing_tw = Some(i32::try_from(int()?).map_err(|_| wrong("a spacing"))?),
             Attr::Position => style.position_hp = Some(i32::try_from(int()?).map_err(|_| wrong("a position"))?),

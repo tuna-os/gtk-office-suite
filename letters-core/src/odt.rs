@@ -90,6 +90,9 @@ fn run_style_props(st: &RunStyle) -> String {
     if st.caps {
         props.push_str(" fo:text-transform=\"uppercase\"");
     }
+    if st.kerned {
+        props.push_str(" style:letter-kerning=\"true\"");
+    }
     if st.underline {
         props.push_str(" style:text-underline-style=\"solid\"");
     }
@@ -846,7 +849,8 @@ fn content_xml(doc: &Document) -> String {
                     let pad_only = padding.clone();
                     let color = doc.table_rule_colors.get(&c.table).map_or("000000", String::as_str);
                     let width = doc.table_rule_widths.get(&c.table).copied().unwrap_or(crate::layout::CELL_RULE_PT);
-                    let padding = if ruled { format!("{padding} fo:border=\"{width}pt solid #{}\"", esc(color)) } else { padding };
+                    let line = if doc.table_rule_double.contains(&c.table) { "double" } else { "solid" };
+                    let padding = if ruled { format!("{padding} fo:border=\"{width}pt {line} #{}\"", esc(color)) } else { padding };
                     let mut fill_styles: std::collections::HashMap<String, String> = Default::default();
                     let mut cell_styles: std::collections::HashMap<(u32, u32), String> = doc.table_fills.get(&c.table).into_iter().flatten().map(|f| {
                         let n = fill_styles.len();
@@ -1635,6 +1639,10 @@ struct AutoStyles {
     /// A paragraph style's own text properties: in styles.xml, how each
     /// `Heading_20_N` looks (#1297).
     para_text: std::collections::HashMap<String, RunStyle>,
+    /// Style → its own `style:letter-kerning`, text and paragraph styles
+    /// and the default style alike: resolved by `para_kerned` and
+    /// `text_kerning`, as an explicit "false" undoes a parent's "true".
+    kerning: std::collections::HashMap<String, bool>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
     /// A table-row style's height.
@@ -1647,6 +1655,8 @@ struct AutoStyles {
     cell_rule_color: std::collections::HashMap<String, String>,
     /// A ruled cell style's rule width in points, when not 0.5pt.
     cell_rule_width: std::collections::HashMap<String, f64>,
+    /// Ruled cell styles whose rule is a double line.
+    cell_rule_double: std::collections::HashSet<String>,
     /// A ruled table-cell style's sides without a border.
     cell_open: std::collections::HashMap<String, crate::model::OpenEdges>,
     /// A table-cell style's content set lower than the top.
@@ -1840,7 +1850,7 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1929,6 +1939,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             if let Some(width) = width {
                                 out.cell_rule_width.insert(name.clone(), width);
                             }
+                            if first.as_deref().is_some_and(|v| v.split_whitespace().any(|w| w.eq_ignore_ascii_case("double"))) {
+                                out.cell_rule_double.insert(name.clone());
+                            }
                             out.cell_ruled.insert(name);
                         }
                         let valign = match attr_val(&e, "style:vertical-align").as_deref() {
@@ -1963,6 +1976,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     }
                     "style:text-properties" => {
                         if let Some(name) = cur_name.clone().filter(|_| cur_family == "text" || cur_family == "paragraph") {
+                            if let Some(k) = attr_val(&e, "style:letter-kerning") {
+                                out.kerning.insert(name.clone(), k == "true");
+                            }
                             let mut st = RunStyle::default();
                             match attr_val(&e, "fo:font-weight").as_deref() {
                                 Some("bold") => st.bold = true,
@@ -2338,7 +2354,7 @@ fn blank(text: &Option<String>) -> bool {
 /// it is based on (`named`: styles.xml's, its automatic ones among them).
 fn hf_line(style: Option<&str>, named: &AutoStyles) -> crate::model::HfLine {
     let Some(name) = style else { return Default::default() };
-    let mut line = crate::model::HfLine { look: para_text_style(name, named, named), ..Default::default() };
+    let mut line = crate::model::HfLine { look: RunStyle { kerned: para_kerned(name, named, named), ..para_text_style(name, named, named) }, ..Default::default() };
     let (mut aligned, mut tabbed) = (false, false);
     let mut cur = Some(name.to_string());
     for _ in 0..8 {
@@ -3197,7 +3213,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -3320,7 +3336,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // The tables with a ruled cell: Writer rules a cell only by its style.
     let mut ruled_tables: std::collections::HashSet<u32> = Default::default();
     // A table's rule colour and width: its first ruled cell's.
-    type RuleLooks = (std::collections::BTreeMap<u32, String>, std::collections::BTreeMap<u32, f64>);
+    type RuleLooks = (std::collections::BTreeMap<u32, String>, std::collections::BTreeMap<u32, f64>, std::collections::BTreeSet<u32>);
     let mut rule_looks: RuleLooks = Default::default();
     let note_rule = |ruled: &mut std::collections::HashSet<u32>, looks: &mut RuleLooks, t: &(u32, i64, i64, usize, bool), e: &quick_xml::events::BytesStart| {
         let Some(n) = attr_val(e, "table:style-name").filter(|n| auto.cell_ruled.contains(n) || named.cell_ruled.contains(n)) else { return };
@@ -3330,6 +3346,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             }
             if let Some(w) = auto.cell_rule_width.get(&n).or_else(|| named.cell_rule_width.get(&n)) {
                 looks.1.insert(t.0, *w);
+            }
+            if auto.cell_rule_double.contains(&n) || named.cell_rule_double.contains(&n) {
+                looks.2.insert(t.0);
             }
         }
     };
@@ -3868,6 +3887,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         Some(n) => para_text_style(&n, &auto, &named),
                         None => RunStyle::default(),
                     };
+                    let name = attr_val(&e, "text:style-name");
+                    let text_base = RunStyle { kerned: para_kerned(name.as_deref().unwrap_or(DEFAULT_PARA), &auto, &named), ..text_base };
                     span_stack.push(text_base);
                     paragraph_bases += 1;
                 }
@@ -3875,6 +3896,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     let name = attr_val(&e, "text:style-name");
                     let own = name.as_deref().map(|n| text_style(n, &auto, &named)).unwrap_or_default();
                     let mut st = inherit(span_stack.last(), own);
+                    st.kerned = name.as_deref().and_then(|n| text_kerning(n, &auto, &named)).unwrap_or_else(|| span_stack.last().is_some_and(|o| o.kerned));
                     // Inline code is Writer's "Source Text", named or as
                     // the parent of an automatic style (#1205).
                     if let Some(n) = &name {
@@ -4817,7 +4839,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         .collect();
     doc.table_padding = cell_padding;
     doc.table_unruled = doc.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| c.table)).filter(|t| !ruled_tables.contains(t)).collect();
-    (doc.table_rule_colors, doc.table_rule_widths) = rule_looks;
+    (doc.table_rule_colors, doc.table_rule_widths, doc.table_rule_double) = rule_looks;
     doc.table_open_edges = open_edges;
     doc.table_valign = valigns;
     // A column count LibreOffice recorded on a section instead of on the
@@ -4862,6 +4884,36 @@ fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Str
 /// does not set, it takes from its paragraph (or outer span).
 /// A text style's look: an automatic style's or a named one's (styles.xml's
 /// "Responses", blue), over what its parents give it.
+/// Whether a paragraph style's text is kerned: the nearest
+/// `style:letter-kerning` up its chain, then the default style's. Absent
+/// everywhere, Writer draws it unkerned.
+fn para_kerned(name: &str, auto: &AutoStyles, named: &AutoStyles) -> bool {
+    let own = |n: &str| auto.kerning.get(n).or_else(|| named.kerning.get(n)).copied();
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if let Some(k) = own(&n) {
+            return k;
+        }
+        cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+    }
+    own(DEFAULT_PARA).unwrap_or(false)
+}
+
+/// A text style's own `style:letter-kerning`, the nearest up its chain;
+/// None leaves its paragraph's.
+fn text_kerning(name: &str, auto: &AutoStyles, named: &AutoStyles) -> Option<bool> {
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let n = cur?;
+        if let Some(&k) = auto.kerning.get(&n).or_else(|| named.kerning.get(&n)) {
+            return Some(k);
+        }
+        cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
+    }
+    None
+}
+
 fn text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
     let mut chain = Vec::new();
     let mut cur = Some(name.to_string());
@@ -5440,6 +5492,21 @@ mod tests {
         d.table_rule_widths.clear();
         let rt = round_trip(&d);
         assert!(rt.table_rule_colors.is_empty() && rt.table_rule_widths.is_empty(), "black 0.5pt rules are a table's own");
+    }
+
+    /// A table ruled in double lines keeps them through a save, and a
+    /// cell's "double" border reads as one: the crime supervisor form's
+    /// tables were drawn single.
+    #[test]
+    fn a_table_keeps_its_double_rules() {
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 1, 2);
+        d.table_rule_double.insert(table);
+        let rt = round_trip(&d);
+        let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert!(rt.table_rule_double.contains(&id), "{:?}", rt.table_rule_double);
+        d.table_rule_double.clear();
+        assert!(round_trip(&d).table_rule_double.is_empty(), "single rules stay single");
     }
 
     /// A table's heading rows (`table:table-header-rows`) are read as rows
@@ -6031,6 +6098,30 @@ mod tests {
             assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
             assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
         }
+    }
+
+    /// Kerning follows the style chain to the default style, and a style
+    /// that says "false" undoes its parent's "true": Writer kerns only what
+    /// asks for it.
+    #[test]
+    fn letter_kerning_follows_the_style_chain() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:text-properties style:letter-kerning=\"true\"/></style:default-style>\
+             <style:style style:name=\"Plain\" style:family=\"paragraph\"><style:text-properties style:letter-kerning=\"false\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:parent-style-name=\"Plain\"/>\
+             <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties style:letter-kerning=\"true\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p>default</text:p><text:p text:style-name=\"P1\">plain <text:span text:style-name=\"T1\">span</text:span></text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let kerned: Vec<Vec<(String, bool)>> = d.paragraphs.iter().map(|p| p.runs.iter().map(|r| (r.text.clone(), r.style.kerned)).collect()).collect();
+        assert_eq!(kerned, [vec![("default".into(), true)], vec![("plain ".into(), false), ("span".into(), true)]]);
+        let mut unkerned = d.clone();
+        unkerned.paragraphs[0].runs[0].style.kerned = false;
+        assert!(round_trip(&d).paragraphs[1].runs[1].style.kerned, "written back");
+        assert!(!round_trip(&unkerned).paragraphs[0].runs[0].style.kerned);
     }
 
     /// A heading paragraph whose style says `fo:font-style="normal"` is

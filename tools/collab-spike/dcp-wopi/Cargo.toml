@@ -17,7 +17,7 @@ tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 getrandom = "0.4"
 parking_lot = "0.13"
 

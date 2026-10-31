@@ -1351,6 +1351,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let rule_looks: Vec<(u32, RuleLook)> = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).map(|(ti, t)| (ti as u32, table_rule_look(t))).collect();
     let table_rule_colors = rule_looks.iter().filter_map(|(ti, (c, _))| Some((*ti, c.clone()?))).collect();
     let table_rule_widths = rule_looks.iter().filter_map(|(ti, (_, w))| Some((*ti, (*w)?))).collect();
+    let table_rule_double = tables.iter().enumerate().filter(|(ti, t)| !table_unruled.contains(&(*ti as u32)) && table_rule_double(t)).map(|(ti, _)| ti as u32).collect();
     // The rows kept on one page (`w:cantSplit`), and heading rows
     // (`w:tblHeader`), which Writer never splits across pages.
     let table_whole_rows = tables
@@ -1401,6 +1402,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_unruled,
         table_rule_colors,
         table_rule_widths,
+        table_rule_double,
         table_whole_rows,
         table_relative,
         table_open_edges,
@@ -2085,7 +2087,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 tbl.set_borders(rdocx::BorderStyle::None, 0, "auto");
             } else {
                 let eighths = doc.table_rule_widths.get(&tc0.table).map_or(4, |w| (w * 8.0).round().clamp(1.0, 96.0) as u32);
-                tbl.set_borders(rdocx::BorderStyle::Single, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
+                let line = if doc.table_rule_double.contains(&tc0.table) { rdocx::BorderStyle::Double } else { rdocx::BorderStyle::Single };
+                tbl.set_borders(line, eighths, doc.table_rule_colors.get(&tc0.table).map_or("000000", String::as_str));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
@@ -2191,6 +2194,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         if !run.style.italic && run.style.upright { r = r.italic(false); }
                         if run.style.italic { r = r.italic(true); }
                         if run.style.caps { r = r.all_caps(true); }
+                        if run.style.kerned { r.set_kern_value(Some(1.0)); }
                         if run.style.underline { r = r.underline(true); }
                         if run.style.strikethrough { r = r.strike(true); }
                         if run.style.highlight { r = r.highlight("yellow"); }
@@ -2505,6 +2509,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if !run.style.italic && run.style.upright { r = r.italic(false); }
             if run.style.italic { r = r.italic(true); }
             if run.style.caps { r = r.all_caps(true); }
+            if run.style.kerned { r.set_kern_value(Some(1.0)); }
             if run.style.underline { r = r.underline(true); }
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
@@ -3441,6 +3446,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
                 // Not italic in a heading, which may be drawn italic.
                 upright: heading.is_some() && r.italic_value().or(eff.italic) == Some(false),
+                // Any threshold: Writer kerns whatever the size. A heading
+                // takes its style's (Heading 1's 16pt).
+                kerned: r.kern().or_else(|| doc.resolve_run_properties(p.style_id(), r.style_id()).kern.map(|k| k.to_pt())).is_some_and(|k| k > 0.0),
                 caps: r.all_caps_value().unwrap_or(eff.caps == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
@@ -3478,8 +3486,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     // opens with two blank 22pt Title lines above its title, which drawn
     // at the body size stood it 32px high.
     // So is one holding nothing but floating text boxes (a form's rule
-    // under its title), whatever its anchoring run's own size.
-    let floating_only = !runs.is_empty() && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text));
+    // under its title) or floating pictures (the audit committee minutes'
+    // logo, above three blank 14pt lines), whatever its anchoring run's
+    // own size.
+    let floating_only = !runs.is_empty()
+        && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text) || (r.style.image.is_some() && r.style.image_anchor.is_some()));
     if (runs.is_empty() || floating_only) && heading.is_none() {
         let mark = p.mark();
         let styled = doc.resolve_run_properties(p.style_id(), None);
@@ -3793,6 +3804,28 @@ fn rule_color(c: &str) -> Option<String> {
 
 /// A ruled table's rule colour and width, each when not the default.
 type RuleLook = (Option<String>, Option<f64>);
+
+/// Whether a ruled table's rules are double lines: its cells' first
+/// visible border's line, else its own (`w:tblBorders`).
+fn table_rule_double(table: &rdocx::TableRef<'_>) -> bool {
+    use rdocx::CellBorderEdge as C;
+    use rdocx::TableBorderEdge as E;
+    let visible = |b: &rdocx::TableBorderRef<'_>| !matches!(b.style(), "none" | "nil");
+    for r in 0..table.row_count() {
+        let Some(row) = table.row(r) else { continue };
+        for c in 0..row.cell_count() {
+            let Some(cell) = row.cell(c) else { continue };
+            if let Some(b) = [C::Top, C::Left, C::Bottom, C::Right].into_iter().filter_map(|e| cell.border(e)).find(visible) {
+                return b.style() == "double";
+            }
+        }
+    }
+    [E::Top, E::Left, E::Bottom, E::Right, E::InsideHorizontal, E::InsideVertical]
+        .into_iter()
+        .filter_map(|e| table.border(e))
+        .find(visible)
+        .is_some_and(|b| b.style() == "double")
+}
 
 /// The colour a ruled table's rules are drawn in, when not black, and
 /// their width in points, when not 0.5pt: its own first visible border's

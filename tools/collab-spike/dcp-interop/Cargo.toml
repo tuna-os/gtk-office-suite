@@ -26,4 +26,4 @@ reqwest = { version = "0.12", default-features = false, features = ["json"] }
 tokio-tungstenite = "0.30"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 parking_lot = "0.13"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }

@@ -28,6 +28,13 @@ pub struct RunStyle {
     /// italic by its style, set back upright.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upright: bool,
+    /// Drawn with the font's pair kerning: OOXML's `<w:kern>` (any
+    /// threshold; Writer kerns whatever the size), ODF's
+    /// `style:letter-kerning="true"`. Unset, Writer and Word draw text
+    /// unkerned, which sets a line's breaks: kerned, a 12pt Inter line of
+    /// the audit-committee minutes ran a point short and took a word more.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub kerned: bool,
     /// Drawn in capitals, whatever case the text is stored in: OOXML's
     /// `<w:caps/>`, ODF's `fo:text-transform="uppercase"` (a form's title
     /// style). The text keeps its own case.
@@ -821,6 +828,11 @@ pub struct Document {
     /// each row that much taller.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_rule_widths: std::collections::BTreeMap<u32, f64>,
+    /// The ruled tables whose rules are double lines, by table id (Word's
+    /// `w:val="double"`, ODF's "double" border): the crime supervisor
+    /// form's tables, drawn single.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub table_rule_double: std::collections::BTreeSet<u32>,
     /// Each table's rows kept on one page, by table id (Word's
     /// `w:cantSplit`, ODF's row `fo:keep-together="always"`): a row that
     /// does not fit what is left of a page starts the next, unless it is
@@ -1088,6 +1100,7 @@ impl Document {
             table_unruled: Default::default(),
             table_rule_colors: Default::default(),
             table_rule_widths: Default::default(),
+            table_rule_double: Default::default(),
             table_whole_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
@@ -1369,6 +1382,7 @@ impl Document {
         self.table_unruled.remove(&table);
         self.table_rule_colors.remove(&table);
         self.table_rule_widths.remove(&table);
+        self.table_rule_double.remove(&table);
         self.table_whole_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);
