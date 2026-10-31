@@ -254,6 +254,11 @@
     "B": "amber",
     "C": "amber"
   },
+  "letters/table-row-split": {
+    "A": "green",
+    "B": "green",
+    "C": "green"
+  },
   "letters/text-color": {
     "A": "green",
     "B": "green",
