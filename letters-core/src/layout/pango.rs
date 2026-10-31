@@ -180,9 +180,15 @@ impl PangoShaper {
                     // line, but holds the line open as an empty one is: a
                     // paragraph holding only one is a line tall in Writer
                     // and Word, not none (the opt-out form's answer boxes
-                    // each sit in a paragraph of their own).
+                    // each sit in a paragraph of their own). The line is
+                    // the paragraph mark's, whose size and font the reader
+                    // gives the run.
                     let run_size = run.style.font_size_hp.map_or(size, |hp| f64::from(hp) / 2.0);
-                    let label = self.label(" ", &base, run_size);
+                    let mut desc = base.clone();
+                    if let Some(family) = &run.style.font_family {
+                        desc.set_family(&with_fallback(family));
+                    }
+                    let label = self.label(" ", &desc, run_size);
                     let (_, logical) = label.extents();
                     pango::Rectangle::new(0, -label.baseline(), 0, logical.height())
                 } else {
@@ -399,9 +405,12 @@ impl Shaper for PangoShaper {
         // the text's own font's: a paragraph of 14pt Arial in a Calibri
         // document has Arial's (render-lab `real-salary-template`).
         if let Some(mut desc) = layout.font_description() {
-            // A blank paragraph's is its empty run's, as its height is.
+            // A blank paragraph's is its empty run's, as its height is; one
+            // holding only floating objects, the mark's its runs carry.
             let text = req.runs.iter().find(|r| !r.text.is_empty() && !super::is_object(r));
-            if let Some(run) = text.or_else(|| req.runs.iter().find(|r| !super::is_object(r))) {
+            let blank = || req.runs.iter().find(|r| !super::is_object(r));
+            let floating = || req.runs.iter().find(|r| r.style.image_anchor.is_some());
+            if let Some(run) = text.or_else(blank).or_else(floating) {
                 if let Some(f) = &run.style.font_family {
                     desc.set_family(&with_fallback(f));
                 }
@@ -1617,7 +1626,12 @@ mod tests {
         let boxed = Run { text: String::new(), style: RunStyle { text_box: Some(Box::new(TextBox { extent_emu: (914_400, 914_400), ..Default::default() })), image_anchor: Some(ImageAnchor::default()), ..Default::default() } };
         let picture = Run { text: String::new(), style: RunStyle { image: Some("/nonexistent.png".into()), image_extent_emu: Some((914_400, 914_400)), image_anchor: Some(ImageAnchor::default()), ..Default::default() } };
         assert_eq!(heights(vec![boxed]), empty, "a text box's paragraph");
-        assert_eq!(heights(vec![picture]), empty, "a floating picture's");
+        assert_eq!(heights(vec![picture.clone()]), empty, "a floating picture's");
+        // Sized by its mark, the line is that mark's blank line: font too.
+        let mark = RunStyle { font_size_hp: Some(56), font_family: Some("Liberation Mono".into()), ..Default::default() };
+        let blank = heights(vec![Run { text: String::new(), style: mark.clone() }]);
+        let marked = Run { style: RunStyle { font_size_hp: mark.font_size_hp, font_family: mark.font_family.clone(), ..picture.style }, ..picture };
+        assert_eq!(heights(vec![marked]), blank, "a picture's paragraph with a 28pt mono mark");
     }
 
     /// A text box is drawn as Writer draws one: its fill, its rule and its

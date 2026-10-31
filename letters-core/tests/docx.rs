@@ -307,6 +307,54 @@ fn a_floating_image_keeps_its_paragraph_and_placement() {
     assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
 }
 
+/// A paragraph holding only a floating picture is a line of its mark's
+/// font, as a blank one is: the audit-committee minutes float their logo
+/// from a paragraph whose mark is 14pt, and Writer sizes that line by the
+/// mark whatever the drawing run's own size. Read at the body size, it
+/// stood the title 3.5pt high and pulled the next page's first paragraph,
+/// with its rule, onto the first.
+#[test]
+fn a_floating_pictures_paragraph_keeps_its_marks_size() {
+    use letters_core::model::ImageAnchor;
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("logo.png");
+    std::fs::write(&img_path, png).unwrap();
+    let mut d = Document::from_plain_text("\nMinutes");
+    d.paragraphs[0].runs = vec![Run {
+        text: "logo".into(),
+        style: RunStyle {
+            image: Some(img_path.to_string_lossy().into_owned()),
+            image_extent_emu: Some((914_400, 914_400)),
+            image_anchor: Some(ImageAnchor::default()),
+            ..Default::default()
+        },
+    }];
+    let doctored = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let p = body.find("<w:body>").expect("a body") + body[body.find("<w:body>").unwrap()..].find("<w:p").unwrap();
+        let open = p + body[p..].find('>').unwrap() + 1;
+        let mark = "<w:rPr><w:rFonts w:ascii=\"Tahoma\" w:hAnsi=\"Tahoma\"/><w:sz w:val=\"28\"/></w:rPr>";
+        if body[open..].starts_with("<w:pPr>") {
+            let close = open + body[open..].find("</w:pPr>").unwrap();
+            body.insert_str(close, mark);
+        } else {
+            body.insert_str(open, &format!("<w:pPr>{mark}</w:pPr>"));
+        }
+    });
+    let logo = doctored.paragraphs[0].runs.iter().find(|r| r.style.image_anchor.is_some()).expect("the floating logo");
+    assert_eq!(logo.style.font_size_hp, Some(28), "its line is the 14pt mark's");
+    assert_eq!(logo.style.font_family.as_deref(), Some("Tahoma"));
+    assert_eq!(doctored.paragraphs[1].text(), "Minutes");
+}
+
 /// A letterhead's logo comes back in the header, above its text with its
 /// page field, and a footer's floating picture keeps its place.
 #[test]

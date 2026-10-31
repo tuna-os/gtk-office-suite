@@ -3481,8 +3481,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     // opens with two blank 22pt Title lines above its title, which drawn
     // at the body size stood it 32px high.
     // So is one holding nothing but floating text boxes (a form's rule
-    // under its title), whatever its anchoring run's own size.
-    let floating_only = !runs.is_empty() && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text));
+    // under its title) or floating pictures (the audit committee minutes'
+    // logo, above three blank 14pt lines), whatever its anchoring run's
+    // own size.
+    let floating_only = !runs.is_empty()
+        && runs.iter().all(|r| crate::docx_text_boxes::is_sentinel(&r.text) || (r.style.image.is_some() && r.style.image_anchor.is_some()));
     if (runs.is_empty() || floating_only) && heading.is_none() {
         let mark = p.mark();
         let styled = doc.resolve_run_properties(p.style_id(), None);
