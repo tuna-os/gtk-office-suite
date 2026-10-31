@@ -312,8 +312,8 @@
     "B": "amber"
   },
   "tables/real-mining-remediation-authority-annual-report-and-a": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/real-nbs-chis-kpi-submission-template": {
     "A": "amber",

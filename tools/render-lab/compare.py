@@ -562,7 +562,9 @@ def align(app, lo_path, ours_path):
     Then both are cut to their cells (headings are drawn differently on
     paper and on screen, see below) and ours is resampled onto
     LibreOffice's, so cells line up and every metric compares layout within
-    the grid.
+    the grid. For an unruled reference and an unclipped capture, compare
+    ink bounding boxes after removing the screen's header bands; neither
+    side then has a frame defining the used range's whitespace.
     """
     ref = load(lo_path)
     if app != "tables":
@@ -581,6 +583,22 @@ def align(app, lo_path, ours_path):
     if box and 0 < ox < ours.width and 0 < oy < ours.height:
         ref = ref.crop(box)
         ours = ours.crop((ox, oy, ours.width, ours.height))
+    elif box is None and 0 < ox < ours.width and 0 < oy < ours.height:
+        # Published sheets need not print headings. The reference above is
+        # then an ink bounding box, not a framed used range. Remove our
+        # screen headings and crop to ink too, or their labels and the
+        # unused cell padding get stretched into the document (#1348).
+        cells = ours.crop((ox, oy, ours.width, ours.height))
+        ys, xs = np.nonzero(ink_mask(np.asarray(cells)))
+        dark = np.asarray(ref.convert("L")) < 128
+        ruled = long_lines(dark, axis=1) or long_lines(dark, axis=0)
+        # Partial borders are not a heading frame, and a viewport cut
+        # through text need not contain the printed page's whole range.
+        # Neither gives us corresponding ink boxes to align.
+        complete = len(xs) and xs.max() < cells.width - 1 and ys.max() < cells.height - 1
+        if complete and not ruled:
+            ours = cells.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+            scale = (ours.width / ref.width + ours.height / ref.height) / 2
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
