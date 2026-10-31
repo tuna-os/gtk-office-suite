@@ -189,6 +189,21 @@ def letters(img):
     r.font.strike = True
     save(x, "char-emphasis", "Bold, italic, underlined and struck-through words on one line")
 
+    # Reduced from real-annex-a-annual-report-form (#1378): its bold
+    # Arial headings have an underline touching the glyphs in Letters,
+    # whereas Writer leaves a gap. char-emphasis uses regular Serif and
+    # does not expose the Sans bold underline's position. Use the installed
+    # metric-compatible face so this measures decoration, not substitution.
+    x = doc()
+    for size in (12, 18, 28):
+        p = x.add_paragraph()
+        r = p.add_run("Key ongoing maintenance")
+        r.font.name = "Liberation Sans"
+        r.font.size = Pt(size)
+        r.bold = True
+        r.underline = True
+    save(x, "underline-position", "Three bold Sans lines at 12/18/28pt: underline offset and thickness match Writer")
+
     x = doc()
     for size in (8, 12, 18, 28, 40):
         x.add_paragraph().add_run(f"{size}pt text").font.size = Pt(size)
