@@ -230,6 +230,11 @@ loosening a budget:
   ("R1C1" as "rici", unhinted glyphs at 12 px) and so 8 of 9 cell words
   match (up from 6 of 9 with the magnifier fallback below, which rescues
   "r1c2" and "r1c3" but not the "r1c1" cell).
+- **`tables/number-formats`** (2026-09-26, resolved). Both sides originally
+  showed "###" for the date and the 7-digit value because column A was left
+  at the default narrow width. Widening column A to width 18 allows all
+  five formatted values to be visible as intended ("15.3%, $1,234.50,
+  2023-03-15, 1/2, 1,234,567.89"), turning the fixture green in A and B (#917).
 - **`tables/wrap-text`** (2026-09-26, #920). The fixture expectation holds
   on both sides: A1 wraps onto three lines and row 1 grows. Every metric
   but one is inside budget (words 1.0, lost lines 0, scale 1.03x against
@@ -575,7 +580,7 @@ amber in both tiers and accepted as metric artifacts, each recorded under
 
 - `letters/font-sizes`: OCR misreads the 8pt and 40pt labels differently on each side; the pixels match within 1px (green since the reference text-layer rule above).
 - `letters/table`: OCR misreads one 12 px cell label.
-- `tables/number-formats`: "###" is a non-word to OCR (green since the reference text-layer rule above).
+- `tables/number-formats`: resolved (column widened to fit formatted values, turning A and B green, #917).
 - `tables/wrap-text`: SSIM on a one-word line-break difference against the
   print-PDF oracle. Our break is the Excel-faithful one, so the fixture is
   accepted as amber rather than retuned to LibreOffice. A

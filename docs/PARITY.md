@@ -92,7 +92,7 @@ are not all green, and any fixture name the baseline does not have.
 | OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) | — |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle | — |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read | — |
-| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells | 🟠 tables/number-formats (accepted metric artifact) |
+| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells | ✅ tables/number-formats |
 | Undo/redo | ✅ | I1 (12 tests) + I6 journey: tests/gui/test_tables.py::test_undo_removes_cell_value, tests/gui/test_smoke.py::TablesUndoSaveReopenSmoke | — |
 | Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) | — |
 | Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc | ✅ tables/borders, tables/merged |

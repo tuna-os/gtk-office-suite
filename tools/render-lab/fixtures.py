@@ -725,6 +725,7 @@ def tables():
     for i, (v, fmt) in enumerate(rows, start=1):
         c = ws.cell(i, 1, v)
         c.number_format = fmt
+    ws.column_dimensions["A"].width = 18
     save(wb, "number-formats", "15.3%, $1,234.50, 2023-03-15, 1/2, 1,234,567.89")
 
     wb, ws = book()

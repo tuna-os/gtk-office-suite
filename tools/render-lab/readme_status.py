@@ -45,7 +45,7 @@ APPS = (("letters", "Letters"), ("tables", "Tables"), ("decks", "Decks"))
 # Accepted metric artifacts, each recorded with its measurement under
 # "Known metric artifacts" in docs/RENDER-PARITY-ROADMAP.md (#1198). Adding
 # one here is a review decision, not a way to turn a gate green.
-ACCEPTED_AMBER = {"letters/font-sizes", "letters/table", "tables/number-formats", "tables/wrap-text"}
+ACCEPTED_AMBER = {"letters/font-sizes", "letters/table", "tables/wrap-text"}
 
 
 def load(summary=None, baseline=BASELINE, baseline_real=BASELINE_REAL):
