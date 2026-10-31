@@ -678,6 +678,29 @@ def tables():
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
     wb, ws = book()
+    # #1349: the supervising panel engineers contact list sets landscape A4
+    # with fit-to-width (ODF scale-to-X="1", fitToWidth=1, fitToHeight=0).
+    # Calc scales wide sheets down so all columns fit across one page width,
+    # fitting far more rows onto page 1 than the editor's 100% on-screen grid.
+    # Keep cells, rows and text simple to isolate fit-to-width print scaling.
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    for c, col in enumerate([chr(ord("A") + i) for i in range(12)], start=1):
+        ws.column_dimensions[col].width = 18
+        ws.cell(1, c, f"Header {col}")
+        for r in range(2, 22):
+            ws.cell(r, c, f"R{r}C{c}")
+    save(
+        wb,
+        "fit-to-width",
+        "A wide landscape A4 worksheet fitted to 1 page wide (fitToWidth=1, fitToHeight=0), "
+        "scaling columns to fit the page width while rows paginate vertically",
+    )
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
