@@ -219,6 +219,10 @@ impl PangoShaper {
             if st.caps {
                 add(pango::AttrInt::new_text_transform(pango::TextTransform::Uppercase).into());
             }
+            // Writer and Word kern only what asks for it.
+            if !st.kerned {
+                add(pango::AttrFontFeatures::new("kern 0").into());
+            }
             if st.underline || st.link.is_some() {
                 add(pango::AttrInt::new_underline(pango::Underline::Single).into());
             }
@@ -1598,6 +1602,32 @@ mod tests {
         let (single, half_again) = (heights(1.0), heights(1.5));
         assert!(single >= 100.0, "the picture's line is at least the picture: {single}");
         assert!((half_again - single - text_line / 2.0).abs() < 0.01, "150% adds half a text line ({}), not half the picture: {single} -> {half_again}", text_line / 2.0);
+    }
+
+    /// Only a run that asks for kerning is kerned, as Writer and Word draw
+    /// it: "AVAVAV" in Liberation Sans is narrower kerned.
+    #[test]
+    fn only_a_kerned_run_is_kerned() {
+        let opts = LayoutOptions::default();
+        let shaper = PangoShaper::new();
+        let width = |kerned: bool| {
+            let style = crate::model::RunStyle { kerned, font_family: Some("Liberation Sans".into()), ..Default::default() };
+            let runs = [Run { text: "AVAVAV".into(), style }];
+            let req = ShapeRequest {
+                runs: &runs,
+                heading: None,
+                code: false,
+                look: Look::Body,
+                alignment: Alignment::Left,
+                width_pt: 400.0,
+                first_line_indent_pt: 0.0,
+                tab_stops: Vec::new(),
+                right_tab: false,
+                defaults: &opts,
+            };
+            line_boxes(&shaper.layout(&req), 0.0)[0].width_pt
+        };
+        assert!(width(true) + 1.0 < width(false), "kerned {} unkerned {}", width(true), width(false));
     }
 
     /// A paragraph holding only a floating picture or text box is as tall

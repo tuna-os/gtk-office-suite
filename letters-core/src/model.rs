@@ -28,6 +28,13 @@ pub struct RunStyle {
     /// italic by its style, set back upright.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub upright: bool,
+    /// Drawn with the font's pair kerning: OOXML's `<w:kern>` (any
+    /// threshold; Writer kerns whatever the size), ODF's
+    /// `style:letter-kerning="true"`. Unset, Writer and Word draw text
+    /// unkerned, which sets a line's breaks: kerned, a 12pt Inter line of
+    /// the audit-committee minutes ran a point short and took a word more.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub kerned: bool,
     /// Drawn in capitals, whatever case the text is stored in: OOXML's
     /// `<w:caps/>`, ODF's `fo:text-transform="uppercase"` (a form's title
     /// style). The text keeps its own case.

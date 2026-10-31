@@ -2194,6 +2194,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         if !run.style.italic && run.style.upright { r = r.italic(false); }
                         if run.style.italic { r = r.italic(true); }
                         if run.style.caps { r = r.all_caps(true); }
+                        if run.style.kerned { r.set_kern_value(Some(1.0)); }
                         if run.style.underline { r = r.underline(true); }
                         if run.style.strikethrough { r = r.strike(true); }
                         if run.style.highlight { r = r.highlight("yellow"); }
@@ -2508,6 +2509,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if !run.style.italic && run.style.upright { r = r.italic(false); }
             if run.style.italic { r = r.italic(true); }
             if run.style.caps { r = r.all_caps(true); }
+            if run.style.kerned { r.set_kern_value(Some(1.0)); }
             if run.style.underline { r = r.underline(true); }
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
@@ -3444,6 +3446,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
                 // Not italic in a heading, which may be drawn italic.
                 upright: heading.is_some() && r.italic_value().or(eff.italic) == Some(false),
+                // Any threshold: Writer kerns whatever the size. A heading
+                // takes its style's (Heading 1's 16pt).
+                kerned: r.kern().or_else(|| doc.resolve_run_properties(p.style_id(), r.style_id()).kern.map(|k| k.to_pt())).is_some_and(|k| k > 0.0),
                 caps: r.all_caps_value().unwrap_or(eff.caps == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
