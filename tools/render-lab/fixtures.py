@@ -677,6 +677,25 @@ def tables():
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
+    # Reduced from the Contents sheet of the DPA return (#1330): Calc's
+    # printed page is smaller than the editor's unscaled grid. Keep this
+    # independent of hyperlinks, hidden rows, merges and workbook selection.
+    wb, ws = book()
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.scale = 62
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = "A1:D8"
+    for col in "ABCD":
+        ws.column_dimensions[col].width = 35
+    ws["A1"] = "A wide worksheet heading reaches the final column"
+    ws["A1"].font = Font(name="Arial", size=28)
+    for row in range(3, 9):
+        ws.row_dimensions[row].height = 24
+        for col in range(1, 5):
+            ws.cell(row, col, f"Row {row} column {col}")
+    save(wb, "print-fit-page", "A wide landscape A4 worksheet fitted to one printed page, with a 62% stored print scale")
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
