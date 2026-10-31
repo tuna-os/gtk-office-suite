@@ -49,6 +49,14 @@ lower the claim's status or relax the rule. A lane the rule watches that no
 claim cites is also refused, so the check cannot pass by having nothing to
 check.
 
+`publish-flatpak.yml` waits for both this revision check and the candidate
+soak before publishing, whether started by a tag push or a manual dispatch
+with `publish` enabled. Both must succeed; skipped or cancelled gates are
+not a pass. A manual dispatch with `publish` disabled is build-only and
+skips these gates. These two gates alone do not establish the full release
+signoff: the remaining candidate-specific checks and evidence are tracked in
+[`readiness-2026-09/release.md`](readiness-2026-09/release.md).
+
 The same workflow's `release-critical-tests` job re-runs the lanes marked
 `runs_on_candidate` in `conformance/lanes.json` (the Rust workspace and the
 release-critical journeys) at the release revision and validates with
