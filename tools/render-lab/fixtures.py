@@ -14,6 +14,7 @@ Usage: fixtures.py <out-dir>
 
 import json
 import os
+import re
 import sys
 
 from PIL import Image, ImageDraw
@@ -155,6 +156,7 @@ def letters(img):
     from docx import Document
     from docx.enum.section import WD_ORIENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+    from docx.oxml import parse_xml
     from docx.shared import Inches, Pt, RGBColor
 
     d = os.path.join(OUT, "letters")
@@ -378,6 +380,40 @@ def letters(img):
     x.add_paragraph("Level two", style="List Bullet 2")
     x.add_paragraph("Level three", style="List Bullet 3")
     save(x, "nested-list", "Three bullet levels, each further indented")
+
+    # Reduced from real-dcms-business-appointment-rules-between-october (#1364):
+    # In bulleted list items where numbering specifies a symbol font (such as
+    # Noto Sans Symbols with a black circle bullet '●'), LibreOffice Writer
+    # treats the bullet marker as an inline run on the first line, expanding
+    # line height to fit the symbol font's large vertical metrics (~24.75pt / 33px for 12pt).
+    # Wrapped continuation lines (plain 12pt body text) have normal line height
+    # (~14.25pt / 19px). In Letters, paragraph line heights are sized solely from
+    # body text runs, ignoring the bullet marker's font metrics, which loses the
+    # first-line height expansion and causes cumulative vertical displacement.
+    x = doc()
+    x.add_paragraph("Introductory paragraph before the bullet list.")
+    x.add_paragraph(
+        "Transparency about the advice given on individual applications under the "
+        "Business Appointment Rules helps to ensure compliance.",
+        style="List Bullet",
+    )
+    x.add_paragraph(
+        "Published information should include the full name of the applicant, former "
+        "Civil Service role, new employment, and department decision.",
+        style="List Bullet",
+    )
+    x.add_paragraph("Following paragraph after the bullet list verifying subsequent position.")
+    for part in x.part.package.parts:
+        if "numbering" in part.partname:
+            xml = part.blob.decode("utf-8")
+            xml_patched = re.sub(
+                r'(<w:lvl [^>]*w:ilvl="0"[^>]*>.*?<w:lvlText [^>]*w:val=")[^"]*(".*?<w:rFonts [^>]*w:ascii=")[^"]*("[^>]*w:hAnsi=")[^"]*(")',
+                r"\g<1>●\g<2>Noto Sans Symbols\g<3>Noto Sans Symbols\g<4>",
+                xml,
+                flags=re.S,
+            )
+            part._element = parse_xml(xml_patched.encode("utf-8"))
+    save(x, "bullet-symbol-font-line-height", "A bullet list using Noto Sans Symbols: the symbol font glyph expands first-line height")
 
     x = doc()
     t = x.add_table(rows=3, cols=3)
