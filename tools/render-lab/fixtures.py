@@ -655,7 +655,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -664,7 +664,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -674,6 +674,96 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from Draft schedule 4 - complaint log (#1327):
+    # a 3-column unheaded worksheet with wide columns (widths 60, 101, 180)
+    # totaling 341 character units (~2,389 px) paginates horizontally across
+    # multiple A4 pages in LibreOffice Calc (Col A on page 1, Col B on page 2,
+    # Col C on page 3) when headings are disabled, while Tables renders the
+    # continuous used extent in its viewport (showing Col A and Col B side-by-side).
+    # In compare.py, candidate page picking chooses page 1 only and align() skips
+    # cropping on-screen header bands (ox=40, oy=20), compressing both Col A and
+    # Col B onto page 1's bounds, yielding scale 1.66×, displacement 25.7pt,
+    # and SSIM 0.13.
+    wb, ws = book()
+    ws.title = "Actionable Complaints"
+    ws.column_dimensions["A"].width = 60
+    ws.column_dimensions["B"].width = 101
+    ws.column_dimensions["C"].width = 180
+
+    title_cell = ws.cell(1, 1, "Log of Actionable Complaints")
+    title_cell.font = Font(name="Arial", size=14, bold=True)
+
+    headers = ["Field", "Options", "Notes"]
+    header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(3, col_idx, h)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+        cell.fill = header_fill
+
+    complaint_rows = [
+        (
+            "Reference",
+            "Text and/or numerical field",
+            "For Veterinary Business use as needed. This field does not need to be included if the Complaint Log is submitted to RCVS.",
+        ),
+        ("Practice name", "Text field", ""),
+        ("Veterinary Business name", "Text field", ""),
+        (
+            "Pet Owner name",
+            "Text field",
+            "Field to be anonymised if Complaint Log shared with the RCVS",
+        ),
+        (
+            "Complaint handler name",
+            "Text field",
+            "Field to be anonymised if Complaint Log shared with the RCVS",
+        ),
+        ("Date the complaint became an Actionable Complaint", "Date field", ""),
+        ("Date the Actionable Complaint was acknowledged in writing", "Date field", ""),
+        (
+            "Summary of the Actionable Complaint",
+            "Text field",
+            "For Veterinary Business use as needed. This field does not need to be included if the Complaint Log is submitted to the RCVS.",
+        ),
+        (
+            "Nature of the Actionable Complaint category",
+            "Select one or two options only from a pre-defined list (see Lookups tab)",
+            "Nature of the Actionable Complaint - Veterinary Business interpretation of the Pet Owner concerns. This field can be updated as the Veterinary Business progresses through its Complaint Process.",
+        ),
+        (
+            "Sub nature of the Actionable Complaint",
+            "Select one or two options only per nature of actionable complaint category from a pre-defined list (see Lookups tab)",
+            "Sub-nature of the Actionable Complaint - Veterinary Business interpretation of the Pet Owner concerns. This field can be updated as the Veterinary Business progresses through its Complaint Process.",
+        ),
+        ("Animal species", "Select one from pre-defined list (see Lookups tab)", ""),
+        ("Animal age", "Numerical field", ""),
+        (
+            "Animal alive",
+            "Select one of alive or deceased.",
+            "Animal alive or deceased to be recorded at the point at which the complaint becomes an Actionable Complaint.",
+        ),
+        ("Steps taken by Veterinary Business to investigate the complaint", "Text field", ""),
+        ("Date the final response to the Actionable Complaint was issued", "Date field", ""),
+        ("Outcome", "Select one or more from a pre-defined list (see Lookups tab)", ""),
+        ("Actions taken by the practice/Veterinary Business", "Select one or more from a pre-defined list (see Lookups tab)", ""),
+    ]
+
+    for r_idx, (field, options, notes) in enumerate(complaint_rows, start=4):
+        c1 = ws.cell(r_idx, 1, field)
+        c1.font = Font(name="Calibri", size=11, bold=True)
+        c2 = ws.cell(r_idx, 2, options)
+        c2.font = Font(name="Calibri", size=11)
+        if notes:
+            c3 = ws.cell(r_idx, 3, notes)
+            c3.font = Font(name="Calibri", size=11)
+
+    save(
+        wb,
+        "wide-unheaded-complaint-log",
+        "A 3-column unheaded complaint log worksheet with wide columns (60, 101, 180) spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
