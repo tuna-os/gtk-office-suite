@@ -17,3 +17,8 @@ gettext-rs = { version = "0.8", features = ["gettext-system"] }
 # As one codegen unit it has no locals to promote.
 [profile.release.package.ironcalc_base]
 codegen-units = 1
+
+# Temporary security backports for collaboration (#1043); see vendor/README.md.
+[patch.crates-io]
+loro-internal = { path = "vendor/loro-internal" }
+serde_columnar = { path = "vendor/serde_columnar" }
