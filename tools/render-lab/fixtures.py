@@ -741,6 +741,21 @@ def tables():
     save(wb, "merged", "One merged block spanning A1:C2 with centred text and no inner gridlines")
 
     wb, ws = book()
+    thin = Side(style="thin")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for r in range(2, 5):
+        for c in range(2, 5):
+            ws.cell(r, c).border = box
+    ws["B2"] = "Merged with borders"
+    ws.merge_cells("B2:D4")
+    ws["B2"].alignment = Alignment(horizontal="center", vertical="center")
+    save(
+        wb,
+        "merged-borders",
+        "A 3x3 merged block B2:D4 with cell borders: only the perimeter is drawn, no inner borders",
+    )
+
+    wb, ws = book()
     ws["A1"] = "This long text wraps inside a narrow cell"
     ws["A1"].alignment = Alignment(wrap_text=True)
     ws.column_dimensions["A"].width = 12

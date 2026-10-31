@@ -117,7 +117,7 @@ on screen while you work, are catching up, and are now measured:
 | App | Single-feature fixtures, Tiers A and B | Real documents | Shipped Flatpak (Tier C) | Status |
 |---|---|---|---|---|
 | **Letters** | 37 / 38 green + `letters/table` (accepted amber) | 19 / 30 green | 30 / 68 green | Not yet usable for everyday documents |
-| **Tables** | 17 / 21 green + `tables/wrap-text` (accepted amber); not green: `tables/chart-multi`, `tables/filtered`, `tables/wrap-merged` | 0 / 30 green | 14 / 51 green | Not yet usable for everyday documents |
+| **Tables** | 18 / 22 green + `tables/wrap-text` (accepted amber); not green: `tables/chart-multi`, `tables/filtered`, `tables/wrap-merged` | 1 / 30 green | 15 / 52 green | Not yet usable for everyday documents |
 | **Decks** | 17 / 18 green; not green: `decks/pay-centre-reduced-line-breaks` | 1 / 30 green | 10 / 48 green | Not yet usable for everyday documents |
 <!-- render-status:end -->
 

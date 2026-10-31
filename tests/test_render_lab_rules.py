@@ -270,5 +270,60 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class DetachedFooterAndUnprintedHeadingsTest(unittest.TestCase):
+    """Spreadsheets may omit printed headings and print detached page footers (#1335)."""
+
+    def setUp(self):
+        import compare
+
+        self.compare = compare
+
+    def test_trim_detached_footer_removes_footer_separated_by_large_gap(self):
+        im = Image.new("RGB", (100, 200), (255, 255, 255))
+        arr = np.asarray(im).copy()
+        arr[20:60, 10:90] = 0
+        arr[185:192, 10:90] = 0
+        im_footer = Image.fromarray(arr)
+        trimmed = self.compare.trim_detached_footer(im_footer)
+        self.assertEqual(trimmed.height, 60)
+
+    def test_trim_detached_footer_preserves_page_without_footer(self):
+        im = Image.new("RGB", (100, 200), (255, 255, 255))
+        arr = np.asarray(im).copy()
+        arr[20:150, 10:90] = 0
+        arr[185:192, 10:90] = 0
+        im_nogap = Image.fromarray(arr)
+        trimmed = self.compare.trim_detached_footer(im_nogap)
+        self.assertEqual(trimmed.height, 200)
+
+    def test_align_removes_screen_headings_when_box_is_none(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            lo_p = os.path.join(d, "lo-1.png")
+            ours_p = os.path.join(d, "A-1.png")
+
+            # lo without headings frame (box is None)
+            im_lo = Image.new("RGB", (100, 100), (255, 255, 255))
+            arr_lo = np.asarray(im_lo).copy()
+            arr_lo[10:90, 10:90] = 0
+            Image.fromarray(arr_lo).save(lo_p)
+
+            # ours with screen header bands ox=40, oy=20
+            im_ours = Image.new("RGB", (140, 120), (255, 255, 255))
+            im_ours.paste((240, 240, 240), (0, 0, 140, 20))
+            im_ours.paste((240, 240, 240), (0, 0, 40, 120))
+            arr_ours = np.asarray(im_ours).copy()
+            arr_ours[30:110, 50:130] = 0
+            Image.fromarray(arr_ours).save(ours_p)
+
+            ref, ours, scale = self.compare.align("tables", lo_p, ours_p)
+            self.assertIsNotNone(scale)
+            # Both padded by 8px around 80x80 content
+            self.assertEqual(ref.size, ours.size)
+
+
 if __name__ == "__main__":
     unittest.main()
