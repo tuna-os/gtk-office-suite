@@ -107,12 +107,12 @@ EXPORT = {
     "tables/chart-scatter",
     "tables/conditional",
 }
-# NOTE (tables/chart-pie, documented amber): both-green on screenshots;
-# export sits in the amber band on Tesseract exact-match noise, not an
-# exporter gap — the Q4 legend glyph OCRs as "ma" in LibreOffice's PDF vs
-# "mq4" in ours (pixels equivalent), so word recall is 0.833 < 0.90 with
-# lost_lines 0. Same class as the letters/nested-list amber; covering it
-# keeps every eligible fixture inside the ratchet instead of outside it.
+# NOTE (tables/chart-pie): both-green on screenshots; its export sat in the
+# amber band on Tesseract exact-match noise, not an exporter gap — the Q4
+# legend glyph OCRs as "ma" in LibreOffice's PDF vs "mq4" in ours (pixels
+# equivalent). "ma" is in no text layer, so the scorer now leaves it out
+# (compare.mark_printed) and the export is green, as the letters ones
+# below are.
 #
 # NOTE (letters/nested-list #1127, letters/super-subscript #1115): their
 # export pixels always agreed with LibreOffice's (SSIM 0.9992 / 1.0000, 4x
