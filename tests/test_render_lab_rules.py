@@ -270,5 +270,52 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import docx
+except ImportError:
+    docx = None
+
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableCellContentControlFixtureTest(unittest.TestCase):
+    """The Tier 2/3 notification reduction isolates cell-level structured
+    document tags (w:sdt wrapping w:tc in w:tr) in Letters (#1359)."""
+
+    def test_table_cell_content_control_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-cell-content-control")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-cell-content-control.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 3)
+            self.assertEqual(table.cell(0, 0).paragraphs[0].text, "Date of activity")
+            self.assertEqual(table.cell(1, 0).paragraphs[0].text, "General Licence")
+            self.assertEqual(table.cell(2, 0).paragraphs[0].text, "Description of activity")
+
+            # Check raw XML in the file for w:sdt containing w:tc
+            with zipfile.ZipFile(Path(tmp_path) / entry["file"]) as z:
+                xml = z.read("word/document.xml").decode("utf-8")
+                self.assertIn("<w:sdt>", xml)
+                self.assertIn("<w:sdtContent>", xml)
+                self.assertIn("Click or tap to enter a date.", xml)
+                self.assertIn("Choose an item.", xml)
+
+
 if __name__ == "__main__":
     unittest.main()
