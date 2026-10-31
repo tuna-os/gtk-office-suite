@@ -47,6 +47,11 @@ impl Default for PangoShaper {
     }
 }
 
+/// `pt` to the nearest twip (1/20pt), Writer's layout unit.
+fn twips(pt: f64) -> f64 {
+    (pt * 20.0).round() / 20.0
+}
+
 /// A family as Pango is asked for it: a fixed-pitch East Asian face
 /// (MS Gothic and its kin) falls back to the monospace face where it is
 /// not installed, as Writer substitutes it by its pitch. The opt-out
@@ -481,6 +486,13 @@ impl Shaper for PangoShaper {
             let (up, down) = on.fold((0.0f64, 0.0f64), |(u, d), &(_, _, pt)| (u.max(pt), d.max(-pt)));
             l.ascent_pt += up;
             l.descent_pt += down;
+            // Writer lays a line out in whole twips: its height is rounded
+            // to the nearest 1/20pt (Inter 12pt: 290.4 twips drawn 14.5pt,
+            // Carlito 11pt: 268.6 drawn 13.45pt). Unrounded, a page of
+            // 12pt Inter ran 0.02pt a line long, and the audit-committee
+            // minutes' 7.1 missed the foot of page 2 by 0.29pt.
+            let height = l.ascent_pt + l.descent_pt;
+            l.descent_pt += twips(height) - height;
         }
         lines
     }
@@ -1702,6 +1714,35 @@ mod tests {
             carried += lines.iter().skip(1).filter(|l| chars[l.start] == '\t').count();
         }
         assert!(carried > 0, "no placement carried the tab to the next line");
+    }
+
+    /// A line is a whole number of twips tall, rounded as Writer rounds it:
+    /// 10pt DejaVu Sans (232.8 twips) is drawn 11.65pt, as LibreOffice
+    /// spaces its lines.
+    #[test]
+    fn a_line_is_a_whole_number_of_twips() {
+        let opts = LayoutOptions::default();
+        let mut shaper = PangoShaper::new();
+        let style = crate::model::RunStyle { font_family: Some("DejaVu Sans".into()), font_size_hp: Some(20), ..Default::default() };
+        let runs = [Run { text: "word ".repeat(80), style }];
+        let req = ShapeRequest {
+            runs: &runs,
+            heading: None,
+            code: false,
+            look: Look::Body,
+            alignment: Alignment::Left,
+            width_pt: 300.0,
+            first_line_indent_pt: 0.0,
+            tab_stops: Vec::new(),
+            right_tab: false,
+            defaults: &opts,
+        };
+        let lines = Shaper::shape(&mut shaper, &req);
+        assert!(lines.len() > 2);
+        for l in &lines {
+            let h = l.ascent_pt + l.descent_pt;
+            assert!((h - 11.65).abs() < 1e-9, "{h}");
+        }
     }
 
     /// A paragraph holding only a floating picture or text box is as tall
