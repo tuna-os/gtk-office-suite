@@ -39,6 +39,48 @@ class ReadmeStatusGate(unittest.TestCase):
             v = rs.load(baseline=base, baseline_real=real)
         self.assertEqual(rs.app_row("decks", v)[1], "0 / 1 green")
 
+    def test_partial_summary_does_not_borrow_or_omit_baseline_verdicts(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            base = os.path.join(d, "baseline.json")
+            real = os.path.join(d, "baseline-real.json")
+            summary = os.path.join(d, "summary.json")
+            with open(base, "w") as f:
+                json.dump({"decks/a": green("A", "B", "C"),
+                           "decks/b": green("A", "B", "C")}, f)
+            with open(real, "w") as f:
+                json.dump({"decks/real-pitch": green("A", "B", "C")}, f)
+            with open(summary, "w") as f:
+                json.dump({"fixtures": [{"fixture": "decks/a", "verdicts": green("A", "B", "C")},
+                                       {"fixture": "decks/real-pitch", "verdicts": green("A", "B", "C")},
+                                       {"fixture": "decks/new", "verdicts": green("A", "B", "C")}]}, f)
+            v = rs.load(summary, baseline=base, baseline_real=real)
+            self.assertEqual(v["decks/b"], {})
+            self.assertEqual(v["decks/new"], green("A", "B", "C"))
+            cell, _, c, status = rs.app_row("decks", v)
+            self.assertIn("not green: `decks/b`", cell)
+            self.assertEqual(c, "3 / 4 green")
+            self.assertNotEqual(status, USABLE)
+
+            # A complete run may promote, but an omitted tier may not use
+            # the green value from the baseline.
+            with open(summary, "w") as f:
+                json.dump({"fixtures": [{"fixture": k, "verdicts": green("A", "B", "C")}
+                                        for k in ("decks/a", "decks/b", "decks/real-pitch")]}, f)
+            self.assertEqual(rs.app_row("decks", rs.load(summary, base, real))[3], USABLE)
+            # A single-feature-only run must not inherit real-document greens.
+            with open(summary, "w") as f:
+                json.dump({"fixtures": [{"fixture": k, "verdicts": green("A", "B", "C")}
+                                        for k in ("decks/a", "decks/b")]}, f)
+            _, real_cell, _, status = rs.app_row("decks", rs.load(summary, base, real))
+            self.assertEqual(real_cell, "0 / 1 green")
+            self.assertNotEqual(status, USABLE)
+            with open(summary, "w") as f:
+                json.dump({"fixtures": [{"fixture": k, "verdicts": green("A", "B")}
+                                        for k in ("decks/a", "decks/b", "decks/real-pitch")]}, f)
+            self.assertNotEqual(rs.app_row("decks", rs.load(summary, base, real))[3], USABLE)
+
     def test_single_feature_green_alone_is_not_usable(self):
         v = {"decks/a": green("A", "B"), "decks/b": green("A", "B")}
         cell, real, c, status = rs.app_row("decks", v)
