@@ -3182,11 +3182,13 @@ fn paragraph_numbering(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Op
 
 /// A directly numbered list paragraph's indent, as the model keeps it: the
 /// declared left edge of its text (the paragraph's own `w:ind`, else its
-/// numbering level's) less the list indent the layout adds for its level.
-/// The writer declares exactly `left_indent + text_indent(level)`, so its
-/// own lists come back as written; a Word toolbar list (0.5in per level)
-/// keeps the extra depth it is drawn with in Word and LibreOffice. A list's
-/// hanging indent is the list's own, not a first-line indent.
+/// numbering level's, else its paragraph style's) less the list indent the layout
+/// adds for its level. The writer declares exactly `left_indent + text_indent(level)`,
+/// so its own lists come back as written; a Word toolbar list (0.5in per level)
+/// keeps the extra depth it is drawn with in Word and LibreOffice. A numbering
+/// level's indent overrides the style's (Word's ListParagraph sets w:left="720",
+/// but a form's numbering level like BP15 sets w:left="567" w:hanging="567").
+/// A list's hanging indent is the list's own, not a first-line indent.
 ///
 /// Paragraphs numbered through a built-in list style ("List Bullet") are
 /// left alone: those styles' 0.25in levels are what the layout already
@@ -3217,10 +3219,13 @@ fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>,
     // Left of the list's own indent as far as the margin.
     style.left_indent_pt = (declared - text).max(-text);
     // The marker hangs as far as the paragraph says, else its level.
-    let hanging = if style.first_line_indent_pt < 0.0 {
-        Some(-style.first_line_indent_pt)
-    } else {
-        level_indents(doc, num_id, level).1
+    let own_hanging = p.first_line_indent().map(|l| l.to_pt()).filter(|&f| f < 0.0).map(|f| -f);
+    let of_style_hanging = (style.first_line_indent_pt < 0.0).then_some(-style.first_line_indent_pt);
+    let of_level_hanging = level_indents(doc, num_id, level).1;
+    let hanging = match own_hanging {
+        Some(h) => Some(h),
+        None if direct => of_level_hanging.or(of_style_hanging),
+        None => of_style_hanging.or(of_level_hanging),
     };
     style.list_hanging_pt = hanging.filter(|h| h.is_finite() && *h > 0.0 && (h - crate::lists::HANGING_PT).abs() > 0.5);
     if style.first_line_indent_pt < 0.0 {

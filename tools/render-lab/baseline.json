@@ -206,6 +206,11 @@
     "B": "green",
     "C": "green"
   },
+  "letters/numbering-level-indent": {
+    "A": "green",
+    "B": "green",
+    "C": "green"
+  },
   "letters/page-break": {
     "A": "green",
     "B": "green",
