@@ -678,6 +678,26 @@ def tables():
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
     wb, ws = book()
+    # #1352: the reservoir list's reference PDF splits a wide sheet across
+    # pages, while the editor capture includes columns from the next page.
+    # Keep text, rows and styles trivial so this measures horizontal paging.
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.scale = 100
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    for col, label in zip("ABCDEF", ("First", "Second", "Third", "Fourth", "Fifth", "Sixth")):
+        ws.column_dimensions[col].width = 22
+        ws[f"{col}1"] = label
+        ws[f"{col}2"] = "Page boundary probe"
+    ws.print_area = "A1:F2"
+    save(
+        wb,
+        "horizontal-pagination",
+        "A wide sheet at 100% scale splits across portrait A4 pages; "
+        "columns on later pages must not be squeezed into the first page",
+    )
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
