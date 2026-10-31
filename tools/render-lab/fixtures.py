@@ -756,6 +756,33 @@ def tables():
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
+    # Reduced from HMT Annual Report and Accounts Core Tables (#1351): a single
+    # sheet with 74 rows prints across two vertical A4 pages in LibreOffice
+    # Calc when headings are disabled, while Tables captures the entire
+    # continuous used extent. In compare.py, candidate page picking chooses only
+    # page 1 and align() compresses all rows into the first page, resulting in
+    # a 1.33× scale squash, 80pt vertical displacement, and low SSIM.
+    wb, ws = book()
+    ws["A1"] = "HM Treasury Core Financial Summary"
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True)
+    headers = ["Category", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(3, c, h)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+    ws.column_dimensions["A"].width = 30
+    for c in "BCDEF":
+        ws.column_dimensions[c].width = 14
+    for r in range(4, 75):
+        ws.cell(r, 1, f"Programme expenditure line {r - 3:02d}")
+        for c in range(2, 7):
+            ws.cell(r, c, (r * 100) + c * 7)
+    save(
+        wb,
+        "tall-unprinted-sheet",
+        "A 74-row sheet without printed headings that spans multiple vertical pages in Calc; isolates continuous viewport vs paginated print comparison",
+        headings=False,
+    )
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
