@@ -53,6 +53,21 @@ class EraseRulesTest(unittest.TestCase):
         self.assertTrue((out[10:18, 10:18] == 255).all())
         self.assertTrue((out[40:48, 10:18] == 0).all())
 
+    def test_a_dark_purple_legend_key_goes_but_grey_stays(self):
+        self.g[10:18, 10:18] = 115
+        self.rgb[10:18, 10:18] = (128, 100, 162)  # chart-pie Q4
+        self.g[40:48, 10:18] = 100
+        self.rgb[40:48, 10:18] = (100, 100, 100)
+        out = self.erased()
+        self.assertTrue((out[10:18, 10:18] == 255).all())
+        self.assertTrue((out[40:48, 10:18] == 100).all())
+
+    def test_coloured_glyph_strokes_stay(self):
+        self.g[10:18, 10:12] = 115
+        self.g[16:18, 10:18] = 115
+        self.rgb[10:18, 10:18] = (128, 100, 162)
+        self.assertTrue((self.erased() == self.g).all())
+
 
 @unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
 class BlankRulesTest(unittest.TestCase):

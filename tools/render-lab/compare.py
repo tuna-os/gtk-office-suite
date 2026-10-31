@@ -337,7 +337,10 @@ def erase_keys(out, ink, rgb):
     coloured (saturated), square or round, solid blob counts: text is
     black or grey, or thin-stroked if coloured, and never that solid."""
     rgbf = rgb.astype(np.float32)
-    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / 255.0
+    # HSV saturation measures chroma relative to brightness. Dividing by
+    # 255 instead misses dark colours such as the purple Q4 legend key
+    # (128, 100, 162), which OCR then joins to the label as "ma".
+    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / np.maximum(rgbf.max(axis=2), 1)
     h, w = ink.shape
     seen = np.zeros_like(ink)
     for y, x in zip(*np.nonzero(ink)):
