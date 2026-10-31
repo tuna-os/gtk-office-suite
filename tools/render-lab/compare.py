@@ -85,7 +85,7 @@ TIER_AGREE = 3.0  # grey levels; measured 0.0-0.3 when the tiers agree
 
 # ── image helpers ─────────────────────────────────────────────────────────
 def load(path, size=None):
-    img = Image.open(path).convert("RGB")
+    img = path if isinstance(path, Image.Image) else Image.open(path).convert("RGB")
     if size and img.size != size:
         img = img.resize(size, Image.LANCZOS)
     return img
@@ -120,6 +120,18 @@ def long_lines(mask, axis):
         else:
             groups.append([i, i])
     return [tuple(g) for g in groups]
+
+
+def is_monochrome_rule(arr, idx, axis):
+    """Whether a line detected by long_lines is a neutral grey/black rule
+    (as cell borders and frames are) rather than a coloured decoration
+    such as a hyperlink underline."""
+    line = arr[idx, :, :] if axis == 1 else arr[:, idx, :]
+    dark = line[line.mean(axis=1) < 128]
+    if not len(dark):
+        return False
+    spread = dark.max(axis=1).astype(int) - dark.min(axis=1).astype(int)
+    return int(np.median(spread)) <= 15
 
 
 def lo_cell_box(ref):
@@ -658,6 +670,28 @@ def align(app, lo_path, ours_path):
     if box and 0 < ox < ours.width and 0 < oy < ours.height:
         ref = ref.crop(box)
         ours = ours.crop((ox, oy, ours.width, ours.height))
+    elif box is None and 0 < ox < ours.width and 0 < oy < ours.height:
+        # Published sheets need not print headings. The reference above is
+        # then an ink bounding box, not a framed used range. Remove our
+        # screen headings and crop to ink too, or their labels and the
+        # unused cell padding get stretched into the document (#1348, #1341).
+        cells = ours.crop((ox, oy, ours.width, ours.height))
+        arr_ref = np.asarray(ref)
+        dark_ref = np.asarray(ref.convert("L")) < 128
+        r_lines = long_lines(dark_ref, axis=1)
+        c_lines = long_lines(dark_ref, axis=0)
+        mono_rows = [r for r in r_lines if is_monochrome_rule(arr_ref, r[0], axis=1)]
+        mono_cols = [c for c in c_lines if is_monochrome_rule(arr_ref, c[0], axis=0)]
+        ruled = bool(mono_rows or mono_cols)
+        # Partial borders are not a heading frame, and a viewport cut
+        # through text need not contain the printed page's whole range.
+        # Neither gives us corresponding ink boxes to align.
+        dark_cells = np.asarray(cells.convert("L")) < 128
+        ys_d, xs_d = np.nonzero(dark_cells)
+        complete = len(xs_d) and xs_d.max() < cells.width - 1 and ys_d.max() < cells.height - 1
+        if complete and not ruled:
+            ours = cells.crop((xs_d.min(), ys_d.min(), xs_d.max() + 1, ys_d.max() + 1))
+            scale = (ours.width / ref.width + ours.height / ref.height) / 2
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
@@ -755,6 +789,101 @@ def pick_sheet_page(lo_pages, ours_path):
     return best
 
 
+def stitch_horizontal_tiles(tiles):
+    """Combine horizontal continuation pages of a wide spreadsheet into
+    a single reference image side-by-side, aligning their shared vertical
+    band."""
+    if len(tiles) <= 1:
+        return tiles[0] if tiles else None
+    ymins, ymaxs = [], []
+    for t in tiles:
+        y, _ = np.nonzero(ink_mask(np.asarray(t)))
+        if len(y):
+            ymins.append(y.min())
+            ymaxs.append(y.max())
+    if not ymins:
+        return tiles[0]
+    ymin, ymax = min(ymins), max(ymaxs)
+    crops = []
+    for t in tiles:
+        _, x = np.nonzero(ink_mask(np.asarray(t)))
+        if len(x):
+            crops.append(t.crop((x.min(), ymin, x.max() + 1, ymax + 1)))
+        else:
+            crops.append(t)
+    total_w = sum(c.width for c in crops)
+    h = ymax - ymin + 1
+    stitched = Image.new("RGB", (total_w, h), (255, 255, 255))
+    cur_x = 0
+    for c in crops:
+        stitched.paste(c, (cur_x, 0))
+        cur_x += c.width
+    return stitched
+
+
+def collect_sheet_tiles(lo_pages, best, ours_path):
+    """If the opening sheet was printed across multiple horizontal pages
+    in LibreOffice (because its width exceeds a single page), collect the
+    consecutive horizontal continuation tiles that correspond to our
+    continuous grid capture."""
+    if len(lo_pages) <= 1:
+        return [best]
+    try:
+        ours = load(ours_path)
+    except Exception:
+        return [best]
+    idx = lo_pages.index(best)
+    ox, oy = our_cell_origin(ours)
+    cells = ours.crop((ox, oy, ours.width, ours.height)) if 0 < ox < ours.width and 0 < oy < ours.height else ours
+
+    tiles = [best]
+    while idx + 1 < len(lo_pages):
+        next_p = lo_pages[idx + 1]
+        try:
+            r1 = load(tiles[0])
+            r2 = load(next_p)
+        except Exception:
+            break
+        y1, x1 = np.nonzero(ink_mask(np.asarray(r1)))
+        y2, x2 = np.nonzero(ink_mask(np.asarray(r2)))
+        if not len(y1) or not len(y2):
+            break
+        h1 = y1.max() - y1.min() + 1
+        h2 = y2.max() - y2.min() + 1
+        w2 = x2.max() - x2.min() + 1
+
+        v_overlap = max(0, min(y1.max(), y2.max()) - max(y1.min(), y2.min()))
+        rel_overlap = v_overlap / min(h1, h2)
+        top_diff = abs(y1.min() - y2.min())
+        bot_diff = abs(y1.max() - y2.max())
+
+        w_cur = 0
+        for t in tiles:
+            _, xt = np.nonzero(ink_mask(np.asarray(load(t))))
+            w_cur += (xt.max() - xt.min() + 1)
+        if cells.width <= w_cur:
+            break
+        scale_cur = cells.width / w_cur
+        scale_next = cells.width / (w_cur + w2)
+
+        if (rel_overlap >= 0.85 and
+            top_diff <= max(20, int(0.15 * min(h1, h2))) and
+            bot_diff <= max(20, int(0.15 * min(h1, h2))) and
+            abs(scale_next - 1.0) < abs(scale_cur - 1.0)):
+            if shutil.which("tesseract"):
+                ours_bag = page_bag(ours_path)
+                next_bag = page_bag(next_p)
+                if ours_bag and next_bag:
+                    shared = sum((ours_bag & next_bag).values())
+                    if shared / max(1, sum(next_bag.values())) < 0.4:
+                        break
+            tiles.append(next_p)
+            idx += 1
+        else:
+            break
+    return tiles
+
+
 def score_fixture(app, d, tier, ref_words_cache):
     lo_pages = sorted(glob.glob(os.path.join(d, "lo-[0-9]*.png")), key=page_no)
     ours_pages = sorted(glob.glob(os.path.join(d, f"{tier}-[0-9]*.png")), key=page_no)
@@ -769,6 +898,7 @@ def score_fixture(app, d, tier, ref_words_cache):
     # picture.
     partial = tier == "B" or app == "tables"
     lo_page = None
+    sheet_tiles = None
     if app == "tables" and len(ours_pages) == 1 and len(lo_pages) > 1:
         # Tables opens the workbook's active sheet (as Excel and Calc do),
         # but LibreOffice prints every sheet from the first: a workbook
@@ -778,7 +908,11 @@ def score_fixture(app, d, tier, ref_words_cache):
         # words with it (then the most structure).
         best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
         lo_page = page_no(best)
-        lo_pages = [best]
+        sheet_tiles = collect_sheet_tiles(lo_pages, best, ours_pages[0])
+        if len(sheet_tiles) > 1:
+            lo_pages = [stitch_horizontal_tiles([load(p) for p in sheet_tiles])]
+        else:
+            lo_pages = [best]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
@@ -787,7 +921,7 @@ def score_fixture(app, d, tier, ref_words_cache):
             per_page.append({"ink": 0.0, "words": 0.0, "lost_lines": None, "disp_pt": None, "colors": 0.0, "ssim": 0.0, "ref_words": None})
             continue
         ref, ours, scale = align(app, lo, ours_pages[i])
-        key = (lo, ref.size)
+        key = (lo if isinstance(lo, str) else tuple(sheet_tiles or ()), ref.size)
         if key not in ref_words_cache:
             ref_words_cache[key] = reference_words(lo, ref, app)
         per_page.append(dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))

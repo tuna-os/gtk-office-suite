@@ -270,5 +270,114 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class HorizontalTilesTest(unittest.TestCase):
+    """Spreadsheets may span multiple horizontal pages when printed, or
+    omit printed headings (#1341)."""
+
+    def setUp(self):
+        import compare
+
+        self.compare = compare
+
+    def test_is_monochrome_rule(self):
+        # Black border
+        black = np.zeros((10, 100, 3), dtype=np.uint8)
+        self.assertTrue(self.compare.is_monochrome_rule(black, 0, 1))
+
+        # Grey border
+        grey = np.full((10, 100, 3), 100, dtype=np.uint8)
+        self.assertTrue(self.compare.is_monochrome_rule(grey, 0, 1))
+
+        # Blue hyperlink underline
+        blue = np.full((10, 100, 3), 255, dtype=np.uint8)
+        blue[5, :, :] = (0, 0, 128)
+        self.assertFalse(self.compare.is_monochrome_rule(blue, 5, 1))
+
+    def test_stitch_horizontal_tiles(self):
+        # Two tiles sharing vertical band y=10..50
+        im1 = Image.new("RGB", (100, 100), "white")
+        arr1 = np.asarray(im1).copy()
+        arr1[10:50, 20:60] = 0  # w=40, h=40
+        im1 = Image.fromarray(arr1)
+
+        im2 = Image.new("RGB", (100, 100), "white")
+        arr2 = np.asarray(im2).copy()
+        arr2[12:48, 10:70] = 0  # w=60, h=36, overlaps y=12..48
+        im2 = Image.fromarray(arr2)
+
+        stitched = self.compare.stitch_horizontal_tiles([im1, im2])
+        # Width should be 40 + 60 = 100
+        self.assertEqual(stitched.width, 100)
+        # Height should span min y (10) to max y (49): 49 - 10 + 1 = 40
+        self.assertEqual(stitched.height, 40)
+
+    def test_collect_sheet_tiles(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            p1 = os.path.join(d, "lo-1.png")
+            p2 = os.path.join(d, "lo-2.png")
+            p3 = os.path.join(d, "lo-3.png")
+            ours_p = os.path.join(d, "A-1.png")
+
+            # Page 1: left tile (w=50, h=60)
+            im1 = Image.new("RGB", (100, 150), "white")
+            a1 = np.asarray(im1).copy()
+            a1[20:80, 10:60] = 0
+            Image.fromarray(a1).save(p1)
+
+            # Page 2: right continuation tile (w=50, h=60, same vertical band)
+            im2 = Image.new("RGB", (100, 150), "white")
+            a2 = np.asarray(im2).copy()
+            a2[20:80, 10:60] = 0
+            Image.fromarray(a2).save(p2)
+
+            # Page 3: different sheet / vertical continuation (y=90..140)
+            im3 = Image.new("RGB", (100, 150), "white")
+            a3 = np.asarray(im3).copy()
+            a3[90:140, 10:60] = 0
+            Image.fromarray(a3).save(p3)
+
+            # Ours: wide capture (w=160) with headers ox=40, oy=20 -> cells w=120
+            ours_im = Image.new("RGB", (160, 100), "white")
+            ours_im.paste((240, 240, 240), (0, 0, 160, 20))
+            ours_im.paste((240, 240, 240), (0, 0, 40, 100))
+            a_ours = np.asarray(ours_im).copy()
+            a_ours[30:80, 50:140] = 0
+            Image.fromarray(a_ours).save(ours_p)
+
+            lo_pages = [p1, p2, p3]
+            tiles = self.compare.collect_sheet_tiles(lo_pages, p1, ours_p)
+            self.assertEqual(tiles, [p1, p2])
+
+    def test_align_unprinted_sheet_with_hyperlink_underline(self):
+        import tempfile
+
+        # Sheet without printed headings containing blue underline
+        ref = Image.new("RGB", (200, 100), "white")
+        ref_arr = np.asarray(ref).copy()
+        ref_arr[20:30, 20:80] = 0  # text
+        ref_arr[40, 20:180] = (0, 0, 128)  # long blue hyperlink underline (> 50% width)
+        ref = Image.fromarray(ref_arr)
+
+        ours = Image.new("RGB", (240, 120), "white")
+        ours.paste((240, 240, 240), (0, 0, 240, 20))
+        ours.paste((240, 240, 240), (0, 0, 40, 120))
+        ours_arr = np.asarray(ours).copy()
+        ours_arr[40:50, 60:120] = 0  # text
+        ours_arr[60, 60:220] = (0, 0, 128)
+        ours = Image.fromarray(ours_arr)
+
+        with tempfile.TemporaryDirectory() as d:
+            rp, op = os.path.join(d, "ref.png"), os.path.join(d, "ours.png")
+            ref.save(rp)
+            ours.save(op)
+            r, o, scale = self.compare.align("tables", rp, op)
+            # The blue underline should not trigger ruled=True, so unprinted headings
+            # alignment is used and scale is 1.0.
+            self.assertAlmostEqual(scale, 1.0, places=2)
+
+
 if __name__ == "__main__":
     unittest.main()

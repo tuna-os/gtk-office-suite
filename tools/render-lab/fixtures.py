@@ -655,7 +655,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -664,7 +664,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -674,6 +674,22 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    wb, ws = book()
+    ws["A1"] = "Available data"
+    ws["A1"].font = Font(name="Liberation Sans", size=18)
+    ws["A3"] = "Notes and details"
+    ws["B3"] = "Wide reference columns"
+    ws["C3"] = "Extended summary description across horizontal pages"
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 70
+    save(
+        wb,
+        "wide-unprinted-sheet",
+        "Wide sheet without printed headings split across horizontal pages in Calc; stitched into one reference for screen viewport alignment",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
