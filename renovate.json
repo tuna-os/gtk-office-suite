@@ -15,6 +15,21 @@
         "ubuntu"
       ],
       "allowedVersions": "<26"
+    },
+    {
+      "description": "Hold the rdocx family at 0.16.2 until the Letters adapters support 0.16.3, and group the eventual upgrade so incompatible partial updates are not proposed (#1725).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "rdocx",
+        "rdocx-html",
+        "rdocx-layout",
+        "rdocx-oxml"
+      ],
+      "allowedVersions": "<0.16.3",
+      "groupName": "rdocx family",
+      "groupSlug": "rdocx-family"
     }
   ]
 }
