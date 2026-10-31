@@ -85,4 +85,44 @@ mod tests {
             assert_eq!(Color::from_hex(&c.to_hex()), Some(c));
         }
     }
+
+    #[test]
+    fn rejects_a_non_hex_pair_in_an_otherwise_well_formed_colour() {
+        // Right length, wrong digits: every channel of RRGGBB, and the
+        // blue channel behind an AARRGGBB alpha byte.
+        assert_eq!(Color::from_hex("GG0000"), None);
+        assert_eq!(Color::from_hex("00GG00"), None);
+        assert_eq!(Color::from_hex("0000GG"), None);
+        assert_eq!(Color::from_hex("FF00GG00"), None);
+        // The ignored alpha byte is not a licence for a bad channel either.
+        assert_eq!(Color::from_hex("#00GG00"), None);
+    }
+
+    #[test]
+    fn trims_surrounding_space_and_drops_the_alpha_byte() {
+        assert_eq!(Color::from_hex("  4472C4  "), Some(Color(0x44, 0x72, 0xC4)));
+        assert_eq!(Color::from_hex("\t#4472C4\n"), Some(Color(0x44, 0x72, 0xC4)));
+        // Whatever the alpha byte says, the colour is its last three bytes.
+        assert_eq!(Color::from_hex("004472C4"), Some(Color(0x44, 0x72, 0xC4)));
+        assert_eq!(Color::from_hex("804472C4"), Some(Color(0x44, 0x72, 0xC4)));
+        assert_eq!(Color::from_hex("FF4472C4"), Some(Color(0x44, 0x72, 0xC4)));
+    }
+
+    #[test]
+    fn maps_black_and_white_to_the_channel_endpoints() {
+        assert_eq!(Color(0, 0, 0).to_f64(), (0.0, 0.0, 0.0));
+        assert_eq!(Color(255, 255, 255).to_f64(), (1.0, 1.0, 1.0));
+        assert_eq!(Color(0, 0, 0).to_u16(), (0, 0, 0));
+        assert_eq!(Color(255, 255, 255).to_u16(), (0xFFFF, 0xFFFF, 0xFFFF));
+    }
+
+    #[test]
+    fn round_trips_a_mixed_channel_colour_through_hex() {
+        assert_eq!(Color::from_hex("1A2B3C"), Some(Color(0x1A, 0x2B, 0x3C)));
+        assert_eq!(Color(0x1A, 0x2B, 0x3C).to_hex(), "1A2B3C");
+        assert_eq!(
+            Color::from_hex(&Color::from_hex("#1a2b3c").unwrap().to_hex()),
+            Some(Color(0x1A, 0x2B, 0x3C))
+        );
+    }
 }
