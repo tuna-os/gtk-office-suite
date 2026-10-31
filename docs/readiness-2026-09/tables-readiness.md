@@ -217,3 +217,19 @@ Work in this order; unchecked gates remain requirements, not claims:
 
 Dependencies: P0 save durability, #354, #374, #400. Exit: passing XLSX create/edit/save/reopen journeys and honest import/export capabilities for every offered extension; no unsupported format is silently overwritten.
 
+
+## UKHSA GPC stored row heights (#1324)
+
+The real workbook stores `ht="15.5"` on transaction rows without
+`customHeight`. Import now retains these heights (20.67 px at 96 DPI)
+instead of drawing each row at the 24 px grid default. The independent
+`tables/stored-row-heights` fixture reduces that source pattern to ten
+Arial 12 rows. A core import regression covers absent/false/true custom
+flags, hidden rows, invalid heights, and sheet isolation.
+
+Fixture generation and source XML checks passed. Rust tests could not run
+because the contributor host lacks a C linker; render-lab could not start
+because neither Podman nor Docker is available. The real document remains
+amber until a measured A/B run proves otherwise; horizontal print pagination
+and the full no-regression ratchet still need validation. Baselines are not
+changed without that evidence.
