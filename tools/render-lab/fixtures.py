@@ -645,8 +645,10 @@ def letters(img):
 
 
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
-def tables():
+def tables(img):
     from openpyxl import Workbook
+    from openpyxl.drawing.image import Image as SheetImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -676,6 +678,29 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from the missing NHS logo in real-nbs-chis-kpi-submission-template
+    # (#1337). Keep its twoCellAnchor/editAs=oneCell picture relationship,
+    # without the real workbook's print scaling, merges or rich text.
+    wb, ws = book()
+    for col in "ABCD":
+        ws.column_dimensions[col].width = 14
+    for row in range(1, 9):
+        ws.row_dimensions[row].height = 18
+    ws["A1"] = "Worksheet picture"
+    ws["D8"] = "End"
+    picture = SheetImage(img)
+    picture.anchor = TwoCellAnchor(
+        editAs="oneCell",
+        _from=AnchorMarker(col=1, row=1),
+        to=AnchorMarker(col=3, row=6),
+    )
+    ws.add_image(picture)
+    save(
+        wb, "worksheet-image",
+        "A red/green/blue/yellow four-quadrant picture anchored from B2 to D7, "
+        "between the Worksheet picture and End labels",
+    )
 
     wb, ws = book()
     pivot_rows = [
@@ -1163,7 +1188,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
-    tables()
+    tables(img)
     decks(img)
     with open(os.path.join(OUT, "manifest.json"), "w") as f:
         json.dump(MANIFEST, f, indent=2)
