@@ -694,6 +694,24 @@ def tables():
         "A column-field pivot output: North and South sales by Apparel and Electronics",
     )
 
+    # Reduced from the ELS final cost form (#1329): theme 10/11 were
+    # outside the imported palette, so underlined links lost their colour.
+    from openpyxl.styles import Color
+    from openpyxl.writer.theme import theme_xml
+
+    wb, ws = book()
+    wb.loaded_theme = theme_xml.replace('val="0563C1"', 'val="0000FF"').replace(
+        'val="954F72"', 'val="800080"'
+    )
+    for row, (label, theme_index) in enumerate(
+        [("Funding rules", 10), ("Visited funding rules", 11)], start=1
+    ):
+        ws.cell(row, 1, label).font = Font(
+            name="Calibri", size=11, underline="single", color=Color(theme=theme_index)
+        )
+    ws.column_dimensions["A"].width = 32
+    save(wb, "hyperlink-theme", "Blue hyperlink and purple followed-link text from theme slots 10 and 11")
+
     wb, ws = book()
     # Name the face and size, as Excel and Calc always do. openpyxl's bare
     # Font(bold=True) writes a <font> with no name, which Calc draws in its

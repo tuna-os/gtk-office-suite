@@ -35,6 +35,13 @@ are not all green, and any fixture name the baseline does not have.
 
 ---
 
+Tables real-document follow-up #1329 reduces the ELS cost form's black
+funding-rule links to `tables/hyperlink-theme`. XLSX import now resolves
+hyperlink and followed-hyperlink theme slots (10 and 11), including custom
+workbook colours and tint; `hyperlink_theme_colours_resolve_and_reset` covers
+the model. Render evidence remains pending; the real-document baseline stays
+amber until measured green in both tiers.
+
 ## Letters (word processor)
 
 ### Tier 1 — Core (daily-driver writing)
