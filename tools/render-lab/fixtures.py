@@ -657,16 +657,16 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
-        # Print headings so LibreOffice's PDF shows the same cells as our
-        # grid, but not gridlines: they are view furniture, which Calc
+    def save(wb, name, expect, *, headings=True):
+        # Normally print headings so LibreOffice's PDF shows the same cells
+        # as our grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
         # a thin cell border drawn on top of it. capture.py turns Tables'
         # "Show gridlines" off to match, so both sides show the cells'
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -676,6 +676,21 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # A published ODS cover sheet (#1342) has a wide, borderless column
+    # and does not print headings. The reference PDF contains only text ink,
+    # not the extent of the column captured by Tables. Isolate that geometry
+    # without long or wrapped text, fills, borders, or multi-page printing.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 80
+    for row, value in enumerate(("Cover sheet", "About this checklist", "Using the checklist", "Contact details"), 1):
+        ws.cell(row, 1, value)
+    save(
+        wb,
+        "wide-column-no-print-headings",
+        "Four short text lines in a wide, borderless column; print headings are off",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
