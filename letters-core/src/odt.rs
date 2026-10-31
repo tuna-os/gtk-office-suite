@@ -90,6 +90,9 @@ fn run_style_props(st: &RunStyle) -> String {
     if st.caps {
         props.push_str(" fo:text-transform=\"uppercase\"");
     }
+    if st.kerned {
+        props.push_str(" style:letter-kerning=\"true\"");
+    }
     if st.underline {
         props.push_str(" style:text-underline-style=\"solid\"");
     }
@@ -1636,6 +1639,10 @@ struct AutoStyles {
     /// A paragraph style's own text properties: in styles.xml, how each
     /// `Heading_20_N` looks (#1297).
     para_text: std::collections::HashMap<String, RunStyle>,
+    /// Style → its own `style:letter-kerning`, text and paragraph styles
+    /// and the default style alike: resolved by `para_kerned` and
+    /// `text_kerning`, as an explicit "false" undoes a parent's "true".
+    kerning: std::collections::HashMap<String, bool>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
     /// A table-row style's height.
@@ -1843,7 +1850,7 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1969,6 +1976,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     }
                     "style:text-properties" => {
                         if let Some(name) = cur_name.clone().filter(|_| cur_family == "text" || cur_family == "paragraph") {
+                            if let Some(k) = attr_val(&e, "style:letter-kerning") {
+                                out.kerning.insert(name.clone(), k == "true");
+                            }
                             let mut st = RunStyle::default();
                             match attr_val(&e, "fo:font-weight").as_deref() {
                                 Some("bold") => st.bold = true,
@@ -2344,7 +2354,7 @@ fn blank(text: &Option<String>) -> bool {
 /// it is based on (`named`: styles.xml's, its automatic ones among them).
 fn hf_line(style: Option<&str>, named: &AutoStyles) -> crate::model::HfLine {
     let Some(name) = style else { return Default::default() };
-    let mut line = crate::model::HfLine { look: para_text_style(name, named, named), ..Default::default() };
+    let mut line = crate::model::HfLine { look: RunStyle { kerned: para_kerned(name, named, named), ..para_text_style(name, named, named) }, ..Default::default() };
     let (mut aligned, mut tabbed) = (false, false);
     let mut cur = Some(name.to_string());
     for _ in 0..8 {
@@ -3877,6 +3887,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         Some(n) => para_text_style(&n, &auto, &named),
                         None => RunStyle::default(),
                     };
+                    let name = attr_val(&e, "text:style-name");
+                    let text_base = RunStyle { kerned: para_kerned(name.as_deref().unwrap_or(DEFAULT_PARA), &auto, &named), ..text_base };
                     span_stack.push(text_base);
                     paragraph_bases += 1;
                 }
@@ -3884,6 +3896,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     let name = attr_val(&e, "text:style-name");
                     let own = name.as_deref().map(|n| text_style(n, &auto, &named)).unwrap_or_default();
                     let mut st = inherit(span_stack.last(), own);
+                    st.kerned = name.as_deref().and_then(|n| text_kerning(n, &auto, &named)).unwrap_or_else(|| span_stack.last().is_some_and(|o| o.kerned));
                     // Inline code is Writer's "Source Text", named or as
                     // the parent of an automatic style (#1205).
                     if let Some(n) = &name {
@@ -4871,6 +4884,36 @@ fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Str
 /// does not set, it takes from its paragraph (or outer span).
 /// A text style's look: an automatic style's or a named one's (styles.xml's
 /// "Responses", blue), over what its parents give it.
+/// Whether a paragraph style's text is kerned: the nearest
+/// `style:letter-kerning` up its chain, then the default style's. Absent
+/// everywhere, Writer draws it unkerned.
+fn para_kerned(name: &str, auto: &AutoStyles, named: &AutoStyles) -> bool {
+    let own = |n: &str| auto.kerning.get(n).or_else(|| named.kerning.get(n)).copied();
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if let Some(k) = own(&n) {
+            return k;
+        }
+        cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+    }
+    own(DEFAULT_PARA).unwrap_or(false)
+}
+
+/// A text style's own `style:letter-kerning`, the nearest up its chain;
+/// None leaves its paragraph's.
+fn text_kerning(name: &str, auto: &AutoStyles, named: &AutoStyles) -> Option<bool> {
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let n = cur?;
+        if let Some(&k) = auto.kerning.get(&n).or_else(|| named.kerning.get(&n)) {
+            return Some(k);
+        }
+        cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
+    }
+    None
+}
+
 fn text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
     let mut chain = Vec::new();
     let mut cur = Some(name.to_string());
@@ -6055,6 +6098,30 @@ mod tests {
             assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
             assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
         }
+    }
+
+    /// Kerning follows the style chain to the default style, and a style
+    /// that says "false" undoes its parent's "true": Writer kerns only what
+    /// asks for it.
+    #[test]
+    fn letter_kerning_follows_the_style_chain() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:text-properties style:letter-kerning=\"true\"/></style:default-style>\
+             <style:style style:name=\"Plain\" style:family=\"paragraph\"><style:text-properties style:letter-kerning=\"false\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:parent-style-name=\"Plain\"/>\
+             <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties style:letter-kerning=\"true\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p>default</text:p><text:p text:style-name=\"P1\">plain <text:span text:style-name=\"T1\">span</text:span></text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let kerned: Vec<Vec<(String, bool)>> = d.paragraphs.iter().map(|p| p.runs.iter().map(|r| (r.text.clone(), r.style.kerned)).collect()).collect();
+        assert_eq!(kerned, [vec![("default".into(), true)], vec![("plain ".into(), false), ("span".into(), true)]]);
+        let mut unkerned = d.clone();
+        unkerned.paragraphs[0].runs[0].style.kerned = false;
+        assert!(round_trip(&d).paragraphs[1].runs[1].style.kerned, "written back");
+        assert!(!round_trip(&unkerned).paragraphs[0].runs[0].style.kerned);
     }
 
     /// A heading paragraph whose style says `fo:font-style="normal"` is

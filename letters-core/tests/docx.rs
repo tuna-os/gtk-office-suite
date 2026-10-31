@@ -307,6 +307,28 @@ fn a_floating_image_keeps_its_paragraph_and_placement() {
     assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
 }
 
+/// A run is kerned where its own properties or its styles carry a
+/// `w:kern` (any threshold: Writer kerns whatever the size), and only
+/// there: the audit-committee minutes' Heading 1 kerns, its body text
+/// does not.
+#[test]
+fn a_run_is_kerned_only_where_its_styles_say() {
+    let d = Document::from_plain_text("styled\nplain\nzero");
+    let doctored = doctor_parts(&d, |parts| {
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        let at = styles.rfind("</w:styles>").unwrap();
+        styles.insert_str(at, "<w:style w:type=\"paragraph\" w:styleId=\"Kerned\"><w:name w:val=\"Kerned\"/><w:rPr><w:kern w:val=\"32\"/></w:rPr></w:style>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        *body = body
+            .replacen("<w:p>", "<w:p><w:pPr><w:pStyle w:val=\"Kerned\"/></w:pPr>", 1)
+            .replacen("<w:t>zero</w:t>", "<w:rPr><w:kern w:val=\"0\"/></w:rPr><w:t>zero</w:t>", 1);
+        assert!(body.contains("w:pStyle w:val=\"Kerned\"") && body.contains("w:kern w:val=\"0\""), "{body}");
+    });
+    let kerned: Vec<(String, bool)> = doctored.paragraphs.iter().map(|p| (p.text(), p.runs.iter().all(|r| r.style.kerned))).collect();
+    assert_eq!(kerned, [("styled".into(), true), ("plain".into(), false), ("zero".into(), false)]);
+    assert!(round_trip(&doctored).paragraphs[0].runs[0].style.kerned, "written back");
+}
+
 /// A paragraph holding only a floating picture is a line of its mark's
 /// font, as a blank one is: the audit-committee minutes float their logo
 /// from a paragraph whose mark is 14pt, and Writer sizes that line by the
