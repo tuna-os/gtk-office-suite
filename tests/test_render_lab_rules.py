@@ -270,5 +270,77 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideBorderlessHyperlinksFixtureTest(unittest.TestCase):
+    """The OTSI Annual Review reduction isolates wide borderless column extent,
+    hyperlinked contents, and unprinted headings (#1344)."""
+
+    def test_wide_borderless_hyperlinks_fixture_is_a_wide_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-borderless-hyperlinks")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-borderless-hyperlinks.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 15)
+            self.assertEqual(sheet.max_column, 1)
+            self.assertEqual(sheet.cell(1, 1).value, "OTSI Annual Review 2025/26 Tables")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 1).font.size, 16)
+            self.assertEqual(sheet.cell(2, 1).value, "This dataset contains nine tables for OTSI's annual review")
+            self.assertEqual(sheet.cell(3, 1).value, "Contents")
+            self.assertTrue(sheet.cell(3, 1).font.bold)
+            self.assertGreaterEqual(sheet.column_dimensions["A"].width, 100)
+
+            # Hyperlinks and styling in rows 4..15
+            expected_links = [
+                ("Cover sheet", "#'Cover sheet'!A1"),
+                ("Notes", "#Notes!A1"),
+                ("Table A1", "#'Table A1'!A1"),
+                ("Table A2", "#'Table A2'!A1"),
+                ("Table A3", "#'Table A3'!A1"),
+                ("Table A4", "#'Table A4'!A1"),
+                ("Table B1", "#'Table B1'!A1"),
+                ("Table B2", "#'Table B2'!A1"),
+                ("Table B3", "#'Table B3'!A1"),
+                ("Table B4", "#'Table B4'!A1"),
+                ("Table C1", "#'Table C1'!A1"),
+                ("Contact Sheet", "#'Contact Sheet'!A1"),
+            ]
+            for row_idx, (expected_label, expected_target) in enumerate(expected_links, start=4):
+                cell = sheet.cell(row_idx, 1)
+                self.assertEqual(cell.value, expected_label)
+                self.assertIsNotNone(cell.hyperlink)
+                self.assertEqual(cell.hyperlink.target, expected_target)
+                self.assertTrue(str(cell.font.color.rgb).endswith("0563C1"))
+                self.assertEqual(cell.font.underline, "single")
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()
