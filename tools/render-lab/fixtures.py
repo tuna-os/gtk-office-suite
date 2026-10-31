@@ -642,6 +642,69 @@ def letters(img):
     save(x, "toc", "A table of contents with dot leaders and page numbers 1, 2, 2 above the two pages of headings it lists")
 
 
+# ── Letters (ODT) ─────────────────────────────────────────────────────────
+def letters_floating_image_gap(img):
+    """Reduce #1376's title beside a floating logo to the wrap clearance.
+
+    Use ODT, as in the source, and explicitly request zero clearance.
+    Three short paragraphs fit alongside the image; a fourth starts below
+    it, so widening a paragraph partway down is a separate feature.
+    """
+    from zipfile import ZIP_STORED, ZipFile
+
+    ns = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2"'
+    )
+    styles = f'''<office:document-styles {ns}>
+      <office:styles><style:default-style style:family="paragraph">
+        <style:paragraph-properties fo:margin-top="0pt" fo:margin-bottom="0pt" fo:line-height="24pt"/>
+        <style:text-properties fo:font-family="Liberation Serif" fo:font-size="12pt"/>
+      </style:default-style></office:styles>
+      <office:automatic-styles><style:page-layout style:name="Page">
+        <style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" fo:margin="1in"/>
+      </style:page-layout></office:automatic-styles>
+      <office:master-styles><style:master-page style:name="Standard" style:page-layout-name="Page"/></office:master-styles>
+    </office:document-styles>'''
+    content = f'''<office:document-content {ns}>
+      <office:automatic-styles><style:style style:name="Line" style:family="paragraph">
+        <style:paragraph-properties fo:margin-top="0pt" fo:margin-bottom="0pt" fo:line-height="24pt"/>
+        <style:text-properties fo:font-family="Liberation Serif" fo:font-size="12pt"/>
+      </style:style><style:style style:name="Float" style:family="graphic">
+        <style:graphic-properties style:wrap="parallel" style:wrap-contour="false"
+          style:horizontal-rel="page-content" style:horizontal-pos="from-left"
+          style:vertical-rel="paragraph" style:vertical-pos="from-top" fo:margin="0pt"/>
+      </style:style></office:automatic-styles>
+      <office:body><office:text>
+        <text:p text:style-name="Line"><draw:frame draw:style-name="Float" draw:name="Zero clearance"
+          text:anchor-type="paragraph" svg:x="0pt" svg:y="0pt" svg:width="144pt" svg:height="72pt"><draw:image xlink:href="Pictures/image.png" xlink:type="simple"/></draw:frame>First line beside the image</text:p>
+        <text:p text:style-name="Line">Second line beside the image</text:p>
+        <text:p text:style-name="Line">Third line beside the image</text:p>
+        <text:p text:style-name="Line">Below the image at the left margin</text:p>
+      </office:text></office:body>
+    </office:document-content>'''
+    path = os.path.join(OUT, "letters", "floating-image-gap.odt")
+    with ZipFile(path, "w") as z:
+        z.writestr("mimetype", "application/vnd.oasis.opendocument.text", compress_type=ZIP_STORED)
+        z.writestr("styles.xml", styles)
+        z.writestr("content.xml", content)
+        z.write(img, "Pictures/image.png")
+        z.writestr("META-INF/manifest.xml", '''<manifest:manifest
+          xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+          <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+          <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+          <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+          <manifest:file-entry manifest:full-path="Pictures/image.png" manifest:media-type="image/png"/>
+        </manifest:manifest>''')
+    add("letters", "floating-image-gap", path,
+        "Three lines touch a floating image's right edge (zero clearance); the fourth starts at the left margin")
+
+
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
 def tables():
     from openpyxl import Workbook
@@ -1161,6 +1224,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
+    letters_floating_image_gap(img)
     tables()
     decks(img)
     with open(os.path.join(OUT, "manifest.json"), "w") as f:
