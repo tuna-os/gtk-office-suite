@@ -657,7 +657,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -666,7 +666,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -676,6 +676,21 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # The SFI26 real document (#1339) starts with a column about 36.7 cm
+    # wide, wider than both a printed page and the app viewport, and does
+    # not print headings. Reduce that geometry independently of its styles,
+    # links and other sheets. In particular, the printed page and screen
+    # expose different portions of the column: stretching one to the other
+    # in compare.align is not a measurement of the grid's scale.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 200
+    for i in range(1, 21):
+        ws.cell(i, 1, f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
+                      "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
+                      "Each view exposes only part of this line of text.")
+    save(wb, "wide-column-no-headings",
+         "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
     wb, ws = book()
     pivot_rows = [
