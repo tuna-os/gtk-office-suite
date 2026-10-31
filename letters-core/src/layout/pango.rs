@@ -326,7 +326,36 @@ impl PangoShaper {
             }
             layout.set_tabs(Some(&tabs));
         }
+        carry_line_end_tabs(&layout, &attrs);
         layout
+    }
+}
+
+/// A tab that would reach past the margin starts the next line, as Writer
+/// and Word lay one out: the text after it then starts at the next line's
+/// first stop. Pango never breaks before a tab (a tab only allows a break
+/// after it), so it hangs the tab at the end of the line instead. Where a
+/// wrapped line ends in a tab after a space, that space becomes a line
+/// separator (U+2028), which breaks before the tab: one char for one, so
+/// char offsets are unchanged, and every reader of the layout maps its
+/// byte offsets through its own text. The audit-committee minutes'
+/// "appointed on 1 <tab>February" wrapped each line after it a word late.
+fn carry_line_end_tabs(layout: &pango::Layout, attrs: &pango::AttrList) {
+    const SEP: char = '\u{2028}';
+    for _ in 0..64 {
+        let text = layout.text().to_string();
+        let lines = layout.lines_readonly();
+        let space = lines.iter().take(lines.len().saturating_sub(1)).find_map(|line| {
+            let end = (line.start_index() + line.length()) as usize;
+            let body = text.get(..end)?.strip_suffix('\t')?;
+            (body.len() > line.start_index() as usize && body.ends_with(' ')).then(|| body.len() - 1)
+        });
+        let Some(at) = space else { return };
+        let mut carried = text;
+        carried.replace_range(at..at + 1, SEP.encode_utf8(&mut [0; 4]));
+        attrs.update(at as i32, 1, SEP.len_utf8() as i32);
+        layout.set_text(&carried);
+        layout.set_attributes(Some(attrs));
     }
 }
 
@@ -1598,6 +1627,42 @@ mod tests {
         let (single, half_again) = (heights(1.0), heights(1.5));
         assert!(single >= 100.0, "the picture's line is at least the picture: {single}");
         assert!((half_again - single - text_line / 2.0).abs() < 0.01, "150% adds half a text line ({}), not half the picture: {single} -> {half_again}", text_line / 2.0);
+    }
+
+    /// A tab that would reach the margin starts the next line, as Writer
+    /// and Word lay it out, rather than hanging at the end of this one: the
+    /// audit-committee minutes' "appointed on 1 <tab>February" wrapped each
+    /// line after it a word late. However far along the tab falls, no
+    /// wrapped line ends in it, and some placement moves it down a line.
+    #[test]
+    fn a_tab_that_reaches_the_margin_starts_the_next_line() {
+        let opts = LayoutOptions::default();
+        let shaper = PangoShaper::new();
+        let mut carried = 0;
+        for n in 1..40 {
+            let text = format!("{}\tafter the tab", "word ".repeat(n));
+            let runs = [Run::plain(text.clone())];
+            let stops = (1..6).map(|i| crate::model::TabStop::left(36.0 * f64::from(i))).collect();
+            let req = ShapeRequest {
+                runs: &runs,
+                heading: None,
+                code: false,
+                look: Look::Body,
+                alignment: Alignment::Left,
+                width_pt: 200.0,
+                first_line_indent_pt: 0.0,
+                tab_stops: stops,
+                right_tab: false,
+                defaults: &opts,
+            };
+            let lines = line_boxes(&shaper.layout(&req), 0.0);
+            let chars: Vec<char> = text.chars().collect();
+            for l in &lines[..lines.len() - 1] {
+                assert_ne!(chars[l.end - 1], '\t', "a wrapped line ends in the tab ({n} words): {lines:?}");
+            }
+            carried += lines.iter().skip(1).filter(|l| chars[l.start] == '\t').count();
+        }
+        assert!(carried > 0, "no placement carried the tab to the next line");
     }
 
     /// A paragraph holding only a floating picture or text box is as tall
