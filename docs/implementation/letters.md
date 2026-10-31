@@ -298,8 +298,9 @@ amber (accepted Tesseract misread, blocked), export #1127 nested-list amber,
    requires the missing face).
 3. Export ambers #1127 (nested-list) and #1115 (super-subscript): done. No
    geometry miss existed; word recall counted OCR misreads of LibreOffice's
-   own render, which the scorer now sets aside against the reference's text
-   layer (`compare.reference_words`). No threshold was tuned.
+   own render, which the scorer now leaves out where we don't match them,
+   checked against the reference's text layer (`compare.mark_printed`). No
+   threshold was tuned.
 4. Keep Typst clearly separate in UI/docs (`engine.rs` labelled alternative);
    never let Typst pagination satisfy a WYSIWYG claim. Delete or repair
    `visual_golden.py` advertising per render roadmap (coordinate with SH-005;

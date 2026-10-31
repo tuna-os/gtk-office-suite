@@ -525,27 +525,35 @@ def match_words(ref, ours, reread=None):
     line below its own, a cascade that read as 14pt of displacement on a
     page that agrees to a pixel.
 
+    A reference word marked unprinted (`mark_printed`) that nothing on our
+    side matches is left out altogether: a misread of the reference is
+    never held against us. Matched, it counts like any other.
+
     `reread`, when given, is called with an unmatched reference word's box
     and returns the word both sides read there on a closer look, or None;
     a rescued word counts as found where it stands (displacement 0)."""
     if ref is None or ours is None or not ref:
         return None, None, None
     pairs = sorted(
-        (((x - x2) ** 2 + (y - y2) ** 2) ** 0.5, i, j)
-        for i, (text, x, y, _, _) in enumerate(ref)
-        for j, (t2, x2, y2, _, _) in enumerate(ours)
-        if t2 == text
+        (((w[1] - o[1]) ** 2 + (w[2] - o[2]) ** 2) ** 0.5, i, j)
+        for i, w in enumerate(ref)
+        for j, o in enumerate(ours)
+        if o[0] == w[0]
     )
     dist, taken = {}, set()
     for d, i, j in pairs:
         if i not in dist and j not in taken:
             dist[i] = d
             taken.add(j)
-    found, disp = 0, []
+    found, counted, disp = 0, 0, []
     per_line = {}
-    for i, (text, x, y, line, box) in enumerate(ref):
+    for i, w in enumerate(ref):
+        line, box = w[3], w[4]
         hit = i in dist
         rescued = not hit and reread is not None and reread(box) is not None
+        if not (hit or rescued) and len(w) > 5 and not w[5]:
+            continue
+        counted += 1
         total, hits = per_line.get(line, (0, 0))
         per_line[line] = (total + 1, hits + (hit or rescued))
         if hit:
@@ -556,13 +564,16 @@ def match_words(ref, ours, reread=None):
             disp.append(0.0)
     median = float(np.median(disp)) * PX_TO_PT if disp else None
     lost = sum(1 for total, hits in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hits <= total)
-    return found / len(ref), median, lost
+    return (found / counted if counted else None), median, lost
 
 
 # A word tesseract reads off LibreOffice's own picture that LibreOffice did
-# not print is a misread of the reference ("8pt" as "spt", a bullet as "e"):
-# no rendering of ours can match it, so it measured the OCR, not us. The
-# reference's text layer (lo-<n>.txt, lo_render.py) says what was printed.
+# not print may be a misread of the reference ("8pt" as "spt", a bullet as
+# "e"), which no rendering of ours can match. It may also be text inside a
+# picture (a logo's "Government of Canada"), which ours draws too. So an
+# unprinted read is marked, not dropped: match_words leaves it out only
+# where nothing on our side matches it. The reference's text layer
+# (lo-<n>.txt, lo_render.py) says what was printed.
 # The layer runs a raised or lowered digit into its word ("mc2", "h2o")
 # where OCR reads the letters alone, so printed words are also cut where
 # letters meet digits. A read may join neighbours ("8pttext") or, across a
@@ -593,22 +604,25 @@ def is_printed(text, printed, joined):
     return len(text) >= TRUTH_PIECE_MIN and any(text in w for w in printed)
 
 
-def keep_printed(words, printed):
-    """`words` (OCR reads of the reference) less those LibreOffice did not
-    print. A page whose text layer is empty (a scan, text drawn as curves)
-    or missing keeps every read: there is nothing to check them against."""
-    if words is None or not printed:
-        return words
+def mark_printed(words, printed):
+    """`words` (OCR reads of the reference), each with a sixth field: did
+    LibreOffice print it. A page whose text layer is empty (a scan, text
+    drawn as curves) or missing marks every read printed: there is nothing
+    to check them against."""
+    if words is None:
+        return None
+    if not printed:
+        return [(*w[:5], True) for w in words]
     pieces = [p for w in printed for p in re.findall(r"[0-9]+|[a-z]+", w)]
     joined = {"".join(pieces[i : i + n]) for n in range(1, TRUTH_JOIN + 1) for i in range(len(pieces) - n + 1)}
-    return [w for w in words if is_printed(w[0], printed, joined)]
+    return [(*w[:5], is_printed(w[0], printed, joined)) for w in words]
 
 
 def reference_words(lo_path, ref, app):
-    """OCR reads of the reference page `ref` (rendered from `lo_path`) that
-    LibreOffice printed."""
+    """OCR reads of the reference page `ref` (rendered from `lo_path`),
+    each marked with whether LibreOffice printed it (`mark_printed`)."""
     words = ocr_words(ref, app == "tables")
-    return keep_printed(words, printed_words(os.path.splitext(lo_path)[0] + ".txt"))
+    return mark_printed(words, printed_words(os.path.splitext(lo_path)[0] + ".txt"))
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
@@ -668,7 +682,9 @@ def compare_page(app, ref, ours, ref_words):
         "disp_pt": disp,
         "colors": color_presence(ref, ours),
         "ssim": ssim(ref, ours),
-        "ref_words": len(ref_words) if ref_words is not None else None,
+        # What LibreOffice printed: misreads of its page don't make it a
+        # page with text to recall.
+        "ref_words": sum(1 for w in ref_words if len(w) < 6 or w[5]) if ref_words is not None else None,
     }
 
 

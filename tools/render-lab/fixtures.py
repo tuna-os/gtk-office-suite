@@ -118,9 +118,10 @@ EXPORT = {
 # export pixels always agreed with LibreOffice's (SSIM 0.9992 / 1.0000, 4x
 # crops identical); word recall alone ambered them, on reads of the
 # reference that LibreOffice never printed (a bullet read as "e", H2O read
-# as "ho"). The scorer now sets such reads aside against the reference's
-# own text layer (compare.reference_words), so they score green on what
-# both sides print. No threshold or geometry changed for it.
+# as "ho"). The scorer now leaves out such reads, checked against the
+# reference's own text layer, where nothing on our side matches them
+# (compare.mark_printed, match_words), so they score green on what both
+# sides print. No threshold or geometry changed for it.
 
 
 def add(app, feature, path, expect):

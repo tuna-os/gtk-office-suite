@@ -207,9 +207,12 @@ loosening any budget (`compare.match_words`, `compare.reference_words`):
   of it a line down: `letters/font-sizes` read 14pt of displacement on a
   page that matches LibreOffice's to within 2px.
 - A word OCR reads off LibreOffice's picture that LibreOffice did not print
-  (its PDF text layer, `lo-<n>.txt`) is set aside: "8pt" read as "spt", a
-  bullet read as "e", H2O read as "ho". No rendering can match a misread of
-  the reference. A misread of ours still counts against us.
+  (its PDF text layer, `lo-<n>.txt`) is left out where nothing on our side
+  matches it: "8pt" read as "spt", a bullet read as "e", H2O read as "ho".
+  No rendering can match a misread of the reference. Matched, it counts:
+  text inside a picture (a deck's "Government of Canada" logo) is in no
+  text layer but is on both pages. A misread of ours still counts against
+  us.
 
 That turned `letters/font-sizes` (render) and `letters/nested-list` and
 `letters/super-subscript` (export) green; their pixels already agreed.

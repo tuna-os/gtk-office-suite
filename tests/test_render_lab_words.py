@@ -50,7 +50,7 @@ class MatchWordsTest(unittest.TestCase):
 
 
 @unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
-class KeepPrintedTest(unittest.TestCase):
+class MarkPrintedTest(unittest.TestCase):
     def setUp(self):
         import compare
 
@@ -63,13 +63,16 @@ class KeepPrintedTest(unittest.TestCase):
         return self.compare.printed_words(f.name)
 
     def kept(self, reads, text):
-        return [w[0] for w in self.compare.keep_printed([word(r, 0, 0) for r in reads], self.printed(text))]
+        marked = self.compare.mark_printed([word(r, 0, 0) for r in reads], self.printed(text))
+        return [w[0] for w in marked if w[5]]
 
-    def test_misreads_of_the_reference_are_set_aside(self):
-        self.assertEqual(self.kept(["spt", "text", "12pt", "aopt"], "8pt text\n\n12pt text\n\n40pt text\n"), ["text", "12pt"])
+    def test_misreads_of_the_reference_are_marked(self):
+        self.assertEqual(
+            self.kept(["spt", "text", "12pt", "aopt"], "8pt text\n\n12pt text\n\n40pt text\n"), ["text", "12pt"]
+        )
 
     def test_a_bullet_read_as_a_letter_is_not_text(self):
-        self.assertEqual(self.kept(["e", "level", "one"], "• Level one\n"), ["level", "one"])
+        self.assertEqual(self.kept(["e", "level", "one"], "\u2022 Level one\n"), ["level", "one"])
 
     def test_a_raised_digit_does_not_hide_its_word(self):
         # The layer prints "mc2" and "H2O"; OCR reads the letters of mc
@@ -77,14 +80,25 @@ class KeepPrintedTest(unittest.TestCase):
         self.assertEqual(self.kept(["e", "mc", "and", "ho"], "E = mc2 and H2O\n"), ["e", "mc", "and"])
 
     def test_joined_and_cut_reads_of_printed_words_count(self):
-        # A cut piece too short to tell from a misread ("co") is set aside:
-        # dropping a reference word never counts against us.
+        # A cut piece too short to tell from a misread ("co") is marked
+        # unprinted: that only ever leaves it out when we miss it.
         self.assertEqual(self.kept(["8pttext", "co", "operate"], "8pt text co-operate\n"), ["8pttext", "operate"])
 
-    def test_without_a_text_layer_every_read_stays(self):
+    def test_without_a_text_layer_every_read_is_printed(self):
         reads = [word("spt", 0, 0)]
-        self.assertEqual(self.compare.keep_printed(reads, None), reads)
-        self.assertEqual(self.compare.keep_printed(reads, self.printed("")), reads)
+        self.assertTrue(self.compare.mark_printed(reads, None)[0][5])
+        self.assertTrue(self.compare.mark_printed(reads, self.printed(""))[0][5])
+
+    def test_an_unprinted_read_counts_only_where_we_match_it(self):
+        # A logo's "canada" is in no text layer but on both pages: it
+        # counts. A misread "spt" we don't share is left out, not missed.
+        ref = [(*word("canada", 100, 100), False), (*word("spt", 100, 200), False), (*word("text", 150, 200), True)]
+        ours = [word("canada", 100, 100), word("text", 150, 200)]
+        found, disp, _ = self.compare.match_words(ref, ours)
+        self.assertEqual(found, 1.0)
+        self.assertEqual(disp, 0.0)
+        found, _, _ = self.compare.match_words(ref, [word("text", 150, 200)])
+        self.assertEqual(found, 1.0, "an unmatched unprinted read is not a miss")
 
 
 if __name__ == "__main__":
