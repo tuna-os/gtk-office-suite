@@ -3709,9 +3709,41 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
                          "the undo to bring Totals back first, formula and all")
 
+        # Redo must delete the restored identity, not whichever sheet is
+        # active after undo. Undo once more before saving the workbook.
+        self.gapplication_action(aid, "redo")
+        self._wait_state((["Sheet1"], 0, ("5", None)), "redo to delete Totals again")
+        self.gapplication_action(aid, "undo")
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "a second undo to restore Totals and its formula")
+
         # Switch to Sheet1 through the switcher: its own value, not the formula.
         self._switch_to("Sheet1")
         self._wait_state((["Totals", "Sheet1"], 1, ("5", None)), "the switcher to show Sheet1's own value")
+
+        rawinput.keyCombo("Escape")
+        self._put("A1", "6")
+        # History belongs to the edited sheet even if the user switches
+        # before undoing. Recalculate the dependent formula after each step.
+        self._switch_to("Totals")
+        self._wait_state((["Totals", "Sheet1"], 0, ("12", "Sheet1!A1*2")),
+                         "Totals to recalculate after the precedent edit")
+        self.gapplication_action(aid, "undo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("5", None)),
+                         "undo from Totals to restore Sheet1's precedent")
+        self._switch_to("Totals")
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "undo to recalculate Totals without overwriting its formula")
+        self.gapplication_action(aid, "redo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("6", None)),
+                         "redo from Totals to restore Sheet1's edit")
+
+        self.gapplication_action(aid, "undo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("5", None)),
+                         "undo to restore the precedent before the final edit")
 
         # TBL-006: edit the precedent on Sheet1, then save WITHOUT
         # visiting Totals first. The saved Totals sheet must still carry
