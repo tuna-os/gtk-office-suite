@@ -643,7 +643,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +652,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -871,6 +871,135 @@ def tables():
     ch.width, ch.height = 9, 6
     ws.add_chart(ch, "D2")
     save(wb, "chart-multi", "A bar chart of Sales (3,7,5,9) and Plan (2,5,6,4) over Q1..Q4 with a bottom legend, anchored at D2")
+
+    # Reduced from Schedule of musts 2026 (#1323):
+    # an unheaded bordered worksheet with 4 columns (widths 13, 115, 26, 49)
+    # and 16 rows enclosed by thin borders across all cells.
+    # In LibreOffice Calc, headings are disabled (headings=False) so no row
+    # numbers (1..N) or column letters (A..D) are printed. However, because
+    # all cells have unbroken borders, lo_cell_box() finds >= 3 long lines along
+    # both axes and erroneously treats row 1 and column A as heading boxes,
+    # cropping them out of the LibreOffice reference image. Meanwhile,
+    # Tables' on-screen capture (A-1.png) retains row 1 and column A past
+    # our_cell_origin (ox=40, oy=20). When align() resamples A-1.png onto
+    # the reference, row 1 is mapped to row 2 and col A to col B, causing
+    # a 148pt displacement, scale 1.77×, and SSIM 0.06.
+    wb, ws = book()
+    ws.title = "Schedule of Musts"
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.column_dimensions["A"].width = 13
+    ws.column_dimensions["B"].width = 115
+    ws.column_dimensions["C"].width = 26
+    ws.column_dimensions["D"].width = 49
+
+    thin_border = Border(
+        left=Side(style="thin", color="000000"),
+        right=Side(style="thin", color="000000"),
+        top=Side(style="thin", color="000000"),
+        bottom=Side(style="thin", color="000000"),
+    )
+    section_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+
+    ws.cell(1, 1, "Schedule of Musts 2026").font = Font(name="Arial", size=24, bold=True)
+    ws.cell(1, 4, "Fully compliant").font = Font(name="Arial", size=18, bold=True)
+    ws.cell(
+        2,
+        1,
+        "These are the requirements in the Academy Trust Handbook brought together into one list: the 'musts'.",
+    ).font = Font(name="Arial", size=11)
+    ws.cell(
+        3,
+        1,
+        "References to the relevant sections are included, which must be read in full.",
+    ).font = Font(name="Arial", size=11)
+
+    headers = [
+        "Paragraph",
+        "Requirement",
+        "In Place:\n- Fully compliant\n- Working towards\n- Not in place",
+        "Comments\nAction to take",
+    ]
+    for c_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(4, c_idx, h)
+        cell.font = Font(name="Arial", size=11, bold=True)
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+
+    sec_title = "Top 10 ‘musts’ for chairs and other trustees"
+    ws.cell(5, 1, sec_title).font = Font(name="Arial", size=11, bold=True)
+
+    musts = [
+        (
+            "1.11 and 1.12",
+            "Apply highest standards of conduct and ensure robust governance, comply with charitable objects, with duties as company directors, with charity law and the funding agreement.",
+            "Fully compliant",
+            "",
+        ),
+        ("2.3", "Ensure the board of trustees meets at least three times a year.", "Fully compliant", ""),
+        ("2.4", "Approve a written scheme of delegation of financial powers.", "Fully compliant", ""),
+        (
+            "2.10",
+            "Ensure the board approves a balanced budget for the financial year and minutes their approval",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "2.19 and 2.20",
+            "Share management accounts with the chair of trustees monthly and consider when the board meets, taking action to maintain financial viability",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "2.31 to 2.33",
+            "Ensure decisions about executive pay follow a robust evidence-based process, that is documented in an agreed pay policy, reflecting the individual's role and responsibilities, and that the approach to pay is transparent, proportionate and defensible. Does not increase at a faster rate that that of teachers.",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "3.6 to 3.14",
+            "Appoint an audit and risk committee (either dedicated or combined with another committee) to advise on the adequacy of the trust's controls and risks.",
+            "Fully compliant",
+            "",
+        ),
+        ("4.4", "Submit audited accounts to DfE by 31 December", "Fully compliant", ""),
+        (
+            "4.14",
+            "Ensure an appropriate, reasonable and timely response to findings by auditors, taking opportunities to strengthen financial management and control",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "5.36 to 5.56",
+            "Manage conflicts of interest, be even-handed with related parties, and ensure goods or services provided by them are at no more than cost, beyond the limits in this handbook",
+            "Fully compliant",
+            "",
+        ),
+        ("Roles and responsibilities", "", "", ""),
+    ]
+
+    for offset, (para, req, status, comments) in enumerate(musts, start=6):
+        c1 = ws.cell(offset, 1, para)
+        c1.font = Font(name="Arial", size=11, bold=(offset == 16))
+        c2 = ws.cell(offset, 2, req)
+        c2.font = Font(name="Arial", size=11)
+        c2.alignment = Alignment(wrap_text=True, vertical="center")
+        c3 = ws.cell(offset, 3, status)
+        c3.font = Font(name="Arial", size=11)
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        c4 = ws.cell(offset, 4, comments)
+        c4.font = Font(name="Arial", size=11)
+
+    for r in range(1, 17):
+        for c in range(1, 5):
+            ws.cell(r, c).border = thin_border
+            if r in (5, 16):
+                ws.cell(r, c).fill = section_fill
+
+    save(
+        wb,
+        "unheaded-bordered-musts",
+        "A 4-column unheaded landscape schedule with full cell borders across rows 1..16; isolates lo_cell_box line-detection false positive on unheaded bordered tables",
+        headings=False,
+    )
 
 
 # ── Decks (pptx) ──────────────────────────────────────────────────────────

@@ -270,5 +270,59 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class UnheadedBorderedMustsFixtureTest(unittest.TestCase):
+    """The Schedule of musts 2026 reduction isolates the lo_cell_box line-detection
+    false positive and vertical pagination mismatch on unheaded bordered tables (#1323)."""
+
+    def test_unheaded_bordered_musts_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "unheaded-bordered-musts")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/unheaded-bordered-musts.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.page_setup.orientation, sheet.ORIENTATION_LANDSCAPE)
+            self.assertEqual(sheet.cell(1, 1).value, "Schedule of Musts 2026")
+            self.assertEqual(sheet.cell(1, 4).value, "Fully compliant")
+            self.assertEqual(sheet.cell(4, 1).value, "Paragraph")
+            self.assertEqual(sheet.cell(4, 2).value, "Requirement")
+            self.assertEqual(sheet.cell(5, 1).value, "Top 10 ‘musts’ for chairs and other trustees")
+            self.assertEqual(sheet.cell(6, 1).value, "1.11 and 1.12")
+            self.assertEqual(sheet.cell(6, 3).value, "Fully compliant")
+            self.assertEqual(sheet.column_dimensions["A"].width, 13)
+            self.assertEqual(sheet.column_dimensions["B"].width, 115)
+            self.assertEqual(sheet.column_dimensions["C"].width, 26)
+            self.assertEqual(sheet.column_dimensions["D"].width, 49)
+            for r in range(1, 17):
+                for c in range(1, 5):
+                    b = sheet.cell(r, c).border
+                    self.assertIsNotNone(b.left.style)
+                    self.assertIsNotNone(b.right.style)
+                    self.assertIsNotNone(b.top.style)
+                    self.assertIsNotNone(b.bottom.style)
+
+
 if __name__ == "__main__":
     unittest.main()
