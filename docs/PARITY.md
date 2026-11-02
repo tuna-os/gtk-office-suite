@@ -90,6 +90,7 @@ are not all green, and any fixture name the baseline does not have.
 |---|---|---|---|
 | Cell editing + formula evaluation | ✅ IronCalc | I1 engine tests; I6 smoke (extend: type into cell) | ✅ tables/values |
 | OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) | — |
+| XLSX hyperlink theme colours | Implemented; render evidence pending | `xlsx_styles::tests::hyperlink_theme_colours_resolve_and_reset_between_workbooks` (authored theme and Office fallback) | Pending: tables/hyperlink-theme-colors |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle | — |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read | — |
 | Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells | 🟠 tables/number-formats (accepted metric artifact) |
