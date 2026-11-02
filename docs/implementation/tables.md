@@ -121,7 +121,7 @@ here.
 | #112 sparse live storage; insert/delete/move metadata; cumulative sizes; Pango; budgets | TBL-007, TBL-015–016, TBL-019 | Prefix geometry exists; standalone SparseGrid benchmarks do not prove live sparse workbook storage |
 | #113 print area, page setup, hiding, row height, names/formulas | TBL-007, TBL-011, TBL-014 | Existing model/controller/dialog/IO paths, independently test their composition |
 | ROADMAP #168 GUI architecture debt | TBL-009–014 as touched | Existing `chart_dialog`, `sheet_actions`, `persistence` seams; no unrelated mass decomposition |
-| Render Phase 3, remaining amber fixtures, screen/PDF differences | TBL-012, TBL-014, TBL-019 | Baseline currently has `number-formats`, `wrap-text`, `wrap-merged` amber; pivot fixture A/B green |
+| Render Phase 3, remaining amber fixtures, screen/PDF differences | TBL-012, TBL-014, TBL-019 | Baseline currently has `wrap-text`, `wrap-merged` amber; `number-formats` and pivot fixture A/B green |
 | Shared save/recovery/stress/interop/a11y/security/release | TBL-017–020 plus shared SH-001–SH-008 | No duplicate atomic-save, autosave-envelope, harness or release system |
 | ROADMAP collaboration/extensions/enterprise/CLI proposals | Explicit boundary below | Not blockers for dependable everyday Tables editing; preserve existing collab operation compatibility when changed |
 
@@ -1010,7 +1010,7 @@ No claim of screen-reader usability based solely on synthetic traversal.
 ## TBL-019 — Remaining rendering tails and real-document interop
 
 **Goal/evidence.** Inspected `tools/render-lab/baseline.json` records Tables
-`number-formats`, `wrap-text`, `wrap-merged` amber; `pivot-crosstab` is A/B green.
+`wrap-text`, `wrap-merged` amber; `number-formats` and `pivot-crosstab` are A/B green.
 `docs/features/tables.md` still describes long numbers showing `###` where
 LibreOffice rounds to fit. `grid_render.rs` already uses Pango and auto-fit;
 `persistence::attach_xlsx_sidecars` auto-fits rows on open. These concrete tails
