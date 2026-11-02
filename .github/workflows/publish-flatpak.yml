@@ -33,14 +33,14 @@ jobs:
   # matrix on the release candidate and for a release that lacks one to be
   # refused; a refusal that arrives after publication is neither.
   #
-  # Both gates are skipped on workflow_dispatch, which exists for build-only
-  # validation and already publishes nothing by default.
+  # Build-only dispatches skip these expensive gates; a dispatch explicitly
+  # requesting publication must pass them just like a tag push.
   evidence:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     uses: ./.github/workflows/release-revision.yml
 
   soak:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     uses: ./.github/workflows/release-soak.yml
     permissions:
       contents: read
@@ -48,14 +48,12 @@ jobs:
 
   publish:
     needs: [evidence, soak]
-    # A *skipped* gate must not block the manual build-only path, but a
-    # failed one must block the tag. `needs` alone would skip this job in
-    # both cases, and `always()` would publish through a failure — so name
-    # the two results explicitly.
+    # Only a build-only dispatch may proceed with skipped gates. Publication
+    # requires explicit success: skipped and cancelled are not evidence.
     if: >-
       ${{ !cancelled()
-          && needs.evidence.result != 'failure'
-          && needs.soak.result != 'failure' }}
+          && ((github.event_name == 'workflow_dispatch' && !inputs.publish)
+              || (needs.evidence.result == 'success' && needs.soak.result == 'success')) }}
     strategy:
       matrix:
         app: [letters, tables, decks]

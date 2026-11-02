@@ -16,6 +16,8 @@ because a target that lives in two places is a target that will disagree
 with itself.
 """
 
+import ast
+import itertools
 import os
 import re
 import unittest
@@ -61,6 +63,27 @@ def gate_jobs():
     }
 
 
+def evaluate_condition(condition, *, event, publish, evidence, soak, cancelled=False):
+    """Evaluate the small boolean subset used by the publish workflow."""
+    expression = condition.removeprefix("${{").removesuffix("}}").strip()
+    values = {
+        "github.event_name": repr(event),
+        "inputs.publish": repr(publish),
+        "needs.evidence.result": repr(evidence),
+        "needs.soak.result": repr(soak),
+        "cancelled()": repr(cancelled),
+    }
+    for name, value in values.items():
+        expression = expression.replace(name, value)
+    expression = expression.replace("&&", " and ").replace("||", " or ")
+    expression = re.sub(r"!(?!=)", " not ", expression).strip()
+    tree = ast.parse(f"({expression})", mode="eval")
+    allowed = (ast.Expression, ast.BoolOp, ast.UnaryOp, ast.Compare, ast.Constant,
+               ast.And, ast.Or, ast.Not, ast.Eq, ast.NotEq)
+    assert all(isinstance(node, allowed) for node in ast.walk(tree)), expression
+    return bool(eval(compile(tree, "<workflow condition>", "eval"), {"__builtins__": {}}))
+
+
 class ReleaseSoakGatesThePublish(unittest.TestCase):
     def test_publishing_depends_on_every_local_evidence_workflow(self):
         gates = gate_jobs()
@@ -88,24 +111,31 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
                     "workflow_call, so the tag would fail before any gate ran",
                 )
 
-    def test_a_failed_gate_blocks_the_publish(self):
-        """`needs` alone skips on a skipped gate; `always()` publishes through
-        a failed one. The condition has to name each result."""
-        condition = str(workflow(PUBLISH)["jobs"]["publish"].get("if", ""))
-        self.assertTrue(condition, "`publish` has no condition, so a skipped "
-                                   "gate blocks the manual build-only path")
-        self.assertNotIn(
-            "always()",
-            condition,
-            "always() publishes through a failed gate",
-        )
-        for name in gate_jobs():
-            with self.subTest(gate=name):
-                self.assertIn(
-                    f"needs.{name}.result != 'failure'",
-                    condition,
-                    f"`publish` does not refuse a failed {name!r}",
-                )
+    def test_publish_paths_require_success_of_both_gates(self):
+        jobs = workflow(PUBLISH)["jobs"]
+        for event, publish, evidence, soak, cancelled in itertools.product(
+            ("push", "workflow_dispatch"), (False, True),
+            ("success", "failure", "cancelled", "skipped"),
+            ("success", "failure", "cancelled", "skipped"), (False, True),
+        ):
+            args = dict(event=event, publish=publish, evidence=evidence,
+                        soak=soak, cancelled=cancelled)
+            with self.subTest(**args):
+                build_only = event == "workflow_dispatch" and not publish
+                for gate in ("evidence", "soak"):
+                    self.assertEqual(evaluate_condition(jobs[gate]["if"], **args),
+                                     not build_only)
+                expected = not cancelled and (build_only or (evidence == soak == "success"))
+                self.assertEqual(evaluate_condition(jobs["publish"]["if"], **args), expected)
+
+    def test_publish_input_is_false_only_for_build_only_dispatch(self):
+        expression = workflow(PUBLISH)["jobs"]["publish"]["with"]["publish"]
+        for event, publish in itertools.product(("push", "workflow_dispatch"), (False, True)):
+            self.assertEqual(
+                evaluate_condition(expression, event=event, publish=publish,
+                                   evidence="skipped", soak="skipped"),
+                event == "push" or publish,
+            )
 
     def test_the_soak_meets_the_stated_stability_target(self):
         repeat = workflow(SOAK)["triggers"]["workflow_call"]["inputs"]["repeat"]
