@@ -276,8 +276,8 @@
     "B": "amber"
   },
   "tables/real-ewco-claim-form": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/real-exceptional-learning-support-final-cost-form-for": {
     "A": "amber",
