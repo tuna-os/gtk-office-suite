@@ -635,6 +635,7 @@ def tables():
     from openpyxl import Workbook
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
 
     d = os.path.join(OUT, "tables")
     os.makedirs(d, exist_ok=True)
@@ -643,7 +644,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +653,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +663,116 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from 2020 - Deep sea stock (#1340):
+    # a 24-column landscape unheaded worksheet (Columns A..X, ~28.5 cm wide) with
+    # multi-tier grouped headers and continuous top border spanning repeated empty
+    # cells (F4:G4). In headless LibreOffice Calc PDF export, landscape A4 with
+    # 0.354 in margins has printable width 27.89 cm, so Calc splits Column X
+    # onto Page 2/3. Because the sheet omits printed headings, lo_cell_box(ref)
+    # returns None, align() skips cropping on-screen header bands (ox=40, oy=20),
+    # and pick_sheet_page() selects Page 1 only (columns A..W), compressing
+    # all 24 columns and header bands onto 23 columns, yielding scale 1.52×,
+    # displacement 61.6pt, SSIM 0.09, and words found 14%.
+    wb, ws = book()
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+
+    thin = Side(style="thin", color="000000")
+
+    ws["A1"] = "Deep Sea Species Statistics: total landings (tonnes live weight) in 2020"
+    ws["A1"].font = Font(name="Arial", size=10, bold=True)
+
+    ws["A2"] = "27-Jan-21"
+    ws["A2"].font = Font(name="Arial", size=9, bold=True)
+    ws["B2"] = "This weeks report includes swap numbers 1448-1502"
+    ws["B2"].font = Font(name="Arial", size=9, italic=True)
+
+    # Row 4: Group headers with top border
+    ws["C4"] = "Landings into"
+    ws.merge_cells("C4:G4")
+    ws["C4"].alignment = Alignment(horizontal="center")
+
+    ws["M4"] = "Total landings"
+    ws.merge_cells("M4:O4")
+    ws["M4"].alignment = Alignment(horizontal="center")
+
+    ws["Q4"] = "Uptake of quota"
+    ws.merge_cells("Q4:U4")
+    ws["Q4"].alignment = Alignment(horizontal="center")
+
+    for col in range(2, 25):  # B..X: continuous top border across header
+        ws.cell(4, col).border = Border(top=thin)
+
+    # Rows 5-7: Subheaders
+    ws["B5"] = "Stock"
+    ws.merge_cells("B5:B7")
+    ws["B5"].alignment = Alignment(horizontal="center", vertical="center")
+
+    subheaders = {
+        3: "Scotland",
+        4: "England, Wales & N.I.",
+        5: "Abroad",
+        6: "by UK vessels",
+        7: "U.K",
+        13: "Quota",
+        14: "2019",
+        15: "2020",
+        24: "UK",
+    }
+    for col, text in subheaders.items():
+        ws.cell(5, col, text).font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        ws.cell(6, col, "%" if col < 24 else "Quota").font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        txt = "2019" if col in (3, 6) else ("2020" if col == 4 else ("change" if col == 5 else "2016"))
+        ws.cell(7, col, txt).font = Font(name="Arial", size=9)
+
+    for col in range(2, 25):
+        ws.cell(7, col).border = Border(bottom=thin)
+
+    # Data rows
+    species = [
+        ("Tusk IV", [41.2, 63.0, 53.1, 1.7, 0.7], 107),
+        ("Ling IV", [2574.5, 2441.4, -5.2, 458.6, 346.7], 2515),
+        ("Tusk V,VI,VII", [90.9, 85.4, -6.1, 1.2, 0.1], 265),
+        ("Ling VI-X,XII,XIV", [2114.9, 1636.0, -22.6, 403.7, 273.4], 3896),
+        ("Black Scabbardfish V-VII,XII", [44.9, 20.0, -55.6, 0.0, 0.0], 194),
+        ("Roundnose/Roughead Grenadier Vb,VI,VII", [6.2, 5.9, -4.7, 0.0, 0.0], 216),
+        ("Blue Ling Vb,VI,VII", [718.3, 715.5, -0.4, 0.0, 0.0], 979),
+    ]
+
+    ws.cell(9, 1, "Deep Sea").font = Font(name="Arial", size=9, bold=True)
+    for idx, (name, vals, quota) in enumerate(species, start=10):
+        ws.cell(idx, 2, name).font = Font(name="Arial", size=9)
+        for c_idx, val in enumerate(vals, start=3):
+            ws.cell(idx, c_idx, val).font = Font(name="Arial", size=9)
+        ws.cell(idx, 24, quota).font = Font(name="Arial", size=9)
+
+    # Footnote
+    ws.cell(18, 2, "2019 landings are for the nearest comparable week last year therefore").font = Font(
+        name="Arial", size=8, italic=True
+    )
+    ws.cell(19, 2, "comparisons will be approximate, and should be treated accordingly.").font = Font(
+        name="Arial", size=8, italic=True
+    )
+
+    # Columns
+    ws.column_dimensions["A"].width = 3
+    ws.column_dimensions["B"].width = 22
+    for c in range(3, 24):
+        col_letter = get_column_letter(c)
+        ws.column_dimensions[col_letter].width = 7
+    ws.column_dimensions["X"].width = 9
+
+    save(
+        wb,
+        "wide-unheaded-deep-sea-stock",
+        "A 24-column landscape unheaded fisheries statistics sheet with grouped headers, repeated empty cell borders, and horizontal multipage split",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [

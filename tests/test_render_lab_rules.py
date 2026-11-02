@@ -270,5 +270,69 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedDeepSeaStockFixtureTest(unittest.TestCase):
+    """The 2020 - Deep sea stock reduction isolates horizontal multipage split,
+    repeated empty cell borders, and unprinted headings (#1340)."""
+
+    def test_wide_unheaded_deep_sea_stock_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-deep-sea-stock")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-deep-sea-stock.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.page_setup.orientation, sheet.ORIENTATION_LANDSCAPE)
+            self.assertEqual(sheet.max_row, 19)
+            self.assertEqual(sheet.max_column, 24)
+
+            # Titles
+            self.assertEqual(
+                sheet.cell(1, 1).value,
+                "Deep Sea Species Statistics: total landings (tonnes live weight) in 2020",
+            )
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(2, 1).value, "27-Jan-21")
+            self.assertEqual(sheet.cell(2, 2).value, "This weeks report includes swap numbers 1448-1502")
+
+            # Headers and borders
+            self.assertEqual(sheet.cell(4, 3).value, "Landings into")
+            self.assertEqual(sheet.cell(5, 2).value, "Stock")
+            self.assertIsNotNone(sheet.cell(4, 6).border.top.style)  # empty cell F4 has top border
+            self.assertIsNotNone(sheet.cell(4, 7).border.top.style)  # empty cell G4 has top border
+
+            # Data rows
+            self.assertEqual(sheet.cell(9, 1).value, "Deep Sea")
+            self.assertEqual(sheet.cell(10, 2).value, "Tusk IV")
+            self.assertEqual(sheet.cell(10, 3).value, 41.2)
+            self.assertEqual(sheet.cell(10, 24).value, 107)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()
