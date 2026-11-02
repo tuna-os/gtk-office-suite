@@ -643,7 +643,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +652,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +662,58 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from OTSI Annual Review 2025-2026: Tables (#1344):
+    # a wide borderless single-column sheet (Column A width ~24 cm / ~896px)
+    # with unprinted headings (headings=False) and hyperlinked table contents
+    # styled with font color #0563C1. In headless LibreOffice Calc PDF export,
+    # borderless text crops to ink width (~412px) while Calc overrides hyperlink
+    # colors to #000080. Tables captures the full used extent of Column A (896px)
+    # plus header bands (ox=40, oy=20). In compare.py, lo_cell_box(ref) returns
+    # None due to missing print headings, align() skips cropping header bands,
+    # and resizes 936px onto 412px (scale 1.74×, 2.27× horizontal squash),
+    # yielding displacement 12.5pt, SSIM 0.67, words 84%, and colors 0%.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 115
+    ws.row_dimensions[1].height = 27
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 21
+
+    cell1 = ws.cell(1, 1, "OTSI Annual Review 2025/26 Tables")
+    cell1.font = Font(name="Arial", size=16, bold=True, color="000000")
+
+    cell2 = ws.cell(2, 1, "This dataset contains nine tables for OTSI's annual review")
+    cell2.font = Font(name="Arial", size=12)
+
+    cell3 = ws.cell(3, 1, "Contents")
+    cell3.font = Font(name="Arial", size=12, bold=True, color="000000")
+
+    links = [
+        ("Cover sheet", "#'Cover sheet'!A1"),
+        ("Notes", "#Notes!A1"),
+        ("Table A1", "#'Table A1'!A1"),
+        ("Table A2", "#'Table A2'!A1"),
+        ("Table A3", "#'Table A3'!A1"),
+        ("Table A4", "#'Table A4'!A1"),
+        ("Table B1", "#'Table B1'!A1"),
+        ("Table B2", "#'Table B2'!A1"),
+        ("Table B3", "#'Table B3'!A1"),
+        ("Table B4", "#'Table B4'!A1"),
+        ("Table C1", "#'Table C1'!A1"),
+        ("Contact Sheet", "#'Contact Sheet'!A1"),
+    ]
+    for idx, (label, target) in enumerate(links, start=4):
+        ws.row_dimensions[idx].height = 21
+        c = ws.cell(idx, 1, label)
+        c.hyperlink = target
+        c.font = Font(name="Arial", size=12, color="0563C1", underline="single")
+
+    save(
+        wb,
+        "wide-borderless-hyperlinks",
+        "A wide borderless single-column cover sheet with hyperlinked contents and unprinted headings; isolates column ink vs viewport extent and hyperlink styling",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
