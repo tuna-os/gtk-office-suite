@@ -663,6 +663,21 @@ def tables():
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
+    # #1338: the CoAST air safety application form has pageSetup scale=53.
+    # Keep this reduction small enough to fit one page even at 100%, with
+    # no print range, merged cells, drawings or manual page breaks. That
+    # isolates explicit print scaling from the real form's other features.
+    wb, ws = book()
+    for r in range(1, 6):
+        for c in range(1, 5):
+            ws.cell(r, c, r * 10 + c)
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.scale = 53
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    save(wb, "air-safety-reduced-print-scale",
+         "A 5x4 block of integers printed at an explicit 53% scale, including the row and column headings")
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
