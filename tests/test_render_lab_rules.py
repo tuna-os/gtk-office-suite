@@ -12,6 +12,11 @@ try:
 except ImportError:  # pragma: no cover - the render lab's own image has them
     np = None
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "render-lab"))
 
 
@@ -269,6 +274,47 @@ class VerdictWordsTest(unittest.TestCase):
     def test_text_that_is_not_recalled_still_holds_a_page_back(self):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedContactListFixtureTest(unittest.TestCase):
+    """The Service reservoir panel engineers reduction isolates horizontal multipage
+    split and unprinted headings (#1346)."""
+
+    def test_wide_unheaded_contact_list_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-contact-list")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-contact-list.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 9)
+            self.assertEqual(sheet.max_column, 15)
+            self.assertEqual(sheet.cell(1, 1).value, "Service Reservoir Panel Engineers Contact Directory")
+            self.assertEqual(sheet.cell(5, 1).value, "Surname")
+            self.assertEqual(sheet.cell(5, 15).value, "Joint corresponding panel")
+            self.assertEqual(sheet.cell(6, 1).value, "Cavanagh")
+            self.assertIsInstance(sheet.cell(6, 13).value, str)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
 
 if __name__ == "__main__":
     unittest.main()
