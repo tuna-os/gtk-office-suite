@@ -270,5 +270,47 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import docx
+except ImportError:
+    docx = None
+
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableCellNumberedListIndentFixtureTest(unittest.TestCase):
+    """The transparency outside appointments reduction isolates table cell
+    numbered list item indents and line wrapping in Letters (#1358)."""
+
+    def test_table_cell_numbered_list_indent_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-cell-numbered-list-indent")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-cell-numbered-list-indent.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 2)
+            c0 = table.cell(0, 0)
+            self.assertEqual(len(c0.paragraphs), 3)
+            self.assertEqual(c0.paragraphs[0].text, "Department’s Decision on Application")
+            self.assertEqual(c0.paragraphs[1].style.name, "List Number")
+            self.assertTrue(len(c0.paragraphs[1].text) > 50)
+            self.assertEqual(c0.paragraphs[2].style.name, "List Number")
+            self.assertTrue(len(c0.paragraphs[2].text) > 50)
+            self.assertEqual(table.cell(1, 0).paragraphs[0].text, "Next row verification text")
+
 if __name__ == "__main__":
     unittest.main()

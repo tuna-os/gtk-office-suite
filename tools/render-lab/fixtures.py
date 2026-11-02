@@ -375,6 +375,41 @@ def letters(img):
             t.cell(r, c).text = f"R{r + 1}C{c + 1}"
     save(x, "table", "A 3x3 table with visible grid borders and cell text")
 
+    # Reduced from real-transparency-information-about-outside-appointme (#1358):
+    # In table cells containing numbered list items with declared indent
+    # (w:ind w:left="405"), LibreOffice Writer aligns continuation lines with
+    # the declared text indent (20.25pt / x=406px) and hangs the numeric marker
+    # 18pt in front (x=382px). In Letters, table cell paragraphs did not have
+    # list_indent_from_declared applied, adding an extra 18pt list indent on top
+    # of the declared indent. This shifts wrapped lines 24px to the right, narrowing
+    # the wrapping width, forcing lines to wrap onto an additional line, and expanding
+    # row height (+18px / +13.5pt).
+    x = doc()
+    t = x.add_table(rows=2, cols=1)
+    t.style = "Table Grid"
+    c0 = t.cell(0, 0)
+    c0.paragraphs[0].text = "Department’s Decision on Application"
+    p1 = c0.add_paragraph(
+        "You should not draw on privileged information available to you as a Crown servant.",
+        style="List Number",
+    )
+    p1.paragraph_format.left_indent = Pt(20.25)
+    p2 = c0.add_paragraph(
+        "For two years from your last paid day of service, you should not become "
+        "personally involved in lobbying the UK Government on behalf of Lend Lease directly "
+        "or indirectly, or make use of your contacts in Government and/or Crown service to "
+        "influence policy or secure business on behalf of Lend Lease.",
+        style="List Number",
+    )
+    p2.paragraph_format.left_indent = Pt(20.25)
+    c1 = t.cell(1, 0)
+    c1.paragraphs[0].text = "Next row verification text"
+    save(
+        x,
+        "table-cell-numbered-list-indent",
+        "A table cell containing numbered list items with custom indent: wrapped lines align at declared indent",
+    )
+
     x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
