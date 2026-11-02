@@ -748,6 +748,26 @@ def tables():
     ws["B3"] = "wide and tall"
     save(wb, "col-row-size", "Column B is ~3x default width, row 3 ~3x default height")
 
+    # #1333: Excel saves automatic heights in ht without customHeight.
+    # openpyxl always writes customHeight with a height, so remove just that
+    # marker from row 1 to exercise the foreign-file case.
+    wb, ws = book()
+    ws["A1"] = "Saved automatic height"
+    ws["A2"] = "Following row"
+    ws.column_dimensions["A"].width = 30
+    ws.row_dimensions[1].height = 47.25
+    save(wb, "saved-row-height", "Row 1 retains its saved 47.25pt height without customHeight; row 2 follows at 63px")
+    import zipfile
+
+    path = os.path.join(d, "saved-row-height.xlsx")
+    with zipfile.ZipFile(path) as source:
+        parts = [(info, source.read(info.filename)) for info in source.infolist()]
+    with zipfile.ZipFile(path, "w") as dest:
+        for info, data in parts:
+            if info.filename == "xl/worksheets/sheet1.xml":
+                data = data.replace(b' customHeight="1"', b'')
+            dest.writestr(info, data)
+
     wb, ws = book()
     for i in range(1, 11):
         ws.cell(i, 1, i * 10)

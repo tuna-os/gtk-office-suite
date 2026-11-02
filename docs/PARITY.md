@@ -97,6 +97,12 @@ are not all green, and any fixture name the baseline does not have.
 | Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) | — |
 | Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc | ✅ tables/borders, tables/merged |
 
+XLSX row geometry (#1333): the reader retains saved `ht` values even when
+`customHeight` is absent or false. The regression test
+`xlsx_saved_row_heights_do_not_require_custom_height` covers the import;
+`tables/saved-row-height` isolates its visual effect. Render measurement is
+pending; the June 2026 forecast report remains amber in the real baseline.
+
 ### Tier 2 — Nice-to-have
 
 | Feature | Status | Proven by | Render |
