@@ -376,6 +376,21 @@ def letters(img):
     save(x, "table", "A 3x3 table with visible grid borders and cell text")
 
     x = doc()
+    # Reduced from real-affordable-housing-supply-data-dictionary (#1357):
+    # A table row near the bottom of a page whose lines cannot fit in the
+    # remaining space moves whole to the next page, rather than splitting
+    # to place only cell padding and leaving an empty cell box on page 1.
+    for i in range(25):
+        x.add_paragraph(f"Paragraph {i + 1} before table filling the page.")
+    t = x.add_table(rows=2, cols=2)
+    t.style = "Table Grid"
+    t.cell(0, 0).text = "Row 1 Col 1"
+    t.cell(0, 1).text = "Row 1 Col 2"
+    t.cell(1, 0).text = "Row 2 Col 1"
+    t.cell(1, 1).text = "Row 2 Col 2"
+    save(x, "table-row-split", "A table row near the bottom of a page moves whole to the next page when its text lines do not fit")
+
+    x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
     save(x, "image", "A 2in-wide four-colour image under the caption")

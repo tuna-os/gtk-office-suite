@@ -1526,14 +1526,36 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 notes_h = need;
             };
             let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
-            let placed_any = takes.iter().zip(&next).any(|((n, _), from)| n > from);
+            let placed_any = if slices.iter().any(|c| c.iter().any(|s| matches!(s, Slice::Line(..)))) {
+                slices
+                    .iter()
+                    .zip(next.iter().zip(&takes))
+                    .any(|(cell, (&from, &(to, _)))| cell[from..to].iter().any(|s| matches!(s, Slice::Line(..))))
+            } else {
+                takes.iter().zip(&next).any(|((n, _), from)| n > from)
+            };
             if !done && !placed_any && !flow.column_is_empty() {
                 flow.next_column();
                 continue;
             }
             // A line taller than a whole page goes where it is anyway.
             let takes: Vec<(usize, f64)> = if !done && !placed_any {
-                slices.iter().zip(&next).map(|(c, &from)| if from < c.len() { (from + 1, c[from].height()) } else { (from, 0.0) }).collect()
+                slices
+                    .iter()
+                    .zip(&next)
+                    .map(|(c, &from)| {
+                        if from < c.len() {
+                            let to = match c[from..].iter().position(|s| matches!(s, Slice::Line(..))) {
+                                Some(pos) => from + pos + 1,
+                                None => c.len(),
+                            };
+                            let h: f64 = c[from..to].iter().map(Slice::height).sum();
+                            (to, h)
+                        } else {
+                            (from, 0.0)
+                        }
+                    })
+                    .collect()
             } else {
                 takes
             };
