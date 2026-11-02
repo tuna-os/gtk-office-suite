@@ -12,6 +12,11 @@ try:
 except ImportError:  # pragma: no cover - the render lab's own image has them
     np = None
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "render-lab"))
 
 
@@ -269,6 +274,70 @@ class VerdictWordsTest(unittest.TestCase):
     def test_text_that_is_not_recalled_still_holds_a_page_back(self):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedTransactionsFixtureTest(unittest.TestCase):
+    """The Insolvency Service Transactions April 2026 reduction isolates horizontal multipage
+    split and unprinted headings (#1331)."""
+
+    def test_wide_unheaded_transactions_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-transactions")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-transactions.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 21)
+            self.assertEqual(sheet.max_column, 11)
+
+            # Headers
+            self.assertEqual(sheet.cell(1, 1).value, "Department Family")
+            self.assertEqual(sheet.cell(1, 2).value, "Entity")
+            self.assertEqual(sheet.cell(1, 3).value, "Date")
+            self.assertEqual(sheet.cell(1, 4).value, "Expense Type")
+            self.assertEqual(sheet.cell(1, 5).value, "Expense Area")
+            self.assertEqual(sheet.cell(1, 6).value, "Supplier")
+            self.assertEqual(sheet.cell(1, 7).value, "Transaction Number")
+            self.assertEqual(sheet.cell(1, 8).value, "Amount")
+            self.assertEqual(sheet.cell(1, 9).value, "Description")
+            self.assertEqual(sheet.cell(1, 10).value, "Supplier Type")
+            self.assertEqual(sheet.cell(1, 11).value, "VAT RegNo")
+
+            # Column dimensions
+            self.assertEqual(sheet.column_dimensions["A"].width, 13)
+            self.assertEqual(sheet.column_dimensions["B"].width, 21)
+            self.assertEqual(sheet.column_dimensions["D"].width, 43)
+            self.assertEqual(sheet.column_dimensions["E"].width, 56)
+            self.assertEqual(sheet.column_dimensions["F"].width, 55)
+            self.assertEqual(sheet.column_dimensions["I"].width, 45)
+
+            # Sample row
+            self.assertEqual(sheet.cell(2, 1).value, "AGY")
+            self.assertEqual(sheet.cell(2, 2).value, "The Insolvency Service")
+            self.assertEqual(sheet.cell(2, 6).value, "Alexander Mann Solutions")
+            self.assertEqual(sheet.cell(2, 7).value, 300074809)
+            self.assertEqual(sheet.cell(2, 8).value, 115658.80)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
 
 if __name__ == "__main__":
     unittest.main()

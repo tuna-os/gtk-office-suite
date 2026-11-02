@@ -632,6 +632,8 @@ def letters(img):
 
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
 def tables():
+    from datetime import datetime
+
     from openpyxl import Workbook
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -643,7 +645,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +654,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +664,88 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from Insolvency Service Transactions April 2026 (#1331):
+    # an 11-column unheaded ledger of spend transactions exceeding 290 width
+    # units (~75 cm) paginates horizontally across multiple pages in LibreOffice
+    # Calc when headings are disabled, while Tables renders the continuous used
+    # extent. In compare.py, candidate page picking chooses page 1 only and
+    # align() fails to crop on-screen header bands (ox=40, oy=20), compressing
+    # all 11 columns onto page 1's bounds, yielding scale 1.69×, SSIM 0.12, and
+    # 34% words found.
+    wb, ws = book()
+    ws.title = "Transactions"
+    tx_headers = [
+        "Department Family",
+        "Entity",
+        "Date",
+        "Expense Type",
+        "Expense Area",
+        "Supplier",
+        "Transaction Number",
+        "Amount",
+        "Description",
+        "Supplier Type",
+        "VAT RegNo",
+    ]
+    tx_widths = {
+        "A": 13,
+        "B": 21,
+        "C": 11,
+        "D": 43,
+        "E": 56,
+        "F": 55,
+        "G": 19,
+        "H": 11,
+        "I": 45,
+        "J": 13,
+        "K": 14,
+    }
+    for col_letter, width in tx_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    for c_idx, h in enumerate(tx_headers, start=1):
+        cell = ws.cell(1, c_idx, h)
+        cell.font = Font(name="Calibri", size=11)
+
+    transactions = [
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074809, 115658.80, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Change and Technology Services", "Wavenet Limited", 300074673, 58239.90, "ICT", "Large", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Investigations & Enforcement Services", "BlueLight Commercial Limited", 300074568, 41755.19, "ICT", "Small", 349449851),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Change and Technology Services", "Nine23 Ltd", 300074501, 29403.85, "ICT", "Small", 141851034),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "Agency Staff & Contractor Costs", "Projects", "SmartSourcing", 300074503, 27957.60, "Staff Costs - Non-Perms", "Medium", 788507869),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 8), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074676, 111388.46, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 8), "Forensic Accounting", "Finance, Commercial, Sustainability & Property", "Ernst & Young LLP", 300074897, 47940.00, "Investigation & Enforcement", "Large", 773831408),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 12), "IT - Transform", "Projects", "Great Wave AI Limited", 300074674, 162000.00, "ICT", "Micro", 464432884),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 13), "IT - Refresh", "Change and Technology Services", "Risk Ledger Ltd", 300074701, 45600.00, "ICT", "Small", 294427378),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074755, 85867.16, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "IT - Transform", "Projects", "NTT Data UK Limited", 300074751, 82692.00, "ICT", "Large", 159334590),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "INSSpire Award Vouchers", "Shared Contracts", "Edenred (UK Group) Limited", 300074753, 65600.00, "Staff Costs - Perms", "Medium", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 21), "IT - Run", "Investigations & Enforcement Services", "NEC Software Solutions UK Ltd", 300074890, 69168.00, "ICT", "Large", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 21), "IT - Run", "Change and Technology Services", "Prolifics", 300074863, 28996.25, "ICT", "Micro", 639210253),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 22), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074903, 81587.87, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 24), "IT - Run", "Change and Technology Services", "Prolifics", 300074964, 42109.50, "ICT", "Micro", 639210253),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 24), "IT - Run", "Investigations & Enforcement Services", "Insight Direct (UK) Ltd", 300074961, 40935.66, "ICT", "Large", 746075129),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 27), "IT - Run", "Investigations & Enforcement Services", "Intaforensics Ltd", 300074565, 162470.30, "ICT", "Micro", 900353372),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 30), "Solicitors Investigations", "Investigations & Enforcement Services", "Mills & Reeve LLP", 300074602, 52877.05, "Legal - Outsourced Investigation", "Large", 104834588),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 30), "Storage - OR", "Shared Contracts", "Iron Mountain (UK) Ltd", 300074948, 30890.86, "Off-Site Storage", "Large", 607937516),
+    ]
+
+    for r_idx, row in enumerate(transactions, start=2):
+        for c_idx, val in enumerate(row, start=1):
+            cell = ws.cell(r_idx, c_idx, val)
+            cell.font = Font(name="Calibri", size=11)
+            if isinstance(val, datetime):
+                cell.number_format = "mm-dd-yy"
+            elif isinstance(val, float):
+                cell.number_format = "#,##0.00"
+
+    save(
+        wb,
+        "wide-unheaded-transactions",
+        "An 11-column unheaded financial transactions ledger spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
