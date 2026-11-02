@@ -368,6 +368,53 @@ def letters(img):
     save(x, "nested-list", "Three bullet levels, each further indented")
 
     x = doc()
+    numbering = x.part.numbering_part.element
+    ab_num = OxmlElement("w:abstractNum")
+    ab_num.set(qn("w:abstractNumId"), "99")
+    lvl = OxmlElement("w:lvl")
+    lvl.set(qn("w:ilvl"), "0")
+    start = OxmlElement("w:start")
+    start.set(qn("w:val"), "1")
+    numFmt = OxmlElement("w:numFmt")
+    numFmt.set(qn("w:val"), "decimal")
+    lvlText = OxmlElement("w:lvlText")
+    lvlText.set(qn("w:val"), "%1.")
+    pPr = OxmlElement("w:pPr")
+    ind = OxmlElement("w:ind")
+    ind.set(qn("w:left"), "567")
+    ind.set(qn("w:hanging"), "567")
+    pPr.append(ind)
+    lvl.append(start)
+    lvl.append(numFmt)
+    lvl.append(lvlText)
+    lvl.append(pPr)
+    ab_num.append(lvl)
+    first_num = numbering.find(qn("w:num"))
+    numbering.insert(numbering.index(first_num), ab_num)
+    num = OxmlElement("w:num")
+    num.set(qn("w:numId"), "100")
+    ab_ref = OxmlElement("w:abstractNumId")
+    ab_ref.set(qn("w:val"), "99")
+    num.append(ab_ref)
+    numbering.append(num)
+
+    for item in (
+        "First item with 567 twips left and hanging indent from numbering level",
+        "Second item wrapping across multiple lines so the hanging indent aligns subsequent lines with the first line text and places the marker at the page margin",
+    ):
+        p = x.add_paragraph(item, style="List Paragraph")
+        pPr = p._p.get_or_add_pPr()
+        numPr = OxmlElement("w:numPr")
+        ilvl = OxmlElement("w:ilvl")
+        ilvl.set(qn("w:val"), "0")
+        numId = OxmlElement("w:numId")
+        numId.set(qn("w:val"), "100")
+        numPr.append(ilvl)
+        numPr.append(numId)
+        pPr.append(numPr)
+    save(x, "numbering-level-indent", "Directly numbered items with 567 twips left and hanging indent from abstractNum overriding List Paragraph style")
+
+    x = doc()
     t = x.add_table(rows=3, cols=3)
     t.style = "Table Grid"
     for r in range(3):

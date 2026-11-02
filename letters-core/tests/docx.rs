@@ -2462,6 +2462,44 @@ fn a_list_items_own_zero_indent_is_kept() {
     assert_eq!((rt.paragraphs[0].style.left_indent_pt, rt.paragraphs[0].style.list_hanging_pt), (st.left_indent_pt, st.list_hanging_pt));
 }
 
+/// A list item whose numbering level specifies an indent (and hanging
+/// indent) uses them over its paragraph style's: Word's ListParagraph style
+/// sets w:left="720", while a form's numbering level (such as Form BP15,
+/// #1362) sets w:left="567" w:hanging="567". Reading the style's indent
+/// displaced every item ~8pt right.
+#[test]
+fn a_numbering_levels_indent_overrides_paragraph_style_indent() {
+    let mut d = Document::from_plain_text("item");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    let doctored = doctor_parts(&d, |parts| {
+        // Strip direct w:ind from the paragraph so it inherits from style and numbering.
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("</w:numPr>").expect("a list item") + "</w:numPr>".len();
+        let tail = &body[at..];
+        let end = tail.find("/>").map(|e| at + e + 2).filter(|_| tail.starts_with("<w:ind"));
+        if let Some(e) = end {
+            body.replace_range(at..e, "<w:pStyle w:val=\"ListParagraph\"/>");
+        }
+        // Give ListParagraph an indent of 720 twips (36pt).
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        let lp = "<w:style w:type=\"paragraph\" w:styleId=\"ListParagraph\"><w:name w:val=\"List Paragraph\"/>\
+                  <w:pPr><w:ind w:left=\"720\"/></w:pPr></w:style>";
+        *styles = styles.replace("</w:styles>", &format!("{lp}</w:styles>"));
+        // Give the numbering level 0 an indent of 567 twips (28.35pt) and hanging 567 twips.
+        let num = parts.get_mut("word/numbering.xml").unwrap();
+        if let Some(pos) = num.find("<w:ind ") {
+            let end_ind = num[pos..].find("/>").unwrap() + pos + 2;
+            num.replace_range(pos..end_ind, "<w:ind w:left=\"567\" w:hanging=\"567\"/>");
+        }
+    });
+    let st = &doctored.paragraphs[0].style;
+    assert_eq!(st.list, ListKind::Numbered);
+    // 567 twips = 28.35pt. text_indent_pt(0) = 18.0pt.
+    // left_indent_pt = 28.35 - 18.0 = 10.35pt (not 36.0 - 18.0 = 18.0pt).
+    assert!((st.left_indent_pt - 10.35).abs() < 0.01, "left_indent: {}", st.left_indent_pt);
+    assert_eq!(st.list_hanging_pt, Some(28.35));
+}
+
 /// A table's indent survives a save and reopen, and `w:tblInd` reads by
 /// the file's rules: under Word 2013's (compatibility mode 15) it is the
 /// table's edge, its text a left padding further right; under older ones
