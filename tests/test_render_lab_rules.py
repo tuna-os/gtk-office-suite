@@ -270,5 +270,59 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import docx
+except ImportError:
+    docx = None
+
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class BulletSymbolFontLineHeightFixtureTest(unittest.TestCase):
+    """The DCMS business appointment rules reduction isolates symbol font bullet
+    marker line height expansion in Letters (#1364)."""
+
+    def test_bullet_symbol_font_line_height_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        import xml.etree.ElementTree as ET
+        import zipfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "bullet-symbol-font-line-height")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/bullet-symbol-font-line-height.docx")
+            doc_path = Path(tmp_path) / entry["file"]
+            doc = docx.Document(doc_path)
+            self.assertEqual(len(doc.paragraphs), 4)
+            self.assertEqual(doc.paragraphs[0].text, "Introductory paragraph before the bullet list.")
+            self.assertEqual(doc.paragraphs[1].style.name, "List Bullet")
+            self.assertTrue(len(doc.paragraphs[1].text) > 50)
+            self.assertEqual(doc.paragraphs[2].style.name, "List Bullet")
+            self.assertTrue(len(doc.paragraphs[2].text) > 50)
+            self.assertEqual(doc.paragraphs[3].text, "Following paragraph after the bullet list verifying subsequent position.")
+
+            with zipfile.ZipFile(doc_path) as z:
+                num_xml = z.read("word/numbering.xml").decode("utf-8")
+                root_el = ET.fromstring(num_xml)
+                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                w_ascii = "{" + ns["w"] + "}ascii"
+                found_noto = any(
+                    "Noto Sans Symbols" in lvl.find("w:rPr/w:rFonts", ns).attrib.get(w_ascii, "")
+                    for lvl in root_el.findall(".//w:lvl", ns)
+                    if lvl.find("w:rPr/w:rFonts", ns) is not None
+                )
+                self.assertTrue(found_noto, "numbering level 0 specifies Noto Sans Symbols")
+
+
 if __name__ == "__main__":
     unittest.main()
