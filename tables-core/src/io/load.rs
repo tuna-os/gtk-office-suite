@@ -674,6 +674,38 @@ mod tests {
         path
     }
 
+    /// Reduction of render-real #1324: Excel caches automatic row heights
+    /// without customHeight, and the grid must not replace them with 24px.
+    #[test]
+    fn xlsx_imports_stored_row_heights_without_custom_height() {
+        let path = protection_fixture(
+            r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="1"><xf/></cellXfs></styleSheet>"#,
+            &[
+                ("Plain", r#"<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>"#),
+                ("Heights", r#"<sheetData>
+                    <row r="1" ht="20"><c r="A1"><v>1</v></c></row>
+                    <row r="2" ht="15.5" customHeight="0"/>
+                    <row r="3" ht="23.5" customHeight="1"/>
+                    <row r="4" ht="18" hidden="true"/>
+                    <row r="5" ht="NaN"/><row r="6" ht="-2"/>
+                    <row r="7" ht="inf"/><row r="8" customHeight="1"/>
+                    </sheetData>"#),
+            ],
+        );
+        let (_, sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        let plain = &sheets[0];
+        let heights = &sheets[1];
+        assert!((heights.row_height(0) - 20.0 / 0.75).abs() < 0.001);
+        assert!((heights.row_height(1) - 15.5 / 0.75).abs() < 0.001);
+        assert!((heights.row_height(2) - 23.5 / 0.75).abs() < 0.001);
+        assert_eq!(heights.row_heights[3], 24.0, "hidden rows keep their stored height");
+        assert!(heights.hidden_rows_manual.contains(&3));
+        for row in 4..8 {
+            assert_eq!(heights.row_height(row), plain.row_height(row), "invalid/missing ht at row {row}");
+        }
+        assert_eq!(plain.row_height(0), plain.row_height(1), "height belongs to its sheet");
+    }
+
     #[test]
     fn xlsx_imports_cell_protection_on_later_sheets_and_blank_cells() {
         use crate::sheet::CellProtection;

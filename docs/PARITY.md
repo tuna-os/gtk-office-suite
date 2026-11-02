@@ -97,6 +97,14 @@ are not all green, and any fixture name the baseline does not have.
 | Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) | — |
 | Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc | ✅ tables/borders, tables/merged |
 
+The UKHSA GPC reduction (#1324) adds `tables/stored-row-heights` for XLSX
+rows whose `ht` is present without `customHeight`. The reader now preserves
+those cached automatic heights instead of using the grid default. The
+regression is `io::load::tests::xlsx_imports_stored_row_heights_without_custom_height`;
+its execution and the fixture's visual parity remain unverified on the
+contributor host (no C linker or render container engine). This does not
+promote the real document or change its amber baseline.
+
 ### Tier 2 — Nice-to-have
 
 | Feature | Status | Proven by | Render |

@@ -663,6 +663,26 @@ def tables():
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
+    # Excel writes cached automatic heights with ht but no customHeight.
+    # openpyxl marks every nonempty height custom, so remove that flag from
+    # the source package to reproduce the UKHSA GPC rows (#1324).
+    wb, ws = book()
+    for row in range(1, 11):
+        ws.cell(row, 1, f"Row {row}").font = Font(name="Arial", size=12)
+        ws.row_dimensions[row].height = 15.5
+    save(wb, "stored-row-heights", "Ten Arial 12 rows retain their stored 15.5pt automatic heights")
+    import io
+    import zipfile
+    path = os.path.join(d, "stored-row-heights.xlsx")
+    with open(path, "rb") as source:
+        original = source.read()
+    with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(path, "w") as target:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                data = data.replace(b' customHeight="1"', b'')
+            target.writestr(entry, data)
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
