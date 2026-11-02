@@ -29,6 +29,9 @@ pub struct SheetXlsxProps {
     /// produces an empty map rather than a row of defaults.
     pub col_widths: std::collections::HashMap<usize, f64>,
     pub row_heights: std::collections::HashMap<usize, f64>,
+    /// Worksheet default row height in pixels, including rows absent from
+    /// sheetData. Explicit row heights override this value.
+    pub default_row_height: Option<f64>,
     /// `(frozen_rows, frozen_cols)` from a frozen `<pane>`, absent when
     /// the sheet has no split or a merely *split* (draggable) one, which
     /// this app has no model for and must not silently read as frozen.
@@ -491,6 +494,15 @@ pub fn read_sheet_props_from_xlsx(
             default_font: default_font.clone(),
             ..SheetXlsxProps::default()
         };
+
+        if let Some(tag) = xml.split("<sheetFormatPr ").nth(1) {
+            let tag = tag.split('>').next().unwrap_or("");
+            props.default_row_height = xml_attr(tag, "defaultRowHeight")
+                .and_then(|v| v.parse::<f64>().ok())
+                .filter(|h| h.is_finite() && *h >= 0.0)
+                .map(height_points_to_pixels)
+                .filter(|h| h.is_finite());
+        }
 
         if let Some(cols_block) = xml.split("<cols>").nth(1) {
             let cols_block = cols_block.split("</cols>").next().unwrap_or("");

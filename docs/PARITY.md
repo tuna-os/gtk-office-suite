@@ -84,6 +84,12 @@ are not all green, and any fixture name the baseline does not have.
 
 ## Tables (spreadsheet)
 
+The Planning Inspectorate reduction (#1328), `tables/default-row-height`,
+exercises XLSX `sheetFormatPr defaultRowHeight`, including blank rows absent
+from `sheetData` and explicit row overrides. The reader now applies this
+worksheet default before row overrides. Visual parity is unmeasured; the
+real-document baseline remains amber pending a render-lab run.
+
 ### Tier 1 — Core
 
 | Feature | Status | Proven by | Render |
