@@ -270,5 +270,49 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import docx
+except ImportError:
+    docx = None
+
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableRowMinHeightPageBreakFixtureTest(unittest.TestCase):
+    """The Crime Supervisor Declaration Form reduction isolates table row
+    minimum height (w:trHeight) pagination across page breaks (#1353)."""
+
+    def test_table_row_min_height_page_break_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-row-min-height-page-break")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-row-min-height-page-break.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 2)
+            self.assertIn("Page 1 tall row", table.cell(0, 0).paragraphs[0].text)
+            self.assertIn("Page 2 row with minimum height", table.cell(1, 0).paragraphs[0].text)
+
+            # Check raw XML in the file for w:trHeight elements on both rows
+            with zipfile.ZipFile(Path(tmp_path) / entry["file"]) as z:
+                xml = z.read("word/document.xml").decode("utf-8")
+                self.assertIn('<w:trHeight w:val="10800"/>', xml)
+                self.assertIn('<w:trHeight w:val="3600"/>', xml)
+
+
 if __name__ == "__main__":
     unittest.main()
