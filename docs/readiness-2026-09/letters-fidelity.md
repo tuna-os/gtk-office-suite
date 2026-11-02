@@ -2,6 +2,21 @@
 
 Original audit: `e7e4df6`; follow-up to closed #109–#111. The dated assessment below supersedes historical current-state language, not the recorded regressions and fixes.
 
+### Social housing dictionary: URL wrapping (#1367)
+
+The Pango shaper now keeps slashes with the following path segment, as
+Writer does in the dictionary's narrow Notes cells. Hyphens and emergency
+character wrapping remain available, and source text offsets are unchanged.
+`url_paths_wrap_at_hyphens_instead_of_slashes` fails without the fix;
+`letters/url-path-wrapping` reduces the behavior to a standalone render fixture.
+
+Local core rendering of the published document, compared with the issue's
+LibreOffice artifact, improves median word displacement from 21.4pt to 7.9pt
+and lost lines from four to zero. This is diagnostic evidence, not a full
+GUI corpus run: hyperlink color and later-page geometry still differ, so
+`baseline-real.json` keeps this document amber for A and green for B.
+The container engine needed for the full A/B run is unavailable locally.
+
 ## Direction assessment — 2026-10-13
 
 **[INFERENCE] A usable GNOME-native word processor is a viable direction on the
