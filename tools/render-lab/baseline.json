@@ -254,6 +254,10 @@
     "B": "amber",
     "C": "amber"
   },
+  "letters/table-cell-content-control": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/text-color": {
     "A": "green",
     "B": "green",
