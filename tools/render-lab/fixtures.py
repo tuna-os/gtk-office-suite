@@ -664,6 +664,27 @@ def tables():
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
     wb, ws = book()
+    # Reduced from real-fruit-and-vegetable-aid-scheme-annual-stats-2025
+    # (#1334): wide columns (widths 45, 42, 60) exceed standard A4 portrait
+    # printable width (~17.4 cm) and span across multiple vertical pages
+    # (40 rows). LibreOffice Calc's default print order paginates in "Down,
+    # then across" sequence, placing column A on pages 1-2, column B on pages
+    # 3-4, and column C on pages 5-6. Tables captures the continuous on-screen
+    # grid with all columns visible in the viewport.
+    for r in range(1, 41):
+        ws.cell(r, 1, f"Category item {r}")
+        ws.cell(r, 2, f"Subcategory detail {r}")
+        ws.cell(r, 3, r * 100)
+    ws.column_dimensions["A"].width = 45
+    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["C"].width = 60
+    save(
+        wb,
+        "paginated-columns",
+        "A multi-page sheet with columns wider than page printable width, paginating down-then-across in Calc",
+    )
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
