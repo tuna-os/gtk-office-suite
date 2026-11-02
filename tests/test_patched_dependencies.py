@@ -7,13 +7,15 @@ easiest thing in a build to forget: it keeps working, so nothing ever asks
 whether it is still needed, and if it points at a branch rather than a commit
 the build stops being reproducible without anyone choosing that.
 
-So every entry must pin a `rev` and appear in docs/DEPENDENCIES.md, and the
-document must say how to remove it.
+So every entry must pin a `rev` or use checked-in vendor sources, appear in
+docs/DEPENDENCIES.md, and say how to remove it.
 """
 
 import os
 import re
+import tomllib
 import unittest
+from pathlib import Path
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARGO_TOML = os.path.join(REPO_ROOT, "Cargo.toml")
@@ -54,21 +56,19 @@ def patch_entries(manifest=CARGO_TOML):
 
 
 class PatchedDependencies(unittest.TestCase):
-    def test_every_patch_is_pinned_to_a_commit(self):
+    def test_every_patch_is_pinned_or_vendored(self):
         for name, spec in patch_entries():
             with self.subTest(crate=name):
-                self.assertIn(
-                    "rev =",
-                    spec,
-                    f"{name} is patched without a rev. A branch or tag can move "
-                    "under the build, which makes the release gate's "
-                    "reproducibility claim false.",
-                )
-                self.assertNotIn(
-                    "branch =",
-                    spec,
-                    f"{name} is patched to a branch; pin the commit instead",
-                )
+                source = tomllib.loads("source = {" + spec + "}")["source"]
+                self.assertNotIn("branch", source, "pin a commit, not a moving branch")
+                if "path" in source:
+                    path = (Path(REPO_ROOT) / source["path"]).resolve()
+                    self.assertTrue(path.is_relative_to(Path(REPO_ROOT) / "vendor"))
+                    self.assertTrue((path / "Cargo.toml").is_file())
+                    self.assertTrue((path / "LICENSE").is_file())
+                    self.assertTrue((Path(REPO_ROOT) / "vendor" / "README.md").is_file())
+                else:
+                    self.assertIn("rev", source, f"{name} must pin a commit")
 
     def test_every_patch_is_documented(self):
         entries = patch_entries()
@@ -97,10 +97,18 @@ class PatchedDependencies(unittest.TestCase):
         """A separate workspace that builds the same crates needs the same
         patches, pinned to the same commits; otherwise the nightly fuzz job
         fails on the bug the root patch exists to avoid."""
+        def sources(manifest):
+            result = {}
+            for name, spec in patch_entries(manifest):
+                source = tomllib.loads("source = {" + spec + "}")["source"]
+                if "path" in source:
+                    source["path"] = str((Path(manifest).parent / source["path"]).resolve())
+                result[name] = source
+            return result
+
         self.assertEqual(
-            sorted(patch_entries(FUZZ_CARGO_TOML)),
-            sorted(patch_entries()),
-            "fuzz/Cargo.toml's [patch.crates-io] must mirror the root Cargo.toml's",
+            sources(FUZZ_CARGO_TOML), sources(CARGO_TOML),
+            "fuzz/Cargo.toml's patches must resolve to the same sources as the root's",
         )
 
     def test_a_branch_pin_would_be_rejected(self):

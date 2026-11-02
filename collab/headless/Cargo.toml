@@ -28,3 +28,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net",
 serde_json = "1"
 tempfile = "3"
 parking_lot = "0.13"
+
+[patch.crates-io]
+# Mirror the product's collaboration security backports (#1043).
+loro-internal = { path = "../../vendor/loro-internal" }
+serde_columnar = { path = "../../vendor/serde_columnar" }
