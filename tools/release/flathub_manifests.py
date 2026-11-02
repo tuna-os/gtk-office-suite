@@ -2,6 +2,7 @@
 """Flathub's manifests, derived from the development ones (#1209).
 
     flathub_manifests.py <archive-url-or-path> <sha256> <out-dir>
+    flathub_manifests.py letters <tag> <flatpak-cargo-generator.py> <out-dir>
 
 The manifests in flatpak/ build from the checkout and let cargo fetch
 crates while building (`--share=network`), which suits CI and is refused
@@ -22,11 +23,46 @@ path CI has just checked. `locked_sources_problems` says which is not.
 
 import copy
 import glob
+import hashlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 FLATPAK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "flatpak")
+
+
+def letters_submission(tag: str, generator: str, out: str) -> None:
+    """Prepare Letters from a tag's lock, never the working tree's lock.
+
+    Run with the Python environment that has the official
+    flatpak-cargo-generator.py's dependencies installed.
+    """
+    repo = Path(FLATPAK_DIR).resolve().parent
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"], cwd=repo, text=True).strip()
+    lock = subprocess.check_output(["git", "show", f"{commit}:Cargo.lock"], cwd=repo)
+    output = Path(out).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "letters-Cargo.lock").write_bytes(lock)
+    generator_path = Path(generator).resolve()
+    with tempfile.TemporaryDirectory() as tmp:
+        lock_path = Path(tmp) / "Cargo.lock"
+        lock_path.write_bytes(lock)
+        subprocess.run([sys.executable, str(generator_path), str(lock_path),
+                        "-o", str(output / "cargo-sources.json")], check=True)
+    dev = json.loads((repo / "flatpak/org.tunaos.letters.json").read_text())
+    manifest = flathub(dev, "unused", "unused")
+    module = manifest["modules"][-1]
+    module["sources"] = [{"type": "git", "url": "https://github.com/tuna-os/gtk-office-suite.git",
+                          "tag": tag, "commit": commit}, "cargo-sources.json"]
+    manifest["build-options"].setdefault("env", {})["CARGO_HOME"] = f"/run/build/{module['name']}/cargo"
+    (output / "org.tunaos.letters.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    provenance = {"tag": tag, "commit": commit, "cargo-lock-sha256": hashlib.sha256(lock).hexdigest(),
+                  "generator-sha256": hashlib.sha256(generator_path.read_bytes()).hexdigest()}
+    (output / "letters-source.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
 
 def flathub(dev: dict, archive: str, sha256: str) -> dict:
@@ -67,6 +103,11 @@ def locked_sources_problems(manifest: dict) -> list:
 
 
 def main(argv: list) -> int:
+    # Archive mode remains the candidate gate; submission mode prepares the
+    # checked-in Letters manifest and source list for the owner to submit.
+    if len(argv) == 5 and argv[1] == "letters":
+        letters_submission(*argv[2:])
+        return 0
     archive, sha256, out = argv[1:4]
     os.makedirs(out, exist_ok=True)
     failed = False
