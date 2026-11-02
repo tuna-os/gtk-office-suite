@@ -67,7 +67,7 @@ jobs:
       - name: Install pytest and the pieces of GUI setup under test
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq python3-pytest xvfb x11-utils libglib2.0-bin python3-numpy python3-pil
+          sudo apt-get install -y -qq python3-pytest xvfb x11-utils libglib2.0-bin python3-numpy python3-pil python3-openpyxl
 
       # --junitxml: the outcomes this lane's ledger step judges below. A
       # collection says a test exists; only the report says it ran (SH-001).
@@ -108,6 +108,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_wide_column.py \
             tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
@@ -192,6 +193,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_wide_column.py \
             tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
