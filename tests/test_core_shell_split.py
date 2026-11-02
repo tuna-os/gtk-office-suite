@@ -15,11 +15,8 @@ test, and silently end the property: from then on the crate needs GTK headers
 to build, its tests need a display, and `SUITE_GTK_TESTS=skip` would start
 hiding them. Nothing in the tree would have said so.
 
-This is the sixth instance of one shape in this repository -- a requirement
-restated in prose that nothing derives (see test_ci_test_list.py for four of
-them and test_workspace_test_lanes.py for the fifth). Closed the same way:
-derive the requirement from the thing it describes, so a new crate is covered
-the moment it exists.
+Derive the requirement from the actual crate graph rather than maintaining
+a second list, so a new crate is covered the moment it exists.
 
 What is checked, and why each is separate:
 

@@ -10,12 +10,10 @@ in CI rather than skip when poppler is missing, so the nightly went red for
 every run from then on (#1191) while every pull request stayed green — the
 same code, measured by two lanes that had quietly diverged.
 
-This is the fifth instance of one shape in this repository: a hand-written
-list in a workflow that omits the thing it polices (see test_ci_test_list.py
-for the other four). Closed the same way: derive the requirement instead of
-restating it. The pull-request job is the reference, because it is the one a
-contributor sees fail; any job that runs the same suite must install at least
-what that job does, and a new such job is covered the moment it exists.
+Derive each lane's requirements from the reference job rather than restating
+a second package list. The pull-request job is the reference because it is
+the one a contributor sees fail; every job running the same suite must
+install at least what that job does.
 """
 
 import glob

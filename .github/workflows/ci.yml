@@ -73,60 +73,10 @@ jobs:
       # collection says a test exists; only the report says it ran (SH-001).
       - name: Unit tests for the release-gate and parity validators
         run: |
+          # Discover every top-level harness test; GUI journeys use their own lane.
+          # Keep the same selector in the evidence collection below.
           python3 -m pytest -q --junitxml=python-junit.xml \
-            tests/test_release_gate.py \
-            tests/test_release_soak.py \
-            tests/test_workflow_credentials.py \
-            tests/test_workspace_test_lanes.py \
-            tests/test_validate_parity.py \
-            tests/test_gui_evidence.py \
-            tests/test_validate_capabilities.py \
-            tests/test_gui_stress.py \
-            tests/test_open_corpus.py \
-            tests/test_gui_harness.py \
-            tests/test_journey_selection.py \
-            tests/test_oracle_triggers.py \
-            tests/test_gtk_diagnostics.py \
-            tests/test_adr_numbers.py \
-            tests/test_readme_status.py \
-            tests/test_sync_issues.py \
-            tests/test_visual_matrix.py \
-            tests/test_save_paths.py \
-            tests/test_letters_field_map.py \
-            tests/test_decks_action_inventory.py \
-            tests/test_gui_sleeps.py \
-            tests/test_fixture_manifests.py \
-            tests/test_interop_evidence.py \
-            tests/test_oracle_lanes.py \
-            tests/test_patched_dependencies.py \
-            tests/test_readiness_citations.py \
-            tests/test_roadmap_figures.py \
-            tests/test_skip_reasons.py \
-            tests/test_actions_pinned.py \
-            tests/test_advisory_waivers.py \
-            tests/test_autosave_defaults.py \
-            tests/test_collab_defaults.py \
-            tests/test_ci_test_list.py \
-            tests/test_render_lab_rules.py \
-            tests/test_render_lab_words.py \
-            tests/test_pixel_scoreboard.py \
-            tests/test_render_lab_locate.py \
-            tests/test_render_lab_gtk_icon_race.py \
-            tests/test_flatpak_smoke_ink.py \
-            tests/test_office_bench.py \
-            tests/test_render_real_scope.py \
-            tests/test_installed_check.py \
-            tests/test_core_shell_split.py \
-            tests/test_release_evidence.py \
-            tests/test_flathub_manifests.py \
-            tests/test_overview_video.py \
-            tests/test_upgrade_check.py \
-            tests/test_gui_guidelines.py \
-            tests/test_export_parity.py \
-            tests/test_feature_docs.py \
-            tests/test_keep_changed_screenshots.py \
-            tests/test_required_checks.py \
-            tests/adaptive_editor_contract.py
+            tests/test_*.py tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
       # features are not green on model-only evidence.
@@ -158,59 +108,7 @@ jobs:
           # runner this adds no -v, so a second -q drops below the node-id
           # listing to per-file counts — which parses as zero tests.
           python3 -m pytest --collect-only -q \
-            tests/test_release_gate.py \
-            tests/test_release_soak.py \
-            tests/test_workflow_credentials.py \
-            tests/test_workspace_test_lanes.py \
-            tests/test_validate_parity.py \
-            tests/test_gui_evidence.py \
-            tests/test_validate_capabilities.py \
-            tests/test_gui_stress.py \
-            tests/test_open_corpus.py \
-            tests/test_gui_harness.py \
-            tests/test_journey_selection.py \
-            tests/test_oracle_triggers.py \
-            tests/test_gtk_diagnostics.py \
-            tests/test_adr_numbers.py \
-            tests/test_readme_status.py \
-            tests/test_sync_issues.py \
-            tests/test_visual_matrix.py \
-            tests/test_save_paths.py \
-            tests/test_letters_field_map.py \
-            tests/test_decks_action_inventory.py \
-            tests/test_gui_sleeps.py \
-            tests/test_fixture_manifests.py \
-            tests/test_interop_evidence.py \
-            tests/test_oracle_lanes.py \
-            tests/test_patched_dependencies.py \
-            tests/test_readiness_citations.py \
-            tests/test_roadmap_figures.py \
-            tests/test_skip_reasons.py \
-            tests/test_actions_pinned.py \
-            tests/test_advisory_waivers.py \
-            tests/test_autosave_defaults.py \
-            tests/test_collab_defaults.py \
-            tests/test_ci_test_list.py \
-            tests/test_render_lab_rules.py \
-            tests/test_render_lab_words.py \
-            tests/test_pixel_scoreboard.py \
-            tests/test_render_lab_locate.py \
-            tests/test_render_lab_gtk_icon_race.py \
-            tests/test_flatpak_smoke_ink.py \
-            tests/test_office_bench.py \
-            tests/test_render_real_scope.py \
-            tests/test_installed_check.py \
-            tests/test_core_shell_split.py \
-            tests/test_release_evidence.py \
-            tests/test_flathub_manifests.py \
-            tests/test_overview_video.py \
-            tests/test_upgrade_check.py \
-            tests/test_gui_guidelines.py \
-            tests/test_export_parity.py \
-            tests/test_feature_docs.py \
-            tests/test_keep_changed_screenshots.py \
-            tests/test_required_checks.py \
-            tests/adaptive_editor_contract.py > python-collected.txt
+            tests/test_*.py tests/adaptive_editor_contract.py > python-collected.txt
           # The collection and the run's own report together: a test that
           # was collected and has no outcome did not run, and a lane whose
           # inventory is empty, or stamped with another revision, is a

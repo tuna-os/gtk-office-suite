@@ -30,8 +30,11 @@ every tier measured (A and B, and C, the shipped Flatpak, once it has run) of [`
 (see [RENDER-PARITY-ROADMAP.md](RENDER-PARITY-ROADMAP.md)); 🟠 names a fixture
 that is amber, with the reason; 🟡 file-only is a visual feature proven only
 at the file level, waiting for a fixture; — is a feature with nothing of its
-own to draw. `conformance/validate_parity.py` (E5) fails a ✅ whose fixtures
-are not all green, and any fixture name the baseline does not have.
+own to draw. `Pending: <fixture-id>` explicitly names planned render evidence,
+not a measured result; it does not claim that the fixture exists or is green.
+Result markers take precedence over `Pending:` if both occur in a Render cell.
+`conformance/validate_parity.py` (E5) fails a ✅ whose fixtures are not all green,
+and any fixture cited as measured evidence that the baseline does not have.
 
 ---
 

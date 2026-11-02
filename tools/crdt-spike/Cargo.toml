@@ -31,8 +31,18 @@ yrs = { version = "0.28", optional = true }
 [profile.release]
 debug = false
 
-# Same patch as the root workspace (see its comment and docs/DEPENDENCIES.md):
-# tables-core -> letters-core -> rdocx -> oxml-layout needs it to build.
+# The same released-source parser constraint repair as the product workspace.
 [patch.crates-io]
-oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "46d220426b635d64890d786959d272b2c210fad8" }
+rdocx = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-html = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-layout = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-oxml = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-chart = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-core = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-drawing = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-media = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-opc = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-pdf = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-sml = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
 

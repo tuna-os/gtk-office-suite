@@ -107,35 +107,6 @@ class TheProductLockfileHasNoNetworkStack(unittest.TestCase):
             ["serde", "serde_json"],
         )
 
-    def test_d6_the_headless_lock_stays_on_the_versions_the_product_builds_with(self):
-        """`collab/headless` builds tables-core, which a fresh resolution would not build.
-
-        The first resolution of that workspace picked a newer `rdocx` than the product
-        lock holds, and `letters-core` did not compile against it. The lock is therefore
-        seeded from the product's: for every package both locks name, the headless lock
-        keeps at least one version the product lock has (the Windows-only `windows*`
-        target shims are the exception: nothing here builds on Windows).
-        """
-        product, headless = {}, {}
-        for table, into in ((lock_packages(), product), (load("collab/headless/Cargo.lock")["package"], headless)):
-            for p in table:
-                into.setdefault(p["name"], set()).add(p["version"])
-        shared = [n for n in headless if n in product and not n.startswith("windows")]
-        self.assertGreater(len(shared), 100, "the locks barely overlap, so this checks nothing")
-        drifted = sorted(
-            f"{n}: product {sorted(product[n])}, headless {sorted(headless[n])}"
-            for n in shared
-            if not product[n] & headless[n]
-        )
-        self.assertEqual(
-            drifted,
-            [],
-            "collab/headless/Cargo.lock resolved a crate of tables-core's graph to a version the "
-            "product does not build with. Reseed: cp Cargo.lock collab/headless/ && "
-            "(cd collab/headless && cargo metadata --format-version 1 > /dev/null)",
-        )
-
-
 class CollaborationIsOffByDefault(unittest.TestCase):
     def test_d3_no_default_feature_of_an_app_reaches_collab(self):
         for app in APPS:

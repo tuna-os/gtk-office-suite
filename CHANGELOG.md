@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Infrastructure
+- Markdown parsers use pulldown-cmark 0.13.6 through an immutable rdocx-family fork; all affected workspaces share that resolution.
+- Parity validation distinguishes planned fixtures from measured render evidence; measured claims still need real baseline entries.
+- Python CI discovers top-level harness tests for execution and capability evidence, preventing omitted tests without source-string assertions.
+
 ### Letters
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.

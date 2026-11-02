@@ -177,7 +177,8 @@ not remove the direct path. Do not suppress the advisory to make CI green.
 All five specification files passed local relative-link and duplicate-package-ID
 checks: 64 distinct work packages. Local checks passed:
 
-- `python3 tests/test_readiness_citations.py` — one test.
+- The retired source-citation assertion passed one test at that revision.
+  Current checks use the capability inventory and JUnit outcomes.
 - `python3 tests/test_roadmap_figures.py` — 18 tests.
 - `python3 tests/test_feature_docs.py` — three tests; existing ResourceWarnings.
 - `python3 conformance/validate_capabilities.py` — 19/19 structural entries.

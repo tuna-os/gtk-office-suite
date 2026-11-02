@@ -24,9 +24,11 @@ feature is proven. This validator makes that claim machine-checkable in PR CI:
   E5  Every Tier 1/2 table ends in a `Render` column (RENDER-PARITY-ROADMAP
       "Rules the humans enforce in review", rule 1). A Render cell may show
       ✅ only when every render-lab fixture it names is green in both tiers
-      of tools/render-lab/baseline.json; any fixture it names must exist
-      there. A visual feature with no green fixture says 🟡 file-only (or
-      🟠 with its amber fixture); a feature with nothing to draw says —.
+      of tools/render-lab/baseline.json; any fixture cited as render
+      evidence must exist there. An explicit `Pending:` cell lists planned
+      fixtures, not evidence, unless it also contains a result marker.
+      A visual feature with no green fixture says 🟡 file-only (or 🟠 with
+      its amber fixture); a feature with nothing to draw says —.
 
 Exit code is non-zero on any violation, so PR CI can gate on it. Tier 3 rows
 are out of scope (not in the scorecard denominator, per PARITY.md).
@@ -165,6 +167,12 @@ def check_render(render_rows, baseline, errors):
                 f"{where} is in a table without a Render column — every "
                 f"Tier 1/2 table ends in one (✅ fixture, 🟡 file-only, or —)."
             )
+            continue
+        # A planned fixture is not measured evidence. Result markers take
+        # precedence over "Pending:" so a conflicting claim still fails closed.
+        if re.match(r"^pending\s*:", cell, re.IGNORECASE) and not any(
+            marker in cell for marker in (*MARKERS, "🟢", "🟠", "🟡", "🔴")
+        ):
             continue
         fixtures = [m.group(0) for m in FIXTURE_RE.finditer(cell)]
         for fx in fixtures:

@@ -3332,8 +3332,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 [[package]]
 name = "oxml-chart"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eae8e95943c01cf185d1b202aac313f617f3f59d3bc33fa0e556a2bd835fb3d"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-core",
  "oxml-drawing",
@@ -3345,8 +3344,7 @@ dependencies = [
 [[package]]
 name = "oxml-core"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f64cbeb9d2efb809599a40c522b5b77e6d3e2949534ef23c1254906fd38e473"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -3355,8 +3353,7 @@ dependencies = [
 [[package]]
 name = "oxml-drawing"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "187dc3c61ffcda918b5bbb014598509f8ae446709ba30652a1dd3d08dae0dc03"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-core",
  "quick-xml 0.41.0",
@@ -3365,8 +3362,7 @@ dependencies = [
 [[package]]
 name = "oxml-layout"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50aa25e6cb6d55bd488ddd983481a4e6c00c8d87146d2a73cfc61f949ff6f778"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "fontdb",
  "harfrust",
@@ -3381,14 +3377,12 @@ dependencies = [
 [[package]]
 name = "oxml-media"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e876854a75340b3f26dfca0e96223f067567265af44813001cb01e035c74780f"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 
 [[package]]
 name = "oxml-opc"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f16e35f4e133e804223c8e6b7bb5a8da958bfcc65647995ac0309ed376783f6"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -3398,8 +3392,7 @@ dependencies = [
 [[package]]
 name = "oxml-pdf"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c99b4f0c870fb7c9130e69b9fe3ac03a62b26f08fb7aa6bd1c5f3a6b3987586b"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "jpeg-encoder",
  "miniz_oxide 0.9.1",
@@ -3416,8 +3409,7 @@ dependencies = [
 [[package]]
 name = "oxml-sml"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "928de6eb42bedc1de627a5b32265612f80ff70688bdebd8f10848c775686aa84"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-opc",
  "quick-xml 0.41.0",
@@ -3890,9 +3882,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.4"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
 dependencies = [
  "bitflags",
  "getopts",
@@ -4163,8 +4155,7 @@ dependencies = [
 [[package]]
 name = "rdocx"
 version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bfe2eb1107ef1293cde0824ec8dde8fc60cacfd40a7281c712e76dbaf8a479d"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "base64 0.23.1",
  "encoding_rs",
@@ -4193,8 +4184,7 @@ dependencies = [
 [[package]]
 name = "rdocx-html"
 version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bd9221e8a859517e9eab6aa4d78b895bf226ef297345f563d95f82009318344"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "rdocx-oxml",
 ]
@@ -4202,8 +4192,7 @@ dependencies = [
 [[package]]
 name = "rdocx-layout"
 version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9aef6278d57ecb146327f910b5859bc12c6ba416cf84511df0e7547ecf3ce1f"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-chart",
  "oxml-drawing",
@@ -4215,8 +4204,7 @@ dependencies = [
 [[package]]
 name = "rdocx-oxml"
 version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017c7d6ecea8da310a61a97c635141b2f6cff5135faba35e06d9d60bc42bd7db"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "itoa",
  "oxml-core",

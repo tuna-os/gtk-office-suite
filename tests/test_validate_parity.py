@@ -330,6 +330,48 @@ def test_e5_unknown_fixture_fails_even_when_not_green(tmp_path):
     assert len(errors) == 1 and "not in" in errors[0], errors
 
 
+@pytest.mark.parametrize("cell", [
+    "Pending: letters/planned",
+    "pending : letters/planned, tables/planned",
+])
+def test_e5_pending_fixtures_are_not_measured_evidence(tmp_path, cell):
+    assert _e5(tmp_path, cell, baseline="{}") == []
+    assert vp.validate(tmp_path / "PARITY.md", repo_root=tmp_path) == 0
+
+
+def test_pending_render_plan_needs_no_baseline(tmp_path):
+    p = tmp_path / "PARITY.md"
+    p.write_text("""## tables
+
+### Tier 1
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Hyperlink colours | Implemented; render evidence pending | model tests | Pending: tables/planned |
+""")
+    assert vp.validate(p, repo_root=tmp_path) == 0
+
+
+@pytest.mark.parametrize("cell", [
+    "✅ letters/planned",
+    "Pending: ✅ letters/planned",
+    "✅ letters/headings; Pending: letters/planned",
+    "Pending: 🟠 letters/planned",
+    "Pending: 🟢 letters/planned",
+    "🟡 file-only; letters/planned",
+    "letters/planned (render pending)",
+])
+def test_e5_pending_does_not_hide_asserted_or_unqualified_fixtures(tmp_path, cell):
+    assert _e5(tmp_path, cell)
+
+
+@pytest.mark.parametrize("cell", [
+    "Pending: ✅ letters/table",
+    "Pending: ✅",
+])
+def test_e5_green_claim_overrides_pending_and_still_requires_proof(tmp_path, cell):
+    assert _e5(tmp_path, cell)
+
+
 def test_e5_table_without_render_column_fails(tmp_path):
     p = tmp_path / "PARITY.md"
     p.write_text("## letters — x\n\n### Tier 1\n| Feature | Status | Proven by |\n"

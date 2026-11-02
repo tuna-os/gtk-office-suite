@@ -17,6 +17,7 @@ dependencies = [
  "cipher",
  "cpubits",
  "cpufeatures",
+ "zeroize",
 ]
 
 [[package]]
@@ -360,9 +361,9 @@ dependencies = [
 
 [[package]]
 name = "calamine"
-version = "0.37.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9ca341b94bc4b29e08970b1a03914fad2dfe177e2ecb67fcd6de9046004aafb"
+checksum = "f431b67cba6122a1f7d26b7adafc71bbdf07026095fe811f5efc025d8748e1d8"
 dependencies = [
  "atoi_simd",
  "byteorder",
@@ -2379,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "lzma-rust2"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7277c9742229dc25243236d578b6471a798c554512c6f6a04365ec2e87c2a3bb"
+checksum = "f1c46f3fcd2e888afdb01a07efc071cb21300e07c68d32c3e8b01b5c8cb1fcaa"
 dependencies = [
  "sha2",
 ]
@@ -2607,9 +2608,8 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "oxml-chart"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4d647c8da7a76395f2961e6346b685e1aa2065f2644b55122169898f2a6c10b"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-core",
  "oxml-drawing",
@@ -2620,9 +2620,8 @@ dependencies = [
 
 [[package]]
 name = "oxml-core"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8b95e06633032181ecec65edb1f66681fccc5b5f596afe84ee69b5f32a420ab"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2630,9 +2629,8 @@ dependencies = [
 
 [[package]]
 name = "oxml-drawing"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb280530cb8f54177ffa05f017ea94702ef1222ba2de54bedb7f80529c9d2d7a"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-core",
  "quick-xml 0.41.0",
@@ -2640,9 +2638,8 @@ dependencies = [
 
 [[package]]
 name = "oxml-layout"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d2d35ae7d90292fffdb3e529e96adda7d11073eb0eb630a9bdf8a100f29d5f"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "fontdb",
  "harfrust",
@@ -2656,15 +2653,13 @@ dependencies = [
 
 [[package]]
 name = "oxml-media"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02ff330a11086438bd2ca1cb31f54fda69b077177c782cc5683582d74cd96a5e"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 
 [[package]]
 name = "oxml-opc"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712c18e58435c05db9bcafa854ec5c89c4972ae7fc7c4586093921fbf79a1308"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2673,9 +2668,8 @@ dependencies = [
 
 [[package]]
 name = "oxml-pdf"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e68893d8e3e9fe232ff6234adc8b6150481f21ccffd18ab6d1d67330f7dde4c7"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "jpeg-encoder",
  "miniz_oxide 0.9.1",
@@ -2691,9 +2685,8 @@ dependencies = [
 
 [[package]]
 name = "oxml-sml"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3fb051a649debb4b11756750d14d7feb84720a72c274274279a1ecf26534b4"
+version = "0.14.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-opc",
  "quick-xml 0.41.0",
@@ -3070,9 +3063,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.4"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
 dependencies = [
  "bitflags",
  "getopts",
@@ -3239,9 +3232,8 @@ dependencies = [
 
 [[package]]
 name = "rdocx"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36b79ec91b99e3f1dd3d3719705ebe9a8c8c0c1fe6e6145d3745281892b3d29e"
+version = "0.16.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "base64 0.23.1",
  "encoding_rs",
@@ -3269,18 +3261,16 @@ dependencies = [
 
 [[package]]
 name = "rdocx-html"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6294cc27652a58fc0d4a0953afcec67e219029053f8c4d850bca6d83f2e54c4f"
+version = "0.16.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "rdocx-oxml",
 ]
 
 [[package]]
 name = "rdocx-layout"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceab7c28eb136675590fabce11bcc43cf551e0c600a09f163863f6a4546a53d2"
+version = "0.16.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "oxml-chart",
  "oxml-drawing",
@@ -3291,9 +3281,8 @@ dependencies = [
 
 [[package]]
 name = "rdocx-oxml"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23e81dfdaed6d4ff3cf415662e08efb80e71163df1f264bf98a20389bdda56c8"
+version = "0.16.2"
+source = "git+https://github.com/tuna-os/rdocx?rev=0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343#0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343"
 dependencies = [
  "itoa",
  "oxml-core",
@@ -3438,9 +3427,9 @@ dependencies = [
 
 [[package]]
 name = "rust_xlsxwriter"
-version = "0.101.0"
+version = "0.102.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49aa1d1558e9465f5053bf9fb5361fe75db827c6a4423d5e5fe72096622f8908"
+checksum = "6ca3d0e879a578c1313c2800ab0c6c029d38eed18098675e50341a30d32372ed"
 dependencies = [
  "zip",
 ]
@@ -4324,9 +4313,9 @@ checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
 
 [[package]]
 name = "typed-path"
-version = "0.12.3"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typenum"
@@ -5305,9 +5294,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.8.2"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zerotrie"
@@ -5348,9 +5337,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.5"
+version = "9.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
+checksum = "e408c6cc4699dd017d53dc080cd51c2cea2b5354af57a1479bd265ed42911487"
 dependencies = [
  "aes",
  "bzip2",
@@ -5361,6 +5350,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac",
  "indexmap",
+ "libc",
  "lzma-rust2",
  "memchr",
  "nix",
@@ -5369,6 +5359,7 @@ dependencies = [
  "sha1",
  "time",
  "typed-path",
+ "windows-sys",
  "zeroize",
  "zopfli",
  "zstd",
@@ -5440,8 +5431,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "oxml-layout"
-version = "0.11.0"
-source = "git+https://github.com/tuna-os/rdocx?rev=46d220426b635d64890d786959d272b2c210fad8#46d220426b635d64890d786959d272b2c210fad8"

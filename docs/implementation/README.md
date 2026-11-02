@@ -104,7 +104,7 @@ verification belongs in CI. Existing entry points include:
 xvfb-run -a cargo test --workspace
 cargo clippy --workspace
 python3 conformance/validate_capabilities.py
-python3 tests/test_readiness_citations.py
+python3 conformance/validate_parity.py
 python3 tests/test_roadmap_figures.py
 python3 tests/test_feature_docs.py
 tests/gui/run_gui_tests.sh test_smoke.py -k Tables

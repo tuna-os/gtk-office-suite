@@ -17,3 +17,20 @@ gettext-rs = { version = "0.8", features = ["gettext-system"] }
 # As one codegen unit it has no locals to promote.
 [profile.release.package.ironcalc_base]
 codegen-units = 1
+
+# Published rdocx pins a vulnerable parser. Keep its released source family
+# together while permitting pulldown-cmark >=0.13.6.
+# Provenance and removal: docs/DEPENDENCIES.md.
+[patch.crates-io]
+rdocx = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-html = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-layout = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+rdocx-oxml = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-chart = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-core = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-drawing = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-media = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-opc = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-pdf = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
+oxml-sml = { git = "https://github.com/tuna-os/rdocx", rev = "0c3d3a03ce7be1ec02c0ad602c666d1a94f5b343" }
