@@ -532,6 +532,10 @@ pub struct ParaStyle {
     /// "(%1)", ODF's num-prefix and num-suffix. `None` is "N.".
     #[serde(default)]
     pub list_label: Option<ListLabel>,
+    /// The bullet marker's character-style font family, when named.
+    /// Its metrics can make the first line taller than the item's text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub list_marker_font: Option<String>,
     /// How far a list item's marker sits before its text, in points, when
     /// the file says other than `lists::HANGING_PT` (Word's numbered
     /// "1.1" paragraphs hang their number 0.5in).
@@ -629,7 +633,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_hanging_pt: None, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_marker_font: None, list_hanging_pt: None, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
     }
 }
 

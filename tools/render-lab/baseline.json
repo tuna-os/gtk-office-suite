@@ -206,6 +206,15 @@
     "B": "green",
     "C": "green"
   },
+  "letters/odt-bullet-font-metrics": {
+    "A": "green"
+  },
+  "letters/odt-contextual-margin-override": {
+    "A": "green"
+  },
+  "letters/odt-continued-cell-space-before": {
+    "A": "green"
+  },
   "letters/page-break": {
     "A": "green",
     "B": "green",
