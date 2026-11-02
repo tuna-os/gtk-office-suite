@@ -144,6 +144,7 @@ INFRASTRUCTURE_MARKERS = (
     "INTERNALERROR",
     "ModuleNotFoundError",
     "dogtail requires",
+    "campaign evidence incomplete",
 )
 
 
@@ -190,20 +191,25 @@ def parse_junit(path: str) -> tuple:
     instead of as zero failures.
     """
     if not os.path.exists(path):
-        return None, [{"message": f"no JUnit report at {path}", "text": ""}]
+        return None, [{"message": f"campaign evidence incomplete: no JUnit report at {path}", "text": ""}]
     try:
         root = ET.parse(path).getroot()
-    except ET.ParseError as exc:
-        return None, [{"message": f"unparseable JUnit report: {exc}", "text": ""}]
+    except (ET.ParseError, OSError) as exc:
+        return None, [{"message": f"campaign evidence incomplete: unparseable JUnit report: {exc}", "text": ""}]
+    if root.tag not in ("testsuites", "testsuite"):
+        return None, [{"message": "campaign evidence incomplete: invalid JUnit root", "text": ""}]
     cases, failures = 0, []
     for case in root.iter("testcase"):
         cases += 1
-        for kind in ("failure", "error"):
+        for kind in ("failure", "error", "skipped"):
             for node in case.findall(kind):
+                message = node.get("message", "")
+                if kind == "skipped":
+                    message = f"campaign evidence incomplete: skipped journey: {message}"
                 failures.append({
                     "journey": f"{case.get('classname', '')}::{case.get('name', '')}",
                     "kind": kind,
-                    "message": node.get("message", ""),
+                    "message": message,
                     "text": (node.text or "")[-2000:],
                 })
     return cases, failures
@@ -264,9 +270,11 @@ def collect(selection: list, select: str | None, python_bin: str | None) -> list
     if python_bin:
         env["GUI_TEST_PYTHON"] = python_bin
     with tempfile.NamedTemporaryFile("w+", suffix=".txt") as sink:
-        subprocess.run(args, cwd=GUI_DIR, env=env, stdout=sink, stderr=subprocess.STDOUT)
+        result = subprocess.run(args, cwd=GUI_DIR, env=env, stdout=sink, stderr=subprocess.STDOUT)
         sink.seek(0)
         text = sink.read()
+    if result.returncode != 0:
+        raise RuntimeError(f"journey collection failed (exit {result.returncode})\n{text}")
     ids = [line.strip() for line in text.splitlines()
            if "::" in line and not line.startswith(("=", "-", " "))]
     if not ids:
@@ -352,6 +360,13 @@ def run_attempt(attempt: Attempt, output: str, timeout: int,
     attempt.log = os.path.relpath(log_path, output)
 
     attempt.cases, attempt.failures = parse_junit(junit)
+    if attempt.cases is not None and attempt.cases != len(attempt.order):
+        attempt.failures.append({
+            "kind": "incomplete",
+            "message": (f"campaign evidence incomplete: planned {len(attempt.order)} journeys, "
+                        f"JUnit recorded {attempt.cases}"),
+            "text": "",
+        })
     attempt.classification = classify(text, attempt.failures,
                                      attempt.exit_code or 0, timed_out)
 
@@ -420,6 +435,10 @@ def main(argv=None) -> int:
                         help="interpreter dogtail is installed for")
     args = parser.parse_args(argv)
 
+    if args.repeat < 1:
+        parser.error("--repeat must be at least 1")
+    if args.timeout < 1:
+        parser.error("--timeout must be at least 1 second")
     if os.path.exists(args.output):
         parser.error(f"{args.output} already exists; campaigns never overwrite "
                      "their own evidence")

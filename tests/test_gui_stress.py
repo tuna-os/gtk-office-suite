@@ -15,6 +15,7 @@ import os
 import sys
 import textwrap
 import unittest
+from unittest import mock
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -157,6 +158,50 @@ class JUnitTests(unittest.TestCase):
         self.assertIsNone(cases)
         self.assertIn("unparseable", failures[0]["message"])
 
+    def test_skipped_and_expected_failure_are_not_passes(self):
+        path = self._write("skipped.xml", textwrap.dedent("""\
+            <testsuite><testcase classname="c" name="a"><skipped message="missing dependency"/></testcase>
+            <testcase classname="c" name="b"><skipped type="pytest.xfail" message="known bug"/></testcase></testsuite>
+        """))
+        cases, failures = stress.parse_junit(path)
+        self.assertEqual(cases, 2)
+        self.assertEqual([f["journey"] for f in failures], ["c::a", "c::b"])
+        self.assertEqual(stress.classify("", failures, 0, False), stress.CLASS_INFRASTRUCTURE)
+
+    def test_wrong_xml_root_is_not_an_empty_report(self):
+        path = self._write("wrong.xml", "<unrelated/>")
+        cases, failures = stress.parse_junit(path)
+        self.assertIsNone(cases)
+        self.assertEqual(stress.classify("", failures, 0, False), stress.CLASS_INFRASTRUCTURE)
+
+
+class AttemptEvidenceTests(unittest.TestCase):
+    def test_fewer_junit_cases_than_planned_fails_even_with_exit_zero(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as output:
+            attempt = stress.Attempt(1, 1, stress.BASELINE, ["a", "b"])
+
+            def run(args, **kwargs):
+                junit = next(arg.split("=", 1)[1] for arg in args if arg.startswith("--junitxml="))
+                with open(junit, "w") as report:
+                    report.write('<testsuite><testcase classname="c" name="a"/></testsuite>')
+                return mock.Mock(returncode=0)
+
+            with mock.patch.object(stress.subprocess, "run", side_effect=run):
+                stress.run_attempt(attempt, output, 10, None, "off")
+            self.assertEqual(attempt.classification, stress.CLASS_INFRASTRUCTURE)
+            self.assertIn("planned 2 journeys", attempt.failures[-1]["message"])
+            self.assertEqual(stress.summarize([attempt])["failed_attempts"], 1)
+
+    def test_failed_collection_with_partial_ids_is_rejected(self):
+        def run(args, **kwargs):
+            kwargs["stdout"].write("test_smoke.py::C::test_ok\nERROR collecting another file\n")
+            return mock.Mock(returncode=2)
+
+        with mock.patch.object(stress.subprocess, "run", side_effect=run):
+            with self.assertRaisesRegex(RuntimeError, "collection failed"):
+                stress.collect(["test_smoke.py"], None, None)
+
 
 class PlanTests(unittest.TestCase):
     JOURNEYS = [f"test_smoke.py::C::test_{n}" for n in range(8)]
@@ -273,6 +318,17 @@ class CLITests(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 stress.main(["--output", existing])
             self.assertNotEqual(caught.exception.code, 0)
+
+    def test_nonpositive_repeat_and_timeout_are_rejected(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            for index, (flag, value) in enumerate((("--repeat", "0"), ("--repeat", "-1"),
+                                                   ("--timeout", "0"), ("--timeout", "-1"))):
+                with self.subTest(flag=flag, value=value):
+                    with mock.patch.object(stress, "collect", side_effect=RuntimeError("collected")):
+                        with self.assertRaises(SystemExit) as caught:
+                            stress.main([flag, value, "--output", os.path.join(temp, str(index))])
+                    self.assertNotEqual(caught.exception.code, 0)
 
     def test_a_setup_failure_is_classified_as_infrastructure(self):
         """An attempt that never started a journey is not evidence about the
