@@ -643,7 +643,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +652,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +662,34 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from Hampshire Public Review: additional postcodes (#1347):
+    # a 251-row, 2-column unheaded list of postcodes and premises counts
+    # paginates across 6 portrait A4 pages in LibreOffice Calc when headings
+    # are disabled (print_options.headings = False), while Tables captures
+    # the continuous unpaginated on-screen grid. In compare.py, without
+    # printed heading boxes, lo_cell_box(ref) returns None, align() does not
+    # crop Tables' header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (50 rows), squashing 73 on-screen rows onto 50 rows.
+    wb, ws = book()
+    ws["A1"] = "Postcode"
+    ws["B1"] = "No of Premises Impacted"
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 25
+    sample_postcodes = [
+        "SO31 1FD", "PO15 7QR", "PO15 7QS", "PO15 7RP", "SO31 8AS",
+        "SO30 0AW", "SO30 2EU", "PO14 4PJ", "RG24 7BB", "GU34 5HN",
+    ]
+    for r in range(2, 76):
+        pc = sample_postcodes[(r - 2) % len(sample_postcodes)]
+        ws.cell(r, 1, f"{pc[:4]} {((r * 7) % 900) + 100:03d}")
+        ws.cell(r, 2, (r % 5) + 1)
+    save(
+        wb,
+        "tall-unheaded-postcodes",
+        "A 75-row, 2-column unheaded list that spans multiple vertical pages in Calc; isolates continuous viewport vs unheaded multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
