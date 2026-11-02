@@ -15,6 +15,14 @@ The ratchet only moves up.
 
 ## 2. Track changes / comments / footnotes — FOOTNOTES ONLY
 
+**Historical decision, 2026-07-18:** the exclusions below describe the
+original scope, not current Letters review support. Later work admitted
+bounded comments and tracked insertions/deletions; the current contract and
+its limitations are in [Letters review workflows](../LETTERS-REVIEW-WORKFLOWS.md)
+and the evidence inventory in [Letters fidelity](../readiness-2026-09/letters-fidelity.md).
+This supersession concerns only Letters review: it does not change the other
+decisions in this ADR or admit arbitrary review features.
+
 - **Footnotes: IN.** rdocx already has a footnotes module; the model
   grows a per-run footnote reference and a document footnote list.
   Round-trip docx + oracle wave + an insert action in Letters.

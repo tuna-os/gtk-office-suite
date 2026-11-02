@@ -73,14 +73,22 @@ are not all green, and any fixture name the baseline does not have.
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
 
-| Feature | Test approach if adopted |
+These rows describe bounded workflows, not blanket fidelity. The earlier
+footnotes-only exclusion in [ADR 0003 §2](adr/0003-later-tier-scope.md)
+is historical for review; [review workflows](LETTERS-REVIEW-WORKFLOWS.md)
+defines the current contract. Test names below identify coverage, not a new
+claim that it passed on this revision; see the
+[readiness inventory](readiness-2026-09/letters-fidelity.md#dependency-ordered-slices).
+
+| Feature | Scope and evidence |
 |---|---|
-| Track changes | I1 revision model; I2 docx `w:ins`/`w:del` fixtures; I3 LO-authored tracked docs |
-| Comments | I2 docx comments part round-trip |
-| Footnotes | ✅ | I2 round-trip + I4 (survives Writer rewrite); insert action in Letters. Endnotes/comments/track changes out per ADR 0003 §2 |
-| Multi-column sections | I1 layout; I7 visual |
-| Bidi/RTL editing | I3 already covers RTL text survival; editing needs I6 caret tests |
-| Table of contents generation | I1: TOC derived from heading model |
+| Track changes | Insertions and deletions admitted; paragraph breaks and formatting changes are not tracked. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`; Writer: `tracked_changes_survive_lo_passes`. |
+| Comments | Anchored threads admitted, including replies and resolution. GUI: `LettersCommentsSmoke`; Writer: `comments_survive_lo_passes` (cross-format reply limitation in the workflow contract). |
+| Footnotes | Insert action and DOCX/ODT mapping; see [field map](LETTERS-FIELD-MAP.md) for per-field evidence. This does not imply endnote support. |
+| Multi-column sections | Section page setup is bounded by `letters.sections.page-setup` in the [capability ledger](../conformance/capabilities.json); unequal columns are loss-reported. |
+| Bidi/RTL editing | RTL text retention is tested; explicit paragraph direction is unavailable. See [workflow contract](LETTERS-REVIEW-WORKFLOWS.md#paragraph-direction-bidi-not-available-yet). |
+| Table of contents generation | Heading levels 1–3; GUI: `LettersTableOfContentsSmoke`; Writer: `a_table_of_contents_survives_lo_passes`. |
+| Smart chips | GUI: `LettersSmartChipsSmoke`; Writer: `smart_chips_survive_lo_passes`. |
 
 ## Tables (spreadsheet)
 

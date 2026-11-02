@@ -286,7 +286,10 @@ A per-tab live model owns the complete represented Document and edit history; se
       `tests/adaptive_editor_contract.py` cites by path. Tables advanced analysis became 0007 and Letters structured
       editing became 0008, the two free numbers; nothing cited either by number. Each renumbered file says so at the
       top, and `tests/test_adr_numbers.py` fails on a shared number or a heading that disagrees with its file name.
-      Still open: reconciling the old and new advanced-feature scope (ADR 0003 against the later ADRs).
+      ADR 0003 §2 now identifies its review exclusions as historical and points to the bounded current workflow
+      contract; the Letters Tier 3 parity rows no longer repeat those exclusions as current. Still open (#1655):
+      reconcile all advanced-feature boundaries and revision-bound capability evidence, including styles and
+      encryption-adjacent work. This documentation correction does not close LET-011.
 
 ## GUI commands that used to write their own markers (fixed 2026-09-11)
 
