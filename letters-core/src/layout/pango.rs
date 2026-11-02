@@ -305,6 +305,20 @@ impl PangoShaper {
             a.set_end_index(text.len() as u32);
             attrs.insert(a);
         }
+        // Writer keeps the path separators in a URL with what follows:
+        // a slash is not a word-wrap opportunity. Pango otherwise fits a
+        // URL prefix beside the preceding prose, shortening narrow table
+        // cells (the social housing dictionary's Notes column). Keep the
+        // original bytes for carets and selection; hyphens and emergency
+        // character wrapping still provide breaks in long paths.
+        for (at, _) in text.match_indices('/') {
+            if let Some(next) = text[at + 1..].chars().next() {
+                let mut a: pango::Attribute = pango::AttrInt::new_allow_breaks(false).into();
+                a.set_start_index(at as u32);
+                a.set_end_index((at + 1 + next.len_utf8()) as u32);
+                attrs.insert(a);
+            }
+        }
         layout.set_text(&text);
         layout.set_attributes(Some(&attrs));
         // A negative first-line indent is a hanging one: the first line
@@ -1852,6 +1866,42 @@ mod tests {
         assert!(rects.iter().all(|r| r.3 > 0.0));
         // Reversed ends select the same text.
         assert_eq!(rects, t.selection_rects(TextPos { para: 1, offset: 9 }, TextPos { para: 0, offset: 4 }));
+    }
+
+    #[test]
+    fn url_paths_wrap_at_hyphens_instead_of_slashes() {
+        let text = "glossary https://www.gov.uk/guidance/housing-statistics-and-england-housing-survey-glossary/a-to-z";
+        let p = crate::model::Paragraph {
+            runs: vec![crate::model::Run::plain(text)],
+            ..Default::default()
+        };
+        let opts = LayoutOptions { font_family: "Liberation Sans".into(), font_size_pt: 11.0, ..Default::default() };
+        let mut shaper = PangoShaper::new();
+        let prefix = crate::model::Paragraph {
+            runs: vec![crate::model::Run::plain("https://www.gov.uk/guidance/housing-")],
+            ..Default::default()
+        };
+        // Measure the font actually available, so the test exercises the
+        // break policy rather than depending on Carlito being installed.
+        let width = shaper.shape(&super::super::paragraph_request(&prefix, 1000.0, &opts))[0].width_pt + 0.05;
+        let req = super::super::paragraph_request(&p, width, &opts);
+        let lines = shaper.shape(&req);
+        let chars: Vec<_> = text.chars().collect();
+        let strings: Vec<String> = lines.iter().map(|l| chars[l.start..l.end].iter().collect()).collect();
+        assert_eq!(strings[0].trim_end(), "glossary", "the URL starts on its own line: {strings:?}");
+        assert!(strings[1].ends_with("housing-"), "hyphens remain break opportunities: {strings:?}");
+        assert_eq!(strings.concat(), text, "shaping preserves text offsets");
+
+        // A path without hyphens still wraps at characters when it is
+        // wider than the column, including beside multibyte text.
+        let p = crate::model::Paragraph {
+            runs: vec![crate::model::Run::plain("é https://example.org/abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz")],
+            ..Default::default()
+        };
+        let lines = shaper.shape(&super::super::paragraph_request(&p, 90.0, &opts));
+        assert!(lines.len() > 2);
+        assert!(lines.iter().all(|l| l.width_pt <= 90.1));
+        assert_eq!(lines.last().unwrap().end, p.text().chars().count());
     }
 
     /// A paragraph's trailing space hangs past the margin: a last line
