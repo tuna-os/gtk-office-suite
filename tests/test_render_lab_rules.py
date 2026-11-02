@@ -270,5 +270,73 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedComplaintLogFixtureTest(unittest.TestCase):
+    """The Draft schedule 4 - complaint log reduction isolates horizontal multipage split
+    and unprinted headings (#1327)."""
+
+    def test_wide_unheaded_complaint_log_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-complaint-log")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-complaint-log.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 20)
+            self.assertEqual(sheet.max_column, 3)
+
+            # Titles and Headers
+            self.assertEqual(sheet.cell(1, 1).value, "Log of Actionable Complaints")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 1).font.size, 14)
+
+            self.assertEqual(sheet.cell(3, 1).value, "Field")
+            self.assertEqual(sheet.cell(3, 2).value, "Options")
+            self.assertEqual(sheet.cell(3, 3).value, "Notes")
+            self.assertTrue(sheet.cell(3, 1).font.bold)
+            self.assertIsNotNone(sheet.cell(3, 1).fill.fill_type)
+
+            # Column dimensions (totaling 341 units)
+            self.assertEqual(sheet.column_dimensions["A"].width, 60)
+            self.assertEqual(sheet.column_dimensions["B"].width, 101)
+            self.assertEqual(sheet.column_dimensions["C"].width, 180)
+
+            # Sample specification rows
+            self.assertEqual(sheet.cell(4, 1).value, "Reference")
+            self.assertTrue(sheet.cell(4, 1).font.bold)
+            self.assertEqual(sheet.cell(4, 2).value, "Text and/or numerical field")
+            self.assertFalse(sheet.cell(4, 2).font.bold)
+            self.assertTrue(sheet.cell(4, 3).value.startswith("For Veterinary Business"))
+
+            self.assertEqual(sheet.cell(20, 1).value, "Actions taken by the practice/Veterinary Business")
+            self.assertEqual(sheet.cell(20, 2).value, "Select one or more from a pre-defined list (see Lookups tab)")
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()
