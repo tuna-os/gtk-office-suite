@@ -270,5 +270,57 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class OversizedUnheadedInstructionsFixtureTest(unittest.TestCase):
+    """The Record of non-lethal actions reduction isolates oversized single-column
+    instruction sheet with vertical multipage pagination and unprinted headings (#1345)."""
+
+    def test_oversized_unheaded_instructions_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "oversized-unheaded-instructions")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/oversized-unheaded-instructions.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 21)
+            self.assertEqual(sheet.max_column, 1)
+            self.assertEqual(sheet.cell(1, 1).value, "Record of Non-Lethal Actions Guidance and Instructions")
+            self.assertEqual(sheet.cell(2, 1).value, "When to use this template")
+            self.assertEqual(sheet.cell(6, 1).value, "New licence applications - daily record requirements")
+            self.assertEqual(sheet.cell(12, 1).value, "Renewing your licence and reporting actions - monthly record")
+            self.assertEqual(sheet.cell(18, 1).value, "Statutory guidance and references")
+            self.assertGreater(sheet.column_dimensions["A"].width, 100)
+            total_height = sum(
+                sheet.row_dimensions[r].height for r in range(1, 22) if sheet.row_dimensions[r].height is not None
+            )
+            self.assertGreater(total_height, 750)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()

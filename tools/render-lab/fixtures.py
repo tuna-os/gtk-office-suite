@@ -643,7 +643,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +652,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +662,82 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from Record of non-lethal actions (template) (#1345):
+    # a single-column unheaded instruction sheet (Column A) spanning ~26 cm in width
+    # and 21 rows totaling >800 pt in height paginates vertically across multiple
+    # portrait A4 pages in LibreOffice Calc when headings are disabled
+    # (print_options.headings = False). Tables captures the continuous unpaginated
+    # on-screen viewport (column A + row/col header bands). In compare.py,
+    # without printed heading boxes, lo_cell_box(ref) returns None, align() skips
+    # cropping on-screen header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (rows 1..17), compressing all 21 rows into the space of
+    # 17 rows and 1019 px into 728 px (scale = 1.37×, displacement 82.1pt, SSIM 0.04).
+    wb, ws = book()
+    instructions_data = [
+        ("Record of Non-Lethal Actions Guidance and Instructions", Font(name="Arial", size=14, bold=True), 45),
+        ("When to use this template", Font(name="Arial", size=12, bold=True), 32),
+        (
+            "You can use this template to record observations of problem bird numbers and non-lethal deterrence measures taken before applying for or renewing wildlife protection licences.",
+            Font(name="Arial", size=10),
+            54,
+        ),
+        (
+            "You do not have to use this template: records may be submitted in another format provided they contain the same statutory fields and dates.",
+            Font(name="Arial", size=10),
+            32,
+        ),
+        ("Find out more about recording non-lethal actions and licence conditions online.", Font(name="Arial", size=10, italic=True), 28),
+        ("New licence applications - daily record requirements", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a record of non-lethal deterrence covering a minimum of one month if applying to shoot wild birds to reinforce scaring activities.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("State the number of birds observed present for each species that you wish to control under the proposed licence.", Font(name="Arial", size=10), 36),
+        (
+            "Include detailed descriptions of all active non-lethal methods deployed, including shooting to scare, acoustic deterrents, or human disturbance.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Use the second sheet of this workbook 'Daily record' to record active control methods on each date of action.", Font(name="Arial", size=10), 38),
+        (
+            "Use the fourth sheet of this workbook 'Long-term methods' to record static deterrents (such as netting, lasers, habitat modification, or visual decoys).",
+            Font(name="Arial", size=10),
+            44,
+        ),
+        ("Renewing your licence and reporting actions - monthly record", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a completed non-lethal action log if you have taken action under your licence or wish to apply for an annual renewal.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        (
+            "Record monthly summaries of active deterrents across the entire licence validity period, stating peak and average bird counts.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Document species-specific reactions to each scaring intervention and note any habituation observed over time.", Font(name="Arial", size=10), 38),
+        ("Use the third sheet of this workbook 'Monthly summary' to record summary statistics and licence reference numbers.", Font(name="Arial", size=10), 38),
+        ("Static deterrent maintenance logs must accompany monthly activity logs to demonstrate ongoing compliance.", Font(name="Arial", size=10), 42),
+        ("Statutory guidance and references", Font(name="Arial", size=12, bold=True), 32),
+        ("Review national wildlife management licensing policies and bird control standards before submitting records:", Font(name="Arial", size=10), 32),
+        ("Licence classes A06 and A07: Protecting fisheries and angling clubs from fish-eating predators", Font(name="Arial", size=10), 36),
+        ("Licence classes A08 and A09: Licences to prevent serious agricultural and horticultural damage", Font(name="Arial", size=10), 36),
+    ]
+
+    ws.column_dimensions["A"].width = 125
+    for r_idx, (text, font_style, r_height) in enumerate(instructions_data, start=1):
+        cell = ws.cell(r_idx, 1, text)
+        cell.font = font_style
+        ws.row_dimensions[r_idx].height = r_height
+
+    save(
+        wb,
+        "oversized-unheaded-instructions",
+        "A single-column unheaded instruction sheet wider and taller than portrait A4; isolates continuous viewport vs unheaded two-dimensional multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
