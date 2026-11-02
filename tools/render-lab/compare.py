@@ -631,10 +631,16 @@ def mark_printed(words, printed):
 
 
 def reference_words(lo_path, ref, app):
-    """OCR reads of the reference page `ref` (rendered from `lo_path`),
-    each marked with whether LibreOffice printed it (`mark_printed`)."""
+    """OCR reads of `ref`, marked against its source pages' text layers.
+    `lo_path` is a page path, or the paths of stitched horizontal tiles.
+    """
     words = ocr_words(ref, app == "tables")
-    return mark_printed(words, printed_words(os.path.splitext(lo_path)[0] + ".txt"))
+    paths = lo_path if isinstance(lo_path, (list, tuple)) else [lo_path]
+    layers = [printed_words(os.path.splitext(p)[0] + ".txt") for p in paths]
+    # If a tile has no usable text layer, its OCR cannot be checked against
+    # the other tiles' text. Keep the single-page fallback for the composite.
+    printed = [w for layer in layers for w in layer] if all(layers) else None
+    return mark_printed(words, printed)
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
@@ -923,7 +929,7 @@ def score_fixture(app, d, tier, ref_words_cache):
         ref, ours, scale = align(app, lo, ours_pages[i])
         key = (lo if isinstance(lo, str) else tuple(sheet_tiles or ()), ref.size)
         if key not in ref_words_cache:
-            ref_words_cache[key] = reference_words(lo, ref, app)
+            ref_words_cache[key] = reference_words(sheet_tiles or lo, ref, app)
         per_page.append(dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))
     m = {k: mean([p.get(k) for p in per_page]) for k in METRICS}
     m["ref_words"] = sum(p["ref_words"] or 0 for p in per_page)

@@ -370,6 +370,57 @@ class HorizontalTilesTest(unittest.TestCase):
 
         self.compare = compare
 
+    def test_score_stitched_tiles_uses_all_source_text_layers_and_caches_ocr(self):
+        import tempfile
+        from unittest import mock
+
+        compare = self.compare
+        reads = [(text, x, 20, (1, 1, 1), (x, 20, 10, 10))
+                 for text, x in (("alpha", 10), ("beta", 60), ("noise", 80))]
+        with tempfile.TemporaryDirectory() as d:
+            pages = [os.path.join(d, f"lo-{n}.png") for n in (1, 2)]
+            for path, text in zip(pages, ("alpha", "beta")):
+                image = Image.new("RGB", (100, 100), "white")
+                image.paste("black", (10, 20, 60, 80))
+                image.save(path)
+                with open(path.replace(".png", ".txt"), "w") as f:
+                    f.write(text)
+            ours = Image.new("RGB", (160, 100), "white")
+            ours.paste((240, 240, 240), (0, 0, 160, 20))
+            ours.paste((240, 240, 240), (0, 0, 40, 100))
+            ours.paste("black", (50, 30, 140, 80))
+            for tier in ("A", "B"):
+                ours.save(os.path.join(d, f"{tier}-1.png"))
+
+            # Only OCR is stubbed: exercise selection, stitching, alignment,
+            # source text lookup, and comparison together, independent of the
+            # installed tesseract version.
+            with mock.patch.object(compare, "page_bag", return_value=None), mock.patch.object(
+                compare, "ocr_words", return_value=reads
+            ) as ocr:
+                cache = {}
+                a = compare.score_fixture("tables", d, "A", cache)
+                b = compare.score_fixture("tables", d, "B", cache)
+            self.assertEqual(a, b)
+            self.assertEqual(a["lo_page"], 1)
+            self.assertEqual(a["pages_lo"], 1)
+            self.assertEqual(a["words"], 1.0)
+            self.assertEqual(len(cache), 1)
+            self.assertEqual([w[5] for w in next(iter(cache.values()))], [True, True, False])
+            self.assertEqual(ocr.call_count, 3)  # reference once, each tier once
+
+            # A missing or empty layer must retain reads from that tile.
+            for text in (None, ""):
+                with self.subTest(text=text):
+                    txt = pages[1].replace(".png", ".txt")
+                    if text is None:
+                        os.remove(txt)
+                    else:
+                        open(txt, "w").close()
+                    with mock.patch.object(compare, "ocr_words", return_value=reads):
+                        marked = compare.reference_words(pages, ours, "tables")
+                    self.assertTrue(all(w[5] for w in marked))
+
     def test_is_monochrome_rule(self):
         # Black border
         black = np.zeros((10, 100, 3), dtype=np.uint8)
