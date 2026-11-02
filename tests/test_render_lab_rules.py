@@ -270,5 +270,69 @@ class VerdictWordsTest(unittest.TestCase):
         self.assertEqual(self.verdict(dict(self.m, ref_words=3, words=0.6)), "amber")
         self.assertEqual(self.verdict(dict(self.m, ref_words=12, words=0.2)), "red")
 
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedConsumptionEstimatesFixtureTest(unittest.TestCase):
+    """The BICS sectoral consumption estimates reduction isolates horizontal multipage
+    split, 2-tier merged headers, and unprinted headings (#1343)."""
+
+    def test_wide_unheaded_consumption_estimates_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-consumption-estimates")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-consumption-estimates.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 14)
+            self.assertEqual(sheet.max_column, 6)
+
+            # 2-tier merged headers
+            self.assertEqual(sheet.cell(1, 1).value, "SIC07 4-digit")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 2).value, "Sector Description")
+            self.assertTrue(sheet.cell(1, 2).font.bold)
+            self.assertEqual(sheet.cell(1, 3).value, "Consumption Range (GWh)")
+            self.assertTrue(sheet.cell(1, 3).font.bold)
+            self.assertEqual(sheet.cell(2, 3).value, "2027-2028")
+            self.assertEqual(sheet.cell(2, 4).value, "2028-2029")
+            self.assertEqual(sheet.cell(2, 5).value, "2029-2030")
+            self.assertEqual(sheet.cell(2, 6).value, "2030-2031")
+
+            # Data rows
+            self.assertEqual(sheet.cell(3, 1).value, "1041")
+            self.assertEqual(sheet.cell(3, 2).value, "Manufacture of oils and fats")
+            self.assertEqual(sheet.cell(3, 3).value, "2.9 - 4.2")
+
+            # Column dimensions
+            self.assertEqual(sheet.column_dimensions["A"].width, 14)
+            self.assertEqual(sheet.column_dimensions["B"].width, 70)
+            self.assertEqual(sheet.column_dimensions["C"].width, 12)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
 if __name__ == "__main__":
     unittest.main()

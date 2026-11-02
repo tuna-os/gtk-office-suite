@@ -643,7 +643,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -652,7 +652,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -662,6 +662,74 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # Reduced from BICS sectoral consumption estimates (#1343):
+    # a 6-column unheaded worksheet with a 2-tier merged header (SIC07 4-digit,
+    # Sector Description, Consumption Range (GWh) 2027-2031) spanning 27.5 cm in width.
+    # In headless LibreOffice Calc, the wide table paginates horizontally across
+    # multiple portrait A4 pages: Column A (2.54 cm / ~14 units) alone on pages 1-2,
+    # Column B (16.91 cm / ~70 units) alone on pages 3-4, and Columns C-F (~8 cm total)
+    # on pages 5-6. Tables captures the continuous on-screen grid (columns A through F, ~1077 px).
+    # In compare.py, with print_options.headings = False, lo_cell_box(ref) returns None,
+    # align() skips cropping on-screen header bands (ox=40, oy=20), and pick_sheet_page()
+    # selects page 1 (Column A alone, ink width 91 px), resampling the 1077 px wide
+    # 6-column sheet down into 91 px (an 11.8× horizontal squeeze, scale 6.72×, SSIM 0.22,
+    # words found 0%, red verdict).
+    wb, ws = book()
+    font = lambda **kw: Font(name="Calibri", size=kw.pop("size", 11), **kw)
+    ws.merge_cells("A1:A2")
+    ws.merge_cells("B1:B2")
+    ws.merge_cells("C1:F1")
+    ws["A1"] = "SIC07 4-digit"
+    ws["A1"].font = font(bold=True)
+    ws["A1"].alignment = Alignment(vertical="center")
+    ws["B1"] = "Sector Description"
+    ws["B1"].font = font(bold=True)
+    ws["B1"].alignment = Alignment(vertical="center")
+    ws["C1"] = "Consumption Range (GWh)"
+    ws["C1"].font = font(bold=True)
+    ws["C1"].alignment = Alignment(horizontal="center")
+    ws["C2"] = "2027-2028"
+    ws["C2"].font = font(bold=True)
+    ws["D2"] = "2028-2029"
+    ws["D2"].font = font(bold=True)
+    ws["E2"] = "2029-2030"
+    ws["E2"].font = font(bold=True)
+    ws["F2"] = "2030-2031"
+    ws["F2"].font = font(bold=True)
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 70
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 10
+    ws.column_dimensions["E"].width = 10
+    ws.column_dimensions["F"].width = 10
+
+    sample_bics_rows = [
+        ("1041", "Manufacture of oils and fats", "2.9 - 4.2", "3 - 4.3", "3.1 - 4.4", "3.2 - 4.6"),
+        ("1062", "Manufacture of starches and starch products", "<1", "<1", "<1", "<1"),
+        ("1081", "Manufacture of sugar", "170 - 190", "180 - 200", "180 - 200", "190 - 210"),
+        ("2011", "Manufacture of industrial gases", "56 - 300", "58 - 300", "59 - 310", "61 - 320"),
+        ("2013", "Manufacture of other inorganic basic chemicals", "81 - 990", "83 - 1000", "85 - 1000", "88 - 1100"),
+        ("2014", "Manufacture of other organic basic chemicals", "29 - 120", "30 - 120", "31 - 120", "32 - 130"),
+        ("2015", "Manufacture of fertilisers and nitrogen compounds", "37 - 360", "37 - 370", "39 - 380", "40 - 390"),
+        ("2016", "Manufacture of plastics in primary forms", "120 - 490", "130 - 500", "130 - 510", "140 - 530"),
+        ("2311", "Manufacture of flat glass", "11 - 25", "11 - 26", "11 - 26", "12 - 27"),
+        ("2312", "Manufacture of hollow glass", "42 - 150", "43 - 150", "44 - 150", "45 - 160"),
+        ("2410", "Manufacture of basic iron and steel and of ferro-alloys", "210 - 890", "220 - 910", "220 - 930", "230 - 960"),
+        ("2420", "Manufacture of tubes, pipes, hollow profiles and related fittings", "15 - 39", "16 - 40", "16 - 41", "17 - 42"),
+    ]
+    for r_idx, row_data in enumerate(sample_bics_rows, start=3):
+        for c_idx, val in enumerate(row_data, start=1):
+            cell = ws.cell(r_idx, c_idx, val)
+            cell.font = font()
+
+    save(
+        wb,
+        "wide-unheaded-consumption-estimates",
+        "A 6-column unheaded consumption estimates sheet with 2-tier header spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
 
     wb, ws = book()
     pivot_rows = [
