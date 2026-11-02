@@ -11,7 +11,8 @@ The scorecard is `tools/render-lab/baseline.json` plus, for the real
 documents, `tools/render-lab/baseline-real.json`: the per-fixture,
 per-tier verdicts that the render-parity workflow ratchets `summary.json`
 against, so the two cannot disagree on a merged commit. `--summary` reads a
-lab run's `summary.json` instead.
+lab run's `summary.json` instead. Fixtures in the baselines but absent from
+that run count as unmeasured, not green; a partial run cannot promote an app.
 
 An app is "usable for everyday documents" only when every gate holds:
 
@@ -49,17 +50,20 @@ ACCEPTED_AMBER = {"letters/font-sizes", "letters/table", "tables/number-formats"
 
 
 def load(summary=None, baseline=BASELINE, baseline_real=BASELINE_REAL):
-    """{fixture: {tier: verdict}} from a summary.json, or the baseline and
-    the real-document baseline (when it exists) together."""
-    if summary:
-        with open(summary) as f:
-            data = json.load(f)
-        return {fx["fixture"]: dict(fx.get("verdicts", {})) for fx in data["fixtures"]}
+    """Load the baselines, or a run against their complete fixture inventory."""
     with open(baseline) as f:
         verdicts = json.load(f)
     if os.path.exists(baseline_real):
         with open(baseline_real) as f:
             verdicts.update(json.load(f))
+    if summary:
+        # Do not borrow any old verdicts: every omitted fixture is unmeasured
+        # in this run, including when the run covers only one app or corpus.
+        verdicts = {fixture: {} for fixture in verdicts}
+        with open(summary) as f:
+            data = json.load(f)
+        for fx in data["fixtures"]:
+            verdicts[fx["fixture"]] = dict(fx.get("verdicts", {}))
     return verdicts
 
 
