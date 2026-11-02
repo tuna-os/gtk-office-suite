@@ -70,3 +70,15 @@ The synthetic fixture isolates the table cell list indent mismatch for focused c
 As local environments lack the container engine/GUI build runtime to measure the full real corpus,
 `tools/render-lab/baseline-real.json` remains untouched until measured on CI.
 The real-document acceptance criteria (turning green in both Tier A and Tier B) remain open on #1365.
+
+## Measured synthetic baseline
+
+[CI run 41347666218](https://github.com/tuna-os/gtk-office-suite/actions/runs/41347666218)
+measured this fixture green in Tiers A and B, with all reference words found
+and zero lost lines. Reviewed the captured Letters and LibreOffice images and
+locked those measured verdicts into `tools/render-lab/baseline.json`. The check
+failed only because the new fixture was absent from the baseline (`RATCHET STALE`).
+The captures agree closely (0.77pt displacement, SSIM 0.996); this fixture
+uses `List Bullet` and does not establish that the real document's `List Paragraph`
+indent mismatch is fixed.
+The real-document acceptance criteria above remain open.
