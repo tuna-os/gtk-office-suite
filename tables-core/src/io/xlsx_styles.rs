@@ -83,8 +83,8 @@ fn flag(font: &str, name: &str) -> bool {
 }
 
 /// Colours of the default Office theme, by theme index (`<color theme="n">`):
-/// lt1, dk1, lt2, dk2, then the six accents.
-const THEME: [Rgb; 10] = [
+/// lt1, dk1, lt2, dk2, then the six accents, hyperlink and followed hyperlink.
+const THEME: [Rgb; 12] = [
     Rgb(0xFF, 0xFF, 0xFF),
     Rgb(0x00, 0x00, 0x00),
     Rgb(0xE7, 0xE6, 0xE6),
@@ -95,19 +95,22 @@ const THEME: [Rgb; 10] = [
     Rgb(0xFF, 0xC0, 0x00),
     Rgb(0x5B, 0x9B, 0xD5),
     Rgb(0x70, 0xAD, 0x47),
+    Rgb(0x05, 0x63, 0xC1),
+    Rgb(0x95, 0x4F, 0x72),
 ];
 
 thread_local! {
     /// The palette of the workbook whose styles are being read
     /// (`parse_cell_styles_with_theme`): its own theme's, else Office's.
-    static PALETTE: std::cell::Cell<[Rgb; 10]> = const { std::cell::Cell::new(THEME) };
+    static PALETTE: std::cell::Cell<[Rgb; 12]> = const { std::cell::Cell::new(THEME) };
 }
 
 /// A workbook's theme colours (`xl/theme/theme1.xml`'s `a:clrScheme`) by
-/// theme index: lt1, dk1, lt2, dk2, then accent1–6. The scheme lists them
-/// dk1, lt1, dk2, lt2, …; a cell's `theme="0"` is lt1. Office's where the
+/// theme index: lt1, dk1, lt2, dk2, then accent1–6, hlink and folHlink.
+/// The scheme lists dk1, lt1, dk2, lt2, …; a cell's `theme="0"` is lt1.
+/// Office's where the
 /// scheme is missing or a colour can't be read.
-pub fn theme_palette(theme_xml: &str) -> [Rgb; 10] {
+pub fn theme_palette(theme_xml: &str) -> [Rgb; 12] {
     let mut out = THEME;
     let Some(scheme) = theme_xml.split("<a:clrScheme").nth(1).and_then(|s| s.split("</a:clrScheme>").next()) else {
         return out;
@@ -121,7 +124,7 @@ pub fn theme_palette(theme_xml: &str) -> [Rgb; 10] {
         // A system colour carries the value it last had.
         Rgb::from_hex(xml_attr(&attrs("<a:sysClr")?, "lastClr")?)
     };
-    let names = ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"];
+    let names = ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"];
     for (slot, name) in out.iter_mut().zip(names) {
         if let Some(c) = read(name) {
             *slot = c;
@@ -464,6 +467,31 @@ mod tests {
         assert_eq!(mixed.bottom, BorderStyle::Solid, "a hairline draws thin");
         let (r, g, b) = mixed.color;
         assert_eq!(((r * 255.0).round(), (g * 255.0).round(), (b * 255.0).round()), (0.0, 112.0, 192.0));
+    }
+
+    /// The ELS cost form's funding-rule links use theme 10, not RGB blue.
+    /// Both link slots must resolve through the workbook theme like accents.
+    #[test]
+    fn hyperlink_theme_colours_resolve_and_reset() {
+        let styles = r#"<styleSheet><fonts count="2">
+            <font><u/><color theme="10"/></font>
+            <font><u/><color theme="11" tint="1"/></font></fonts>
+            <cellXfs count="2"><xf fontId="0"/><xf fontId="1"/></cellXfs></styleSheet>"#;
+        let theme = r#"<a:theme><a:themeElements><a:clrScheme name="Links">
+            <a:hlink><a:srgbClr val="0000FF"/></a:hlink>
+            <a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+            </a:clrScheme></a:themeElements></a:theme>"#;
+        let palette = theme_palette(theme);
+        assert_eq!(palette[10], Rgb(0, 0, 255));
+        assert_eq!(palette[11], Rgb(128, 0, 128));
+        let themed = parse_cell_styles_with_theme(styles, theme);
+        assert_eq!(themed[0].style.color, Some(Rgb(0, 0, 255)));
+        assert!(themed[0].style.underline);
+        assert_eq!(themed[1].style.color, Some(Rgb(255, 255, 255)));
+        // A later workbook without a theme must use the default link colours.
+        let defaults = parse_cell_styles(styles);
+        assert_eq!(defaults[0].style.color, Some(THEME[10]));
+        assert_eq!(theme_palette("")[11], THEME[11]);
     }
 
     /// A workbook's theme names its own colours: theme 5 (accent2) is the

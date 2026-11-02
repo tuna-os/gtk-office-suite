@@ -12,6 +12,13 @@ accounting, calculation/edit consistency, accessible interaction, and measured
 performance. ODS is import-only; neither an Excel-compatible UI nor preferred
 ODF wording can substitute for a working writer.
 
+Render-real #1329: the ELS cost form's funding-rule links exposed missing
+XLSX theme slots 10/11. Import now resolves both link colours, with a reduced
+`tables/hyperlink-theme` render fixture and a core regression test. This is
+partial progress: print scaling, the logo, and headers/footers still differ
+from the inspected LibreOffice reference. No real-document green or baseline
+promotion is claimed.
+
 ## Architecture and scope
 WorkbookController remains the sole mutation gateway. Stable sheet identities bind formulas, selection and undo. IronCalc owns calculation/dependency semantics; the view projects sparse state and does not implement a second formula engine. Format capability is explicit in the session: imported read-only formats require Save As to a writable format until their writers exist.
 
