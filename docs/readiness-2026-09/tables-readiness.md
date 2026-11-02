@@ -153,6 +153,12 @@ Work in this order; unchecked gates remain requirements, not claims:
       have both sheets in the new order under the new names, the formula with its cached value, and no formula on
       Sheet1. The file is then reopened in a fresh `tables two-sheets.xlsx` process and both sheets are walked
       through the switcher again, each showing its own content.
+      Follow-up for #439 extends this same journey with delete → undo → redo → undo
+      and precedent-edit undo/redo while the dependent sheet is selected. It asserts
+      both sheet-local values and recalculated formulas before the existing save/reopen
+      checks. These new assertions await the GUI CI lane; they are not new verified evidence.
+      Test/export action registration now lives in a dedicated shell module,
+      preserving the opt-in test-mode gate while reducing constructor setup code.
 - [x] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
       invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
       narrow breakpoint hides the name box — #516, found by the display matrix.)
