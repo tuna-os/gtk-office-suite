@@ -78,3 +78,7 @@ doc = false
 bench = false
 
 [workspace]
+
+[patch.crates-io]
+# Keep this separate workspace aligned with the root dependency graph.
+citationberg = { git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d" }

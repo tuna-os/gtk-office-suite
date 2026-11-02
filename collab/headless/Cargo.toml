@@ -28,3 +28,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net",
 serde_json = "1"
 tempfile = "3"
 parking_lot = "0.13"
+
+[patch.crates-io]
+# Mirrors the root workspace patch (docs/DEPENDENCIES.md, #225).
+citationberg = { git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d" }
