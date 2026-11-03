@@ -12,7 +12,7 @@ decks-core = { path = "../decks-core" }
 cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 pango = { version = "0.22", features = ["v1_44"] }
 pangocairo = { version = "0.22" }
-pulldown-cmark = "0.13.6"
+pulldown-cmark = "0.13"
 image = "0.25"
 zip = "9.0"
 quick-xml = "0.42"
