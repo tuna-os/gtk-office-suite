@@ -81,4 +81,74 @@ mod tests {
         let px = pt_to_px(72.0, SCREEN_DPI);
         assert!((px - 96.0).abs() < 1.0);
     }
+
+    // Tight enough that a wrong conversion factor fails, loose enough for
+    // the rounding of a division by 25.4.
+    const EPS: f64 = 1e-9;
+
+    /// One inch is the same length at any DPI; only its pixel count moves.
+    #[test]
+    fn test_one_inch_at_screen_and_print_dpi() {
+        for (dpi, px_per_inch) in [(SCREEN_DPI, 96.0), (PRINT_DPI, 300.0)] {
+            assert!((twips_to_px(1440.0, dpi) - px_per_inch).abs() < EPS);
+            assert!((pt_to_px(72.0, dpi) - px_per_inch).abs() < EPS);
+            assert!((mm_to_px(25.4, dpi) - px_per_inch).abs() < EPS);
+            assert!((cm_to_px(2.54, dpi) - px_per_inch).abs() < EPS);
+            assert!((px_to_twips(px_per_inch, dpi) - 1440.0).abs() < EPS);
+            assert!((px_to_mm(px_per_inch, dpi) - 25.4).abs() < EPS);
+        }
+        assert!((mm_to_inches(25.4) - 1.0).abs() < EPS);
+        assert!((inches_to_mm(1.0) - 25.4).abs() < EPS);
+    }
+
+    #[test]
+    fn test_px_twips_inverse() {
+        for dpi in [SCREEN_DPI, PRINT_DPI] {
+            for px in [0.0, 1.0, 37.5, 96.0, 1234.75] {
+                assert!((twips_to_px(px_to_twips(px, dpi), dpi) - px).abs() < EPS);
+            }
+            for twips in [0.0, 1.0, 567.25, 1440.0, 20_000.0] {
+                assert!((px_to_twips(twips_to_px(twips, dpi), dpi) - twips).abs() < EPS);
+            }
+        }
+        // A known pair, so a wrong 1440 factor fails rather than cancelling out.
+        assert!((px_to_twips(96.0, SCREEN_DPI) - 1440.0).abs() < EPS);
+        assert!((px_to_twips(150.0, PRINT_DPI) - 720.0).abs() < EPS);
+    }
+
+    #[test]
+    fn test_mm_inches_inverse() {
+        for mm in [0.0, 0.5, 25.4, 123.456, 297.0] {
+            assert!((inches_to_mm(mm_to_inches(mm)) - mm).abs() < EPS);
+        }
+        for inches in [0.0, 0.25, 1.0, 8.5, 11.0] {
+            assert!((mm_to_inches(inches_to_mm(inches)) - inches).abs() < EPS);
+        }
+        // A4 width and US Letter width, each to the other unit.
+        assert!((mm_to_inches(210.0) - 210.0 / 25.4).abs() < EPS);
+        assert!((inches_to_mm(8.5) - 215.9).abs() < EPS);
+    }
+
+    #[test]
+    fn test_zero_and_fractional_inputs() {
+        for dpi in [SCREEN_DPI, PRINT_DPI] {
+            assert!(mm_to_px(0.0, dpi).abs() < EPS);
+            assert!(px_to_mm(0.0, dpi).abs() < EPS);
+            assert!(twips_to_px(0.0, dpi).abs() < EPS);
+            assert!(px_to_twips(0.0, dpi).abs() < EPS);
+            assert!(cm_to_px(0.0, dpi).abs() < EPS);
+            assert!(pt_to_px(0.0, dpi).abs() < EPS);
+        }
+        assert!(mm_to_inches(0.0).abs() < EPS);
+        assert!(inches_to_mm(0.0).abs() < EPS);
+        // Half an inch at screen DPI, by each route into pixels.
+        assert!((mm_to_px(12.7, SCREEN_DPI) - 48.0).abs() < EPS);
+        assert!((cm_to_px(1.27, SCREEN_DPI) - 48.0).abs() < EPS);
+        assert!((twips_to_px(720.0, SCREEN_DPI) - 48.0).abs() < EPS);
+        assert!((pt_to_px(36.0, SCREEN_DPI) - 48.0).abs() < EPS);
+        // And at print DPI, where the same length is 150 px.
+        assert!((mm_to_px(12.7, PRINT_DPI) - 150.0).abs() < EPS);
+        assert!((cm_to_px(1.27, PRINT_DPI) - 150.0).abs() < EPS);
+        assert!((px_to_mm(150.0, PRINT_DPI) - 12.7).abs() < EPS);
+    }
 }
