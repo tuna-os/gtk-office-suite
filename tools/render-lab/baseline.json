@@ -344,8 +344,8 @@
     "C": "green"
   },
   "tables/number-formats": {
-    "A": "green",
-    "B": "green",
+    "A": "amber",
+    "B": "amber",
     "C": "amber"
   },
   "tables/pivot-crosstab": {
