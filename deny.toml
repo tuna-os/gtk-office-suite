@@ -61,4 +61,12 @@ ignore = [
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 SUID/SGID bits kept by extract(); never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink targets outside the destination; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() permissions through symlinks; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
+    # rdocx 0.16.2 (and latest 0.16.4) pins pulldown-cmark =0.13.4,
+    # blocking the 0.13.5/0.13.6 fixes. Both advisories require
+    # Options::ENABLE_WIKILINKS (also set by Options::all()). The suite
+    # uses Parser::new or strikethrough only; rdocx src/html.rs enables
+    # only tables and strikethrough, so neither vulnerable path is reached.
+    # Remove both exceptions once rdocx permits >=0.13.6 (#1798).
+    { id = "RUSTSEC-2026-0414", reason = "pulldown-cmark wikilink event growth requires ENABLE_WIKILINKS, never enabled here or in rdocx; rdocx pins =0.13.4, blocking the fix (#1798); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0433", reason = "pulldown-cmark nested image wikilink quadratic parsing requires ENABLE_WIKILINKS, never enabled here or in rdocx; rdocx pins =0.13.4, blocking >=0.13.6 (#1798); review by 2027-01-01" },
 ]
