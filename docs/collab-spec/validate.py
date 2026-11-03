@@ -21,6 +21,8 @@ registry = Registry().with_resources(
 POSITIVE = {
     "meta.json": "meta.schema.json",
     "version.json": "version.schema.json",
+    "version-durable-stream.json": "version.schema.json",
+    "version-blake3.json": "version.schema.json",
     "lease-held.json": "lease.schema.json",
     "lease-released.json": "lease.schema.json",
     "lease-held-empty-document.json": "lease.schema.json",
@@ -60,6 +62,29 @@ NEGATIVE = [
     ("update over 34000 bytes", "update.json", "update.schema.json",
      lambda d: d["payload"].update(size=34001)),
     ("update with bad algorithm id", "update.json", "update.schema.json", lambda d: d.update(algorithm="Loro")),
+    # Locators added in draft 1 update 2 (8.4, 8.5): additive enum values.
+    ("durable-stream locator, plain-http href", "version-durable-stream.json", "version.schema.json",
+     lambda d: d["file"]["locator"].update(href="http://streams.example.org/dcp/x/f/y")),
+    ("durable-stream locator without href", "version-durable-stream.json", "version.schema.json",
+     lambda d: d["file"]["locator"].pop("href")),
+    ("durable-stream locator, hash instead of href", "version-durable-stream.json", "version.schema.json",
+     lambda d: d["file"].update(locator={"type": "durable-stream", "hash": "0" * 64})),
+    ("blake3 locator without hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"]["locator"].pop("hash")),
+    ("blake3 locator, 63-digit hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"]["locator"].update(hash="a" * 63)),
+    ("blake3 locator, 65-digit hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"]["locator"].update(hash="a" * 65)),
+    ("blake3 locator, upper-case hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"]["locator"].update(hash="A" * 64)),
+    ("blake3 locator, non-hex hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"]["locator"].update(hash="g" * 64)),
+    ("blake3 locator, href instead of hash", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"].update(locator={"type": "blake3", "href": "https://example.org/x"})),
+    ("unknown locator type (a reader of draft 1 update 2 rejects it too)", "version.json", "version.schema.json",
+     lambda d: d["file"].update(locator={"type": "ipfs", "cid": "bafy"})),
+    ("blake3 version, sha256 still required", "version-blake3.json", "version.schema.json",
+     lambda d: d["file"].pop("sha256")),
 ]
 
 # Draft 0 objects ("dcp": 0) must be rejected by every draft 1 schema.

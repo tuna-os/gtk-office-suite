@@ -202,7 +202,17 @@ async fn collabora_over_matrix_refresh_is_a_new_lease_record_with_renewal_plus_o
     let owner = rig.native(Who::Owner);
     let s = open(&rig, &e, Who::Editor).await;
 
-    let first = owner.lease(&rig.doc).await.unwrap().expect("lease after load");
+    // Collabora sends LOCK after it has downloaded the file, and "document loaded"
+    // only says the editor is ready: the lease can land a moment later. Wait for it
+    // (up to 30 s) instead of racing it; a lease that never appears still fails.
+    let lease_deadline = Instant::now() + Duration::from_secs(30);
+    let first = loop {
+        if let Some(lease) = owner.lease(&rig.doc).await.unwrap() {
+            break lease;
+        }
+        assert!(Instant::now() < lease_deadline, "no lease within 30 s of the document loading");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    };
     assert_eq!(first.body.renewal, Some(0), "the first LOCK over no record: renewal 0");
     let end = Instant::now() + Duration::from_secs(90);
     while Instant::now() < end && lock_ops(&rig).len() < 2 {

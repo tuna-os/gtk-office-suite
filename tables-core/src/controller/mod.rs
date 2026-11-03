@@ -34,7 +34,7 @@ mod protection_tests;
 mod tests;
 
 #[cfg(feature = "collab")]
-pub use collab::Replica;
+pub use collab::{CollabError, ImportReport, Replica, SheetChange};
 pub use core::WorkbookController;
 pub use format::BorderPreset;
 pub use ops::{apply, apply_all, blank_lines, Axis, CellContent, Line, Op, SheetImage, WorkbookImage};

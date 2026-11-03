@@ -129,7 +129,26 @@ pub struct Fixture {
     /// How long a journey waits for an effect to reach another handle
     /// (eventual consistency over a network). Zero for in-process stores.
     pub settle: Duration,
+    /// The lease duration, in milliseconds, that `lease_expiry_releases`
+    /// claims (spec test 5). The journey needs the lease's 500 ms settle
+    /// interval, the renewal, its read-backs and two more reads to fit inside
+    /// the renewed lease, so a binding whose operations take more than about
+    /// 100 ms (a federated Nextcloud: two server hops each) sets a longer one
+    /// and states it. [`DEFAULT_LEASE_MS`] from the constructors.
+    pub lease_ms: u64,
 }
+
+/// The lease duration `lease_expiry_releases` uses unless a binding sets
+/// [`Fixture::lease_ms`].
+///
+/// Ten seconds, not four: after the renewal the journey has a quarter of the
+/// lease, minus the 500 ms settle interval, for two read-backs and two more
+/// reads. At 4 s that was about 0.5 s of slack, and the journey failed
+/// intermittently on shared runners against three different bindings (Nextcloud
+/// 35.0.2, and Durable Streams behind TLS/HTTP2 in run 40208731356). At 10 s the
+/// slack is about 2 s. The journey only waits for the lease to expire, so it
+/// costs a few extra seconds per real-time store.
+pub const DEFAULT_LEASE_MS: u64 = 10_000;
 
 pub fn standard_meta() -> Meta {
     Meta {
@@ -196,6 +215,7 @@ impl Fixture {
             faults,
             forger: None,
             settle,
+            lease_ms: DEFAULT_LEASE_MS,
         };
         let versions = fx.owner.versions(&fx.doc).await?;
         if versions.len() != 1 || !versions[0].body.parents.is_empty() {

@@ -19,6 +19,8 @@ pub struct Resp {
     /// `X-DCP-Heads` of the response (GetFile).
     pub heads: Option<String>,
     pub body: Vec<u8>,
+    /// Wall time from sending the request to having its whole body, ms.
+    pub elapsed_ms: u128,
 }
 
 impl Resp {
@@ -75,6 +77,7 @@ impl RawWopi {
             Some(b) => req.header("content-type", "application/octet-stream").body(b),
             None => req.header("content-length", "0"),
         };
+        let started = std::time::Instant::now();
         let r = req.send().await.map_err(|e| Failure::new(format!("WOPI request failed: {e}")))?;
         let header = |name: &str| r.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
         let (status, lock, item_version, heads) = (
@@ -88,7 +91,7 @@ impl RawWopi {
             .await
             .map_err(|e| Failure::new(format!("WOPI response body: {e}")))?
             .to_vec();
-        Ok(Resp { status, lock, item_version, heads, body })
+        Ok(Resp { status, lock, item_version, heads, body, elapsed_ms: started.elapsed().as_millis() })
     }
 
     pub async fn check_file_info(&self) -> Result<Resp, Failure> {
@@ -112,6 +115,24 @@ impl RawWopi {
 
     pub async fn unlock(&self, lock: &str) -> Result<Resp, Failure> {
         self.lock_op("UNLOCK", lock).await
+    }
+
+    /// `REFRESH_LOCK`: Collabora never sends it (it refreshes with `LOCK` and
+    /// the same string), other WOPI clients do.
+    pub async fn refresh_lock(&self, lock: &str) -> Result<Resp, Failure> {
+        self.lock_op("REFRESH_LOCK", lock).await
+    }
+
+    /// `UNLOCK_AND_RELOCK`: `LOCK` carrying `X-WOPI-OldLock`.
+    pub async fn unlock_and_relock(&self, new_lock: &str, old_lock: &str) -> Result<Resp, Failure> {
+        self.send(
+            Method::POST,
+            false,
+            &[],
+            &[("X-WOPI-Override", "LOCK"), ("X-WOPI-Lock", new_lock), ("X-WOPI-OldLock", old_lock)],
+            None,
+        )
+        .await
     }
 
     pub async fn get_lock(&self) -> Result<Resp, Failure> {

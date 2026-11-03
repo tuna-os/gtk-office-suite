@@ -12,7 +12,7 @@
 //!
 //! The defects are `dcp-conformance`'s `Defective` stores, and, for forged
 //! versions, a room with the draft-0 power-level table plus readers that trust
-//! the sender (`MatrixConfig::reader_checks_senders = false`).
+//! the sender (`MatrixConfig::sender_rule = SenderRule::Trust`).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,7 +20,7 @@ use std::time::Duration;
 use dcp_conformance::wrappers::{Defect, Defective};
 use dcp_core::DocumentStore;
 use dcp_interop::checks;
-use dcp_interop::rig::synapse;
+use dcp_interop::rig::synapse_relaxed as synapse;
 use dcp_interop::{Rig, RigOptions, Who};
 
 fn defective(defect: Defect, store: Arc<dyn DocumentStore>) -> Arc<dyn DocumentStore> {
@@ -153,6 +153,38 @@ control!(
     "no gate and no reader check: WOPI sees two heads and a read-only document"
 );
 
+// Forged updates, and a demoted editor's events: same rig, same defect.
+control!(
+    readers_that_trust_the_sender_fail_the_forged_update_check,
+    "forged_update_from_a_viewer_is_dropped_by_readers",
+    RigOptions::honest().draft0_power_levels_and_readers_that_trust_senders().settle(SETTLE),
+    must_say = "a viewer's forged update was accepted by a Matrix reader",
+    "no gate and no reader check: the viewer's updates are listed"
+);
+
+control!(
+    readers_that_trust_the_sender_fail_the_demoted_editor_check,
+    "a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through",
+    RigOptions::honest().draft0_power_levels_and_readers_that_trust_senders().settle(SETTLE),
+    must_say = "a demoted editor's forged version was accepted by a Matrix reader",
+    "no gate and no reader check: the ex-editor's forged version is a second head"
+);
+
+// A host that cannot see the second head (its own view of the document hides
+// it) is the host as it was before spike F's fix: it offers a writable session
+// on a conflicted document and the check must notice.
+control!(
+    a_host_that_cannot_see_the_conflict_fails_the_conflicted_put_file_check,
+    "put_file_on_a_conflicted_document_is_refused",
+    RigOptions::honest().settle(SETTLE).backing(|who, store, _| if who == Who::Editor {
+        defective(Defect::HideSiblingHeads, store)
+    } else {
+        store
+    }),
+    must_say = "must open read-only",
+    "the host's view shows one head, so it offers a writable session"
+);
+
 /// The defects above must not make every check fail: the same defective rig
 /// (revoke is a no-op) passes a check the defect cannot reach, and a rig with
 /// no reader checks still passes a check that does not depend on them.
@@ -190,6 +222,9 @@ fn the_controls_name_real_checks() {
         "native_lease_expiry_frees_the_wopi_lock",
         "forged_version_is_dropped_by_matrix_readers",
         "forged_version_is_dropped_by_wopi_readers",
+        "forged_update_from_a_viewer_is_dropped_by_readers",
+        "a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through",
+        "put_file_on_a_conflicted_document_is_refused",
     ] {
         let _ = checks::by_name(name);
     }

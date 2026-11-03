@@ -9,6 +9,7 @@ import mss
 from PIL import Image
 from dogtail import tree, rawinput
 
+from . import instances
 from . import recorder as screen_recorder
 from .owned_processes import (
     register as _register_launched,
@@ -43,9 +44,26 @@ class _SecondApp:
         self.process = process
         self.app = app
         self.win_id = win_id
+        self._output = None
+        self.exit_status = None
 
     def __repr__(self):
         return f"<_SecondApp {self.name} pid={self.process.pid} win={self.win_id}>"
+
+    def output(self):
+        """Stop the process and return its `(stdout, stderr)`, once: the pipes
+        can only be drained one time, so the answer is kept (the same
+        arrangement as `BaseGUITestCase.app_output`)."""
+        if self._output is None:
+            self.exit_status = self.process.poll()
+            if self.exit_status is None:
+                self.process.terminate()
+            try:
+                self._output = self.process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self._output = self.process.communicate(timeout=5)
+        return self._output
 
 
 class BaseGUITestCase(unittest.TestCase):
@@ -831,6 +849,35 @@ class BaseGUITestCase(unittest.TestCase):
             print(f"Warning: app log capture failed: {e}")
         record("app_log", "app.log", failure)
 
+        # Every further instance a journey launched (`launch_second_app`):
+        # a collaboration failure is as often in the other person's window as
+        # in the primary's, and a journey that has only the primary's log and
+        # tree cannot say which side did not converge.
+        for other in getattr(self, "_second_apps", []):
+            tag = f"{other.name}_{other.process.pid}"
+            try:
+                with open(os.path.join(artifacts_dir, f"atspi_tree_{tag}.txt"), "w") as f:
+                    f.write(self._dump_atspi_tree(app=other.app))
+                failure = None
+            except Exception as e:
+                failure = str(e)
+                print(f"Warning: AT-SPI tree dump of {other} failed: {e}")
+            record(f"atspi_tree_{tag}", f"atspi_tree_{tag}.txt", failure)
+            try:
+                out, err = other.output()
+                with open(os.path.join(artifacts_dir, f"app_{tag}.log"), "w") as f:
+                    f.write("--- stdout ---\n")
+                    f.write(out or "")
+                    f.write("\n--- stderr ---\n")
+                    f.write(err or "")
+                    f.write("\n--- exit ---\n")
+                    f.write(describe_exit(other.exit_status) + "\n")
+                failure = None
+            except Exception as e:
+                failure = str(e)
+                print(f"Warning: app log capture of {other} failed: {e}")
+            record(f"app_log_{tag}", f"app_{tag}.log", failure)
+
         snapshot_path = os.environ.get("GTK_OFFICE_SNAPSHOT_PATH")
         if not snapshot_path:
             captured["state_snapshot"] = {
@@ -1001,7 +1048,7 @@ class BaseGUITestCase(unittest.TestCase):
             print(f"Warning: failure artifacts incomplete, missing: {', '.join(missing)}")
         print(f"Failure artifacts retained at {artifacts_dir}")
 
-    def _dump_atspi_tree(self, max_depth: int = 12) -> str:
+    def _dump_atspi_tree(self, max_depth: int = 12, app=None) -> str:
         lines = []
 
         def walk(node, depth):
@@ -1020,7 +1067,7 @@ class BaseGUITestCase(unittest.TestCase):
                 pass
 
         try:
-            walk(self.app, 0)
+            walk(app if app is not None else self.app, 0)
         except Exception as e:
             lines.append(f"(tree dump failed: {e})")
         return "\n".join(lines)
@@ -1136,12 +1183,27 @@ class BaseGUITestCase(unittest.TestCase):
     # *conversions* are pure functions with their own unit tests; what
     # needed a second process was the transfer.
 
-    def launch_second_app(self, app_name: str, launch_args=()):
+    def launch_second_app(self, app_name: str, launch_args=(), env=None,
+                          same_name: bool = False):
         """Launch another suite application beside the primary one.
 
         Returns a handle with `.name`, `.process`, `.app` (AT-SPI node) and
         `.win_id`. Registered for cleanup, so a failing journey does not
         leave a window on the display for the next test to type into.
+
+        `env` is merged over the primary's `launch_env`, so one entry
+        (`XDG_DATA_HOME`, `COLLABD_DATA_DIR`, ...) is enough to give this
+        process its own store; whatever it does not name it shares with the
+        primary, which is why a pair of instances is built with
+        `prepare_instance_pair`, where every store is named.
+
+        `same_name=True` is for a second instance of the *same* app: the
+        pre-launch sweep (`_terminate_owned(app_name)`) is the one that
+        terminates every process the harness launched under that name, the
+        primary included, so it is skipped. The process is still registered,
+        so the next journey's sweep and this one's cleanup both reap it.
+        `wait_for_app(name, pid=...)` is what tells the two apart in the
+        AT-SPI registry.
         """
         target_dir = os.environ.get("CARGO_TARGET_DIR") or os.path.join(
             self.workspace_dir, "target")
@@ -1149,13 +1211,15 @@ class BaseGUITestCase(unittest.TestCase):
         if not os.path.exists(bin_path):
             raise RuntimeError(f"Binary not found at {bin_path}. Run 'cargo build' first.")
 
-        _terminate_owned(app_name)
+        if not same_name:
+            _terminate_owned(app_name)
 
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        env.update(getattr(self, "launch_env", {}))
+        process_env = os.environ.copy()
+        process_env["GDK_BACKEND"] = "x11"
+        process_env.update(getattr(self, "launch_env", {}))
+        process_env.update(env or {})
         process = subprocess.Popen(
-            [bin_path] + list(launch_args), env=env,
+            [bin_path] + list(launch_args), env=process_env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         _register_launched(app_name, process)
@@ -1169,7 +1233,7 @@ class BaseGUITestCase(unittest.TestCase):
                     process.kill()
         self.addCleanup(terminate)
 
-        app = self.wait_for_app(app_name, pid=process.pid)
+        app = self.wait_for_app(app_name, timeout=30.0, pid=process.pid)
         win_id = self.wait_for_condition(
             lambda: self._window_for_pid(process.pid),
             description=f"an X window for {app_name}",
@@ -1190,6 +1254,135 @@ class BaseGUITestCase(unittest.TestCase):
             return None
         ids = [w for w in result.stdout.split() if w]
         return ids[-1] if ids else None
+
+    def toplevel_window(self, pid: int):
+        """The application window of process `pid`: the largest visible X
+        window it owns. `_window_for_pid` takes the last window the process
+        owns, which is the window when it is alone and may be one of GTK's
+        small helper windows when it is not; tiling and input for two
+        instances need the real one."""
+        try:
+            found = subprocess.run(
+                ["xdotool", "search", "--onlyvisible", "--pid", str(pid)],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.split()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+        best, best_area = None, 0
+        for window in found:
+            geometry = self._window_geometry(window)
+            if geometry is None:
+                continue
+            area = geometry[2] * geometry[3]
+            if area > best_area:
+                best, best_area = window, area
+        return best
+
+    @staticmethod
+    def _window_geometry(window):
+        """(x, y, width, height) of an X window on the screen, or None."""
+        try:
+            out = subprocess.run(
+                ["xdotool", "getwindowgeometry", "--shell", str(window)],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+            return instances.parse_shell_geometry(out)
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            return None
+
+    # ── Two instances of one app (collaboration journeys) ──────────────
+    # Two people editing one document are two processes, each with its own
+    # settings, data, autosave state and sidecar identity, on one display
+    # and one session bus (so one AT-SPI tree). The primary instance goes
+    # through the ordinary `setUp`, which reads `launch_env` before it
+    # launches, so its half is `prepare_instance_pair()` *before*
+    # `super().setUp()`; the second is `launch_instance_pair()` after it.
+    # The apps start side by side only when asked for by the window manager
+    # (`GUI_TEST_WINDOW_MANAGER=openbox`, tests/gui/run_gui_tests.sh):
+    # matchbox gives every window the whole screen.
+
+    def prepare_instance_pair(self, labels=("a", "b")):
+        """Give each instance its own environment (`instances.instance_env`)
+        and make the first one this test's `launch_env`. Call before
+        `super().setUp()`, as with the other `isolate_*` helpers; the
+        directories are removed with the test and retained on failure."""
+        collabd = instances.resolve_collabd(
+            os.environ,
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))))))
+        if not hasattr(self, "_capture_excluded"):
+            self._capture_excluded = []
+        envs = {}
+        for label in labels:
+            root = self.temp_dir(f"instance-{label}-")
+            envs[label] = instances.instance_env(root, collabd)
+            self._capture_excluded.append(envs[label]["XDG_CACHE_HOME"])
+        self._pair_labels = tuple(labels)
+        self._pair_envs = envs
+        self._collabd_bin = collabd
+        self.launch_env = {**getattr(self, "launch_env", {}), **envs[labels[0]]}
+        return envs
+
+    def launch_instance_pair(self):
+        """Start the second instance (the first is the one `setUp`
+        launched), find each one's own window and, when the window manager
+        lets windows be placed, put them side by side so one screen
+        recording shows both. Returns `(first, second)`, handles for
+        `focus_app`; `self.windows_tiled` says whether they are side by side.
+        """
+        if not os.path.isfile(self._collabd_bin):
+            self.fail(f"the sidecar is not built at {self._collabd_bin}: run "
+                      "`cargo build -p collabd --locked` in collab/, or set COLLABD_BIN")
+        first = self.primary_instance()
+        second = self.launch_second_app(
+            self.app_name, env=self._pair_envs[self._pair_labels[1]], same_name=True)
+        for handle in (first, second):
+            handle.win_id = self.wait_for_condition(
+                lambda h=handle: self.toplevel_window(h.process.pid),
+                description=f"the window of {handle}")
+        # `focus_app()` with no argument and the input shims read these.
+        self._primary_win_id = first.win_id
+        self._win_id = first.win_id
+        self.windows_tiled = None
+        if os.environ.get("GUI_TEST_WINDOW_MANAGER", "matchbox") != "matchbox":
+            self.windows_tiled = self.tile_windows(first, second)
+        return first, second
+
+    def primary_instance(self):
+        """The primary app as a `focus_app` handle, like a second app's."""
+        return _SecondApp(self.app_name, self.process, self.app,
+                          getattr(self, "_primary_win_id", None))
+
+    def tile_windows(self, *handles, timeout: float = 10.0) -> bool:
+        """Place the handles' windows in equal columns across the screen and
+        report whether the window manager did it. Placement is evidence (one
+        recording shows both people), not an assertion, so a window manager
+        that refuses (matchbox) is an answer of False, not a failure; the
+        caller decides whether it needed True."""
+        width, height = (int(n) for n in os.environ.get(
+            "GUI_TEST_SCREEN_SIZE", "1920x1080").split("x"))
+        cells = instances.side_by_side(width, height, len(handles))
+        slack = 64  # window decorations and borders, in pixels
+
+        def placed():
+            for handle, (x, y, w, h) in zip(handles, cells):
+                subprocess.run(["xdotool", "windowsize", handle.win_id, str(w), str(h)],
+                               capture_output=True, timeout=5)
+                subprocess.run(["xdotool", "windowmove", handle.win_id, str(x), str(y)],
+                               capture_output=True, timeout=5)
+            now = [self._window_geometry(handle.win_id) for handle in handles]
+            if None in now:
+                return False
+            return instances.rects_disjoint(now) and all(
+                got[0] >= x - slack and got[0] + got[2] <= x + w + slack
+                for got, (x, _y, w, _h) in zip(now, cells))
+
+        try:
+            self.wait_for_condition(placed, timeout=timeout, interval=0.25,
+                                    description="the windows to sit side by side")
+        except AssertionError:
+            return False
+        return True
 
     def focus_app(self, target=None):
         """Point synthetic input at `target` (a `launch_second_app` handle),

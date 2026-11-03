@@ -100,7 +100,12 @@ fn refuses_op(state: &WorkbookState, op: &Op) -> bool {
 
 impl WorkbookController {
     /// Preflight the complete group without executing even its first op.
+    /// A read-only workbook refuses every group, without counting a
+    /// protection rejection (`read_only`).
     pub(super) fn authorize_ops(&mut self, ops: &[Op]) -> bool {
+        if self.read_only {
+            return false;
+        }
         let refused = {
             let state = self.state.borrow();
             ops.iter().any(|op| refuses_op(&state, op))

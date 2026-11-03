@@ -129,8 +129,8 @@
     "C": "green"
   },
   "letters/font-sizes": {
-    "A": "amber",
-    "B": "amber",
+    "A": "green",
+    "B": "green",
     "C": "green"
   },
   "letters/footnote-continued": {
@@ -254,6 +254,10 @@
     "B": "amber",
     "C": "amber"
   },
+  "letters/table-cell-list-indent": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/text-color": {
     "A": "green",
     "B": "green",
@@ -344,8 +348,8 @@
     "C": "green"
   },
   "tables/number-formats": {
-    "A": "amber",
-    "B": "amber",
+    "A": "green",
+    "B": "green",
     "C": "amber"
   },
   "tables/pivot-crosstab": {

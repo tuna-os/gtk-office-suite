@@ -23,7 +23,7 @@ pub use compare::{assert_same_content, assert_same_view};
 pub use failure::Failure;
 pub use fixture::{
     new_file, standard_meta, Capabilities, Faults, Fixture, Forger, RealTime, StoreFactory, Time,
-    ALGORITHM, BASE_FILE, DOC_MODEL, MIME,
+    ALGORITHM, BASE_FILE, DEFAULT_LEASE_MS, DOC_MODEL, MIME,
 };
 pub use memory_factory::{MemoryFactory, MemoryForger};
 pub use runner::{

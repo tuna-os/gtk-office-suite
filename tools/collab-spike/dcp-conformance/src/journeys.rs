@@ -597,14 +597,14 @@ pub async fn lease_exclusion_and_readback(f: &dyn StoreFactory) -> Result<(), Fa
 /// Test 5: lease expiry releases the document, and renewal at half the
 /// duration keeps it.
 pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> {
-    // Long enough that the settle interval inside every acquire (rule 3)
-    // does not eat the lease it just took.
-    const D: u64 = 4_000;
     let fx = f.fresh().await?;
+    // Long enough that the settle interval inside every acquire (rule 3)
+    // does not eat the lease it just took: the binding's `Fixture::lease_ms`.
+    let d = fx.lease_ms;
     let first = fx.first_version.clone();
     let (ed, ow) = (&fx.editor, &fx.owner);
-    let ce = Claim::new(ed.principal(), "session-editor", "token-editor", &first, D);
-    let co = Claim::new(ow.principal(), "session-owner", "token-owner", &first, D);
+    let ce = Claim::new(ed.principal(), "session-editor", "token-editor", &first, d);
+    let co = Claim::new(ow.principal(), "session-owner", "token-owner", &first, d);
     let pause = TimePause(fx.time.clone());
     let st = Settle::new(&pause, MATRIX_SETTLE_MS);
 
@@ -629,7 +629,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
     );
 
     // Kill the holder: it stops renewing. After the duration anyone may acquire.
-    fx.time.pass(D + 500).await;
+    fx.time.pass(d + 500).await;
     let Acquire::Acquired(taken) = lease::acquire(&**ow, &fx.doc, &co, &st).await? else {
         return Err(Failure::new("the lease did not expire after its duration"));
     };
@@ -653,7 +653,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
     );
 
     // Renewal: due at half the duration, and it really extends the lease.
-    fx.time.pass(D / 2).await;
+    fx.time.pass(d / 2).await;
     let renewed = lease::renew_if_due(&**ow, &fx.doc, &co, &taken, &st).await?;
     let Some(Acquire::Acquired(renewed)) = renewed else {
         return Err(Failure::new(format!(
@@ -669,7 +669,7 @@ pub async fn lease_expiry_releases(f: &dyn StoreFactory) -> Result<(), Failure> 
         "a renewal carries the previous renewal plus 1 (rule 8): expected 2, got {:?}",
         renewed.body.renewal
     );
-    fx.time.pass(D * 3 / 4).await; // past the ORIGINAL expiry, inside the renewed one
+    fx.time.pass(d * 3 / 4).await; // past the ORIGINAL expiry, inside the renewed one
     wait_lease(&fx, ed, "the editor sees the renewal", |l| {
         l.is_some_and(|l| l.id == renewed.id)
     })

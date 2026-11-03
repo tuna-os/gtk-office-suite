@@ -137,6 +137,12 @@ mod tests {
                 include_str!("../../../../docs/collab-spec/examples/lease-held-wopi.json")
             }
             "update.json" => include_str!("../../../../docs/collab-spec/examples/update.json"),
+            "version-durable-stream.json" => include_str!(
+                "../../../../docs/collab-spec/examples/version-durable-stream.json"
+            ),
+            "version-blake3.json" => {
+                include_str!("../../../../docs/collab-spec/examples/version-blake3.json")
+            }
             other => panic!("unknown example {other} (examples live in {DIR})"),
         };
         serde_json::from_str(text).unwrap()
@@ -151,6 +157,8 @@ mod tests {
         validate(Kind::Lease, &example("lease-held-empty-document.json")).unwrap();
         validate(Kind::Lease, &example("lease-held-wopi.json")).unwrap();
         validate(Kind::Update, &example("update.json")).unwrap();
+        validate(Kind::Version, &example("version-durable-stream.json")).unwrap();
+        validate(Kind::Version, &example("version-blake3.json")).unwrap();
 
         // The typed model serializes back to something the schema accepts and
         // that is the same JSON (no field is silently dropped or renamed).
@@ -174,9 +182,24 @@ mod tests {
         }
         let u: Update = parse(Kind::Update, &example("update.json")).unwrap();
         assert_eq!(serde_json::to_value(&u).unwrap(), example("update.json"));
+        // The two locators added in draft 1 update 2 map onto their own variants.
+        for (name, check) in [
+            (
+                "version-durable-stream.json",
+                (|l: &crate::Locator| matches!(l, crate::Locator::DurableStream { .. }))
+                    as fn(&crate::Locator) -> bool,
+            ),
+            ("version-blake3.json", |l| {
+                matches!(l, crate::Locator::Blake3 { .. })
+            }),
+        ] {
+            let v: Version = parse(Kind::Version, &example(name)).unwrap();
+            assert!(check(&v.file.locator), "{name}: {:?}", v.file.locator);
+            assert_eq!(serde_json::to_value(&v).unwrap(), example(name), "{name}");
+        }
     }
 
-    /// The sixteen malformed variants of `docs/collab-spec/validate.py`, in the
+    /// The malformed variants of `docs/collab-spec/validate.py`, in the
     /// same order and with the same labels (the draft-0 variants it generates
     /// from the examples are covered by `draft_0_objects_are_rejected`). Each
     /// must be rejected.
@@ -290,13 +313,86 @@ mod tests {
             "update.json",
             &|d| d["algorithm"] = json!("Loro"),
         );
+        add(
+            "durable-stream locator, plain-http href",
+            Kind::Version,
+            "version-durable-stream.json",
+            &|d| d["file"]["locator"]["href"] = json!("http://streams.example.org/dcp/x/f/y"),
+        );
+        add(
+            "durable-stream locator without href",
+            Kind::Version,
+            "version-durable-stream.json",
+            &|d| {
+                d["file"]["locator"].as_object_mut().unwrap().remove("href");
+            },
+        );
+        add(
+            "durable-stream locator, hash instead of href",
+            Kind::Version,
+            "version-durable-stream.json",
+            &|d| d["file"]["locator"] = json!({"type": "durable-stream", "hash": "0".repeat(64)}),
+        );
+        add(
+            "blake3 locator without hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| {
+                d["file"]["locator"].as_object_mut().unwrap().remove("hash");
+            },
+        );
+        add(
+            "blake3 locator, 63-digit hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| d["file"]["locator"]["hash"] = json!("a".repeat(63)),
+        );
+        add(
+            "blake3 locator, 65-digit hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| d["file"]["locator"]["hash"] = json!("a".repeat(65)),
+        );
+        add(
+            "blake3 locator, upper-case hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| d["file"]["locator"]["hash"] = json!("A".repeat(64)),
+        );
+        add(
+            "blake3 locator, non-hex hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| d["file"]["locator"]["hash"] = json!("g".repeat(64)),
+        );
+        add(
+            "blake3 locator, href instead of hash",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| d["file"]["locator"] = json!({"type": "blake3", "href": "https://example.org/x"}),
+        );
+        add(
+            "unknown locator type (a reader of draft 1 update 2 rejects it too)",
+            Kind::Version,
+            "version.json",
+            &|d| d["file"]["locator"] = json!({"type": "ipfs", "cid": "bafy"}),
+        );
+        add(
+            "blake3 version, sha256 still required",
+            Kind::Version,
+            "version-blake3.json",
+            &|d| {
+                d["file"].as_object_mut().unwrap().remove("sha256");
+            },
+        );
         out
     }
 
     #[test]
-    fn the_sixteen_validate_py_negatives_are_rejected() {
+    fn the_validate_py_negatives_are_rejected() {
         let cases = negatives();
-        assert_eq!(cases.len(), 16);
+        // 16 of draft 1, and the 11 locator cases of draft 1 update 2.
+        assert_eq!(cases.len(), 27);
         for (label, kind, doc) in &cases {
             assert!(validate(*kind, doc).is_err(), "accepted: {label}");
         }

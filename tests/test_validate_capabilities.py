@@ -598,16 +598,25 @@ class TheRealReleaseRule(unittest.TestCase):
         lanes = self._lanes()
         stale = [lane for lane in lanes["lanes"] if not lane["runs_on_every_revision"]]
         namespaces = tuple(n for lane in stale for n in lane["namespaces"])
-        recorded = {
-            feature["revision"]
-            for feature in ledger["features"]
-            for tests in (feature.get("evidence") or {}).values()
-            for test in tests
-            if test.startswith(namespaces)
-        }
-        self.assertEqual(len(recorded), 1, f"expected one oracle revision, got {recorded}")
-        self.assertEqual(
-            vc.check_release_revision(ledger, lanes, recorded.pop()), [])
+        # One revision per lane: a lane's evidence is one run, but two lanes that
+        # do not run on every revision are two runs.
+        for lane in stale:
+            recorded = {
+                feature["revision"]
+                for feature in ledger["features"]
+                for tests in (feature.get("evidence") or {}).values()
+                for test in tests
+                if test.startswith(tuple(lane["namespaces"]))
+            }
+            self.assertEqual(len(recorded), 1, f"expected one revision for lane {lane['job']}, got {recorded}")
+            # Releasable at the revision it recorded, judged for this lane's claims
+            # alone: a release needs every such lane run at the release revision.
+            own = dict(ledger, features=[
+                f for f in ledger["features"]
+                if any(test.startswith(tuple(lane["namespaces"]))
+                       for tests in (f.get("evidence") or {}).values() for test in tests)])
+            self.assertEqual(
+                vc.check_release_revision(own, dict(lanes, lanes=[lane]), recorded.pop()), [])
 
 
 class ReleaseCritical(unittest.TestCase):

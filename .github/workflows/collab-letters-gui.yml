@@ -1,0 +1,229 @@
+name: collab-letters-gui
+
+# RFC-0005 P5: live collaboration in Letters, driven the way a person drives it.
+#
+#   journeys   two real Letters processes (built with `--features collab`), each with its
+#              own settings, data directory and sidecar (the real `collabd`), on one Xvfb
+#              display and one AT-SPI tree, edit one document through the Durable Streams
+#              Node reference server 0.3.9: share, join, type into one paragraph, make it
+#              bold, stop sharing; and, with a third person (a windowless collabd,
+#              tests/gui/collab_peer.py) whose saved version covers nothing the others hold,
+#              the two-versions banner and each way out of it through the Resolve dialog:
+#              Keep Mine, Keep Theirs, Open Both (tests/gui/test_collab_letters.py). Every assertion is
+#              read from AT-SPI. The run is recorded (GUI_TEST_VIDEO=all) under openbox, so
+#              one recording shows both windows side by side.
+#
+# The server is started by tools/collab-spike's scripts, which stay as they are. A journey
+# that needs the server FAILS when it is missing; only DCP_SKIP_STREAMS=1 skips it, and the
+# skip says so. This workflow checks both behaviours, then runs the journeys with the server.
+on:
+  push:
+    branches: [main, 'collab/**']
+    paths:
+      - 'letters/**'
+      - 'letters-core/**'
+      - 'suite-collab/**'
+      - 'collab/**'
+      - 'tests/gui/**'
+      - 'suite-common/**'
+      - 'tools/collab-spike/scripts/streams-*'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/collab-letters-gui.yml'
+  pull_request:
+    paths:
+      - 'letters/**'
+      - 'letters-core/**'
+      - 'suite-collab/**'
+      - 'collab/**'
+      - 'tests/gui/**'
+      - 'suite-common/**'
+      - 'tools/collab-spike/scripts/streams-*'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/collab-letters-gui.yml'
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes the queued or running one.
+concurrency:
+  group: collab-letters-gui-${{ github.ref }}
+  cancel-in-progress: true
+
+# Lean dev builds, as in gui-tests.yml: backtraces keep file and line, and the cache stays a
+# fraction of the size.
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+
+permissions:
+  contents: read
+
+jobs:
+  journeys:
+    name: Letters live collaboration, two instances through Durable Streams (GUI journeys)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      COLLABD_BIN: ${{ github.workspace }}/collab/target/debug/collabd
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            .
+            collab
+          shared-key: collab-letters-gui
+          save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/collab/') }}
+          cache-on-failure: true
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          npm --version
+
+      # --locked: the committed root Cargo.lock must already be the one this resolves to.
+      - name: Build Letters with the collab feature
+        run: cargo build -p letters --features collab --locked
+
+      - name: Build the sidecar (collabd)
+        working-directory: collab
+        run: cargo build -p collabd --locked
+
+      - name: Install the pinned reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+
+      # openbox, unlike matchbox, lets two windows sit side by side
+      # (GUI_TEST_WINDOW_MANAGER, tests/gui/run_gui_tests.sh).
+      - name: Install GUI test dependencies
+        run: |
+          sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager openbox xdotool \
+            x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests
+          python3 -m pip install --break-system-packages mss
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/logs" "$GITHUB_WORKSPACE/gtk-diagnostics"
+
+      # A journey that needs a server must fail without one, and skip only when told to,
+      # saying so. Neither run starts an application: the check is the first thing setUp does.
+      - name: Fails loudly without a server
+        env:
+          GUI_TEST_WINDOW_MANAGER: matchbox
+        run: |
+          if env -u DCP_STREAMS_URL -u DCP_SKIP_STREAMS tests/gui/run_gui_tests.sh test_collab_letters.py \
+              -k test_two_instances_converge > "$RUNNER_TEMP/noserver.log" 2>&1; then
+            cat "$RUNNER_TEMP/noserver.log"
+            echo "::error::the two-instance journey passed with no server"
+            exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/noserver.log"
+      - name: DCP_SKIP_STREAMS=1 skips explicitly and says so
+        env:
+          DCP_SKIP_STREAMS: '1'
+          GUI_TEST_WINDOW_MANAGER: matchbox
+        run: |
+          env -u DCP_STREAMS_URL tests/gui/run_gui_tests.sh test_collab_letters.py \
+            -k test_two_instances_converge -rs 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          grep -q "SKIPPED (DCP_SKIP_STREAMS=1)" "$RUNNER_TEMP/skip.log"
+          grep -q "1 skipped" "$RUNNER_TEMP/skip.log"
+
+      # The journeys, recorded. GUI_TEST_VIDEO=all keeps the clips of passing journeys too:
+      # they are the evidence of the feature working, and the only way to see both windows.
+      - name: The collaboration journeys, against the Node reference server 0.3.9
+        env:
+          GUI_TEST_VIDEO: all
+          GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
+          GUI_TEST_WINDOW_MANAGER: matchbox
+          GUI_TEST_DIAGNOSTICS_LOG: ${{ github.workspace }}/gtk-diagnostics/collab-letters.jsonl
+        run: |
+          set -euo pipefail
+          eval "$(tools/collab-spike/scripts/streams-up.sh node)"
+          trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server.log" 2>/dev/null || true; tools/collab-spike/scripts/streams-down.sh node' EXIT
+          tests/gui/run_gui_tests.sh test_collab_letters.py \
+            --junitxml="$GITHUB_WORKSPACE/logs/collab-letters-junit.xml" 2>&1 | tee "$GITHUB_WORKSPACE/logs/collab-letters.log"
+
+      # Both journeys ran: a collected journey with no outcome, or one that skipped, did not
+      # prove anything.
+      - name: Every journey ran and none skipped
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = os.path.join(os.environ["GITHUB_WORKSPACE"], "logs", "collab-letters-junit.xml")
+          cases = [c for c in ET.parse(path).getroot().iter("testcase")]
+          names = sorted(c.get("name") for c in cases)
+          bad = [c.get("name") for c in cases if c.find("skipped") is not None
+                 or c.find("failure") is not None or c.find("error") is not None]
+          print("journeys:", names)
+          expected = ["test_default_off", "test_keep_mine_collapses_the_heads",
+                      "test_keep_theirs_takes_the_other_version_in",
+                      "test_open_both_leaves_the_shared_session_alone",
+                      "test_two_instances_converge"]
+          if names != expected or bad:
+              print("::error::expected every journey to pass; got", names, "not passing:", bad)
+              sys.exit(1)
+          PY
+
+      # C3/C4/C9 for the GUI layer of this lane (conformance/lanes.json, lane `journeys`): a journey
+      # the ledger cites must still be collected under that name and must have passed in this run.
+      - name: Capability ledger vs. collected and completed journeys
+        if: always()
+        run: |
+          tests/gui/run_gui_tests.sh test_collab_letters.py --collect-only -q -q > collab-collected.txt
+          python3 conformance/collect_test_inventory.py \
+            --pytest "tests/gui=collab-collected.txt" \
+            --pytest-junit "tests/gui=$GITHUB_WORKSPACE/logs/collab-letters-junit.xml" \
+            --revision "$GITHUB_SHA" \
+            --out collab-inventory.json --results-out collab-results.json
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --lane journeys \
+            --collected collab-inventory.json --results collab-results.json \
+            --candidate "$GITHUB_SHA"
+
+      - name: Upload the recordings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: collab-letters-gui-videos
+          path: tests/gui/videos
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload failure artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: collab-letters-gui-failure-artifacts
+          path: tests/gui/failure_artifacts
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: collab-letters-gui-logs
+          path: |
+            logs/
+            gtk-diagnostics/
+            collab-inventory.json
+            collab-results.json
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,26 @@
+[package]
+name = "dcp-webdav"
+description = "Spike E: a DocumentStore over Nextcloud WebDAV and OCS sharing (the OCM and WebDAV binding), and the OCM helper that drives federation."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+dcp-core = { path = "../dcp-core" }
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "io-util"] }
+# Plain HTTP only: the instances in CI are on a private docker network. No TLS
+# stack is built, which is also why nothing here is evidence about HTTPS.
+reqwest = { version = "0.12", default-features = false }
+quick-xml = "0.37"
+getrandom = "0.3"
+httpdate = "1"
+parking_lot = "0.12"
+hex.workspace = true
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+
+[dev-dependencies]
+dcp-conformance = { path = "../dcp-conformance" }

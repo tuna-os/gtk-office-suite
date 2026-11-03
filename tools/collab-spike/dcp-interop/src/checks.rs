@@ -15,14 +15,15 @@ use std::pin::Pin;
 use std::time::Instant;
 
 use dcp_conformance::{
-    assert_same_content, assert_same_view, ensure, new_file, Failure, BASE_FILE,
+    assert_same_content, assert_same_view, ensure, new_file, Failure, ALGORITHM, BASE_FILE, DOC_MODEL,
 };
 use dcp_core::lease::{self, Acquire, Claim, Pause, Release, Settle, MATRIX_SETTLE_MS};
 use dcp_core::schema::{self, Kind};
-use dcp_core::{graph, Author, DocumentStore, LeaseState, StoreError, Version};
+use dcp_core::{graph, updates, Author, DocumentStore, LeaseState, Role, StoreError, Update, Version};
 use dcp_wopi::timefmt::iso8601_ms;
 use serde_json::Value;
 
+use crate::profile;
 use crate::raw::Resp;
 use crate::rig::{Rig, Who};
 
@@ -60,6 +61,12 @@ checks!(
     removed_members_wopi_token_gets_no_new_content_and_no_write,
     forged_version_is_dropped_by_matrix_readers,
     forged_version_is_dropped_by_wopi_readers,
+    forged_update_from_a_viewer_is_dropped_by_readers,
+    a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through,
+    put_file_on_a_conflicted_document_is_refused,
+    refresh_lock_and_unlock_and_relock_are_new_lease_records_on_matrix,
+    two_wopi_sessions_on_one_document_never_share_a_lock,
+    two_wopi_hosts_racing_for_one_lock_have_one_winner,
 );
 
 pub fn by_name(name: &str) -> &'static Check {
@@ -886,7 +893,7 @@ async fn forge_as_viewer(rig: &Rig) -> Result<Vec<String>, Failure> {
             covers: None,
         };
         let content = serde_json::to_value(&forged).map_err(|e| Failure::new(e.to_string()))?;
-        let sent = viewer.send_unchecked(doc, "org.tunaos.dcp.version", content).await;
+        let sent = profile::send_unchecked_patiently(viewer, doc, "org.tunaos.dcp.version", content).await;
         match (gated, sent) {
             (true, Err(StoreError::Forbidden(_))) => {}
             (true, other) => {
@@ -982,5 +989,620 @@ pub async fn forged_version_is_dropped_by_wopi_readers(rig: &Rig) -> R {
     let vw = rig.raw(Who::Viewer);
     status("viewer PutFile", &vw.put_file(None, None, b"forged through WOPI").await?, 403)?;
     status("viewer LOCK", &vw.lock("forgery-lock").await?, 403)?;
+    Ok(())
+}
+
+// ======================================================================
+// Spike F: the items spikes A, D and the first interop run left unverified.
+// ======================================================================
+
+fn update(seq: u64, bytes: &[u8], base: &str) -> Result<Update, Failure> {
+    Ok(Update {
+        dcp: 1,
+        algorithm: ALGORITHM.into(),
+        doc_model: DOC_MODEL.into(),
+        base_version: base.into(),
+        seq,
+        payload: updates::inline_payload(bytes).map_err(|e| Failure::new(e.to_string()))?,
+    })
+}
+
+/// What a server must answer to an event a member below the editor level sends
+/// straight to it: in a room whose power levels gate `m.room.encrypted` a 403,
+/// otherwise acceptance (so that the readers' rule is what is tested, and the
+/// check cannot pass vacuously). `Ok(Some(id))`: accepted.
+fn expect_server_verdict(
+    gated: bool,
+    who: &str,
+    what: &str,
+    sent: Result<String, StoreError>,
+) -> Result<Option<String>, Failure> {
+    match (gated, sent) {
+        (true, Err(StoreError::Forbidden(_))) => Ok(None),
+        (true, other) => Err(Failure::new(format!(
+            "the room gates m.room.encrypted at the editor level, so the server must refuse {what} from {who}; got {other:?}"
+        ))),
+        (false, Ok(id)) => Ok(Some(id)),
+        (false, other) => Err(Failure::new(format!(
+            "the room has no m.room.encrypted gate (draft-0 table), so the server must accept {what} from {who} for this check to mean anything; got {other:?}"
+        ))),
+    }
+}
+
+/// A viewer publishes an `org.tunaos.dcp.update` straight to the homeserver,
+/// around `MatrixStore`'s role check. With the spec's power-level table the
+/// server refuses (every DCP timeline event is `m.room.encrypted`, level 50);
+/// with the draft-0 table it accepts, and every Matrix reader must drop it
+/// (spec 8.1 reader rule, which applies to updates as to versions). The
+/// updates are schema-valid, so only the authorisation can drop them, and the
+/// readers' counters say which rule did.
+pub async fn forged_update_from_a_viewer_is_dropped_by_readers(rig: &Rig) -> R {
+    let doc = &rig.doc;
+    let viewer = &rig.handles.viewer;
+    let gated = rig.handles.owner.snapshot(doc).await?.power.server_gates_encrypted_timeline();
+    let mut accepted = Vec::new();
+    for seq in 0..2u64 {
+        let content = serde_json::to_value(update(seq, b"forged by a viewer", &rig.first)?)
+            .map_err(|e| Failure::new(e.to_string()))?;
+        let sent = profile::send_unchecked_patiently(viewer, doc, "org.tunaos.dcp.update", content).await;
+        if let Some(id) = expect_server_verdict(gated, "a viewer", "an update", sent)? {
+            accepted.push(id);
+        }
+    }
+    // An editor's legitimate update after them: once a reader has it, the
+    // forgeries (sent before it, same room timeline) have been read too.
+    let legit = rig
+        .native(Who::Editor)
+        .publish_update(doc, update(0, b"a legitimate update", &rig.first)?)
+        .await?;
+    for who in Who::ALL {
+        let store = rig.native(who);
+        let ids = rig
+            .until(&format!("{who:?} to see the legitimate update"), || async {
+                let ids: Vec<String> = store.updates(doc).await?.into_iter().map(|u| u.id).collect();
+                if ids.contains(&legit.id) {
+                    return Ok(Ok(ids));
+                }
+                Ok(Err(format!("updates {ids:?}")))
+            })
+            .await?;
+        ensure!(
+            ids == [legit.id.clone()],
+            "{who:?}: a viewer's forged update was accepted by a Matrix reader (the server accepted {accepted:?}); the reader lists {ids:?}"
+        );
+        let report = rig.handles.get(who).read_report(doc).await?;
+        ensure!(
+            report.rejected_unauthorised == accepted.len(),
+            "{who:?}: the reader dropped {} events as unauthorised, expected {} (the forged updates the server accepted: {accepted:?})",
+            report.rejected_unauthorised,
+            accepted.len()
+        );
+    }
+    Ok(())
+}
+
+/// An editor who was demoted (owner `grant(.., Viewer)`) and then publishes.
+///
+/// * Server side: with the spec's table Synapse refuses a version and an update
+///   from the ex-editor (the power-level change takes effect at once), the
+///   store's own role check refuses too, and the ex-editor's WOPI token can no
+///   longer LOCK or PutFile (403). What the ex-editor published *before* the
+///   demotion stays: every reader lists it and the owner's later save builds on
+///   it.
+/// * Reader side: in a room whose table does not gate `m.room.encrypted` the
+///   server accepts the forged version and update, and every reader drops
+///   them, and ONLY them: the reader judges a sender by the power level in
+///   force at the event (spec 8.1, Spike Q15), so what the ex-editor
+///   legitimately published before the demotion stays listed and the owner's
+///   save built on it is the head. (With draft 1's rule, the room's CURRENT
+///   levels, the readers dropped the earlier version too and fell back to the
+///   first one: Spike F. `tests/power_at_event.rs` keeps that rule as the
+///   negative control.)
+pub async fn a_demoted_editor_cannot_publish_and_readers_drop_what_slips_through(rig: &Rig) -> R {
+    let doc = &rig.doc;
+    let owner = &rig.handles.owner;
+    let editor = &rig.handles.editor;
+    let editor_id = rig.principal(Who::Editor);
+    let gated = owner.snapshot(doc).await?.power.server_gates_encrypted_timeline();
+
+    // 1. A legitimate version while still an editor.
+    let v2 = rig
+        .native(Who::Editor)
+        .publish_version(doc, vec![rig.first.clone()], new_file(b"edited while still an editor"), None)
+        .await?;
+    rig.wait_head(Who::Owner, &v2.id).await?;
+    rig.wait_head(Who::Viewer, &v2.id).await?;
+
+    // 2. The demotion, as the server sees it.
+    owner.grant(doc, &editor_id, Role::Viewer).await?;
+    rig.until("the room's power levels to show the ex-editor as a viewer", || async {
+        let role = owner.snapshot(doc).await?.power.role_of(&editor_id);
+        Ok(if role == Role::Viewer { Ok(()) } else { Err(format!("role {role:?}")) })
+    })
+    .await?;
+
+    // 3. What the ex-editor can still try.
+    let refused = rig
+        .native(Who::Editor)
+        .publish_version(doc, vec![v2.id.clone()], new_file(b"native publish by an ex-editor"), None)
+        .await;
+    ensure!(matches!(refused, Err(StoreError::Forbidden(_))), "the store must refuse a publish from a demoted editor, got {refused:?}");
+    let wire = rig.raw(Who::Editor);
+    status("the ex-editor's GetFile (reading is still allowed)", &wire.get_file(None).await?, 200)?;
+    status("the ex-editor's LOCK", &wire.lock("demoted-lock").await?, 403)?;
+    status("the ex-editor's PutFile", &wire.put_file(None, None, b"saved by an ex-editor").await?, 403)?;
+
+    let forged_version = Version {
+        dcp: 1,
+        parents: vec![v2.id.clone()],
+        file: v2.body.file.clone(),
+        created_by: Author { principal: editor_id.clone(), device: editor.device() },
+        message: Some("forged by a demoted editor".into()),
+        covers: None,
+    };
+    let content = serde_json::to_value(&forged_version).map_err(|e| Failure::new(e.to_string()))?;
+    let forged_v = expect_server_verdict(
+        gated,
+        "a demoted editor",
+        "a version",
+        profile::send_unchecked_patiently(editor, doc, "org.tunaos.dcp.version", content).await,
+    )?;
+    let content = serde_json::to_value(update(0, b"forged by a demoted editor", &v2.id)?).map_err(|e| Failure::new(e.to_string()))?;
+    let forged_u = expect_server_verdict(
+        gated,
+        "a demoted editor",
+        "an update",
+        profile::send_unchecked_patiently(editor, doc, "org.tunaos.dcp.update", content).await,
+    )?;
+    let accepted: Vec<String> = forged_v.iter().chain(forged_u.iter()).cloned().collect();
+
+    // 4. The owner saves on top of what the ex-editor had published.
+    let marker = rig
+        .native(Who::Owner)
+        .publish_version(doc, vec![v2.id.clone()], new_file(b"the owner's save after the demotion"), None)
+        .await?;
+    for who in Who::ALL {
+        let store = rig.native(who);
+        rig.until(&format!("{who:?} to list the owner's save"), || async {
+            let ids: Vec<String> = store.versions(&rig.doc).await?.into_iter().map(|v| v.id).collect();
+            Ok(if ids.contains(&marker.id) { Ok(()) } else { Err(format!("versions {ids:?}")) })
+        })
+        .await?;
+        // Whatever else happens, nothing the ex-editor sent after the demotion is a version or an update a reader accepts.
+        let heads = rig.view(who).await?.head_ids().into_iter().map(str::to_owned).collect::<Vec<_>>();
+        ensure!(
+            forged_v.as_ref().is_none_or(|f| !heads.contains(f)),
+            "{who:?}: a demoted editor's forged version was accepted by a Matrix reader (heads {heads:?})"
+        );
+        let listed = rig.version_ids(&**store).await?;
+        ensure!(
+            forged_v.as_ref().is_none_or(|f| !listed.contains(f)),
+            "{who:?}: a demoted editor's forged version was accepted by a Matrix reader (listed {listed:?})"
+        );
+        ensure!(
+            store.updates(doc).await?.iter().all(|u| !forged_u.as_ref().is_some_and(|f| &u.id == f)),
+            "{who:?}: a demoted editor's forged update was accepted by a Matrix reader"
+        );
+        let view = rig.view(who).await?;
+        let report = rig.handles.get(who).read_report(doc).await?;
+        if gated {
+            ensure!(
+                listed.contains(&v2.id) && view.head_ids() == [marker.id.as_str()],
+                "{who:?}: in a gated room the ex-editor's earlier version must stay and the owner's save be the head; listed {listed:?}, heads {:?}",
+                view.head_ids()
+            );
+            ensure!(report.rejected_unauthorised == 0, "{who:?}: a gated room has nothing for the readers to drop as unauthorised, got {}", report.rejected_unauthorised);
+        } else {
+            // The level in force at each event: the earlier version and the
+            // owner's save stay, exactly what the ex-editor sent after the
+            // demotion is dropped.
+            ensure!(
+                listed.contains(&v2.id) && view.head_ids() == [marker.id.as_str()],
+                "{who:?}: the ex-editor's version from before the demotion must stay listed and the owner's save be the head; listed {listed:?}, heads {:?}, rejected {:?}",
+                view.head_ids(),
+                view.rejected
+            );
+            ensure!(
+                report.rejected_unauthorised == accepted.len() && report.rejected_unresolved == 0,
+                "{who:?}: expected exactly the {} events the ex-editor sent after the demotion ({accepted:?}) dropped as unauthorised, got {} (unresolved {}, ids {:?})",
+                accepted.len(),
+                report.rejected_unauthorised,
+                report.rejected_unresolved,
+                report.unauthorised_ids
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The state of a forked document for the next check: the editor holds a WOPI
+/// lock, a native publish and the editor's forced save (no timestamp) fork the
+/// first version. Returns `(lock, native version id, wopi version id)`.
+async fn fork_through_a_forced_save(rig: &Rig, lock: &str) -> Result<(String, String), Failure> {
+    let ed = rig.raw(Who::Editor);
+    status("GetFile", &ed.get_file(None).await?, 200)?;
+    status("LOCK", &ed.lock(lock).await?, 200)?;
+    let native = rig
+        .native(Who::Owner)
+        .publish_version(&rig.doc, vec![rig.first.clone()], new_file(b"native edit A"), None)
+        .await?;
+    wait_host_head(rig, Who::Editor, &native.id).await?;
+    let forced = ed.put_file(Some(lock), None, b"forced WOPI edit B").await?;
+    status("forced PutFile", &forced, 200)?;
+    let wopi = forced.item_version.clone().ok_or_else(|| Failure::new("PutFile response has no X-WOPI-ItemVersion"))?;
+    for who in Who::ALL {
+        rig.wait_heads(who, 2).await?;
+    }
+    Ok((native.id, wopi))
+}
+
+/// A WOPI client that ignores `UserCanWrite: false` and sends `PutFile` on a
+/// document with two heads. Before the host refused this (spike F), the first
+/// attempt got 200 and the save became a third version (a child of the
+/// session's own version) while the conflict stood; the lock and the
+/// timestamp cannot tell. Now: 409, `COOLStatusCode` 1010, no `X-WOPI-Lock`,
+/// nothing published, whoever asks and whatever headers they send; a native
+/// merge makes the document writable again.
+pub async fn put_file_on_a_conflicted_document_is_refused(rig: &Rig) -> R {
+    let lock = "interop-conflict-lock";
+    let (native, wopi) = fork_through_a_forced_save(rig, lock).await?;
+    let ed = rig.raw(Who::Editor);
+    let info = ed.check_file_info().await?.json()?;
+    ensure!(info["UserCanWrite"] == false, "the forked document must open read-only: {info}");
+    let stamp = field(&info, "LastModifiedTime").to_owned();
+    let ow = rig.raw(Who::Owner);
+    let got = ow.get_file(None).await?;
+    status("owner GetFile", &got, 200)?;
+    ensure!(got.heads.as_deref() == Some("2"), "X-DCP-Heads is {:?}", got.heads);
+
+    let attempts: [(&str, &crate::raw::RawWopi, Option<&str>, Option<&str>); 4] = [
+        ("the editor, its lock, no timestamp", &ed, Some(lock), None),
+        ("the editor, its lock, the timestamp", &ed, Some(lock), Some(&stamp)),
+        ("the owner, no lock, no timestamp", &ow, None, None),
+        ("the owner, no lock, the timestamp", &ow, None, Some(&stamp)),
+    ];
+    for (who, wire, l, ts) in attempts {
+        let r = wire.put_file(l, ts, b"saved by a client that ignores UserCanWrite=false").await?;
+        status(&format!("PutFile on a conflicted document ({who})"), &r, 409)?;
+        ensure!(r.lock.is_none(), "{who}: a lock header on the refusal would read as a lock mismatch, got {:?}", r.lock);
+        ensure!(r.json()?["COOLStatusCode"] == 1010, "{who}: the 409 body must say COOLStatusCode 1010, got {:?}", r.text());
+    }
+    // Nothing was published, as every principal reads it a moment later.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let mut want = vec![rig.first.clone(), native.clone(), wopi.clone()];
+    want.sort();
+    for who in Who::ALL {
+        let ids = rig.version_ids(&**rig.native(who)).await?;
+        ensure!(ids == want, "{who:?} lists {ids:?} after the refused PutFiles, expected {want:?}");
+    }
+
+    // The way out is a merge, natively; then the same session can save.
+    let view = rig.view(Who::Owner).await?;
+    let heads: Vec<_> = view.heads.iter().map(|h| &h.version).collect();
+    let merged = rig
+        .native(Who::Owner)
+        .publish_version(&rig.doc, graph::merge_parents(&heads), new_file(b"merged natively"), None)
+        .await?;
+    let info = wait_host_head(rig, Who::Editor, &merged.id).await?;
+    ensure!(info["UserCanWrite"] == true, "after the merge the editor must be able to write again: {info}");
+    status("re-reading GetFile", &ed.get_file(None).await?, 200)?;
+    let saved = ed.put_file(Some(lock), Some(field(&info, "LastModifiedTime")), b"saved after the merge").await?;
+    status("PutFile after the merge", &saved, 200)?;
+    let id = saved.item_version.clone().ok_or_else(|| Failure::new("PutFile response has no X-WOPI-ItemVersion"))?;
+    let v = rig.wait_head(Who::Viewer, &id).await?;
+    ensure!(v.heads[0].version.body.parents == [merged.id.clone()], "the save must be a child of the merge: {:?}", v.heads[0].version.body.parents);
+    status("UNLOCK", &ed.unlock(lock).await?, 200)?;
+    Ok(())
+}
+
+/// The lease record as a Matrix reader sees it, which must exist.
+async fn lease_now(rig: &Rig, what: &str) -> Result<dcp_core::Stamped<dcp_core::Lease>, Failure> {
+    rig.native(Who::Viewer)
+        .lease(&rig.doc)
+        .await?
+        .ok_or_else(|| Failure::new(format!("no lease record {what}")))
+}
+
+/// `REFRESH_LOCK` and `UNLOCK_AND_RELOCK` (Collabora sends neither; the host
+/// must answer them for other clients) over Matrix, on the wire, each judged by
+/// the lease record in the room (lease rules 3 and 8): a refresh is a new
+/// event with `renewal` + 1 and a later timestamp; a relock replaces the token
+/// in one record over the held one (`renewal` + 1, same holder and base
+/// version); the old string is dead at once; wrong strings change nothing.
+pub async fn refresh_lock_and_unlock_and_relock_are_new_lease_records_on_matrix(rig: &Rig) -> R {
+    let doc = &rig.doc;
+    let ed = rig.raw(Who::Editor);
+    let (a, b) = ("interop-rl-a", "interop-rl-b");
+    status("GetFile", &ed.get_file(None).await?, 200)?;
+    status("LOCK", &ed.lock(a).await?, 200)?;
+    let mut previous = lease_now(rig, "after LOCK").await?;
+    ensure!(previous.body.renewal == Some(0) && previous.body.token.as_deref() == Some(a), "{:?}", previous.body);
+
+    for expected in [1u64, 2, 3] {
+        status("REFRESH_LOCK", &ed.refresh_lock(a).await?, 200)?;
+        let now = lease_now(rig, "after REFRESH_LOCK").await?;
+        ensure!(
+            now.body.renewal == Some(expected) && now.id != previous.id && now.ts_ms > previous.ts_ms,
+            "REFRESH_LOCK {expected}: the record is {} @ {} renewal {:?} after {} @ {} (expected a new event, later, renewal {expected})",
+            now.id, now.ts_ms, now.body.renewal, previous.id, previous.ts_ms
+        );
+        ensure!(
+            now.body.token == previous.body.token && now.body.holder == previous.body.holder && now.body.base_version == previous.body.base_version && now.body.duration_ms == Some(1_800_000),
+            "REFRESH_LOCK must keep holder, token, base version and the WOPI duration: {:?} after {:?}",
+            now.body, previous.body
+        );
+        schema::validate_typed(Kind::Lease, &now.body).map_err(|e| Failure::new(format!("the refreshed lease does not validate: {e}")))?;
+        previous = now;
+    }
+
+    // A wrong string refreshes nothing and says who holds it.
+    let wrong = ed.refresh_lock("someone-elses-lock").await?;
+    status("REFRESH_LOCK with another string", &wrong, 409)?;
+    ensure!(wrong.lock.as_deref() == Some(a), "the 409 must carry the current lock {a:?}, got {:?}", wrong.lock);
+    ensure!(lease_now(rig, "after the refused refresh").await?.id == previous.id, "a refused REFRESH_LOCK wrote a lease record");
+
+    // UNLOCK_AND_RELOCK: a -> b in one record.
+    let relock = ed.unlock_and_relock(b, a).await?;
+    status("UNLOCK_AND_RELOCK", &relock, 200)?;
+    let relocked = lease_now(rig, "after UNLOCK_AND_RELOCK").await?;
+    ensure!(
+        relocked.id != previous.id && relocked.ts_ms > previous.ts_ms && relocked.body.state == LeaseState::Held && relocked.body.token.as_deref() == Some(b),
+        "UNLOCK_AND_RELOCK must leave one new held record naming {b:?}: {:?}",
+        relocked.body
+    );
+    ensure!(
+        relocked.body.renewal == Some(4) && relocked.body.holder == previous.body.holder && relocked.body.base_version == previous.body.base_version,
+        "the relock is a write over a held record (renewal 3 + 1), same holder and base version: {:?} over {:?}",
+        relocked.body, previous.body
+    );
+    schema::validate_typed(Kind::Lease, &relocked.body).map_err(|e| Failure::new(format!("the relocked lease does not validate: {e}")))?;
+    let held = ed.get_lock().await?;
+    ensure!(held.lock.as_deref() == Some(b), "GET_LOCK after the relock says {:?}", held.lock);
+
+    // The old string is dead: PutFile with it is a lock mismatch carrying the new one, nothing published.
+    let dead = ed.put_file(Some(a), None, b"saved with the old lock string").await?;
+    status("PutFile with the old string", &dead, 409)?;
+    ensure!(dead.lock.as_deref() == Some(b), "the 409 must carry the new lock {b:?}, got {:?}", dead.lock);
+    let still = rig.native(Who::Owner).versions(doc).await?;
+    ensure!(still.len() == 1, "the refused PutFile published something: {still:?}");
+    // A wrong OldLock changes nothing.
+    let bad = ed.unlock_and_relock("interop-rl-c", "not-the-old-lock").await?;
+    status("UNLOCK_AND_RELOCK with a wrong OldLock", &bad, 409)?;
+    ensure!(bad.lock.as_deref() == Some(b), "the 409 must carry the current lock {b:?}, got {:?}", bad.lock);
+    ensure!(lease_now(rig, "after the refused relock").await?.id == relocked.id, "a refused UNLOCK_AND_RELOCK wrote a lease record");
+    // The new string saves.
+    let saved = ed.put_file(Some(b), None, b"saved with the new lock string").await?;
+    status("PutFile with the new string", &saved, 200)?;
+
+    // Released: nothing to refresh or relock.
+    status("UNLOCK", &ed.unlock(b).await?, 200)?;
+    let none = ed.refresh_lock(b).await?;
+    status("REFRESH_LOCK on an unlocked file", &none, 409)?;
+    ensure!(none.lock.as_deref() == Some(""), "the 409 must carry an empty lock, got {:?}", none.lock);
+    let none = ed.unlock_and_relock("interop-rl-d", b).await?;
+    status("UNLOCK_AND_RELOCK on an unlocked file", &none, 409)?;
+    ensure!(none.lock.as_deref() == Some(""), "the 409 must carry an empty lock, got {:?}", none.lock);
+    ensure!(lease_now(rig, "at the end").await?.body.state == LeaseState::Released, "the lease must end released");
+    Ok(())
+}
+
+/// Two WOPI sessions on one document, two principals (the editor's token and
+/// the owner's) through one host. The second `LOCK` is 409 carrying the
+/// holder's string; nothing the second session does (LOCK, PutFile with and
+/// without its own string, REFRESH_LOCK, UNLOCK) changes the lease record: the
+/// same event, byte for byte. After the holder unlocks the second session
+/// locks (renewal 0 over the released record) and the first one's old string
+/// is the mismatch. Then both `LOCK` at once on a free lease: exactly one 200,
+/// and the 409 carries the winner's string.
+pub async fn two_wopi_sessions_on_one_document_never_share_a_lock(rig: &Rig) -> R {
+    let doc = &rig.doc;
+    let (ed, ow) = (rig.raw(Who::Editor), rig.raw(Who::Owner));
+    let (a, b) = ("session-A", "session-B");
+    status("A GetFile", &ed.get_file(None).await?, 200)?;
+    status("B GetFile", &ow.get_file(None).await?, 200)?;
+    status("A LOCK", &ed.lock(a).await?, 200)?;
+    let held = lease_now(rig, "after A's LOCK").await?;
+    ensure!(held.body.token.as_deref() == Some(a) && held.body.renewal == Some(0), "{:?}", held.body);
+
+    let refused = ow.lock(b).await?;
+    status("B LOCK while A holds it", &refused, 409)?;
+    ensure!(refused.lock.as_deref() == Some(a), "the 409 must carry the holder's string {a:?}, got {:?}", refused.lock);
+    ensure!(ow.get_lock().await?.lock.as_deref() == Some(a), "B's GET_LOCK must name A's string");
+    for (what, r) in [
+        ("B PutFile with its own string", ow.put_file(Some(b), None, b"B saves").await?),
+        ("B PutFile with no string", ow.put_file(None, None, b"B saves without a lock").await?),
+        ("B UNLOCK with its own string", ow.unlock(b).await?),
+        ("B REFRESH_LOCK with its own string", ow.refresh_lock(b).await?),
+        ("B UNLOCK_AND_RELOCK from a string it does not hold", ow.unlock_and_relock(b, b).await?),
+    ] {
+        status(what, &r, 409)?;
+        ensure!(r.lock.as_deref() == Some(a), "{what}: the 409 must carry {a:?}, got {:?}", r.lock);
+    }
+    let after = lease_now(rig, "after B's attempts").await?;
+    ensure!(
+        after.id == held.id && after.body == held.body && after.ts_ms == held.ts_ms,
+        "B's refused requests changed the lease: {:?} became {:?}",
+        held, after
+    );
+    ensure!(rig.native(Who::Owner).versions(doc).await?.len() == 1, "a refused request of B published a version");
+
+    // A is unaffected: it saves with its string, then B is still refused.
+    let saved = ed.put_file(Some(a), None, b"A saves").await?;
+    status("A PutFile", &saved, 200)?;
+    status("B PutFile after A's save", &ow.put_file(Some(b), None, b"B saves").await?, 409)?;
+    status("A UNLOCK", &ed.unlock(a).await?, 200)?;
+    ensure!(lease_now(rig, "after A's UNLOCK").await?.body.state == LeaseState::Released, "A's UNLOCK must release the lease");
+
+    // B takes over the released file; A's old string is now the mismatch.
+    status("B GetFile (re-read the head)", &ow.get_file(None).await?, 200)?;
+    status("B LOCK after A's UNLOCK", &ow.lock(b).await?, 200)?;
+    let taken = lease_now(rig, "after B's LOCK").await?;
+    ensure!(
+        taken.body.token.as_deref() == Some(b) && taken.body.renewal == Some(0)
+            && taken.body.holder.as_ref().map(|h| h.principal.clone()) == Some(rig.principal(Who::Owner)),
+        "B's LOCK over a released record: renewal 0 and B as holder: {:?}",
+        taken.body
+    );
+    let stale = ed.put_file(Some(a), None, b"A saves after losing the lock").await?;
+    status("A PutFile with the string it released", &stale, 409)?;
+    ensure!(stale.lock.as_deref() == Some(b), "the 409 must carry B's string, got {:?}", stale.lock);
+    status("B UNLOCK", &ow.unlock(b).await?, 200)?;
+
+    // Both at once on a free lease.
+    for round in 0..3 {
+        let (ra, rb) = (format!("race-A-{round}"), format!("race-B-{round}"));
+        let (x, y) = tokio::join!(ed.lock(&ra), ow.lock(&rb));
+        let (x, y) = (x?, y?);
+        let (winner, loser_resp, winner_lock) = match (x.status, y.status) {
+            (200, 409) => (&ed, &y, ra.clone()),
+            (409, 200) => (&ow, &x, rb.clone()),
+            other => return Err(Failure::new(format!("round {round}: two simultaneous LOCKs must give one 200 and one 409, got {other:?}"))),
+        };
+        ensure!(
+            loser_resp.lock.as_deref() == Some(winner_lock.as_str()),
+            "round {round}: the loser's 409 must carry the winner's string {winner_lock:?}, got {:?}",
+            loser_resp.lock
+        );
+        let l = lease_now(rig, "after the race").await?;
+        ensure!(l.body.token.as_deref() == Some(winner_lock.as_str()), "round {round}: the lease names {:?}, the winner holds {winner_lock:?}", l.body.token);
+        status("the winner's UNLOCK", &winner.unlock(&winner_lock).await?, 200)?;
+    }
+    Ok(())
+}
+
+/// Percent-encode for a URL path or query component.
+fn pct(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// The server timestamps of the room's newest `n` lease events, newest first,
+/// including records a later one replaced (state events are timeline events
+/// too): straight from the homeserver, with the owner's token.
+async fn lease_event_times(rig: &Rig, n: usize) -> Result<Vec<u64>, Failure> {
+    let token = rig
+        .handles
+        .owner
+        .client()
+        .access_token()
+        .ok_or_else(|| Failure::new("the owner has no access token"))?;
+    let url = format!(
+        "{}/_matrix/client/v3/rooms/{}/messages?dir=b&limit={n}&filter={}",
+        rig.syn.url.trim_end_matches('/'),
+        pct(&rig.doc),
+        pct(r#"{"types":["org.tunaos.dcp.lease"]}"#)
+    );
+    let page: Value = dcp_matrix::matrix_sdk::reqwest::Client::new()
+        .get(&url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| Failure::new(format!("GET messages: {e}")))?
+        .json()
+        .await
+        .map_err(|e| Failure::new(format!("messages body: {e}")))?;
+    Ok(page["chunk"]
+        .as_array()
+        .map(|c| c.iter().filter_map(|ev| ev["origin_server_ts"].as_u64()).collect())
+        .unwrap_or_default())
+}
+
+/// Two WOPI hosts in front of one room (two instances of the adapter, so the
+/// per-document mutex of one host does not serialise them), each with a
+/// different principal's token, both `LOCK` at once on a free lease. The
+/// two-read rule inside `LOCK` (lease rule 3) promises one winner when the two
+/// writes land within the settle interval of each other, so: exactly one 200
+/// and one 409, and the lease names the winner. If both answer 200 the check
+/// reads the server timestamps of the two lease records, and that is only
+/// accepted when they are at least the settle interval (500 ms) apart, the
+/// case the rule does not cover (a write held back by the homeserver's rate
+/// limit lands after the other session has already confirmed): it is printed
+/// as `OUTSIDE-TOLERANCE` with the gap, and counted. Four rounds.
+pub async fn two_wopi_hosts_racing_for_one_lock_have_one_winner(rig: &Rig) -> R {
+    use std::collections::BTreeMap;
+    let doc = &rig.doc;
+    let host2 = dcp_wopi::WopiHost::new(dcp_wopi::HostConfig { validate_packages: false, ..dcp_wopi::HostConfig::default() });
+    let server2 = host2
+        .serve("127.0.0.1:0".parse().expect("socket addr"))
+        .await
+        .map_err(|e| Failure::new(format!("cannot start the second WOPI host: {e}")))?;
+    let owner_store: std::sync::Arc<dyn DocumentStore> = rig.handles.owner.clone();
+    let token2 = host2.register(doc.clone(), owner_store, rig.principal(Who::Owner));
+    let on_host1 = rig.raw(Who::Editor);
+    let on_host2 = crate::raw::RawWopi::new(&server2.base_url(), doc, &token2);
+    status("host 1 GetFile", &on_host1.get_file(None).await?, 200)?;
+    status("host 2 GetFile", &on_host2.get_file(None).await?, 200)?;
+
+    let mut outcomes: BTreeMap<&str, u32> = BTreeMap::new();
+    for round in 0..4 {
+        let (l1, l2) = (format!("host1-round-{round}"), format!("host2-round-{round}"));
+        let (x, y) = tokio::join!(on_host1.lock(&l1), on_host2.lock(&l2));
+        let (x, y) = (x?, y?);
+        match (x.status, y.status) {
+            (200, 409) | (409, 200) => {
+                let (winner, winner_lock, loser) =
+                    if x.status == 200 { (&on_host1, l1.clone(), &y) } else { (&on_host2, l2.clone(), &x) };
+                *outcomes.entry(if x.status == 200 { "host 1 won" } else { "host 2 won" }).or_default() += 1;
+                println!("two hosts, round {round}: statuses {} / {}, loser's X-WOPI-Lock {:?}", x.status, y.status, loser.lock);
+                ensure!(
+                    loser.lock.as_deref() == Some(winner_lock.as_str()),
+                    "round {round}: the loser's 409 must carry the winner's string {winner_lock:?}, got {:?}",
+                    loser.lock
+                );
+                let l = lease_now(rig, "after the race").await?;
+                ensure!(l.body.token.as_deref() == Some(winner_lock.as_str()), "round {round}: the lease names {:?}, the 200 went to {winner_lock:?}", l.body.token);
+                status("the winner's UNLOCK", &winner.unlock(&winner_lock).await?, 200)?;
+            }
+            (200, 200) => {
+                let times = lease_event_times(rig, 2).await?;
+                let gap = match times.as_slice() {
+                    [newest, older] => newest.saturating_sub(*older),
+                    other => return Err(Failure::new(format!("round {round}: both LOCKs answered 200 and the room has {} recent lease events: {other:?}", other.len()))),
+                };
+                ensure!(
+                    gap >= MATRIX_SETTLE_MS,
+                    "round {round}: both hosts answered 200 although their lease writes were only {gap} ms apart, inside the {MATRIX_SETTLE_MS} ms settle interval the two-read rule covers"
+                );
+                println!("OUTSIDE-TOLERANCE two hosts, round {round}: both LOCKs answered 200; their lease writes landed {gap} ms apart (settle interval {MATRIX_SETTLE_MS} ms)");
+                *outcomes.entry("both 200 outside the settle interval").or_default() += 1;
+                // The room names one holder. The other host's session believes
+                // it holds the lock too, but the lease record is what every
+                // PutFile is judged against: its save is refused with the
+                // holder's string, and publishes nothing.
+                let l = lease_now(rig, "after the race").await?;
+                let (holder, lock, other, other_lock) = if l.body.token.as_deref() == Some(l1.as_str()) {
+                    (&on_host1, l1, &on_host2, l2)
+                } else {
+                    (&on_host2, l2, &on_host1, l1)
+                };
+                let before = rig.native(Who::Owner).versions(doc).await?.len();
+                let stale = other.put_file(Some(&other_lock), None, b"saved by the session that lost the lease").await?;
+                status("PutFile by the host whose LOCK also answered 200", &stale, 409)?;
+                ensure!(
+                    stale.lock.as_deref() == Some(lock.as_str()),
+                    "round {round}: the refused PutFile must carry the holder's string {lock:?}, got {:?}",
+                    stale.lock
+                );
+                ensure!(rig.native(Who::Owner).versions(doc).await?.len() == before, "round {round}: the refused PutFile published a version");
+                status("the holder's UNLOCK", &holder.unlock(&lock).await?, 200)?;
+            }
+            other => {
+                return Err(Failure::new(format!(
+                    "round {round}: two racing LOCKs on two hosts must not both fail, got {other:?}; bodies {:?} / {:?}",
+                    x.text(),
+                    y.text()
+                )))
+            }
+        }
+    }
+    println!("two hosts racing for one lock: {outcomes:?}");
+    server2.shutdown().await;
     Ok(())
 }

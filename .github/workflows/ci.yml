@@ -105,8 +105,10 @@ jobs:
             tests/test_actions_pinned.py \
             tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
+            tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
@@ -187,8 +189,10 @@ jobs:
             tests/test_actions_pinned.py \
             tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
+            tests/test_collab_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
+            tests/test_render_lab_words.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
@@ -287,7 +291,7 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@eaa248e7e83aa1d4f575fb2e231e8a5da93dabc3 # nextest
+        uses: taiki-e/install-action@3b728f3d612841223d50b6bc8f2addad110e6918 # nextest
         with:
           tool: nextest
 
@@ -322,19 +326,30 @@ jobs:
         run: scripts/with-display.sh cargo test --doc --workspace
 
       # RFC-0001 Phase 2: the `collab` feature is off in every product
-      # build, so the workspace runs above never compile it. Lint and test
-      # it here on its own.
+      # build, so the workspace runs above never compile it. Lint it here
+      # on its own, and run its tests under nextest below.
       - name: tables-core with the collab feature
-        run: |
-          cargo clippy -p tables-core --features collab --all-targets -- -D warnings
-          cargo test -p tables-core --features collab --lib collab
+        run: cargo clippy -p tables-core --features collab --all-targets -- -D warnings
 
       # RFC-0001 Phase 3: Decks' deck as a Loro movable tree, likewise off
       # by default.
       - name: decks-core with the collab feature
+        run: cargo clippy -p decks-core --features collab --all-targets -- -D warnings
+
+      # The tests of the `collab` feature under nextest (RFC-0005 PR 1), not
+      # `cargo test`: the capability ledger can cite only tests whose ids
+      # reached the JUnit report it reads, and these were in no report. The
+      # feature is switched on for these two crates only, by crate, and this
+      # is a second nextest run, so the workspace run above, which is the
+      # shipped configuration, is untouched. The `collab` profile
+      # (.config/nextest.toml) writes its report beside the `ci` profile's;
+      # the same path would overwrite it. `--success-output final` prints
+      # what passing tests print, which is where the delta sizes are.
+      - name: collab-feature tests under nextest
         run: |
-          cargo clippy -p decks-core --features collab --all-targets -- -D warnings
-          cargo test -p decks-core --features collab --lib collab
+          cargo nextest run -p tables-core -p decks-core \
+            --features tables-core/collab,decks-core/collab \
+            --profile collab -E 'test(collab)' --success-output final
 
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been
@@ -346,7 +361,8 @@ jobs:
       - name: Capability ledger vs. the tests that ran
         run: |
           python3 conformance/collect_test_inventory.py \
-            --junit "=target/nextest/ci/junit.xml" --revision "$GITHUB_SHA" \
+            --junit "=target/nextest/ci/junit.xml" --junit "=target/nextest/collab/junit.xml" \
+            --revision "$GITHUB_SHA" \
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json --lane test \
@@ -391,6 +407,7 @@ jobs:
           name: junit-results
           path: |
             target/nextest/ci/junit.xml
+            target/nextest/collab/junit.xml
             skip-reasons.json
           retention-days: 14
 
