@@ -122,7 +122,8 @@ class LettersTableOcrRegressionTest(unittest.TestCase):
         self.compare = compare
 
     def _grid(self):
-        # The fixture's nine cell centres, a 3x3 grid 30px apart.
+        # Nine cell centres on a 3x3 grid, 30px apart (modelled for this
+        # synthetic run — not LibreOffice's real table-layout pixel centres).
         words = []
         for r in range(3):
             for c in range(3):
