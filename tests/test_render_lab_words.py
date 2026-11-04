@@ -101,5 +101,93 @@ class MarkPrintedTest(unittest.TestCase):
         self.assertEqual(found, 1.0, "an unmatched unprinted read is not a miss")
 
 
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class LettersTableOcrRegressionTest(unittest.TestCase):
+    """letters/table is the tracked amber fixture
+    (docs/RENDER-PARITY-ROADMAP.md, "Known metric artifacts"): its pixels and
+    cell text sit within ~0.2pt of LibreOffice's, but tesseract misreads one
+    cell label — "R1C1" as "rici", unhinted glyphs at 12px — so 8 of 9 cell
+    words match and the fixture stays amber. That is a measurement gap, not a
+    rendering gap, so this regression pins the misread and the unchanged
+    budget. It is not to be "fixed" by redrawing the cell, loosening a
+    threshold, or dropping the word metric: the fixture is amber on purpose
+    until the metric can read the glyph.
+
+    tools/render-lab/compare.py (match_words, verdict),
+    tools/render-lab/fixtures.py (the 3x3 R1C1..R3C3 table)."""
+
+    def setUp(self):
+        import compare
+
+        self.compare = compare
+
+    def _grid(self):
+        # The fixture's nine cell centres, a 3x3 grid 30px apart.
+        words = []
+        for r in range(3):
+            for c in range(3):
+                words.append(word(f"r{r + 1}c{c + 1}", 12 + 30 * c, 12 + 30 * r))
+        return words
+
+    def test_the_cell_label_misread_is_a_miss(self):
+        # "R1C1" read as "rici" on our side: it shares no text with the
+        # reference's "r1c1", so match_words finds 8 of 9 — the
+        # roadmap's number — and the miss stands when nothing rescues it.
+        ref = self._grid()
+        ours = [word("rici", 12, 12)] + [
+            word("r1c2", 42, 12), word("r1c3", 72, 12),
+            word("r2c1", 12, 42), word("r2c2", 42, 42), word("r2c3", 72, 42),
+            word("r3c1", 12, 72), word("r3c2", 42, 72), word("r3c3", 72, 72),
+        ]
+        found, disp, lost = self.compare.match_words(ref, ours)
+        self.assertEqual(found, 8 / 9)
+        self.assertEqual(lost, 0)
+        self.assertLess(found, self.compare.GREEN_WORDS)
+
+    def test_magnifier_rescues_two_but_not_r1c1(self):
+        # Page-wide, R1C1 misreads and R1C2/R1C3 drop out of ours: 6 of 9.
+        # The magnifier fallback reads the crops closely and rescues R1C2
+        # and R1C3 (they read as themselves on both sides) but not R1C1,
+        # which misreads even magnified: back to 8 of 9.
+        ref = self._grid()
+        ours = [word("rici", 12, 12)] + [
+            word("r2c1", 12, 42), word("r2c2", 42, 42), word("r2c3", 72, 42),
+            word("r3c1", 12, 72), word("r3c2", 42, 72), word("r3c3", 72, 72),
+        ]
+        found, _, lost = self.compare.match_words(ref, ours)
+        self.assertEqual(found, 6 / 9)
+        self.assertEqual(lost, 0)
+
+        def reread(box):
+            cx = box[0] + box[2] / 2  # the crop's centre-x
+            if cx < 30:               # R1C1: misreads even under the magnifier
+                return None
+            return "r1c2" if cx < 55 else "r1c3"
+
+        found, _, lost = self.compare.match_words(ref, ours, reread=reread)
+        self.assertEqual(found, 8 / 9)
+        self.assertEqual(lost, 0)
+
+    def test_verdict_amber_only_for_the_word_recall(self):
+        # Every metric the roadmap records for letters/table is green
+        # except word recall (8/9 < 0.90); verdict() returns amber on that
+        # one number — the pixels agree, the metric disagrees.
+        m = {
+            "ink": 1.02,
+            "words": 8 / 9,
+            "lost_lines": 0,
+            "disp_pt": 0.3,
+            "colors": 1.0,
+            "ssim": 1.00,
+            "ref_words": 9,
+        }
+        self.assertEqual(self.compare.verdict(m), "amber")
+        # Amber only because words < GREEN_WORDS, and the budget is
+        # unchanged: loosening it to 0.85 would let 8/9 go green, which
+        # this pins. No rendering change moves it; only the metric can.
+        self.assertEqual(self.compare.GREEN_WORDS, 0.90)
+        self.assertLess(8 / 9, self.compare.GREEN_WORDS)
+
+
 if __name__ == "__main__":
     unittest.main()
