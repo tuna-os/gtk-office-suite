@@ -23,6 +23,14 @@ on:
   schedule:
     - cron: '0 5 * * *'   # daily at 5am UTC (before gui-tests.yml's 6am)
   workflow_dispatch:
+  # autorelease.yml runs the oracle at the revision it is about to release.
+  # It needs the oracle's verdict, not coverage or the fuzz smoke.
+  workflow_call:
+    inputs:
+      oracle-only:
+        description: Run the oracle job alone
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'letters-core/**'
@@ -132,7 +140,7 @@ jobs:
   coverage:
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.oracle-only
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -181,7 +189,7 @@ jobs:
     name: Fuzz importer smoke tests
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.oracle-only
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
