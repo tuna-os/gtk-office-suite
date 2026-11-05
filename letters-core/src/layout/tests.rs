@@ -569,6 +569,33 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
     assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
 }
 
+/// A cell continued on the next page opens with the space before the
+/// paragraph it resumes, whether the break fell between two paragraphs
+/// or inside one, as Writer lays it out (ODT and DOCX alike). Without it
+/// the excise warehouse notes' page 3 stood 6pt high from its first line
+/// to its foot (render-lab `real-notes-on-the-completion-of-form-w1`).
+#[test]
+fn a_continued_cell_opens_with_the_space_before_its_paragraph() {
+    for (lines, words) in [(80usize, 1usize), (4, 120)] {
+        let mut d = doc_of(3, "filler");
+        let table = d.insert_table_at(3, 1, 1);
+        let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+        let paras: Vec<Paragraph> = (0..lines)
+            .map(|n| Paragraph {
+                style: ParaStyle { table_cell: Some(TableCell { table, row: 0, col: 0 }), space_before_pt: 6.0, ..Default::default() },
+                runs: vec![Run::plain((0..words).map(|w| format!("p{n}w{w}")).collect::<Vec<_>>().join(" "))],
+            })
+            .collect();
+        d.paragraphs.splice(at..=at, paras);
+        let t = lay(&d);
+        assert!(t.pages.len() > 1, "the row splits");
+        let items = &t.pages[1].items;
+        let cell = items.iter().find_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).unwrap();
+        let first = items.iter().find_map(|i| match i { Item::Line { text, top_pt, .. } if text.starts_with('p') => Some(*top_pt), _ => None }).unwrap();
+        assert!((first - cell - 6.0).abs() < 1e-6, "{lines}x{words}: continued line {} below the cell's top", first - cell);
+    }
+}
+
 /// A row kept on one page that does not fit what is left of a page
 /// starts the next, as Writer moves the social housing dictionary's long
 /// rows whole; one not kept so splits there; and one taller than a page

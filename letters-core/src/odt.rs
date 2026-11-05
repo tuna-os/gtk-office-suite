@@ -4872,8 +4872,14 @@ fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Str
         if style.is_none() && !is_auto(&n) {
             style = Some(n.clone());
         }
+        // Writer keeps the setting with the space above and below (one
+        // item): a style that sets either and not this has it off, whatever
+        // its parent says. The W1 notes' list items set their own 8pt below
+        // under a contextual List Paragraph, and Writer keeps the 8pt.
         if on.is_none() {
-            on = auto.contextual.get(&n).or_else(|| named.contextual.get(&n)).copied();
+            on = auto.contextual.get(&n).or_else(|| named.contextual.get(&n)).copied().or_else(|| {
+                auto.para.get(&n).or_else(|| named.para.get(&n)).filter(|st| st.sets[0] || st.sets[1]).map(|_| false)
+            });
         }
         cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
     }
@@ -6530,6 +6536,30 @@ mod tests {
         let d = read_package(content, styles);
         let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
         assert_eq!(after, [0.0, 8.0, 12.0], "only between the two list paragraphs, the last with the default's");
+    }
+
+    /// A style that sets its own space above or below and says nothing of
+    /// contextual spacing has it off, as Writer keeps the two in one
+    /// setting: the W1 notes' list items, each with 8pt below under a
+    /// contextual List Paragraph, stand 8pt apart in Writer.
+    #[test]
+    fn spacing_set_without_contextual_spacing_turns_it_off() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"8pt\"/></style:default-style>\
+             <style:style style:name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties style:contextual-spacing=\"true\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-top=\"0pt\" fo:margin-bottom=\"8pt\"/></style:style>\
+             <style:style style:name=\"P2\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-top=\"0pt\" fo:margin-bottom=\"8pt\"/></style:style>\
+             <style:style style:name=\"P3\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-top=\"0pt\" fo:margin-bottom=\"8pt\" style:contextual-spacing=\"true\"/></style:style>\
+             <style:style style:name=\"P4\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-top=\"0pt\" fo:margin-bottom=\"8pt\" style:contextual-spacing=\"true\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p text:style-name=\"P1\">one</text:p><text:p text:style-name=\"P2\">two</text:p>\
+             <text:p text:style-name=\"P3\">three</text:p><text:p text:style-name=\"P4\">four</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
+        assert_eq!(after, [8.0, 8.0, 0.0, 8.0], "kept where the margins come without the setting, dropped where it is restated");
     }
 
     /// A line break within a paragraph (`text:line-break`, Shift+Enter)

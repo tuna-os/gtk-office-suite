@@ -1486,14 +1486,22 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         let mut first_piece = true;
         loop {
             // A cell continued on a new page starts with its next line: the
-            // space between paragraphs at the break stays on the page
+            // space after the paragraph before the break stays on the page
             // before, as Writer lays it out. Its top padding opens the new
-            // piece again, as Writer opens a continued cell.
+            // piece again, as Writer opens a continued cell, and so does
+            // the space before the paragraph it resumes, whether the break
+            // fell between two paragraphs or inside one (measured in
+            // Writer, ODT and DOCX alike: 6pt before puts the continued
+            // line 6pt lower).
             let pad_top = if first_piece { 0.0 } else { pad.top_pt.max(0.0) };
+            let mut lead = vec![0.0; slices.len()];
             if !first_piece {
-                for (c, n) in slices.iter().zip(next.iter_mut()) {
+                for (((c, n), lead), (_, _, paras)) in slices.iter().zip(next.iter_mut()).zip(lead.iter_mut()).zip(&row_cells) {
                     while c.get(*n).is_some_and(|s| matches!(s, Slice::Gap(_))) {
                         *n += 1;
+                    }
+                    if let Some(Slice::Line(k, _, _)) = c.get(*n) {
+                        *lead = doc.paragraphs[paras[*k].0].style.space_before_pt.max(0.0);
                     }
                 }
             }
@@ -1512,7 +1520,15 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             let mut notes_h = 0.0;
             let takes: Vec<(usize, f64)> = loop {
                 let room = flow.bottom() - flow.y - rule_pt - notes_h - pad_top;
-                let takes: Vec<(usize, f64)> = slices.iter().zip(&next).map(|(c, &from)| fit(c, from, room)).collect();
+                let takes: Vec<(usize, f64)> = slices
+                    .iter()
+                    .zip(&next)
+                    .zip(&lead)
+                    .map(|((c, &from), &lead)| {
+                        let (n, h) = fit(c, from, room - lead);
+                        (n, if n > from { h + lead } else { h })
+                    })
+                    .collect();
                 let notes: Vec<usize> = row_cells
                     .iter()
                     .zip(&slices)
@@ -1550,13 +1566,14 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             if whole {
                 start_tall(flow, &mut tall, top);
             }
-            for (((col, width, paras), cell), (&from, &(to, used))) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)) {
+            for ((((col, width, paras), cell), (&from, &(to, used))), &lead) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)).zip(&lead) {
                 let cx = x0 - pad.left_pt + col_x[*col as usize];
                 flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: height, fill: fill(*col), ruled, open: open(*col) });
                 // A row placed in one piece sets each cell's content where
                 // the cell says; a row split across pages fills from the top.
                 let drop = valign(*col).filter(|_| whole && done).map_or(0.0, |v| (height - rule_pt - used).max(0.0) * v.share());
-                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + pad_top + drop);
+                let lead = if to > from { lead } else { 0.0 };
+                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + pad_top + lead + drop);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
                 *n = *to;
