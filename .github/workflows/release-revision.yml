@@ -15,8 +15,8 @@ name: Release revision
 # what we are about to publish?", which is a question only a release has.
 # Pull requests get the structural ledger checks from ci.yml.
 #
-# docs/RELEASE.md says how to satisfy it: dispatch nightly.yml at the
-# release commit and record the revision it passed at. The fix is never to
+# docs/RELEASE.md says how to satisfy it: autorelease.yml runs those lanes
+# at main's head and tags a commit recording the revision they passed at. The fix is never to
 # lower a claim's status or relax the rule.
 on:
   push:
@@ -46,7 +46,12 @@ jobs:
   scheduled-evidence-is-current:
     runs-on: ubuntu-24.04
     steps:
+      # Full history: a release commit is certified by evidence recorded at
+      # its parent when the two differ only in release metadata, and
+      # validate_capabilities.py asks git what differs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - name: Refuse to certify a release with stale scheduled evidence
         env:
           REQUESTED: ${{ inputs.revision }}
