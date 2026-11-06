@@ -30,8 +30,8 @@ Proton Mail accounts added, developed in the fork
 [tuna-os/hylki](https://github.com/tuna-os/hylki), and it belongs to the
 suite by name, icon and packaging. Its Flatpak bundles are on that
 repository's [releases page](https://github.com/tuna-os/hylki/releases),
-starting with
-[1.47.1-tuna3](https://github.com/tuna-os/hylki/releases/tag/v1.47.1-tuna3).
+currently
+[1.47.1-tuna4](https://github.com/tuna-os/hylki/releases/tag/v1.47.1-tuna4).
 Report problems with it in this repository's issues. Everything below this
 section is about Letters, Tables and Decks.
 
@@ -99,7 +99,7 @@ Lifafa is not in the TunaOS repository yet. Download its bundle from the
 and install that file, for example:
 
 ```bash
-flatpak install --user org.tunaos.lifafa-1.47.1-tuna3.flatpak
+flatpak install --user org.tunaos.lifafa-1.47.1-tuna4.flatpak
 ```
 
 Something not working? See [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
