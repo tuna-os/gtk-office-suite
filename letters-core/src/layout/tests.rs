@@ -603,11 +603,13 @@ fn a_row_kept_whole_starts_the_next_page() {
 /// gap (leaving an empty row box at the foot of the page).
 #[test]
 fn a_table_row_without_room_for_a_line_starts_the_next_page() {
-    let mut d = doc_of(47, "filler");
-    let table = d.insert_table_at(47, 1, 1);
+    // A full page of body lines leaves less than a line at its foot, but
+    // more than the cell's top padding.
+    let mut d = doc_of(LINES_PER_PAGE, "filler");
+    let table = d.insert_table_at(LINES_PER_PAGE, 1, 1);
     let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
     d.paragraphs[at].runs = vec![Run::plain("cell line")];
-    d.table_padding.insert(table, CellPadding { top_pt: 10.0, bottom_pt: 10.0, ..CellPadding::default() });
+    d.table_padding.insert(table, CellPadding { top_pt: 2.0, bottom_pt: 2.0, ..CellPadding::default() });
     let tree = lay(&d);
     let page0_has_cell = tree.pages[0].items.iter().any(|i| matches!(i, Item::Cell { .. }));
     assert!(!page0_has_cell, "the row must move whole to the next page, not split for padding");
