@@ -328,7 +328,7 @@ version = "1.1.8"
 version = "0.1"
 
 [dependencies.wasm-bindgen]
-version = "=0.2.100"
+version = "=0.2.130"
 optional = true
 
 [dependencies.xxhash-rust]
