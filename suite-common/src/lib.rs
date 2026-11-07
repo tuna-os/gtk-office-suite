@@ -27,7 +27,7 @@ pub mod icons;
 pub mod about;
 pub mod page_setup;
 pub mod menus;
-pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
+pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session, report};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -164,6 +164,15 @@ impl SuiteApp {
         });
         app.add_action(&act_about);
 
+        let act_report_problem = gio::SimpleAction::new("report-problem", None);
+        let app_weak = app.downgrade();
+        act_report_problem.connect_activate(move |_, _| {
+            if let Some(app) = app_weak.upgrade() {
+                about::report_problem(&app);
+            }
+        });
+        app.add_action(&act_report_problem);
+
         let act_shortcuts = gio::SimpleAction::new("shortcuts", None);
         let app_weak = app.downgrade();
         act_shortcuts.connect_activate(move |_, _| {
@@ -276,6 +285,7 @@ impl SuiteApp {
             ("app.save-as", "Save As…"),
             ("app.preferences", "Preferences"),
             ("app.about", "About"),
+            ("app.report-problem", "Report a Problem…"),
             ("app.help", "Help"),
             ("app.shortcuts", "Keyboard Shortcuts"),
             ("app.clear-recent-files", "Clear Recent Files"),
@@ -794,6 +804,7 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
     let help_section = gio::Menu::new();
     help_section.append(Some(&i18n("_Help")), Some("app.help"));
     help_section.append(Some(&i18n("_Keyboard Shortcuts")), Some("app.shortcuts"));
+    help_section.append(Some(&i18n("Report a _Problem\u{2026}")), Some("app.report-problem"));
     help_section.append(Some(&i18n("_About %s").replace("%s", app_name)), Some("app.about"));
     menu.append_section(None, &help_section);
 
@@ -1166,6 +1177,48 @@ mod tests {
         crate::gtk_test::run(|| {
             let state = make_empty_state("Title", "Description", "icon", "Open");
             assert_eq!(state.width_request(), -1);
+        });
+    }
+
+    #[test]
+    fn make_header_bar_includes_report_problem_in_menu() {
+        crate::gtk_test::run(|| {
+            let hb = make_header_bar("Letters");
+            let menu = crate::menus::primary_menu(hb.upcast_ref())
+                .expect("primary menu must be found in header bar");
+            fn has_action(model: &gio::MenuModel, target: &str) -> bool {
+                for i in 0..model.n_items() {
+                    if let Some(action) = model.item_attribute_value(i, gio::MENU_ATTRIBUTE_ACTION, None) {
+                        if action.str() == Some(target) {
+                            return true;
+                        }
+                    }
+                    if let Some(link) = model.item_link(i, gio::MENU_LINK_SECTION) {
+                        if has_action(&link, target) {
+                            return true;
+                        }
+                    }
+                    if let Some(link) = model.item_link(i, gio::MENU_LINK_SUBMENU) {
+                        if has_action(&link, target) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            assert!(has_action(menu.upcast_ref(), "app.report-problem"), "make_header_bar primary menu must include app.report-problem");
+        });
+    }
+
+    #[test]
+    fn suite_app_registers_report_problem_action() {
+        crate::gtk_test::run(|| {
+            let app = SuiteApp::new("org.tunaos.test.report");
+            assert!(gio::prelude::ActionMapExt::lookup_action(&app.app, "report-problem").is_some());
+            assert_eq!(
+                crate::actions::label_for("app.report-problem").as_deref(),
+                Some("Report a Problem…")
+            );
         });
     }
 }
