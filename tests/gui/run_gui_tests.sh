@@ -157,8 +157,28 @@ fi
 # see framework/base.py's _activate_window). matchbox is minimal and
 # needs no config; skip it entirely when reusing a real desktop, which
 # already has one.
-if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && command -v matchbox-window-manager >/dev/null 2>&1; then
-    matchbox-window-manager -use_titlebar no &
+#
+# GUI_TEST_WINDOW_MANAGER=openbox starts openbox instead. matchbox gives every
+# window the whole screen and ignores moves and resizes, which is right for
+# one window and wrong for a journey that runs two instances of an app and
+# wants both on screen in one recording (framework/base.py `tile_windows`).
+# Asking for a window manager that is not installed fails; only the default
+# is optional.
+WM_NAME="${GUI_TEST_WINDOW_MANAGER:-matchbox}"
+case "$WM_NAME" in
+    matchbox) WM_BIN=matchbox-window-manager; WM_ARGS="-use_titlebar no" ;;
+    openbox) WM_BIN=openbox; WM_ARGS="" ;;
+    *)
+        echo "GUI setup failed: GUI_TEST_WINDOW_MANAGER=${WM_NAME} is not one of matchbox, openbox." >&2
+        exit 1 ;;
+esac
+if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && [ "$WM_NAME" != matchbox ] && ! command -v "$WM_BIN" >/dev/null 2>&1; then
+    echo "GUI setup failed: GUI_TEST_WINDOW_MANAGER=${WM_NAME} was requested but ${WM_BIN} is not installed." >&2
+    exit 1
+fi
+if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && command -v "$WM_BIN" >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    "$WM_BIN" $WM_ARGS &
     MWM_PID=$!
     trap 'kill ${MWM_PID:-} ${XVFB_PID:-} 2>/dev/null || true; rm -rf "${SCHEMA_DIR:-}" "${DISPLAY_NUM_FILE:-}"' EXIT
     # Wait for the WM to actually claim the display rather than sleeping a
@@ -173,7 +193,7 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && command -v matchbox-window-manager >/
         sleep 0.1
     done
     if ! xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
-        echo "GUI setup failed: matchbox did not claim ${DISPLAY} within ${GUI_TEST_READY_SECONDS}s." >&2
+        echo "GUI setup failed: ${WM_NAME} did not claim ${DISPLAY} within ${GUI_TEST_READY_SECONDS}s." >&2
         exit 1
     fi
 fi

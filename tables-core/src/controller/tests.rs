@@ -951,15 +951,19 @@
         // The sheet went behind the history's back (every real delete is an
         // op, so undo would bring it back first). The Sheet2 edit's undo no
         // longer applies: it must not retarget Sheet3, which now sits at the
-        // old Sheet2 position, and no half undo happens: the history is
-        // dropped (ADR 0011).
+        // old Sheet2 position, and no half undo happens: that step is
+        // dropped, and the Sheet1 edit's step stays (ADR 0011).
         controller.state.borrow_mut().switch_sheet(1).unwrap();
         let sheet3_before = controller.state.borrow().sheet().cell(0, 0).to_string();
         assert!(!controller.undo());
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), sheet3_before);
-        assert!(!controller.can_undo() && controller.undo_description().is_none());
+        assert!(controller.can_undo() && !controller.can_redo(), "the Sheet1 edit is still there, and the dropped step is not redoable");
+        assert_eq!(controller.undo_description(), Some("Edit Cell"), "its name, not the dropped step's, is the one shown");
         controller.state.borrow_mut().switch_sheet(0).unwrap();
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "sheet1-a");
+        assert!(controller.undo(), "and it still undoes");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
+        assert!(!controller.can_undo() && controller.undo_description().is_none());
     }
 
     #[test]

@@ -1,0 +1,57 @@
+# Its own workspace (and lockfile): see the `exclude` in ../Cargo.toml.
+[workspace]
+
+[package]
+name = "dcp-p2p"
+description = "DCP draft-1 peer-to-peer binding (iroh + p2panda), Spike C of RFC-0004."
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-or-later"
+
+[features]
+# Tests that run a relay server in-process (pulls in iroh's relay server).
+relay-test = ["iroh/test-utils", "dep:iroh-relay"]
+
+[dependencies]
+dcp-core = { path = "../dcp-core" }
+async-trait = "0.1"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "net", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
+
+# p2panda 0.7.1 (crates.io, 2026-08-21): the pieces the binding really uses.
+p2panda-core = "=0.7.1"
+p2panda-store = { version = "=0.7.1", default-features = false, features = ["sqlite", "spaces"] }
+p2panda-sync = "=0.7.1"
+p2panda-auth = { version = "=0.7.1", default-features = false, features = ["serde"] }
+p2panda-encryption = { version = "=0.7.1", default-features = false, features = ["data_scheme"] }
+p2panda-spaces = "=0.7.1"
+petgraph = "0.8"
+serde_bytes = "0.11"
+
+# iroh 1.x transport and blobs. iroh-blobs 0.103.1 is the fixed release (0.103.0 is yanked:
+# push-request bug, https://www.iroh.computer/blog/iroh-blobs-push-fix).
+iroh-blobs = "=0.104.1"
+# `metrics`: iroh's own socket counters (bytes by transport, hole-punch attempts), which the
+# relay spike reads (src/pathlog.rs).
+iroh = { version = "1.4", default-features = false, features = ["tls-ring", "metrics"] }
+# DER trust anchors for a private relay's CA (P2pConfig::relay_ca_der).
+rustls-pki-types = "1"
+iroh-relay = { version = "1", optional = true }
+
+# Wire framing for the sync sessions (the same codec p2panda-net uses, copied: see codec.rs).
+tokio-util = { version = "0.7", features = ["codec"] }
+postcard = { version = "1", default-features = false, features = ["alloc", "use-std"] }
+futures-util = { version = "0.3", features = ["sink"] }
+bytes = "1"
+tracing = "0.1"
+# The node binary logs to stderr when RUST_LOG is set; the tests use it too.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
+
+[dev-dependencies]
+dcp-conformance = { path = "../dcp-conformance" }
+# The same version dcp-core and dcp-conformance use.
+parking_lot = "0.13"

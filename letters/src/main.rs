@@ -25,6 +25,17 @@ mod review_ui;
 mod comments_ui;
 mod link_ui;
 mod toc_ui;
+// Live collaboration (RFC-0005 P5), feature `collab`, off by default.
+#[cfg(feature = "collab")]
+mod collab_actions;
+#[cfg(feature = "collab")]
+mod collab_dialogs;
+#[cfg(feature = "collab")]
+mod collab_logic;
+#[cfg(feature = "collab")]
+mod collab_session;
+#[cfg(feature = "collab")]
+mod collab_status;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");

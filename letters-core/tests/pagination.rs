@@ -224,7 +224,8 @@ fn assert_bounds(typeset: &Typeset) {
                 Item::Image { x_pt, y_pt, width_pt, height_pt, .. }
                 | Item::Cell { x_pt, y_pt, width_pt, height_pt, .. }
                 | Item::ParaBox { x_pt, y_pt, width_pt, height_pt, .. }
-                | Item::PageBorder { x_pt, y_pt, width_pt, height_pt, .. } => {
+                | Item::PageBorder { x_pt, y_pt, width_pt, height_pt, .. }
+                | Item::TextBox { x_pt, y_pt, width_pt, height_pt, .. } => {
                     for v in [x_pt, y_pt, width_pt, height_pt] {
                         assert!(v.is_finite(), "a box with a non-finite edge: {item:?}");
                     }

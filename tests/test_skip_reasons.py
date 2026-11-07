@@ -267,7 +267,7 @@ class TheRealTreeHasNoUnexplainedIgnores(unittest.TestCase):
 
     def test_every_ignore_attribute_in_the_tree_carries_a_reason(self):
         bare = []
-        for path in collector.rust_sources([REPO_ROOT]):
+        for path in collector.rust_sources([REPO_ROOT], nested_workspaces=True):
             for attr in collector.scan_file(path):
                 if not attr["reason"]:
                     bare.append(f"{os.path.relpath(attr['file'], REPO_ROOT)}:{attr['line']}")
@@ -282,6 +282,39 @@ class TheRealTreeHasNoUnexplainedIgnores(unittest.TestCase):
         self.assertIn("letters-core/tests/stateful.rs", found)
         self.assertIn("letters-core/tests/corpus_debug.rs", found)
         self.assertGreaterEqual(len(found), 5, sorted(found))
+
+
+class NestedWorkspacesAreNotInTheListing(unittest.TestCase):
+    """tools/collab-spike has its own workspace, so nextest never lists its tests."""
+
+    def _tree(self, root):
+        for rel, body in {
+            "Cargo.toml": "[workspace]\nmembers = []\nexclude = [\"spike\"]\n",
+            "src/lib.rs": "#[test]\n#[ignore = \"root reason\"]\nfn root_case() {}\n",
+            "spike/Cargo.toml": "[workspace]\nresolver = \"2\"\n",
+            "spike/tests/m.rs": "#[test]\n#[ignore = \"spike reason\"]\nfn spike_case() {}\n",
+            "plain/Cargo.toml": "[package]\nname = \"plain\"\n",
+            "plain/src/lib.rs": "#[test]\n#[ignore = \"plain reason\"]\nfn plain_case() {}\n",
+        }.items():
+            path = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(body)
+
+    def test_a_directory_with_its_own_workspace_is_skipped_but_a_plain_crate_is_not(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            self._tree(root)
+            names = sorted(os.path.relpath(p, root) for p in collector.rust_sources([root]))
+            self.assertEqual(names, ["plain/src/lib.rs", "src/lib.rs"])
+
+    def test_the_bare_ignore_scan_can_still_see_it(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            self._tree(root)
+            names = sorted(os.path.relpath(p, root)
+                           for p in collector.rust_sources([root], nested_workspaces=True))
+            self.assertIn("spike/tests/m.rs", names)
 
 
 class TheScriptRunsAsACommand(unittest.TestCase):

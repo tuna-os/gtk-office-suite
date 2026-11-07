@@ -109,6 +109,13 @@ python3 conformance/validate_capabilities.py --lanes conformance/lanes.json --la
     --collected inv.json --results res.json --candidate "$(git rev-parse HEAD)"
 ```
 
+The `test` job feeds the collector a second report: the `collab` feature is
+off in every shipped build, so the workspace run never compiles it, and its
+tests (`tables-core` and `decks-core`) run as a second nextest run with
+`--profile collab`, which writes `target/nextest/collab/junit.xml`. Pass it
+as another `--junit "=target/nextest/collab/junit.xml"`; a ledger entry may
+cite those tests like any other.
+
 A renamed or deleted test, a layer with no test, a skipped or failing test
 behind a `verified` claim, an expired waiver, or two test classes sharing a
 name all fail the build. So does evidence filed under the wrong layer (a
