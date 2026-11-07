@@ -405,6 +405,10 @@
     "B": "amber",
     "C": "amber"
   },
+  "tables/worksheet-image": {
+    "A": "red",
+    "B": "red"
+  },
   "tables/wrap-merged": {
     "A": "amber",
     "B": "amber",
