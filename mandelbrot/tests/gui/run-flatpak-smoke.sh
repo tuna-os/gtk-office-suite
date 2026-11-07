@@ -89,7 +89,7 @@ FATAL=$(fatal_log_lines "$APP_LOG")
 if [ -z "$FATAL" ]; then
     gui_log "PASS no panic, CRITICAL or app ERROR in the log"
 else
-    gui_log "FAIL the log has panics, criticals or app errors:"
+    gui_log "FAIL the log has a panic, a CRITICAL or an app ERROR:"
     printf '%s\n' "$FATAL"
     failed=1
 fi
