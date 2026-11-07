@@ -136,6 +136,10 @@
     "B": "green",
     "C": "green"
   },
+  "letters/floating-image-gap": {
+    "A": "amber",
+    "B": "amber"
+  },
   "letters/font-families": {
     "A": "green",
     "B": "green",
@@ -276,10 +280,22 @@
     "B": "amber",
     "C": "amber"
   },
+  "letters/table-cell-content-control": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/table-cell-list-indent": {
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "letters/table-cell-numbered-list-indent": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/table-row-min-height-page-break": {
+    "A": "amber",
+    "B": "green"
   },
   "letters/text-color": {
     "A": "green",
@@ -370,10 +386,18 @@
     "B": "amber",
     "C": "amber"
   },
+  "tables/fit-to-width": {
+    "A": "amber",
+    "B": "amber"
+  },
   "tables/frozen": {
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "tables/horizontal-pagination": {
+    "A": "amber",
+    "B": "amber"
   },
   "tables/hyperlink-theme-colors": {
     "A": "amber",
@@ -390,10 +414,30 @@
     "B": "green",
     "C": "green"
   },
+  "tables/paginated-columns": {
+    "A": "amber",
+    "B": "amber"
+  },
   "tables/pivot-crosstab": {
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "tables/print-fit-page": {
+    "A": "green",
+    "B": "green"
+  },
+  "tables/print-scale": {
+    "A": "red",
+    "B": "red"
+  },
+  "tables/tall-unprinted-sheet": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/unheaded-bordered-musts": {
+    "A": "amber",
+    "B": "amber"
   },
   "tables/unprinted-headings": {
     "A": "green",
@@ -408,6 +452,10 @@
     "A": "amber",
     "B": "amber",
     "C": "amber"
+  },
+  "tables/worksheet-image": {
+    "A": "red",
+    "B": "red"
   },
   "tables/wrap-merged": {
     "A": "amber",
