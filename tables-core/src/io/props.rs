@@ -24,9 +24,9 @@ pub struct SheetXlsxProps {
     pub hidden_rows: std::collections::HashSet<usize>,
     pub hidden_cols: std::collections::HashSet<usize>,
     pub page_setup: Option<suite_common_core::print::PageSetup>,
-    /// Explicitly-sized columns and rows, in pixels, 0-based — only the
-    /// ones the file marks as custom, so a sheet of default-width columns
-    /// produces an empty map rather than a row of defaults.
+    /// Stored column widths and row heights, in pixels, 0-based. Column
+    /// widths are marked custom; row heights also include cached automatic
+    /// heights (`ht` without `customHeight`), as Excel writes them.
     pub col_widths: std::collections::HashMap<usize, f64>,
     pub row_heights: std::collections::HashMap<usize, f64>,
     /// `(frozen_rows, frozen_cols)` from a frozen `<pane>`, absent when
@@ -386,11 +386,21 @@ fn height_points_to_pixels(points: f64) -> f64 {
     (points / POINTS_PER_PIXEL * 100.0).round() / 100.0
 }
 
+/// `attr`'s value in `tag`, matched as a whole attribute name: `ht` is not
+/// the tail of `customHeight`.
 fn xml_attr<'a>(tag: &'a str, attr: &str) -> Option<&'a str> {
     let needle = format!("{attr}=\"");
-    let start = tag.find(&needle)? + needle.len();
-    let end = tag[start..].find('"')? + start;
-    Some(&tag[start..end])
+    let mut from = 0;
+    while let Some(i) = tag[from..].find(&needle) {
+        let at = from + i;
+        let start = at + needle.len();
+        if at == 0 || tag.as_bytes()[at - 1].is_ascii_whitespace() {
+            let end = tag[start..].find('"')? + start;
+            return Some(&tag[start..end]);
+        }
+        from = start;
+    }
+    None
 }
 
 /// OOXML boolean attributes are legal as either "1"/"0" or "true"/"false"
@@ -543,8 +553,15 @@ pub fn read_sheet_props_from_xlsx(
             for tag in data_block.split("<row ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
                 let hidden = xml_bool_attr(tag, "hidden");
-                let custom_height = xml_bool_attr(tag, "customHeight");
-                if !hidden && !custom_height {
+                // `customHeight` says the user set the height manually, not
+                // whether `ht` exists. Excel also stores automatic heights
+                // (the UKHSA GPC workbook has ht="15.5" on every data row).
+                // Until we recalculate auto-fit, use that stored geometry.
+                let height = xml_attr(tag, "ht")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|h| h.is_finite() && *h >= 0.0)
+                    .map(height_points_to_pixels);
+                if !hidden && height.is_none() {
                     continue;
                 }
                 if let Some(r) = xml_attr(tag, "r").and_then(|v| v.parse::<usize>().ok()) {
@@ -554,14 +571,8 @@ pub fn read_sheet_props_from_xlsx(
                         if hidden {
                             props.hidden_rows.insert(r - 1); // 1-based → 0-based
                         }
-                        if custom_height {
-                            if let Some(px) = xml_attr(tag, "ht")
-                                .and_then(|v| v.parse::<f64>().ok())
-                                .filter(|h| h.is_finite() && *h >= 0.0)
-                                .map(height_points_to_pixels)
-                            {
-                                props.row_heights.insert(r - 1, px);
-                            }
+                        if let Some(px) = height {
+                            props.row_heights.insert(r - 1, px);
                         }
                     }
                 }
