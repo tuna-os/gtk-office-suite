@@ -7843,12 +7843,31 @@ class DecksCanvasGeometry:
         """
         import re
 
-        canvas = self.app.child(name="Slide canvas")
-        cw, ch = canvas.size
-        match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas.description)
-        if not match:
-            self.fail(f"canvas_at not found in description: {canvas.description!r}")
-        cx, cy = int(match.group(1)), int(match.group(2))
+        # A snapshot confirms the model changed, but GTK may still be
+        # allocating the canvas after switching from the empty view. Mixing
+        # its new size with the previous draw's canvas_at sent DCK-007's
+        # double-click to stale coordinates on CI. Wait for the size and
+        # draw-published origin together to settle before sending input.
+        previous = None
+        unchanged_since = time.monotonic()
+
+        def geometry():
+            canvas = self.app.child(name="Slide canvas")
+            match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas.description)
+            if not canvas.showing or not match:
+                return None
+            return (*canvas.size, int(match.group(1)), int(match.group(2)))
+
+        def settled(value):
+            nonlocal previous, unchanged_since
+            now = time.monotonic()
+            if value is None or value != previous:
+                previous, unchanged_since = value, now
+                return False
+            return value[0] > 0 and value[1] > 0 and now - unchanged_since >= 0.25
+
+        cw, ch, cx, cy = self.wait_until(
+            geometry, settled, description="stable slide canvas size and origin")
         scale = min(cw / 960.0, ch / 540.0) * 0.92
         ox = (cw - 960.0 * scale) / 2.0
         oy = (ch - 540.0 * scale) / 2.0
