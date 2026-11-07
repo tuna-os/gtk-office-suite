@@ -101,12 +101,12 @@ pub fn parse_multistatus(body: &[u8]) -> Result<Vec<Entry>, String> {
             .read_resolved_event()
             .map_err(|e| format!("xml: {e}"))?;
         let ns_str = match &ns {
-            ResolveResult::Bound(n) => String::from_utf8_lossy(n.as_ref()).into_owned(),
+            ResolveResult::Bound(n) => n.as_ref().to_owned(),
             _ => String::new(),
         };
         match ev {
             Event::Start(e) => {
-                let local = String::from_utf8_lossy(e.local_name().as_ref()).into_owned();
+                let local = e.local_name().as_ref().to_owned();
                 if in_prop {
                     let raw = reader
                         .read_text(e.name())
@@ -141,12 +141,12 @@ pub fn parse_multistatus(body: &[u8]) -> Result<Vec<Entry>, String> {
             }
             Event::Empty(e) => {
                 if in_prop {
-                    let local = String::from_utf8_lossy(e.local_name().as_ref()).into_owned();
+                    let local = e.local_name().as_ref().to_owned();
                     pending.push(((ns_str, local), String::new()));
                 }
             }
             Event::End(e) => {
-                let local = String::from_utf8_lossy(e.local_name().as_ref()).into_owned();
+                let local = e.local_name().as_ref().to_owned();
                 if ns_str == DAV {
                     match local.as_str() {
                         "prop" => in_prop = false,
