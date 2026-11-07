@@ -74,7 +74,7 @@ jobs:
     # and the index token must not run whatever the shared branch holds at
     # publish time (#286, #1007). Renovate proposes digest bumps; review the
     # tuna-os/.github diff before merging one.
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@7d966c7bb537dec12db463ef4d7122fbe6749cfd # main
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@794ded942d9de91b886b1bc82c1f663bc36ba61d # main
     with:
       app-id: org.tunaos.${{ matrix.app }}
       manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
@@ -89,3 +89,83 @@ jobs:
     # implicitly, limited by `permissions` above.
     secrets:
       FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
+
+  # The /app tree of each app as a tarball on the release, for remotes that
+  # repackage the vendor's own download (FlatPark, extra-data) instead of
+  # building from source. Built from the tag in the GNOME SDK, like the
+  # bundles, so the published bytes match the tag they are filed under.
+  # FlatPark's resolvers read `<app>-<arch>.tar.gz` from the latest release
+  # and check `bin/<app>` inside it.
+  tarballs:
+    needs: [evidence, soak]
+    if: >-
+      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/')
+          && needs.evidence.result == 'success' && needs.soak.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+        arch: [x86_64, aarch64]
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
+      options: --privileged
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build org.tunaos.${{ matrix.app }}
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          bundle: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
+          arch: ${{ matrix.arch }}
+          cache: false
+          upload-artifact: false
+      - name: Pack the /app tree
+        env:
+          APP: ${{ matrix.app }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          flatpak install --user -y --noninteractive --bundle "$APP-$ARCH.flatpak"
+          files="$(flatpak info --user --show-location "org.tunaos.$APP")/files"
+          [ -x "$files/bin/$APP" ] || { echo "::error::bin/$APP missing from the built app"; exit 1; }
+          # Recorded owner 0: FlatPark's apply_extra unpacks as root with
+          # every capability dropped, where restoring another uid fails.
+          tar --owner=0 --group=0 --numeric-owner -C "$files" -czf "$APP-$ARCH.tar.gz" .
+          sha256sum "$APP-$ARCH.tar.gz" | tee "$APP-$ARCH.tar.gz.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tarball-${{ matrix.app }}-${{ matrix.arch }}
+          path: |
+            ${{ matrix.app }}-${{ matrix.arch }}.tar.gz
+            ${{ matrix.app }}-${{ matrix.arch }}.tar.gz.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  # autorelease.yml creates the release as a draft, so nothing reading
+  # `releases/latest` sees it before its downloads are attached. This
+  # attaches the tarballs and then publishes it, only once the Flatpaks
+  # were published and every tarball was built.
+  release:
+    needs: [publish, tarballs]
+    if: >-
+      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/')
+          && needs.publish.result == 'success' && needs.tarballs.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: tarball-*
+          merge-multiple: true
+      - name: Attach the tarballs and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" --clobber -R "$GITHUB_REPOSITORY" -- *.tar.gz *.tar.gz.sha256
+          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' >> "$GITHUB_STEP_SUMMARY"
