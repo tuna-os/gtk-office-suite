@@ -488,6 +488,7 @@ by hand:
 | `corpus (letters)` | `file-corpus.yml` → `corpus` | optional | Path-filtered to the corpus and GUI harness; it reports nothing on other pull requests, so requiring it would block them forever. |
 | `corpus (tables)` | `file-corpus.yml` → `corpus` | optional | Path-filtered to the corpus and GUI harness; it reports nothing on other pull requests, so requiring it would block them forever. |
 | `build` | `gui-container.yml` → `build` | optional | Path-filtered to the test container's own files. |
+| `publish` | `gui-container.yml` → `publish` | optional | Skipped on pull requests by design (`if: github.event_name != 'pull_request'`): it holds `packages: write` and pushes the image, which a pull request must not (#1684). |
 | `vlm-audit (decks)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (letters)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (tables)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
