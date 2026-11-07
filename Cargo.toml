@@ -18,7 +18,7 @@ gettext-rs = { version = "0.8", features = ["gettext-system"] }
 [profile.release.package.ironcalc_base]
 codegen-units = 1
 
-# Temporary security backports for collaboration (#1043); see vendor/README.md.
+# Temporary security backports for collaboration (#1043); see third_party/README.md.
 [patch.crates-io]
-loro-internal = { path = "vendor/loro-internal" }
-serde_columnar = { path = "vendor/serde_columnar" }
+loro-internal = { path = "third_party/loro-internal" }
+serde_columnar = { path = "third_party/serde_columnar" }

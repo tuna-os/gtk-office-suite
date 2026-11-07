@@ -81,5 +81,5 @@ bench = false
 
 # Mirror the product's collaboration security backports (#1043).
 [patch.crates-io]
-loro-internal = { path = "../vendor/loro-internal" }
-serde_columnar = { path = "../vendor/serde_columnar" }
+loro-internal = { path = "../third_party/loro-internal" }
+serde_columnar = { path = "../third_party/serde_columnar" }

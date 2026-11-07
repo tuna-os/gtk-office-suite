@@ -63,10 +63,10 @@ class PatchedDependencies(unittest.TestCase):
                 self.assertNotIn("branch", source, "pin a commit, not a moving branch")
                 if "path" in source:
                     path = (Path(REPO_ROOT) / source["path"]).resolve()
-                    self.assertTrue(path.is_relative_to(Path(REPO_ROOT) / "vendor"))
+                    self.assertTrue(path.is_relative_to(Path(REPO_ROOT) / "third_party"))
                     self.assertTrue((path / "Cargo.toml").is_file())
                     self.assertTrue((path / "LICENSE").is_file())
-                    self.assertTrue((Path(REPO_ROOT) / "vendor" / "README.md").is_file())
+                    self.assertTrue((Path(REPO_ROOT) / "third_party" / "README.md").is_file())
                 else:
                     self.assertIn("rev", source, f"{name} must pin a commit")
 

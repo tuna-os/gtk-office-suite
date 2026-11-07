@@ -34,7 +34,7 @@ Local changes, also reflected in `Cargo.toml.orig`:
 
 Upgrade to published Loro/serde_columnar releases carrying these changes, then
 remove both patch entries from the root, fuzz and `collab/headless` manifests
-and delete the corresponding vendor directories. Regenerate those workspace
+and delete the corresponding `third_party/` directories. Regenerate those workspace
 lockfiles and run:
 
 ```sh

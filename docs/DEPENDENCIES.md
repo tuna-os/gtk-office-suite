@@ -16,7 +16,7 @@ exceptions. We also vendor **serde_columnar** 0.3.14 to disable its unused
 Postcard default features, removing `heapless` 0.7 and `atomic-polyfill`.
 Collaboration remains optional and off by default.
 
-[Vendor provenance and changes](../vendor/README.md) records release checksums,
+[Vendor provenance and changes](../third_party/README.md) records release checksums,
 upstream commits, licenses, and validation commands. How to remove: upgrade to
 published releases with both fixes, remove the corresponding patches from the
 root, fuzz and `collab/headless` manifests, delete the vendored sources, and
@@ -28,7 +28,7 @@ none of the #1043 exceptions should return.
 A patch must be mirrored in `fuzz/Cargo.toml` and `collab/headless/Cargo.toml`
 (separate workspaces the root's patches do not reach, #883).
 Git patches must pin a **`rev`, never a branch**;
-vendored patches must use checked-in sources under `vendor/`, preserve their
+vendored patches must use checked-in sources under `third_party/`, preserve their
 licenses, and document provenance and local changes. `tests/test_patched_dependencies.py`
 checks the source pins, documentation, and matching fuzz patches.
 
