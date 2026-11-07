@@ -356,6 +356,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/default-row-height": {
+    "A": "green",
+    "B": "green"
+  },
   "tables/edited-journey": {
     "A": "green",
     "B": "green"

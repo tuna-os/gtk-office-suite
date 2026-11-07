@@ -339,6 +339,9 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                     sheet.col_widths[c] = px;
                 }
             }
+            if let Some(px) = props.default_row_height {
+                sheet.row_heights.fill(px);
+            }
             for (&r, &px) in &props.row_heights {
                 if r < sheet.row_heights.len() {
                     sheet.row_heights[r] = px;
@@ -672,6 +675,33 @@ mod tests {
         }
         zip.finish().unwrap();
         path
+    }
+
+    #[test]
+    fn xlsx_default_row_height_applies_to_missing_rows_and_yields_to_overrides() {
+        let styles = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="1"><xf/></cellXfs></styleSheet>"#;
+        let body = r#"<sheetFormatPr defaultRowHeight="14.5"/>
+            <sheetData><row r="1"><c r="A1"><v>1</v></c></row>
+            <row r="3" ht="36" customHeight="1"><c r="A3"><v>3</v></c></row>
+            <row r="4" hidden="1"><c r="A4"><v>4</v></c></row></sheetData>"#;
+        let plain = r#"<sheetData><row r="1"><c r="A1"><v>2</v></c></row></sheetData>"#;
+        let path = protection_fixture(styles, &[("Compact", body), ("Plain", plain)]);
+        let (_, sheets) = load_workbook(path.to_str().unwrap()).unwrap();
+        let compact = &sheets[0];
+        assert_eq!(compact.row_height(0), 19.33);
+        assert_eq!(compact.row_height(1), 19.33, "absent row inherits the default");
+        assert_eq!(compact.row_height(2), 48.0, "explicit height wins");
+        assert!(compact.is_row_hidden(3));
+        assert_eq!(compact.row_height(compact.rows - 1), 19.33);
+        assert_eq!(sheets[1].row_height(0), crate::sheet::ROW_HEIGHT);
+
+        // Invalid producer values must not put NaN/inf into grid geometry.
+        for height in ["NaN", "inf", "-1", "garbage", "1e308"] {
+            let body = format!(r#"<sheetFormatPr defaultRowHeight="{height}"/>{plain}"#);
+            let path = protection_fixture(styles, &[("Invalid", &body)]);
+            let props = read_sheet_props_from_xlsx(path.to_str().unwrap(), &["Invalid".into()]);
+            assert_eq!(props["Invalid"].default_row_height, None, "{height}");
+        }
     }
 
     #[test]
