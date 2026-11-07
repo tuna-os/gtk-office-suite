@@ -686,12 +686,6 @@ def align(app, lo_path, ours_path):
     if box and 0 < ox < ours.width and 0 < oy < ours.height:
         ref = ref.crop(box)
         ours = ours.crop((ox, oy, ours.width, ours.height))
-    elif box is None and 0 < ox < ours.width and 0 < oy < ours.height:
-        # Published sheets need not print headings (#1335, #1341).
-        # Remove our screen header bands so column letters and row numbers
-        # are not stretched into the document.
-        ours = ours.crop((ox, oy, ours.width, ours.height))
-        scale = (ours.width / ref.width + ours.height / ref.height) / 2
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or

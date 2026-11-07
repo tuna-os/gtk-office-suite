@@ -385,6 +385,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/merged-borders": {
+    "A": "green",
+    "B": "green"
+  },
   "tables/number-formats": {
     "A": "green",
     "B": "green",
