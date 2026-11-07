@@ -136,6 +136,10 @@
     "B": "green",
     "C": "green"
   },
+  "letters/floating-image-gap": {
+    "A": "amber",
+    "B": "amber"
+  },
   "letters/font-families": {
     "A": "green",
     "B": "green",
