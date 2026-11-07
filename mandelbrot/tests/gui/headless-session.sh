@@ -89,19 +89,42 @@ in_dbus_session() { # "$0" "$@"
 }
 
 # The app keeps its session secrets in the keyring through the Secret portal
-# (src/secret/linux.rs); without one, logging in fails. Start an unlocked
-# gnome-keyring and point xdg-desktop-portal's Secret interface at it. The
-# portal itself is D-Bus activated on first use.
+# (src/secret/linux.rs); without one it shows "Secret Portal Error" at
+# startup and cannot log in. Start an unlocked gnome-keyring, point
+# xdg-desktop-portal's Secret interface at it, and check both work before the
+# app ever asks. The portals are D-Bus activated, so the bus's activation
+# environment must carry the display and desktop first: xdg-desktop-portal-gtk
+# (the Settings portal) exits immediately without a display.
+# Must run inside the D-Bus session, after start_compositor.
 start_secret_portal() {
     export XDG_CURRENT_DESKTOP=GNOME
     mkdir -p "$XDG_CONFIG_HOME/xdg-desktop-portal"
     printf '[preferred]\ndefault=gtk\norg.freedesktop.impl.portal.Secret=gnome-keyring\n' \
         >"$XDG_CONFIG_HOME/xdg-desktop-portal/portals.conf"
-    # An empty password creates and unlocks the default "login" collection.
-    printf '' | gnome-keyring-daemon --unlock --components=secrets >/dev/null ||
+    # --unlock creates the "login" keyring with the password read from stdin,
+    # unlocked; --start then adds the secrets component on the session bus.
+    # Both print the daemon's environment (GNOME_KEYRING_CONTROL=…).
+    local keyring_env
+    keyring_env=$(printf 'mandelbrot-test' | gnome-keyring-daemon --unlock --components=secrets) ||
         gui_die "gnome-keyring-daemon --unlock failed"
-    gnome-keyring-daemon --start --components=secrets >/dev/null ||
+    eval "$keyring_env"
+    keyring_env=$(gnome-keyring-daemon --start --components=secrets) ||
         gui_die "gnome-keyring-daemon --start failed"
+    eval "$keyring_env"
+    export GNOME_KEYRING_CONTROL
+    dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR \
+        XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME HOME GNOME_KEYRING_CONTROL ||
+        gui_die "dbus-update-activation-environment failed"
+
+    printf 'probe' | secret-tool store --label=probe mandelbrot-test probe ||
+        gui_die "the keyring does not accept secrets"
+    [ "$(secret-tool lookup mandelbrot-test probe)" = probe ] ||
+        gui_die "the keyring does not return secrets"
+    gdbus introspect --session --dest org.freedesktop.portal.Desktop \
+        --object-path /org/freedesktop/portal/desktop |
+        grep -q "interface org.freedesktop.portal.Secret" ||
+        gui_die "xdg-desktop-portal does not export the Secret portal"
+    gui_log "keyring unlocked; Secret portal available"
 }
 
 # A PulseAudio server with no hardware: it loads a null sink, whose monitor

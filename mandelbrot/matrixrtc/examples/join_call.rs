@@ -512,17 +512,29 @@ async fn main() {
         });
     }
 
-    // Resolve the focus: use the --focus argument (pre-warmed preferred
-    // foci). We prove SFU access BEFORE writing membership so that a user
+    // Resolve the focus: the --focus argument is our preferred focus (the
+    // pre-warmed one), but if anyone is already in the call we follow the
+    // oldest membership's focus instead, so that everyone ends up on the
+    // same SFU. We prove SFU access BEFORE writing membership so that a user
     // who cannot reach the SFU never appears in the call (#9).
-    let service_url = options.focus.clone().unwrap_or_else(|| {
-        eprintln!("no --focus given; nothing to connect to");
-        exit(1);
-    });
+    let foci_preferred = options
+        .focus
+        .iter()
+        .map(|service_url| {
+            Transport::from_livekit(&ruma::events::call::member::LivekitFocus::new(
+                room_id.clone(),
+                service_url.clone(),
+            ))
+        })
+        .collect::<Vec<_>>();
+    let service_url = session
+        .livekit_focus_to_join(&foci_preferred)
+        .map(|focus| focus.service_url)
+        .unwrap_or_else(|| {
+            eprintln!("no --focus given and nobody in the call; nothing to connect to");
+            exit(1);
+        });
     println!("using LiveKit JWT service: {service_url}");
-    let foci_preferred = vec![Transport::from_livekit(
-        &ruma::events::call::member::LivekitFocus::new(room_id.clone(), service_url.clone()),
-    )];
 
     // Fetch the SFU JWT with our OpenID token (MSC4195) and connect
     // to LiveKit BEFORE joining — proves SFU access before membership

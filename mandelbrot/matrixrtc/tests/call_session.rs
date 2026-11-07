@@ -14,7 +14,7 @@ use common::{
 use mandelbrot_matrixrtc::{
     CallMembershipIdentity, MemberStateEvent, MembershipConfig, RtcCallSession,
     RtcCallSessionConfig, RtcCallSessionEvent, RtcRoom, SessionActivity, SessionActivityTracker,
-    Status, ToDeviceTarget,
+    Status, ToDeviceTarget, Transport,
 };
 use serde_json::{Value as JsonValue, json};
 use tokio::sync::mpsc;
@@ -472,6 +472,56 @@ async fn resolves_the_active_focus_from_the_oldest_membership() {
             "livekit_alias": "!active:active.url",
         })
     );
+}
+
+/// A LiveKit transport of our own homeserver, distinct from [`focus`].
+fn own_focus() -> Transport {
+    serde_json::from_value(json!({
+        "type": "livekit",
+        "livekit_service_url": "https://own.url",
+        "livekit_alias": "!own:own.url",
+    }))
+    .unwrap()
+}
+
+#[test]
+fn joins_the_oldest_memberships_focus_rather_than_its_own_preferred_one() {
+    // The federated-call case of EC's federation-oldest-membership-bug.spec.ts:
+    // someone on another homeserver started the call on their SFU, and our
+    // own preferred focus is a different one. We must follow theirs, or the
+    // call splits across two SFUs.
+    let session = make_session(MockClient::new(), RtcCallSessionConfig::default());
+    let mut content = session_membership_template();
+    content
+        .as_object_mut()
+        .unwrap()
+        .insert("foci_preferred".to_owned(), json!([focus()]));
+    session.on_room_state_update(
+        &[member_event(
+            "$creator:e.org",
+            "@creator:other.example",
+            content,
+        )],
+        |_| true,
+        NOW,
+    );
+
+    let to_join = session.livekit_focus_to_join(&[own_focus()]).unwrap();
+    assert_eq!(to_join.service_url, "https://active.url");
+    assert_eq!(to_join.alias, "!active:active.url");
+}
+
+#[test]
+fn the_first_participant_joins_its_own_first_livekit_focus() {
+    let session = make_session(MockClient::new(), RtcCallSessionConfig::default());
+    let not_livekit: Transport = serde_json::from_value(json!({"type": "other"})).unwrap();
+
+    let to_join = session
+        .livekit_focus_to_join(&[not_livekit, own_focus(), focus()])
+        .unwrap();
+    assert_eq!(to_join.service_url, "https://own.url");
+
+    assert!(session.livekit_focus_to_join(&[]).is_none());
 }
 
 // session manager: session start/end detection
