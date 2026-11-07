@@ -1150,6 +1150,278 @@ def tables(img):
         "scaling columns to fit the page width while rows paginate vertically",
     )
 
+
+    # Reduced from Record of non-lethal actions (template) (#1345):
+    # a single-column unheaded instruction sheet (Column A) spanning ~26 cm in width
+    # and 21 rows totaling >800 pt in height paginates vertically across multiple
+    # portrait A4 pages in LibreOffice Calc when headings are disabled
+    # (print_options.headings = False). Tables captures the continuous unpaginated
+    # on-screen viewport (column A + row/col header bands). In compare.py,
+    # without printed heading boxes, lo_cell_box(ref) returns None, align() skips
+    # cropping on-screen header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (rows 1..17), compressing all 21 rows into the space of
+    # 17 rows and 1019 px into 728 px (scale = 1.37×, displacement 82.1pt, SSIM 0.04).
+    wb, ws = book()
+    instructions_data = [
+        ("Record of Non-Lethal Actions Guidance and Instructions", Font(name="Arial", size=14, bold=True), 45),
+        ("When to use this template", Font(name="Arial", size=12, bold=True), 32),
+        (
+            "You can use this template to record observations of problem bird numbers and non-lethal deterrence measures taken before applying for or renewing wildlife protection licences.",
+            Font(name="Arial", size=10),
+            54,
+        ),
+        (
+            "You do not have to use this template: records may be submitted in another format provided they contain the same statutory fields and dates.",
+            Font(name="Arial", size=10),
+            32,
+        ),
+        ("Find out more about recording non-lethal actions and licence conditions online.", Font(name="Arial", size=10, italic=True), 28),
+        ("New licence applications - daily record requirements", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a record of non-lethal deterrence covering a minimum of one month if applying to shoot wild birds to reinforce scaring activities.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("State the number of birds observed present for each species that you wish to control under the proposed licence.", Font(name="Arial", size=10), 36),
+        (
+            "Include detailed descriptions of all active non-lethal methods deployed, including shooting to scare, acoustic deterrents, or human disturbance.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Use the second sheet of this workbook 'Daily record' to record active control methods on each date of action.", Font(name="Arial", size=10), 38),
+        (
+            "Use the fourth sheet of this workbook 'Long-term methods' to record static deterrents (such as netting, lasers, habitat modification, or visual decoys).",
+            Font(name="Arial", size=10),
+            44,
+        ),
+        ("Renewing your licence and reporting actions - monthly record", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a completed non-lethal action log if you have taken action under your licence or wish to apply for an annual renewal.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        (
+            "Record monthly summaries of active deterrents across the entire licence validity period, stating peak and average bird counts.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Document species-specific reactions to each scaring intervention and note any habituation observed over time.", Font(name="Arial", size=10), 38),
+        ("Use the third sheet of this workbook 'Monthly summary' to record summary statistics and licence reference numbers.", Font(name="Arial", size=10), 38),
+        ("Static deterrent maintenance logs must accompany monthly activity logs to demonstrate ongoing compliance.", Font(name="Arial", size=10), 42),
+        ("Statutory guidance and references", Font(name="Arial", size=12, bold=True), 32),
+        ("Review national wildlife management licensing policies and bird control standards before submitting records:", Font(name="Arial", size=10), 32),
+        ("Licence classes A06 and A07: Protecting fisheries and angling clubs from fish-eating predators", Font(name="Arial", size=10), 36),
+        ("Licence classes A08 and A09: Licences to prevent serious agricultural and horticultural damage", Font(name="Arial", size=10), 36),
+    ]
+
+    ws.column_dimensions["A"].width = 125
+    for r_idx, (text, font_style, r_height) in enumerate(instructions_data, start=1):
+        cell = ws.cell(r_idx, 1, text)
+        cell.font = font_style
+        ws.row_dimensions[r_idx].height = r_height
+
+    save(
+        wb,
+        "oversized-unheaded-instructions",
+        "A single-column unheaded instruction sheet wider and taller than portrait A4; isolates continuous viewport vs unheaded two-dimensional multipage print",
+        headings=False,
+    )
+
+
+    # Reduced from OTSI Annual Review 2025-2026: Tables (#1344):
+    # a wide borderless single-column sheet (Column A width ~24 cm / ~896px)
+    # with unprinted headings (headings=False) and hyperlinked table contents
+    # styled with font color #0563C1. In headless LibreOffice Calc PDF export,
+    # borderless text crops to ink width (~412px) while Calc overrides hyperlink
+    # colors to #000080. Tables captures the full used extent of Column A (896px)
+    # plus header bands (ox=40, oy=20). In compare.py, lo_cell_box(ref) returns
+    # None due to missing print headings, align() skips cropping header bands,
+    # and resizes 936px onto 412px (scale 1.74×, 2.27× horizontal squash),
+    # yielding displacement 12.5pt, SSIM 0.67, words 84%, and colors 0%.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 115
+    ws.row_dimensions[1].height = 27
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 21
+
+    cell1 = ws.cell(1, 1, "OTSI Annual Review 2025/26 Tables")
+    cell1.font = Font(name="Arial", size=16, bold=True, color="000000")
+
+    cell2 = ws.cell(2, 1, "This dataset contains nine tables for OTSI's annual review")
+    cell2.font = Font(name="Arial", size=12)
+
+    cell3 = ws.cell(3, 1, "Contents")
+    cell3.font = Font(name="Arial", size=12, bold=True, color="000000")
+
+    links = [
+        ("Cover sheet", "#'Cover sheet'!A1"),
+        ("Notes", "#Notes!A1"),
+        ("Table A1", "#'Table A1'!A1"),
+        ("Table A2", "#'Table A2'!A1"),
+        ("Table A3", "#'Table A3'!A1"),
+        ("Table A4", "#'Table A4'!A1"),
+        ("Table B1", "#'Table B1'!A1"),
+        ("Table B2", "#'Table B2'!A1"),
+        ("Table B3", "#'Table B3'!A1"),
+        ("Table B4", "#'Table B4'!A1"),
+        ("Table C1", "#'Table C1'!A1"),
+        ("Contact Sheet", "#'Contact Sheet'!A1"),
+    ]
+    for idx, (label, target) in enumerate(links, start=4):
+        ws.row_dimensions[idx].height = 21
+        c = ws.cell(idx, 1, label)
+        c.hyperlink = target
+        c.font = Font(name="Arial", size=12, color="0563C1", underline="single")
+
+    save(
+        wb,
+        "wide-borderless-hyperlinks",
+        "A wide borderless single-column cover sheet with hyperlinked contents and unprinted headings; isolates column ink vs viewport extent and hyperlink styling",
+        headings=False,
+    )
+
+    from openpyxl.utils import get_column_letter
+
+
+    # Reduced from 2020 - Deep sea stock (#1340):
+    # a 24-column landscape unheaded worksheet (Columns A..X, ~28.5 cm wide) with
+    # multi-tier grouped headers and continuous top border spanning repeated empty
+    # cells (F4:G4). In headless LibreOffice Calc PDF export, landscape A4 with
+    # 0.354 in margins has printable width 27.89 cm, so Calc splits Column X
+    # onto Page 2/3. Because the sheet omits printed headings, lo_cell_box(ref)
+    # returns None, align() skips cropping on-screen header bands (ox=40, oy=20),
+    # and pick_sheet_page() selects Page 1 only (columns A..W), compressing
+    # all 24 columns and header bands onto 23 columns, yielding scale 1.52×,
+    # displacement 61.6pt, SSIM 0.09, and words found 14%.
+    wb, ws = book()
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+
+    thin = Side(style="thin", color="000000")
+
+    ws["A1"] = "Deep Sea Species Statistics: total landings (tonnes live weight) in 2020"
+    ws["A1"].font = Font(name="Arial", size=10, bold=True)
+
+    ws["A2"] = "27-Jan-21"
+    ws["A2"].font = Font(name="Arial", size=9, bold=True)
+    ws["B2"] = "This weeks report includes swap numbers 1448-1502"
+    ws["B2"].font = Font(name="Arial", size=9, italic=True)
+
+    # Row 4: Group headers with top border
+    ws["C4"] = "Landings into"
+    ws.merge_cells("C4:G4")
+    ws["C4"].alignment = Alignment(horizontal="center")
+
+    ws["M4"] = "Total landings"
+    ws.merge_cells("M4:O4")
+    ws["M4"].alignment = Alignment(horizontal="center")
+
+    ws["Q4"] = "Uptake of quota"
+    ws.merge_cells("Q4:U4")
+    ws["Q4"].alignment = Alignment(horizontal="center")
+
+    for col in range(2, 25):  # B..X: continuous top border across header
+        ws.cell(4, col).border = Border(top=thin)
+
+    # Rows 5-7: Subheaders
+    ws["B5"] = "Stock"
+    ws.merge_cells("B5:B7")
+    ws["B5"].alignment = Alignment(horizontal="center", vertical="center")
+
+    subheaders = {
+        3: "Scotland",
+        4: "England, Wales & N.I.",
+        5: "Abroad",
+        6: "by UK vessels",
+        7: "U.K",
+        13: "Quota",
+        14: "2019",
+        15: "2020",
+        24: "UK",
+    }
+    for col, text in subheaders.items():
+        ws.cell(5, col, text).font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        ws.cell(6, col, "%" if col < 24 else "Quota").font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        txt = "2019" if col in (3, 6) else ("2020" if col == 4 else ("change" if col == 5 else "2016"))
+        ws.cell(7, col, txt).font = Font(name="Arial", size=9)
+
+    for col in range(2, 25):
+        ws.cell(7, col).border = Border(bottom=thin)
+
+    # Data rows
+    species = [
+        ("Tusk IV", [41.2, 63.0, 53.1, 1.7, 0.7], 107),
+        ("Ling IV", [2574.5, 2441.4, -5.2, 458.6, 346.7], 2515),
+        ("Tusk V,VI,VII", [90.9, 85.4, -6.1, 1.2, 0.1], 265),
+        ("Ling VI-X,XII,XIV", [2114.9, 1636.0, -22.6, 403.7, 273.4], 3896),
+        ("Black Scabbardfish V-VII,XII", [44.9, 20.0, -55.6, 0.0, 0.0], 194),
+        ("Roundnose/Roughead Grenadier Vb,VI,VII", [6.2, 5.9, -4.7, 0.0, 0.0], 216),
+        ("Blue Ling Vb,VI,VII", [718.3, 715.5, -0.4, 0.0, 0.0], 979),
+    ]
+
+    ws.cell(9, 1, "Deep Sea").font = Font(name="Arial", size=9, bold=True)
+    for idx, (name, vals, quota) in enumerate(species, start=10):
+        ws.cell(idx, 2, name).font = Font(name="Arial", size=9)
+        for c_idx, val in enumerate(vals, start=3):
+            ws.cell(idx, c_idx, val).font = Font(name="Arial", size=9)
+        ws.cell(idx, 24, quota).font = Font(name="Arial", size=9)
+
+    # Footnote
+    ws.cell(18, 2, "2019 landings are for the nearest comparable week last year therefore").font = Font(
+        name="Arial", size=8, italic=True
+    )
+    ws.cell(19, 2, "comparisons will be approximate, and should be treated accordingly.").font = Font(
+        name="Arial", size=8, italic=True
+    )
+
+    # Columns
+    ws.column_dimensions["A"].width = 3
+    ws.column_dimensions["B"].width = 22
+    for c in range(3, 24):
+        col_letter = get_column_letter(c)
+        ws.column_dimensions[col_letter].width = 7
+    ws.column_dimensions["X"].width = 9
+
+    save(
+        wb,
+        "wide-unheaded-deep-sea-stock",
+        "A 24-column landscape unheaded fisheries statistics sheet with grouped headers, repeated empty cell borders, and horizontal multipage split",
+        headings=False,
+    )
+
+    # Reduced from the June 2026 forecast evaluation report (#1333):
+    # Its cover sheet uses a 119-character wide column without printed headings.
+    # Cell B2 places right-aligned, top-aligned multiline heading text in that
+    # wide column, Row 3 has a centered section title, and Row 4 has indented
+    # items (indent=2). In LibreOffice Calc's A4 portrait print, the column
+    # exceeds printable page width and right-aligned text is clipped at the
+    # margin, whereas Tables draws the full column on screen.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 8.78
+    ws.column_dimensions["B"].width = 119
+    ws.row_dimensions[2].height = 48
+    ws.row_dimensions[3].height = 24
+    ws["B2"] = "Forecast evaluation report\nAnnual database"
+    ws["B2"].font = Font(name="Calibri", size=16, color="E7A614")
+    ws["B2"].alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
+    ws["B3"] = "Economic model development database"
+    ws["B3"].font = Font(name="Calibri", size=14)
+    ws["B3"].alignment = Alignment(horizontal="center")
+    ws["B3"].fill = PatternFill("solid", fgColor="F5D0A9")
+    ws["B4"] = "Model improvements"
+    ws["B4"].font = Font(name="Calibri", size=11, underline="single")
+    ws["B4"].alignment = Alignment(horizontal="left", indent=2)
+    save(
+        wb,
+        "wide-column-right-align",
+        "A wide unprinted column with right-aligned multiline heading, centered title and indented entries",
+        headings=False,
+    )
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
