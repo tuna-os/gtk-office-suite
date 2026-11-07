@@ -16,7 +16,8 @@
   },
   "decks/delegated-authorities-reduced-dark-mode-window": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/edited-journey": {
     "A": "green",
@@ -34,23 +35,28 @@
   },
   "decks/pay-centre-reduced-connector-rules": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/pay-centre-reduced-leading-blank-paragraphs": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/pay-centre-reduced-line-breaks": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "decks/pay-centre-reduced-picture-background": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/preset-shapes": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/rich-text-edited": {
     "A": "green",
@@ -96,6 +102,11 @@
     "B": "green",
     "C": "green"
   },
+  "letters/bullet-symbol-font-line-height": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
+  },
   "letters/char-emphasis": {
     "A": "green",
     "B": "green",
@@ -113,7 +124,8 @@
   },
   "letters/combining-marks": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/edited-journey": {
     "A": "green",
@@ -121,7 +133,8 @@
   },
   "letters/exact-line-spacing": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/font-families": {
     "A": "green",
@@ -175,7 +188,8 @@
   },
   "letters/keep-widow": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/landscape": {
     "A": "green",
@@ -189,7 +203,8 @@
   },
   "letters/mixed-sections": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/named-styles": {
     "A": "green",
@@ -205,6 +220,11 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "letters/odt-page-break-spacing": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
   },
   "letters/page-break": {
     "A": "green",
@@ -228,7 +248,8 @@
   },
   "letters/para-shading-borders": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/paragraph-spacing": {
     "A": "green",
@@ -247,7 +268,8 @@
   },
   "letters/tab-leaders": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/table": {
     "A": "amber",
@@ -256,7 +278,8 @@
   },
   "letters/table-cell-list-indent": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/text-color": {
     "A": "green",
@@ -267,6 +290,16 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "letters/underline-position": {
+    "A": "red",
+    "B": "red",
+    "C": "red"
+  },
+  "letters/url-path-wrapping": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
   },
   "tables/alignment": {
     "A": "green",
@@ -342,6 +375,11 @@
     "B": "green",
     "C": "green"
   },
+  "tables/hyperlink-theme-colors": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
+  },
   "tables/merged": {
     "A": "green",
     "B": "green",
@@ -350,22 +388,34 @@
   "tables/number-formats": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/pivot-crosstab": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/values": {
     "A": "green",
     "B": "green",
     "C": "green"
   },
+  "tables/wide-column-no-headings": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
+  },
   "tables/wrap-merged": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wrap-text": {
+    "A": "amber",
+    "B": "amber",
+    "C": "amber"
+  },
+  "tables/wrap-wide-default-font": {
     "A": "amber",
     "B": "amber",
     "C": "amber"
