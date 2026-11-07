@@ -713,9 +713,9 @@ jobs:
     if: ${{ !cancelled() && needs.flatpak.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    # Not gating yet: Tier C has not had a green run. Remove this line once
-    # it has run green on main for a week. Its failures stay visible in the
-    # run list and the report either way.
+    # Non-gating until Tier C has a fresh week of green nightly runs on main
+    # (#1199). Workflow success alone is insufficient: inspect this job
+    # and its Compare step, since failures here are currently allowed.
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -764,11 +764,25 @@ jobs:
       - name: Capture in the VM
         run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out prior-bundles
 
+      # Preserve the committed baseline; the proposal is review evidence,
+      # never an automatic acceptance of regressions.
+      - name: Propose Tier C baseline
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -ec '
+            cp tools/render-lab/baseline.json render-lab-out/baseline.proposed.json
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out \
+              --baseline render-lab-out/baseline.proposed.json --update-baseline'
+
       - name: Compare
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace render-lab \
             python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out --baseline tools/render-lab/baseline.json
-          cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Compare returns nonzero for regressions and stale baselines. Publish
+      # its report in a separate step so those failures remain readable.
+      - name: Tier C summary
+        if: always() && hashFiles('render-lab-out/summary.md') != ''
+        run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       # The installed Flatpak used the way a desktop uses it (#1209): opened
       # from the file manager, saved through the document portal.
@@ -793,6 +807,7 @@ jobs:
           name: render-parity-vm-report
           path: |
             render-lab-out/report.html
+            render-lab-out/baseline.proposed.json
             render-lab-out/summary.*
             render-lab-out/*/*/*.png
             render-lab-out/*/*/*.log
