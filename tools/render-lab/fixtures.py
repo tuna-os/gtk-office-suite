@@ -478,6 +478,69 @@ def letters(img):
     c1.paragraphs[0].text = "Signed: ___________________________"
     save(x, "table-cell-list-indent", "A table cell containing wrapping bullet list items: wrapped lines align with first-line text")
 
+    # Reduced from real-tier-2-3-notification-of-dealing-with-a-non-uk-t (#1359):
+    # In WordprocessingML tables, Structured Document Tags (w:sdt / content
+    # controls) can wrap individual cells as direct children of w:tr
+    # (<w:tr><w:tc>...</w:tc><w:sdt><w:sdtContent><w:tc>...</w:tc></w:sdtContent></w:sdt></w:tr>).
+    # In Letters, rdocx iterates only direct w:tc children of w:tr, completely
+    # dropping any cell wrapped in w:sdt. This drops cell text ("Click or tap to
+    # enter a date.", "Choose an item.") and distorts row cell counts into jagged
+    # rows, triggering lost-lines in compare.py.
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    x = doc()
+    x.add_paragraph("Table with cell-level content controls (w:sdt in w:tr):")
+    t = x.add_table(rows=3, cols=1)
+    t.style = "Table Grid"
+
+    # Row 0: Col 0 is standard w:tc, Col 1 is w:sdt wrapping w:tc
+    t.cell(0, 0).paragraphs[0].text = "Date of activity"
+    sdt0 = parse_xml(
+        f'<w:sdt {nsdecls("w")}>'
+        '<w:sdtPr><w:alias w:val="Date of activity"/></w:sdtPr>'
+        '<w:sdtContent>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Click or tap to enter a date.</w:t></w:r></w:p>'
+        '</w:tc>'
+        '</w:sdtContent>'
+        '</w:sdt>'
+    )
+    t.rows[0]._tr.append(sdt0)
+
+    # Row 1: Col 0 is standard w:tc, Col 1 is w:sdt wrapping w:tc
+    t.cell(1, 0).paragraphs[0].text = "General Licence"
+    sdt1 = parse_xml(
+        f'<w:sdt {nsdecls("w")}>'
+        '<w:sdtPr><w:alias w:val="General Licence"/></w:sdtPr>'
+        '<w:sdtContent>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Choose an item.</w:t></w:r></w:p>'
+        '</w:tc>'
+        '</w:sdtContent>'
+        '</w:sdt>'
+    )
+    t.rows[1]._tr.append(sdt1)
+
+    # Row 2: Standard 2-column row to verify following row alignment
+    t.cell(2, 0).paragraphs[0].text = "Description of activity"
+    c2 = parse_xml(
+        f'<w:tc {nsdecls("w")}>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Provision of trade financing and maritime insurance</w:t></w:r></w:p>'
+        '</w:tc>'
+    )
+    t.rows[2]._tr.append(c2)
+
+    save(
+        x,
+        "table-cell-content-control",
+        "A table with cell-level content controls (w:sdt in w:tr): content controls preserve cell geometry and text",
+    )
+
+
     x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
