@@ -503,3 +503,48 @@ fn tbl005_every_modeled_permission_governs_its_operations() {
     assert_rejected(&mut controller, |c| c.delete_lines(Axis::Rows, 0, 1));
     assert_rejected(&mut controller, |c| { c.sort_column(0, SortDirection::Ascending); });
 }
+
+/// RFC-0005 question 4: a viewer's workbook. Every user edit goes through
+/// `apply_ops`, which refuses; undo and redo refuse; protection's feedback
+/// counter is not touched; trusted replay (how a peer's update is applied)
+/// still works, and the history comes back when the mode is lifted.
+#[test]
+fn a_read_only_workbook_refuses_user_edits_undo_and_redo_but_takes_replay() {
+    let mut controller = WorkbookController::new(8, 4).unwrap();
+    controller.edit_cell(0, 0, "1");
+    controller.edit_cell(0, 1, "2");
+    assert!(controller.undo());
+    controller.mark_clean();
+    let sheet = controller.state.borrow().sheet().sheet_id;
+    assert!(!controller.is_read_only());
+
+    controller.set_read_only(true);
+    assert!(controller.is_read_only());
+    let before = WorkbookImage::of(&controller.state.borrow());
+    let count = controller.protection_rejection_count();
+    controller.edit_cell(2, 0, "refused");
+    controller.paste_fragment(3, 0, &grid(&[&["x"], &["y"]]));
+    controller.fill((0, 0, 0, 0), 0, 1);
+    controller.insert_lines(Axis::Rows, 0, 1);
+    controller.clear_selection();
+    controller.format_selection("Bold", |style| style.bold = true);
+    assert!(!controller.add_sheet("Nope"));
+    assert!(!controller.set_note(0, 0, Some("a note".into())));
+    assert!(!controller.apply_ops("Raw", vec![Op::SetCell { sheet, row: 4, col: 0, input: "raw".into() }]));
+    assert!(!controller.begin_resize(Axis::Cols), "a resize drag does not start");
+    assert!(!controller.undo() && !controller.redo());
+    assert!(!controller.can_undo() && !controller.can_redo(), "a viewer has nothing to undo");
+    assert_eq!(WorkbookImage::of(&controller.state.borrow()), before);
+    assert!(!controller.is_dirty(), "nothing was edited");
+    assert_eq!(controller.protection_rejection_count(), count, "this is not protection's refusal");
+
+    // What applying a peer's update does is trusted replay, not a user edit.
+    apply_all(&mut controller.state.borrow_mut(), &[Op::SetCell { sheet, row: 5, col: 0, input: "peer".into() }]).unwrap();
+    assert_eq!(controller.state.borrow().cell_input(5, 0), "peer");
+
+    controller.set_read_only(false);
+    assert!(controller.can_undo() && controller.can_redo(), "the history was kept, not cleared");
+    controller.edit_cell(2, 1, "ok");
+    assert_eq!(controller.state.borrow().cell_input(2, 1), "ok");
+    assert_eq!(controller.undo_description(), Some("Edit Cell"));
+}

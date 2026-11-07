@@ -29,6 +29,12 @@ pub struct WorkbookController {
     /// Monotonic feedback token; compare before/after a user operation so a
     /// rejection cannot leak into a later no-op. Trusted replay never changes it.
     pub(super) protection_rejections: u64,
+    /// A viewer's workbook (DCP role `viewer`, RFC-0005 question 4): every
+    /// user edit, undo and redo is refused, with no history step and no
+    /// rejection counted (protection's feedback text would be wrong).
+    /// Trusted replay (`ops::apply`, a remote update applied by the
+    /// collaboration layer) is not a user edit and is not affected.
+    pub(super) read_only: bool,
     /// The workbook's on-disk path, or `None` for an unsaved new document.
     /// Canonical document identity (#103) — window.rs reads/writes this
     /// shared cell rather than tracking its own copy.
@@ -45,6 +51,7 @@ impl WorkbookController {
             broadcaster: Rc::new(Broadcaster::new()),
             dirty: false,
             protection_rejections: 0,
+            read_only: false,
             file_path: Rc::new(RefCell::new(None)),
         })
     }
@@ -54,10 +61,7 @@ impl WorkbookController {
     }
 
     fn notify(&self) {
-        self.broadcaster.broadcast(Hint::UndoStateChanged {
-            can_undo: self.history.can_undo(),
-            can_redo: self.history.can_redo(),
-        });
+        self.broadcaster.broadcast(Hint::UndoStateChanged { can_undo: self.can_undo(), can_redo: self.can_redo() });
     }
 
     /// Record an applied group's inverse as one undo step named `name`, and
@@ -72,6 +76,9 @@ impl WorkbookController {
     }
 
     fn step(&mut self, redo: bool) -> bool {
+        if self.read_only {
+            return false;
+        }
         let applied = {
             let mut state = self.state.borrow_mut();
             let applied = if redo { self.history.redo(&mut state) } else { self.history.undo(&mut state) };
@@ -85,9 +92,11 @@ impl WorkbookController {
         if did {
             to.extend(from.pop());
             self.dirty = true;
-        } else if !self.history.can_undo() && !self.history.can_redo() {
-            // A step that no longer applied: the history dropped itself.
-            self.names = (Vec::new(), Vec::new());
+        } else {
+            // Nothing to step (no name either), or a step that no longer
+            // applied: the history dropped that step alone, and its name
+            // goes with it, so the names stay in step with the stacks.
+            from.pop();
         }
         self.notify();
         did
@@ -111,6 +120,20 @@ impl WorkbookController {
         self.dirty = true;
     }
 
+    /// Whether the workbook refuses user edits (a viewer's, see `read_only`).
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    /// Make the workbook read-only, or editable again. Listeners hear the
+    /// undo state change (a read-only workbook cannot undo or redo).
+    pub fn set_read_only(&mut self, read_only: bool) {
+        if self.read_only != read_only {
+            self.read_only = read_only;
+            self.notify();
+        }
+    }
+
     pub fn undo(&mut self) -> bool {
         self.step(false)
     }
@@ -120,11 +143,11 @@ impl WorkbookController {
     }
 
     pub fn can_undo(&self) -> bool {
-        self.history.can_undo()
+        !self.read_only && self.history.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        self.history.can_redo()
+        !self.read_only && self.history.can_redo()
     }
 
     pub fn undo_description(&self) -> Option<&str> {

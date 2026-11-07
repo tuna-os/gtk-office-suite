@@ -14,6 +14,7 @@ Usage: fixtures.py <out-dir>
 
 import json
 import os
+import re
 import sys
 
 from PIL import Image, ImageDraw
@@ -24,21 +25,9 @@ MANIFEST = []
 # Fixtures that cannot go green until a Phase 1 architecture item exists
 # (docs/RENDER-PARITY-ROADMAP.md). Their issues are labelled blocked so
 # agents pick unblocked work first instead of hacking around the gap.
-NEEDS = {
-    "letters/page-margins": "letters-page-layout",
-    "letters/landscape": "letters-page-layout",
-    "letters/header-footer": "letters-page-layout",
-    "letters/page-break": "letters-page-layout",
-    "letters/pagination": "letters-page-layout",
-    "tables/cell-fonts": "tables-cell-style-model",
-    "tables/fills": "tables-cell-style-model",
-    "tables/alignment": "tables-cell-style-model",
-    "tables/wrap-text": "tables-cell-style-model",
-    "decks/shapes": "decks-shape-style-model",
-    "decks/title-layout": "decks-shape-style-model",
-    "decks/bullets": "decks-shape-style-model",
-    "decks/table": "decks-shape-style-model",
-}
+# Empty: every Phase 1 item (Letters page layout, Tables cell-style model,
+# Decks shape-style model) has landed, so no fixture waits on one.
+NEEDS = {}
 
 
 # Fixtures whose own PDF export is pixel-compared against LibreOffice's PDF
@@ -107,23 +96,21 @@ EXPORT = {
     "tables/chart-scatter",
     "tables/conditional",
 }
-# NOTE (tables/chart-pie, documented amber): both-green on screenshots;
-# export sits in the amber band on Tesseract exact-match noise, not an
-# exporter gap — the Q4 legend glyph OCRs as "ma" in LibreOffice's PDF vs
-# "mq4" in ours (pixels equivalent), so word recall is 0.833 < 0.90 with
-# lost_lines 0. Same class as the letters/nested-list amber; covering it
-# keeps every eligible fixture inside the ratchet instead of outside it.
+# NOTE (tables/chart-pie): both-green on screenshots; its export sat in the
+# amber band on Tesseract exact-match noise, not an exporter gap — the Q4
+# legend glyph OCRs as "ma" in LibreOffice's PDF vs "mq4" in ours (pixels
+# equivalent). "ma" is in no text layer, so the scorer now leaves it out
+# (compare.mark_printed) and the export is green, as the letters ones
+# below are.
 #
-# NOTE (letters/nested-list #1127, letters/super-subscript #1115: accepted
-# OCR-artifact ambers, same class as render #904). Reduced to a layout/pango
-# cause per LET-004 and none found — the export pixels agree: nested-list
-# SSIM 0.9992 with disp 0.47pt, super-subscript SSIM 1.0000 with disp 0.0pt,
-# ink ~1.0 and lost_lines 0 on both (scorecard-export.json, main). Word
-# recall alone ambers them (0.889 / 0.75): the reference decodes misread a
-# bullet-adjacent "two" and the small raised/lowered "2" glyphs, while 4x
-# crops of ours-vs-LO are pixel-identical (indents, markers, super/subscript
-# shaping). There is no geometry miss to fix, so no thresholds are tuned and
-# no geometry is churned to chase the OCR: the ambers stand as documented.
+# NOTE (letters/nested-list #1127, letters/super-subscript #1115): their
+# export pixels always agreed with LibreOffice's (SSIM 0.9992 / 1.0000, 4x
+# crops identical); word recall alone ambered them, on reads of the
+# reference that LibreOffice never printed (a bullet read as "e", H2O read
+# as "ho"). The scorer now leaves out such reads, checked against the
+# reference's own text layer, where nothing on our side matches them
+# (compare.mark_printed, match_words), so they score green on what both
+# sides print. No threshold or geometry changed for it.
 
 
 def add(app, feature, path, expect):
@@ -157,6 +144,7 @@ def letters(img):
     from docx import Document
     from docx.enum.section import WD_ORIENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+    from docx.oxml import parse_xml
     from docx.shared import Inches, Pt, RGBColor
 
     d = os.path.join(OUT, "letters")
@@ -190,6 +178,21 @@ def letters(img):
     r = p.add_run("Strike")
     r.font.strike = True
     save(x, "char-emphasis", "Bold, italic, underlined and struck-through words on one line")
+
+    # Reduced from real-annex-a-annual-report-form (#1378): its bold
+    # Arial headings have an underline touching the glyphs in Letters,
+    # whereas Writer leaves a gap. char-emphasis uses regular Serif and
+    # does not expose the Sans bold underline's position. Use the installed
+    # metric-compatible face so this measures decoration, not substitution.
+    x = doc()
+    for size in (12, 18, 28):
+        p = x.add_paragraph()
+        r = p.add_run("Key ongoing maintenance")
+        r.font.name = "Liberation Sans"
+        r.font.size = Pt(size)
+        r.bold = True
+        r.underline = True
+    save(x, "underline-position", "Three bold Sans lines at 12/18/28pt: underline offset and thickness match Writer")
 
     x = doc()
     for size in (8, 12, 18, 28, 40):
@@ -233,6 +236,33 @@ def letters(img):
     p._p.append(link)
     p.add_run(" before you start.")
     save(x, "hyperlink", "One sentence whose words 'project guide' are a blue, underlined link")
+
+    # Reduced from real-social-housing-sales-data-dictionary (#1367):
+    # slashes must not let a URL prefix fit beside the preceding prose.
+    # Writer moves it to the next line and wraps the path at hyphens.
+    x = doc()
+    x.sections[0].page_width = Inches(4.9527)
+    x.sections[0].page_height = Inches(6)
+    x.sections[0].left_margin = x.sections[0].right_margin = Inches(1.075)
+    x.styles["Normal"].font.name = "Calibri"
+    x.styles["Normal"].font.size = Pt(11)
+    url = "https://www.gov.uk/guidance/housing-statistics-and-england-housing-survey-glossary/a-to-z"
+    p = x.add_paragraph("glossary ")
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), p.part.relate_to(url, RT.HYPERLINK, is_external=True))
+    run = OxmlElement("w:r")
+    props = OxmlElement("w:rPr")
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    props.append(underline)
+    run.append(props)
+    text = OxmlElement("w:t")
+    text.text = url
+    run.append(text)
+    link.append(run)
+    p._p.append(link)
+    x.add_paragraph("glossary " + url)
+    save(x, "url-path-wrapping", "In a narrow column, URL paths stay together at slashes and wrap at hyphens, with or without a hyperlink")
 
     x = doc()
     from docx.enum.style import WD_STYLE_TYPE
@@ -381,6 +411,40 @@ def letters(img):
     x.add_paragraph("Level three", style="List Bullet 3")
     save(x, "nested-list", "Three bullet levels, each further indented")
 
+    # Reduced from real-dcms-business-appointment-rules-between-october (#1364):
+    # In bulleted list items where numbering specifies a symbol font (such as
+    # Noto Sans Symbols with a black circle bullet '●'), LibreOffice Writer
+    # treats the bullet marker as an inline run on the first line, expanding
+    # line height to fit the symbol font's large vertical metrics (~24.75pt / 33px for 12pt).
+    # Wrapped continuation lines (plain 12pt body text) have normal line height
+    # (~14.25pt / 19px). In Letters, paragraph line heights are sized solely from
+    # body text runs, ignoring the bullet marker's font metrics, which loses the
+    # first-line height expansion and causes cumulative vertical displacement.
+    x = doc()
+    x.add_paragraph("Introductory paragraph before the bullet list.")
+    x.add_paragraph(
+        "Transparency about the advice given on individual applications under the "
+        "Business Appointment Rules helps to ensure compliance.",
+        style="List Bullet",
+    )
+    x.add_paragraph(
+        "Published information should include the full name of the applicant, former "
+        "Civil Service role, new employment, and department decision.",
+        style="List Bullet",
+    )
+    x.add_paragraph("Following paragraph after the bullet list verifying subsequent position.")
+    for part in x.part.package.parts:
+        if "numbering" in part.partname:
+            xml = part.blob.decode("utf-8")
+            xml_patched = re.sub(
+                r'(<w:lvl [^>]*w:ilvl="0"[^>]*>.*?<w:lvlText [^>]*w:val=")[^"]*(".*?<w:rFonts [^>]*w:ascii=")[^"]*("[^>]*w:hAnsi=")[^"]*(")',
+                r"\g<1>●\g<2>Noto Sans Symbols\g<3>Noto Sans Symbols\g<4>",
+                xml,
+                flags=re.S,
+            )
+            part._element = parse_xml(xml_patched.encode("utf-8"))
+    save(x, "bullet-symbol-font-line-height", "A bullet list using Noto Sans Symbols: the symbol font glyph expands first-line height")
+
     x = doc()
     t = x.add_table(rows=3, cols=3)
     t.style = "Table Grid"
@@ -388,6 +452,31 @@ def letters(img):
         for c in range(3):
             t.cell(r, c).text = f"R{r + 1}C{c + 1}"
     save(x, "table", "A 3x3 table with visible grid borders and cell text")
+
+    # Reduced from real-sma-positive-result-call-checklist (#1365):
+    # In table cells containing bullet list items, LibreOffice Writer aligns
+    # continuation lines with the first line's text indent (bullet hanging
+    # in front). In Letters, table cell paragraphs did not have
+    # list_indent_from_declared applied, resulting in an extra 18pt indent
+    # on wrapped lines and premature line wrapping.
+    x = doc()
+    t = x.add_table(rows=2, cols=1)
+    t.style = "Table Grid"
+    c0 = t.cell(0, 0)
+    c0.paragraphs[0].text = "Points to cover"
+    c0.add_paragraph(
+        "We need to see you and your baby as soon as possible to discuss "
+        "the screening test results, treatment options and next steps.",
+        style="List Bullet",
+    )
+    c0.add_paragraph(
+        "Confirm baby details and provide contact information for the clinical "
+        "team with the days and times someone will be available.",
+        style="List Bullet",
+    )
+    c1 = t.cell(1, 0)
+    c1.paragraphs[0].text = "Signed: ___________________________"
+    save(x, "table-cell-list-indent", "A table cell containing wrapping bullet list items: wrapped lines align with first-line text")
 
     x = doc()
     x.add_paragraph("Image below:")
@@ -657,7 +746,7 @@ def tables():
         wb = Workbook()
         return wb, wb.active
 
-    def save(wb, name, expect):
+    def save(wb, name, expect, *, headings=True):
         # Print headings so LibreOffice's PDF shows the same cells as our
         # grid, but not gridlines: they are view furniture, which Calc
         # prints black and screens draw faint, and a printed gridline hides
@@ -666,7 +755,7 @@ def tables():
         # own borders, fills and text.
         for sheet in wb.worksheets:
             sheet.print_options.gridLines = False
-            sheet.print_options.headings = True
+            sheet.print_options.headings = headings
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)
         add("tables", name, path, expect)
@@ -676,6 +765,21 @@ def tables():
         for c in range(1, 5):
             ws.cell(r, c, r * 10 + c)
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
+
+    # The SFI26 real document (#1339) starts with a column about 36.7 cm
+    # wide, wider than both a printed page and the app viewport, and does
+    # not print headings. Reduce that geometry independently of its styles,
+    # links and other sheets. In particular, the printed page and screen
+    # expose different portions of the column: stretching one to the other
+    # in compare.align is not a measurement of the grid's scale.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 200
+    for i in range(1, 21):
+        ws.cell(i, 1, f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
+                      "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
+                      "Each view exposes only part of this line of text.")
+    save(wb, "wide-column-no-headings",
+         "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
     wb, ws = book()
     pivot_rows = [
@@ -708,6 +812,18 @@ def tables():
     ws["A4"] = "Red"
     ws["A4"].font = font(color="C00000")
     save(wb, "cell-fonts", "Bold, italic, 20pt and red text in A1:A4; row 3 is taller")
+
+    wb, ws = book()
+    # Reduced from the July 2026 fiscal-risks introduction (#1326): these
+    # font colours live after accent6 in the workbook's theme palette.
+    from openpyxl.styles import Color
+    ws.column_dimensions["A"].width = 44
+    for row, (text, theme) in enumerate(
+        (("Hyperlink theme colour", 10), ("Followed hyperlink theme colour", 11)), start=1
+    ):
+        cell = ws.cell(row, 1, text)
+        cell.font = font(color=Color(theme=theme), underline="single")
+    save(wb, "hyperlink-theme-colors", "Underlined hyperlink blue and followed-hyperlink purple text")
 
     wb, ws = book()
     for i, color in enumerate(("FFC7CE", "C6EFCE", "FFEB9C", "BDD7EE"), start=1):
@@ -747,6 +863,22 @@ def tables():
     ws["A1"].alignment = Alignment(wrap_text=True)
     ws.column_dimensions["A"].width = 12
     save(wb, "wrap-text", "A1 text wraps onto several lines; row 1 grows")
+
+    # The MenB real workbook (#1325) uses a wide column with Arial 12 as
+    # the *workbook default*, not the Calibri 11 assumed by the XLSX width
+    # conversion. The Tables capture wraps its heading and shifts the later
+    # rows; Calc's printed page clips the heading at the right edge. This
+    # isolates the default-font/column-width hypothesis; it does not model
+    # the source's stored row heights. Keep the text synthetic.
+    wb, ws = book()
+    wb._fonts[0] = Font(name="Arial", size=12)
+    ws.column_dimensions["A"].width = 100.6640625
+    ws["A1"] = "Young adult programme coverage for participating regions up to the end of September"
+    ws["A1"].font = Font(name="Arial", size=16, bold=True)
+    ws["A1"].alignment = Alignment(wrap_text=True)
+    ws["A2"] = "Following section"
+    ws["A2"].font = Font(name="Arial", size=12)
+    save(wb, "wrap-wide-default-font", "A bold wrapped heading in a wide Arial 12 workbook, followed by a section label")
 
     wb, ws = book()
     ws["A1"] = "A merged cell with wrapped text needs the combined width of its columns to fit its row."
@@ -1159,10 +1291,87 @@ def decks(img):
     save(p, "rotation", "A rectangle rotated 30 degrees clockwise")
 
 
+def letters_odt_page_break_spacing():
+    """Reduce real-explanatory-note-2's 24pt loss at a master switch.
+
+    Keep identical page geometry and text looks so the report measures
+    paragraph spacing, without the source's lists, headers and footers.
+    """
+    from zipfile import ZIP_STORED, ZipFile
+
+    directory = os.path.join(OUT, "letters")
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "odt-page-break-spacing.odt")
+    namespaces = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'office:version="1.3"'
+    )
+    content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content {namespaces}>
+  <office:automatic-styles>
+    <style:style style:name="First" style:family="paragraph"
+                 style:parent-style-name="Spaced" style:master-page-name="One"/>
+    <style:style style:name="Break" style:family="paragraph" style:parent-style-name="Spaced">
+      <style:paragraph-properties fo:break-before="page"/>
+    </style:style>
+    <style:style style:name="Switch" style:family="paragraph"
+                 style:parent-style-name="Spaced" style:master-page-name="Two">
+      <style:paragraph-properties fo:break-before="page"/>
+    </style:style>
+  </office:automatic-styles>
+  <office:body><office:text>
+    <text:p text:style-name="First">First page: 24pt before.</text:p>
+    <text:p text:style-name="Break">Explicit page break: 24pt before.</text:p>
+    <text:p text:style-name="Switch">New page master: 24pt before.</text:p>
+  </office:text></office:body>
+</office:document-content>'''
+    styles = f'''<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles {namespaces}>
+  <office:font-face-decls>
+    <style:font-face style:name="Liberation Serif" svg:font-family="Liberation Serif"/>
+  </office:font-face-decls>
+  <office:styles>
+    <style:style style:name="Spaced" style:family="paragraph">
+      <style:paragraph-properties fo:margin-top="24pt" fo:margin-bottom="0pt"/>
+      <style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt"/>
+    </style:style>
+  </office:styles>
+  <office:automatic-styles>
+    <style:page-layout style:name="Page">
+      <style:page-layout-properties fo:page-width="432pt" fo:page-height="432pt"
+                                   fo:margin="72pt"/>
+    </style:page-layout>
+  </office:automatic-styles>
+  <office:master-styles>
+    <style:master-page style:name="One" style:page-layout-name="Page"/>
+    <style:master-page style:name="Two" style:page-layout-name="Page"/>
+  </office:master-styles>
+</office:document-styles>'''
+    manifest = '''<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+                   manifest:version="1.3">
+  <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+</manifest:manifest>'''
+    with ZipFile(path, "w") as package:
+        package.writestr("mimetype", "application/vnd.oasis.opendocument.text", compress_type=ZIP_STORED)
+        package.writestr("META-INF/manifest.xml", manifest)
+        package.writestr("content.xml", content)
+        package.writestr("styles.xml", styles)
+    add("letters", "odt-page-break-spacing", path,
+        "Three pages with 24pt paragraph space before: document start, explicit break, then a new page master")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
+    letters_odt_page_break_spacing()
     tables()
     decks(img)
     with open(os.path.join(OUT, "manifest.json"), "w") as f:

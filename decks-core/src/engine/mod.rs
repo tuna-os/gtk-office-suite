@@ -6,6 +6,11 @@
 //! Split by concern (issue #247):
 //! - `model.rs` — [`Deck`], [`Slide`], [`MasterSlide`], [`SlideObject`]
 //! - `parse.rs` — [`read_pptx`], [`parse_master_shapes`], xml helpers
+//!   - `parse/geometry.rs` — slide-space and group coordinate helpers
+//!   - `parse/layout.rs` — layout and theme relationship parsing
+//!   - `parse/master.rs` — master decoration parsing
+//!   - `parse/pictures.rs` — image relationship and extraction helpers
+//!   - `parse/transitions.rs` — slide transition parsing
 //! - `write.rs` — [`write_pptx`], [`write_pptx_bytes`], shape writers
 //! - `notes.rs` — speaker-notes XML + text extraction
 //! - `placeholders.rs` — layout/master geometry a slide placeholder inherits

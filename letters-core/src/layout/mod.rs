@@ -138,11 +138,23 @@ pub struct LineBox {
     /// layout text and left edge relative to the text box.
     #[serde(default)]
     pub objects: Vec<(usize, f64)>,
+    /// The height of the line's text alone, when an inline picture makes
+    /// the line taller than its font: what proportional line spacing
+    /// scales (`text_height`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_pt: Option<f64>,
 }
 
 impl LineBox {
     pub fn natural_height(&self) -> f64 {
         self.ascent_pt + self.descent_pt
+    }
+
+    /// The part of the line proportional line spacing scales: its text's
+    /// height, not a picture's. Writer adds half a line of text below a
+    /// chart at 150%, not half the chart.
+    pub fn text_height(&self) -> f64 {
+        self.text_pt.map_or(self.natural_height(), |t| t.min(self.natural_height()))
     }
 }
 
@@ -288,6 +300,9 @@ pub enum Item {
     /// in `color` (0xRRGGBB) whose outer edge is this box, around the
     /// page's text and the header and footer it shows.
     PageBorder { x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64, line_pt: f64, color: u32 },
+    /// A text box of paragraph `para`: its outer box, drawn with its fill,
+    /// its rule and its text inside its padding (`crate::model::TextBox`).
+    TextBox { para: usize, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64, text_box: Box<crate::model::TextBox> },
 }
 
 /// One page of the render tree.
@@ -440,11 +455,11 @@ impl RenderTree {
 /// layout text.
 pub const OBJECT: char = '\u{FFFC}';
 
-/// Whether a run is an inline object (an image, a footnote reference or a
-/// smart chip): one `OBJECT` char in the layout and edit sequence, whatever
-/// its text.
+/// Whether a run is an inline object (an image, a text box, a footnote
+/// reference or a smart chip): one `OBJECT` char in the layout and edit
+/// sequence, whatever its text.
 pub fn is_object(run: &Run) -> bool {
-    run.style.image.is_some() || run.style.footnote.is_some() || run.style.chip.is_some()
+    run.style.image.is_some() || run.style.text_box.is_some() || run.style.footnote.is_some() || run.style.chip.is_some()
 }
 
 /// Space around a smart chip's label, in points: horizontal padding inside
@@ -461,34 +476,33 @@ pub fn layout_text(runs: &[Run]) -> String {
 }
 
 /// EMU per point (914400 per inch).
-const EMU_PER_PT: f64 = 12700.0;
+pub(crate) const EMU_PER_PT: f64 = 12700.0;
 
-/// Displayed size of an image run in points, shrunk to fit `max_width_pt`
-/// with its aspect kept: the document's extent if it has one, else the
-/// image's own pixels at 96 dpi (PNG), else one inch square.
-pub fn image_size_pt(run: &Run, max_width_pt: f64) -> (f64, f64) {
+/// Displayed size of an image run in points: the document's extent if it
+/// has one, else the image's own pixels at 96 dpi (PNG), else one inch
+/// square. A picture wider than its column keeps its size and runs into
+/// the margin, as Writer and Word draw it; shrunk to fit, a chart a little
+/// wider than the text was drawn shorter and pulled everything after it up
+/// (render-lab `real-statistical-release-october-to-december-2020`).
+pub fn image_size_pt(run: &Run) -> (f64, f64) {
     let (w, h) = match run.style.image_extent_emu {
         Some((w, h)) => (w as f64 / EMU_PER_PT, h as f64 / EMU_PER_PT),
         None => run.style.image.as_deref().and_then(png_size_px).map_or((72.0, 72.0), |(w, h)| {
             (f64::from(w) * 0.75, f64::from(h) * 0.75)
         }),
     };
-    if w > max_width_pt && w > 0.0 {
-        (max_width_pt, h * max_width_pt / w)
-    } else {
-        (w, h)
-    }
+    (w, h)
 }
 
 /// The room an image run takes in its line: its size and the room kept
 /// beside it, or none for a floating image, which is drawn where its
 /// anchor puts it.
-pub fn inline_size_pt(run: &Run, max_width_pt: f64) -> (f64, f64) {
+pub fn inline_size_pt(run: &Run) -> (f64, f64) {
     if run.style.image_anchor.is_some() {
         (0.0, 0.0)
     } else {
         let (left, right) = image_sides_pt(run);
-        let (w, h) = image_size_pt(run, (max_width_pt - left - right).max(1.0));
+        let (w, h) = image_size_pt(run);
         (w + left + right, h)
     }
 }
@@ -632,7 +646,7 @@ pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> 
             i = end;
             continue;
         }
-        let shaped = shape_paragraph(para, col_w, opts, shaper);
+        let shaped = shape_beside_floats(&mut flow, para, col_w, opts, shaper);
         // Keep a heading, and any paragraph set to keep with the next (a
         // Title, a Word style's keepNext), with the first lines of what
         // follows it — in its own section: the next section starts a page
@@ -670,7 +684,7 @@ fn keep_chain(doc: &Document, n: usize, section_end: usize, col_w: f64, opts: &L
         let (orphans, widows) = orphan_widow(&p.style, opts);
         let whole = chained || s.lines.len() < orphans.max(1) + widows.max(1);
         let lines = if whole { s.lines.len() } else { orphans.max(1) };
-        total += p.style.space_before_pt + s.lines[..lines].iter().map(|l| line_height(p, l.natural_height())).sum::<f64>();
+        total += p.style.space_before_pt + s.lines[..lines].iter().map(|l| line_height(p, l)).sum::<f64>();
         if !chained {
             return Some(total);
         }
@@ -752,8 +766,8 @@ fn spacing(p: &Paragraph) -> f64 {
 /// How tall one line of `natural` points stands in paragraph `p`: the
 /// proportional multiple, unless the paragraph fixes its height
 /// (`ParaStyle::line_height`: OOXML exact/atLeast).
-fn line_height(p: &Paragraph, natural: f64) -> f64 {
-    let multiple = natural * spacing(p);
+fn line_height(p: &Paragraph, lb: &LineBox) -> f64 {
+    let multiple = lb.natural_height() + lb.text_height() * (spacing(p) - 1.0);
     match p.style.line_height {
         Some(crate::model::LineHeight::Exact(pt)) if pt.is_finite() && pt > 0.0 => pt,
         Some(crate::model::LineHeight::Minimum(pt)) if pt.is_finite() && pt > 0.0 => multiple.max(pt),
@@ -823,10 +837,9 @@ fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions) -> f64 {
     let st = &p.style;
     let Some(marker) = lists::marker_for(st, 1) else { return 0.0 };
     let hanging = st.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x);
-    // Measured without a shaper, as every renderer rebuilds this request:
-    // a body-text glyph is about 0.6em wide.
+    // Measured without a shaper, as every renderer rebuilds this request.
     let size = p.runs.first().and_then(|r| r.style.font_size_hp).map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
-    let label_end = box_x - hanging + marker.chars().count() as f64 * size * 0.6;
+    let label_end = box_x - hanging + marker.chars().map(label_char_em).sum::<f64>() * size;
     if label_end <= box_x {
         return 0.0;
     }
@@ -838,6 +851,23 @@ fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions) -> f64 {
         .fold(f64::INFINITY, f64::min)
         .min(((label_end / DEFAULT_TAB_PT).floor() + 1.0) * DEFAULT_TAB_PT);
     stop - box_x
+}
+
+/// About how wide a list label's character is, in ems: a sans body face's
+/// (Arial's and its metric twins') advances. A "2.1" label is 15pt at
+/// 11pt and fits a quarter-inch hanging, as the Ofsted minutes' do; a
+/// flat 0.6em made it 20pt and pushed the text a tab stop on.
+fn label_char_em(c: char) -> f64 {
+    match c {
+        '.' | ',' | ':' | ';' | ' ' | 'i' | 'j' | 'l' | 'I' => 0.278,
+        '(' | ')' | '[' | ']' | '-' | 'f' | 't' | 'r' => 0.333,
+        'm' | 'M' | 'W' => 0.833,
+        'w' => 0.722,
+        '0'..='9' | 'a'..='z' => 0.556,
+        'A'..='Z' => 0.667,
+        '•' | '·' | '◦' | '▪' => 0.35,
+        _ => 0.6,
+    }
 }
 
 /// How far a block quote is indented from the left, in points (the Draft
@@ -885,8 +915,10 @@ pub fn paragraph_look(st: &crate::model::ParaStyle) -> Look {
 
 /// The tab stops a shaping request carries: the paragraph's own stops,
 /// relative to its text box, then Word's default grid past the last of
-/// them. An explicit stop keeps its alignment and leader; a grid stop is
-/// plain left-aligned.
+/// them. The grid runs from the column's (or cell's) left edge, not the
+/// indent: an item indented 0.25in tabs to 0.5in, as the Ofsted minutes'
+/// "2.1" items do. An explicit stop keeps its alignment and leader; a
+/// grid stop is plain left-aligned.
 fn request_tabs(
     st: &crate::model::ParaStyle,
     box_x: f64,
@@ -901,9 +933,9 @@ fn request_tabs(
         .collect();
     stops.sort_by(|a, b| a.pos_pt.partial_cmp(&b.pos_pt).unwrap_or(std::cmp::Ordering::Equal));
     let last = stops.iter().map(|t| t.pos_pt).fold(0.0f64, f64::max);
-    let mut grid = (last / DEFAULT_TAB_PT).floor() * DEFAULT_TAB_PT + DEFAULT_TAB_PT;
-    while grid < box_w {
-        stops.push(TabStop::left(grid));
+    let mut grid = ((last + box_x) / DEFAULT_TAB_PT).floor() * DEFAULT_TAB_PT + DEFAULT_TAB_PT;
+    while grid - box_x < box_w {
+        stops.push(TabStop::left(grid - box_x));
         grid += DEFAULT_TAB_PT;
     }
     stops
@@ -944,7 +976,7 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
     let mut lines = shaper.shape(&paragraph_request(p, box_w, opts));
     if lines.is_empty() {
         let size = opts.font_size_pt;
-        lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new() });
+        lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
     Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal: 1 }
 }
@@ -983,7 +1015,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     if st.page_break_before && !flow.page_is_empty() {
         flow.new_page();
     }
-    let heights: Vec<f64> = shaped.lines.iter().map(|l| line_height(para, l.natural_height())).collect();
+    let heights: Vec<f64> = shaped.lines.iter().map(|l| line_height(para, l)).collect();
     let total: f64 = heights.iter().sum();
     let (orphans, widows) = orphan_widow(st, flow.opts);
 
@@ -1001,6 +1033,10 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     if !flow.column_is_empty() || document_top {
         let (before, after) = (st.space_before_pt.max(0.0), std::mem::take(&mut flow.pending_after));
         flow.y += if flow.opts.space_adds { before + after } else { before.max(after) };
+    }
+    // Below a floating object it may not sit beside (`shape_beside_floats`).
+    if let Some(below) = flow.wrap_below.take() {
+        flow.y = flow.y.max(below);
     }
     // Everything that must stay together with the first line: the whole
     // paragraph if short, the orphan lines otherwise, plus a heading's
@@ -1147,8 +1183,11 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
     let baseline = top + line_ascent(para, lb, height);
     // A paragraph's floating images are placed from its first line's top:
     // those behind the text before the line, the rest after it.
+    // Where its floating objects hang from: the top it was given, when a
+    // floating object moved its text below (`shape_beside_floats`).
+    let anchor_top = flow.anchor_top.unwrap_or(top);
     if k == 0 {
-        place_floating(flow, idx, para, top, true);
+        place_floating(flow, idx, para, anchor_top, true);
     }
     flow.push(Item::Line {
         source: Source::Paragraph(idx),
@@ -1179,12 +1218,13 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
             continue;
         }
         // Drawn inside the room its line keeps beside it.
-        let (left, right) = image_sides_pt(run);
-        let (w, h) = image_size_pt(run, (box_w - left - right).max(1.0));
+        let (left, _) = image_sides_pt(run);
+        let (w, h) = image_size_pt(run);
         flow.push(Item::Image { para: idx, src, x_pt: box_x + x + left, y_pt: baseline - h, width_pt: w, height_pt: h });
     }
     if k == 0 {
-        place_floating(flow, idx, para, top, false);
+        place_floating(flow, idx, para, anchor_top, false);
+        flow.anchor_top = None;
     }
 }
 
@@ -1193,14 +1233,34 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
 /// its frame (the page, the page inside its margins, or the paragraph's
 /// column and first line's `top`).
 fn place_floating(flow: &mut Flow, idx: usize, para: &Paragraph, top: f64, behind: bool) {
-    use crate::model::{AnchorAlign, AnchorFrame};
-    let g = flow.geometry;
-    for run in &para.runs {
-        let (Some(src), Some(anchor)) = (&run.style.image, run.style.image_anchor) else { continue };
-        if anchor.behind != behind {
+    for (run, x, y, w, h) in floating_boxes(flow, para, top) {
+        if run.style.image_anchor.is_some_and(|a| a.behind != behind) {
             continue;
         }
-        let (w, h) = image_size_pt(run, g.width_pt);
+        match (&run.style.image, &run.style.text_box) {
+            (Some(src), _) => flow.push(Item::Image { para: idx, src: src.clone(), x_pt: x, y_pt: y, width_pt: w, height_pt: h }),
+            (None, Some(tb)) => flow.push(Item::TextBox { para: idx, x_pt: x, y_pt: y, width_pt: w, height_pt: h, text_box: tb.clone() }),
+            (None, None) => {}
+        }
+    }
+}
+
+/// Paragraph `para`'s floating pictures and text boxes, each with its box
+/// on the current page (x, y, width, height) when its first line's top is
+/// `top`.
+fn floating_boxes<'p>(flow: &Flow, para: &'p Paragraph, top: f64) -> Vec<(&'p Run, f64, f64, f64, f64)> {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let g = flow.geometry;
+    let mut out = Vec::new();
+    for run in &para.runs {
+        let Some(anchor) = run.style.image_anchor else { continue };
+        if run.style.image.is_none() && run.style.text_box.is_none() {
+            continue;
+        }
+        let (w, h) = match &run.style.text_box {
+            Some(tb) => (tb.extent_emu.0 as f64 / EMU_PER_PT, tb.extent_emu.1 as f64 / EMU_PER_PT),
+            None => image_size_pt(run),
+        };
         let (left, width) = match anchor.h_from {
             AnchorFrame::Page => (0.0, g.width_pt),
             AnchorFrame::Margin => (g.margin_left_pt, flow.content_width()),
@@ -1220,8 +1280,68 @@ fn place_floating(flow: &mut Flow, idx: usize, para: &Paragraph, top: f64, behin
         let x = place(left, width, w, anchor.x_emu, anchor.h_align);
         // Kept on the page: Word moves a picture that would hang off it.
         let y = place(upper, height, h, anchor.y_emu, anchor.v_align).clamp(0.0, (g.height_pt - h).max(0.0));
-        flow.push(Item::Image { para: idx, src: src.clone(), x_pt: x, y_pt: y, width_pt: w, height_pt: h });
+        out.push((run, x, y, w, h));
     }
+    out
+}
+
+/// Shape paragraph `para` for the column, beside the floating objects on
+/// the page that text flows around (its own among them, placed where its
+/// first line will be). One its first line would sit beside is set in the
+/// room on the object's wider side, as Writer and Word set a short
+/// paragraph beside a picture; the whole paragraph is set that wide (a long
+/// one that runs on past the object is not widened again below it). One
+/// with too little room there, or beside an object it may not sit beside,
+/// starts below the object.
+fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Shaped {
+    use crate::model::Wrap;
+    let shaped = shape_paragraph(para, col_w, opts, shaper);
+    // A paragraph that starts a page of its own is past this page's.
+    if para.style.page_break_before && !flow.page_is_empty() {
+        return shaped;
+    }
+    let top = flow.next_top(&para.style);
+    let own: Vec<WrapBox> = floating_boxes(flow, para, top)
+        .into_iter()
+        .filter_map(|(run, x, y, w, h)| run.style.image_anchor.filter(|a| a.wrap != Wrap::None && !a.behind).map(|a| WrapBox { x0: x, y0: y, x1: x + w, y1: y + h, wrap: a.wrap }))
+        .collect();
+    flow.wraps.extend(own);
+    if flow.wraps.is_empty() {
+        return shaped;
+    }
+    let first_h = shaped.lines.first().map_or(0.0, |l| line_height(para, l));
+    let cx = flow.column_x();
+    let (mut l, mut r) = (cx, cx + col_w);
+    let mut below: Option<f64> = None;
+    let beside: Vec<WrapBox> = flow.wraps.iter().copied().filter(|b| b.y0 < top + first_h && b.y1 > top && b.x1 > cx && b.x0 < cx + col_w).collect();
+    for b in &beside {
+        match b.wrap {
+            Wrap::TopBottom => below = Some(below.map_or(b.y1, |y: f64| y.max(b.y1))),
+            Wrap::Parallel => {
+                if b.x0 - l >= r - b.x1 {
+                    r = r.min(b.x0 - WRAP_GAP_PT);
+                } else {
+                    l = l.max(b.x1 + WRAP_GAP_PT);
+                }
+            }
+            Wrap::None => {}
+        }
+    }
+    if below.is_none() && r - l < WRAP_MIN_PT {
+        below = beside.iter().filter(|b| b.wrap != Wrap::None).map(|b| b.y1).reduce(f64::max);
+    }
+    if let Some(y) = below {
+        flow.wrap_below = Some(y);
+        flow.anchor_top = Some(top);
+        return shaped;
+    }
+    if l == cx && r == cx + col_w {
+        return shaped;
+    }
+    let mut narrow = shape_paragraph(para, r - l, opts, shaper);
+    narrow.box_x += l - cx;
+    narrow.marker_x += l - cx;
+    narrow
 }
 
 /// A shaped paragraph of a table cell: its index, lines and height.
@@ -1274,7 +1394,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     let pad = doc.table_padding.get(&first.table).copied().unwrap_or_default();
     // A table without rules has no rule in its rows' height either.
     let ruled = !doc.table_unruled.contains(&first.table);
-    let rule_pt = if ruled { CELL_RULE_PT } else { 0.0 };
+    let rule_pt = if ruled { doc.table_rule_widths.get(&first.table).copied().unwrap_or(CELL_RULE_PT) } else { 0.0 };
     let opts = flow.opts.clone();
     flow.y += std::mem::take(&mut flow.pending_after);
 
@@ -1293,7 +1413,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 let p = &doc.paragraphs[i];
                 let mut s = shape_paragraph(p, inner_w, &opts, shaper);
                 s.ordinal = ordinals.get(i).copied().unwrap_or(1);
-                let ph: f64 = s.lines.iter().map(|l| line_height(p, l.natural_height())).sum::<f64>()
+                let ph: f64 = s.lines.iter().map(|l| line_height(p, l)).sum::<f64>()
                     + p.style.space_before_pt.max(0.0)
                     + p.style.space_after_pt.max(0.0);
                 paras.push((i, s, ph));
@@ -1365,6 +1485,18 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         let mut min_left = file_h.map_or(0.0, |h| h.pt).max(tall_need);
         let mut first_piece = true;
         loop {
+            // A cell continued on a new page starts with its next line: the
+            // space between paragraphs at the break stays on the page
+            // before, as Writer lays it out. Its top padding opens the new
+            // piece again, as Writer opens a continued cell.
+            let pad_top = if first_piece { 0.0 } else { pad.top_pt.max(0.0) };
+            if !first_piece {
+                for (c, n) in slices.iter().zip(next.iter_mut()) {
+                    while c.get(*n).is_some_and(|s| matches!(s, Slice::Gap(_))) {
+                        *n += 1;
+                    }
+                }
+            }
             // How many of each cell's remaining slices fit in `room`.
             let fit = |cell: &[Slice], from: usize, room: f64| -> (usize, f64) {
                 let mut h = 0.0;
@@ -1379,7 +1511,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             // the footnotes they reference: take less until they fit.
             let mut notes_h = 0.0;
             let takes: Vec<(usize, f64)> = loop {
-                let room = flow.bottom() - flow.y - rule_pt - notes_h;
+                let room = flow.bottom() - flow.y - rule_pt - notes_h - pad_top;
                 let takes: Vec<(usize, f64)> = slices.iter().zip(&next).map(|(c, &from)| fit(c, from, room)).collect();
                 let notes: Vec<usize> = row_cells
                     .iter()
@@ -1406,7 +1538,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 takes
             };
             let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
-            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + rule_pt;
+            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + rule_pt + pad_top;
             let height = if done {
                 content.max(min_left.min((flow.bottom() - flow.y).max(content)))
             } else {
@@ -1424,7 +1556,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 // A row placed in one piece sets each cell's content where
                 // the cell says; a row split across pages fills from the top.
                 let drop = valign(*col).filter(|_| whole && done).map_or(0.0, |v| (height - rule_pt - used).max(0.0) * v.share());
-                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + drop);
+                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + pad_top + drop);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
                 *n = *to;
@@ -1503,7 +1635,7 @@ fn cell_slices(doc: &Document, paras: &[CellParagraph], pad: &crate::model::Cell
     for (k, (i, s, _)) in paras.iter().enumerate() {
         let p = &doc.paragraphs[*i];
         out.push(Slice::Gap(between(doc, after, p.style.space_before_pt)));
-        out.extend(s.lines.iter().enumerate().map(|(l, lb)| Slice::Line(k, l, line_height(p, lb.natural_height()))));
+        out.extend(s.lines.iter().enumerate().map(|(l, lb)| Slice::Line(k, l, line_height(p, lb))));
         after = p.style.space_after_pt.max(0.0);
     }
     out.push(Slice::Gap(after));
@@ -1640,7 +1772,32 @@ struct Flow<'o> {
     /// header and footer it shows.
     section: usize,
     page_sections: Vec<usize>,
+    /// The floating objects on this page that text flows around.
+    wraps: Vec<WrapBox>,
+    /// Where the next paragraph starts at the earliest: below an object
+    /// it may not sit beside.
+    wrap_below: Option<f64>,
+    /// Where that paragraph's own floating objects hang from when it is
+    /// moved below one: the top it had.
+    anchor_top: Option<f64>,
 }
+
+/// A floating object text flows around: its box on the page and how.
+#[derive(Clone, Copy, Debug)]
+struct WrapBox {
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    wrap: crate::model::Wrap,
+}
+
+/// The room kept between a floating object and the text beside it:
+/// Word's own 0.125in.
+const WRAP_GAP_PT: f64 = 9.0;
+/// The narrowest a paragraph is set beside a floating object; one with
+/// less room than this goes below it, as Writer and Word move it.
+const WRAP_MIN_PT: f64 = 72.0;
 
 impl<'o> Flow<'o> {
     fn new(geometry: PageGeometry, opts: &'o LayoutOptions) -> Self {
@@ -1658,6 +1815,9 @@ impl<'o> Flow<'o> {
             carry: Vec::new(),
             section: 0,
             page_sections: Vec::new(),
+            wraps: Vec::new(),
+            wrap_below: None,
+            anchor_top: None,
         };
         f.new_page();
         f
@@ -1672,7 +1832,7 @@ impl<'o> Flow<'o> {
         for i in 0..doc.footnotes.len() {
             let p = note_paragraph(doc, i, self.opts);
             let shaped = shape_paragraph(&p, text_w, self.opts, shaper);
-            self.note_lines.push(shaped.lines.iter().map(|l| line_height(&p, l.natural_height())).collect());
+            self.note_lines.push(shaped.lines.iter().map(|l| line_height(&p, l)).collect());
             self.note_after.push(p.style.space_after_pt.max(0.0));
         }
     }
@@ -1888,6 +2048,22 @@ impl<'o> Flow<'o> {
         self.y = self.top();
         self.column_items = 0;
         self.pending_after = 0.0;
+        self.wraps.clear();
+        self.wrap_below = None;
+        self.anchor_top = None;
+    }
+
+    /// Where a paragraph of style `st` placed next has its first line's
+    /// top, if it stays in this column: past the space between it and the
+    /// one before (as `place_paragraph` adds it).
+    fn next_top(&self, st: &crate::model::ParaStyle) -> f64 {
+        let document_top = self.pages.len() == 1 && self.column == 0 && self.column_is_empty();
+        if !self.column_is_empty() || document_top {
+            let (before, after) = (st.space_before_pt.max(0.0), self.pending_after);
+            self.y + if self.opts.space_adds { before + after } else { before.max(after) }
+        } else {
+            self.y
+        }
     }
 
     fn next_column(&mut self) {
@@ -1950,7 +2126,7 @@ impl<'o> Flow<'o> {
                 .iter()
                 .zip(&notes)
                 .map(|(piece, (p, lines))| {
-                    lines[piece.from.min(lines.len())..piece.to.min(lines.len())].iter().map(|lb| line_height(p, lb.natural_height())).sum::<f64>()
+                    lines[piece.from.min(lines.len())..piece.to.min(lines.len())].iter().map(|lb| line_height(p, lb)).sum::<f64>()
                         + if ends(piece, lines) { p.style.space_after_pt.max(0.0) } else { 0.0 }
                 })
                 .sum();
@@ -1964,7 +2140,7 @@ impl<'o> Flow<'o> {
                 .filter(|(_, (p, _))| p.style.line_height.is_none())
                 .and_then(|(piece, (p, lines))| {
                     let lb = lines.get(piece.to.min(lines.len()).checked_sub(1)?)?;
-                    Some((line_height(p, lb.natural_height()) - lb.natural_height()).max(0.0))
+                    Some((line_height(p, lb) - lb.natural_height()).max(0.0))
                 })
                 .unwrap_or(0.0);
             let mut y = foot + after + hang - total;
@@ -1973,7 +2149,7 @@ impl<'o> Flow<'o> {
                 let i = piece.note;
                 let chars: Vec<char> = layout_text(&p.runs).chars().collect();
                 for (k, lb) in lines.iter().enumerate().take(piece.to).skip(piece.from) {
-                    let h = line_height(p, lb.natural_height());
+                    let h = line_height(p, lb);
                     page.items.push(Item::Line {
                         source: Source::Footnote(i),
                         line: k,
@@ -2005,7 +2181,7 @@ impl<'o> Flow<'o> {
             let (mut text_top, mut text_bottom) = (g.margin_top_pt, height - g.margin_bottom_pt);
             for source in [Source::Header, Source::Footer] {
                 let PageStory { text: template, pictures, alignment, lines: story } = page_story(doc, section, page.index == 0, source == Source::Header);
-                let row_h = picture_row_height(pictures, width);
+                let row_h = picture_row_height(pictures);
                 let text_h = flowing_text(template, story).map_or(0.0, |t| {
                     let text = page_field_text(t, page.index + 1, total);
                     flow_height(&text, &header_footer_lines(&text, alignment, story, pictures, width, opts, shaper), story)
@@ -2128,8 +2304,8 @@ fn shape_header_footer(text: &str, alignment: crate::model::Alignment, story: &[
 
 /// The height of the row a header's or footer's pictures in line make:
 /// its tallest picture (floating ones take no room).
-fn picture_row_height(pictures: &[Run], width: f64) -> f64 {
-    pictures.iter().filter(|r| r.style.image.is_some()).map(|r| inline_size_pt(r, width).1).fold(0.0, f64::max)
+fn picture_row_height(pictures: &[Run]) -> f64 {
+    pictures.iter().filter(|r| r.style.image.is_some()).map(|r| inline_size_pt(r).1).fold(0.0, f64::max)
 }
 
 /// How tall a header or footer is: its pictures' row and its text, laid
@@ -2148,7 +2324,7 @@ fn header_footer_height(pictures: &[Run], template: Option<&str>, alignment: cra
         let text = page_field_text(t, 1, 1);
         flow_height(&text, &header_footer_lines(&text, alignment, story, pictures, width, opts, shaper), story)
     });
-    picture_row_height(pictures, width) + text
+    picture_row_height(pictures) + text
 }
 
 /// The room a header's or footer's `lines` of `text` take: a floating
@@ -2174,8 +2350,8 @@ fn hf_line_boxes(text: &str, lines: &[LineBox], story: &[HfLine]) -> (Vec<(f64, 
             continue;
         }
         if prev != Some(n) {
-            y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.space_after_pt.max(0.0));
-            y += line.map_or(0.0, |l| l.space_before_pt.max(0.0));
+            y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.pad_below_pt.max(0.0) + p.space_after_pt.max(0.0));
+            y += line.map_or(0.0, |l| l.space_before_pt.max(0.0) + l.pad_above_pt.max(0.0));
             prev = Some(n);
         }
         let (h, ascent) = match line.and_then(|l| l.line_height) {
@@ -2187,7 +2363,8 @@ fn hf_line_boxes(text: &str, lines: &[LineBox], story: &[HfLine]) -> (Vec<(f64, 
         y += h;
     }
     // The last paragraph's space after is outside the part, as Writer
-    // sizes a header to its text.
+    // sizes a header to its text; its padding is inside.
+    y += prev.and_then(|p| story.get(p)).map_or(0.0, |p| p.pad_below_pt.max(0.0));
     (out, y)
 }
 
@@ -2196,7 +2373,7 @@ fn hf_line_boxes(text: &str, lines: &[LineBox], story: &[HfLine]) -> (Vec<(f64, 
 /// the pictures' row is that line.
 fn header_footer_lines(text: &str, alignment: crate::model::Alignment, story: &[HfLine], pictures: &[Run], width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
     let mut lines = shape_header_footer(text, alignment, story, width, opts, shaper);
-    if picture_row_height(pictures, width) > 0.0 && lines.len() > 1 && lines[0].start == lines[0].end {
+    if picture_row_height(pictures) > 0.0 && lines.len() > 1 && lines[0].start == lines[0].end {
         lines.remove(0);
     }
     lines
@@ -2208,11 +2385,11 @@ fn header_footer_lines(text: &str, alignment: crate::model::Alignment, story: &[
 /// frame).
 fn place_header_footer_pictures(page: &mut Page, pictures: &[Run], left: f64, width: f64, top: f64, page_h: f64) {
     use crate::model::{AnchorAlign, AnchorFrame};
-    let row_h = picture_row_height(pictures, width);
+    let row_h = picture_row_height(pictures);
     let mut x = left;
     for run in pictures {
         let Some(src) = run.style.image.clone() else { continue };
-        let (w, h) = image_size_pt(run, width);
+        let (w, h) = image_size_pt(run);
         let (x_pt, y_pt) = match run.style.image_anchor {
             None => {
                 let at = x;
@@ -2273,8 +2450,10 @@ impl Shaper for MonoShaper {
             .flat_map(|r| -> Vec<(char, f64, f64)> {
                 let s = Self::size(req, Some(r));
                 if r.style.image.is_some() {
-                    let (w, h) = inline_size_pt(r, req.width_pt);
+                    let (w, h) = inline_size_pt(r);
                     vec![(OBJECT, w, h)]
+                } else if r.style.text_box.is_some() {
+                    vec![(OBJECT, 0.0, 0.0)]
                 } else if let Some(n) = r.style.footnote {
                     let digits = (n + 1).to_string().len() as f64;
                     vec![(OBJECT, digits * s * NOTE_REF_SCALE * 0.5, 0.0)]
@@ -2306,7 +2485,7 @@ impl Shaper for MonoShaper {
                 }
                 x += c.1;
             }
-            LineBox { start, end, x_pt: indent + align, width_pt: width, ascent_pt: ascent, descent_pt: size * 0.25, objects }
+            LineBox { start, end, x_pt: indent + align, width_pt: width, ascent_pt: ascent, descent_pt: size * 0.25, objects, text_pt: None }
         };
         let mut out = Vec::new();
         let mut start = 0;

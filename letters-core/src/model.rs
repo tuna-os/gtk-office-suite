@@ -22,6 +22,19 @@ pub struct RunStyle {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub regular: bool,
     pub italic: bool,
+    /// Drawn upright where the paragraph's look is italic (a heading whose
+    /// level's style is italic): ODF's `fo:font-style="normal"`, OOXML's
+    /// `<w:i w:val="0"/>`. The W1 notes' "For alcohol" is a Heading 4,
+    /// italic by its style, set back upright.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub upright: bool,
+    /// Drawn with the font's pair kerning: OOXML's `<w:kern>` (any
+    /// threshold; Writer kerns whatever the size), ODF's
+    /// `style:letter-kerning="true"`. Unset, Writer and Word draw text
+    /// unkerned, which sets a line's breaks: kerned, a 12pt Inter line of
+    /// the audit-committee minutes ran a point short and took a word more.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub kerned: bool,
     /// Drawn in capitals, whatever case the text is stored in: OOXML's
     /// `<w:caps/>`, ODF's `fo:text-transform="uppercase"` (a form's title
     /// style). The text keeps its own case.
@@ -44,11 +57,17 @@ pub struct RunStyle {
     /// picture that leaves out `distL`/`distR`. None is none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_sides_emu: Option<(u64, u64)>,
-    /// A floating image's place on the page; None = inline in the text.
-    /// A floating image takes no room in its line: it is drawn where its
-    /// anchor puts it, over the text (Word's "in front of text").
+    /// A floating image's or text box's place on the page; None = inline
+    /// in the text. A floating object takes no room in its line: it is
+    /// drawn where its anchor puts it, over the text (Word's "in front of
+    /// text").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_anchor: Option<ImageAnchor>,
+    /// A text box (ODF's `draw:frame` holding a `draw:text-box`, Word's
+    /// `wps:txbx`): a framed block of text floating where `image_anchor`
+    /// puts it. The run's own text is empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_box: Option<Box<TextBox>>,
     /// Font family name (e.g. "Liberation Serif"); None = document default.
     #[serde(default)]
     pub font_family: Option<String>,
@@ -132,6 +151,33 @@ pub struct Revision {
     pub under: Option<Box<Revision>>,
 }
 
+/// A text box's size, frame and text. Lengths are in EMU (914400 per inch,
+/// OOXML's unit), as an image's extent is.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextBox {
+    /// Width and height of its outer box.
+    pub extent_emu: (u64, u64),
+    /// The rule drawn around it; None is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border: Option<BoxRule>,
+    /// Its background colour (six hex digits); None is transparent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<String>,
+    /// Room between its frame and its text: top, right, bottom, left.
+    #[serde(default)]
+    pub padding_emu: [u32; 4],
+    /// Its text, a line per paragraph.
+    #[serde(default)]
+    pub text: String,
+}
+
+/// A solid rule `width_emu` wide in `color` (six hex digits).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoxRule {
+    pub width_emu: u32,
+    pub color: String,
+}
+
 /// Where a floating image sits: on each axis an offset from, or an
 /// alignment within, a frame (Word's `wp:anchor`, ODF's `svg:x`/`svg:y`
 /// with `style:horizontal-rel`/`vertical-rel`).
@@ -148,6 +194,22 @@ pub struct ImageAnchor {
     pub v_align: Option<AnchorAlign>,
     /// Drawn behind the text rather than in front of it.
     pub behind: bool,
+    /// How the text flows around it.
+    #[serde(default)]
+    pub wrap: Wrap,
+}
+
+/// How text flows around a floating picture or text box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Wrap {
+    /// Over or under it, as if it were not there (Writer's run-through,
+    /// Word's "in front of" or "behind text").
+    #[default]
+    None,
+    /// Beside it, on its wider side (Writer's parallel, Word's square).
+    Parallel,
+    /// Above and below it, nothing beside it.
+    TopBottom,
 }
 
 /// The box a floating image is placed in.
@@ -236,6 +298,14 @@ pub struct HfLine {
     pub space_before_pt: f64,
     #[serde(default, skip_serializing_if = "is_no_space")]
     pub space_after_pt: f64,
+    /// The padding inside the paragraph above and below its text, in
+    /// points: its top and bottom borders' gaps (`w:pBdr` `w:space`, an
+    /// invisible border's too, as Writer keeps it). Unlike the space
+    /// after, the last paragraph's padding below is inside the part.
+    #[serde(default, skip_serializing_if = "is_no_space")]
+    pub pad_above_pt: f64,
+    #[serde(default, skip_serializing_if = "is_no_space")]
+    pub pad_below_pt: f64,
     /// How tall the line is, when its paragraph fixes it (exactly or at
     /// least); None is its text's own height.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -748,6 +818,21 @@ pub struct Document {
     /// answer box). A table not listed (any made here) is ruled.
     #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
     pub table_unruled: std::collections::BTreeSet<u32>,
+    /// The colour of a ruled table's rules (six hex digits), by table id:
+    /// Word's "Table Grid Light" and Writer's grey borders. A ruled table
+    /// not listed (any made here) is ruled in black.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_rule_colors: std::collections::BTreeMap<u32, String>,
+    /// The width of a ruled table's rules in points, by table id, when not
+    /// the 0.5pt a table made here has: a form whose grid is 0.75pt stands
+    /// each row that much taller.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_rule_widths: std::collections::BTreeMap<u32, f64>,
+    /// The ruled tables whose rules are double lines, by table id (Word's
+    /// `w:val="double"`, ODF's "double" border): the crime supervisor
+    /// form's tables, drawn single.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub table_rule_double: std::collections::BTreeSet<u32>,
     /// Each table's rows kept on one page, by table id (Word's
     /// `w:cantSplit`, ODF's row `fo:keep-together="always"`): a row that
     /// does not fit what is left of a page starts the next, unless it is
@@ -1013,6 +1098,9 @@ impl Document {
             table_padding: Default::default(),
             table_indent: Default::default(),
             table_unruled: Default::default(),
+            table_rule_colors: Default::default(),
+            table_rule_widths: Default::default(),
+            table_rule_double: Default::default(),
             table_whole_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
@@ -1292,6 +1380,9 @@ impl Document {
         self.table_padding.remove(&table);
         self.table_indent.remove(&table);
         self.table_unruled.remove(&table);
+        self.table_rule_colors.remove(&table);
+        self.table_rule_widths.remove(&table);
+        self.table_rule_double.remove(&table);
         self.table_whole_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);

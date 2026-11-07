@@ -444,6 +444,34 @@ impl LettersWindow {
         crate::actions::register_formatting_actions(&tab_view, app);
         crate::actions::register_structured_actions(&tab_view, app);
 
+        // ── Collaboration (feature `collab`, off by default) ───────
+        // Share, Join and Stop Sharing in the main menu, the status button
+        // and the two-versions banner. Nothing runs, connects or asks for a
+        // permission until a person uses one (RFC-0005 P5).
+        #[cfg(feature = "collab")]
+        {
+            let (tv, st, s) = (tab_view.clone(), stack.clone(), settings.clone());
+            let (wc, sl) = (word_count_label.clone(), style_label.clone());
+            // A joined document opens as a new tab, as a file does.
+            let open = move |doc: &letters_core::Document, title: &str| {
+                let (container, buf) = make_doc_widget(Some(&s));
+                crate::bridge::load_document(doc, &buf);
+                apply_page_setup_from_buffer(&container, &buf);
+                tab_data_set(&container, TabData::new());
+                let page = tv.append(&container);
+                page.set_title(title);
+                page.set_needs_attention(false);
+                st.set_visible_child_name("editor");
+                let p = tv.page(&container);
+                buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
+                connect_word_count(&buf, &wc);
+                connect_style_readout(&buf, &sl);
+                tv.set_selected_page(&page);
+                Some(buf)
+            };
+            crate::collab_actions::install(app, &win, &tab_view, &toast_overlay, &suite_win.header_bar, |banner| suite_win.add_top_bar(banner), Box::new(open));
+        }
+
         // ── Drag and Drop file opening ────────────────────────────
         // A dropped file opens the way one from the file manager does,
         // through GApplication::open: in a new tab (#1316). It used to load

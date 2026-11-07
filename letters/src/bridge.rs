@@ -391,6 +391,20 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
             let anchor: Option<letters_core::model::ImageAnchor> = unsafe {
                 paintable.data::<Option<letters_core::model::ImageAnchor>>("letters-image-anchor").and_then(|p| *p.as_ref())
             };
+            let text_box: Option<letters_core::model::TextBox> = unsafe {
+                paintable.data::<letters_core::model::TextBox>("letters-text-box").map(|p| p.as_ref().clone())
+            };
+            if let Some(tb) = text_box {
+                if let Some(r) = current_run.take() {
+                    current.runs.push(r);
+                }
+                current.runs.push(Run {
+                    text: String::new(),
+                    style: RunStyle { text_box: Some(Box::new(tb)), image_anchor: anchor, revision: revision_at(&iter), comments: comments_at(&iter), ..Default::default() },
+                });
+                iter.forward_char();
+                continue;
+            }
             if let Some(src) = src {
                 if let Some(r) = current_run.take() {
                     current.runs.push(r);
@@ -1118,6 +1132,23 @@ fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &
         }
         text_starts.push(insert.offset().max(0) as usize);
         for run in &para.runs {
+            // A text box rides on a clear one-pixel paintable: the page view
+            // draws it from the model, and the buffer only keeps it in its
+            // place in the line.
+            if let Some(tb) = &run.style.text_box {
+                let texture = gtk4::gdk::MemoryTexture::new(
+                    1, 1, gtk4::gdk::MemoryFormat::R8g8b8a8,
+                    &gtk4::glib::Bytes::from_static(&[0, 0, 0, 0]), 4,
+                );
+                unsafe {
+                    texture.set_data("letters-text-box", tb.as_ref().clone());
+                    texture.set_data("letters-image-anchor", run.style.image_anchor);
+                }
+                let start = insert.offset();
+                buf.insert_paintable(&mut insert, &texture);
+                tag_object(buf, start, &insert, &run.style);
+                continue;
+            }
             if let Some(src) = &run.style.image {
                 match gtk4::gdk::Texture::from_filename(src) {
                     Ok(texture) => {
@@ -2102,6 +2133,25 @@ single");
         assert_eq!(rt.paragraphs[0].style.line_spacing, 1.15);
         assert_eq!(rt.paragraphs[1].style.line_spacing, 2.0);
         assert_eq!(rt.paragraphs[2].style.line_spacing, 1.0);
+
+        // text box (a clear paintable carrying the box and its place)
+        let buf = fresh();
+        let tb = letters_core::model::TextBox {
+            extent_emu: (914_400, 457_200),
+            border: Some(letters_core::model::BoxRule { width_emu: 9525, color: "000000".into() }),
+            fill: None,
+            padding_emu: [0, 91_440, 0, 91_440],
+            text: "two\nlines".into(),
+        };
+        let anchor = Some(letters_core::model::ImageAnchor { h_align: Some(letters_core::model::AnchorAlign::End), ..Default::default() });
+        let mut d = Document::from_plain_text("name ");
+        d.paragraphs[0].runs.push(Run { text: String::new(), style: RunStyle { text_box: Some(Box::new(tb.clone())), image_anchor: anchor, ..Default::default() } });
+        d.paragraphs[0].runs.push(Run::plain("here"));
+        let rt = round_trip(&buf, &d);
+        let runs = &rt.paragraphs[0].runs;
+        let got = runs.iter().find(|r| r.style.text_box.is_some()).expect("text box lost through buffer");
+        assert_eq!((got.style.text_box.as_deref(), got.style.image_anchor), (Some(&tb), anchor));
+        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<String>(), "name here");
 
         // image (renders as paintable, captures back with src + alt)
         let buf = fresh();

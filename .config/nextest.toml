@@ -60,3 +60,19 @@ threads-required = "num-cpus"
 [[profile.ci.overrides]]
 filter = 'binary(=performance_budgets) | test(=sidebar::tests::a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide) | test(=live::tests::a_keystroke_on_200_paragraphs_relays_out_within_budget)'
 threads-required = "num-cpus"
+
+# The tests of the `collab` feature (RFC-0005 PR 1). The workspace run above
+# never compiles that feature, which is off in every product build, so these
+# tests are a second nextest run in `ci.yml`. nextest writes one JUnit file
+# per profile (target/nextest/<profile>/junit.xml), so the `ci` profile's
+# report is not overwritten, and the capability ledger reads both.
+[profile.collab]
+
+[profile.collab.junit]
+path = "junit.xml"
+
+# The Letters buffer tests of the `collab` feature run in the `letters` binary, whose widget tests
+# are confined to one at a time for the reason above; the profile that runs them says so too.
+[[profile.collab.overrides]]
+filter = 'binary_id(=letters::bin/letters)'
+test-group = 'letters-widgets'

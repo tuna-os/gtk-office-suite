@@ -41,13 +41,14 @@ below.
 
 ## Workspace Structure
 
-Nine crates. Line counts are indicative of weight, not targets.
+Ten crates, and the `collab/` workspace beside them. Line counts are indicative of weight, not targets.
 
 | Crate | GTK? | Published | Holds |
 |---|---|---|---|
 | `suite-common-core` | no | yes | Undo, number formats, styles, property pool, search, print, units, atomic saves, autosave, ZIP bounds, interop reports |
 | `suite-common` | yes | no | Command palette, shortcuts dialog, file dialogs, toasts, GTK test helpers |
 | `suite-export` | no | yes | PDF export |
+| `suite-collab` | no | no | The shell-to-sidecar protocol of collaboration (`Command`, `Event`, a JSON-lines codec, `SessionClient`); `serde` and `serde_json` only. The sidecar that speaks to Matrix and Durable Streams is `collab/collabd`, a separate cargo workspace (RFC-0005 option B), so the apps' lockfile and default build are unchanged |
 | `letters-core` | no | no | Document model, DOCX/ODT/Markdown I/O, structured editing, sessions |
 | `letters` | yes | no | Window, tabs, page view, live model, its GtkTextBuffer projection, ruler, styles |
 | `tables-core` | no | yes | Sheet model, IronCalc engine wrapper, XLSX/ODS/CSV I/O, workbook controller |

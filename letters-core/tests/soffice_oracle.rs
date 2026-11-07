@@ -1932,7 +1932,7 @@ fn table_cell_fills_survive_writer_both_ways() {
 /// page's edge and centred down it.
 #[test]
 fn floating_pictures_keep_their_placement_through_writer_both_ways() {
-    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor, Wrap};
     let Some(bin) = require_or_skip() else { return };
     let dir = tempfile::tempdir().unwrap();
     let png: &[u8] = &[
@@ -1945,7 +1945,9 @@ fn floating_pictures_keep_their_placement_through_writer_both_ways() {
     let png_path = dir.path().join("logo.png");
     std::fs::write(&png_path, png).unwrap();
     let want = [
-        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+        // Text beside it, text above and below it, and text over it.
+        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, wrap: Wrap::Parallel, ..Default::default() },
+        ImageAnchor { h_from: AnchorFrame::Margin, x_emu: 457_200, v_from: AnchorFrame::Text, y_emu: 127_000, wrap: Wrap::TopBottom, ..Default::default() },
         ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
     ];
     let mut d = Document::from_plain_text("");
@@ -2458,6 +2460,59 @@ fn a_regular_run_in_a_heading_survives_writer_both_ways() {
     close(&rt, "odt → Writer → docx");
 }
 
+/// A heading's run set back upright stays upright through Writer, both
+/// ways: the W1 notes' "For alcohol", a Heading 4 italic by its style.
+#[test]
+fn an_upright_run_in_a_heading_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("For alcohol\nafter");
+    d.paragraphs[0].style.heading = Some(4);
+    d.heading_styles = (1..=6).map(|n| RunStyle { italic: n == 4, ..Default::default() }).collect();
+    d.paragraphs[0].runs[0].style.upright = true;
+    let close = |got: &Document, how: &str| {
+        let p = para_with_text(got, "For alcohol");
+        assert!(p.style.heading.is_some(), "{how}: still a heading");
+        assert!(p.runs.iter().all(|r| r.style.upright && !r.style.italic), "{how}: {:?}", p.runs);
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("upright.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("upright.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "upright") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// Pair kerning through Writer both ways, on the run that asks for it
+/// only: Writer and Word draw everything else unkerned, which sets where
+/// a line breaks (the audit-committee minutes).
+#[test]
+fn kerning_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("AVATAR kerned\nplain after");
+    d.paragraphs[0].runs[0].style.kerned = true;
+    let close = |got: &Document, how: &str| {
+        let p = para_with_text(got, "AVATAR kerned");
+        assert!(p.runs.iter().all(|r| r.style.kerned), "{how}: {:?}", p.runs);
+        assert!(para_with_text(got, "plain after").runs.iter().all(|r| !r.style.kerned), "{how}: only the first");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("kerned.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("kerned.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "kerned") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
 /// Capitals through Writer both ways, the text in its own case: the crime
 /// supervisor form's title.
 #[test]
@@ -2805,4 +2860,70 @@ fn a_page_border_survives_writer_both_ways() {
     assert!(odt_path.exists(), "soffice did not convert docx to odt");
     check(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
     check(&through_lo_to_docx(&d, "border").expect("Writer"), "odt → Writer → docx");
+}
+
+/// A text box survives Writer every way: our .odt or .docx, rewritten by
+/// Writer as either, reopens with the box at its paragraph, the same size,
+/// place, rule, fill, padding and text, and its text kept out of the body.
+#[test]
+fn a_text_box_survives_writer_both_ways() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, BoxRule, ImageAnchor, TextBox};
+    let Some(bin) = require_or_skip() else { return };
+    let anchor = ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: 91_440, ..Default::default() };
+    let tb = TextBox {
+        extent_emu: (1_828_800, 457_200),
+        border: Some(BoxRule { width_emu: 12_700, color: "1F3864".into() }),
+        fill: Some("DEEAF6".into()),
+        padding_emu: [45_720, 91_440, 45_720, 91_440],
+        text: "Name & date\nsigned".into(),
+    };
+    let mut d = Document::from_plain_text("after");
+    d.paragraphs.insert(0, Paragraph {
+        style: Default::default(),
+        runs: vec![Run::plain("Sign here"), Run { text: String::new(), style: RunStyle { text_box: Some(Box::new(tb.clone())), image_anchor: Some(anchor), ..Default::default() } }],
+    });
+    let dir = tempfile::tempdir().unwrap();
+    for (from, to) in [("odt", "odt"), ("docx", "docx"), ("docx", "odt"), ("odt", "docx")] {
+        let how = format!("{from} -> Writer -> {to}");
+        let work = dir.path().join(format!("{from}-{to}"));
+        let out = work.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let staged = work.join(format!("box.{from}"));
+        match from {
+            "docx" => docx::write(&d, &staged).expect("write docx"),
+            _ => letters_core::odt::write(&d, &staged).expect("write odt"),
+        }
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        // Into a directory of its own: onto the input itself Writer writes
+        // nothing.
+        let st = Command::new(bin)
+            .arg("--headless")
+            .arg(format!("-env:UserInstallation=file://{}", work.join("lo").display()))
+            .args(["--convert-to", filter, "--outdir"])
+            .arg(&out)
+            .arg(&staged)
+            .output()
+            .expect("soffice");
+        assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+        let converted = out.join(format!("box.{to}"));
+        let rt = match to {
+            "docx" => docx::read(converted.to_str().unwrap()).expect("read Writer's docx"),
+            _ => letters_core::odt::read(converted.to_str().unwrap()).expect("read Writer's odt"),
+        };
+        let texts: Vec<String> = rt.paragraphs.iter().map(|p| p.text()).collect();
+        assert_eq!(texts, ["Sign here", "after"], "{how}: the box's text stays in the box");
+        let got = rt.paragraphs[0].runs.iter().find(|r| r.style.text_box.is_some()).unwrap_or_else(|| panic!("{how}: the box is lost"));
+        let g = got.style.text_box.as_deref().unwrap();
+        // Writer keeps lengths in hundredths of a millimetre (360 EMU) and
+        // rounds them again in inches: within two of them.
+        let near = |a: u64, b: u64| a.abs_diff(b) <= 720;
+        assert!(near(g.extent_emu.0, tb.extent_emu.0) && near(g.extent_emu.1, tb.extent_emu.1), "{how}: size {:?}", g.extent_emu);
+        assert!(g.padding_emu.iter().zip(tb.padding_emu).all(|(a, b)| near(*a as u64, b as u64)), "{how}: padding {:?}", g.padding_emu);
+        let rule = g.border.as_ref().unwrap_or_else(|| panic!("{how}: its rule"));
+        assert!(near(rule.width_emu as u64, 12_700) && rule.color == "1F3864", "{how}: rule {rule:?}");
+        assert_eq!((g.fill.as_deref(), g.text.as_str()), (Some("DEEAF6"), "Name & date\nsigned"), "{how}");
+        let a = got.style.image_anchor.unwrap_or_else(|| panic!("{how}: its place"));
+        assert_eq!((a.h_from, a.h_align, a.v_from), (AnchorFrame::Margin, Some(AnchorAlign::End), AnchorFrame::Text), "{how}: {a:?}");
+        assert!(near(a.y_emu.unsigned_abs(), 91_440), "{how}: {a:?}");
+    }
 }

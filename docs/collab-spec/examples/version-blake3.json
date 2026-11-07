@@ -1,0 +1,19 @@
+{
+  "dcp": 1,
+  "parents": [
+    "7d2a6e4b0c19f3857a6b5c4d3e2f10918273645566778899aabbccddeeff0011"
+  ],
+  "file": {
+    "mime": "application/vnd.oasis.opendocument.spreadsheet",
+    "size": 48213,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locator": {
+      "type": "blake3",
+      "hash": "0f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff0"
+    }
+  },
+  "created_by": {
+    "principal": "4c9b1d7e2f60a35b8e1d4c7a90b3f2e65d8a1c4e7b0293f6d5a8c1e4b7092d3f",
+    "device": "laptop-1"
+  }
+}
