@@ -50,6 +50,11 @@ ignore = [
     # here calls either; calamine and rust_xlsxwriter read and write
     # entries only. Patched only in zip 9, which those crates do not take
     # yet: remove with the zip@8.6.0 entry above (#1537).
+    # pulldown-cmark 0.13.4: quadratic nested image wikilinks, only with
+    # Options::ENABLE_WIKILINKS. Neither our parsers (letters-core, decks)
+    # nor rdocx's html.rs set it. rdocx pins =0.13.4, so no lock update
+    # reaches 0.13.6.
+    { id = "RUSTSEC-2026-0433", reason = "pulldown-cmark 0.13.4 wikilink parsing; ENABLE_WIKILINKS is set nowhere here or in rdocx, which pins =0.13.4 (#1868); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 SUID/SGID bits kept by extract(); never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink targets outside the destination; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() permissions through symlinks; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },

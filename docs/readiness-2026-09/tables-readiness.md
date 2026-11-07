@@ -12,6 +12,13 @@ accounting, calculation/edit consistency, accessible interaction, and measured
 performance. ODS is import-only; neither an Excel-compatible UI nor preferred
 ODF wording can substitute for a working writer.
 
+The #1326 fiscal-risks introduction exposed missing XLSX theme slots 10
+(hyperlink) and 11 (followed hyperlink). The reader now resolves both from
+the workbook theme, with Office defaults when absent. A focused
+`tables/hyperlink-theme-colors` fixture and parser regression cover this
+reduction; visual parity remains unverified. The real document's geometry
+and its green A/B acceptance still need render-lab evidence.
+
 ## Architecture and scope
 WorkbookController remains the sole mutation gateway. Stable sheet identities bind formulas, selection and undo. IronCalc owns calculation/dependency semantics; the view projects sparse state and does not implement a second formula engine. Format capability is explicit in the session: imported read-only formats require Save As to a writable format until their writers exist.
 

@@ -66,9 +66,58 @@ checking, zip + quick-xml for PPTX.
 
 ## Workflow
 
-- Branch from `main`; PRs run check, clippy, unit tests, Flatpak builds, and
-  the GUI smoke tests. All of these gate — a red smoke test means an app is
-  broken for real users, not a flaky test.
+Use one topic branch per issue. The base branch is `main`; do not commit
+directly to it.
+
+1. Update local `main` before starting:
+
+   ```bash
+   git switch main
+   git pull --ff-only origin main
+   ```
+
+2. Create a topic branch. Replace `docs/my-change` with a short
+   `<type>/<description>` name appropriate to the change:
+
+   ```bash
+   BRANCH=docs/my-change
+   git switch -c "$BRANCH"
+   ```
+
+3. Keep commits focused, use the commit style in
+   [CONTRIBUTING.md](CONTRIBUTING.md), and run the checks in
+   [TESTING.md](TESTING.md) that cover the changed surface. Before publishing
+   the branch, check the diff:
+
+   ```bash
+   git diff --check origin/main...HEAD
+   ```
+
+4. Publish the branch:
+
+   ```bash
+   git push --set-upstream origin "$BRANCH"
+   ```
+
+5. Open a pull request against `main`. Link the issue, describe evidence and
+   known limits, and wait for required checks before merge.
+
+6. If `main` advances during review, refresh the branch before requesting
+   another review:
+
+   ```bash
+   git switch "$BRANCH"
+   git fetch origin
+   git rebase origin/main
+   git diff --check origin/main...HEAD
+   ```
+
+   Resolve conflicts locally, rerun relevant checks, then publish the
+   refreshed branch. Do not rebase while another contributor is changing the
+   same branch.
+
+- PRs run check, clippy, unit tests, Flatpak builds, and GUI smoke tests. A
+  red smoke test means an app is broken for real users, not a flaky test.
 - Before pushing: `cargo test --workspace` and
   `tests/gui/run_gui_tests.sh test_smoke.py`.
 - GitHub Issues track work; `gh` CLI is the expected interface.

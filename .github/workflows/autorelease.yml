@@ -1,0 +1,134 @@
+name: Autorelease
+
+# Publish new Flatpaks on a schedule instead of whenever someone remembers to
+# tag. Nothing had shipped since v2.1.0 in July. Part of the reason was that
+# the documented release steps could not pass: the ledger had to record the
+# release commit's own SHA (docs/RELEASE.md).
+#
+# Every week, when main has changed since the last tag:
+#
+#   plan      the next version (minor bump by default), or nothing to do
+#   oracle    nightly.yml's LibreOffice oracle at main's head X
+#   journeys  the collaboration journeys at X
+#   release   commit Y = X + the ledger recording X + AppStream <release>
+#             entries (tools/release/cut_release.py), tag vN on Y, push only
+#             the tag, and dispatch publish-flatpak.yml on it. That run's
+#             gates (release-revision.yml, the soak) decide whether it
+#             publishes. validate_capabilities.py certifies Y with evidence
+#             recorded at X because the two differ in release metadata alone.
+#
+# The release commit is tagged, not merged into main, so main is never
+# pushed to. cut_release.py writes earlier tags back into each release's
+# AppStream history.
+#
+# A tag pushed with GITHUB_TOKEN starts no workflow, which is why this run
+# dispatches publish-flatpak.yml and release-gate.yml itself.
+
+on:
+  schedule:
+    - cron: '41 7 * * 3'   # Wednesdays 07:41 UTC, after nightly.yml's 05:00 run
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+      force:
+        description: Release even when nothing changed since the last tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A literal group: the called workflows evaluate github.workflow as this
+# workflow's name, and sharing a group with them would deadlock.
+concurrency:
+  group: autorelease
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # Only main is released.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Decide whether there is anything to release
+        id: plan
+        env:
+          BUMP: ${{ inputs.bump || 'minor' }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          set -euo pipefail
+          last="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          version="$(python3 tools/release/cut_release.py --next-version "$BUMP")"
+          release=true
+          if [ -n "$last" ] && [ "$FORCE" != true ] && git diff --quiet "$last" HEAD -- . \
+              ':(exclude)conformance/capabilities.json' ':(exclude)flatpak/*.metainfo.xml'; then
+            release=false
+            echo "main has not changed since $last: nothing to release." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version already exists"
+            exit 1
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          [ "$release" = true ] && echo "Releasing v$version from ${GITHUB_SHA::12} (last: ${last:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
+          true
+
+  oracle:
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    uses: ./.github/workflows/nightly.yml
+    with:
+      oracle-only: true
+
+  journeys:
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    uses: ./.github/workflows/collab-letters-gui.yml
+
+  release:
+    needs: [plan, oracle, journeys]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # push the tag
+      actions: write    # dispatch the publish on it
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Commit the release metadata on top of the tested revision
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 tools/release/cut_release.py --version "$VERSION" --revision "$GITHUB_SHA" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          git commit -a -m "release: v$VERSION" \
+            -m "The oracle and collaboration journeys passed at $GITHUB_SHA ($run_url)."
+          # The same check publish-flatpak.yml's evidence gate runs; failing
+          # here leaves no tag behind.
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --release-revision "$(git rev-parse HEAD)"
+          git tag -a "v$VERSION" -m "v$VERSION" -m "Automatic release of $GITHUB_SHA ($run_url)."
+          git push origin "refs/tags/v$VERSION"
+      - name: Publish the tag
+        run: |
+          set -euo pipefail
+          gh workflow run publish-flatpak.yml --ref "v$VERSION" -f publish=true
+          gh workflow run release-gate.yml --ref "v$VERSION"
+          echo "Dispatched publish-flatpak.yml and release-gate.yml on v$VERSION." >> "$GITHUB_STEP_SUMMARY"

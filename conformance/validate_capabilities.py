@@ -66,6 +66,7 @@ import argparse
 import ast
 import json
 import re
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -505,7 +506,46 @@ def deselected_citations(ledger: dict, inventory: dict) -> list:
                    for feature, _, test in cited_tests(ledger) if test in deselected})
 
 
-def check_release_revision(ledger: dict, lanes: dict, revision: str) -> list:
+# What a release commit may change on top of the revision its scheduled
+# evidence was recorded at (#313 with autorelease.yml). A commit cannot
+# contain its own SHA, so a ledger that records "the oracle passed at X" is
+# necessarily committed at some Y != X. When X and Y differ only in the
+# ledger itself and the AppStream release entries, the code the lane ran is
+# the code being released, and Y may be certified by evidence recorded at X.
+RELEASE_METADATA = (
+    re.compile(r"conformance/capabilities\.json"),
+    re.compile(r"flatpak/[^/]+\.metainfo\.xml"),
+)
+
+
+def only_release_metadata(paths) -> bool:
+    """Whether every changed path is release metadata (none at all counts)."""
+    return all(any(p.fullmatch(path) for p in RELEASE_METADATA) for path in paths)
+
+
+def git_changed_paths(recorded: str, revision: str, cwd=None):
+    """Files that differ between two revisions, or None when git can't say."""
+    try:
+        out = subprocess.run(
+            ["git", "diff", "--name-only", "--no-renames", recorded, revision, "--"],
+            capture_output=True, text=True, check=True, cwd=cwd,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [line for line in out.splitlines() if line]
+
+
+def _metadata_only(changed_paths, recorded, revision, memo) -> bool:
+    if changed_paths is None or not recorded:
+        return False
+    if recorded not in memo:
+        paths = changed_paths(recorded, revision)
+        memo[recorded] = paths is not None and only_release_metadata(paths)
+    return memo[recorded]
+
+
+def check_release_revision(ledger: dict, lanes: dict, revision: str,
+                           changed_paths=None) -> list:
     """A release may not be certified by evidence a pull request never ran.
 
     The LibreOffice oracle and the parity corpus need LibreOffice
@@ -522,6 +562,13 @@ def check_release_revision(ledger: dict, lanes: dict, revision: str) -> list:
     released. The fix when this fires is to run that lane at the
     release revision (nightly.yml accepts workflow_dispatch) and record
     what it found — not to lower the bar.
+
+    The one exception is a release commit that changes nothing but release
+    metadata (RELEASE_METADATA) on top of the recorded revision: the ledger
+    cannot hold its own commit's SHA, so recording the lane's run and
+    tagging always takes a second commit. *changed_paths(recorded,
+    revision)* lists the files that differ, or returns None when that is
+    unknown (and the evidence is then refused as before).
 
     A lane like that which no claim cites is also an error. Otherwise this
     check passes by having nothing to check, which is the failure mode the
@@ -549,6 +596,7 @@ def check_release_revision(ledger: dict, lanes: dict, revision: str) -> list:
 
     errors = []
     cited_lanes = set()
+    memo = {}
     for lane in scheduled:
         namespaces = tuple(lane.get("namespaces", []))
         job = lane.get("job")
@@ -568,7 +616,8 @@ def check_release_revision(ledger: dict, lanes: dict, revision: str) -> list:
                 continue
             cited_lanes.add(job)
             recorded = str(feature.get("revision", "")).strip()
-            if not _same_revision(recorded, revision):
+            if not _same_revision(recorded, revision) and not _metadata_only(
+                    changed_paths, recorded, revision, memo):
                 errors.append(
                     f"{feature.get('id')}: rests on the {job!r} lane, which does not run "
                     f"on every revision, and its evidence "
@@ -836,7 +885,8 @@ def main(argv=None) -> int:
     if args.release_revision:
         if lanes is None:
             parser.error("--release-revision needs --lanes to know which lanes are scheduled")
-        errors += check_release_revision(ledger, lanes, args.release_revision)
+        errors += check_release_revision(ledger, lanes, args.release_revision,
+                                         changed_paths=git_changed_paths)
     scope, excluded = lane_scope(lanes, args.lane) if args.lane else (None, ())
     inventory = None
     if args.collected:
