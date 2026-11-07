@@ -85,6 +85,18 @@ jobs:
           sudo apt-get install -y -qq appstream desktop-file-utils gettext libglib2.0-bin
       - name: Validate source release contract
         run: python3 scripts/release_gate.py
+      - name: Verify Letters submission provenance against its tag
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          info = json.loads(pathlib.Path('flathub/letters-source.json').read_text())
+          commit = subprocess.check_output(['git', 'rev-parse', '--verify',
+              f"refs/tags/{info['tag']}^{{commit}}"], text=True).strip()
+          assert commit == info['commit'], 'submission tag moved'
+          lock = subprocess.check_output(['git', 'show', f'{commit}:Cargo.lock'])
+          assert lock == pathlib.Path('flathub/letters-Cargo.lock').read_bytes(), 'submission lock differs from tag'
+          assert hashlib.sha256(lock).hexdigest() == info['cargo-lock-sha256']
+          PY
       - name: Validate desktop files, schemas, translations, and AppStream
         run: |
           set -euo pipefail
@@ -271,6 +283,29 @@ jobs:
           upload-artifact: false
           bundle: org.tunaos.letters-offline-${{ matrix.arch }}.flatpak
           arch: ${{ matrix.arch }}
+      # Also verify the exact files the owner will copy to flathub/flathub.
+      # The candidate archive above does not exercise this tagged source list.
+      - name: Build the committed Letters submission offline
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: flathub/org.tunaos.letters.json
+          cache: false
+          upload-artifact: false
+          build-dir: submission-build
+          state-dir: submission-state
+          repo-dir: submission-repo
+          bundle: org.tunaos.letters-submission-${{ matrix.arch }}.flatpak
+          arch: ${{ matrix.arch }}
+      - name: Keep the verified submission inputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: letters-submission-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            flathub/org.tunaos.letters.json
+            flathub/cargo-sources.json
+            flathub/letters-Cargo.lock
+            flathub/letters-source.json
+          retention-days: 90
 
   # The core crates' tests on aarch64 itself, not just a build for it: the
   # readers, writers and layout run where the published aarch64 bundle runs.
@@ -287,7 +322,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+      - uses: taiki-e/install-action@dd2e657c648186b8f995f901aaf7d95fbd87ee34 # nextest
         with:
           tool: nextest
       - name: Core crates' tests on aarch64

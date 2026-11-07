@@ -782,6 +782,14 @@ def tables():
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
     wb, ws = book()
+    ws["A1"] = "Financial statements"
+    ws["A1"].font = Font(name="Liberation Sans", size=24)
+    ws["A4"] = "Income"
+    ws["B4"] = "Statement of income"
+    ws.column_dimensions["B"].width = 40
+    save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
