@@ -18,7 +18,7 @@ reqwest = { version = "0.12", default-features = false }
 quick-xml = "0.37"
 getrandom = "0.3"
 httpdate = "1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 hex.workspace = true
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 

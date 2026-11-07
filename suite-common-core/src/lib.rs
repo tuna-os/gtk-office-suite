@@ -24,3 +24,4 @@ pub mod recent;
 pub mod templates;
 pub mod session;
 pub mod peak_heap;
+pub mod report;
