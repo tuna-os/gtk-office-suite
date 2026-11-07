@@ -643,12 +643,11 @@ def align(app, lo_path, ours_path):
     ink bounding boxes after removing the screen's header bands; neither
     side then has a frame defining the used range's whitespace.
     """
-    ref = load(lo_path)
+    ref_raw = load(lo_path)
     if app != "tables":
-        return ref, load(ours_path, ref.size), None
-    ys, xs = np.nonzero(ink_mask(np.asarray(ref)))
-    if len(xs):
-        ref = ref.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+        return ref_raw, load(ours_path, ref_raw.size), None
+    ys_r, xs_r = np.nonzero(ink_mask(np.asarray(ref_raw)))
+    ref = ref_raw.crop((xs_r.min(), ys_r.min(), xs_r.max() + 1, ys_r.max() + 1)) if len(xs_r) else ref_raw
     ours = load(ours_path)
     scale = (ours.width / ref.width + ours.height / ref.height) / 2
     # Headings are furniture and each side draws its own: Calc prints them
@@ -673,9 +672,24 @@ def align(app, lo_path, ours_path):
         # through text need not contain the printed page's whole range.
         # Neither gives us corresponding ink boxes to align.
         complete = len(xs) and xs.max() < cells.width - 1 and ys.max() < cells.height - 1
+        # When an unruled, unheaded sheet's column is wider than both the
+        # printed page and the screen viewport, each render clips the column
+        # at its own right edge (#1339). Strip our screen headings, compare
+        # the shared width from the cell origin, and measure scale along the
+        # unclipped vertical axis.
+        ys_c, xs_c = np.nonzero(np.asarray(cells.convert("L")) < 200)
+        v_complete = len(ys_c) and ys_c.max() < cells.height - 1
+        ref_h_clipped = len(xs_r) and xs_r.max() >= ref_raw.width - 4
+        ours_h_clipped = len(xs_c) and xs_c.max() >= cells.width - 4 and ours.width >= 960
         if complete and not ruled:
             ours = cells.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
             scale = (ours.width / ref.width + ours.height / ref.height) / 2
+        elif v_complete and not ruled and ref_h_clipped and ours_h_clipped:
+            ours_ink = cells.crop((xs_c.min(), ys_c.min(), xs_c.max() + 1, ys_c.max() + 1))
+            shared_w = min(ref.width, ours_ink.width)
+            ref = ref.crop((0, 0, shared_w, ref.height))
+            ours = ours_ink.crop((0, 0, shared_w, ours_ink.height))
+            scale = ours.height / ref.height
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
