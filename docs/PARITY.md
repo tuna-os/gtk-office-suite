@@ -96,8 +96,8 @@ claim that it passed on this revision; see the
 The Planning Inspectorate reduction (#1328), `tables/default-row-height`,
 exercises XLSX `sheetFormatPr defaultRowHeight`, including blank rows absent
 from `sheetData` and explicit row overrides. The reader now applies this
-worksheet default before row overrides. Visual parity is unmeasured; the
-real-document baseline remains amber pending a render-lab run.
+worksheet default before row overrides. The fixture is green in Tiers A and
+B; the real Planning Inspectorate workbook stays amber.
 
 ### Tier 1 — Core
 
