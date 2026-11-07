@@ -121,11 +121,19 @@ start_secret_portal() {
         gui_die "the keyring does not accept secrets"
     [ "$(secret-tool lookup mandelbrot-test probe)" = probe ] ||
         gui_die "the keyring does not return secrets"
-    gdbus introspect --session --dest org.freedesktop.portal.Desktop \
-        --object-path /org/freedesktop/portal/desktop |
-        grep -q "interface org.freedesktop.portal.Secret" ||
-        gui_die "xdg-desktop-portal does not export the Secret portal"
-    gui_log "keyring unlocked; Secret portal available"
+    # The first introspect D-Bus-activates xdg-desktop-portal, which can
+    # answer before it has exported the Secret interface; give it 15 s.
+    local _
+    for _ in $(seq 1 30); do
+        if gdbus introspect --session --dest org.freedesktop.portal.Desktop \
+            --object-path /org/freedesktop/portal/desktop 2>/dev/null |
+            grep -q "interface org.freedesktop.portal.Secret"; then
+            gui_log "keyring unlocked; Secret portal available"
+            return 0
+        fi
+        sleep 0.5
+    done
+    gui_die "xdg-desktop-portal does not export the Secret portal"
 }
 
 # Run the installed app in the background with debug logging for its own
