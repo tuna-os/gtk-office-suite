@@ -60,6 +60,14 @@ side clips the column at its own right edge (`tables/wide-column-no-headings`,
 horizontal width from the cell origin, and measures scale along the
 unclipped vertical axis.
 
+Tables references can omit printed row and column headings and paginate
+wide sheets across multiple horizontal pages. In that case the scorer
+stitches the consecutive horizontal continuation tiles and aligns ink
+bounding boxes after removing screen header bands, provided the
+reference is unruled and the capture does not clip ink.
+`tables/wide-unprinted-sheet` is the reduced fixture for this case
+(Available data and their modes of access, #1341).
+
 ## Licences and attribution
 
 Every document is published under an open government licence that
