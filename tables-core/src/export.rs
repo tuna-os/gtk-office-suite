@@ -50,11 +50,27 @@ pub fn to_pdf_with_setup(
     suite_export::compile_pdf_to_file(&to_typst_with_setup(ss, range, setup), output_path)
 }
 
+/// Escape Typst special characters (`\`, `[`, `]`, `#`) in a table cell
+/// so that the cell content is treated as literal text.
+pub fn escape_typst_cell(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '[' => out.push_str("\\["),
+            ']' => out.push_str("\\]"),
+            '#' => out.push_str("\\#"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn typst_table(grid: &[Vec<String>]) -> String {
     let mut out = String::from("#table(\n  columns: 1,\n");
     for row in grid {
         out.push_str("  [");
-        let cells: Vec<&str> = row.iter().map(|s| s.as_str()).collect();
+        let cells: Vec<String> = row.iter().map(|s| escape_typst_cell(s)).collect();
         out.push_str(&cells.join("], ["));
         out.push_str("],\n");
     }
@@ -165,5 +181,44 @@ mod tests {
             out.contains("columns: 3"),
             "typst export bug #176: multi-column grid emitted as single column — got {out:?}"
         );
+    }
+
+    #[test]
+    fn escape_typst_cell_escapes_special_characters() {
+        assert_eq!(escape_typst_cell("hello"), "hello");
+        assert_eq!(escape_typst_cell(r"a\b"), r"a\\b");
+        assert_eq!(escape_typst_cell("[brackets]"), r"\[brackets\]");
+        assert_eq!(
+            escape_typst_cell("#nonexistent_function()"),
+            r"\#nonexistent_function()"
+        );
+        assert_eq!(escape_typst_cell(r"\\#test"), r"\\\\\#test");
+    }
+
+    #[test]
+    fn typst_table_escapes_cell_specials_and_compiles_to_pdf() {
+        let mut e = TablesEngine::new(3, 1).unwrap();
+        e.set_cell_text(0, 0, "#nonexistent_function()").unwrap();
+        e.set_cell_text(1, 0, "[brackets]").unwrap();
+        e.set_cell_text(2, 0, r"\\#test").unwrap();
+
+        let out = to_typst(&e);
+        assert!(
+            out.contains(r"[\#nonexistent_function()]"),
+            "function call syntax not escaped: {out}"
+        );
+        assert!(
+            out.contains(r"[\[brackets\]]"),
+            "brackets not escaped: {out}"
+        );
+        assert!(
+            out.contains(r"[\\\\\#test]"),
+            "backslashes and hash not escaped: {out}"
+        );
+
+        let pdf = suite_export::compile_pdf(&out)
+            .expect("Typst PDF compilation must succeed with escaped cell content");
+        assert!(pdf.starts_with(b"%PDF-"), "output is not a valid PDF");
+        assert!(pdf.len() > 500, "suspiciously small PDF");
     }
 }
