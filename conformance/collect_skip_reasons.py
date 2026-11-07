@@ -167,12 +167,17 @@ def rust_sources(roots: list, nested_workspaces: bool = False) -> list:
     Directories that are their own Cargo workspace are skipped unless
     `nested_workspaces` is true: the listing the caller checks against does not
     cover them. The bare-`#[ignore]` scan passes True so they still need reasons.
+    A root's `third_party/` is never scanned: it holds upstream crates
+    patched in by path (third_party/README.md), not workspace members, so the
+    listing never runs their tests and their `#[ignore]`s are upstream's.
     """
     found = []
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
+            at_root = os.path.abspath(dirpath) == os.path.abspath(root)
             dirnames[:] = [d for d in sorted(dirnames)
                            if d not in (".git", "target", "node_modules", ".venv")
+                           and not (at_root and d == "third_party")
                            and (nested_workspaces
                                 or not _is_nested_workspace(os.path.join(dirpath, d), root))]
             for filename in sorted(filenames):
