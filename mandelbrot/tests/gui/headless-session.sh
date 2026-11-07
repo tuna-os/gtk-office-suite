@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for driving the real Mandelbrot Flatpak bundle headlessly.
 #
-# Sourced by tests/gui/run-flatpak-smoke.sh.
+# Sourced by tests/gui/run-flatpak-smoke.sh and tests/e2e/run-gui-call.sh.
 # The approach is upstream Fractal's (commit 209da3c2, "Launch a wayland
 # display server for UI tests"): a private D-Bus session plus
 # `mutter --headless --wayland --no-x11 --virtual-monitor`, so GTK gets a real
@@ -9,7 +9,8 @@
 #
 # Host requirements: flatpak, mutter, dbus-daemon (dbus-run-session),
 # xdg-dbus-proxy (a flatpak dependency), gnome-keyring, libsecret-tools,
-# xdg-desktop-portal, xdg-desktop-portal-gnome and xdg-desktop-portal-gtk.
+# xdg-desktop-portal, xdg-desktop-portal-gnome, xdg-desktop-portal-gtk,
+# and, for the call test, at-spi2-core.
 #
 # Everything the app writes goes under $WORK: HOME, the XDG base dirs and
 # XDG_RUNTIME_DIR are all private, so a run never sees or touches the user's
@@ -134,6 +135,18 @@ start_secret_portal() {
         sleep 0.5
     done
     gui_die "xdg-desktop-portal does not export the Secret portal"
+}
+
+# A PulseAudio server with no hardware: it loads a null sink, whose monitor
+# is the default source, so the app's microphone pipeline (autoaudiosrc)
+# captures silence and publishes a real audio track.
+start_audio() {
+    pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target=stderr \
+        2>"$1" || gui_die "pulseaudio did not start"
+}
+
+stop_audio() {
+    pulseaudio --kill 2>/dev/null || true
 }
 
 # Run the installed app in the background with debug logging for its own
