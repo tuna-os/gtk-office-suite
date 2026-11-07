@@ -281,6 +281,10 @@
     "B": "green",
     "C": "green"
   },
+  "letters/table-cell-numbered-list-indent": {
+    "A": "amber",
+    "B": "amber"
+  },
   "letters/text-color": {
     "A": "green",
     "B": "green",
