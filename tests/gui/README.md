@@ -87,9 +87,9 @@ There is no retry, and there will not be one: a green rerun does not unfail
 the first attempt. Run a diagnostic repeat as a second campaign with its own
 output directory, which keeps both results.
 
-`.github/workflows/gui-stress.yml` runs a bounded campaign nightly in the same
+`.github/workflows/gui-stress.yml` runs a bounded campaign weekly in the same
 container the recorded journeys use, and takes `repeat`, `seed`, `matrix` and
-`select` on manual dispatch. The nightly schedule uses the baseline display
+`select` on manual dispatch. The scheduled run uses the baseline display
 only, and the matrix stays opt-in until the narrow-width findings it keeps
 turning up are closed: #516 is fixed, but a full 47-journey matrix pass still
 reports more (see #520). A known-red nightly teaches people to ignore it.
