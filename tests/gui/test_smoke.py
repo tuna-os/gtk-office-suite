@@ -42,6 +42,40 @@ class LettersSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while typing")
 
 
+class LettersPrintPreviewSmoke(BaseGUITestCase):
+    """Print Preview must open a real paginated view with an observable page count."""
+
+    app_name = "letters"
+
+    def test_print_preview_reports_single_page(self):
+        from dogtail import rawinput
+
+        self.new_letters_document()
+        rawinput.typeText("print preview page")
+        self.wait_for_node(name="3 words", roleName="label")
+
+        rawinput.keyCombo("<Control><Shift>p")
+        preview = self.wait_until(
+            lambda: next(
+                (
+                    node
+                    for node in self.app.children
+                    if node.roleName == "frame" and node.name == "Print Preview"
+                ),
+                None,
+            ),
+            lambda node: node is not None,
+            description="the Print Preview window",
+        )
+        self.wait_until(
+            lambda: preview.child(name="Page 1 of 1", roleName="label"),
+            lambda node: node is not None,
+            description="the single-page preview indicator",
+        )
+        rawinput.keyCombo("Escape")
+        self.assertIsNone(self.process.poll(), "letters exited while opening Print Preview")
+
+
 class LettersSnapshotSmoke(BaseGUITestCase):
     """State-snapshot interface (#104), same mechanism as
     TablesSnapshotSmoke/DecksSnapshotSmoke: typed text is visible in the
