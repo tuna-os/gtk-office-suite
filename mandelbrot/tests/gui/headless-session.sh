@@ -77,11 +77,43 @@ stop_compositor() {
 }
 
 # Re-execute the calling script inside a private D-Bus session bus, once.
+# The path is made absolute because the scripts cd before calling this.
 in_dbus_session() { # "$0" "$@"
     if [ -z "${MANDELBROT_TEST_IN_DBUS:-}" ]; then
         export MANDELBROT_TEST_IN_DBUS=1
-        exec dbus-run-session -- bash "$@"
+        local script
+        script=$(realpath "$1")
+        shift
+        exec dbus-run-session -- bash "$script" "$@"
     fi
+}
+
+# The app keeps its session secrets in the keyring through the Secret portal
+# (src/secret/linux.rs); without one, logging in fails. Start an unlocked
+# gnome-keyring and point xdg-desktop-portal's Secret interface at it. The
+# portal itself is D-Bus activated on first use.
+start_secret_portal() {
+    export XDG_CURRENT_DESKTOP=GNOME
+    mkdir -p "$XDG_CONFIG_HOME/xdg-desktop-portal"
+    printf '[preferred]\ndefault=gtk\norg.freedesktop.impl.portal.Secret=gnome-keyring\n' \
+        >"$XDG_CONFIG_HOME/xdg-desktop-portal/portals.conf"
+    # An empty password creates and unlocks the default "login" collection.
+    printf '' | gnome-keyring-daemon --unlock --components=secrets >/dev/null ||
+        gui_die "gnome-keyring-daemon --unlock failed"
+    gnome-keyring-daemon --start --components=secrets >/dev/null ||
+        gui_die "gnome-keyring-daemon --start failed"
+}
+
+# A PulseAudio server with no hardware: it loads a null sink, whose monitor
+# is the default source, so the app's microphone pipeline (autoaudiosrc)
+# captures silence and publishes a real audio track.
+start_audio() {
+    pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target=stderr \
+        2>"$1" || gui_die "pulseaudio did not start"
+}
+
+stop_audio() {
+    pulseaudio --kill 2>/dev/null || true
 }
 
 # Run the installed app in the background with debug logging for its own
@@ -111,8 +143,12 @@ stop_app() {
 }
 
 # Lines in the app log that mean the run is broken regardless of what the
-# UI looked like: a Rust panic, or a GLib/GTK critical (which is a
-# programming error, not an environment hiccup).
+# UI looked like: a Rust panic, a GLib/GTK critical (a programming error, not
+# an environment hiccup), or an ERROR the app itself logged (`fractal::…`
+# targets; e.g. the keyring could not be read through the Secret portal).
+# The session is complete enough — compositor, keyring, portals — that none
+# of these are expected. The level and target are separated by ANSI escapes
+# in the log, hence the loose match.
 fatal_log_lines() { # log_file
-    grep -nE "panicked|CRITICAL" "$1" || true
+    grep -nE "panicked|CRITICAL|ERROR.*fractal::" "$1" || true
 }

@@ -6,7 +6,8 @@
 # with a private D-Bus session and fresh HOME/XDG dirs, and asserts that:
 #   - the app activated (its log has `Application::activate`),
 #   - it is still running after $ALIVE_S seconds,
-#   - its log has no `panicked` and no `CRITICAL` line.
+#   - its log has no `panicked`, no `CRITICAL` and no app-logged `ERROR` line
+#     (a keyring, compositor and portals are running, so none is expected).
 #
 # This is what catches a runtime or dependency bump that compiles and passes
 # the unit tests but no longer starts: a missing shared library or GSettings
@@ -38,6 +39,7 @@ trap 'stop_app; stop_compositor' EXIT
 
 start_compositor "$OUT/mutter.log"
 gui_log "compositor up on $WAYLAND_DISPLAY"
+start_secret_portal
 
 start_app "$APP_LOG"
 gui_log "app started (pid $APP_PID); waiting ${ALIVE_S}s"
@@ -59,7 +61,7 @@ else
 fi
 FATAL=$(fatal_log_lines "$APP_LOG")
 if [ -z "$FATAL" ]; then
-    gui_log "PASS no panic or CRITICAL in the log"
+    gui_log "PASS no panic, CRITICAL or app ERROR in the log"
 else
     gui_log "FAIL the log has panics or criticals:"
     printf '%s\n' "$FATAL"
