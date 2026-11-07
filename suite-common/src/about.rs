@@ -83,6 +83,18 @@ pub fn report_problem(app: &adw::Application) {
     gtk::UriLauncher::new(&url).launch(active.as_ref(), None::<&gtk::gio::Cancellable>, |_| {});
 }
 
+/// Register `app.report-problem`, which opens [`report_problem`].
+pub(crate) fn add_report_problem_action(app: &adw::Application) {
+    let action = gtk::gio::SimpleAction::new("report-problem", None);
+    let app_weak = app.downgrade();
+    action.connect_activate(move |_, _| {
+        if let Some(app) = app_weak.upgrade() {
+            report_problem(&app);
+        }
+    });
+    app.add_action(&action);
+}
+
 /// Show the About dialog of the app, over its active window.
 pub fn show(app: &adw::Application) {
     let id = app.application_id().map(|s| s.to_string()).unwrap_or_default();

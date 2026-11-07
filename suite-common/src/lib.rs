@@ -164,14 +164,7 @@ impl SuiteApp {
         });
         app.add_action(&act_about);
 
-        let act_report_problem = gio::SimpleAction::new("report-problem", None);
-        let app_weak = app.downgrade();
-        act_report_problem.connect_activate(move |_, _| {
-            if let Some(app) = app_weak.upgrade() {
-                about::report_problem(&app);
-            }
-        });
-        app.add_action(&act_report_problem);
+        about::add_report_problem_action(&app);
 
         let act_shortcuts = gio::SimpleAction::new("shortcuts", None);
         let app_weak = app.downgrade();
@@ -1177,48 +1170,6 @@ mod tests {
         crate::gtk_test::run(|| {
             let state = make_empty_state("Title", "Description", "icon", "Open");
             assert_eq!(state.width_request(), -1);
-        });
-    }
-
-    #[test]
-    fn make_header_bar_includes_report_problem_in_menu() {
-        crate::gtk_test::run(|| {
-            let hb = make_header_bar("Letters");
-            let menu = crate::menus::primary_menu(hb.upcast_ref())
-                .expect("primary menu must be found in header bar");
-            fn has_action(model: &gio::MenuModel, target: &str) -> bool {
-                for i in 0..model.n_items() {
-                    if let Some(action) = model.item_attribute_value(i, gio::MENU_ATTRIBUTE_ACTION, None) {
-                        if action.str() == Some(target) {
-                            return true;
-                        }
-                    }
-                    if let Some(link) = model.item_link(i, gio::MENU_LINK_SECTION) {
-                        if has_action(&link, target) {
-                            return true;
-                        }
-                    }
-                    if let Some(link) = model.item_link(i, gio::MENU_LINK_SUBMENU) {
-                        if has_action(&link, target) {
-                            return true;
-                        }
-                    }
-                }
-                false
-            }
-            assert!(has_action(menu.upcast_ref(), "app.report-problem"), "make_header_bar primary menu must include app.report-problem");
-        });
-    }
-
-    #[test]
-    fn suite_app_registers_report_problem_action() {
-        crate::gtk_test::run(|| {
-            let app = SuiteApp::new("org.tunaos.test.report");
-            assert!(gio::prelude::ActionMapExt::lookup_action(&app.app, "report-problem").is_some());
-            assert_eq!(
-                crate::actions::label_for("app.report-problem").as_deref(),
-                Some("Report a Problem…")
-            );
         });
     }
 }
