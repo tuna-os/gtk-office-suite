@@ -25,26 +25,19 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
+  # Read-only validation, run for every trigger including pull requests.
+  # It builds whatever Containerfile the PR carries, so it must never hold
+  # a package-write token; publishing is the separate `publish` job below.
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-
-      # A pull request only proves the image still builds and works. It is
-      # published from main (and the scheduled rebuild), so no PR can
-      # change the environment other branches test in without review.
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -83,8 +76,31 @@ jobs:
             echo "recorded ${duration}s probe clip"
           '
 
+  # Publishes from main, the scheduled rebuild and manual dispatch only, so
+  # no pull request can change the environment other branches test in
+  # without review. It rebuilds from the pushed commit rather than reusing
+  # the validation job's output, which keeps `packages: write` out of the
+  # job that builds PR-controlled code.
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Push image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: tests/gui/container

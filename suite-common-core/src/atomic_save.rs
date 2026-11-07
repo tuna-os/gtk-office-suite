@@ -232,25 +232,144 @@ fn test_pause(stage: &str, path: &Path) {
     }
 }
 
+/// Identity and content stamp of a destination file, captured when a document
+/// is opened or saved so a later save can tell whether something else
+/// replaced or rewrote it in between (SH-002).
+///
+/// On Unix this is device + inode + mtime (nanosecond resolution) + size.
+/// The inode is what catches "unlinked and recreated" — e.g. another window's
+/// atomic save, which renames a new file over the path and so always yields a
+/// new inode. Size and mtime catch in-place rewrites. On other platforms only
+/// mtime and size are compared, which is weaker: a same-size rewrite within
+/// the filesystem's mtime granularity is invisible.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileVersion {
+    #[cfg(unix)]
+    dev: u64,
+    #[cfg(unix)]
+    ino: u64,
+    mtime: Option<std::time::SystemTime>,
+    size: u64,
+}
+
+impl FileVersion {
+    fn from_metadata(metadata: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        FileVersion {
+            #[cfg(unix)]
+            dev: metadata.dev(),
+            #[cfg(unix)]
+            ino: metadata.ino(),
+            mtime: metadata.modified().ok(),
+            size: metadata.len(),
+        }
+    }
+
+    /// The current version of the file at `path` (following symlinks, like
+    /// the save itself does when it inspects the destination), or `None`
+    /// when nothing is there.
+    pub fn capture(path: &Path) -> std::io::Result<Option<FileVersion>> {
+        match fs::metadata(path) {
+            Ok(metadata) => Ok(Some(FileVersion::from_metadata(&metadata))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Why a save did not (fully) succeed, structured so a caller can tell the
+/// three cases apart without parsing text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SaveError {
+    /// The destination no longer matches the version the caller expected.
+    /// Nothing was written; the destination and its directory are untouched.
+    PreconditionFailed,
+    /// The save failed before the new bytes replaced the destination, which
+    /// still holds whatever it held before.
+    FailedBeforeCommit(String),
+    /// The new bytes *are* at the destination, but syncing the directory
+    /// entry failed, so durability is unconfirmed. The caller must not treat
+    /// the old content as current, nor the document as durably saved.
+    CommittedWithDirSyncFailure(String),
+}
+
+impl std::fmt::Display for SaveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SaveError::PreconditionFailed => {
+                f.write_str("The file was changed on disk since it was opened; it was not overwritten")
+            }
+            SaveError::FailedBeforeCommit(msg) | SaveError::CommittedWithDirSyncFailure(msg) => {
+                f.write_str(msg)
+            }
+        }
+    }
+}
+
+impl std::error::Error for SaveError {}
+
 /// Write `bytes` to `path` atomically: write to a temporary file in the same
 /// directory, flush and sync it to disk, then rename it over the
 /// destination. `rename` within one filesystem is atomic, so a reader can
 /// never observe a partially-written file, and a failure at any point before
 /// the rename leaves the original untouched.
+///
+/// No precondition is checked: this overwrites whatever is at `path`. Use
+/// [`atomic_write_bytes_conditional`] to refuse overwriting a file that
+/// changed since it was opened.
 pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    atomic_write_impl(path, bytes, None)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Like [`atomic_write_bytes`], but only replaces the destination if it still
+/// has the `expected` version; `None` means the destination is expected not
+/// to exist. On success returns the version of the file just written, taken
+/// from the temporary before the rename (rename preserves inode, mtime and
+/// size), so it describes what this call wrote even if something else
+/// replaces the path a moment later.
+///
+/// On [`SaveError::PreconditionFailed`] the destination was not modified and
+/// the temporary has been removed.
+///
+/// **Residual race.** The version is checked immediately before the rename,
+/// but check-then-rename is not atomic: POSIX offers no compare-and-rename,
+/// so an external writer that changes or replaces the destination in the
+/// window between the check and the rename is silently overwritten. This
+/// narrows the window from "the whole time the document was open" to
+/// microseconds; it does not close it. Closing it needs cooperative locking
+/// between writers, which this function does not provide.
+pub fn atomic_write_bytes_conditional(
+    path: &Path,
+    bytes: &[u8],
+    expected: Option<&FileVersion>,
+) -> Result<FileVersion, SaveError> {
+    atomic_write_impl(path, bytes, Some(expected))
+}
+
+/// `precondition`: `None` = unconditional; `Some(expected)` = the destination
+/// must currently be `expected` (`None` inside = absent).
+fn atomic_write_impl(
+    path: &Path,
+    bytes: &[u8],
+    precondition: Option<Option<&FileVersion>>,
+) -> Result<FileVersion, SaveError> {
+    use SaveError::FailedBeforeCommit;
     let dir = match path.parent() {
         Some(p) if !p.as_os_str().is_empty() => p,
         _ => Path::new("."),
     };
     path.file_name()
-        .ok_or_else(|| "save path has no file name".to_string())?;
+        .ok_or_else(|| FailedBeforeCommit("save path has no file name".to_string()))?;
     // Exclusive creation prevents concurrent saves or stale symlinks from
     // sharing/truncating a temporary file. Drop cleans up only our own file.
     let mut tmp = fail_point!(
         fault::Boundary::CreateTemp,
         tempfile::Builder::new().prefix(TEMP_PREFIX).tempfile_in(dir)
     )
-    .map_err(|e| format!("Failed to create save file: {e}"))?;
+    .map_err(|e| FailedBeforeCommit(format!("Failed to create save file: {e}")))?;
     // Claim the temporary for as long as this write lasts, so another
     // window's sweep can tell it apart from one a crash stranded. The
     // kernel drops this when the process does, however it does, which is
@@ -264,19 +383,37 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
             fault::Boundary::Permissions,
             tmp.as_file().set_permissions(metadata.permissions())
         )
-        .map_err(|e| format!("Failed to preserve file permissions: {e}"))?,
+        .map_err(|e| FailedBeforeCommit(format!("Failed to preserve file permissions: {e}")))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("Failed to inspect destination: {e}")),
+        Err(e) => return Err(FailedBeforeCommit(format!("Failed to inspect destination: {e}"))),
     }
     test_pause("created", path);
     fail_point!(fault::Boundary::WriteData, tmp.write_all(bytes))
-        .map_err(|e| format!("Failed to write file: {e}"))?;
+        .map_err(|e| FailedBeforeCommit(format!("Failed to write file: {e}")))?;
     fail_point!(fault::Boundary::SyncData, tmp.as_file().sync_all())
-        .map_err(|e| format!("Failed to sync file: {e}"))?;
+        .map_err(|e| FailedBeforeCommit(format!("Failed to sync file: {e}")))?;
     test_pause("written", path);
+    // The version this save produces. Rename keeps inode, mtime and size, and
+    // nothing writes to the temporary after the sync above.
+    let written = tmp
+        .as_file()
+        .metadata()
+        .map(|m| FileVersion::from_metadata(&m))
+        .map_err(|e| FailedBeforeCommit(format!("Failed to inspect saved file: {e}")))?;
+    // As late as possible: after the slow work (write + fsync, and any pause
+    // a journey holds), immediately before the rename. See the residual-race
+    // note on `atomic_write_bytes_conditional`. A mismatch returns here and
+    // `tmp` drops, removing the temporary; the destination is never touched.
+    if let Some(expected) = precondition {
+        let current = FileVersion::capture(path)
+            .map_err(|e| FailedBeforeCommit(format!("Failed to inspect destination: {e}")))?;
+        if current.as_ref() != expected {
+            return Err(SaveError::PreconditionFailed);
+        }
+    }
     fail_point!(fault::Boundary::Persist, Ok(()))
         .and_then(|()| tmp.persist(path).map_err(std::io::Error::from))
-        .map_err(|e| format!("Failed to finalize save: {e}"))?;
+        .map_err(|e| FailedBeforeCommit(format!("Failed to finalize save: {e}")))?;
     // Persist the directory entry as well as the data before reporting a
     // durable save. If this fails, the new file is present but durability
     // isn't confirmed; callers must retain dirty state/recovery data.
@@ -285,12 +422,16 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         fault::Boundary::SyncDir,
         fs::File::open(dir).and_then(|dir| dir.sync_all())
     )
-    .map_err(|e| format!("File replaced, but failed to sync its directory: {e}"))?;
+    .map_err(|e| {
+        SaveError::CommittedWithDirSyncFailure(format!(
+            "File replaced, but failed to sync its directory: {e}"
+        ))
+    })?;
     // Only once the save has succeeded: a sweep is housekeeping, and doing
     // it first would spend time and risk on the path that still has the
     // user's document to save.
     sweep_stranded_temps(dir, std::time::SystemTime::now());
-    Ok(())
+    Ok(written)
 }
 
 #[cfg(test)]
@@ -863,6 +1004,200 @@ mod tests {
             .filter_map(|e| e.ok().map(|e| e.file_name()))
             .collect();
         assert_eq!(names, vec![name.to_os_string()], "saved beside the requested path");
+    }
+
+    // ---- SH-002: destination version precondition -------------------------
+
+    /// Set a file's mtime explicitly, so a test never depends on the
+    /// filesystem's timestamp granularity to see (or not see) a change.
+    fn set_mtime(path: &Path, when: std::time::SystemTime) {
+        let handle = fs::OpenOptions::new().write(true).open(path).unwrap();
+        handle.set_times(fs::FileTimes::new().set_modified(when)).unwrap();
+    }
+
+    /// The directory holds the document and nothing else: a refused or failed
+    /// save must not strand its temporary.
+    fn assert_only_entry(dir: &Path, name: &str) {
+        let names: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.file_name()))
+            .collect();
+        assert_eq!(names, vec![std::ffi::OsString::from(name)], "stray entries in {dir:?}");
+    }
+
+    #[test]
+    fn a_matching_version_saves_and_returns_the_new_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap().expect("file exists");
+
+        let saved = atomic_write_bytes_conditional(&path, b"first save", Some(&opened)).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), b"first save");
+        assert_eq!(
+            FileVersion::capture(&path).unwrap().as_ref(),
+            Some(&saved),
+            "the returned version must describe the file now at the path"
+        );
+        assert_ne!(saved, opened, "a new file must not look like the one it replaced");
+        // The returned version is what the next save expects.
+        atomic_write_bytes_conditional(&path, b"second save", Some(&saved)).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"second save");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    /// An external in-place rewrite that changes the size keeps the inode, so
+    /// it is the size (and mtime) that must catch it.
+    #[test]
+    fn an_external_size_change_refuses_the_save_and_keeps_their_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+
+        fs::write(&path, b"someone else wrote a longer document").unwrap();
+        let err = atomic_write_bytes_conditional(&path, b"mine", opened.as_ref()).unwrap_err();
+
+        assert_eq!(err, SaveError::PreconditionFailed);
+        assert_eq!(fs::read(&path).unwrap(), b"someone else wrote a longer document");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    /// Same size, same inode: only the mtime differs, and it is set
+    /// explicitly so a coarse-grained clock cannot hide the change.
+    #[test]
+    fn an_external_same_size_rewrite_is_caught_by_mtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+
+        fs::write(&path, b"tampered").unwrap();
+        set_mtime(&path, std::time::SystemTime::now() + std::time::Duration::from_secs(3600));
+        let err = atomic_write_bytes_conditional(&path, b"mine", opened.as_ref()).unwrap_err();
+
+        assert_eq!(err, SaveError::PreconditionFailed);
+        assert_eq!(fs::read(&path).unwrap(), b"tampered");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    /// Another window's atomic save renames a new file over the path. Make
+    /// the replacement identical in size and mtime so the inode is the only
+    /// thing left to tell them apart. It is created while the original still
+    /// exists, so the inode numbers cannot be recycled into a false match.
+    #[cfg(unix)]
+    #[test]
+    fn a_replaced_inode_refuses_the_save_even_when_size_and_mtime_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+        let original_mtime = fs::metadata(&path).unwrap().modified().unwrap();
+
+        let sibling = dir.path().join("other-window.tmp");
+        fs::write(&sibling, b"replaced").unwrap();
+        set_mtime(&sibling, original_mtime);
+        fs::rename(&sibling, &path).unwrap();
+        let now = FileVersion::capture(&path).unwrap();
+        assert_ne!(now, opened, "precondition: the replacement must differ");
+
+        let err = atomic_write_bytes_conditional(&path, b"mine", opened.as_ref()).unwrap_err();
+
+        assert_eq!(err, SaveError::PreconditionFailed);
+        assert_eq!(fs::read(&path).unwrap(), b"replaced");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    #[test]
+    fn expecting_no_file_saves_only_when_the_destination_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        assert_eq!(FileVersion::capture(&path).unwrap(), None);
+
+        // Absent and expected absent: creates it.
+        let created = atomic_write_bytes_conditional(&path, b"created", None).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"created");
+        assert_eq!(FileVersion::capture(&path).unwrap(), Some(created));
+
+        // Present but expected absent: someone created it first.
+        let err = atomic_write_bytes_conditional(&path, b"clobber", None).unwrap_err();
+        assert_eq!(err, SaveError::PreconditionFailed);
+        assert_eq!(fs::read(&path).unwrap(), b"created");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    #[test]
+    fn a_deleted_destination_refuses_a_save_that_expected_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+
+        let err = atomic_write_bytes_conditional(&path, b"mine", opened.as_ref()).unwrap_err();
+
+        assert_eq!(err, SaveError::PreconditionFailed);
+        assert!(!path.exists(), "a refused save must not resurrect a deleted file");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0, "temporary left behind");
+    }
+
+    /// The unconditional wrapper keeps its behaviour: it overwrites a file
+    /// that changed underneath it.
+    #[test]
+    fn the_unconditional_wrapper_still_overwrites_a_changed_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        fs::write(&path, b"changed externally").unwrap();
+
+        atomic_write_bytes(&path, b"mine").unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), b"mine");
+    }
+
+    /// A pre-rename failure is `FailedBeforeCommit`, with the original kept.
+    #[test]
+    fn a_failure_before_the_rename_is_reported_as_not_committed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+
+        let err = {
+            let _armed = fault::arm(fault::Boundary::SyncData);
+            atomic_write_bytes_conditional(&path, b"never lands", opened.as_ref()).unwrap_err()
+        };
+
+        assert!(matches!(err, SaveError::FailedBeforeCommit(_)), "got {err:?}");
+        assert_eq!(fs::read(&path).unwrap(), b"original");
+        assert_eq!(FileVersion::capture(&path).unwrap(), opened, "destination must be untouched");
+        assert_only_entry(dir.path(), "doc.txt");
+    }
+
+    /// The directory sync fails after the rename: the new bytes are at the
+    /// destination and the outcome says so, distinctly from a failed save.
+    #[cfg(unix)]
+    #[test]
+    fn a_dir_sync_failure_after_the_rename_is_reported_as_committed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("doc.txt");
+        fs::write(&path, b"original").unwrap();
+        let opened = FileVersion::capture(&path).unwrap();
+
+        let err = {
+            let _armed = fault::arm(fault::Boundary::SyncDir);
+            atomic_write_bytes_conditional(&path, b"new content", opened.as_ref()).unwrap_err()
+        };
+
+        match &err {
+            SaveError::CommittedWithDirSyncFailure(msg) => {
+                assert!(msg.contains("File replaced"), "message: {msg}");
+            }
+            other => panic!("expected CommittedWithDirSyncFailure, got {other:?}"),
+        }
+        assert_eq!(fs::read(&path).unwrap(), b"new content");
+        assert!(err.to_string().contains("File replaced"), "Display must carry the message");
     }
 
 }

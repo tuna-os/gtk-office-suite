@@ -220,16 +220,7 @@ pub const FALLBACK_BACKGROUND: &str = "#ffffff";
 /// means absent at every level — never white smuggled in at import.
 /// An explicit white slide on a coloured master stays white.
 pub fn resolve_background<'a>(slide_bg: &'a str, layout_bg: Option<&'a str>, master_bg: &'a str) -> &'a str {
-    if !slide_bg.is_empty() {
-        return slide_bg;
-    }
-    if let Some(bg) = layout_bg.filter(|b| !b.is_empty()) {
-        return bg;
-    }
-    if !master_bg.is_empty() {
-        return master_bg;
-    }
-    FALLBACK_BACKGROUND
+    crate::engine::resolver::stated_background(slide_bg, layout_bg, master_bg).unwrap_or(FALLBACK_BACKGROUND)
 }
 
 /// The placeholder a slide object fills, if any.
