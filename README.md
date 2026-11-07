@@ -18,7 +18,7 @@ libadwaita, and an email client built alongside them, shipped as Flatpaks:
 | **Letters** | Word processor | DOCX, ODT, Markdown, TXT | DOCX, ODT, Markdown, HTML, PDF, TXT |
 | **Tables** | Spreadsheet | XLSX, XLS, ODS, CSV, TSV | XLSX, PDF |
 | **Decks** | Presentations | PPTX, ODP | PPTX, ODP, PDF |
-| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/hylki](https://github.com/tuna-os/hylki) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
+| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/lifafa](https://github.com/tuna-os/lifafa) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
 
 CSV and TSV are import-only in Tables, on purpose: saving a spreadsheet
 over an imported `.csv` would write XLSX bytes to a file everything else
@@ -27,13 +27,13 @@ reads as text, so Save As offers `.xlsx` instead.
 Lifafa (a word for envelope) is not built from this repository. It is
 [Hylki](https://github.com/hyprlab/hylki) by hyprlab with native Tuta and
 Proton Mail accounts added, developed in the fork
-[tuna-os/hylki](https://github.com/tuna-os/hylki), and it belongs to the
-suite by name, icon and packaging. Its Flatpak bundles are on that
-repository's [releases page](https://github.com/tuna-os/hylki/releases),
-currently
-[1.47.1-tuna4](https://github.com/tuna-os/hylki/releases/tag/v1.47.1-tuna4).
-Report problems with it in this repository's issues. Everything below this
-section is about Letters, Tables and Decks.
+[tuna-os/lifafa](https://github.com/tuna-os/lifafa), and it belongs to the
+suite by name, icon and packaging. It is published from that repository as a
+signed Flatpak repository on its GitHub Pages, and as bundles on its
+[releases page](https://github.com/tuna-os/lifafa/releases) (see
+[Install](#install)). Report problems with it in
+[tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
+Everything below this section is about Letters, Tables and Decks.
 
 They are not a LibreOffice port. Each app has its own document model in a
 GTK-free `*-core` crate, and compatibility with other office software is
@@ -94,13 +94,20 @@ Then launch them from your application menu, or:
 flatpak run org.tunaos.letters
 ```
 
-Lifafa is not in the TunaOS repository yet. Download its bundle from the
-[latest release of tuna-os/hylki](https://github.com/tuna-os/hylki/releases)
-and install that file, for example:
+Lifafa is not in the TunaOS repository; it has a signed Flatpak repository of
+its own (coming with its first release published there, v1.47.1-tuna6), which
+`flatpak update` follows:
 
 ```bash
-flatpak install --user org.tunaos.lifafa-1.47.1-tuna4.flatpak
+flatpak install --user https://tuna-os.github.io/lifafa/org.tunaos.lifafa.flatpakref
 ```
+
+Until then, or to install a file, download the bundle from the
+[latest release of tuna-os/lifafa](https://github.com/tuna-os/lifafa/releases/latest)
+and install it with `flatpak install --user org.tunaos.lifafa-<version>.flatpak`.
+The signing key, the bundles and moving an older bundle install over to the
+repository are in
+[Lifafa's install instructions](https://github.com/tuna-os/lifafa#install).
 
 Something not working? See [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
 
