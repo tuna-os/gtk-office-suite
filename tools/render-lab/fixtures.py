@@ -1004,6 +1004,7 @@ def tables(img=None):
     ws.column_dimensions["B"].width = 40
     save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
+    wb, ws = book()
     # Reduced from real-competition-in-uk-electricity-markets-2025-data
     # (#1336): its cover sheet has pageSetup scale="46". Keep this grid
     # small enough to fit the capture, so viewport clipping cannot explain
@@ -1038,6 +1039,7 @@ def tables(img=None):
             ws.cell(row, col, f"Row {row} column {col}")
     save(wb, "print-fit-page", "A wide landscape A4 worksheet fitted to one printed page, with a 62% stored print scale")
 
+    wb, ws = book()
     # Reduced from real-fruit-and-vegetable-aid-scheme-annual-stats-2025
     # (#1334): wide columns (widths 45, 42, 60) exceed standard A4 portrait
     # printable width (~17.4 cm) and span across multiple vertical pages
