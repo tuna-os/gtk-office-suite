@@ -454,6 +454,72 @@ async fn collabora_timestamp_conflict_is_reported_as_1010() {
     assert_eq!(info["DcpHeads"].as_array().unwrap().len(), 2);
 }
 
+/// Spec 8.2 rule 6: with more than one head `CheckFileInfo` says `UserCanWrite`
+/// false. A client that ignores that and sends `PutFile` anyway (with a lock, a
+/// timestamp, neither) must not add to the conflicted document: its save would
+/// be a child of one head (or of an ancestor), park the user's work on a branch
+/// and leave the conflict standing. 409 with `COOLStatusCode` 1010 and no
+/// `X-WOPI-Lock`, so Collabora reloads and finds the document read-only.
+#[tokio::test]
+async fn put_file_on_a_conflicted_document_is_refused() {
+    let rig = Rig::new().await;
+    grant(&rig, "@bob:test", Role::Editor).await;
+    let (a, b) = (rig.token("@alice:test"), rig.token("@bob:test"));
+    get_file(&rig, &a).await;
+    post_op(&rig, &a, "LOCK", &[("X-WOPI-Lock", "L1")]).await;
+    let bob = rig.backend.handle("@bob:test");
+    let vb = bob
+        .publish_version(&rig.doc, vec![rig.v1.clone()], NewFile { mime: ODT_MIME.into(), bytes: make_odt("bob") }, None)
+        .await
+        .unwrap();
+    // Alice's forced save (no timestamp) forks: two heads.
+    let r = put(&rig, &a, &[("X-WOPI-Lock", "L1")], make_odt("alice forced")).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    let va = r.headers()["x-wopi-itemversion"].to_str().unwrap().to_string();
+    let info = cfi(&rig, &b).await;
+    assert_eq!(info["UserCanWrite"], false);
+    assert_eq!(info["DcpHeads"].as_array().unwrap().len(), 2);
+    assert_eq!(version_count(&rig).await, 3);
+    let stamp = info["LastModifiedTime"].as_str().unwrap().to_string();
+
+    // Alice again (her lease is still hers), with and without Collabora's
+    // timestamp; Bob after reading, with the timestamp he was given.
+    get_file(&rig, &b).await;
+    let attempts: Vec<(&str, &String, Vec<(&str, &str)>)> = vec![
+        ("alice, her lock, no timestamp", &a, vec![("X-WOPI-Lock", "L1")]),
+        ("alice, her lock, the timestamp", &a, vec![("X-WOPI-Lock", "L1"), ("X-COOL-WOPI-Timestamp", &stamp)]),
+        ("bob, no lock, no timestamp", &b, vec![]),
+        ("bob, no lock, the timestamp", &b, vec![("X-COOL-WOPI-Timestamp", &stamp)]),
+    ];
+    for (who, token, headers) in attempts {
+        let r = put(&rig, token, &headers, make_odt("ignoring UserCanWrite=false")).await;
+        assert_eq!(r.status(), StatusCode::CONFLICT, "{who}: a PutFile on a conflicted document must be refused");
+        assert!(r.headers().get("x-wopi-lock").is_none(), "{who}: a lock header would read as a lock mismatch");
+        let body: Value = r.json().await.unwrap();
+        assert_eq!(body["COOLStatusCode"], 1010, "{who}");
+        assert_eq!(version_count(&rig).await, 3, "{who}: nothing may be published");
+    }
+
+    // Merging the two heads natively makes the document writable again, and a
+    // session that re-reads can save.
+    let merge = bob
+        .publish_version(
+            &rig.doc,
+            vec![vb.id.clone(), va.clone()],
+            NewFile { mime: ODT_MIME.into(), bytes: make_odt("merged") },
+            Some("merge".into()),
+        )
+        .await
+        .unwrap();
+    let info = cfi(&rig, &a).await;
+    assert_eq!(info["UserCanWrite"], true);
+    assert_eq!(info["DcpHeads"], serde_json::json!([merge.id]));
+    get_file(&rig, &a).await;
+    let r = put(&rig, &a, &[("X-WOPI-Lock", "L1"), ("X-COOL-WOPI-Timestamp", info["LastModifiedTime"].as_str().unwrap())], make_odt("after merge")).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    assert_eq!(version_count(&rig).await, 5);
+}
+
 #[tokio::test]
 async fn put_file_refuses_a_package_that_does_not_open() {
     let rig = Rig::new().await;

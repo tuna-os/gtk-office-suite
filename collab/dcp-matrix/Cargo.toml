@@ -1,0 +1,33 @@
+[package]
+name = "dcp-matrix"
+description = "DCP draft-1 Matrix binding (spec 8.1), Spike A of RFC-0004. Measured against a real Synapse."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[features]
+# Persistent state/crypto store instead of the in-memory default. Pulls in
+# rusqlite (bundled C sqlite), so it is off unless asked for.
+sqlite = ["matrix-sdk/sqlite", "matrix-sdk/bundled-sqlite"]
+
+[dependencies]
+dcp-core = { path = "../dcp-core" }
+async-trait.workspace = true
+base64.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+sha2.workspace = true
+tokio.workspace = true
+hmac = "0.12"
+# Same crate instance as matrix-sdk's (feature unification); adds `.json()`.
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
+sha1 = "0.10"
+httpdate = "1"
+matrix-sdk = { version = "=0.19.1", default-features = false, features = ["e2e-encryption", "automatic-room-key-forwarding", "rustls-aws-lc-rs"] }
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
+dcp-conformance = { path = "../dcp-conformance" }
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }

@@ -1,0 +1,21 @@
+[package]
+name = "suite-collab"
+version = "0.1.0"
+edition = "2021"
+description = "GTK-free, synchronous wire protocol between an app shell and the collabd sidecar (RFC-0005 2.2): Command and Event types, a JSON-lines codec, and a SessionClient"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+keywords = ["collaboration", "protocol"]
+
+# RFC-0005 option B: the shell never links a network stack. This crate is the
+# one file both ends share, so it depends on serde and serde_json only (both
+# are already in the root Cargo.lock) and has no async runtime and no dcp-*
+# crate. The sidecar (collab/collabd, its own cargo workspace) depends on it by
+# path.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lib]
+name = "suite_collab"
+path = "src/lib.rs"

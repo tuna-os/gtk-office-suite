@@ -12,6 +12,7 @@ use dcp_wopi::{HostConfig, RunningHost, WopiClientStore, WopiHost};
 
 use crate::common::proxy::FaultProxy;
 use crate::common::{self, Synapse};
+use crate::profile;
 use crate::raw::RawWopi;
 
 /// The three principals of a rig. Each is a distinct Matrix user and device.
@@ -81,8 +82,10 @@ pub struct RigOptions {
     /// Spec version rule 3: the host refuses a `PutFile` that is not a readable
     /// ODF/OOXML package. Off for opaque bytes.
     pub validate_packages: bool,
-    /// How long a check waits for an effect to reach another handle.
-    pub settle: Duration,
+    /// How long a check waits for an effect to reach another handle. `None`
+    /// takes the profile's value ([`crate::profile::settle_for`]): 30 s on a
+    /// relaxed Synapse, [`crate::profile::SETTLE_DEFAULT`] on the default one.
+    pub settle: Option<Duration>,
 }
 
 impl RigOptions {
@@ -94,7 +97,7 @@ impl RigOptions {
             wopi_port: 0,
             first_file: None,
             validate_packages: false,
-            settle: Duration::from_secs(30),
+            settle: None,
         }
     }
 
@@ -120,7 +123,7 @@ impl RigOptions {
     pub fn draft0_power_levels_and_readers_that_trust_senders(mut self) -> Self {
         self.config = |c| {
             c.enforce_encrypted_pl = false;
-            c.reader_checks_senders = false;
+            c.sender_rule = dcp_matrix::SenderRule::Trust;
         };
         self
     }
@@ -138,26 +141,44 @@ impl RigOptions {
     /// A broken store makes a check time out; a short settle keeps a negative
     /// control from waiting the full 30 s.
     pub fn settle(mut self, d: Duration) -> Self {
-        self.settle = d;
+        self.settle = Some(d);
         self
     }
 }
 
-/// The Synapse profile every interop test is written for: the binding's own
-/// 3 events/s client limiter is the only pacing, as in the spike-A journeys.
+/// The relaxed profile only (`scripts/synapse-up.sh relaxed`): for the tests
+/// whose point is a rate-limit-free homeserver (the negative controls, which
+/// wait a few seconds for an effect that never comes).
 pub fn require_relaxed(syn: &Synapse) {
     assert_eq!(
         syn.profile, "relaxed",
-        "the interop tests need Synapse started with `scripts/synapse-up.sh relaxed` (DCP_SYNAPSE_PROFILE=relaxed), got {:?}",
+        "this test needs Synapse started with `scripts/synapse-up.sh relaxed` (DCP_SYNAPSE_PROFILE=relaxed), got {:?}",
         syn.profile
     );
 }
 
 /// `Some` when a Synapse is configured; `None` only for an explicit
 /// `DCP_SKIP_SYNAPSE=1` (printed as SKIPPED by [`common::synapse`]). Panics
-/// otherwise, so a missing Synapse fails the run.
+/// otherwise, so a missing Synapse fails the run. Both of
+/// `scripts/synapse-up.sh`'s profiles are accepted: `relaxed` (the binding's
+/// own 3 events/s client limiter is the only pacing) and `default` (Synapse's
+/// shipped `rc_message`: 0.2 events/s per user, burst 10), where the Matrix
+/// client queues and backs off on `M_LIMIT_EXCEEDED` and the harness's
+/// settle time and per-test deadline are those of [`crate::profile`]. Any
+/// other profile name fails: an unknown profile has unknown limits.
 pub fn synapse() -> Option<Synapse> {
     let syn = common::synapse()?;
+    assert!(
+        syn.profile == "relaxed" || syn.profile == "default",
+        "DCP_SYNAPSE_PROFILE must be `relaxed` or `default` (scripts/synapse-up.sh), got {:?}",
+        syn.profile
+    );
+    Some(syn)
+}
+
+/// [`synapse`], and the relaxed profile is required.
+pub fn synapse_relaxed() -> Option<Synapse> {
+    let syn = synapse()?;
     require_relaxed(&syn);
     Some(syn)
 }
@@ -205,7 +226,6 @@ impl Rig {
             editor: Arc::new(mk("editor").await),
             viewer: Arc::new(mk("viewer").await),
         };
-
         let first_bytes = opts.first_file.map_or_else(|| BASE_FILE.to_vec(), |f| f());
         let doc = handles.owner.create_document(&standard_meta(), Some(new_file(&first_bytes))).await?;
         handles.owner.grant(&doc, &handles.editor.principal(), Role::Editor).await?;
@@ -245,7 +265,7 @@ impl Rig {
             tokens,
             doc,
             first,
-            settle: opts.settle,
+            settle: opts.settle.unwrap_or_else(|| profile::settle_for(syn)),
             backing: opts.backing,
         };
         // Join and read before the first check: the editor and the viewer
@@ -253,6 +273,21 @@ impl Rig {
         for who in [Who::Editor, Who::Viewer] {
             let first = rig.first.clone();
             rig.wait_head(who, &first).await?;
+        }
+        // The drained profile (DCP_DRAIN_BURST=1, default Synapse only): the
+        // room exists and everyone has read it; now every principal's message
+        // budget is spent, together, so the first event of the check or the
+        // journey, from anyone, is already paced by the homeserver. (Draining
+        // before the setup would let the editor's and the viewer's buckets
+        // refill while the owner builds the room.)
+        if profile::drained(syn) {
+            let h = &rig.handles;
+            let (a, b, c) = tokio::join!(
+                profile::drain_message_budget(&h.owner),
+                profile::drain_message_budget(&h.editor),
+                profile::drain_message_budget(&h.viewer)
+            );
+            println!("drained the message budgets after {} / {} / {} events (owner / editor / viewer)", a?, b?, c?);
         }
         Ok(rig)
     }
@@ -273,6 +308,13 @@ impl Rig {
         );
         let raw = RawWopi::new(&self.base_url(), &doc, &token);
         Ok((doc, raw))
+    }
+
+    /// What the three principals' stores have sent, and waited for the
+    /// homeserver's rate limit to allow, so far. The WOPI host's backing stores
+    /// are these same handles, so a WOPI request is counted here too.
+    pub fn stats(&self) -> dcp_matrix::StatsSnapshot {
+        profile::sum_stats(&[&*self.handles.owner, &*self.handles.editor, &*self.handles.viewer])
     }
 
     /// The principal's handle as a native caller sees it.

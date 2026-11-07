@@ -29,7 +29,7 @@ pub struct MatrixViewerForger(pub Arc<MatrixStore>);
 impl Forger for MatrixViewerForger {
     async fn forge_version(&self, doc: &DocId, version: Version) -> Result<Option<String>, Failure> {
         let content = serde_json::to_value(&version).map_err(|e| Failure::new(e.to_string()))?;
-        match self.0.send_unchecked(doc, "org.tunaos.dcp.version", content).await {
+        match crate::profile::send_unchecked_patiently(&self.0, doc, "org.tunaos.dcp.version", content).await {
             Ok(id) => Ok(Some(id)),
             Err(StoreError::Forbidden(_)) => Ok(None),
             Err(e) => Err(e.into()),
@@ -41,16 +41,26 @@ pub struct InteropFactory {
     pub syn: Synapse,
     pub stack: Stack,
     pub opts: RigOptions,
+    /// The stores of every rig `fresh` has built, so a runner can say how much
+    /// of a journey's time went to the homeserver's rate limit.
+    rigs: std::sync::Mutex<Vec<[Arc<MatrixStore>; 3]>>,
 }
 
 impl InteropFactory {
     pub fn new(syn: Synapse, stack: Stack) -> Self {
-        InteropFactory { syn, stack, opts: RigOptions::honest() }
+        InteropFactory { syn, stack, opts: RigOptions::honest(), rigs: Default::default() }
     }
 
     pub fn with_options(mut self, opts: RigOptions) -> Self {
         self.opts = opts;
         self
+    }
+
+    /// Counters summed over every store of every rig built so far.
+    pub fn stats_total(&self) -> dcp_matrix::StatsSnapshot {
+        let rigs = self.rigs.lock().expect("rigs lock");
+        let all: Vec<&MatrixStore> = rigs.iter().flat_map(|r| r.iter().map(|s| &**s)).collect();
+        crate::profile::sum_stats(&all)
     }
 }
 
@@ -101,6 +111,7 @@ impl StoreFactory for InteropFactory {
 
     async fn fresh(&self) -> Result<Fixture, Failure> {
         let rig = Rig::new(&self.syn, self.opts).await?;
+        self.rigs.lock().expect("rigs lock").push([rig.handles.owner.clone(), rig.handles.editor.clone(), rig.handles.viewer.clone()]);
         let handles: [Arc<dyn DocumentStore>; 3] = match self.stack {
             Stack::Matrix => Who::ALL.map(|w| rig.native(w).clone()),
             Stack::WopiOverMatrix => Who::ALL.map(|w| Arc::new(rig.sim(w)) as Arc<dyn DocumentStore>),

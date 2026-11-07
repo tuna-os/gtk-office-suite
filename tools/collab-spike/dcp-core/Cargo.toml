@@ -14,7 +14,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-parking_lot = "0.12"
+parking_lot = "0.13"
 # The schemas are local, so no HTTP retriever is wanted (and reqwest is heavy).
 jsonschema = { version = "0.30", default-features = false }
 

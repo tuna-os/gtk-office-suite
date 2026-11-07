@@ -1,6 +1,6 @@
 # RFC 0004: An interoperable document-collaboration protocol (Matrix, OCM, WOPI and local-first bindings)
 
-Date: 2026-10-24 · Status: **draft, not accepted** (Spikes A and D have run; B, C and E have not) · Related: [RFC-0001](0001-crdt-collaboration.md), [RFC-0003](0003-cloud-documents.md)
+Date: 2026-10-24 · Status: **draft, not accepted** (Spikes A to F have each run once; see [Spike results](#spike-results)) · Related: [RFC-0001](0001-crdt-collaboration.md), [RFC-0003](0003-cloud-documents.md)
 
 ## Provenance
 
@@ -12,9 +12,10 @@ argued with before any code exists.
 
 The research below was written before anything was built, and every claim in it is either cited to a
 source in [References](#references) or listed under [Not verified](#not-verified). Where a source is a
-vendor blog or a conference abstract, the claim is only as strong as that. Spikes A (Matrix) and D
-(WOPI) have since run once each; see [Spike results](#spike-results), and the claims they checked
-have moved out of Not verified.
+vendor blog or a conference abstract, the claim is only as strong as that. Spikes A (Matrix), B
+(Durable Streams), C (iroh and p2panda), D (WOPI), E (OCM and WebDAV) and F (default rate limits and
+verification gaps) have since run once each; see [Spike results](#spike-results), and the claims
+they checked have moved out of Not verified.
 
 ## Summary
 
@@ -227,19 +228,19 @@ a requirement.
 
 ## What would have to be proven
 
-Matching this repository's definition of done. The last column is what Spikes A and D showed; "not
+Matching this repository's definition of done. The last column is what Spikes A to F showed; "not
 run" means no spike has tried it.
 
-| Claim | Evidence | After Spikes A and D |
+| Claim | Evidence | After Spikes A to F |
 |---|---|---|
-| Two instances converge over each binding | AT-SPI journey launching two app instances, per binding | Matrix and WOPI: store-level journey 1 passed (two store handles, not two app instances). Other bindings: not run |
-| A removed member cannot read new updates | Journey: remove, edit, assert the removed device cannot decrypt (Matrix; p2panda-auth if chosen) | Matrix: passed, 0 of 70 trials with a control, on the condition that the sender's member view shows the removal. p2panda-auth: not run |
-| Offline gap merges after reconnect | Journey: disconnect, edit both sides, reconnect | Not run as a merge. Matrix: queued events were delivered in order after a 6 to 8 s outage; a second head is shown, not merged |
-| A version always points at a complete, valid file | Atomic-save property tests extended to version creation | Matrix: verify-after-upload, and a truncated upload was never published. The property tests were not extended |
-| A WOPI client round-trips a version | Collabora Online opens a version, edits, saves, and the new version appears with correct parent | **Passed once**, Collabora Online 26.04.5.2, over an in-memory store |
-| Lease expiry releases the document | Journey: kill the holder, assert another editor can take over after expiry | Passed at store level on Matrix and in memory (journey 5), after a fix: a renewal had to change the record. On the WOPI wire: host tests only |
+| Two instances converge over each binding | AT-SPI journey launching two app instances, per binding | Store-level journey 1 passed (two store handles, not two app instances) on Matrix, WOPI, Nextcloud (three users, one server and a two-server federation), Durable Streams (both servers) and iroh with p2panda (three nodes). No binding was run with two app instances |
+| A removed member cannot read new updates | Journey: remove, edit, assert the removed device cannot decrypt (Matrix; p2panda-auth if chosen) | Matrix: passed, 0 of 70 trials with a control, on the condition that the sender's member view shows the removal. Durable Streams: a real second principal holding every key it ever had decrypted 0 of 2 records and 0 of 1 file published after its removal, and a control that reuses the key decrypted them. p2panda: later entries unreadable, **but content published by a member that had not applied the removal was readable by the removed member** (measured). Nextcloud: access control only (`404`), not encryption |
+| Offline gap merges after reconnect | Journey: disconnect, edit both sides, reconnect | p2panda: two offline writers' versions were two heads at all three nodes 55 ms after reconnecting (release) and a merge left one head. Matrix: queued events were delivered in order after a 6 to 8 s outage; a second head is shown, not merged. Durable Streams and Nextcloud: the second-head journey passes (a fork is shown); no merge was timed |
+| A version always points at a complete, valid file | Atomic-save property tests extended to version creation | Matrix, Durable Streams, Nextcloud and p2panda: verify-after-upload, and a truncated upload was never published (on Nextcloud a short body is refused `400` and the read-back catches the rest; on Durable Streams an upload cut on the wire left no stream). The property tests were not extended |
+| A WOPI client round-trips a version | Collabora Online opens a version, edits, saves, and the new version appears with correct parent | **Passed once**, Collabora Online 26.04.5.2, over an in-memory store (Spike D) and over the Matrix binding (interop results, Spike F churn: one version per `PutFile`) |
+| Lease expiry releases the document | Journey: kill the holder, assert another editor can take over after expiry | Passed at store level on Matrix, in memory, Durable Streams, iroh and p2panda (with clocks 60 s apart) and Nextcloud; **a 4 s lease failed across an OCM federation in 7 of 8 runs and passes at 20 s**. On the WOPI wire: host tests only |
 | A merged document round-trips ODT/DOCX with a truthful loss report | Existing oracle corpora on post-merge documents | Not run |
-| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default | Not run |
+| No new permission without user action; collaboration off by default | Manifest review plus a test asserting the default | Not run. Spike C: three nodes in one Flatpak build sandbox reach each other over loopback with and without `--share=network`; reaching another device needs `--share=network` in `finish-args`, which the repository's manifests grant only to the build. Relay spike: the permission cannot be limited to ports; outside Flatpak a client needed outbound TCP 443 to the relay and, to be direct, UDP to its peers, and nothing else (no DNS with an IP-literal relay URL; nothing contacted with iroh's `Minimal` preset, while the `N0` preset publishes the endpoint id and home relay to `dns.iroh.link`). Not run inside an installed Flatpak on two devices |
 | Identity mapping between bindings is unambiguous | Test: a Matrix ID and an OCM address never resolve to the same principal unless explicitly linked | Not run |
 
 ## Phases and spikes
@@ -252,47 +253,129 @@ Each must be abandonable without leaving the codebase worse.
   level journeys instead of two Tables instances and no Loro deltas; room growth was measured to
   1,000 events, not an hour (see [Spike results](#spike-results)).*
 - **Spike B: Durable Streams.** The same journeys over a Durable Streams server with client-side
-  encryption.
+  encryption. *Ran, against two servers; see [Spike results](#spike-results).*
 - **Spike C: iroh and p2panda.** The same journeys with `p2panda-auth` and `p2panda-encryption`.
+  *Ran, with the p2panda pieces that work and iroh-blobs; see [Spike results](#spike-results).*
 - **Spike D: WOPI host adapter.** A small Matrix-backed WOPI host. Collabora Online reads and writes
   versions with no Collabora change. This is the test of L1 for session-hosted editors. *Ran, over
   an in-memory store rather than Matrix (see [Spike results](#spike-results)).*
 - **Spike E: OCM interoperability.** Read-only: discover and receive an OCM share from a Nextcloud
-  instance and open it. Decides whether an OCM binding is practical.
+  instance and open it. Decides whether an OCM binding is practical. *Ran, and went further than
+  read-only: a full WebDAV store over OCS sharing and an OCM federation, which rejected the
+  draft-1 outline and replaced it (see [Spike results](#spike-results)).*
+- **Spike F: verification gaps.** The interop suites on default rate limits, forged updates and
+  demoted editors, the lease race 1 200 times, and Collabora's save churn against Matrix's limits.
+  *Ran (see [Spike results](#spike-results)).*
 - **Output.** A results file for each, like `0001-spike-results.md`, ending in go or no-go, and a
-  recommendation on whether the three transports remain bindings or one wins.
+  recommendation on whether the three transports remain bindings or one wins. *See
+  [Open questions](#open-questions): the evidence does not make one win.*
 
-A draft-1 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-COLLABORATION-SPEC.md), with schemas and examples in [`docs/collab-spec/`](../collab-spec/). Its Matrix binding and WOPI adapter have each been measured once and corrected from the results ([Spike results](#spike-results)); its OCM, Durable Streams and iroh bindings have not been measured. Nobody outside this repository should implement it before the remaining spikes report and the namespace is registered.
+A draft-1 specification exists: [`DOCUMENT-COLLABORATION-SPEC.md`](../DOCUMENT-COLLABORATION-SPEC.md), with schemas and examples in [`docs/collab-spec/`](../collab-spec/). Each of its five bindings (Matrix, WOPI adapter, OCM with WebDAV, Durable Streams, iroh with p2panda) has been measured once and the spec corrected from the results ([Spike results](#spike-results)); L3 presence and any update algorithm profile have not. Nobody outside this repository should implement it before the namespace is registered and a second implementation has read the bytes of a binding.
 
 ## Spike results
 
-Spikes A and D have run; B, C and E have not. Each ran **once**, in CI, on one build, and says so.
+Spikes A to F have each run **once**, in CI, on one build of each system, and say so. Three further
+CI verification spikes (TLS, Q15 and relay, below) closed items the first six left open, each run on
+its own branch and workflow. The results documents for the three new spikes live on the branches
+`spike/collab-tls`, `spike/collab-q15` and `spike/collab-relay` until they are integrated.
 
 | Spike | Measured against | Verdict | Results |
 |---|---|---|---|
 | **A: Matrix** | Synapse 1.163.2, matrix-sdk 0.19.1, loopback, one GitHub-hosted 2-core runner | **Go** for L0, L1 and the version-carrying half of L2, with nine corrections to the draft (now in the spec). **No-go as written** for the power-level table (a viewer's forged encrypted version was accepted until `m.room.encrypted` was set to 50) and for "3 events per second" as a default (stock Synapse allows 0.2 per user, burst 10); **thin margin** for the 34000-byte inline payload (largest working payload 36,109 bytes). Lease read-back alone is **partial** (both sessions believed they held it in 7 of 40 races) | [`0004-spike-a-results.md`](0004-spike-a-results.md) |
+| **B: Durable Streams** | `@durable-streams/server` 0.3.9 (Node, file-backed) and the Go server (Caddy plugin) v0.3.0; client crates chacha20poly1305 0.10.1, ed25519-dalek 2.2.0, x25519-dalek 2.0.1, reqwest 0.12.28; loopback, plain `http`; CI run 40137430958, commit `0c99551` | **GO, with conditions, for L0, L1 and L2; NO-GO for "the server enforces roles"** (neither server has any access control, so a deployment must put one in front). All 11 journeys pass on both servers with nothing skipped, the lease is a real compare-and-set (`Stream-Seq`), and a removed principal holding every key it had read 0 of 2 records and 0 of 1 file published afterwards, with a control that fails. Conditions: every roster change is a new epoch and key and takes effect when the old epoch is sealed; time is a `Date`-header estimate; the lease stream can be poisoned; a new member reads all history; a 100-byte update is a 747-byte record. L3 not built | [`0004-spike-b-results.md`](0004-spike-b-results.md) |
+| **C: iroh and p2panda** | iroh 1.4.1, iroh-blobs 0.103.1, p2panda-core, -store, -sync, -auth, -encryption, -spaces 0.7.1, rustc 1.99.1; three nodes on loopback; CI run 40139997921 | **Conditional go for L0 and the version-carrying half of L1, go with a size limit for L2; no-go for `commenter`, for exclusive leases, and for using p2panda-net, p2panda-blobs (an empty crate) or p2panda-spaces' role change (`unimplemented!()`) as published.** All 11 journeys pass with nothing skipped. Content published by a member that has not applied a removal is readable by the removed member. Leases are advisory (both partitioned sessions acquired; one holder 254 ms, debug, after healing). p2panda-spaces took 81 s to catch up on 1 000 entries. The crate is its own workspace (`libsqlite3-sys` `links` clash with `dcp-matrix`) | [`0004-spike-c-results.md`](0004-spike-c-results.md) |
 | **D: WOPI host adapter** | Collabora Online 26.04.5.2 (`collabora/code:latest`, 2026-10-23), one run | **GO with conditions** for L1 (versions and lease) on session-hosted editors. **L2 and L3 are not offered over WOPI**, and WOPI cannot express two heads or a merge. Conditions: a per-token base-version record, conflict detection by Collabora's timestamp header (`409` with `COOLStatusCode` 1010), a fixed 30-minute lock | [`0004-spike-d-results.md`](0004-spike-d-results.md) |
+| **E: OCM and WebDAV** | Nextcloud 34.0.5 and 35.0.2 (`nextcloud:*-apache`, by digest), PostgreSQL 16, one server and a two-server OCM federation, plain HTTP; CI run 40139702356, commit `cee909b9` | **The draft-1 outline is rejected as written** (an ETag is not a version: a replaced file kept its ETag in 16 of 20 trials; `If-Match` gave 0 or 1 winner; Nextcloud has no core lock provider and `LOCK` is authorised by its token alone). **A redesign is GO for L0 and L1 for `viewer` and `editor`**: a document is two folders, versions are create-only files with a sidecar, the lease is a create-if-absent log (which is not atomic under concurrency: both writers were accepted in 12 of 9 216 rounds, so lease rule 3's read-backs apply in full; the 280 rounds without a double win of the first run were too few to see a rate of 1 in 750). L2 and L3 not offered; `commenter` not expressible, and over a federation `owner` is not either; `created_by` is a claim (an editor named the owner). One server: 9 passed, 2 skipped; federation: 8 passed, 1 failed (4 s lease), 2 skipped | [`0004-spike-e-results.md`](0004-spike-e-results.md) |
+| **F: verification gaps** | Synapse 1.163.2 (relaxed, default, default-drained) and Collabora Online 26.04.5.2, matrix-sdk 0.19.1, debug builds; CI run 40142775201, commit `513086d`, 14 jobs green | **No binding failure on default rate limits**: the interop suites pass unchanged, because a fresh user's burst of 10 covers a journey. Forged updates and a demoted editor are stopped by the server or dropped by every reader. The two-read lease rule let one session acquire in 1 200 of 1 200 rounds, and fails when a limiter delays a write by seconds. Collabora's churn did not reach the limit (6, 14 and 40 events in 187 s), but on a spent budget it abandons a call after 3003 ms. **Three findings**: `WopiHost` accepted a `PutFile` on a conflicted document (fixed), the Matrix reader rule applied the current power levels to history, and the two-read rule has no bound under delayed writes | [`0004-spike-f-results.md`](0004-spike-f-results.md) |
+| **TLS: Durable Streams over TLS 1.3, HTTP/1.1 and HTTP/2** | The same two servers as Spike B (`@durable-streams/server` 0.3.9, Node v22; Go server v0.3.0), each behind Caddy v2.10.2 terminating TLS with a generated test CA; client: rustls 0.23.46 (`ring`), reqwest 0.12.28, hyper 1.12.0, h2 0.4.20; ubuntu-24.04, rustc 1.99.1, loopback. Correctness run [40182677787](https://github.com/tuna-os/gtk-office-suite/actions/runs/40182677787), commit `167aa64` (workflow `collab-spike-tls`): all four server and version jobs and the dependency job green. Measurements run [40178415302](https://github.com/tuna-os/gtk-office-suite/actions/runs/40178415302), commit `63e0bf9`: the four `tls-measure` jobs green (its four correctness jobs failed there on an openssl probe step, since fixed); run [40179818637](https://github.com/tuna-os/gtk-office-suite/actions/runs/40179818637), commit `8e4f228`, has the 32 passed, 0 failed count and the server access-log check | **GO for L0 to L2 over `https`, HTTP/1.1 and HTTP/2, on both servers, with conditions that are now spec 8.4 text.** The Spike B suite behaves the same over TLS; the client fails closed on a wrong CA, a wrong host name, an expired certificate, a server that offers no HTTP/2 when HTTP/2 is required, a plaintext URL and a redirect to `http`; `openssl s_client` agrees. TLS added nothing measurable to a warm connection (4.5 to 6.7 ms p50 Node, 2.6 to 2.8 ms Go); a handshake is 0.3 to 0.6 ms; 50 live readers used 1 HTTP/2 connection against 50 on HTTP/1.1. Findings: the Node server's `Location` names its plaintext origin; a proxy that is silent for 60 s costs a long poll 45 s and an HTTP/2 request 90 s without keep-alive PINGs, and 10 s with them; a server heartbeat longer than the proxy's idle timeout never completes a long poll for a reader that does not resume from its offset. One terminator (Caddy), one run, loopback | [`0004-spike-tls-results.md`](0004-spike-tls-results.md) |
+| **Q15: the power level of a sender at an event (Matrix)** | Synapse 1.163.2 (`matrixdotorg/synapse:v1.163.2@sha256:c3c21919a322…`, and once `:latest`, also 1.163.2), SQLite, one homeserver, no federation; matrix-sdk 0.19.1; ubuntu-24.04, rustc 1.99.1, debug builds. Run A [40186028967](https://github.com/tuna-os/gtk-office-suite/actions/runs/40186028967), commit `92c7466`, and run B [40192035297](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192035297), commit `fb2dfa4` (workflow `collab-spike-q15`): 7 of 7 jobs green in both | **Answered on Synapse.** A reader that judges by the power level at the event got every verdict right in all six scenarios (65 reader runs, 0 wrong) under four ways of getting the level (`/context` raw and through matrix-sdk, a linked forward walk, a backward walk through `unsigned.prev_content`) and their hybrid, which is now spec 8.1; draft 1's current-table reader got 24 verdicts wrong in 10 runs and a trusting reader 20 in 8. `/context` was not rate limited (0 of 620 requests per job) and cost 2.7 to 5.6 ms and 4 KB per event on loopback. A plain forward walk fails silently when a demotion is hidden by `history_visibility: joined` (scenario 6, found by the spike), hence the `replaces_state` link check and `/context` for what the walk cannot place. One server, one homeserver: no federation, no other homeserver, no 429 on `/context` | [`0004-spike-q15-results.md`](0004-spike-q15-results.md) |
+| **Relay: dcp-p2p over a real `iroh-relay` on shaped links** | iroh 1.4.1, `iroh-relay` 1.4.1 (test CA), noq 1.4.0, iroh-blobs 0.103.1, p2panda 0.7.1; ubuntu-24.04 (kernel 6.17.0-1022-azure), 4 vCPU, Linux network namespaces with `tc netem` (50 and 150 ms RTT, 1 % and 5 % loss, 1 Mbit/s, and all three), relay-only (firewall drops all peer-to-peer packets) and direct modes. Run [40179059127](https://github.com/tuna-os/gtk-office-suite/actions/runs/40179059127), commit `53e2285` (workflow `collab-spike-relay`): all jobs green (`check`, `probe`, `build`, 14 `wan`, `footprint`); run [40192160497](https://github.com/tuna-os/gtk-office-suite/actions/runs/40192160497), commit `f45846a`: in-process relay path data and state-growth counters, green | **Relay and path behaviour measured; several 8.5 sentences corrected.** All 154 journey runs (11 journeys, 2 modes, 7 conditions) passed. Spike C's "relay-only" run had synced over a direct path (its latency comparison compared two direct connections); with peer-to-peer UDP dropped no IP path was ever opened (1,515 connections). An upgraded connection survived the relay being killed (7 of 7); a relay-only one recovered 3.5 to 22.6 s after the relay returned; a silently cut direct path took 15 to 21 s to fail over. **A lease write took 437 to 507 ms median at 150 ms RTT, so the 500 ms settle is too short on a WAN (now at least 2 s).** The reader of p2panda-spaces is CPU-bound without a rate limit and received 438 MB for a 2.1 MB state at 1,000 entries. A client needs TCP 443 to the relay and optionally UDP to peers; iroh's `Minimal` preset contacts nothing, the `N0` preset publishes the endpoint id and home relay. No NAT, no jitter, no real WAN, no n0 relay carrying dcp-p2p traffic | [`0004-spike-relay-results.md`](0004-spike-relay-results.md) |
 
 What the spikes changed in the draft is listed in the [spec's changelog](../DOCUMENT-COLLABORATION-SPEC.md#changelog):
-an on-wire change (`dcp` 1: a lease `renewal` counter), the Matrix power-level table, the rate and
-size rules, the time source, lease read-back, and the WOPI call order, headers and conflict form.
-What neither spike shows: the OCM, Durable Streams and iroh bindings, L3 presence, any update
-algorithm profile, interoperation with real Matrix clients or other WOPI clients, and the WOPI
-adapter running over the Matrix binding (Collabora's save frequency against Matrix's limits).
+on-wire changes (`dcp` 1: a lease `renewal` counter; two additive locator types), the Matrix
+power-level table, the rate and size rules, the time source, lease rules 3 and 9 to 13, the WOPI
+call order, headers, conflict form and refusal on a conflicted document, and a replacement of the
+OCM and WebDAV binding, plus two new bindings (8.4, 8.5). The three CI verification spikes added
+the at-event reader rule (8.1), transport and live-read rules (8.4) and path, settle-interval and
+port text (8.5), and changed no object. What the spikes do not show: L3
+presence, any update algorithm profile, a network that is not loopback or emulated for any binding
+but WebDAV's plain HTTP (Durable Streams was run over TLS on loopback only; iroh through a relay
+in network namespaces only, with no NAT or jitter; Matrix, WOPI and OCM over TLS not at all), a
+second implementation of any binding, interoperation with real Matrix clients, other WOPI
+clients, other OCM servers or ownCloud, and Keyhive.
 
 ## Open questions
 
-1. Which binding does the owner want first for the suite itself: Matrix, or the lowest-dependency
-   one the spikes find?
-2. Is a Matrix account an acceptable requirement for users, or must a Matrix-free binding exist
-   from the start?
-3. Should the permissions layer be p2panda-auth, Keyhive, or Matrix power levels, per binding?
-4. Who is the first external implementer: Collabora (via WOPI), Nextcloud (via OCM), or a
-   Matrix-native client?
+Each answer below is **evidence, not a decision**; the owner decides.
+
+1. **Which binding first for the suite itself?** The spikes do not make one win. For live editing
+   without running a homeserver, Durable Streams (8.4) passed all 11 journeys with nothing skipped
+   on two different servers, with a lease that is a real compare-and-set (Matrix also passed all
+   11, on one homeserver, with a read-back lease), and an update reached a second client's
+   verified read in 3.9 ms p50 on loopback (Node server); its costs are a gate that
+   must be put in front, one epoch per roster change, a principal that is a key with no
+   multi-device or recovery, and cryptography that this project would own and that only its own
+   Rust crate has ever read. Matrix (8.1) passed with a server that already has accounts, access
+   control, media and encryption, but needs raised rate limits for inline updates (0.2 events per
+   second by default), has no `commenter`, and a new device reads no history. The iroh and p2panda
+   binding (8.5) is the weakest today: three of p2panda 0.7.1's pieces cannot be used as published,
+   leases cannot be exclusive and need a settle interval of at least 2 s on a WAN, a cut direct path
+   takes 15 to 20 s to fail over, and inline updates stop being usable past a few hundred entries.
+   OCM with WebDAV (8.3) is L1 only. So the evidence supports Matrix or Durable Streams first and
+   the peer-to-peer binding last.
+2. **Is a Matrix account an acceptable requirement, or must a Matrix-free binding exist from the
+   start?** **A Matrix account is not required by the protocol.** Durable Streams (8.4) and the
+   peer-to-peer binding (8.5) each passed all 11 journeys with no Matrix server, and Nextcloud
+   (8.3) needs only a Nextcloud account. A Matrix-free binding therefore exists and is measured;
+   what it costs is stated in question 1 (a key is the principal, so the link statement of spec
+   section 9.2 is needed before one person can use two devices).
+3. **Should the permissions layer be p2panda-auth, Keyhive, or Matrix power levels, per binding?**
+   There is now evidence for two of three. *Matrix power levels*: server-enforced and tested (a
+   forged event was refused `403` once `m.room.encrypted` was gated at 50), with the gap that an
+   encrypted room has one timeline gate for every DCP event type. *p2panda-auth*, through
+   p2panda-spaces 0.7.1: three of four roles map, **a role change is unimplemented** (the binding
+   removes and re-adds), any key holder can encrypt anything so **a reader-side rule is what makes
+   a role mean "may publish"**, and revocation reaches only members that have applied it. *A roster
+   the binding signs itself* (8.4) enforced roles at every reader and failed when the check was
+   removed, at the price of one epoch per change. *Keyhive*: **no spike ran**; it stays an
+   unevaluated alpha. Per binding, the measured answer is Matrix power levels for 8.1, a signed
+   epoch chain for 8.4, and p2panda-auth plus a reader rule for 8.5.
+4. **Who is the first external implementer: Collabora (via WOPI), Nextcloud (via OCM), or a
+   Matrix-native client?** Collabora via WOPI is the only one with a measured round trip that needs
+   no change on the editor's side (Collabora Online 26.04.5.2), with the conditions of spec 8.2.
+   Nextcloud would have to adopt a two-folder layout that its desktop clients would show as two
+   sync roots (an inference: not tried), has no encryption and no authenticated authorship, and its
+   OCM sender differed from the OCM text in the ten places the spike lists. Whether anyone at those projects
+   wants it remains unknown.
 5. Should the version graph and lease be proposed to Matrix as MSCs, to OCM as an extension, or
    kept as an independent specification? The Matrix proposal process may require working
-   implementations first; the exact requirement was not checked.
-6. How should a hosted editor in an encrypted room be shown to users?
+   implementations first; the exact requirement was not checked. The spikes add that the lease
+   needs a compare-and-set, which Matrix state events lack, Durable Streams has, and a WebDAV
+   create-if-absent log does not quite have (Nextcloud accepted both of two concurrent creators in
+   1 of 750 rounds; spike E).
+6. How should a hosted editor in an encrypted room be shown to users? No spike built or tested how
+   this is shown to users.
+7. **New:** how many bindings should the specification keep? Each is feasible, and each adds a
+   section that one implementation has read. Holding 8.5 back until p2panda-spaces can change a
+   role and scale, or keeping 8.3 as L1 only, would shrink what has to be kept honest.
+8. **Closed on one homeserver (spec question 15, [Spike Q15](#spike-results)): how does a Matrix
+   reader know a sender's power level at the event?** From the room's own `m.room.power_levels`
+   events in the `/messages` pass, trusted only while each names the previous one in
+   `unsigned.replaces_state`, or from `GET /rooms/{id}/context/{eventId}?limit=0` for what that
+   cannot place; an event whose level cannot be established is dropped, never judged by the
+   current table. The measured cost on Synapse 1.163.2 is 0 extra requests in the usual case and
+   2.7 to 5.6 ms and 4 KB per event otherwise, with no rate limit. Still open: other homeservers,
+   a room that federates across two homeservers, a `429` on `/context`, and incremental `/sync`
+   readers.
+9. **New: which trust anchor does a Durable Streams client use?** The TLS spike ran with a
+   configured CA and no built-in roots; using the platform's roots, and what a product does on
+   certificate rotation, is a decision. Real load balancers and CDNs were not run (their idle
+   rules were emulated), so the 30 s server heartbeat and the 15 s HTTP/2 PING in spec 8.4 are
+   measured against an emulated 60 s proxy only.
+10. **New: is the iroh binding acceptable with a 2 s settle and a 15 to 20 s path fail-over?** The
+    relay spike measured both on routed namespaces with no NAT; hole-punch success behind real
+    NATs and the behaviour on a real WAN are open, and so is whether a host-name relay URL, more
+    than one relay or a relay behind an HTTP proxy works.
 
 ## Not verified
 
@@ -304,15 +387,24 @@ adapter running over the Matrix binding (Collabora's save frequency against Matr
   types and encrypted attachments are sufficient, with its own send queue and cross-signing
   bootstrap; see [Spike results](#spike-results).)
 - Homeserver limits for relations and retention, and any homeserver other than Synapse. (Checked by
-  Spike A on Synapse 1.163.2: message rate, the 64 KiB event cap and media up to 32 MiB; `rc_joins`,
-  `rc_invites` and `rc_login` were not pushed.)
-- What neither spike ran: each results document ends with its own list, including federation, real
-  Matrix clients, a second WOPI client, HTTPS and WOPI proof keys, and the WOPI adapter over the
-  Matrix binding.
-- Whether OCM defines anything beyond shares and access that overlaps versions or leases.
+  Spike A on Synapse 1.163.2: message rate, the 64 KiB event cap and media up to 32 MiB; Spike F
+  added the interop suites on default and spent `rc_message` budgets; `rc_joins`, `rc_invites`,
+  `rc_login` and `rc_registration` were not pushed.)
+- What no spike ran, each results document ending with its own list: any network beyond loopback and
+  namespaces with `tc netem` for the Durable Streams and iroh bindings, and any TLS for Matrix, WOPI
+  and OCM; a TLS terminator other than Caddy 2.10.2, the platform trust store, mutual TLS,
+  revocation checking and HTTP/3 for Durable Streams; a WAN, NAT traversal, jitter and production
+  relays for iroh; a second implementation of any binding; Matrix federation, a homeserver other
+  than Synapse 1.163.2 and real Matrix clients; a second WOPI client, WOPI proof keys and two real
+  Collabora sessions; ownCloud and any OCM server but Nextcloud's sender; L3 presence; and a
+  `loro/1` update profile.
+- Whether OCM defines anything beyond shares and access that overlaps versions or leases. (Spike E
+  found none that it needed; it did not search the OCM text for one.)
 - Whether OCM addresses and Matrix IDs could collide.
-- Whether Nextcloud editors work with Nextcloud's E2EE folders.
-- `p2panda-auth`'s security model and maturity; how it compares with Keyhive.
+- Whether Nextcloud editors work with Nextcloud's E2EE folders, and Nextcloud Office or Collabora
+  editing a DCP document (Spike E installed the app and configured no Collabora server).
+- `p2panda-auth`'s security model and maturity beyond what Spike C used through p2panda-spaces 0.7.1
+  (a group CRDT with four levels; read, not audited); how it compares with Keyhive, which no spike ran.
 - Willow's status; the status of `spreed#13212`.
 - LibreOffice tracked-changes merge as a way to join divergent versions (inference only).
 - Whether anyone at Collabora, Element, Nordeck, Nextcloud or openDesk wants this.
@@ -351,3 +443,17 @@ Newer technology
 - Loro, CRDTs are not enough: https://loro.dev/blog/crdt-is-not-enough
 - Automerge, August 2026: https://automerge.org/blog/2026-august/
 - Keyhive: https://www.inkandswitch.com/project/keyhive
+
+Spike results (B, C, E and F are on the branches `spike/collab-b`, `-c`, `-e` and `-f` until integrated)
+- Spike A, Matrix: [`0004-spike-a-results.md`](0004-spike-a-results.md)
+- Spike B, Durable Streams: [`0004-spike-b-results.md`](0004-spike-b-results.md)
+- Spike C, iroh and p2panda: [`0004-spike-c-results.md`](0004-spike-c-results.md)
+- Spike D, WOPI: [`0004-spike-d-results.md`](0004-spike-d-results.md)
+- Spike E, OCM and WebDAV: [`0004-spike-e-results.md`](0004-spike-e-results.md)
+- Spike F, verification gaps: [`0004-spike-f-results.md`](0004-spike-f-results.md)
+- Matrix and WOPI against each other: [`0004-spike-interop-results.md`](0004-spike-interop-results.md)
+
+Sources the new spikes read
+- Durable Streams protocol: https://github.com/durable-streams/durable-streams/blob/main/PROTOCOL.md
+- iroh-blobs push fix (0.103.0 yanked): https://www.iroh.computer/blog/iroh-blobs-push-fix
+- Open Cloud Mesh text and spec: https://github.com/cs3org/OCM-API (`IETF-OCM.md`, `spec.yaml`)

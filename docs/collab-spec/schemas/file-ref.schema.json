@@ -34,7 +34,9 @@
             "matrix-encrypted-media",
             "matrix-media",
             "webdav",
-            "url"
+            "url",
+            "durable-stream",
+            "blake3"
           ]
         }
       },
@@ -91,7 +93,8 @@
               "type": {
                 "enum": [
                   "webdav",
-                  "url"
+                  "url",
+                  "durable-stream"
                 ]
               }
             }
@@ -104,6 +107,26 @@
               "href": {
                 "type": "string",
                 "pattern": "^https://"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "blake3"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "hash"
+            ],
+            "properties": {
+              "hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             }
           }

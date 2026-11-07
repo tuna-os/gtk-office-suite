@@ -1,32 +1,36 @@
 //! The shared section-12 journeys (`dcp-conformance`) against both stacks on
-//! one real Synapse (relaxed rate limits): `MatrixStore`, and
-//! `WopiClientStore -> WopiHost -> MatrixStore`. Needs `DCP_SYNAPSE_URL`; fails
-//! without it unless `DCP_SKIP_SYNAPSE=1`.
+//! one real Synapse, relaxed or default rate limits (`DCP_SYNAPSE_PROFILE`):
+//! `MatrixStore`, and `WopiClientStore -> WopiHost -> MatrixStore`. Needs
+//! `DCP_SYNAPSE_URL`; fails without it unless `DCP_SKIP_SYNAPSE=1`. Every
+//! journey is timed (`TIMING` lines, and `DCP_MEASURE_OUT`); on the default
+//! profile see `dcp_interop::profile` for the deadline and for how a journey
+//! that really fails there is recorded rather than weakened.
 //!
 //! The skip lists are asserted exactly. A journey that silently stops running
 //! (or one that starts running because a capability was declared) fails here.
 
-use std::time::Duration;
-
 use std::sync::Arc;
 
 use dcp_conformance::wrappers::{Defect, Defective};
-use dcp_conformance::{journey_names, run_all, run_one, Outcome};
+use dcp_conformance::{journey_names, run_one, Outcome};
 use dcp_core::DocumentStore;
 use dcp_interop::factories::{InteropFactory, Stack};
+use dcp_interop::profile::{self, control_settle, expected_failure, run_all_timed};
 use dcp_interop::rig::synapse;
 use dcp_interop::{RigOptions, Who};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_journey_passes_on_matrix() {
     let Some(syn) = synapse() else { return };
-    let report = run_all(&InteropFactory::new(syn, Stack::Matrix)).await;
+    let report = run_all_timed(&InteropFactory::new(syn.clone(), Stack::Matrix)).await;
     println!("{report}");
-    report.assert_no_failures();
+    profile::judge_report(&syn, "matrix", &report);
     // MatrixStore claims every capability: nothing is skipped.
     report.assert_skipped_exactly(&[]);
-    assert_eq!(report.passed(), journey_names(), "every journey, in spec order, must pass");
-    assert_eq!(report.passed().len(), 11);
+    let expected: Vec<&str> =
+        journey_names().into_iter().filter(|n| expected_failure(&syn, &format!("matrix/{n}")).is_none()).collect();
+    assert_eq!(report.passed(), expected, "every journey, in spec order, must pass (but those recorded as failing on the default profile)");
+    assert_eq!(journey_names().len(), 11);
 }
 
 /// What WOPI cannot express, and why (docs/rfc/0004-spike-d-results.md,
@@ -49,26 +53,25 @@ const WOPI_SKIPPED: &[&str] = &[
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_journeys_wopi_can_express_pass_over_a_matrix_host() {
     let Some(syn) = synapse() else { return };
-    let report = run_all(&InteropFactory::new(syn, Stack::WopiOverMatrix)).await;
+    let report = run_all_timed(&InteropFactory::new(syn.clone(), Stack::WopiOverMatrix)).await;
     println!("{report}");
-    report.assert_no_failures();
+    profile::judge_report(&syn, "wopi", &report);
     report.assert_skipped_exactly(WOPI_SKIPPED);
     let mut passed = report.passed();
     passed.sort_unstable();
-    assert_eq!(
-        passed,
-        [
-            "convergence_on_one_head",
-            "corrupt_file_rejected",
-            // The forger is a viewer on the Matrix room; every reader is a
-            // WOPI client over the host.
-            "forged_version_from_a_viewer_is_not_accepted",
-            "roles_enforced_at_store",
-            "truncated_upload_never_published"
-        ]
-    );
-    // Every journey is accounted for: passed or skipped, none lost.
-    assert_eq!(report.passed().len() + report.skipped().len(), journey_names().len());
+    let mut expected: Vec<&str> = vec![
+        "convergence_on_one_head",
+        "corrupt_file_rejected",
+        // The forger is a viewer on the Matrix room; every reader is a
+        // WOPI client over the host.
+        "forged_version_from_a_viewer_is_not_accepted",
+        "roles_enforced_at_store",
+        "truncated_upload_never_published",
+    ];
+    expected.retain(|n| expected_failure(&syn, &format!("wopi/{n}")).is_none());
+    assert_eq!(passed, expected, "the journeys WOPI can express must pass (but those recorded as failing on the default profile)");
+    // Every journey is accounted for: passed, failed (recorded) or skipped, none lost.
+    assert_eq!(report.results.len(), journey_names().len());
 }
 
 /// The path must be able to fail: the viewer's backing store never shows the
@@ -76,7 +79,7 @@ async fn the_journeys_wopi_can_express_pass_over_a_matrix_host() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_journeys_can_fail_through_wopi_over_matrix() {
     let Some(syn) = synapse() else { return };
-    let opts = RigOptions::honest().settle(Duration::from_secs(8)).backing(|who, store, _| {
+    let opts = RigOptions::honest().settle(control_settle(&syn)).backing(|who, store, _| {
         if who == Who::Viewer {
             Arc::new(Defective::new(store, Defect::HideNewest)) as Arc<dyn DocumentStore>
         } else {
@@ -111,7 +114,7 @@ async fn the_forged_version_journey_fails_when_neither_the_server_nor_the_reader
     for stack in [Stack::Matrix, Stack::WopiOverMatrix] {
         let opts = RigOptions::honest()
             .draft0_power_levels_and_readers_that_trust_senders()
-            .settle(Duration::from_secs(8));
+            .settle(control_settle(&syn));
         let f = InteropFactory::new(syn.clone(), stack).with_options(opts);
         let r = run_one(&f, "forged_version_from_a_viewer_is_not_accepted").await;
         match &r.outcome {

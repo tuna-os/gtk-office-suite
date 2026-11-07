@@ -23,6 +23,14 @@ on:
   schedule:
     - cron: '0 5 * * *'   # daily at 5am UTC (before gui-tests.yml's 6am)
   workflow_dispatch:
+  # autorelease.yml runs the oracle at the revision it is about to release.
+  # It needs the oracle's verdict, not coverage or the fuzz smoke.
+  workflow_call:
+    inputs:
+      oracle-only:
+        description: Run the oracle job alone
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'letters-core/**'
@@ -34,6 +42,9 @@ on:
       # tests/test_oracle_triggers.py now derives the required list from the
       # crates the oracle actually tests instead of trusting this one.
       - 'suite-common-core/**'
+      # letters-core's headless collaboration test (tests/two_instances.rs, feature
+      # `collab`) speaks this crate's protocol, so it is a dev-dependency.
+      - 'suite-collab/**'
       - 'suite-export/**'
       - 'interop/**'
       - 'Cargo.lock'
@@ -68,7 +79,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             libreoffice-writer libreoffice-calc libreoffice-impress
-      - uses: taiki-e/install-action@eaa248e7e83aa1d4f575fb2e231e8a5da93dabc3 # nextest
+      - uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
         with:
           tool: nextest
       # One nextest run over both targets, so the lane leaves one JUnit
@@ -129,7 +140,7 @@ jobs:
   coverage:
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.oracle-only
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -178,7 +189,7 @@ jobs:
     name: Fuzz importer smoke tests
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.oracle-only
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:

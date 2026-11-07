@@ -300,9 +300,13 @@ fn lock_mismatch(current: &str, reason: &str) -> Response {
 /// 409 that Collabora reads as "document changed in storage": a body with
 /// `COOLStatusCode` 1010 and no `X-WOPI-Lock` header.
 fn doc_changed() -> Response {
+    doc_changed_because("document changed in storage")
+}
+
+fn doc_changed_because(message: &str) -> Response {
     json_resp(
         StatusCode::CONFLICT,
-        &json!({ "COOLStatusCode": COOL_STATUS_DOC_CHANGED, "Message": "document changed in storage" }),
+        &json!({ "COOLStatusCode": COOL_STATUS_DOC_CHANGED, "Message": message }),
     )
 }
 
@@ -597,6 +601,20 @@ async fn do_put(
     let heads = heads_of(&versions);
     let head = heads.first();
     let opened = s.opened.lock().clone();
+
+    // 0. Spec 8.2 rule 6: with more than one head CheckFileInfo says
+    //    `UserCanWrite` false. A client that ignores that must not add to the
+    //    conflicted document: its save would be a child of one head (or of an
+    //    ancestor), park the user's work on a branch and leave the conflict
+    //    standing, and the lock and the timestamp cannot tell. Answered like a
+    //    changed document (409, 1010, no `X-WOPI-Lock`): Collabora reloads and
+    //    finds the document read-only. (Before this check existed, the first
+    //    attempt of `put_file_on_a_conflicted_document_is_refused` got 200.)
+    if heads.len() > 1 {
+        return Err(doc_changed_because(
+            "document has more than one head and is read-only until they are merged (DCP 8.2 rule 6)",
+        ));
+    }
 
     // 1. Lock check (MS PutFile): a held lock must match; the response to a
     //    mismatch carries the current lock.

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The workbook as a Loro document: RFC-0001 Phase 2, behind the `collab`
-//! feature (off by default). No transport yet: a [`Replica`] records local
-//! op groups into its document, exchanges updates with another replica
-//! in-process, and rebuilds the workbook from the merged document.
+//! feature (off by default). A [`Replica`] records local op groups into its
+//! document and rebuilds the workbook from it. It has no transport: what
+//! leaves it is bytes ([`Replica::export_since`], [`Replica::export_snapshot`]),
+//! what enters it is bytes ([`Replica::import_updates`],
+//! [`Replica::from_snapshot`]), and the sidecar of RFC-0005 carries them.
+//! Two replicas in one process can also [`Replica::merge_from`] each other.
 //!
 //! # Encoding
 //!
@@ -46,9 +49,13 @@
 //! - A cell's style is one register: bold on one peer and italic on the
 //!   other at the same time keeps one of the two.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::sync::{Arc, Mutex, PoisonError};
 
-use loro::{ExportMode, LoroDoc, LoroList, LoroMap, LoroMovableList, LoroValue, ValueOrContainer};
+use loro::event::Diff;
+use loro::{
+    ContainerID, ExportMode, LoroDoc, LoroList, LoroMap, LoroMovableList, LoroValue, Subscription, ValueOrContainer, VersionVector,
+};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::ops::{cell_content, Axis, CellContent, Op};
@@ -109,16 +116,29 @@ fn encode_cell(c: &CellContent, blank: &CellContent) -> [Option<String>; 7] {
     ]
 }
 
-fn decode_field(cell: &mut CellContent, field: &str, text: &str) {
+/// Read one stored field into `cell`. False when the text is not what the
+/// field holds (a format that does not parse), and the cell is left as it
+/// was. A field this version does not know is ignored, so a newer peer's
+/// extra fields do not break an older one.
+fn decode_field(cell: &mut CellContent, field: &str, text: &str) -> bool {
+    fn set<T: DeserializeOwned>(slot: &mut T, text: &str) -> bool {
+        unjson(text).map(|value| *slot = value).is_some()
+    }
     match field {
-        "v" => cell.input = text.to_string(),
-        "nf" => cell.format = unjson(text).unwrap_or_else(|| cell.format.clone()),
-        "st" => cell.style = unjson(text).unwrap_or_else(|| cell.style.clone()),
-        "bd" => cell.border = unjson(text).unwrap_or_else(|| cell.border.clone()),
-        "va" => cell.validation = unjson(text),
-        "lk" => cell.lock = unjson(text).unwrap_or_else(|| cell.lock.clone()),
-        "no" => cell.note = Some(text.to_string()),
-        _ => {}
+        "v" => {
+            cell.input = text.to_string();
+            true
+        }
+        "nf" => set(&mut cell.format, text),
+        "st" => set(&mut cell.style, text),
+        "bd" => set(&mut cell.border, text),
+        "va" => set(&mut cell.validation, text),
+        "lk" => set(&mut cell.lock, text),
+        "no" => {
+            cell.note = Some(text.to_string());
+            true
+        }
+        _ => true,
     }
 }
 
@@ -273,6 +293,78 @@ impl Replica {
         let updates = other.doc.export(ExportMode::updates(&self.doc.oplog_vv())).map_err(|e| e.to_string())?;
         self.doc.import(&updates).map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    /// A peer that joins through `snapshot` (from [`Replica::export_snapshot`]
+    /// of a replica already in the session) rather than through
+    /// [`Replica::fork`]: its replica and the workbook the document holds.
+    /// `peer` must be one this document has never seen and is never used for
+    /// it again: line ids are `peer.counter`, so a restarted replica reusing
+    /// an old peer would issue ids that already exist. The workbook is built
+    /// from the document alone, so a snapshot that does not make a workbook
+    /// is an error here, before it is anyone's live state.
+    pub fn from_snapshot(peer: u64, snapshot: &[u8]) -> Result<(Replica, WorkbookState), CollabError> {
+        let doc = LoroDoc::from_snapshot(snapshot).map_err(decode_error)?;
+        let mut me = Self::with_doc(doc, peer);
+        let state = me.rebuild().map_err(CollabError::Invalid)?;
+        Ok((me, state))
+    }
+
+    /// The document's version, as opaque bytes (a Loro version vector): what
+    /// is handed to [`Replica::export_since`] to take the changes after it.
+    pub fn version_bytes(&self) -> Vec<u8> {
+        self.doc.commit();
+        self.doc.oplog_vv().encode()
+    }
+
+    /// What this replica has that a peer at `version` (from its
+    /// [`Replica::version_bytes`]) lacks: the delta one update carries.
+    /// A one-cell edit is about a hundred bytes.
+    pub fn export_since(&self, version: &[u8]) -> Result<Vec<u8>, CollabError> {
+        let from = VersionVector::decode(version).map_err(|e| CollabError::Decode(format!("not a version: {e}")))?;
+        self.doc.commit();
+        self.doc.export(ExportMode::updates_owned(from)).map_err(|e| CollabError::Export(e.to_string()))
+    }
+
+    /// The document's state and history in one blob: the genesis a joiner
+    /// starts from ([`Replica::from_snapshot`]). Four to five times the
+    /// xlsx, so far over the 34,000-byte inline limit for a real workbook
+    /// (RFC-0005 3.7).
+    pub fn export_snapshot(&self) -> Vec<u8> {
+        self.doc.commit();
+        self.doc.export(ExportMode::Snapshot).expect("export")
+    }
+
+    /// Take in an update from a peer (a delta from [`Replica::export_since`],
+    /// or a snapshot), in any order and any number of times: updates that
+    /// are already here change nothing, and updates that arrive before the
+    /// ones they follow wait ([`ImportReport::pending`]) and apply on their
+    /// own once those arrive.
+    ///
+    /// This is the dry run of DCP spec 7 rule 3. The update is applied to a
+    /// fork first and the live document is changed only if what it touched
+    /// still decodes: every cell field it wrote must parse as its type, and
+    /// an update that changes sheets, lines, names or sheet properties must
+    /// still build a workbook. On any error the replica is exactly as it
+    /// was. The fork copies the document, so a call costs time in
+    /// proportion to the document, and one that reshapes the workbook
+    /// costs a rebuild on top; the sidecar batches for that reason.
+    ///
+    /// The workbook is not touched: the report says what changed, and
+    /// [`Replica::rebuild`] builds the workbook the document now holds.
+    pub fn import_updates(&mut self, updates: &[u8]) -> Result<ImportReport, CollabError> {
+        // The header and the checksum first: garbage costs nothing but this.
+        LoroDoc::decode_import_blob_meta(updates, true).map_err(decode_error)?;
+        self.doc.commit();
+        let probe = self.doc.fork();
+        let (tape, _subscription) = watch(&probe);
+        let status = probe.import(updates).map_err(decode_error)?;
+        let mut tape = std::mem::take(&mut *tape.lock().unwrap_or_else(PoisonError::into_inner));
+        tape.check(&probe)?;
+        self.doc.import(updates).map_err(decode_error)?;
+        tape.report.ops = status.success.iter().map(|(_, &(from, to))| usize::try_from(to - from).unwrap_or(0)).sum();
+        tape.report.pending = status.pending.is_some_and(|range| !range.is_empty());
+        Ok(tape.report)
     }
 
     fn fresh_id(&mut self) -> String {
@@ -570,6 +662,184 @@ impl Replica {
         }
         self.names = view.names;
         Ok(state)
+    }
+}
+
+/// Why a [`Replica`] call failed. A failed [`Replica::import_updates`] leaves
+/// the replica as it was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CollabError {
+    /// The bytes are not a version, an update or a snapshot that Loro reads,
+    /// or are damaged (the checksum fails).
+    Decode(String),
+    /// The bytes read, but what they would do is refused (DCP spec 7 rule 3):
+    /// a cell field that does not parse, or a document that would no longer
+    /// build a workbook.
+    Invalid(String),
+    /// Loro could not export what was asked.
+    Export(String),
+}
+
+impl std::fmt::Display for CollabError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CollabError::Decode(why) => write!(f, "not readable: {why}"),
+            CollabError::Invalid(why) => write!(f, "refused: {why}"),
+            CollabError::Export(why) => write!(f, "cannot export: {why}"),
+        }
+    }
+}
+
+impl std::error::Error for CollabError {}
+
+fn decode_error(e: loro::LoroError) -> CollabError {
+    CollabError::Decode(e.to_string())
+}
+
+/// What an imported update changed in the document, by the document's own
+/// keys (sheet keys and line ids), not this replica's positions: the
+/// mirror is not updated until [`Replica::rebuild`], so the shell cannot
+/// turn a line id into a row yet. Enough to decide what a remote change
+/// does to the local undo history (RFC-0005 2.4): a cell value leaves
+/// index-addressed steps valid, [`ImportReport::structural`] does not.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ImportReport {
+    /// Ops the update added; 0 when every one of them was already here.
+    pub ops: usize,
+    /// Ops that arrived before ones they follow: they wait inside the
+    /// document and apply, with a report of their own, when those arrive.
+    pub pending: bool,
+    /// Sheets added, deleted (or brought back) or moved.
+    pub sheet_list: bool,
+    /// Defined names written or removed.
+    pub names: bool,
+    /// What changed on each sheet, by sheet key.
+    pub sheets: BTreeMap<String, SheetChange>,
+}
+
+/// What an update changed on one sheet.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SheetChange {
+    /// Rows or columns inserted or deleted: every index after them moves.
+    pub lines: bool,
+    /// The name, frozen panes, merges or a sheet-wide property.
+    pub meta: bool,
+    /// Row heights or column widths.
+    pub sizes: bool,
+    /// Cells with a field written or removed, as `(row id, column id)`.
+    pub cells: BTreeSet<(String, String)>,
+}
+
+impl ImportReport {
+    /// Whether the update added anything.
+    pub fn changed(&self) -> bool {
+        self.ops > 0
+    }
+
+    /// Whether it moved rows, columns or sheets, so that a stored inverse
+    /// addressed by index can now land on the wrong cell. A cell written is
+    /// not structural: the undo of one's own edit still means what it did.
+    pub fn structural(&self) -> bool {
+        self.sheet_list || self.sheets.values().any(|s| s.lines)
+    }
+
+    /// Whether the update can change what the workbook is built from beyond
+    /// cell fields and sizes, and so the dry run builds it.
+    fn reshapes(&self) -> bool {
+        self.sheet_list || self.names || self.sheets.values().any(|s| s.lines || s.meta)
+    }
+}
+
+/// What the events of one import say, read as it ran: the report and the
+/// entries the dry run checks.
+#[derive(Default)]
+struct Tape {
+    report: ImportReport,
+    /// Cell fields written, `(field, text)`.
+    fields: Vec<(String, String)>,
+    /// The first reason found to refuse the update.
+    refusal: Option<String>,
+}
+
+/// Read the events of `doc` into a [`Tape`] until the subscription drops.
+fn watch(doc: &LoroDoc) -> (Arc<Mutex<Tape>>, Subscription) {
+    let tape: Arc<Mutex<Tape>> = Arc::default();
+    let sink = Arc::clone(&tape);
+    let subscription = doc.subscribe_root(Arc::new(move |event| {
+        let mut tape = sink.lock().unwrap_or_else(PoisonError::into_inner);
+        for diff in &event.events {
+            tape.note(diff.target, &diff.diff);
+        }
+    }));
+    (tape, subscription)
+}
+
+impl Tape {
+    fn refuse(&mut self, why: String) {
+        self.refusal.get_or_insert(why);
+    }
+
+    fn note(&mut self, target: &ContainerID, diff: &Diff) {
+        let ContainerID::Root { name, .. } = target else { return };
+        let name = name.to_string();
+        match (name.split_once(':'), diff) {
+            (None, _) if name == "sheets" => self.report.sheet_list = true,
+            (None, _) if name == "names" => self.report.names = true,
+            (Some(("sheet", key)), diff) => {
+                self.report.sheets.entry(key.to_string()).or_default().meta = true;
+                // A sheet's tombstone is the sheet list changing.
+                if matches!(diff, Diff::Map(map) if map.updated.contains_key("deleted")) {
+                    self.report.sheet_list = true;
+                }
+            }
+            (Some(("rows" | "cols", key)), _) => self.report.sheets.entry(key.to_string()).or_default().lines = true,
+            (Some(("sizes", key)), Diff::Map(map)) => {
+                self.report.sheets.entry(key.to_string()).or_default().sizes = true;
+                for value in map.updated.values() {
+                    match value {
+                        None => {}
+                        Some(ValueOrContainer::Value(LoroValue::Double(px))) if px.is_finite() && *px >= 0.0 => {}
+                        Some(_) => self.refuse("a row height or column width that is not a size".into()),
+                    }
+                }
+            }
+            (Some(("cells", key)), Diff::Map(map)) => {
+                let mut touched = Vec::new();
+                for (entry, value) in &map.updated {
+                    let mut parts = entry.splitn(3, '|');
+                    let (Some(row), Some(col), Some(field)) = (parts.next(), parts.next(), parts.next()) else {
+                        self.refuse(format!("the cell entry {entry:?} is not row|column|field"));
+                        continue;
+                    };
+                    touched.push((row.to_string(), col.to_string()));
+                    match value {
+                        None => {}
+                        Some(ValueOrContainer::Value(LoroValue::String(text))) => self.fields.push((field.to_string(), text.to_string())),
+                        Some(_) => self.refuse(format!("the cell entry {entry:?} is not text")),
+                    }
+                }
+                self.report.sheets.entry(key.to_string()).or_default().cells.extend(touched);
+            }
+            _ => {}
+        }
+    }
+
+    /// The dry run's verdict on what was read, against the fork it was read
+    /// from.
+    fn check(&self, probe: &LoroDoc) -> Result<(), CollabError> {
+        if let Some(why) = &self.refusal {
+            return Err(CollabError::Invalid(why.clone()));
+        }
+        let mut scratch = blank_cell();
+        for (field, text) in &self.fields {
+            if !decode_field(&mut scratch, field, text) {
+                return Err(CollabError::Invalid(format!("the cell field {field:?} does not hold a value of its type")));
+            }
+        }
+        if self.report.reshapes() {
+            build(&read_doc(probe)).map_err(CollabError::Invalid)?;
+        }
+        Ok(())
     }
 }
 

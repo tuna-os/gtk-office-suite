@@ -57,6 +57,15 @@ pub enum Locator {
     Webdav { href: String },
     #[serde(rename = "url")]
     Url { href: String },
+    /// Draft 1 update 2 (spec 4.2.1, 8.4): a file stream of a Durable Streams
+    /// document. The bytes are ciphertext, so a `url` reader would fetch them and
+    /// fail the `sha256`. A reader uses only the path of `href`, against its own server.
+    #[serde(rename = "durable-stream")]
+    DurableStream { href: String },
+    /// Draft 1 update 2 (spec 4.2.1, 8.5): the BLAKE3 hash, 64 lower-case hex
+    /// digits, of the bytes the provider serves (encrypted, so not `sha256`).
+    #[serde(rename = "blake3")]
+    Blake3 { hash: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

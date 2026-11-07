@@ -14,7 +14,11 @@
 #   COLLABORA_NAME     container name, default dcp-collabora
 #   DCP_WOPI_HOST_PORT port of the WOPI host the test starts (default 18080)
 #   COLLABORA_LOCK_REFRESH_SECS storage.wopi.locking.refresh (default 10 here;
-#                      Collabora's own default is 900), so a refresh is observable
+#                      Collabora's own default is 900), so a refresh is observable.
+#                      `default` passes nothing: Collabora's own value.
+#   COLLABORA_EXTRA_PARAMS more coolwsd options, e.g.
+#                      "--o:per_document.autosave_duration_secs=30" (spike F's
+#                      churn measurement tightens the autosave timers)
 #   COLLABORA_READY_TIMEOUT seconds to wait for discovery (default 180)
 #
 # Exits non-zero, with the container log, when Collabora does not come up. It
@@ -40,13 +44,18 @@ if [ "${1:-up}" = "down" ]; then
   exit 0
 fi
 
+REFRESH_PARAM=""
+if [ "${COLLABORA_LOCK_REFRESH_SECS:-10}" != "default" ]; then
+  REFRESH_PARAM=" --o:storage.wopi.locking.refresh=${COLLABORA_LOCK_REFRESH_SECS:-10}"
+fi
+
 # aliasgroup1 is the docker image's way to fill storage.wopi.alias_groups: the
 # WOPI host origins Collabora may call back. The entrypoint escapes the dots.
 "$ENGINE" run -d --name "$NAME" \
   --network host \
   --cap-add MKNOD \
   -e "aliasgroup1=http://127.0.0.1:${PORT}" \
-  -e "extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:storage.wopi.locking.refresh=${COLLABORA_LOCK_REFRESH_SECS:-10}" \
+  -e "extra_params=--o:ssl.enable=false --o:ssl.termination=false${REFRESH_PARAM} ${COLLABORA_EXTRA_PARAMS:-}" \
   -e "username=admin" -e "password=admin" \
   "$IMAGE"
 

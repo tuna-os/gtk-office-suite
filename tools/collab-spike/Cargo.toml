@@ -6,7 +6,10 @@
 # or their lockfile, and the Flatpak `--locked` build must not change.
 [workspace]
 resolver = "2"
-members = ["dcp-core", "dcp-conformance", "dcp-matrix", "dcp-wopi", "dcp-interop"]
+members = ["dcp-core", "dcp-conformance", "dcp-matrix", "dcp-wopi", "dcp-interop", "dcp-streams", "dcp-webdav"]
+# dcp-p2p is its own workspace: p2panda-store pulls sqlx 0.8 (libsqlite3-sys ^0.30) and matrix-sdk
+# pulls rusqlite 0.40 (libsqlite3-sys ^0.38); only one package may link sqlite3 per resolution.
+exclude = ["dcp-p2p"]
 
 [workspace.package]
 version = "0.0.0"

@@ -6,10 +6,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dcp_conformance::wrappers::{CorruptingStore, Corruption, Defect, Defective, Target};
+use dcp_conformance::wrappers::{
+    CorruptingStore, Corruption, Defect, Defective, LeaseRecorder, Target,
+};
 use dcp_conformance::{
     journey_names, run_all, run_one, run_selected, Capabilities, Failure, Fixture, MemoryFactory,
-    Outcome, StoreFactory,
+    Outcome, StoreFactory, DEFAULT_LEASE_MS,
 };
 use dcp_core::memory::MemoryConfig;
 use dcp_core::DocumentStore;
@@ -251,6 +253,45 @@ async fn store_whose_clock_never_advances_fails_lease_expiry() {
         fx.owner = wrap(&fx.owner, Defect::FrozenClock);
         fx.editor = wrap(&fx.editor, Defect::FrozenClock);
     });
+    assert_caught(&f, "lease_expiry_releases").await;
+}
+
+/// `Fixture::lease_ms` is what `lease_expiry_releases` claims, not a constant
+/// inside the journey: every held lease it writes carries the fixture's value,
+/// the default and a binding's own.
+#[tokio::test]
+async fn lease_expiry_claims_the_fixtures_lease_ms() {
+    for set in [None, Some(7_000u64)] {
+        let seen = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let recorded = seen.clone();
+        let f = Mutant::new("records lease durations", move |fx| {
+            if let Some(ms) = set {
+                fx.lease_ms = ms;
+            }
+            fx.owner = Arc::new(LeaseRecorder::new(fx.owner.clone(), recorded.clone()));
+            fx.editor = Arc::new(LeaseRecorder::new(fx.editor.clone(), recorded.clone()));
+        });
+        let want = set.unwrap_or(DEFAULT_LEASE_MS);
+        assert_eq!(
+            run_one(&f, "lease_expiry_releases").await.outcome,
+            Outcome::Passed,
+            "lease_expiry_releases with lease_ms {want}"
+        );
+        let held: Vec<u64> = seen.lock().iter().flatten().copied().collect();
+        assert!(!held.is_empty(), "the journey wrote no held lease");
+        assert!(
+            held.iter().all(|d| *d == want),
+            "a held lease did not carry lease_ms {want}: {held:?}"
+        );
+    }
+}
+
+/// The parameter is the journey's clock, not decoration: a lease shorter than
+/// the settle interval of rule 3 cannot be held for the journey's checks, so
+/// the journey fails. (It passes at the default on the same store.)
+#[tokio::test]
+async fn a_lease_shorter_than_the_settle_interval_fails_lease_expiry() {
+    let f = Mutant::new("lease_ms below the settle interval", |fx| fx.lease_ms = 100);
     assert_caught(&f, "lease_expiry_releases").await;
 }
 

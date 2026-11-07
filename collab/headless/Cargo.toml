@@ -1,0 +1,30 @@
+# RFC-0005 PR 2: the two-instance test, with no GTK.
+#
+# Two real `collabd` processes and two tables-core `Replica`s converge through a
+# real Durable Streams server. It is a workspace of its own, with its own
+# Cargo.lock, because tables-core drags in suite-export and with it the whole
+# Typst tree (and ironcalc, calamine, loro): that graph must not enter
+# `collab/Cargo.lock`, which is what ships beside the apps and what `cargo deny`
+# audits for the sidecar. A path dependency on tables-core resolves its
+# dependencies afresh in THIS workspace, so `Cargo.lock` here is not the
+# product's; the product's `Cargo.lock` is untouched.
+[workspace]
+
+[package]
+name = "collab-headless"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-or-later"
+
+[dev-dependencies]
+tables-core = { path = "../../tables-core", features = ["collab"] }
+suite-collab = { path = "../../suite-collab" }
+# Only to play the other people the sidecar cannot: a hostile editor that skips
+# a `seq`, a viewer that signs an update anyway, a reader of the raw log.
+dcp-core = { path = "../dcp-core" }
+dcp-streams = { path = "../dcp-streams" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "io-util", "sync"] }
+serde_json = "1"
+tempfile = "3"
+parking_lot = "0.13"

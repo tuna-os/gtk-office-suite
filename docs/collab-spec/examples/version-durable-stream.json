@@ -1,0 +1,20 @@
+{
+  "dcp": 1,
+  "parents": [
+    "3f1c0a9d5b7e2468a0c1d2e3f4a5b6c7d8e9f001122334455667788990011aabb"
+  ],
+  "file": {
+    "mime": "application/vnd.oasis.opendocument.spreadsheet",
+    "size": 48213,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locator": {
+      "type": "durable-stream",
+      "href": "https://streams.example.org/dcp/Zm9vYmFyYmF6cXV4/f/q83JmVnH2xZk_0Tb"
+    }
+  },
+  "created_by": {
+    "principal": "ed25519:A5hL0xqX3cZ8s1nTn2mC9wYb4uJdE7oPrVfGk6iQa-w",
+    "device": "laptop-1"
+  },
+  "message": "Add October actuals"
+}

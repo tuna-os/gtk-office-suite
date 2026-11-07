@@ -29,6 +29,12 @@ pub fn sentinel(index: usize) -> String {
     format!("{OPEN}{index}{CLOSE}")
 }
 
+/// Whether `text` is nothing but text box sentinels: the run of a
+/// paragraph whose only content floats.
+pub fn is_sentinel(text: &str) -> bool {
+    text.starts_with(OPEN) && text.ends_with(CLOSE) && text.chars().all(|c| c == OPEN || c == CLOSE || c.is_ascii_digit())
+}
+
 /// The end of the element that opens at `xml[start..]` (`<name ` or
 /// `<name>`), past its close tag, counting elements of the same name nested
 /// in it.
@@ -141,7 +147,7 @@ fn text_box(el: &str) -> Option<(TextBox, ImageAnchor)> {
         Some(at) if el[..at].contains("<w:txbxContent") => &el[..at],
         _ => el,
     };
-    let content_at = el.find("<w:txbxContent")?;
+    let Some(content_at) = el.find("<w:txbxContent") else { return rule_shape(el) };
     let content_end = element_end(el, content_at, "w:txbxContent")?;
     let text = box_text(&el[content_at..content_end]);
     if let Some(at) = el.find("<wps:wsp") {
@@ -185,6 +191,32 @@ fn text_box(el: &str) -> Option<(TextBox, ImageAnchor)> {
         })
         .unwrap_or(INSETS);
     Some((TextBox { extent_emu, border, fill, padding_emu, text }, ImageAnchor::default()))
+}
+
+/// A straight line drawn across or down the page (`prst="line"`, or a
+/// straight connector), as a box with no text, as long as the line and
+/// none deep, ruled with the line's outline: a form's coloured rule under
+/// its title. A slanted line, or one in a group, is not one.
+fn rule_shape(el: &str) -> Option<(TextBox, ImageAnchor)> {
+    let el = el.find("<mc:Fallback").map_or(el, |at| &el[..at]);
+    if el.contains("<wpg:") || el.contains("<pic:pic") {
+        return None;
+    }
+    let shape = &el[el.find("<wps:wsp")?..];
+    let geometry = attr(shape, "<a:prstGeom ", "prst")?;
+    if !matches!(geometry, "line" | "straightConnector1") {
+        return None;
+    }
+    let size = |a| attr(el, "<wp:extent ", a).and_then(|v| v.parse::<u64>().ok());
+    let extent_emu = size("cx").zip(size("cy"))?;
+    if extent_emu.0 != 0 && extent_emu.1 != 0 {
+        return None;
+    }
+    let sp = shape.find("<wps:spPr")?;
+    let (_, border) = shape_look(&shape[sp..element_end(shape, sp, "wps:spPr").unwrap_or(shape.len())]);
+    let a = el.find("<wp:anchor")?;
+    let anchor = placement(&el[a..element_end(el, a, "wp:anchor").unwrap_or(el.len())]);
+    Some((TextBox { extent_emu, border: Some(border?), fill: None, padding_emu: [0; 4], text: String::new() }, anchor))
 }
 
 /// Turn every text box in a body's runs into a sentinel in its run, and
@@ -233,7 +265,15 @@ pub fn restore(doc: &mut Document, boxes: &[(TextBox, ImageAnchor)]) {
                 match rest[a + OPEN.len_utf8()..b].parse::<usize>().ok().and_then(|i| boxes.get(i)) {
                     Some((tb, anchor)) => runs.push(Run {
                         text: String::new(),
-                        style: RunStyle { text_box: Some(Box::new(tb.clone())), image_anchor: Some(*anchor), ..Default::default() },
+                        // The size and font its run was given: a paragraph
+                        // of nothing but floating boxes is a line of them.
+                        style: RunStyle {
+                            text_box: Some(Box::new(tb.clone())),
+                            image_anchor: Some(*anchor),
+                            font_size_hp: run.style.font_size_hp,
+                            font_family: run.style.font_family.clone(),
+                            ..Default::default()
+                        },
                     }),
                     None => runs.push(Run { text: rest[a..b + CLOSE.len_utf8()].to_string(), style: run.style.clone() }),
                 }
@@ -347,6 +387,25 @@ mod tests {
     fn a_picture_is_left_alone() {
         let pic = r#"<w:p><w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="rId5"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"#;
         assert_eq!(unwrap(pic), (pic.to_string(), Vec::new()));
+    }
+
+    /// A straight line shape (a form's coloured rule under its title) is
+    /// a box with no text, the line's length and no depth, ruled in the
+    /// line's colour and width, where its anchor puts it; its VML fallback
+    /// is not a second one. A slanted line is no rule.
+    #[test]
+    fn a_line_shape_is_a_rule() {
+        let line = |cy: u32| {
+            format!(
+                r##"<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="margin"><wp:align>left</wp:align></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>2204720</wp:posOffset></wp:positionV><wp:extent cx="5705475" cy="{cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="2" name="Straight Connector 2"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:cNvCnPr/><wps:spPr><a:xfrm flipV="1"><a:off x="0" y="0"/><a:ext cx="5705475" cy="{cy}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="22225"><a:solidFill><a:srgbClr val="2CC7DC"/></a:solidFill></a:ln></wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict><v:line from="0,173.6pt" to="449.25pt,173.6pt" strokecolor="#2cc7dc"/></w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>"##
+            )
+        };
+        let (xml, boxes) = unwrap(&line(0));
+        assert_eq!(xml, format!("<w:p><w:r><w:t>{}</w:t></w:r></w:p>", sentinel(0)));
+        let (tb, a) = &boxes[0];
+        assert_eq!(tb, &TextBox { extent_emu: (5_705_475, 0), border: Some(BoxRule { width_emu: 22_225, color: "2CC7DC".into() }), fill: None, padding_emu: [0; 4], text: String::new() });
+        assert_eq!((a.h_from, a.h_align, a.v_from, a.y_emu), (AnchorFrame::Margin, Some(AnchorAlign::Start), AnchorFrame::Page, 2_204_720));
+        assert!(unwrap(&line(9525)).1.is_empty(), "a slanted line");
     }
 
     /// A VML-only box (an old Word's) keeps its size, look and insets.

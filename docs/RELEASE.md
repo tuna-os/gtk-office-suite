@@ -36,16 +36,39 @@ python3 conformance/validate_capabilities.py \
 ```
 
 which refuses the release if any claim resting on a lane marked
-`runs_on_every_revision: false` records a different revision. Before
-tagging:
-
-1. dispatch `nightly.yml` (`workflow_dispatch`) at the release commit;
-2. when it passes, set that commit's SHA as the `revision` of the affected
-   claims in `conformance/capabilities.json`;
-3. tag.
+`runs_on_every_revision: false` records a different revision, unless the
+release commit differs from the recorded one only in release metadata
+(`conformance/capabilities.json` and `flatpak/*.metainfo.xml`). A commit
+cannot hold its own SHA, so recording a lane's run always takes a commit
+on top of the code it ran.
 
 If it fails, the fix is to run the lane at the release revision — not to
-lower the claim's status or relax the rule. A lane the rule watches that no
+lower the claim's status or relax the rule.
+
+## Automatic releases
+
+`.github/workflows/autorelease.yml` cuts a release every Wednesday when
+`main` has changed since the last tag, and on demand
+(`workflow_dispatch`: `bump` = minor, patch or major; `force` to release
+an unchanged `main`):
+
+1. it runs the scheduled lanes, `nightly.yml`'s oracle and
+   `collab-letters-gui.yml`'s journeys, at `main`'s head X;
+2. when both pass, `tools/release/cut_release.py` records X as the
+   `revision` of every claim resting on them and adds an AppStream
+   `<release>` (the version, the date and the merged changes) to each app's
+   metainfo;
+3. it commits that on top of X, checks it with `--release-revision`, tags
+   the commit `vN` and pushes only the tag. `main` is not pushed to;
+4. it dispatches `publish-flatpak.yml` with `publish` on the tag, which
+   runs the evidence and soak gates before publishing anything, and
+   `release-gate.yml`.
+
+A manual release follows the same steps: run the lanes at the commit, run
+`cut_release.py --version <v> --revision <sha>`, commit, tag and push the
+tag. A tag pushed with `GITHUB_TOKEN` starts no workflow, so the automatic
+run dispatches the publish itself, and a manual `publish` dispatch runs
+both gates and needs them to pass. A lane the rule watches that no
 claim cites is also refused, so the check cannot pass by having nothing to
 check.
 

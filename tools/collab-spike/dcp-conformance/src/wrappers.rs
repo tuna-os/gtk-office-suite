@@ -144,6 +144,79 @@ impl DocumentStore for CorruptingStore {
     }
 }
 
+/// A store that notes the `duration_ms` of every lease record written through
+/// it and otherwise is the inner store. Lets a test see what duration a journey
+/// claims (`Fixture::lease_ms`).
+pub struct LeaseRecorder {
+    inner: Arc<dyn DocumentStore>,
+    durations: Arc<Mutex<Vec<Option<u64>>>>,
+}
+
+impl LeaseRecorder {
+    /// Wrap `inner`; every written lease's duration is pushed to `durations`.
+    pub fn new(inner: Arc<dyn DocumentStore>, durations: Arc<Mutex<Vec<Option<u64>>>>) -> Self {
+        LeaseRecorder { inner, durations }
+    }
+}
+
+#[async_trait]
+impl DocumentStore for LeaseRecorder {
+    fn principal(&self) -> String {
+        self.inner.principal()
+    }
+    fn device(&self) -> String {
+        self.inner.device()
+    }
+    async fn create_document(&self, meta: &Meta, first: Option<NewFile>) -> Result<DocId> {
+        self.inner.create_document(meta, first).await
+    }
+    async fn meta(&self, doc: &DocId) -> Result<Meta> {
+        self.inner.meta(doc).await
+    }
+    async fn role(&self, doc: &DocId) -> Result<Role> {
+        self.inner.role(doc).await
+    }
+    async fn grant(&self, doc: &DocId, principal: &str, role: Role) -> Result<()> {
+        self.inner.grant(doc, principal, role).await
+    }
+    async fn revoke(&self, doc: &DocId, principal: &str) -> Result<()> {
+        self.inner.revoke(doc, principal).await
+    }
+    async fn versions(&self, doc: &DocId) -> Result<Vec<Stamped<Version>>> {
+        self.inner.versions(doc).await
+    }
+    async fn fetch_file(&self, doc: &DocId, version: &Stamped<Version>) -> Result<Vec<u8>> {
+        self.inner.fetch_file(doc, version).await
+    }
+    async fn publish_version(
+        &self,
+        doc: &DocId,
+        parents: Vec<String>,
+        file: NewFile,
+        message: Option<String>,
+    ) -> Result<Stamped<Version>> {
+        self.inner
+            .publish_version(doc, parents, file, message)
+            .await
+    }
+    async fn lease(&self, doc: &DocId) -> Result<Option<Stamped<Lease>>> {
+        self.inner.lease(doc).await
+    }
+    async fn write_lease(&self, doc: &DocId, lease: Lease) -> Result<Stamped<Lease>> {
+        self.durations.lock().push(lease.duration_ms);
+        self.inner.write_lease(doc, lease).await
+    }
+    async fn now_ms(&self, doc: &DocId) -> Result<u64> {
+        self.inner.now_ms(doc).await
+    }
+    async fn publish_update(&self, doc: &DocId, update: Update) -> Result<Stamped<Update>> {
+        self.inner.publish_update(doc, update).await
+    }
+    async fn updates(&self, doc: &DocId) -> Result<Vec<Stamped<Update>>> {
+        self.inner.updates(doc).await
+    }
+}
+
 /// The one thing a [`Defective`] store gets wrong.
 #[derive(Clone)]
 pub enum Defect {
