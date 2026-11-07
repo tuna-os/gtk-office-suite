@@ -625,6 +625,33 @@ def reference_words(lo_path, ref, app):
     return mark_printed(words, printed_words(os.path.splitext(lo_path)[0] + ".txt"))
 
 
+def trim_detached_footer(img):
+    """If a printed spreadsheet page has a detached footer at the very bottom
+    margin (a small strip of ink <= 30px tall preceded by a large blank vertical
+    gap >= 80px, such as Calc's oddFooter), return the page cropped above the gap."""
+    arr = np.asarray(img)
+    mask = ink_mask(arr)
+    ys, xs = np.nonzero(mask)
+    if not len(ys):
+        return img
+    last_y = int(ys.max())
+    if last_y < img.height * 0.85:
+        return img
+    ink_y = mask.sum(axis=1)
+    gap = 0
+    for y in range(last_y, int(ys.min()), -1):
+        if ink_y[y] == 0:
+            gap += 1
+        elif gap >= 80:
+            footer_h = last_y - (y + gap + 1) + 1
+            if footer_h <= 30:
+                return img.crop((0, 0, img.width, y + 1))
+            break
+        else:
+            gap = 0
+    return img
+
+
 # ── scoring ───────────────────────────────────────────────────────────────
 def align(app, lo_path, ours_path):
     """Put both renderings in one coordinate space; returns (ref, ours,
@@ -644,6 +671,7 @@ def align(app, lo_path, ours_path):
     ref = load(lo_path)
     if app != "tables":
         return ref, load(ours_path, ref.size), None
+    ref = trim_detached_footer(ref)
     ys, xs = np.nonzero(ink_mask(np.asarray(ref)))
     if len(xs):
         ref = ref.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
@@ -658,6 +686,12 @@ def align(app, lo_path, ours_path):
     if box and 0 < ox < ours.width and 0 < oy < ours.height:
         ref = ref.crop(box)
         ours = ours.crop((ox, oy, ours.width, ours.height))
+    elif box is None and 0 < ox < ours.width and 0 < oy < ours.height:
+        # Published sheets need not print headings (#1335, #1341).
+        # Remove our screen header bands so column letters and row numbers
+        # are not stretched into the document.
+        ours = ours.crop((ox, oy, ours.width, ours.height))
+        scale = (ours.width / ref.width + ours.height / ref.height) / 2
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
