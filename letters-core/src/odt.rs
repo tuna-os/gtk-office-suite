@@ -61,90 +61,21 @@ fn esc(s: &str) -> String {
 
 // ── Writing ──────────────────────────────────────────────────────────
 
-/// The application's body size, in half-points, where a document gives none.
-fn default_size_hp() -> u16 {
-    (crate::layout::LayoutOptions::default().font_size_pt * 2.0) as u16
-}
-
-/// The size, in half-points, text is drawn at where it names none of its
-/// own: its heading level's, else the document's body size (`base_font`,
-/// else the application's 12pt). A raised or lowered run's shift is a
-/// percentage of this (`style:text-position`), so reader and writer must
-/// agree on it.
-fn effective_size_hp(own: Option<u16>, heading: Option<u8>, doc: &Document) -> u16 {
-    let base = doc.base_font.size_hp.filter(|hp| *hp > 0).unwrap_or_else(default_size_hp);
-    if let Some(hp) = own.filter(|hp| *hp > 0) {
-        return hp;
-    }
-    match heading {
-        None => base,
-        // As `LayoutOptions::heading_size_pt` and `heading_styles`: the
-        // document's look for the level, else the body size scaled.
-        Some(n) => match doc.heading_styles.get(usize::from(n.clamp(1, 6)) - 1) {
-            Some(look) => look.font_size_hp.filter(|hp| *hp > 0).unwrap_or(base),
-            None => (f64::from(base) * crate::layout::heading_scale(n)).round() as u16,
-        },
-    }
-}
-
-/// A shift of `pct` percent of a font `size_hp` half-points high, in
-/// half-points; None where it rounds to none.
-fn shift_hp(pct: f64, size_hp: u16) -> Option<i32> {
-    let hp = (pct / 100.0 * f64::from(size_hp)).round() as i32;
-    (hp != 0).then_some(hp)
-}
-
-/// `style:text-position` for a shift of `hp` half-points at a font of
-/// `size_hp`: the whole percent that reads back as `hp` where there is
-/// one (Writer keeps whole percents), else the exact one.
-fn text_position_attr(hp: i32, size_hp: u16) -> String {
-    let exact = f64::from(hp) / f64::from(size_hp) * 100.0;
-    let whole = exact.round();
-    let pct = if shift_hp(whole, size_hp) == Some(hp) { whole } else { (exact * 10000.0).round() / 10000.0 };
-    format!("{pct}% 100%")
-}
-
-/// The size, in half-points, the file this writer makes gives text that
-/// names none of its own, as `effective_size_hp` finds it on reading it
-/// back. A heading's is the explicit size `heading_styles` writes; the body
-/// has none (the document's `base_font` is not written to .odt), so it is
-/// the application's default.
-fn written_size_hp(own: Option<u16>, heading: Option<u8>, doc: &Document) -> u16 {
-    own.filter(|hp| *hp > 0).unwrap_or_else(|| match heading {
-        Some(_) => effective_size_hp(None, heading, doc),
-        None => default_size_hp(),
-    })
-}
-
-/// What distinguishes a run's automatic text style: its look, and, where it
-/// is raised or lowered, the size that shift is a percentage of, which the
-/// run's paragraph decides.
-type RunKey = (RunStyle, Option<u16>);
-
-fn run_key(doc: &Document, p: &Paragraph, style: &RunStyle) -> RunKey {
-    let plain = RunStyle { revision: None, comments: Vec::new(), ..style.clone() };
-    let size = (plain.position_hp.is_some_and(|hp| hp != 0) && plain.vert_align.is_none()).then(|| written_size_hp(plain.font_size_hp, p.style.heading, doc));
-    (plain, size)
-}
-
 /// Collect the distinct run styles used, in first-use order.
-fn collect_run_styles(doc: &Document) -> Vec<RunKey> {
-    let mut styles: Vec<RunKey> = Vec::new();
+fn collect_run_styles(doc: &Document) -> Vec<RunStyle> {
+    let mut styles: Vec<RunStyle> = Vec::new();
     for p in &doc.paragraphs {
         for r in &p.runs {
-            let key = run_key(doc, p, &r.style);
-            if key.0 != RunStyle::default() && key.0.chip.is_none() && !styles.contains(&key) {
-                styles.push(key);
+            let style = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
+            if style != RunStyle::default() && style.chip.is_none() && !styles.contains(&style) {
+                styles.push(style);
             }
         }
     }
     styles
 }
 
-/// A run style's text properties. `size_hp` is the font size, in
-/// half-points, a raised or lowered run's shift is a percentage of; without
-/// it the shift is not written.
-fn run_style_props(st: &RunStyle, size_hp: Option<u16>) -> String {
+fn run_style_props(st: &RunStyle) -> String {
     let mut props = String::new();
     if st.bold {
         props.push_str(" fo:font-weight=\"bold\"");
@@ -183,9 +114,6 @@ fn run_style_props(st: &RunStyle, size_hp: Option<u16>) -> String {
             VertAlign::Subscript => "sub 58%",
         };
         props.push_str(&format!(" style:text-position=\"{pos}\""));
-    }
-    if let (Some(hp), Some(size), None) = (st.position_hp.filter(|hp| *hp != 0), size_hp.filter(|hp| *hp > 0), st.vert_align) {
-        props.push_str(&format!(" style:text-position=\"{}\"", text_position_attr(hp, size)));
     }
     if st.code {
         props.push_str(" style:font-name=\"Monospace\"");
@@ -702,12 +630,12 @@ fn content_xml(doc: &Document) -> String {
     let mut text_boxes_written = 0usize;
 
     let mut auto = String::new();
-    for (i, (st, size)) in run_styles.iter().enumerate() {
+    for (i, st) in run_styles.iter().enumerate() {
         auto.push_str(&format!(
             "<style:style style:name=\"T{}\" style:family=\"text\">\
              <style:text-properties{}/></style:style>",
             i + 1,
-            run_style_props(st, *size)
+            run_style_props(st)
         ));
     }
     // Paragraph automatic styles: one per used (alignment, break) combo.
@@ -770,6 +698,21 @@ fn content_xml(doc: &Document) -> String {
         ));
     }
     auto.push_str("</text:list-style>");
+    let mut marker_fonts: Vec<&str> = Vec::new();
+    for p in &doc.paragraphs {
+        if p.style.list == ListKind::Bullet {
+            if let Some(font) = p.style.list_marker_font.as_deref().filter(|f| !marker_fonts.contains(f)) {
+                marker_fonts.push(font);
+            }
+        }
+    }
+    for (k, font) in marker_fonts.iter().enumerate() {
+        auto.push_str(&format!("<style:style style:name=\"MarkerF{k}\" style:family=\"text\"><style:text-properties style:font-name=\"{}\"/></style:style><text:list-style style:name=\"LBF{k}\">", esc(font)));
+        for level in 0..10 {
+            auto.push_str(&format!("<text:list-level-style-bullet text:level=\"{}\" text:style-name=\"MarkerF{k}\" text:bullet-char=\"{}\">{}<style:text-properties style:font-name=\"{}\"/></text:list-level-style-bullet>", level + 1, bullets[level % bullets.len()], level_props(level), esc(font)));
+        }
+        auto.push_str("</text:list-style>");
+    }
     // "LN", every level "N.", and one more for each set of labels a list
     // gives its levels (`labelled_lists`).
     let labelled = labelled_lists(&doc.paragraphs);
@@ -991,7 +934,10 @@ fn content_xml(doc: &Document) -> String {
             (ListKind::Numbered, k) => format!("LN{k}"),
             _ => "LB".to_string(),
         };
-        if kind != open_list || (kind == ListKind::Numbered && list_style != open_style) {
+        let list_style = if kind == ListKind::Bullet {
+            p.style.list_marker_font.as_deref().and_then(|f| marker_fonts.iter().position(|n| *n == f)).map_or(list_style.clone(), |k| format!("LBF{k}"))
+        } else { list_style };
+        if kind != open_list || (kind != ListKind::None && list_style != open_style) {
             body.push_str(&"</text:list-item></text:list>".repeat(depth));
             depth = 0;
             open_list = kind;
@@ -1113,9 +1059,9 @@ fn content_xml(doc: &Document) -> String {
             // A tab and a line break are elements in ODF: raw, they are
             // only whitespace.
             let mut run_xml = esc(&r.text).replace('\t', "<text:tab/>").replace('\n', "<text:line-break/>");
-            let key = run_key(doc, p, &r.style);
-            if key.0 != RunStyle::default() {
-                let ti = run_styles.iter().position(|s| *s == key).unwrap() + 1;
+            let plain = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
+            if plain != RunStyle::default() {
+                let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
                 run_xml = format!("<text:span text:style-name=\"T{ti}\">{run_xml}</text:span>");
             }
             // Inline code as Writer's "Source Text" (#1205): the monospace
@@ -1171,6 +1117,7 @@ fn content_xml(doc: &Document) -> String {
         format!("<text:tracked-changes text:track-changes=\"false\">{}</text:tracked-changes>", regions.concat())
     };
 
+    let marker_faces: String = marker_fonts.iter().map(|font| format!("<style:font-face style:name=\"{}\" svg:font-family=\"{}\"/>", esc(font), esc(font))).collect();
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-content \
@@ -1189,7 +1136,7 @@ fn content_xml(doc: &Document) -> String {
          <style:font-face style:name=\"Monospace\" \
          svg:font-family=\"&apos;Liberation Mono&apos;, monospace\" \
          style:font-family-generic=\"modern\" style:font-pitch=\"fixed\"/>\
-         </office:font-face-decls>\
+         {marker_faces}</office:font-face-decls>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:body><office:text>{changes}{body}</office:text></office:body>\
          </office:document-content>"
@@ -1492,7 +1439,7 @@ fn styles_xml(doc: &Document) -> String {
                 }
                 styles.push_str(&format!(
                     "<style:style style:name=\"{name}\" style:family=\"paragraph\"><style:paragraph-properties{align}{spacing}>{tabs}</style:paragraph-properties><style:text-properties{}/></style:style>",
-                    run_style_props(&line.look, Some(written_size_hp(line.look.font_size_hp, None, doc)))
+                    run_style_props(&line.look)
                 ));
                 let frame = line.float.map(|f| {
                     let (v_pos, top, bottom) = match f {
@@ -1597,7 +1544,7 @@ fn heading_styles(doc: &Document) -> String {
                 "<style:style style:name=\"Heading_20_{n}\" style:display-name=\"Heading {n}\" style:family=\"paragraph\" \
                  style:default-outline-level=\"{n}\" style:class=\"text\"><style:paragraph-properties fo:keep-with-next=\"always\"/>\
                  <style:text-properties{}/></style:style>",
-                run_style_props(&look, look.font_size_hp)
+                run_style_props(&look)
             )
         })
         .collect()
@@ -1715,14 +1662,6 @@ struct AutoStyles {
     /// and the default style alike: resolved by `para_kerned` and
     /// `text_kerning`, as an explicit "false" undoes a parent's "true".
     kerning: std::collections::HashMap<String, bool>,
-    /// A text style's own `style:text-position`, when it sets one: the
-    /// shift as a percentage of the font size where it is one at the full
-    /// size (`"<n>% 100%"`), None for super- and subscript, which
-    /// `RunStyle::vert_align` holds. Resolved by `text_shift`.
-    text_shift: std::collections::HashMap<String, Option<f64>>,
-    /// A paragraph style's own `style:text-position`, as `text_shift`;
-    /// resolved by `para_shift`.
-    para_shift: std::collections::HashMap<String, Option<f64>>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
     /// A table-row style's height.
@@ -1853,6 +1792,37 @@ fn list_style_labels(xml: &str) -> std::collections::HashMap<String, Vec<Option<
     out
 }
 
+/// The font family each bullet level names for its marker. It is separate
+/// from the item's text: W1's Arial text has Aptos bullets.
+fn list_marker_fonts(xml: &str, auto: &AutoStyles, named: &AutoStyles) -> std::collections::HashMap<String, Vec<Option<String>>> {
+    let mut out: std::collections::HashMap<String, Vec<Option<String>>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                "text:list-level-style-bullet" => {
+                    let level = attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok()).filter(|l| (1..=10).contains(l));
+                    // The character style affects line metrics; the level's
+                    // own text properties choose only the bullet's glyph.
+                    let font = attr_val(&e, "text:style-name").and_then(|n| text_style(&n, auto, named).font_family);
+                    if let (Some(name), Some(l), Some(font)) = (current.as_ref(), level, font) {
+                        let fonts = out.entry(name.clone()).or_default();
+                        fonts.resize(fonts.len().max(l), None);
+                        fonts[l - 1] = Some(font);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == "text:list-style" => current = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Each `text:list-style` in `xml`: whether each of its levels is numbered,
 /// by level (1-based in the file, 0-based here). LibreOffice names the list
 /// styles it writes "WWNum1", "L2"…, so the kind can't be read off the name.
@@ -1930,7 +1900,7 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), text_shift: Default::default(), para_shift: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -2135,8 +2105,6 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 } else if tp.starts_with("sub") {
                                     st.vert_align = Some(VertAlign::Subscript);
                                 }
-                                let shifts = if cur_family == "paragraph" { &mut out.para_shift } else { &mut out.text_shift };
-                                shifts.insert(name.clone(), parse_text_position(&tp));
                             }
                             // Writer names a paragraph style's face by its
                             // font declaration.
@@ -3268,10 +3236,14 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let styles = zip.optional_part_to_string("styles.xml", &mut budget);
 
     let auto = parse_auto_styles(&content);
+    // styles.xml's named styles, the parents of content.xml's automatic ones.
+    let named = parse_auto_styles(&styles);
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
     let mut list_labels = list_style_labels(&styles);
     list_labels.extend(list_style_labels(&content));
+    let mut marker_fonts = list_marker_fonts(&styles, &auto, &named);
+    marker_fonts.extend(list_marker_fonts(&content, &auto, &named));
     let mut list_indents = list_style_indents(&styles);
     list_indents.extend(list_style_indents(&content));
     // The label of a numbered item at `level` (1-based) of the list style
@@ -3293,18 +3265,12 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         (kind, if kind == ListKind::Numbered { label_of(name, level) } else { None })
     };
 
-    // styles.xml's named styles, the parents of content.xml's automatic ones.
-    let named = parse_auto_styles(&styles);
     let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
     // Span/link style stack: (style, depth marker)
     let mut span_stack: Vec<RunStyle> = Vec::new();
-    // Each entry of `span_stack`'s `style:text-position` shift, as a
-    // percentage of the font size (None: none). Held as a percentage
-    // because a span at another size shifts by as much of its own.
-    let mut shift_stack: Vec<Option<f64>> = Vec::new();
     // Body paragraphs open, each with its text base on `span_stack`.
     let mut paragraph_bases = 0usize;
     // Each body paragraph's named style and contextual spacing, by index.
@@ -3931,6 +3897,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if kind != ListKind::None {
                         let own = item_styles.get(usize::from(list_level.max(1) - 1)).cloned().flatten();
                         let name = own.as_ref().or_else(|| list_style_names.last().and_then(Option::as_ref));
+                        style.list_marker_font = name.and_then(|n| marker_fonts.get(n)).and_then(|l| l.get(usize::from(list_level.max(1) - 1))).cloned().flatten();
                         let declared = name.and_then(|n| list_indents.get(n)).and_then(|l| l.get(usize::from(list_level.max(1) - 1)).copied().flatten());
                         let text = crate::lists::text_indent_pt(style.list_level);
                         if style.left_indent_pt == 0.0 {
@@ -3975,10 +3942,6 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     };
                     let name = attr_val(&e, "text:style-name");
                     let text_base = RunStyle { kerned: para_kerned(name.as_deref().unwrap_or(DEFAULT_PARA), &auto, &named), ..text_base };
-                    let shift = para_shift(name.as_deref(), &auto, &named);
-                    let size = effective_size_hp(text_base.font_size_hp, para.as_ref().and_then(|p| p.style.heading), &doc);
-                    let text_base = RunStyle { position_hp: shift.and_then(|pct| shift_hp(pct, size)), ..text_base };
-                    shift_stack.push(shift);
                     span_stack.push(text_base);
                     paragraph_bases += 1;
                 }
@@ -3995,17 +3958,6 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             st.font_family = None;
                         }
                     }
-                    // A span's own shift replaces its outer's (the attribute
-                    // is one value, super- and subscript too); else it
-                    // takes it, as a share of its own size.
-                    let own_shift = name.as_deref().and_then(|n| text_shift(n, &auto, &named));
-                    let shift = own_shift.unwrap_or_else(|| shift_stack.last().copied().flatten());
-                    if own_shift.is_some_and(|s| s.is_some()) {
-                        st.vert_align = None;
-                    }
-                    let size = effective_size_hp(st.font_size_hp, para.as_ref().and_then(|p| p.style.heading), &doc);
-                    st.position_hp = shift.and_then(|pct| shift_hp(pct, size));
-                    shift_stack.push(shift);
                     span_stack.push(st);
                 }
                 "text:a" => {
@@ -4249,7 +4201,6 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if paragraph_bases > 0 {
                         paragraph_bases -= 1;
                         span_stack.pop();
-                        shift_stack.pop();
                     }
                     if let Some(mut p) = para.take() {
                         if p.runs.is_empty() && p.style.table_cell.is_none() {
@@ -4303,7 +4254,6 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 "text:index-title" => in_index_title = false,
                 "text:span" => {
                     span_stack.pop();
-                    shift_stack.pop();
                 }
                 "text:a" => {
                     link_stack.pop();
@@ -4977,6 +4927,12 @@ fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Str
         }
         if on.is_none() {
             on = auto.contextual.get(&n).or_else(|| named.contextual.get(&n)).copied();
+            // Writer stores contextual spacing with the vertical margins:
+            // setting a margin without it resets it to false. Indents and
+            // line height alone do not replace that setting (W1 P242).
+            if on.is_none() && auto.para.get(&n).or_else(|| named.para.get(&n)).is_some_and(|st| st.sets[0] || st.sets[1]) {
+                on = Some(false);
+            }
         }
         cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
     }
@@ -5015,51 +4971,6 @@ fn text_kerning(name: &str, auto: &AutoStyles, named: &AutoStyles) -> Option<boo
         cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
     }
     None
-}
-
-/// A text style's own `style:text-position`, the nearest up its chain:
-/// None where no style sets one; else the shift it makes (None for super-
-/// and subscript).
-fn text_shift(name: &str, auto: &AutoStyles, named: &AutoStyles) -> Option<Option<f64>> {
-    let mut cur = Some(name.to_string());
-    for _ in 0..16 {
-        let n = cur?;
-        if let Some(&s) = auto.text_shift.get(&n).or_else(|| named.text_shift.get(&n)) {
-            return Some(s);
-        }
-        cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
-    }
-    None
-}
-
-/// A paragraph style's text shift as a percentage of its font size: the
-/// nearest `style:text-position` up its chain, then the default style's.
-fn para_shift(name: Option<&str>, auto: &AutoStyles, named: &AutoStyles) -> Option<f64> {
-    let own = |n: &str| auto.para_shift.get(n).or_else(|| named.para_shift.get(n)).copied();
-    let mut cur = name.map(str::to_string);
-    for _ in 0..16 {
-        let Some(n) = cur else { break };
-        if let Some(s) = own(&n) {
-            return s;
-        }
-        cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
-    }
-    own(DEFAULT_PARA).flatten()
-}
-
-/// The shift of a `style:text-position` value of the form `"<n>% [100%]"`,
-/// in percent of the font size. Super, sub and a value that also resizes
-/// the text (`"33% 58%"`) are not one.
-fn parse_text_position(v: &str) -> Option<f64> {
-    let percent = |t: &str| t.strip_suffix('%')?.parse::<f64>().ok().filter(|n| n.is_finite());
-    let mut parts = v.split_whitespace();
-    let shift = percent(parts.next()?)?;
-    match parts.next() {
-        None => {}
-        Some(size) if percent(size) == Some(100.0) => {}
-        Some(_) => return None,
-    }
-    parts.next().is_none().then_some(shift)
 }
 
 fn text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
@@ -6029,134 +5940,6 @@ mod tests {
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
     }
 
-    /// `<n>% 100%` is a shift of that share of the run's font size, at the
-    /// run's own size, else its paragraph style's, else the document's
-    /// (#1691). Super- and subscript stay `vert_align`.
-    #[test]
-    fn a_text_position_percentage_is_read_at_the_runs_effective_size() {
-        let content = "<office:document-content><office:automatic-styles>\
-            <style:style style:name=\"P1\" style:family=\"paragraph\"><style:text-properties fo:font-size=\"20pt\"/></style:style>\
-            <style:style style:name=\"P2\" style:family=\"paragraph\"><style:text-properties fo:font-size=\"20pt\" style:text-position=\"10% 100%\"/></style:style>\
-            <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties style:text-position=\"-10% 100%\"/></style:style>\
-            <style:style style:name=\"T2\" style:family=\"text\"><style:text-properties style:text-position=\"25% 100%\" fo:font-size=\"16pt\"/></style:style>\
-            <style:style style:name=\"T3\" style:family=\"text\"><style:text-properties style:text-position=\"super 58%\"/></style:style>\
-            <style:style style:name=\"T4\" style:family=\"text\"><style:text-properties style:text-position=\"33% 58%\"/></style:style>\
-            <style:style style:name=\"T5\" style:family=\"text\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
-            <style:style style:name=\"T6\" style:family=\"text\"><style:text-properties style:text-position=\"0% 100%\"/></style:style>\
-            <style:style style:name=\"T7\" style:family=\"text\" style:parent-style-name=\"T1\"><style:text-properties fo:font-size=\"8pt\"/></style:style>\
-            </office:automatic-styles><office:body><office:text>\
-            <text:p text:style-name=\"P1\"><text:span text:style-name=\"T1\">paragraph size</text:span>\
-              <text:span text:style-name=\"T2\">own size</text:span><text:span text:style-name=\"T3\">super</text:span>\
-              <text:span text:style-name=\"T4\">resized</text:span>plain</text:p>\
-            <text:p><text:span text:style-name=\"T1\">default size</text:span></text:p>\
-            <text:p text:style-name=\"P2\">shifted <text:span text:style-name=\"T5\">inherits</text:span>\
-              <text:span text:style-name=\"T6\">level</text:span> <text:span text:style-name=\"T7\">own smaller</text:span></text:p>\
-            <text:h text:outline-level=\"1\"><text:span text:style-name=\"T2\">in a heading</text:span>\
-              <text:span text:style-name=\"T1\">heading size</text:span></text:h>\
-            </office:text></office:body></office:document-content>";
-        let styles = "<office:document-styles><office:styles>\
-            <style:default-style style:family=\"paragraph\"><style:text-properties fo:font-size=\"11pt\"/></style:default-style>\
-            <style:style style:name=\"Heading_20_1\" style:family=\"paragraph\"><style:text-properties fo:font-size=\"30pt\"/></style:style>\
-            </office:styles></office:document-styles>";
-        let d = read_package(content, styles);
-        let look = |p: usize, text: &str| {
-            let r = d.paragraphs[p].runs.iter().find(|r| r.text.contains(text)).unwrap_or_else(|| panic!("{text}: {:?}", d.paragraphs[p].runs));
-            (r.style.position_hp, r.style.vert_align, r.style.font_size_hp)
-        };
-        // −10% of the paragraph style's 20pt = −2pt = −4hp.
-        assert_eq!(look(0, "paragraph size"), (Some(-4), None, Some(40)));
-        // 25% of the span's own 16pt = 4pt = 8hp, not of the paragraph's 20pt.
-        assert_eq!(look(0, "own size"), (Some(8), None, Some(32)));
-        assert_eq!(look(0, "super"), (None, Some(VertAlign::Superscript), Some(40)));
-        // A shift that also resizes the text is not read as one.
-        assert_eq!(look(0, "resized"), (None, None, Some(40)));
-        assert_eq!(look(0, "plain"), (None, None, Some(40)));
-        // No size anywhere up the chain: the default style's 11pt, −10% = −1.1pt ≈ −2hp.
-        assert_eq!(look(1, "default size"), (Some(-2), None, None));
-        // A paragraph style's own shift (10% of 20pt = 4hp) reaches its spans,
-        // as a share of each span's size; a span's own value replaces it.
-        assert_eq!(look(2, "shifted"), (Some(4), None, Some(40)));
-        assert_eq!(look(2, "inherits"), (Some(4), None, Some(40)));
-        assert_eq!(look(2, "level"), (None, None, Some(40)));
-        // −10% inherited from T1 through T7's parent, at T7's own 8pt = −0.8pt ≈ −2hp.
-        assert_eq!(look(2, "own smaller"), (Some(-2), None, Some(16)));
-        // A heading takes its level's size (30pt) where nothing else names one.
-        assert_eq!(look(3, "in a heading"), (Some(8), None, Some(32)));
-        assert_eq!(look(3, "heading size"), (Some(-6), None, None));
-    }
-
-    /// The writer states a shift as a percentage of the same effective size
-    /// the reader divides it back by.
-    #[test]
-    fn a_position_is_written_as_a_percentage_of_the_runs_effective_size() {
-        let mut d = Document::from_plain_text("");
-        // The body size is not written to .odt, so the body's 12pt is the
-        // size the file declares; the heading's is written out in full.
-        d.base_font.size_hp = Some(28);
-        let shifted = |text: &str, hp: i32, size: Option<u16>| Run { text: text.into(), style: RunStyle { position_hp: Some(hp), font_size_hp: size, ..Default::default() } };
-        d.paragraphs[0].runs = vec![shifted("down", -2, None), shifted("up", 6, None), shifted("big", 4, Some(40)), shifted("level", 0, None)];
-        let mut h = Paragraph::default();
-        h.style.heading = Some(1);
-        h.runs = vec![shifted("head", 5, None)];
-        d.paragraphs.push(h);
-        let xml = content_xml(&d);
-        let positions: Vec<&str> = xml.split("style:text-position=\"").skip(1).map(|s| s.split('"').next().unwrap()).collect();
-        // −2hp of 12pt, 6hp of 12pt, 4hp of 20pt, and 5hp of the heading's
-        // 28 × 1.6 = 45hp.
-        assert_eq!(positions, ["-8% 100%", "25% 100%", "10% 100%", "11% 100%"], "{xml}");
-        assert!(xml.contains("fo:font-size=\"20pt\""), "{xml}");
-    }
-
-    /// Every shift comes back as written, at any size: a whole percent where
-    /// it reads back as the shift (Writer keeps whole percents), else exact.
-    #[test]
-    fn a_position_attribute_reads_back_as_the_shift_it_was_written_from() {
-        for size in 2u16..=400 {
-            for hp in (-300i32..=300).filter(|hp| *hp != 0) {
-                let attr = text_position_attr(hp, size);
-                assert_eq!(shift_hp(parse_text_position(&attr).unwrap(), size), Some(hp), "{hp}hp at {size}hp: {attr}");
-            }
-        }
-        assert_eq!(text_position_attr(-2, 24), "-8% 100%");
-        assert_eq!(text_position_attr(1, 300), "0.3333% 100%");
-    }
-
-    #[test]
-    fn a_text_position_value_is_a_shift_only_at_full_size() {
-        assert_eq!(parse_text_position("-8% 100%"), Some(-8.0));
-        assert_eq!(parse_text_position("12.5% 100%"), Some(12.5));
-        assert_eq!(parse_text_position("10%"), Some(10.0));
-        assert_eq!(parse_text_position("33% 58%"), None);
-        assert_eq!(parse_text_position("super 58%"), None);
-        assert_eq!(parse_text_position("sub"), None);
-        assert_eq!(parse_text_position("10% 100% x"), None);
-        assert_eq!(parse_text_position(""), None);
-    }
-
-    /// Raised and lowered runs survive a save at their own size, the
-    /// paragraph's and the document's, and a heading's: the same shift in
-    /// two paragraphs of different sizes is two different percentages.
-    #[test]
-    fn raised_and_lowered_text_round_trips() {
-        let mut d = Document::from_plain_text("");
-        d.base_font.size_hp = Some(28);
-        let shifted = |text: &str, hp: i32, size: Option<u16>| Run { text: text.into(), style: RunStyle { position_hp: Some(hp), font_size_hp: size, ..Default::default() } };
-        d.paragraphs[0].runs = vec![Run::plain("level "), shifted("down", -2, None), shifted(" up", 6, None), shifted(" big", -4, Some(40)), shifted(" tiny", 1, Some(7))];
-        let mut h = Paragraph::default();
-        h.style.heading = Some(2);
-        h.runs = vec![shifted("head", 3, None), shifted(" bigger", -5, Some(60))];
-        d.paragraphs.push(h);
-        d.paragraphs.push(Paragraph { runs: vec![shifted("same shift in the body", 3, None)], ..Default::default() });
-        let looks = |d: &Document| -> Vec<(String, Option<i32>, Option<u16>)> {
-            d.paragraphs.iter().flat_map(|p| &p.runs).map(|r| (r.text.clone(), r.style.position_hp, r.style.font_size_hp)).collect()
-        };
-        let rt = round_trip(&d);
-        assert_eq!(looks(&rt), looks(&d));
-        // Stable: a second pass changes nothing.
-        assert_eq!(looks(&round_trip(&rt)), looks(&d));
-        assert!(rt.paragraphs.iter().flat_map(|p| &p.runs).all(|r| r.style.vert_align.is_none()));
-    }
-
     #[test]
     fn font_size_color_highlight_survive() {
         let mut d = Document::from_plain_text("");
@@ -6806,6 +6589,46 @@ mod tests {
         let d = read_package(content, styles);
         let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
         assert_eq!(after, [0.0, 8.0, 12.0], "only between the two list paragraphs, the last with the default's");
+    }
+
+    /// A direct margin replaces the contextual-spacing part of Writer's
+    /// paragraph spacing setting too (W1 notes P242-P246). Indent-only
+    /// automatic styles still inherit it; an explicit opt-in wins.
+    #[test]
+    fn explicit_margins_reset_inherited_contextual_spacing() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties style:contextual-spacing=\"true\" fo:margin-bottom=\"8pt\"/></style:style>\
+             </office:styles></office:document-styles>";
+        for margin in ["fo:margin-top", "fo:margin-bottom"] {
+            for explicit in ["", " style:contextual-spacing=\"true\"", " style:contextual-spacing=\"false\""] {
+                let content = format!("<office:document-content><office:automatic-styles>\
+                     <style:style style:name=\"P1\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties {margin}=\"8pt\"{explicit}/></style:style>\
+                     </office:automatic-styles><office:body><office:text>\
+                     <text:p text:style-name=\"P1\">one</text:p><text:p text:style-name=\"P1\">two</text:p>\
+                     </office:text></office:body></office:document-content>");
+                let d = read_package(&content, styles);
+                let enabled = explicit.contains("true");
+                let expected = if enabled { 0.0 } else { 8.0 };
+                let actual = if margin == "fo:margin-top" { d.paragraphs[1].style.space_before_pt } else { d.paragraphs[0].style.space_after_pt };
+                assert_eq!(actual, expected, "{margin} {explicit}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_bullets_own_font_is_read_and_survives_an_odt_save() {
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"Marker\" style:family=\"text\"><style:text-properties style:font-name=\"DejaVu Sans\"/></style:style>\
+             <text:list-style style:name=\"L1\"><text:list-level-style-bullet text:level=\"1\" text:style-name=\"Marker\" text:bullet-char=\"•\"><style:text-properties style:font-name=\"DejaVu Sans\"/></text:list-level-style-bullet></text:list-style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:list text:style-name=\"L1\"><text:list-item><text:p>one</text:p></text:list-item></text:list>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        assert_eq!(d.paragraphs[0].style.list_marker_font.as_deref(), Some("DejaVu Sans"));
+        assert!(content_xml(&d).contains("<style:font-face style:name=\"DejaVu Sans\" svg:font-family=\"DejaVu Sans\"/>"));
+        let glyph_font_only = content.replace(" text:style-name=\"Marker\"", "");
+        assert_eq!(read_package(&glyph_font_only, "<office:document-styles/>").paragraphs[0].style.list_marker_font, None, "a glyph font alone does not grow the line");
+        assert_eq!(round_trip(&d).paragraphs[0].style.list_marker_font, d.paragraphs[0].style.list_marker_font);
     }
 
     /// A line break within a paragraph (`text:line-break`, Shift+Enter)

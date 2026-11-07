@@ -569,6 +569,46 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
     assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
 }
 
+/// Space before a cell's paragraph opens each continuation, even when
+/// the paragraph itself is split. Space after still stays behind.
+#[test]
+fn a_continued_cell_repeats_its_paragraphs_space_before() {
+    let mut d = doc_of(0, "");
+    let table = d.insert_table_at(0, 1, 1);
+    d.table_padding.insert(table, CellPadding { top_pt: 4.0, ..Default::default() });
+    d.paragraphs[0].style.space_before_pt = 6.0;
+    d.paragraphs[0].runs = vec![Run::plain("A long answer fills the cell. ".repeat(300))];
+    let tree = lay(&d);
+    assert!(tree.pages.len() > 2);
+    for page in &tree.pages {
+        let Some(cell_top) = page.items.iter().find_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }) else { continue };
+        let first_top = page.items.iter().find_map(|i| match i { Item::Line { top_pt, .. } => Some(*top_pt), _ => None }).unwrap();
+        assert!((first_top - cell_top - 10.0).abs() < 1e-6, "page {}: {} below cell", page.index, first_top - cell_top);
+    }
+}
+
+#[test]
+fn a_bullet_font_grows_only_the_items_first_line() {
+    struct MarkerShaper;
+    impl Shaper for MarkerShaper {
+        fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
+            let mut lines = MonoShaper.shape(req);
+            if req.runs.first().and_then(|r| r.style.font_family.as_deref()) == Some("Tall Marker") {
+                for line in &mut lines { line.ascent_pt = 20.0; line.descent_pt = 5.0; }
+            }
+            lines
+        }
+    }
+    let mut d = doc_of(1, &"Wrapped list text. ".repeat(12));
+    d.paragraphs[0].style.list = ListKind::Bullet;
+    d.paragraphs[0].style.list_marker_font = Some("Tall Marker".into());
+    let tree = layout(&d, &opts(), &mut MarkerShaper);
+    let heights: Vec<f64> = tree.pages[0].items.iter().filter_map(|i| match i { Item::Line { height_pt, .. } => Some(*height_pt), _ => None }).collect();
+    assert!(heights.len() > 1);
+    assert_eq!(heights[0], 25.0);
+    assert!(heights[1..].iter().all(|h| *h == LINE));
+}
+
 /// A row kept on one page that does not fit what is left of a page
 /// starts the next, as Writer moves the social housing dictionary's long
 /// rows whole; one not kept so splits there; and one taller than a page
