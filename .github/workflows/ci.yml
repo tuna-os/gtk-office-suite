@@ -112,6 +112,7 @@ jobs:
             tests/test_cut_release.py \
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_unprinted_headings.py \
+            tests/test_render_lab_wrap.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
@@ -199,6 +200,7 @@ jobs:
             tests/test_cut_release.py \
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_unprinted_headings.py \
+            tests/test_render_lab_wrap.py \
             tests/test_pixel_scoreboard.py \
             tests/test_render_lab_locate.py \
             tests/test_render_lab_gtk_icon_race.py \
