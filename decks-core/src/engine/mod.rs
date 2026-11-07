@@ -19,6 +19,8 @@
 //! - `text_body.rs` — paragraph styles, anchor and insets of a text box
 //! - `text_xml.rs` — the pptx text styles a paragraph inherits
 //! - `theme.rs` — deck themes and colour references (DCK-006)
+//! - `resolver.rs` — the one object → layout → master → theme → fallback
+//!   precedence resolver (DCK-006)
 
 mod model;
 mod notes;
@@ -27,6 +29,7 @@ mod placeholders;
 pub mod freeform;
 pub mod shape;
 pub mod table;
+pub mod resolver;
 pub mod theme;
 pub mod chart;
 mod shape_xml;
@@ -42,6 +45,7 @@ pub use text_body::{shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerS
 // the type it is handed without depending on letters-core directly.
 pub use letters_core::model::{Run, RunStyle};
 pub use parse::{parse_master_shapes, parse_master_shapes_scaled, parse_slide_size, read_pptx, SlideScale};
+pub use resolver::PrecedenceResolver;
 pub use write::{write_pptx, write_pptx_bytes};
 
 // odp.rs and the shape parsers share these quick_xml helpers.

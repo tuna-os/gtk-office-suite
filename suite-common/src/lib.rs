@@ -27,7 +27,7 @@ pub mod icons;
 pub mod about;
 pub mod page_setup;
 pub mod menus;
-pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
+pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session, report};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -164,6 +164,8 @@ impl SuiteApp {
         });
         app.add_action(&act_about);
 
+        about::add_report_problem_action(&app);
+
         let act_shortcuts = gio::SimpleAction::new("shortcuts", None);
         let app_weak = app.downgrade();
         act_shortcuts.connect_activate(move |_, _| {
@@ -276,6 +278,7 @@ impl SuiteApp {
             ("app.save-as", "Save As…"),
             ("app.preferences", "Preferences"),
             ("app.about", "About"),
+            ("app.report-problem", "Report a Problem…"),
             ("app.help", "Help"),
             ("app.shortcuts", "Keyboard Shortcuts"),
             ("app.clear-recent-files", "Clear Recent Files"),
@@ -794,6 +797,7 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
     let help_section = gio::Menu::new();
     help_section.append(Some(&i18n("_Help")), Some("app.help"));
     help_section.append(Some(&i18n("_Keyboard Shortcuts")), Some("app.shortcuts"));
+    help_section.append(Some(&i18n("Report a _Problem\u{2026}")), Some("app.report-problem"));
     help_section.append(Some(&i18n("_About %s").replace("%s", app_name)), Some("app.about"));
     menu.append_section(None, &help_section);
 
