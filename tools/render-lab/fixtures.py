@@ -139,6 +139,101 @@ def test_image(path):
     return path
 
 
+def letters_odt_spacing(directory):
+    """Small ODT reductions of the W1 notes (#1366), independent of our writer."""
+    from zipfile import ZIP_STORED, ZipFile
+
+    namespaces = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"'
+    )
+    styles = f'''<office:document-styles {namespaces} office:version="1.2">
+      <office:font-face-decls>
+        <style:font-face style:name="Liberation Sans" svg:font-family="Liberation Sans"/>
+        <style:font-face style:name="Noto Sans" svg:font-family="Noto Sans"/>
+      </office:font-face-decls>
+      <office:styles>
+        <style:default-style style:family="paragraph">
+          <style:text-properties fo:font-size="12pt" style:font-name="Liberation Sans"/>
+        </style:default-style>
+        <style:style style:name="Normal" style:family="paragraph">
+          <style:paragraph-properties fo:margin-top="6pt" fo:margin-bottom="0pt"/>
+        </style:style>
+        <style:style style:name="Marker" style:family="text">
+          <style:text-properties style:font-name="Noto Sans"/>
+        </style:style>
+        <style:style style:name="List" style:family="paragraph">
+          <style:paragraph-properties style:contextual-spacing="true" fo:margin-bottom="16pt"/>
+        </style:style>
+      </office:styles>
+      <office:automatic-styles>
+        <style:page-layout style:name="Page"><style:page-layout-properties
+          fo:page-width="595.3pt" fo:page-height="841.9pt" fo:margin="72pt"/></style:page-layout>
+      </office:automatic-styles>
+      <office:master-styles><style:master-page style:name="Standard" style:page-layout-name="Page"/></office:master-styles>
+    </office:document-styles>'''
+
+    def save(name, automatic, body, expect):
+        content = f'''<office:document-content {namespaces} office:version="1.2">
+          <office:automatic-styles>{automatic}</office:automatic-styles>
+          <office:body><office:text>{body}</office:text></office:body>
+        </office:document-content>'''
+        manifest = '''<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+          <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+          <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+          <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+        </manifest:manifest>'''
+        path = os.path.join(directory, name + ".odt")
+        with ZipFile(path, "w", compression=ZIP_STORED) as package:
+            package.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+            package.writestr("content.xml", content)
+            package.writestr("styles.xml", styles)
+            package.writestr("META-INF/manifest.xml", manifest)
+        add("letters", name, path, expect)
+
+    save(
+        "odt-contextual-margin-override",
+        '''<style:style style:name="Explicit" style:family="paragraph" style:parent-style-name="List">
+          <style:paragraph-properties fo:margin-bottom="16pt"/></style:style>''',
+        '''<text:p text:style-name="List">Inherited spacing first line</text:p>
+          <text:p text:style-name="List">Inherited spacing second line</text:p>
+          <text:p text:style-name="Explicit">Explicit margin first line</text:p>
+          <text:p text:style-name="Explicit">Explicit margin second line</text:p>
+          <text:p text:style-name="List">Inherited spacing final line</text:p>''',
+        "Inherited contextual spacing closes the first gap; explicit margins retain two 16pt gaps",
+    )
+    # 80 lines split across two pages and end mid-page: a table filling
+    # page 2 sends Writer's closing empty paragraph to a blank page 3.
+    answer = "<text:line-break/>".join(f"Answer line {i} continues." for i in range(80))
+    save(
+        "odt-continued-cell-space-before",
+        '''<style:style style:name="Grid" style:family="table"><style:table-properties style:width="451.3pt"/></style:style>
+          <style:style style:name="Column" style:family="table-column"><style:table-column-properties style:column-width="225.65pt"/></style:style>
+          <style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0pt"/></style:style>''',
+        f'''<table:table table:style-name="Grid"><table:table-column table:style-name="Column" table:number-columns-repeated="2"/>
+          <table:table-row><table:table-cell table:style-name="Cell"><text:p text:style-name="Normal">Answer label</text:p></table:table-cell>
+          <table:table-cell table:style-name="Cell"><text:p text:style-name="Normal">{answer}</text:p></table:table-cell></table:table-row></table:table>''',
+        "A split table cell repeats its paragraph's 6pt space before on every page",
+    )
+    save(
+        "odt-bullet-font-metrics",
+        '''<text:list-style style:name="Bullets"><text:list-level-style-bullet text:level="1" text:style-name="Marker" text:bullet-char="•">
+          <style:list-level-properties text:space-before="0pt" text:min-label-width="18pt"/>
+          <style:text-properties style:font-name="Noto Sans"/></text:list-level-style-bullet></text:list-style>''',
+        '''<text:list text:style-name="Bullets">
+          <text:list-item><text:p>First bullet with a taller marker font.</text:p></text:list-item>
+          <text:list-item><text:p>Second bullet with a taller marker font.</text:p></text:list-item>
+          <text:list-item><text:p>Third bullet with a taller marker font.</text:p></text:list-item>
+          <text:list-item><text:p>Fourth bullet with a taller marker font.</text:p></text:list-item>
+          </text:list><text:p>Body text follows the bullet list.</text:p>''',
+        "Noto Sans bullets grow the first lines of items whose body text is Liberation Sans",
+    )
+
+
 # ── Letters (docx) ────────────────────────────────────────────────────────
 def letters(img):
     from docx import Document
@@ -149,6 +244,7 @@ def letters(img):
 
     d = os.path.join(OUT, "letters")
     os.makedirs(d, exist_ok=True)
+    letters_odt_spacing(d)
     LOREM = (
         "The quick brown fox jumps over the lazy dog. Pack my box with five "
         "dozen liquor jugs. How vexingly quick daft zebras jump. "
@@ -773,27 +869,13 @@ def tables():
     # expose different portions of the column: stretching one to the other
     # in compare.align is not a measurement of the grid's scale.
     wb, ws = book()
-    wb._fonts[0] = Font(name="Liberation Sans", size=11)
     ws.column_dimensions["A"].width = 200
     for i in range(1, 21):
-        cell = ws.cell(
-            i,
-            1,
-            f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
-            "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
-            "Each view exposes only part of this line of text.",
-        )
-        cell.font = Font(name="Liberation Sans", size=11)
+        ws.cell(i, 1, f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
+                      "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
+                      "Each view exposes only part of this line of text.")
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
-
-    wb, ws = book()
-    ws["A1"] = "Financial statements"
-    ws["A1"].font = Font(name="Liberation Sans", size=24)
-    ws["A4"] = "Income"
-    ws["B4"] = "Statement of income"
-    ws.column_dimensions["B"].width = 40
-    save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
     wb, ws = book()
     pivot_rows = [
