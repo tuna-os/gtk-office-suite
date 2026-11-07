@@ -140,6 +140,10 @@ class LettersTextIsDrawnMixin:
         bottom = min(v.y + v.height, port.y + port.height)
         if right <= left or bottom <= top:
             return 0
+        # AT-SPI gives logical pixels; the screenshot is in device pixels,
+        # twice as many at the display matrix's GDK_SCALE=2.
+        left, top = self.to_device(left, top)
+        right, bottom = self.to_device(right, bottom)
         with mss.mss() as sct:
             shot = sct.grab({"left": left, "top": top, "width": right - left, "height": bottom - top})
         img = Image.frombytes("RGB", shot.size, shot.rgb)
@@ -171,7 +175,12 @@ class LettersTextIsDrawnMixin:
 
         self.new_letters_document()
         blank = self._page_ink()
-        rawinput.typeText("the quick brown fox jumps over the lazy dog")
+        # Three short lines, so they fit the view at the display matrix's
+        # 400px too, where the page stays at 100% and shows its left part.
+        for k, line in enumerate(("the quick brown", "fox jumps over", "the lazy dog")):
+            if k:
+                rawinput.keyCombo("Return")
+            rawinput.typeText(line)
         self.wait_for_node(name="9 words", roleName="label")
         ink = self.wait_until(self._page_ink, lambda n: n - blank >= self.TYPED_INK, timeout=15.0,
                               description="the typed text to be drawn on the page")
@@ -217,9 +226,17 @@ class LettersOpenedTextIsDrawnSmoke(LettersTextIsDrawnMixin, BaseGUITestCase):
 
         path = os.path.join(self.temp_dir(prefix="letters-opened-ink-"), "letter.docx")
         w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        # Short lines: at the display matrix's 400px the page stays at 100%
+        # and the view shows only its left part, so a long line is mostly
+        # off screen and its ink is not counted.
         body = "".join(f"<w:p><w:r><w:t>{t}</w:t></w:r></w:p>" for t in (
             "Dear reader,",
-            "This letter was opened from a file and its text must be drawn on the page.",
+            "This letter",
+            "was opened",
+            "from a file",
+            "and its text",
+            "must be drawn",
+            "on the page.",
             "Yours sincerely,",
         ))
         with zipfile.ZipFile(path, "w") as z:
@@ -4068,11 +4085,12 @@ class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
     custom code typed into Format Code and applied formats the selection,
     and the cell shows (and says) the value as the code draws it."""
 
-    def test_bold_applies_to_the_selection_and_follows_it(self):
-        self.skipTest("the parent's journey; this class runs its own")
-
-    def test_ctrl_b_toggles_bold_on_the_selection(self):
-        self.skipTest("the parent's journey; this class runs its own")
+    # The parent's journeys, not this class's: unset, so they are not
+    # collected here. Skipped, they read as two journeys that never ran,
+    # and the nightly stress campaign (which counts a skip as a failure,
+    # #442) failed every attempt on them.
+    test_bold_applies_to_the_selection_and_follows_it = None
+    test_ctrl_b_toggles_bold_on_the_selection = None
 
     def test_a_custom_code_formats_the_cell(self):
         import subprocess

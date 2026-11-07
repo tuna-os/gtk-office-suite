@@ -17,6 +17,7 @@ from .owned_processes import (
 )
 
 _dogtail_click = rawinput.click
+_dogtail_double_click = rawinput.doubleClick
 _dogtail_key_combo = rawinput.keyCombo
 _dogtail_type_text = rawinput.typeText
 
@@ -691,6 +692,7 @@ class BaseGUITestCase(unittest.TestCase):
             self._capture_failure_artifacts()
         self._finish_recording(failed)
         rawinput.click = _dogtail_click
+        rawinput.doubleClick = _dogtail_double_click
         rawinput.keyCombo = _dogtail_key_combo
         rawinput.typeText = _dogtail_type_text
         if hasattr(self, "process") and self.process:
@@ -1146,6 +1148,16 @@ class BaseGUITestCase(unittest.TestCase):
             self.move_pointer(*self.to_device(x, y))
             subprocess.run(["xdotool", "click", str(button)], capture_output=True, timeout=5)
 
+        # Dogtail's own doubleClick moves the pointer in logical pixels too,
+        # so at GDK_SCALE=2 the Decks journeys opened no slide text editor:
+        # their double-clicks landed up and left of the text box.
+        def double_click(x, y, button=1, check=True):
+            trace("double_click", x=x, y=y, button=button)
+            reactivate()
+            self.move_pointer(*self.to_device(x, y))
+            subprocess.run(["xdotool", "click", "--repeat", "2", "--delay", "80", str(button)],
+                           capture_output=True, timeout=5)
+
         def key_combo(combo_string):
             trace("key_combo", combo=combo_string)
             # Dogtail's own syntax: '<Control>k' -> tokens ['Control', 'k'].
@@ -1172,6 +1184,7 @@ class BaseGUITestCase(unittest.TestCase):
             )
 
         rawinput.click = click
+        rawinput.doubleClick = double_click
         rawinput.keyCombo = key_combo
         rawinput.typeText = type_text
 
