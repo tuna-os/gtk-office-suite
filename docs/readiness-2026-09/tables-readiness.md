@@ -6,6 +6,13 @@ but passing individual feature tests is not evidence of an everyday Excel
 replacement.
 
 ## Current gap
+
+For #1328, the XLSX reader now imports the worksheet default row height,
+including omitted blank rows. `tables/default-row-height` reduces that gap;
+`xlsx_default_row_height_applies_to_missing_rows_and_yields_to_overrides`
+guards import precedence and invalid heights. Rust and visual checks still
+need a provisioned runner; no real-document green verdict is claimed.
+
 Format-safe Save As and several multi-sheet journeys now have evidence below.
 The remaining priority is trustworthy workbook editing: precise XLSX loss
 accounting, calculation/edit consistency, accessible interaction, and measured
