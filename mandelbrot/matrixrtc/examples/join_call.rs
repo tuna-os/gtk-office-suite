@@ -527,13 +527,13 @@ async fn main() {
             ))
         })
         .collect::<Vec<_>>();
-    let service_url = session
-        .livekit_focus_to_join(&foci_preferred)
-        .map(|focus| focus.service_url)
-        .unwrap_or_else(|| {
+    let service_url = session.livekit_focus_to_join(&foci_preferred).map_or_else(
+        || {
             eprintln!("no --focus given and nobody in the call; nothing to connect to");
             exit(1);
-        });
+        },
+        |focus| focus.service_url,
+    );
     println!("using LiveKit JWT service: {service_url}");
 
     // Fetch the SFU JWT with our OpenID token (MSC4195) and connect
@@ -732,11 +732,10 @@ async fn main() {
                                                         );
                                                 }
                                             }
-                                            let _old = std::mem::replace(
+                                            drop(std::mem::replace(
                                                 &mut connection,
                                                 new_connection,
-                                            );
-                                            drop(_old);
+                                            ));
                                             room_events = new_events;
                                             reconnect_backoff =
                                                 Duration::from_millis(200);

@@ -5,7 +5,8 @@
 # throwaway per-user installation, starts it on a headless Wayland display
 # with a private D-Bus session and fresh HOME/XDG dirs, and asserts that:
 #   - the app activated (its log has `Application::activate`),
-#   - it is still running after $ALIVE_S seconds,
+#   - it is still running after $ALIVE_S seconds, then quits cleanly (exit
+#     status 0) when `app.quit` is activated over D-Bus,
 #   - its log has no `panicked`, no `CRITICAL` and no app-logged `ERROR` line
 #     (a keyring, compositor and portals are running, so none is expected).
 #
@@ -48,27 +49,51 @@ sleep "$ALIVE_S"
 failed=0
 if kill -0 "$APP_PID" 2>/dev/null; then
     gui_log "PASS alive after ${ALIVE_S}s"
+    # Quit the way the user does (app.quit, Ctrl+Q) through GApplication's
+    # D-Bus actions, so the shutdown path is exercised too, and wait for it.
+    gdbus call --session --dest "$APP_ID" --object-path "/${APP_ID//.//}" \
+        --method org.gtk.Actions.Activate quit '[]' '{}' >/dev/null ||
+        gui_log "warning: could not activate app.quit over D-Bus"
+    status=""
+    for _ in $(seq 1 75); do
+        if ! kill -0 "$APP_PID" 2>/dev/null; then
+            wait "$APP_PID"
+            status=$?
+            break
+        fi
+        sleep 0.2
+    done
+    APP_PID_EXITED=$status
+    if [ "$status" = 0 ]; then
+        gui_log "PASS quit cleanly (exit status 0)"
+    else
+        gui_log "FAIL did not quit cleanly within 15s (exit status: ${status:-still running})"
+        failed=1
+    fi
 else
     wait "$APP_PID"
     gui_log "FAIL the app exited early with status $?"
     failed=1
 fi
+[ -n "${APP_PID_EXITED:-}" ] && APP_PID=""
+stop_app
+
 if grep -q "Application::activate" "$APP_LOG"; then
     gui_log "PASS the application activated"
 else
     gui_log "FAIL no 'Application::activate' in the log"
     failed=1
 fi
+# Checked after the app is gone, so that a panic on shutdown counts.
 FATAL=$(fatal_log_lines "$APP_LOG")
 if [ -z "$FATAL" ]; then
     gui_log "PASS no panic, CRITICAL or app ERROR in the log"
 else
-    gui_log "FAIL the log has panics or criticals:"
+    gui_log "FAIL the log has panics, criticals or app errors:"
     printf '%s\n' "$FATAL"
     failed=1
 fi
 
-stop_app
 gui_log "app log: $APP_LOG"
 echo "----- app log -----"
 cat "$APP_LOG"

@@ -75,7 +75,29 @@ def describe(node):
         text += f" desc={description!r}"
     if is_showing(node):
         text += " (showing)"
+    if is_checked(node):
+        text += " (checked)"
+    actions = action_names(node)
+    if actions:
+        text += f" actions={actions}"
     return text
+
+
+def action_names(node):
+    try:
+        action = node.get_action_iface()
+        if action is None:
+            return []
+        return [action.get_name(i) for i in range(action.get_n_actions())]
+    except GLib.Error:
+        return []
+
+
+def is_checked(node):
+    try:
+        return node.get_state_set().contains(Atspi.StateType.CHECKED)
+    except GLib.Error:
+        return False
 
 
 def find_app(timeout):
@@ -137,16 +159,15 @@ class Driver:
         )
 
     def press(self, node, label):
-        action = node.get_action_iface()
-        if action is None:
+        names = action_names(node)
+        if not names:
             self.dump(f"no-action-{label}")
-            raise SystemExit(f"{label}: {describe(node)} has no Action interface")
-        names = [action.get_action_name(i) for i in range(action.get_n_actions())]
+            raise SystemExit(f"{label}: {describe(node)} has no action")
         index = next(
             (i for i, name in enumerate(names) if name in ("click", "activate", "press")), 0
         )
         log(f"pressing {label}: {describe(node)} via {names[index] if names else index!r}")
-        action.do_action(index)
+        node.get_action_iface().do_action(index)
 
     def fill(self, node, text, label, secret=False):
         editable = node.get_editable_text_iface()
@@ -208,20 +229,19 @@ def wait_editable(driver, label_names, timeout):
     raise SystemExit(f"timed out waiting for the {label_names[0]!r} entry")
 
 
-def is_checked(node):
-    try:
-        return node.get_state_set().contains(Atspi.StateType.CHECKED)
-    except GLib.Error:
-        return False
-
-
 def step_login(driver, args):
     driver.press(driver.wait_for("log-in", named("Log In", roles=BUTTON), 60), "Log In")
 
     # A homeserver URL (rather than a server name) is only accepted with
     # auto-discovery off: Advanced… -> Auto-Discovery.
     driver.press(driver.wait_for("advanced", named("Advanced…", roles=BUTTON), 30), "Advanced…")
-    switch = driver.wait_for("auto-discovery", named("Auto-Discovery"), 10)
+    # Both the row and the switch inside it carry the name; only one of them
+    # is actionable.
+    switch = driver.wait_for(
+        "auto-discovery",
+        lambda node: named("Auto-Discovery")(node) and bool(action_names(node)),
+        10,
+    )
     if is_checked(switch):
         driver.press(switch, "Auto-Discovery")
         time.sleep(1)
