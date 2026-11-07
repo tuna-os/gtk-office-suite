@@ -629,6 +629,28 @@ def reference_words(lo_path, ref, app):
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
+def trim_detached_footer(im):
+    """Calc prints a sheet's page footer (oddFooter) detached at the very
+    bottom margin of the page separated by a wide blank gap (#1335). Detect and
+    trim the detached footer so it does not inflate the reference height and
+    distort vertical scale."""
+    arr = np.asarray(im)
+    ys, _ = np.nonzero(ink_mask(arr))
+    if not len(ys):
+        return im
+    y_unique = np.unique(ys)
+    diffs = np.diff(y_unique)
+    if not len(diffs):
+        return im
+    max_gap_idx = np.argmax(diffs)
+    max_gap = diffs[max_gap_idx]
+    gap_y_end = y_unique[max_gap_idx + 1]
+    if max_gap >= 50 and (im.height - gap_y_end) <= max(30, int(0.2 * im.height)):
+        last_body_y = y_unique[max_gap_idx]
+        return im.crop((0, 0, im.width, last_body_y + 1))
+    return im
+
+
 def align(app, lo_path, ours_path):
     """Put both renderings in one coordinate space; returns (ref, ours,
     scale) where scale is our size / LibreOffice's for the same content
@@ -646,7 +668,7 @@ def align(app, lo_path, ours_path):
     ink bounding boxes after removing the screen's header bands; neither
     side then has a frame defining the used range's whitespace.
     """
-    ref_raw = load(lo_path)
+    ref_raw = trim_detached_footer(load(lo_path))
     if app != "tables":
         return ref_raw, load(ours_path, ref_raw.size), None
     ys_r, xs_r = np.nonzero(ink_mask(np.asarray(ref_raw)))

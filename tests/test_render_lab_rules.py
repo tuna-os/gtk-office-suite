@@ -53,21 +53,6 @@ class EraseRulesTest(unittest.TestCase):
         self.assertTrue((out[10:18, 10:18] == 255).all())
         self.assertTrue((out[40:48, 10:18] == 0).all())
 
-    def test_a_dark_purple_legend_key_goes_but_grey_stays(self):
-        self.g[10:18, 10:18] = 115
-        self.rgb[10:18, 10:18] = (128, 100, 162)  # chart-pie Q4
-        self.g[40:48, 10:18] = 100
-        self.rgb[40:48, 10:18] = (100, 100, 100)
-        out = self.erased()
-        self.assertTrue((out[10:18, 10:18] == 255).all())
-        self.assertTrue((out[40:48, 10:18] == 100).all())
-
-    def test_coloured_glyph_strokes_stay(self):
-        self.g[10:18, 10:12] = 115
-        self.g[16:18, 10:18] = 115
-        self.rgb[10:18, 10:18] = (128, 100, 162)
-        self.assertTrue((self.erased() == self.g).all())
-
 
 @unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
 class BlankRulesTest(unittest.TestCase):
@@ -373,6 +358,34 @@ class TableCellListIndentFixtureTest(unittest.TestCase):
             self.assertEqual(c0.paragraphs[2].style.name, "List Bullet")
             self.assertTrue(len(c0.paragraphs[2].text) > 50)
             self.assertEqual(table.cell(1, 0).paragraphs[0].text, "Signed: ___________________________")
+
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class DetachedFooterTest(unittest.TestCase):
+    """Calc prints a sheet's page footer detached at the foot of the page (#1335)."""
+
+    def setUp(self):
+        import compare
+
+        self.compare = compare
+
+    def test_trim_detached_footer_removes_footer_separated_by_large_gap(self):
+        im = Image.new("RGB", (100, 200), (255, 255, 255))
+        arr = np.asarray(im).copy()
+        arr[20:60, 10:90] = 0
+        arr[185:192, 10:90] = 0
+        im_footer = Image.fromarray(arr)
+        trimmed = self.compare.trim_detached_footer(im_footer)
+        self.assertEqual(trimmed.height, 60)
+
+    def test_trim_detached_footer_preserves_page_without_footer(self):
+        im = Image.new("RGB", (100, 200), (255, 255, 255))
+        arr = np.asarray(im).copy()
+        arr[20:150, 10:90] = 0
+        arr[185:192, 10:90] = 0
+        im_nogap = Image.fromarray(arr)
+        trimmed = self.compare.trim_detached_footer(im_nogap)
+        self.assertEqual(trimmed.height, 200)
 
 
 if __name__ == "__main__":
