@@ -4,7 +4,9 @@
   <launchable type="desktop-id">org.tunaos.letters.desktop</launchable>
   <name>Letters</name>
   <summary>Word processor for the GNOME desktop</summary>
-  <developer_name>Hanthor Contributors</developer_name>
+  <developer id="org.tunaos">
+    <name>Hanthor Contributors</name>
+  </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <description>
