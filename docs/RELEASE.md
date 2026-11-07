@@ -60,9 +60,15 @@ an unchanged `main`):
    metainfo;
 3. it commits that on top of X, checks it with `--release-revision`, tags
    the commit `vN` and pushes only the tag. `main` is not pushed to;
-4. it dispatches `publish-flatpak.yml` with `publish` on the tag, which
-   runs the evidence and soak gates before publishing anything, and
-   `release-gate.yml`.
+4. it creates the tag's GitHub release as a draft and dispatches
+   `publish-flatpak.yml` with `publish` on the tag, which runs the evidence
+   and soak gates before publishing anything, and `release-gate.yml`;
+5. once the Flatpaks are published, `publish-flatpak.yml` builds each app's
+   `/app` tree in the GNOME SDK for x86_64 and aarch64, attaches it to the
+   release as `<app>-<arch>.tar.gz` (with a `.sha256`), and publishes the
+   draft. FlatPark repackages these tarballs (extra-data) and its update
+   resolvers read them from `releases/latest`, which is why the release
+   stays a draft until they are attached.
 
 A manual release follows the same steps: run the lanes at the commit, run
 `cut_release.py --version <v> --revision <sha>`, commit, tag and push the
