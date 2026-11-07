@@ -145,7 +145,15 @@ wait_for() { # url timeout_s name
     die "$3 did not come up at $1"
 }
 
+# Every script tears its stack down on exit, so the container logs have to be
+# saved into the evidence bundle first or a red run in CI has none.
+save_container_logs() { # compose -f args… -> $LOG_DIR/containers.log
+    [ -n "${LOG_DIR:-}" ] || return 0
+    $COMPOSE "$@" logs --no-color --timestamps >"$LOG_DIR/containers.log" 2>&1 || true
+}
+
 stack_down() {
+    save_container_logs -f compose.yml
     if [ "${KEEP_STACK:-0}" = 1 ]; then
         log "KEEP_STACK=1: leaving the stack running"
         return
