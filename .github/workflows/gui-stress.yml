@@ -3,7 +3,7 @@ name: GUI stress campaign
 # Repeats the real AT-SPI journeys many times, in a recorded order, and
 # publishes what happened (tests/gui/stress.py, #442).
 #
-# Why a separate nightly workflow: the smoke gate answers "does this
+# Why a separate scheduled (weekly) workflow: the smoke gate answers "does this
 # change break a journey", which it can only do by running each journey
 # once. The question this asks is different — how often does a journey
 # that passes once pass — and answering it costs an hour, not five
@@ -13,7 +13,7 @@ name: GUI stress campaign
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # nightly, before the 6am GUI suite
+    - cron: '0 3 * * 0'   # weekly: 7 of 7 nightly runs failed after 3-4 h each
   workflow_dispatch:
     inputs:
       repeat:

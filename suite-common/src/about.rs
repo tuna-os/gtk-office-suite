@@ -36,9 +36,63 @@ pub(crate) fn about_info(app_id: &str) -> Option<AboutInfo> {
     Some(AboutInfo {
         name: between("<name>", "</name>")?,
         summary: between("<summary>", "</summary>")?,
-        developer: between("<developer_name>", "</developer_name>")?,
+        developer: between("<developer_name>", "</developer_name>").or_else(|| {
+            let dev = between("<developer", "</developer>")?;
+            let start = dev.find("<name>")? + "<name>".len();
+            let end = start + dev[start..].find("</name>")?;
+            Some(dev[start..end].trim().to_string())
+        })?,
         version: between("<release version=\"", "\"")?,
     })
+}
+
+/// Context for reporting an issue against `app_id`.
+pub(crate) fn report_context(id: &str) -> suite_common_core::report::ReportContext {
+    let (app_name, version) = about_info(id)
+        .map(|i| (i.name, i.version))
+        .unwrap_or_else(|| {
+            let fallback = id.split('.').next_back().unwrap_or("App").to_string();
+            (fallback, env!("CARGO_PKG_VERSION").to_string())
+        });
+    let os = suite_common_core::report::os_pretty_name();
+    let gtk_v = format!("GTK {}.{}.{}", gtk::major_version(), gtk::minor_version(), gtk::micro_version());
+    let adw_v = unsafe {
+        format!(
+            "libadwaita {}.{}.{}",
+            adw::ffi::adw_get_major_version(),
+            adw::ffi::adw_get_minor_version(),
+            adw::ffi::adw_get_micro_version(),
+        )
+    };
+    let toolkit = format!("{gtk_v}, {adw_v}");
+    suite_common_core::report::ReportContext {
+        app_name,
+        version,
+        os,
+        toolkit,
+    }
+}
+
+/// Open the tracker's new-issue page in the user's browser, with the app,
+/// version and environment filled in.
+pub fn report_problem(app: &adw::Application) {
+    let id = app.application_id().map(|s| s.to_string()).unwrap_or_default();
+    let ctx = report_context(&id);
+    let url = suite_common_core::report::report_problem_url(&ctx);
+    let active = app.active_window();
+    gtk::UriLauncher::new(&url).launch(active.as_ref(), None::<&gtk::gio::Cancellable>, |_| {});
+}
+
+/// Register `app.report-problem`, which opens [`report_problem`].
+pub(crate) fn add_report_problem_action(app: &adw::Application) {
+    let action = gtk::gio::SimpleAction::new("report-problem", None);
+    let app_weak = app.downgrade();
+    action.connect_activate(move |_, _| {
+        if let Some(app) = app_weak.upgrade() {
+            report_problem(&app);
+        }
+    });
+    app.add_action(&action);
 }
 
 /// Show the About dialog of the app, over its active window.
@@ -54,7 +108,8 @@ pub fn show(app: &adw::Application) {
     about.set_application_icon(&id);
     about.set_license_type(gtk::License::Gpl30);
     about.set_website("https://github.com/tuna-os/gtk-office-suite");
-    about.set_issue_url("https://github.com/tuna-os/gtk-office-suite/issues");
+    let ctx = report_context(&id);
+    about.set_issue_url(&suite_common_core::report::report_problem_url(&ctx));
     about.present(app.active_window().as_ref());
 }
 
@@ -71,5 +126,15 @@ mod tests {
             assert!(!info.summary.is_empty() && !info.developer.is_empty());
         }
         assert_eq!(super::about_info("org.example.other"), None);
+    }
+
+    #[test]
+    fn report_context_builds_for_each_app() {
+        for (id, name) in [("org.tunaos.letters", "Letters"), ("org.tunaos.tables", "Tables"), ("org.tunaos.decks", "Decks")] {
+            let ctx = super::report_context(id);
+            assert_eq!(ctx.app_name, name);
+            assert_eq!(ctx.version, "2.1.0");
+            assert!(ctx.toolkit.contains("GTK 4"));
+        }
     }
 }
