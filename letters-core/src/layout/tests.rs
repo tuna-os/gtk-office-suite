@@ -597,6 +597,24 @@ fn a_row_kept_whole_starts_the_next_page() {
     assert_eq!(first_cell_page(&d), 0, "taller than a page, it splits all the same");
 }
 
+/// A table row with text splits across pages only when at least one line
+/// of text fits on the page. When only cell padding fits, the row moves
+/// whole to the next page rather than splitting to place only its top padding
+/// gap (leaving an empty row box at the foot of the page).
+#[test]
+fn a_table_row_without_room_for_a_line_starts_the_next_page() {
+    let mut d = doc_of(47, "filler");
+    let table = d.insert_table_at(47, 1, 1);
+    let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+    d.paragraphs[at].runs = vec![Run::plain("cell line")];
+    d.table_padding.insert(table, CellPadding { top_pt: 10.0, bottom_pt: 10.0, ..CellPadding::default() });
+    let tree = lay(&d);
+    let page0_has_cell = tree.pages[0].items.iter().any(|i| matches!(i, Item::Cell { .. }));
+    assert!(!page0_has_cell, "the row must move whole to the next page, not split for padding");
+    let page1_has_cell = tree.pages[1].items.iter().any(|i| matches!(i, Item::Cell { .. }));
+    assert!(page1_has_cell, "the cell is placed on page 1");
+}
+
 /// A shaded cell carries its colour to the page (a form's grey header
 /// cells), and the shading moves with its cell when rows and columns are
 /// inserted or deleted.
