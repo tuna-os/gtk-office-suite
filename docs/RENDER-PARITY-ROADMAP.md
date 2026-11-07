@@ -245,9 +245,17 @@ loosening a budget:
   through xlsx, and the row auto-fits on open. Excel's own breaking
   depends on printer metrics, so the headless-PDF oracle is not Excel
   here; re-breaking our text to match LibreOffice's pixels would tune the
-  product to the oracle against the owner's Excel-faithful call. It stays
-  amber until a renderer-independent check (e.g. line-count and row-growth
-  rather than pixel structure) can tell the two apart.
+  product to the oracle against the owner's Excel-faithful call.
+  The independent wrap check (#1110) now counts three text bands in each
+  raw capture and requires row 1 to be at least 2.5 column-heading heights,
+  with no text touching the top or bottom edge. It measures both the
+  reference and our capture before alignment can resize away a row-height
+  regression. For this single-cell fixture only, that check replaces the
+  SSIM gate; SSIM remains reported and every other budget still applies.
+  Missing framing or a failed check keeps the fixture non-green, even with
+  high SSIM. The measurements appear in report.html and summary.json.
+  Replaying the CI captures makes tiers A and B green; Tier C remains
+  amber until measured.
 
 The two remaining are OCR of very small or non-word glyphs, not
 rendering. They go green when the metric can read them. The named next candidate, a larger
@@ -578,13 +586,12 @@ amber in both tiers and accepted as metric artifacts, each recorded under
 - `tables/number-formats`: "###" is a non-word to OCR (green since the reference text-layer rule above).
 - `tables/wrap-text`: SSIM on a one-word line-break difference against the
   print-PDF oracle. Our break is the Excel-faithful one, so the fixture is
-  accepted as amber rather than retuned to LibreOffice. A
-  renderer-independent check (line count and row growth) would turn it
-  green; it does not block Phase 2.
+  accepted as amber rather than retuned to LibreOffice. The independent
+  line-count/row-growth check added for #1110 now makes tiers A and B green
+  without changing the product or the shared metric budgets; see above.
 
-They stay amber rather than having budgets loosened, so a real regression
-on those fixtures still shows. PARITY.md marks the two features they cover
-🟠 in its Render column.
+The remaining artifacts stay amber rather than having budgets loosened,
+so a real regression on those fixtures still shows.
 
 ### Phase 3: Real documents
 

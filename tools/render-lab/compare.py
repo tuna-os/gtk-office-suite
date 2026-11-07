@@ -688,6 +688,51 @@ def compare_page(app, ref, ours, ref_words):
     }
 
 
+def wrap_structure(lo_path, ours_path):
+    """Measure the single-cell wrap fixture before alignment resizes rows.
+
+    Count separated bands of text pixels, independent of OCR and of where
+    Excel/Calc break words. The column heading provides a single-line height
+    control: row 1 must grow to at least 2.5 heading heights for three lines.
+    Unknown framing or clipped text fails closed.
+    """
+    measurements = {}
+    for name, path in (("reference", lo_path), ("ours", ours_path)):
+        img = load(path)
+        if name == "reference":
+            ys, xs = np.nonzero(ink_mask(np.asarray(img)))
+            if not len(xs):
+                return {"passed": False, **measurements}
+            img = img.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+            box = lo_cell_box(img)
+        else:
+            ox, oy = our_cell_origin(img)
+            box = (ox, oy, img.width, img.height) if ox and oy else None
+        if box is None:
+            return {"passed": False, **measurements}
+        cell = img.crop(box)
+        ink = erase_rules(np.asarray(cell.convert("L"))) < 128
+        rows = np.flatnonzero(ink.sum(axis=1) >= 2)
+        # Tiny internal gaps in glyphs (e.g. dots) are part of one line.
+        bands = []
+        for y in rows:
+            if bands and y - bands[-1][1] <= 3:
+                bands[-1][1] = int(y)
+            else:
+                bands.append([int(y), int(y)])
+        measurements[name] = {
+            "lines": len(bands),
+            "row_height": cell.height,
+            "heading_height": int(box[1]),
+            "unclipped": bool(len(rows) and rows[0] > 0 and rows[-1] < cell.height - 1),
+        }
+    passed = all(
+        m["lines"] == 3 and m["row_height"] >= 2.5 * m["heading_height"] and m["unclipped"]
+        for m in measurements.values()
+    )
+    return {"passed": passed, **measurements}
+
+
 def verdict(m):
     if m is None:
         return "missing"
@@ -695,7 +740,11 @@ def verdict(m):
         return "red"
     if m["words"] is not None and (m["ref_words"] or 0) >= 3 and m["words"] < RED_WORDS:
         return "red"
-    ok = [m["ssim"] >= GREEN_SSIM]
+    # Only the isolated wrap fixture supplies this evidence. Its accepted
+    # Excel/Calc word-break difference makes SSIM unsuitable; keep SSIM in
+    # the report and require the independent check even if SSIM is high.
+    structure = m.get("wrap_structure")
+    ok = [structure["passed"] if structure is not None else m["ssim"] >= GREEN_SSIM]
     # As for red: a reference with under three words has no text to recall,
     # only what OCR makes of shapes (a star read as "006"), so it does not
     # decide green either.
@@ -755,7 +804,7 @@ def pick_sheet_page(lo_pages, ours_path):
     return best
 
 
-def score_fixture(app, d, tier, ref_words_cache):
+def score_fixture(app, d, tier, ref_words_cache, feature=None):
     lo_pages = sorted(glob.glob(os.path.join(d, "lo-[0-9]*.png")), key=page_no)
     ours_pages = sorted(glob.glob(os.path.join(d, f"{tier}-[0-9]*.png")), key=page_no)
     if not lo_pages or not ours_pages:
@@ -799,6 +848,12 @@ def score_fixture(app, d, tier, ref_words_cache):
     m["page_count_match"] = partial or len(lo_pages) == len(ours_pages)
     if lo_page is not None:
         m["lo_page"] = lo_page
+    if app == "tables" and feature == "wrap-text":
+        m["wrap_structure"] = (
+            wrap_structure(lo_pages[0], ours_pages[0])
+            if len(lo_pages) == len(ours_pages) == 1
+            else {"passed": False}
+        )
     m["verdict"] = verdict(m)
     return m
 
@@ -893,10 +948,19 @@ def write_report(out, manifest, results, agreement):
             for label, src in imgs
         )
         tiers = ""
+        checks = []
         for t in TIERS:
             m = r.get(t)
             if not m:
                 continue
+            if "wrap_structure" in m:
+                evidence = m["wrap_structure"]
+                detail = "; ".join(
+                    f'{side}: {v["lines"]} lines, row {v["row_height"]}px / heading {v["heading_height"]}px, '
+                    f'wholly visible: {v["unclipped"]}'
+                    for side, v in evidence.items() if side != "passed"
+                )
+                checks.append(f'Tier {t} wrap check: {"pass" if evidence["passed"] else "fail"} ({detail}).')
             tiers += (
                 f'<tr><td>{t}</td><td><span class="v {m["verdict"]}">{m["verdict"]}</span></td>'
                 f'<td>{fmt(m["ink"])}</td><td>{fmt(m["words"], "{:.0%}")}</td>'
@@ -919,7 +983,8 @@ def write_report(out, manifest, results, agreement):
             f'<section class="fx" data-app="{fx["app"]}" data-verdict="{worst}">'
             f'<h2><span class="v {worst}">{worst}</span> {html.escape(key)}</h2>'
             f'<p class="expect">Expect: {html.escape(fx["expect"])}</p>{agree_html}'
-            f'<table><tr><th>tier</th><th>verdict</th><th>ink</th><th>words</th><th>Δpos</th>'
+            + "".join(f'<p class="expect">{html.escape(check)}</p>' for check in checks)
+            + f'<table><tr><th>tier</th><th>verdict</th><th>ink</th><th>words</th><th>Δpos</th>'
             f"<th>colours</th><th>SSIM</th><th>scale</th><th>pages</th></tr>{tiers or '<tr><td colspan=9>no captures</td></tr>'}</table>"
             f'<div class="imgs">{cells}</div></section>'
         )
@@ -982,7 +1047,7 @@ def main():
     for fx in manifest:
         key = f"{fx['app']}/{fx['feature']}"
         d = os.path.join(args.out, fx["app"], fx["feature"])
-        results[key] = {t: score_fixture(fx["app"], d, t, cache) for t in TIERS}
+        results[key] = {t: score_fixture(fx["app"], d, t, cache, fx["feature"]) for t in TIERS}
         agreement[key] = tier_agreement(d)
         printed[key] = print_agreement(d)
         line = "  ".join(f"{t}:{(results[key][t] or {'verdict': '-'})['verdict']}" for t in TIERS)
@@ -999,7 +1064,13 @@ def main():
         print("compare: no captures found for any fixture; the lab produced nothing to judge", file=sys.stderr)
         sys.exit(2)
     card = {
-        k: {t: {"verdict": m["verdict"], "lost_lines": m.get("lost_lines"), **{x: m.get(x) for x in METRICS}} for t, m in v.items() if m}
+        k: {
+            t: {
+                "verdict": m["verdict"], "lost_lines": m.get("lost_lines"), **{x: m.get(x) for x in METRICS},
+                **({"wrap_structure": m["wrap_structure"]} if "wrap_structure" in m else {}),
+            }
+            for t, m in v.items() if m
+        }
         for k, v in results.items()
     }
     with open(os.path.join(args.out, "scorecard.json"), "w") as f:

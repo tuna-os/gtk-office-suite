@@ -411,8 +411,8 @@
     "C": "amber"
   },
   "tables/wrap-text": {
-    "A": "amber",
-    "B": "amber",
+    "A": "green",
+    "B": "green",
     "C": "amber"
   },
   "tables/wrap-wide-default-font": {
