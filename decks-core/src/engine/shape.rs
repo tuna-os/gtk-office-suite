@@ -578,8 +578,9 @@ mod tests {
             }
         }
         assert_eq!(polygon(&ShapeKind::Other("star5".into()), w, h).unwrap().len(), 10);
-        // An unknown preset is still drawn as its box.
-        assert_eq!(polygon(&ShapeKind::Other("cloud".into()), w, h).unwrap(), rect);
+        // An unknown preset is still drawn as its box. (Not "cloud": BetterOffice
+        // draws that one since 0.5.)
+        assert_eq!(polygon(&ShapeKind::Other("notAPreset".into()), w, h).unwrap(), rect);
     }
 
     /// The presets only BetterOffice draws have their own outline too,
