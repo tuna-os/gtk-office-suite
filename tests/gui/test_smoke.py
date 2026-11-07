@@ -3677,24 +3677,35 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
     def _switch_to(self, name):
         """Pick `name` in the sheet switcher, as a user does: open it, step
         towards the sheet, Return. The popup list is not in the AT-SPI tree
-        (see TablesMultiSheetSmoke), so the gesture is retried until the
-        switcher's accessible name, which mirrors the selection, lands."""
+        (see TablesMultiSheetSmoke), but its toggle button is pressed exactly
+        while it is open, so the keys wait for that; the gesture is retried
+        until the switcher's accessible name, which mirrors the selection,
+        lands."""
+        import pyatspi
         from dogtail import rawinput
 
         def step():
             names, active, _ = self._state()
             switcher = self.app.child(roleName="combo box")
             if switcher.name != name:
-                switcher.child(roleName="toggle button").do_action(0)
+                toggle = switcher.child(roleName="toggle button")
+                if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+                    # do_action(0) returns before GTK's keyboard activation
+                    # clicks, 250 ms later: keys sent meanwhile reach the
+                    # grid, and a popup that opens after them is closed by
+                    # the next retry's click before anything is picked.
+                    toggle.do_action(0)
+                    self.wait_until(lambda: toggle.getState().contains(pyatspi.STATE_PRESSED), bool,
+                                    description="the sheet switcher's list to open")
                 rawinput.keyCombo("Down" if names.index(name) > active else "Up")
                 rawinput.keyCombo("Return")
             return self.app.child(roleName="combo box").name
         self.wait_until(step, lambda got: got == name, interval=0.6,
                         description=f"the sheet switcher to select {name}")
-        # The popup is invisible to AT-SPI, so a retry can land the
-        # selection while leaving it open; an open popup holds the
-        # keyboard and every later Ctrl+G misses. Escape dismisses it,
-        # and in the grid it only hands focus back to the grid.
+        # Return closes the list as it picks; should a retry have left it
+        # open, it would hold the keyboard and every later Ctrl+G would
+        # miss. Escape dismisses it, and in the grid it only hands focus
+        # back to the grid.
         rawinput.keyCombo("Escape")
 
     def test_rename_reorder_delete_undo_save_and_reopen(self):
