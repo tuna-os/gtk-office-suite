@@ -206,7 +206,9 @@ def letters_odt_spacing(directory):
           <text:p text:style-name="List">Inherited spacing final line</text:p>''',
         "Inherited contextual spacing closes the first gap; explicit margins retain two 16pt gaps",
     )
-    answer = "<text:line-break/>".join(f"Answer line {i} continues." for i in range(100))
+    # 80 lines split across two pages and end mid-page: a table filling
+    # page 2 sends Writer's closing empty paragraph to a blank page 3.
+    answer = "<text:line-break/>".join(f"Answer line {i} continues." for i in range(80))
     save(
         "odt-continued-cell-space-before",
         '''<style:style style:name="Grid" style:family="table"><style:table-properties style:width="451.3pt"/></style:style>

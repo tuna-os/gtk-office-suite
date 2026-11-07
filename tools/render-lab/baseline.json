@@ -221,6 +221,14 @@
     "B": "green",
     "C": "green"
   },
+  "letters/odt-bullet-font-metrics": {
+    "A": "green",
+    "B": "green"
+  },
+  "letters/odt-contextual-margin-override": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/odt-page-break-spacing": {
     "A": "amber",
     "B": "amber",
