@@ -339,7 +339,7 @@ features = ["xxh32"]
 version = "1"
 
 [dev-dependencies.criterion]
-version = "0.7.0"
+version = "0.8.0"
 features = ["html_reports"]
 
 [dev-dependencies.ctor]
