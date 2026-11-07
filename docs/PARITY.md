@@ -69,18 +69,27 @@ are not all green, and any fixture name the baseline does not have.
 | Font family round-trip | ✅ | I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) | ✅ letters/font-families |
 | Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | ✅ letters/block-quote |
 | Line spacing round-trip | ✅ | I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both | ✅ letters/line-spacing |
+| URL path wrapping | Partial | `layout::pango::tests::url_paths_wrap_at_hyphens_instead_of_slashes` checks slash, hyphen and emergency breaks without changing text offsets | Full render-lab validation pending; real social housing dictionary remains amber (#1367) |
 | ODT read/write | ✅ | I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
 
-| Feature | Test approach if adopted |
+These rows describe bounded workflows, not blanket fidelity. The earlier
+footnotes-only exclusion in [ADR 0003 §2](adr/0003-later-tier-scope.md)
+is historical for review; [review workflows](LETTERS-REVIEW-WORKFLOWS.md)
+defines the current contract. Test names below identify coverage, not a new
+claim that it passed on this revision; see the
+[readiness inventory](readiness-2026-09/letters-fidelity.md#dependency-ordered-slices).
+
+| Feature | Scope and evidence |
 |---|---|
-| Track changes | I1 revision model; I2 docx `w:ins`/`w:del` fixtures; I3 LO-authored tracked docs |
-| Comments | I2 docx comments part round-trip |
-| Footnotes | ✅ | I2 round-trip + I4 (survives Writer rewrite); insert action in Letters. Endnotes/comments/track changes out per ADR 0003 §2 |
-| Multi-column sections | I1 layout; I7 visual |
-| Bidi/RTL editing | I3 already covers RTL text survival; editing needs I6 caret tests |
-| Table of contents generation | I1: TOC derived from heading model |
+| Track changes | Insertions and deletions admitted; paragraph breaks and formatting changes are not tracked. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`; Writer: `tracked_changes_survive_lo_passes`. |
+| Comments | Anchored threads admitted, including replies and resolution. GUI: `LettersCommentsSmoke`; Writer: `comments_survive_lo_passes` (cross-format reply limitation in the workflow contract). |
+| Footnotes | Insert action and DOCX/ODT mapping; see [field map](LETTERS-FIELD-MAP.md) for per-field evidence. This does not imply endnote support. |
+| Multi-column sections | Section page setup is bounded by `letters.sections.page-setup` in the [capability ledger](../conformance/capabilities.json); unequal columns are loss-reported. |
+| Bidi/RTL editing | RTL text retention is tested; explicit paragraph direction is unavailable. See [workflow contract](LETTERS-REVIEW-WORKFLOWS.md#paragraph-direction-bidi-not-available-yet). |
+| Table of contents generation | Heading levels 1–3; GUI: `LettersTableOfContentsSmoke`; Writer: `a_table_of_contents_survives_lo_passes`. |
+| Smart chips | GUI: `LettersSmartChipsSmoke`; Writer: `smart_chips_survive_lo_passes`. |
 
 ## Tables (spreadsheet)
 
@@ -90,6 +99,7 @@ are not all green, and any fixture name the baseline does not have.
 |---|---|---|---|
 | Cell editing + formula evaluation | ✅ IronCalc | I1 engine tests; I6 smoke (extend: type into cell) | ✅ tables/values |
 | OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) | — |
+| XLSX hyperlink theme colours | Implemented; render evidence pending | `xlsx_styles::tests::hyperlink_theme_colours_resolve_and_reset_between_workbooks` (authored theme and Office fallback) | Pending: tables/hyperlink-theme-colors |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle | — |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read | — |
 | Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells | 🟠 tables/number-formats (accepted metric artifact) |
