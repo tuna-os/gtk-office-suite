@@ -395,6 +395,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/print-fit-page": {
+    "A": "green",
+    "B": "green"
+  },
   "tables/values": {
     "A": "green",
     "B": "green",
