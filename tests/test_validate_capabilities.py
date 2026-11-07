@@ -14,6 +14,7 @@ Dependency-free: no display, no GUI packages, no cargo.
 import copy
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -492,6 +493,58 @@ class ReleaseRevision(unittest.TestCase):
             self._ledger(self.RELEASE), lanes, self.RELEASE)
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("does not say whether it runs on every revision", errors[0])
+
+    def test_a_release_commit_adding_only_release_metadata_is_certified(self):
+        """The ledger cannot hold its own commit's SHA: recording "the oracle
+        passed at X" makes a commit Y != X. When Y changes nothing but the
+        ledger and the AppStream release entries, the lane ran the code
+        being released (autorelease.yml)."""
+        seen = []
+
+        def changed(recorded, revision):
+            seen.append((recorded, revision))
+            return ["conformance/capabilities.json",
+                    "flatpak/org.tunaos.letters.metainfo.xml"]
+
+        errors = vc.check_release_revision(
+            self._ledger("a" * 40), self.LANES, self.RELEASE, changed_paths=changed)
+        self.assertEqual(errors, [])
+        self.assertEqual(seen, [("a" * 40, self.RELEASE)])
+
+    def test_a_release_commit_that_changes_code_is_still_refused(self):
+        errors = vc.check_release_revision(
+            self._ledger("a" * 40), self.LANES, self.RELEASE,
+            changed_paths=lambda *_: ["conformance/capabilities.json",
+                                      "letters-core/src/model.rs"])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("would certify code that lane never saw", errors[0])
+
+    def test_an_unknown_difference_is_refused(self):
+        """git could not compare the two (a shallow clone, an unknown SHA)."""
+        errors = vc.check_release_revision(
+            self._ledger("a" * 40), self.LANES, self.RELEASE,
+            changed_paths=lambda *_: None)
+        self.assertEqual(len(errors), 1, errors)
+        errors = vc.check_release_revision(
+            self._ledger(""), self.LANES, self.RELEASE,
+            changed_paths=lambda *_: [])
+        self.assertEqual(len(errors), 1, "no recorded revision is never certified")
+
+    def test_only_the_ledger_and_metainfo_are_release_metadata(self):
+        self.assertTrue(vc.only_release_metadata([
+            "conformance/capabilities.json", "flatpak/org.tunaos.decks.metainfo.xml"]))
+        for path in ("conformance/lanes.json", "flatpak/org.tunaos.decks.json",
+                     "flatpak/sub/x.metainfo.xml", "docs/RELEASE.md"):
+            self.assertFalse(vc.only_release_metadata([path]), path)
+
+    def test_git_compares_two_real_revisions(self):
+        root = Path(__file__).resolve().parent.parent
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                              capture_output=True, text=True).stdout.strip()
+        if not head:
+            self.skipTest("not a git checkout")
+        self.assertEqual(vc.git_changed_paths(head, head, cwd=root), [])
+        self.assertIsNone(vc.git_changed_paths("0" * 40, head, cwd=root))
 
     def test_a_map_where_every_lane_claims_every_revision_is_refused(self):
         lanes = {"lanes": [{"job": "test", "runs_on_every_revision": True,
