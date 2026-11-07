@@ -92,15 +92,20 @@ Client and state logs land in `logs/<timestamp>/`.
 
 ## CI
 
-`.github/workflows/matrixrtc-e2e.yml` runs this suite on **manual dispatch
-and nightly**, never on the PR merge gate:
+`.github/workflows/matrixrtc-e2e.yml` runs this suite nightly, on manual
+dispatch, and on pull requests that touch what a call depends on (its
+`paths:` filter: `Cargo.toml`, `Cargo.lock`, `matrixrtc/**`,
+`src/session/call/**`, `src/session_view/call/**`, `tests/e2e/**`, the
+Flatpak manifest, the workflow). With a warm cargo cache the whole job takes
+about ten minutes. Every TEST step runs even when an earlier one failed, and
+each script saves the stack's container logs (`containers.log`) into its
+evidence bundle before tearing the stack down.
 
 * it pulls ~1.5 GB of container images and builds libwebrtc (~10 min cold),
 * it needs UDP 50100-50200 (and 50300-50400 for the federated stack) plus
   host networking for LiveKit,
-* media timing makes it inherently flakier than the unit suite
-  (`matrixrtc/tests/`), which stays the merge gate as the
-  `matrixrtc-conformance` job in `ci.yml`.
+* being path-filtered, it cannot be a required check; Renovate merges the
+  updates it covers only once it is green (see `renovate.json`).
 
 A GitHub-hosted `ubuntu-latest` runner is sufficient: the job owns the VM's
 network namespace, so host networking and arbitrary UDP ranges work, and

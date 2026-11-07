@@ -172,14 +172,48 @@ when the hook runs.
 
 | What | Command | Where CI runs it |
 | --- | --- | --- |
-| App unit tests | `cargo test` (after `meson setup`), or `meson compile -C _build src/cargo-test` with `cargo-nextest` installed | — |
+| App unit tests | `cargo test --features calls-media` (after `meson setup`), or `meson compile -C _build src/cargo-test` with `cargo-nextest` installed | `Clippy (flatpak sandbox)` |
 | Desktop file, AppStream metadata, and GSettings schema validation | `meson test -C _build` | `Flatpak build + tests` (`run-tests` in the manifest) |
 | MatrixRTC conformance suite (`matrixrtc/tests/`, ported from matrix-js-sdk, including the Element Call scenarios) | `cargo test --manifest-path matrixrtc/Cargo.toml` | `MatrixRTC conformance tests` |
-| MatrixRTC live-stack harness (Synapse + LiveKit + `lk-jwt-service`) | see [tests/e2e/README.md](../tests/e2e/README.md) | `matrixrtc-e2e.yml`, nightly and manual only |
+| Launch smoke test of the built bundle | `tests/gui/run-flatpak-smoke.sh Mandelbrot.flatpak` | `Flatpak launch smoke test` |
+| MatrixRTC live-stack harness (Synapse + LiveKit + `lk-jwt-service`) | see [tests/e2e/README.md](../tests/e2e/README.md) | `MatrixRTC e2e harness` |
 
-The jobs in `.github/workflows/ci.yml` run on every pull request: `Code checks (fmt, typos, deny,
-i18n)` (the `hooks/checks` crate), `MatrixRTC conformance tests`, `Clippy (flatpak sandbox)`, and
-`Flatpak build + tests`, which uploads the built bundle as the `Mandelbrot-Linux-CI` artifact.
+## How we know an update works
+
+A dependency or runtime update (a Renovate PR or a manual bump) has to get past these checks:
+
+| Check (job name) | What it proves | Runs on |
+| --- | --- | --- |
+| `Code checks (fmt, typos, deny, i18n)` | formatting, licenses/advisories (`cargo-deny`), unused deps (`cargo-machete`), resource lists | every PR, `main` |
+| `MatrixRTC conformance tests` | the `matrixrtc` crate's clippy, tests and a 90 % line-coverage floor | every PR, `main` |
+| `Clippy (flatpak sandbox)` | the app builds, lints clean and passes its unit tests in the GNOME SDK, **with `calls-media`**, as the bundle is built | every PR, `main` |
+| `Flatpak build + tests` | the real bundle builds from the manifest and its Meson tests pass; uploads `Mandelbrot-Linux-CI` | every PR, `main` |
+| `Flatpak launch smoke test` | that bundle installs with its runtime, starts on a headless Wayland display (mutter, as upstream Fractal's UI tests), restores sessions through the Secret portal, stays up 20 s, quits cleanly on `app.quit`, and logs no panic, `CRITICAL` or app `ERROR` | every PR, `main` (after the build) |
+| `MatrixRTC e2e harness` | real calls between `join_call` clients over Synapse + LiveKit + `lk-jwt-service`: interop, reconnect, restricted SFU, a five-way huddle, a two-homeserver federated call | PRs touching `Cargo.toml`, `Cargo.lock`, `matrixrtc/**`, `src/session/call/**`, `src/session_view/call/**`, `tests/e2e/**`, the manifest or the workflow; nightly; manual dispatch |
+
+Renovate (`renovate.json`) groups crates that must move together (matrix-sdk + ruma, gtk-rs and
+the GNOME bindings, the LiveKit crates) and waits 3 days after a crate release. Because the e2e
+workflow is path-filtered it cannot be a required check, so updates it covers (`matrixrtc/**`,
+`tests/e2e/**`) are merged by Renovate itself only after every check, the e2e harness included,
+is green. The app's own matrix-sdk/ruma/LiveKit bumps and action bumps in `publish-flatpak.yml`
+never automerge: no check runs a call inside the app, and nothing on a PR runs the publish
+workflow.
+
+Locally:
+
+```sh
+# The smoke test, against a bundle (e.g. the Mandelbrot-Linux-CI artifact of a PR's CI run).
+# Needs flatpak, mutter, dbus, gnome-keyring, libsecret-tools, xdg-desktop-portal(-gtk).
+gh run download <run-id> -n Mandelbrot-Linux-CI
+tests/gui/run-flatpak-smoke.sh Mandelbrot-Linux-CI.flatpak
+
+# The e2e harness (needs docker or podman compose; see tests/e2e/README.md)
+cargo build --manifest-path matrixrtc/Cargo.toml --features livekit --example join_call
+cd tests/e2e && JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-interop.sh
+```
+
+The smoke test isolates HOME, the XDG directories, the Flatpak installation and the D-Bus session
+in a temporary directory, so it does not touch your own Mandelbrot data or keyring.
 
 ## A local homeserver
 
