@@ -478,6 +478,132 @@ def letters(img):
     c1.paragraphs[0].text = "Signed: ___________________________"
     save(x, "table-cell-list-indent", "A table cell containing wrapping bullet list items: wrapped lines align with first-line text")
 
+    # Reduced from real-transparency-information-about-outside-appointme (#1358):
+    # In table cells containing numbered list items with declared indent
+    # (w:ind w:left="405"), LibreOffice Writer aligns continuation lines with
+    # the declared text indent (20.25pt / x=406px) and hangs the numeric marker
+    # 18pt in front (x=382px). In Letters, table cell paragraphs did not have
+    # list_indent_from_declared applied, adding an extra 18pt list indent on top
+    # of the declared indent. This shifts wrapped lines 24px to the right, narrowing
+    # the wrapping width, forcing lines to wrap onto an additional line, and expanding
+    # row height (+18px / +13.5pt).
+    x = doc()
+    t = x.add_table(rows=2, cols=1)
+    t.style = "Table Grid"
+    c0 = t.cell(0, 0)
+    c0.paragraphs[0].text = "Department’s Decision on Application"
+    p1 = c0.add_paragraph(
+        "You should not draw on privileged information available to you as a Crown servant.",
+        style="List Number",
+    )
+    p1.paragraph_format.left_indent = Pt(20.25)
+    p2 = c0.add_paragraph(
+        "For two years from your last paid day of service, you should not become "
+        "personally involved in lobbying the UK Government on behalf of Lend Lease directly "
+        "or indirectly, or make use of your contacts in Government and/or Crown service to "
+        "influence policy or secure business on behalf of Lend Lease.",
+        style="List Number",
+    )
+    p2.paragraph_format.left_indent = Pt(20.25)
+    c1 = t.cell(1, 0)
+    c1.paragraphs[0].text = "Next row verification text"
+    save(
+        x,
+        "table-cell-numbered-list-indent",
+        "A table cell containing numbered list items with custom indent: wrapped lines align at declared indent",
+    )
+
+    # Reduced from real-tier-2-3-notification-of-dealing-with-a-non-uk-t (#1359):
+    # In WordprocessingML tables, Structured Document Tags (w:sdt / content
+    # controls) can wrap individual cells as direct children of w:tr
+    # (<w:tr><w:tc>...</w:tc><w:sdt><w:sdtContent><w:tc>...</w:tc></w:sdtContent></w:sdt></w:tr>).
+    # In Letters, rdocx iterates only direct w:tc children of w:tr, completely
+    # dropping any cell wrapped in w:sdt. This drops cell text ("Click or tap to
+    # enter a date.", "Choose an item.") and distorts row cell counts into jagged
+    # rows, triggering lost-lines in compare.py.
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    x = doc()
+    x.add_paragraph("Table with cell-level content controls (w:sdt in w:tr):")
+    t = x.add_table(rows=3, cols=1)
+    t.style = "Table Grid"
+
+    # Row 0: Col 0 is standard w:tc, Col 1 is w:sdt wrapping w:tc
+    t.cell(0, 0).paragraphs[0].text = "Date of activity"
+    sdt0 = parse_xml(
+        f'<w:sdt {nsdecls("w")}>'
+        '<w:sdtPr><w:alias w:val="Date of activity"/></w:sdtPr>'
+        '<w:sdtContent>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Click or tap to enter a date.</w:t></w:r></w:p>'
+        '</w:tc>'
+        '</w:sdtContent>'
+        '</w:sdt>'
+    )
+    t.rows[0]._tr.append(sdt0)
+
+    # Row 1: Col 0 is standard w:tc, Col 1 is w:sdt wrapping w:tc
+    t.cell(1, 0).paragraphs[0].text = "General Licence"
+    sdt1 = parse_xml(
+        f'<w:sdt {nsdecls("w")}>'
+        '<w:sdtPr><w:alias w:val="General Licence"/></w:sdtPr>'
+        '<w:sdtContent>'
+        '<w:tc>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Choose an item.</w:t></w:r></w:p>'
+        '</w:tc>'
+        '</w:sdtContent>'
+        '</w:sdt>'
+    )
+    t.rows[1]._tr.append(sdt1)
+
+    # Row 2: Standard 2-column row to verify following row alignment
+    t.cell(2, 0).paragraphs[0].text = "Description of activity"
+    c2 = parse_xml(
+        f'<w:tc {nsdecls("w")}>'
+        '<w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>'
+        '<w:p><w:r><w:t>Provision of trade financing and maritime insurance</w:t></w:r></w:p>'
+        '</w:tc>'
+    )
+    t.rows[2]._tr.append(c2)
+
+    save(
+        x,
+        "table-cell-content-control",
+        "A table with cell-level content controls (w:sdt in w:tr): content controls preserve cell geometry and text",
+    )
+
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    # Reduced from the Crime Supervisor Declaration Form (#1353): a table row
+    # with a declared minimum height (w:trHeight) that exceeds the remaining space
+    # on the page moves to the next page in LibreOffice Writer, rather than being
+    # clamped to the page foot or overflowing into the bottom margin.
+    x = doc()
+    s = x.sections[0]
+    s.top_margin = Inches(1)
+    s.bottom_margin = Inches(1)
+    s.left_margin = Inches(1)
+    s.right_margin = Inches(1)
+    t = x.add_table(rows=2, cols=2)
+    t.style = "Table Grid"
+    t.rows[0].cells[0].paragraphs[0].text = "Page 1 tall row"
+    t.rows[0].cells[1].paragraphs[0].text = "Content filling upper portion of page 1"
+    tr0_pr = t.rows[0]._tr.get_or_add_trPr()
+    tr0_pr.append(parse_xml(f'<w:trHeight {nsdecls("w")} w:val="10800"/>'))
+    t.rows[1].cells[0].paragraphs[0].text = "Page 2 row with minimum height"
+    t.rows[1].cells[1].paragraphs[0].text = "Short text inside a row with 180pt declared minimum height"
+    tr1_pr = t.rows[1]._tr.get_or_add_trPr()
+    tr1_pr.append(parse_xml(f'<w:trHeight {nsdecls("w")} w:val="3600"/>'))
+    save(
+        x,
+        "table-row-min-height-page-break",
+        "A table where a row with a declared minimum height that exceeds the page's remaining space starts on page 2",
+    )
+
     x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
@@ -733,9 +859,74 @@ def letters(img):
     save(x, "toc", "A table of contents with dot leaders and page numbers 1, 2, 2 above the two pages of headings it lists")
 
 
+# ── Letters (ODT) ─────────────────────────────────────────────────────────
+def letters_floating_image_gap(img):
+    """Reduce #1376's title beside a floating logo to the wrap clearance.
+
+    Use ODT, as in the source, and explicitly request zero clearance.
+    Three short paragraphs fit alongside the image; a fourth starts below
+    it, so widening a paragraph partway down is a separate feature.
+    """
+    from zipfile import ZIP_STORED, ZipFile
+
+    ns = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2"'
+    )
+    styles = f'''<office:document-styles {ns}>
+      <office:styles><style:default-style style:family="paragraph">
+        <style:paragraph-properties fo:margin-top="0pt" fo:margin-bottom="0pt" fo:line-height="24pt"/>
+        <style:text-properties fo:font-family="Liberation Serif" fo:font-size="12pt"/>
+      </style:default-style></office:styles>
+      <office:automatic-styles><style:page-layout style:name="Page">
+        <style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" fo:margin="1in"/>
+      </style:page-layout></office:automatic-styles>
+      <office:master-styles><style:master-page style:name="Standard" style:page-layout-name="Page"/></office:master-styles>
+    </office:document-styles>'''
+    content = f'''<office:document-content {ns}>
+      <office:automatic-styles><style:style style:name="Line" style:family="paragraph">
+        <style:paragraph-properties fo:margin-top="0pt" fo:margin-bottom="0pt" fo:line-height="24pt"/>
+        <style:text-properties fo:font-family="Liberation Serif" fo:font-size="12pt"/>
+      </style:style><style:style style:name="Float" style:family="graphic">
+        <style:graphic-properties style:wrap="parallel" style:wrap-contour="false"
+          style:horizontal-rel="page-content" style:horizontal-pos="from-left"
+          style:vertical-rel="paragraph" style:vertical-pos="from-top" fo:margin="0pt"/>
+      </style:style></office:automatic-styles>
+      <office:body><office:text>
+        <text:p text:style-name="Line"><draw:frame draw:style-name="Float" draw:name="Zero clearance"
+          text:anchor-type="paragraph" svg:x="0pt" svg:y="0pt" svg:width="144pt" svg:height="72pt"><draw:image xlink:href="Pictures/image.png" xlink:type="simple"/></draw:frame>First line beside the image</text:p>
+        <text:p text:style-name="Line">Second line beside the image</text:p>
+        <text:p text:style-name="Line">Third line beside the image</text:p>
+        <text:p text:style-name="Line">Below the image at the left margin</text:p>
+      </office:text></office:body>
+    </office:document-content>'''
+    path = os.path.join(OUT, "letters", "floating-image-gap.odt")
+    with ZipFile(path, "w") as z:
+        z.writestr("mimetype", "application/vnd.oasis.opendocument.text", compress_type=ZIP_STORED)
+        z.writestr("styles.xml", styles)
+        z.writestr("content.xml", content)
+        z.write(img, "Pictures/image.png")
+        z.writestr("META-INF/manifest.xml", '''<manifest:manifest
+          xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+          <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+          <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+          <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+          <manifest:file-entry manifest:full-path="Pictures/image.png" manifest:media-type="image/png"/>
+        </manifest:manifest>''')
+    add("letters", "floating-image-gap", path,
+        "Three lines touch a floating image's right edge (zero clearance); the fourth starts at the left margin")
+
+
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
-def tables():
+def tables(img):
     from openpyxl import Workbook
+    from openpyxl.drawing.image import Image as SheetImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -787,6 +978,33 @@ def tables():
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
+    # Reduced from HMT Annual Report and Accounts Core Tables (#1351): a single
+    # sheet with 74 rows prints across two vertical A4 pages in LibreOffice
+    # Calc when headings are disabled, while Tables captures the entire
+    # continuous used extent. In compare.py, candidate page picking chooses only
+    # page 1 and align() compresses all rows into the first page, resulting in
+    # a 1.33× scale squash, 80pt vertical displacement, and low SSIM.
+    wb, ws = book()
+    ws["A1"] = "HM Treasury Core Financial Summary"
+    ws["A1"].font = Font(name="Calibri", size=14, bold=True)
+    headers = ["Category", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(3, c, h)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+    ws.column_dimensions["A"].width = 30
+    for c in "BCDEF":
+        ws.column_dimensions[c].width = 14
+    for r in range(4, 75):
+        ws.cell(r, 1, f"Programme expenditure line {r - 3:02d}")
+        for c in range(2, 7):
+            ws.cell(r, c, (r * 100) + c * 7)
+    save(
+        wb,
+        "tall-unprinted-sheet",
+        "A 74-row sheet without printed headings that spans multiple vertical pages in Calc; isolates continuous viewport vs paginated print comparison",
+        headings=False,
+    )
+
     wb, ws = book()
     ws["A1"] = "Financial statements"
     ws["A1"].font = Font(name="Liberation Sans", size=24)
@@ -809,6 +1027,127 @@ def tables():
         "wide-unprinted-sheet",
         "Wide sheet without printed headings split across horizontal pages in Calc; stitched into one reference for screen viewport alignment",
         headings=False,
+    )
+
+    # #1338: the CoAST air safety application form has pageSetup scale=53.
+    # Keep this reduction small enough to fit one page even at 100%, with
+    # no print range, merged cells, drawings or manual page breaks. That
+    # isolates explicit print scaling from the real form's other features.
+    wb, ws = book()
+    for r in range(1, 6):
+        for c in range(1, 5):
+            ws.cell(r, c, r * 10 + c)
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.scale = 53
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    save(wb, "air-safety-reduced-print-scale",
+         "A 5x4 block of integers printed at an explicit 53% scale, including the row and column headings")
+
+    # Reduced from the missing NHS logo in real-nbs-chis-kpi-submission-template
+    # (#1337). Keep its twoCellAnchor/editAs=oneCell picture relationship,
+    # without the real workbook's print scaling, merges or rich text.
+    wb, ws = book()
+    for col in "ABCD":
+        ws.column_dimensions[col].width = 14
+    for row in range(1, 9):
+        ws.row_dimensions[row].height = 18
+    ws["A1"] = "Worksheet picture"
+    ws["D8"] = "End"
+    picture = SheetImage(img)
+    picture.anchor = TwoCellAnchor(
+        editAs="oneCell",
+        _from=AnchorMarker(col=1, row=1),
+        to=AnchorMarker(col=3, row=6),
+    )
+    ws.add_image(picture)
+    save(
+        wb, "worksheet-image",
+        "A red/green/blue/yellow four-quadrant picture anchored from B2 to D7, "
+        "between the Worksheet picture and End labels",
+    )
+
+    # Reduced from the Contents sheet of the DPA return (#1330): Calc's
+    # printed page is smaller than the editor's unscaled grid. Keep this
+    # independent of hyperlinks, hidden rows, merges and workbook selection.
+    wb, ws = book()
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.scale = 62
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = "A1:D8"
+    for col in "ABCD":
+        ws.column_dimensions[col].width = 35
+    ws["A1"] = "A wide worksheet heading reaches the final column"
+    ws["A1"].font = Font(name="Arial", size=28)
+    for row in range(3, 9):
+        ws.row_dimensions[row].height = 24
+        for col in range(1, 5):
+            ws.cell(row, col, f"Row {row} column {col}")
+    save(wb, "print-fit-page", "A wide landscape A4 worksheet fitted to one printed page, with a 62% stored print scale")
+
+    wb, ws = book()
+    # Reduced from real-fruit-and-vegetable-aid-scheme-annual-stats-2025
+    # (#1334): wide columns (widths 45, 42, 60) exceed standard A4 portrait
+    # printable width (~17.4 cm) and span across multiple vertical pages
+    # (40 rows). LibreOffice Calc's default print order paginates in "Down,
+    # then across" sequence, placing column A on pages 1-2, column B on pages
+    # 3-4, and column C on pages 5-6. Tables captures the continuous on-screen
+    # grid with all columns visible in the viewport.
+    for r in range(1, 41):
+        ws.cell(r, 1, f"Category item {r}")
+        ws.cell(r, 2, f"Subcategory detail {r}")
+        ws.cell(r, 3, r * 100)
+    ws.column_dimensions["A"].width = 45
+    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["C"].width = 60
+    save(
+        wb,
+        "paginated-columns",
+        "A multi-page sheet with columns wider than page printable width, paginating down-then-across in Calc",
+    )
+
+    wb, ws = book()
+    # #1352: the reservoir list's reference PDF splits a wide sheet across
+    # pages, while the editor capture includes columns from the next page.
+    # Keep text, rows and styles trivial so this measures horizontal paging.
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.scale = 100
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    for col, label in zip("ABCDEF", ("First", "Second", "Third", "Fourth", "Fifth", "Sixth")):
+        ws.column_dimensions[col].width = 22
+        ws[f"{col}1"] = label
+        ws[f"{col}2"] = "Page boundary probe"
+    ws.print_area = "A1:F2"
+    save(
+        wb,
+        "horizontal-pagination",
+        "A wide sheet at 100% scale splits across portrait A4 pages; "
+        "columns on later pages must not be squeezed into the first page",
+    )
+
+    wb, ws = book()
+    # #1349: the supervising panel engineers contact list sets landscape A4
+    # with fit-to-width (ODF scale-to-X="1", fitToWidth=1, fitToHeight=0).
+    # Calc scales wide sheets down so all columns fit across one page width,
+    # fitting far more rows onto page 1 than the editor's 100% on-screen grid.
+    # Keep cells, rows and text simple to isolate fit-to-width print scaling.
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    for c, col in enumerate([chr(ord("A") + i) for i in range(12)], start=1):
+        ws.column_dimensions[col].width = 18
+        ws.cell(1, c, f"Header {col}")
+        for r in range(2, 22):
+            ws.cell(r, c, f"R{r}C{c}")
+    save(
+        wb,
+        "fit-to-width",
+        "A wide landscape A4 worksheet fitted to 1 page wide (fitToWidth=1, fitToHeight=0), "
+        "scaling columns to fit the page width while rows paginate vertically",
     )
 
     wb, ws = book()
@@ -1047,6 +1386,135 @@ def tables():
     ch.width, ch.height = 9, 6
     ws.add_chart(ch, "D2")
     save(wb, "chart-multi", "A bar chart of Sales (3,7,5,9) and Plan (2,5,6,4) over Q1..Q4 with a bottom legend, anchored at D2")
+
+    # Reduced from Schedule of musts 2026 (#1323):
+    # an unheaded bordered worksheet with 4 columns (widths 13, 115, 26, 49)
+    # and 16 rows enclosed by thin borders across all cells.
+    # In LibreOffice Calc, headings are disabled (headings=False) so no row
+    # numbers (1..N) or column letters (A..D) are printed. However, because
+    # all cells have unbroken borders, lo_cell_box() finds >= 3 long lines along
+    # both axes and erroneously treats row 1 and column A as heading boxes,
+    # cropping them out of the LibreOffice reference image. Meanwhile,
+    # Tables' on-screen capture (A-1.png) retains row 1 and column A past
+    # our_cell_origin (ox=40, oy=20). When align() resamples A-1.png onto
+    # the reference, row 1 is mapped to row 2 and col A to col B, causing
+    # a 148pt displacement, scale 1.77×, and SSIM 0.06.
+    wb, ws = book()
+    ws.title = "Schedule of Musts"
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.column_dimensions["A"].width = 13
+    ws.column_dimensions["B"].width = 115
+    ws.column_dimensions["C"].width = 26
+    ws.column_dimensions["D"].width = 49
+
+    thin_border = Border(
+        left=Side(style="thin", color="000000"),
+        right=Side(style="thin", color="000000"),
+        top=Side(style="thin", color="000000"),
+        bottom=Side(style="thin", color="000000"),
+    )
+    section_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+
+    ws.cell(1, 1, "Schedule of Musts 2026").font = Font(name="Arial", size=24, bold=True)
+    ws.cell(1, 4, "Fully compliant").font = Font(name="Arial", size=18, bold=True)
+    ws.cell(
+        2,
+        1,
+        "These are the requirements in the Academy Trust Handbook brought together into one list: the 'musts'.",
+    ).font = Font(name="Arial", size=11)
+    ws.cell(
+        3,
+        1,
+        "References to the relevant sections are included, which must be read in full.",
+    ).font = Font(name="Arial", size=11)
+
+    headers = [
+        "Paragraph",
+        "Requirement",
+        "In Place:\n- Fully compliant\n- Working towards\n- Not in place",
+        "Comments\nAction to take",
+    ]
+    for c_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(4, c_idx, h)
+        cell.font = Font(name="Arial", size=11, bold=True)
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+
+    sec_title = "Top 10 ‘musts’ for chairs and other trustees"
+    ws.cell(5, 1, sec_title).font = Font(name="Arial", size=11, bold=True)
+
+    musts = [
+        (
+            "1.11 and 1.12",
+            "Apply highest standards of conduct and ensure robust governance, comply with charitable objects, with duties as company directors, with charity law and the funding agreement.",
+            "Fully compliant",
+            "",
+        ),
+        ("2.3", "Ensure the board of trustees meets at least three times a year.", "Fully compliant", ""),
+        ("2.4", "Approve a written scheme of delegation of financial powers.", "Fully compliant", ""),
+        (
+            "2.10",
+            "Ensure the board approves a balanced budget for the financial year and minutes their approval",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "2.19 and 2.20",
+            "Share management accounts with the chair of trustees monthly and consider when the board meets, taking action to maintain financial viability",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "2.31 to 2.33",
+            "Ensure decisions about executive pay follow a robust evidence-based process, that is documented in an agreed pay policy, reflecting the individual's role and responsibilities, and that the approach to pay is transparent, proportionate and defensible. Does not increase at a faster rate that that of teachers.",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "3.6 to 3.14",
+            "Appoint an audit and risk committee (either dedicated or combined with another committee) to advise on the adequacy of the trust's controls and risks.",
+            "Fully compliant",
+            "",
+        ),
+        ("4.4", "Submit audited accounts to DfE by 31 December", "Fully compliant", ""),
+        (
+            "4.14",
+            "Ensure an appropriate, reasonable and timely response to findings by auditors, taking opportunities to strengthen financial management and control",
+            "Fully compliant",
+            "",
+        ),
+        (
+            "5.36 to 5.56",
+            "Manage conflicts of interest, be even-handed with related parties, and ensure goods or services provided by them are at no more than cost, beyond the limits in this handbook",
+            "Fully compliant",
+            "",
+        ),
+        ("Roles and responsibilities", "", "", ""),
+    ]
+
+    for offset, (para, req, status, comments) in enumerate(musts, start=6):
+        c1 = ws.cell(offset, 1, para)
+        c1.font = Font(name="Arial", size=11, bold=(offset == 16))
+        c2 = ws.cell(offset, 2, req)
+        c2.font = Font(name="Arial", size=11)
+        c2.alignment = Alignment(wrap_text=True, vertical="center")
+        c3 = ws.cell(offset, 3, status)
+        c3.font = Font(name="Arial", size=11)
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        c4 = ws.cell(offset, 4, comments)
+        c4.font = Font(name="Arial", size=11)
+
+    for r in range(1, 17):
+        for c in range(1, 5):
+            ws.cell(r, c).border = thin_border
+            if r in (5, 16):
+                ws.cell(r, c).fill = section_fill
+
+    save(
+        wb,
+        "unheaded-bordered-musts",
+        "A 4-column unheaded landscape schedule with full cell borders across rows 1..16; isolates lo_cell_box line-detection false positive on unheaded bordered tables",
+        headings=False,
+    )
 
 
 # ── Decks (pptx) ──────────────────────────────────────────────────────────
@@ -1402,7 +1870,8 @@ def main():
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
     letters_odt_page_break_spacing()
-    tables()
+    letters_floating_image_gap(img)
+    tables(img)
     decks(img)
     with open(os.path.join(OUT, "manifest.json"), "w") as f:
         json.dump(MANIFEST, f, indent=2)
