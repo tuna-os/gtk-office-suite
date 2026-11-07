@@ -33,6 +33,22 @@ class AdrNumbers(unittest.TestCase):
             with self.subTest(name):
                 self.assertRegex(heading, rf"^# ADR[ -]{number}\b", f"{name} is headed {heading.strip()!r}")
 
+    def test_letters_review_exclusion_is_historical_not_current(self):
+        root = os.path.dirname(ADR_DIR)
+        with open(os.path.join(ADR_DIR, "0003-later-tier-scope.md"), encoding="utf-8") as f:
+            adr = f.read()
+        with open(os.path.join(root, "LETTERS-REVIEW-WORKFLOWS.md"), encoding="utf-8") as f:
+            workflows = f.read()
+        with open(os.path.join(root, "PARITY.md"), encoding="utf-8") as f:
+            parity = f.read()
+        section = adr.split("## 2. ", 1)[1].split("## 3. ", 1)[0]
+        self.assertIn("Historical decision", section)
+        self.assertIn("not current Letters review support", section)
+        self.assertIn("../LETTERS-REVIEW-WORKFLOWS.md", section)
+        self.assertIn("original comments and tracked-changes exclusions", workflows)
+        self.assertIn("historical for review", parity)
+        self.assertNotIn("Endnotes/comments/track changes out per ADR 0003", parity)
+
 
 if __name__ == "__main__":
     unittest.main()

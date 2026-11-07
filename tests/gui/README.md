@@ -75,15 +75,21 @@ class of bug, and a fixed order never finds it.
 for every attempt its config, order, verdict, duration, JUnit report, log and
 retained artifacts. Failures are classified as `product-crash`,
 `assertion-mismatch`, `timeout`, `infrastructure` or `unclassified`; the
-summary reports the first-attempt failure rate.
+summary reports the first-attempt failure rate. A skipped or expected-failure
+journey, a missing/invalid JUnit report, or a case count different from the
+planned order fails the attempt as incomplete infrastructure evidence, even
+when pytest exits zero. Collection must succeed in full; a partial collection
+is not a campaign. `--repeat` and `--timeout` must both be positive. The count
+check does not independently verify that each reported case is the planned ID;
+inspect the recorded order and JUnit report when investigating evidence.
 
 There is no retry, and there will not be one: a green rerun does not unfail
 the first attempt. Run a diagnostic repeat as a second campaign with its own
 output directory, which keeps both results.
 
-`.github/workflows/gui-stress.yml` runs a bounded campaign nightly in the same
+`.github/workflows/gui-stress.yml` runs a bounded campaign weekly in the same
 container the recorded journeys use, and takes `repeat`, `seed`, `matrix` and
-`select` on manual dispatch. The nightly schedule uses the baseline display
+`select` on manual dispatch. The scheduled run uses the baseline display
 only, and the matrix stays opt-in until the narrow-width findings it keeps
 turning up are closed: #516 is fixed, but a full 47-journey matrix pass still
 reports more (see #520). A known-red nightly teaches people to ignore it.
