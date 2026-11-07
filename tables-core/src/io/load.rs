@@ -695,9 +695,10 @@ mod tests {
         let (_, sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
         let plain = &sheets[0];
         let heights = &sheets[1];
-        assert!((heights.row_height(0) - 20.0 / 0.75).abs() < 0.001);
-        assert!((heights.row_height(1) - 15.5 / 0.75).abs() < 0.001);
-        assert!((heights.row_height(2) - 23.5 / 0.75).abs() < 0.001);
+        // Points to pixels, kept to two decimals as every imported height is.
+        assert_eq!(heights.row_height(0), 26.67);
+        assert_eq!(heights.row_height(1), 20.67);
+        assert_eq!(heights.row_height(2), 31.33);
         assert_eq!(heights.row_heights[3], 24.0, "hidden rows keep their stored height");
         assert!(heights.hidden_rows_manual.contains(&3));
         for row in 4..8 {

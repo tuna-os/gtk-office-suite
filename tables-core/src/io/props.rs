@@ -386,11 +386,21 @@ fn height_points_to_pixels(points: f64) -> f64 {
     (points / POINTS_PER_PIXEL * 100.0).round() / 100.0
 }
 
+/// `attr`'s value in `tag`, matched as a whole attribute name: `ht` is not
+/// the tail of `customHeight`.
 fn xml_attr<'a>(tag: &'a str, attr: &str) -> Option<&'a str> {
     let needle = format!("{attr}=\"");
-    let start = tag.find(&needle)? + needle.len();
-    let end = tag[start..].find('"')? + start;
-    Some(&tag[start..end])
+    let mut from = 0;
+    while let Some(i) = tag[from..].find(&needle) {
+        let at = from + i;
+        let start = at + needle.len();
+        if at == 0 || tag.as_bytes()[at - 1].is_ascii_whitespace() {
+            let end = tag[start..].find('"')? + start;
+            return Some(&tag[start..end]);
+        }
+        from = start;
+    }
+    None
 }
 
 /// OOXML boolean attributes are legal as either "1"/"0" or "true"/"false"
