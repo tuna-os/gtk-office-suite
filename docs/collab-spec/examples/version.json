@@ -1,0 +1,37 @@
+{
+  "dcp": 1,
+  "parents": [
+    "$parent_event_id"
+  ],
+  "file": {
+    "mime": "application/vnd.oasis.opendocument.spreadsheet",
+    "size": 48213,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locator": {
+      "type": "matrix-encrypted-media",
+      "file": {
+        "url": "mxc://example.org/abc123",
+        "key": {
+          "alg": "A256CTR",
+          "ext": true,
+          "k": "x",
+          "key_ops": [
+            "encrypt",
+            "decrypt"
+          ],
+          "kty": "oct"
+        },
+        "iv": "AAAAAAAAAAA",
+        "hashes": {
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "v": "v2"
+      }
+    }
+  },
+  "created_by": {
+    "principal": "@alice:example.org",
+    "device": "DEVICE1"
+  },
+  "message": "Add October actuals"
+}

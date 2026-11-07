@@ -1,0 +1,12 @@
+{
+  "dcp": 1,
+  "title": "Q4 budget",
+  "mime": "application/vnd.oasis.opendocument.spreadsheet",
+  "levels": [
+    "L1",
+    "L2"
+  ],
+  "algorithms": [
+    "loro/1"
+  ]
+}

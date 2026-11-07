@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor, Wrap};
 
 /// Each image relationship's anchored placements, in document order.
 pub type Placements = HashMap<String, VecDeque<ImageAnchor>>;
@@ -161,6 +161,22 @@ pub(crate) fn placement(anchor: &str) -> ImageAnchor {
         y_emu,
         v_align,
         behind: attr(anchor, "<wp:anchor", "behindDoc").is_some_and(|v| v == "1" || v == "true"),
+        wrap: if ["<wp:wrapSquare", "<wp:wrapTight", "<wp:wrapThrough"].iter().any(|w| anchor.contains(w)) {
+            Wrap::Parallel
+        } else if anchor.contains("<wp:wrapTopAndBottom") {
+            Wrap::TopBottom
+        } else {
+            Wrap::None
+        },
+    }
+}
+
+/// An anchor's `wp:wrap*` element: how text flows around it.
+pub(crate) fn wrap_element(wrap: Wrap) -> &'static str {
+    match wrap {
+        Wrap::None => "<wp:wrapNone/>",
+        Wrap::Parallel => "<wp:wrapSquare wrapText=\"bothSides\"/>",
+        Wrap::TopBottom => "<wp:wrapTopAndBottom/>",
     }
 }
 
@@ -232,12 +248,13 @@ pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)], fir
             "<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{next_id}\" \
              behindDoc=\"{}\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\"><wp:simplePos x=\"0\" y=\"0\"/>\
              <wp:positionH relativeFrom=\"{}\">{}</wp:positionH><wp:positionV relativeFrom=\"{}\">{}</wp:positionV>\
-             {extent}<wp:wrapNone/><wp:docPr id=\"{next_id}\" name=\"Picture {next_id}\" descr=\"{}\"{tail}</wp:anchor>",
+             {extent}{}<wp:docPr id=\"{next_id}\" name=\"Picture {next_id}\" descr=\"{}\"{tail}</wp:anchor>",
             u8::from(anchor.behind),
             frame(anchor.h_from, "column"),
             position(anchor.x_emu, anchor.h_align, ["left", "center", "right"]),
             frame(anchor.v_from, "paragraph"),
             position(anchor.y_emu, anchor.v_align, ["top", "center", "bottom"]),
+            wrap_element(anchor.wrap),
             xml_attr(alt),
         ));
     }
@@ -477,10 +494,10 @@ mod tests {
         let xml = r#"<w:p><w:r><w:drawing><wp:anchor distT="0" behindDoc="0" relativeHeight="1">
             <wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="margin"><wp:align>right</wp:align></wp:positionH>
             <wp:positionV relativeFrom="paragraph"><wp:posOffset>-660400</wp:posOffset></wp:positionV>
-            <wp:extent cx="1296035" cy="1097915"/><a:graphic><pic:pic><pic:blipFill><a:blip r:embed="rId7"/></pic:blipFill></pic:pic></a:graphic>
+            <wp:extent cx="1296035" cy="1097915"/><wp:wrapSquare wrapText="bothSides"/><a:graphic><pic:pic><pic:blipFill><a:blip r:embed="rId7"/></pic:blipFill></pic:pic></a:graphic>
             </wp:anchor></w:drawing></w:r></w:p>
             <w:p><w:r><w:drawing><wp:anchor behindDoc="1"><wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>
-            <wp:positionV relativeFrom="page"><wp:posOffset>12700</wp:posOffset></wp:positionV><a:blip r:embed="rId7"/></wp:anchor></w:drawing></w:r></w:p>
+            <wp:positionV relativeFrom="page"><wp:posOffset>12700</wp:posOffset></wp:positionV><wp:wrapTopAndBottom/><a:blip r:embed="rId7"/></wp:anchor></w:drawing></w:r></w:p>
             <w:p><w:r><w:drawing><wp:anchor><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>
             <wp:wsp/></wp:anchor></w:drawing></w:r></w:p>"#;
         let mut found = placements(xml);
@@ -495,10 +512,11 @@ mod tests {
                 y_emu: -660_400,
                 v_align: None,
                 behind: false,
+                wrap: Wrap::Parallel,
             })
         );
         let second = logos.pop_front().expect("the second use of rId7");
-        assert_eq!((second.h_from, second.x_emu, second.v_from, second.y_emu, second.behind), (AnchorFrame::Page, 914_400, AnchorFrame::Page, 12_700, true));
+        assert_eq!((second.h_from, second.x_emu, second.v_from, second.y_emu, second.behind, second.wrap), (AnchorFrame::Page, 914_400, AnchorFrame::Page, 12_700, true, Wrap::TopBottom));
         assert_eq!(found.len(), 1, "a shape without a picture is not a placement");
     }
 

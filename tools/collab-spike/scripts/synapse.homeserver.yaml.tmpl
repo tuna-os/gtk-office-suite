@@ -1,0 +1,36 @@
+# Synapse config for the RFC-0004 Spike A tests. NOT for any real deployment:
+# open registration, a fixed shared secret, no federation.
+# scripts/synapse-up.sh fills the __PLACEHOLDERS__ and appends the rate-limit
+# block of the chosen profile (see synapse.ratelimits.*.yaml).
+server_name: "__SERVER_NAME__"
+pid_file: /data/homeserver.pid
+public_baseurl: "http://127.0.0.1:__PORT__/"
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: false
+    bind_addresses: ["0.0.0.0"]
+    resources:
+      - names: [client]
+        compress: false
+database:
+  name: sqlite3
+  args:
+    database: /data/homeserver.db
+log_config: "/data/log.config"
+media_store_path: /data/media_store
+signing_key_path: "/data/signing.key"
+report_stats: false
+max_upload_size: 50M
+suppress_key_server_warning: true
+trusted_key_servers: []
+federation_domain_whitelist: []
+macaroon_secret_key: "__MACAROON__"
+form_secret: "__FORM__"
+# Users for tests come from the shared-secret admin endpoint (not rate limited,
+# returns a token and device id). Open registration is on as well, for tools
+# that cannot do the HMAC handshake; it is subject to rc_registration.
+registration_shared_secret: "__SHARED_SECRET__"
+enable_registration: true
+enable_registration_without_verification: true

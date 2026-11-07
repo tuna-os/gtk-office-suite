@@ -1,0 +1,10 @@
+{
+  "name": "dcp-streams-reference-server",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pins the Durable Streams Node reference server for RFC-0004 Spike B. Run with `node server.mjs`.",
+  "type": "module",
+  "dependencies": {
+    "@durable-streams/server": "0.3.9"
+  }
+}

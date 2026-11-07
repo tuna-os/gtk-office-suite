@@ -1,0 +1,413 @@
+name: collab-apps
+
+# RFC-0005 option B: collaboration in the apps goes through a sidecar process.
+#
+#   product    suite-collab, the protocol crate (a member of the product workspace, serde
+#              and serde_json only): clippy, its unit tests, and the promise that the root
+#              Cargo.lock has no network crate and the apps' default graph has no `collab`
+#              (tests/test_collab_defaults.py)
+#   sidecar    collab/, the sidecar's own cargo workspace and Cargo.lock (dcp-core,
+#              dcp-conformance, dcp-matrix, dcp-streams copied from tools/collab-spike, and
+#              collabd): `cargo check --locked`, clippy, unit tests, the schemas, and
+#              `cargo deny check advisories` on its lock (deny.toml)
+#   letters-core  the document as a Loro rich text (letters-core, feature `collab`, RFC-0005 P5):
+#              clippy and its tests under nextest, and the promise that the feature stays off
+#              in the default graph. No GTK, no server.
+#   headless   the two-instance test without GTK (collab/headless, its own workspace and
+#              lock because it needs tables-core): two real collabd processes and two
+#              tables-core Replicas converge through the Durable Streams Node reference
+#              server 0.3.9, plus the copied dcp-streams conformance journeys on the same server
+#
+# The scripts that start the server are tools/collab-spike's, which stay as they are.
+#
+# A test that needs the server FAILS when it is missing; only DCP_SKIP_STREAMS=1 skips it, and
+# the test says so. The headless job checks both behaviours.
+on:
+  push:
+    branches: [main, 'collab/**']
+    paths:
+      - 'collab/**'
+      - 'suite-collab/**'
+      - 'docs/collab-spec/**'
+      - 'tables-core/src/controller/collab*.rs'
+      - 'tables-core/Cargo.toml'
+      - 'letters-core/**'
+      - 'letters/**'
+      - 'suite-common-core/src/ops.rs'
+      - 'suite-common-core/src/ops/**'
+      - 'tools/collab-spike/scripts/streams-*'
+      - 'tests/test_collab_defaults.py'
+      - 'deny.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/collab-apps.yml'
+  pull_request:
+    paths:
+      - 'collab/**'
+      - 'suite-collab/**'
+      - 'docs/collab-spec/**'
+      - 'tables-core/src/controller/collab*.rs'
+      - 'tables-core/Cargo.toml'
+      - 'letters-core/**'
+      - 'letters/**'
+      - 'suite-common-core/src/ops.rs'
+      - 'suite-common-core/src/ops/**'
+      - 'tools/collab-spike/scripts/streams-*'
+      - 'tests/test_collab_defaults.py'
+      - 'deny.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/collab-apps.yml'
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes the queued or running one.
+concurrency:
+  group: collab-apps-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+
+permissions:
+  contents: read
+
+jobs:
+  product:
+    name: suite-collab and the default build graph
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: collab-apps-product
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # --locked: the committed root Cargo.lock must already be the one this resolves to.
+      - name: cargo clippy -p suite-collab
+        run: cargo clippy -p suite-collab --all-targets --locked -- -D warnings
+      - name: cargo test -p suite-collab
+        run: cargo test -p suite-collab --locked
+      # The root lock gained exactly one package, suite-collab, and no network crate; the
+      # default graph of the apps holds neither loro nor suite-collab.
+      - name: tests/test_collab_defaults.py
+        run: python3 tests/test_collab_defaults.py -v
+
+  sidecar:
+    name: collab/ workspace (check, tests, advisories)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: collab
+          shared-key: collab-apps-sidecar
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # --locked: collab/Cargo.lock is the one the sidecar's workspace resolves to.
+      - name: cargo check --workspace --all-targets --locked
+        working-directory: collab
+        run: cargo check --workspace --all-targets --locked
+      - name: cargo clippy -p collabd
+        working-directory: collab
+        run: cargo clippy -p collabd --all-targets --locked --no-deps -- -D warnings
+      # dcp-conformance's tests/mutation.rs is part of this: each deliberately broken
+      # store must be caught by the journey it breaks. collabd's tests run the daemon
+      # against the in-memory store; what needs a server is the `headless` job.
+      - name: cargo test -p dcp-core -p dcp-conformance -p collabd
+        working-directory: collab
+        run: cargo test -p dcp-core -p dcp-conformance -p collabd --locked --no-fail-fast -- --test-threads=2
+      - name: validate.py (the Rust negatives are kept in step with it)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/v"
+          "$RUNNER_TEMP/v/bin/pip" install --quiet jsonschema
+          "$RUNNER_TEMP/v/bin/python" docs/collab-spec/validate.py
+      # The advisories of collab/Cargo.lock, against deny.toml (its ignores for this lock
+      # are the ones that name collab/). The product's own gate is ci.yml's `advisories`.
+      - name: cargo deny check advisories (collab/Cargo.lock)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: collab/Cargo.toml
+          command: check advisories
+          arguments: --all-features --config deny.toml
+
+  letters-core:
+    name: letters-core with the collab feature (clippy, nextest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+        with:
+          tool: nextest
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: collab-apps-letters-core
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # The feature is off in every product build, so the workspace's own clippy and nextest
+      # runs (ci.yml) never compile it. --locked: the committed root Cargo.lock must already
+      # be the one this resolves to.
+      - name: cargo clippy -p letters-core --features collab
+        run: cargo clippy -p letters-core --features collab --all-targets --locked -- -D warnings
+      # Letters' tests of the feature (letters-core/src/collab) and the shared history's
+      # `rebase` (suite-common-core, ADR 0011). A test that finds nothing to run fails, so a
+      # filter that stops matching cannot pass. `--success-output final` prints what passing
+      # tests print: the size of one keystroke's update.
+      - name: the collab tests under nextest
+        run: |
+          cargo nextest run -p letters-core -p suite-common-core \
+            --features letters-core/collab --locked \
+            --profile collab --no-fail-fast -E 'test(collab) | test(rebase)' --success-output final
+      # Off by default: the graph letters-core builds without the feature holds no loro, and
+      # the lock needs no change to say so (`--locked`). The lock does record the optional
+      # edge, as it does for tables-core and decks-core; tests/test_collab_defaults.py (the
+      # `product` job) checks the apps' graph.
+      - name: the default graph of letters-core has no loro
+        run: |
+          cargo metadata --locked --format-version 1 > /dev/null
+          cargo tree --locked -p letters-core -e normal --prefix none > "$RUNNER_TEMP/default-graph.txt"
+          grep -q '^serde_json ' "$RUNNER_TEMP/default-graph.txt"
+          if grep -q '^loro ' "$RUNNER_TEMP/default-graph.txt"; then
+            echo "::error::loro is in the default graph of letters-core"
+            exit 1
+          fi
+          cargo tree --locked -p letters-core --features collab -e normal --prefix none | grep -q '^loro '
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: letters-core-collab-junit
+          path: target/nextest/collab/junit.xml
+          if-no-files-found: warn
+
+  # The Letters shell with the feature (RFC-0005 P5): the live model in a session on real GtkTextBuffers
+  # and real Replicas (letters/src/live/collab_tests.rs: the caret and the selection under a peer's
+  # edits, bold from a peer, undo that stays mine, a refused edit), the shell's own logic, and the
+  # existing live-model tests with the feature on, since the feature changes apply_ops, undo and project.
+  letters-ui:
+    name: letters with the collab feature (clippy, buffer tests under a display)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install GTK4 + libadwaita dev libraries and Xvfb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: clippy
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
+        with:
+          tool: nextest
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: collab-apps-letters-ui
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+      # --locked: the committed root Cargo.lock must already be the one this resolves to.
+      - name: cargo clippy -p letters --features collab
+        run: cargo clippy -p letters --features collab --all-targets --locked -- -D warnings
+      - name: the buffer tests of the feature, and the live model's own, under a display
+        run: |
+          scripts/with-display.sh cargo nextest run -p letters --features collab --locked \
+            --profile collab --no-fail-fast -E 'test(collab) | test(live::)' --success-output final
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: letters-ui-collab-junit
+          path: target/nextest/collab/junit.xml
+          if-no-files-found: warn
+
+  # Two Letters replicas, two real collabd processes, one real Durable Streams server, no GTK: the
+  # journey of the GUI test (share, join, type in one paragraph, converge, bold, undo) and the covers
+  # rule (two live editors saving is not a conflict), at the protocol.
+  letters-headless:
+    name: two Letters replicas and two collabd processes through a real server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      COLLABD_BIN: ${{ github.workspace }}/collab/target/debug/collabd
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            .
+            collab
+          shared-key: collab-apps-letters-headless
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          npm --version
+      - name: Install the pinned reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+      - name: Build collabd
+        working-directory: collab
+        run: cargo build -p collabd --locked
+      - name: Build the test
+        run: cargo test -p letters-core --features collab --locked --test two_instances --no-run
+      # A test that needs a server must fail without one, and skip only when told to, saying so.
+      - name: Fails loudly without a server
+        run: |
+          if env -u DCP_STREAMS_URL -u DCP_SKIP_STREAMS cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture > "$RUNNER_TEMP/noserver.log" 2>&1; then
+            cat "$RUNNER_TEMP/noserver.log"
+            echo "::error::the letters headless test passed with no server"
+            exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/noserver.log"
+      - name: DCP_SKIP_STREAMS=1 skips explicitly and says so
+        env:
+          DCP_SKIP_STREAMS: '1'
+        run: |
+          env -u DCP_STREAMS_URL cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          test "$(grep -c 'SKIPPED .*(DCP_SKIP_STREAMS=1)' "$RUNNER_TEMP/skip.log")" -ge 2
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/logs"
+      - name: The journeys, against the Node reference server 0.3.9
+        run: |
+          set -euo pipefail
+          eval "$(tools/collab-spike/scripts/streams-up.sh node)"
+          trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server.log" 2>/dev/null || true; tools/collab-spike/scripts/streams-down.sh node' EXIT
+          cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/letters_two_instances.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: collab-apps-letters-headless-logs
+          path: logs/
+          if-no-files-found: warn
+
+  headless:
+    name: two collabd processes and two Replicas through a real server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      COLLABD_BIN: ${{ github.workspace }}/collab/target/debug/collabd
+      # The TLS and access-control tests of the copied dcp-streams suite need other servers;
+      # the spike's streams-tls job runs them. They fail without one, so say they are skipped.
+      DCP_SKIP_STREAMS_TLS: '1'
+      DCP_SKIP_STREAMS_AUTH: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            collab
+            collab/headless
+          shared-key: collab-apps-headless
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          node --version
+          npm --version
+          nproc
+          free -m
+      - name: Install the pinned reference server (npm ci)
+        working-directory: tools/collab-spike/scripts/streams-server
+        run: |
+          npm ci --no-audit --no-fund
+          node -e 'console.log("@durable-streams/server", require("./node_modules/@durable-streams/server/package.json").version)'
+      - name: Build collabd
+        working-directory: collab
+        run: cargo build -p collabd --locked
+      # tables-core's graph (ironcalc, calamine, loro, the Typst tree) is resolved in this
+      # workspace's own lock, not in collab/Cargo.lock and not in the product's.
+      - name: Build the headless test
+        working-directory: collab/headless
+        run: cargo test --locked --no-run
+
+      # A test that needs a server must fail without one, and skip only when told to, saying so.
+      - name: Fails loudly without a server
+        working-directory: collab/headless
+        run: |
+          if env -u DCP_STREAMS_URL -u DCP_SKIP_STREAMS cargo test --locked --test two_instances share_join -- --nocapture > "$RUNNER_TEMP/noserver.log" 2>&1; then
+            cat "$RUNNER_TEMP/noserver.log"
+            echo "::error::the headless test passed with no server"
+            exit 1
+          fi
+          grep -q "DCP_STREAMS_URL is not set" "$RUNNER_TEMP/noserver.log"
+      - name: DCP_SKIP_STREAMS=1 skips explicitly and says so
+        working-directory: collab/headless
+        env:
+          DCP_SKIP_STREAMS: '1'
+        run: |
+          env -u DCP_STREAMS_URL cargo test --locked --test two_instances -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          test "$(grep -c 'SKIPPED .*(DCP_SKIP_STREAMS=1)' "$RUNNER_TEMP/skip.log")" -ge 5
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/logs"
+
+      - name: The two-instance test, against the Node reference server 0.3.9
+        working-directory: collab/headless
+        run: |
+          set -euo pipefail
+          eval "$(../../tools/collab-spike/scripts/streams-up.sh node)"
+          trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server.log" 2>/dev/null || true; ../../tools/collab-spike/scripts/streams-down.sh node' EXIT
+          cargo test --locked --test two_instances -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/two_instances.log"
+
+      # The copied binding still passes its own conformance journeys (spec section 12).
+      - name: dcp-streams copy - unit tests and conformance journeys on the same server
+        working-directory: collab
+        run: |
+          set -euo pipefail
+          cargo test -p dcp-streams --locked --lib -- --nocapture
+          eval "$(../tools/collab-spike/scripts/streams-up.sh node)"
+          trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server-dcp-streams.log" 2>/dev/null || true; ../tools/collab-spike/scripts/streams-down.sh node' EXIT
+          cargo test -p dcp-streams --locked --test streams -- conformance:: --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/dcp-streams.log"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: collab-apps-logs
+          path: logs/
+          if-no-files-found: warn

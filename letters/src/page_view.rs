@@ -136,8 +136,35 @@ mod imp {
             }
         }
 
-        fn attributes(&self, _offset: u32) -> Vec<(gtk::AccessibleTextRange, glib::GString, glib::GString)> {
-            Vec::new()
+        /// The character formatting at `offset`, as the attributes GTK names for
+        /// assistive technology: `weight` 700 for bold, `style` italic,
+        /// `underline` single and `strikethrough` true, each with the run of
+        /// text it covers. A screen reader says "bold"; a test reads it.
+        fn attributes(&self, offset: u32) -> Vec<(gtk::AccessibleTextRange, glib::GString, glib::GString)> {
+            let Some(buf) = self.buffer.borrow().clone() else { return Vec::new() };
+            if offset as i32 >= buf.char_count() {
+                return Vec::new();
+            }
+            let at = buf.iter_at_offset(offset as i32);
+            let mut out = Vec::new();
+            for tag in at.tags() {
+                let (name, value) = match tag.name().as_deref() {
+                    Some("bold") => ("weight", "700"),
+                    Some("italic") => ("style", "italic"),
+                    Some("underline") => ("underline", "single"),
+                    Some("strikethrough") => ("strikethrough", "true"),
+                    _ => continue,
+                };
+                let mut start = at;
+                if !start.starts_tag(Some(&tag)) {
+                    start.backward_to_tag_toggle(Some(&tag));
+                }
+                let mut end = at;
+                end.forward_to_tag_toggle(Some(&tag));
+                let range = gtk::AccessibleTextRange::new(start.offset().max(0) as usize, (end.offset() - start.offset()).max(0) as usize);
+                out.push((range, glib::GString::from(name), glib::GString::from(value)));
+            }
+            out
         }
 
         fn default_attributes(&self) -> Vec<(glib::GString, glib::GString)> {

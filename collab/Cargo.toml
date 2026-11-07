@@ -1,0 +1,40 @@
+# The collabd sidecar (RFC-0005 option B): its own cargo workspace and its own
+# Cargo.lock, NOT a member of the root workspace (see the root Cargo.toml's
+# `exclude`). It holds the Durable Streams and Matrix bindings, which need tokio,
+# rustls and matrix-sdk; none of that may reach the product lockfile or the
+# default build graph of the apps. The apps talk to `collabd` over a pipe with
+# the `suite-collab` protocol crate (a member of the root workspace, serde only).
+#
+# dcp-core, dcp-conformance, dcp-matrix and dcp-streams are COPIES of the crates
+# in tools/collab-spike (RFC-0004 spikes), whose workspace, lockfile and CI stay
+# as they are so the spike results stay reproducible. What differs from the
+# originals is listed in each crate's header comment ("collab/ copy") and is
+# small: the `include_str!` paths of dcp-core (one `../` fewer), the script paths
+# of dcp-streams' tests, and the additions collabd needs (see DocumentStore's
+# extra methods, `updates::CrdtSession`). The schemas themselves are not copied:
+# docs/collab-spec is the single source of truth and dcp-core reads it by path.
+#
+# `headless` is the two-instance test: it needs tables-core, whose dependency
+# graph (ironcalc, calamine, loro, ...) must not enter THIS lockfile, so it is a
+# workspace of its own with its own lockfile.
+[workspace]
+resolver = "2"
+members = ["dcp-core", "dcp-conformance", "dcp-matrix", "dcp-streams", "collabd"]
+exclude = ["headless"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+async-trait = "0.1"
+base64 = "0.23"
+hex = "0.4"
+jsonschema = "0.30"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }

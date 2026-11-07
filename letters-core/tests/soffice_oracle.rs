@@ -1932,7 +1932,7 @@ fn table_cell_fills_survive_writer_both_ways() {
 /// page's edge and centred down it.
 #[test]
 fn floating_pictures_keep_their_placement_through_writer_both_ways() {
-    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor, Wrap};
     let Some(bin) = require_or_skip() else { return };
     let dir = tempfile::tempdir().unwrap();
     let png: &[u8] = &[
@@ -1945,7 +1945,9 @@ fn floating_pictures_keep_their_placement_through_writer_both_ways() {
     let png_path = dir.path().join("logo.png");
     std::fs::write(&png_path, png).unwrap();
     let want = [
-        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+        // Text beside it, text above and below it, and text over it.
+        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, wrap: Wrap::Parallel, ..Default::default() },
+        ImageAnchor { h_from: AnchorFrame::Margin, x_emu: 457_200, v_from: AnchorFrame::Text, y_emu: 127_000, wrap: Wrap::TopBottom, ..Default::default() },
         ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
     ];
     let mut d = Document::from_plain_text("");
@@ -2455,6 +2457,59 @@ fn a_regular_run_in_a_heading_survives_writer_both_ways() {
     close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
 
     let Some(rt) = through_lo_to_docx(&d, "regular") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// A heading's run set back upright stays upright through Writer, both
+/// ways: the W1 notes' "For alcohol", a Heading 4 italic by its style.
+#[test]
+fn an_upright_run_in_a_heading_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("For alcohol\nafter");
+    d.paragraphs[0].style.heading = Some(4);
+    d.heading_styles = (1..=6).map(|n| RunStyle { italic: n == 4, ..Default::default() }).collect();
+    d.paragraphs[0].runs[0].style.upright = true;
+    let close = |got: &Document, how: &str| {
+        let p = para_with_text(got, "For alcohol");
+        assert!(p.style.heading.is_some(), "{how}: still a heading");
+        assert!(p.runs.iter().all(|r| r.style.upright && !r.style.italic), "{how}: {:?}", p.runs);
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("upright.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("upright.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "upright") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// Pair kerning through Writer both ways, on the run that asks for it
+/// only: Writer and Word draw everything else unkerned, which sets where
+/// a line breaks (the audit-committee minutes).
+#[test]
+fn kerning_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("AVATAR kerned\nplain after");
+    d.paragraphs[0].runs[0].style.kerned = true;
+    let close = |got: &Document, how: &str| {
+        let p = para_with_text(got, "AVATAR kerned");
+        assert!(p.runs.iter().all(|r| r.style.kerned), "{how}: {:?}", p.runs);
+        assert!(para_with_text(got, "plain after").runs.iter().all(|r| !r.style.kerned), "{how}: only the first");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("kerned.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("kerned.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "kerned") else { return };
     close(&rt, "odt → Writer → docx");
 }
 

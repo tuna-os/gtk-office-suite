@@ -1590,10 +1590,10 @@ impl DecksController {
             self.dirty.set(true);
             self.merge_chain.set(false);
         } else {
-            // Nothing to undo, or history no longer fits and dropped
-            // itself: the stacks mirror it either way.
-            self.undo_sels.borrow_mut().clear();
-            self.redo_sels.borrow_mut().clear();
+            // Nothing to undo, or the step no longer fits and the history
+            // dropped that step alone: the selection entry goes with it, so
+            // the stacks stay in step with the history.
+            self.undo_sels.borrow_mut().pop();
         }
         done
     }
@@ -1628,8 +1628,8 @@ impl DecksController {
             self.dirty.set(true);
             self.merge_chain.set(false);
         } else {
-            self.undo_sels.borrow_mut().clear();
-            self.redo_sels.borrow_mut().clear();
+            // As for undo: the dropped step's entry goes, the others stay.
+            self.redo_sels.borrow_mut().pop();
         }
         done
     }
@@ -2420,6 +2420,32 @@ mod tests {
         assert_eq!(c.slide_index(first), Some(0));
         assert_eq!(c.slide_index(third), Some(1));
         assert!(c.selection().slide_id.is_some_and(|id| id == first || id == third));
+    }
+
+    /// ADR 0011: a step that no longer fits is dropped alone. (Decks' ops
+    /// treat a missing slide or object as a delete that won and do nothing;
+    /// an out-of-range position is the error a step can meet.) The
+    /// selection stacks mirror the history, so the dropped step's entry goes
+    /// with it and the next undo restores the selection of the step it takes
+    /// back.
+    #[test]
+    fn a_step_that_no_longer_fits_is_dropped_with_its_selection_entry_and_the_rest_stay() {
+        let c = DecksController::new(vec![slide("S1"), slide("S2"), slide("S3")], vec![]);
+        let third = sid(&c, 2);
+        c.add_object(third, rect(1.0, 1.0));
+        let o = oid(&c, 2, 0);
+        assert!(c.select_objects(third, &[o], Some(o), SelectionMode::Object));
+        let on_object = c.selection();
+        c.move_object(third, o, 1.0, 0.0);
+        assert!(c.select_slide(third));
+        assert_ne!(c.selection(), on_object);
+        assert!(c.move_slide_up(third), "its undo moves it back to position 2");
+        // A peer removes the other two slides: position 2 is out of range.
+        c.slides.borrow_mut().retain(|s| s.ids.slide == third);
+        assert!(!c.undo(), "that step no longer fits");
+        assert!(c.can_undo() && !c.can_redo(), "the steps before it stay, and the dropped one cannot be redone");
+        assert!(c.undo(), "the move is next");
+        assert_eq!(c.selection(), on_object, "with the selection that step saw, not the dropped step's");
     }
 
     #[test]

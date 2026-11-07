@@ -10,7 +10,7 @@ fn tab(doc: &Document) -> (gtk::TextBuffer, Rc<RefCell<LiveModel>>) {
 }
 
 /// The buffer's text and, for each char, the names of its tags.
-fn shown(buf: &gtk::TextBuffer) -> (String, Vec<Vec<String>>) {
+pub(super) fn shown(buf: &gtk::TextBuffer) -> (String, Vec<Vec<String>>) {
     let mut tags = Vec::new();
     let mut it = buf.start_iter();
     while !it.is_end() {
@@ -26,7 +26,7 @@ fn shown(buf: &gtk::TextBuffer) -> (String, Vec<Vec<String>>) {
 /// The projection is exact: the buffer, and where each paragraph starts in
 /// it, are what rendering the model's document from scratch gives, and
 /// nothing but the model has edited the buffer.
-fn check(buf: &gtk::TextBuffer, live: &Rc<RefCell<LiveModel>>, what: &str) {
+pub(super) fn check(buf: &gtk::TextBuffer, live: &Rc<RefCell<LiveModel>>, what: &str) {
     let snap = live.borrow().snapshot();
     let fresh = gtk::TextBuffer::new(Some(&buf.tag_table()));
     let want_starts = crate::bridge::render_to_buffer(&snap.doc, &fresh);
@@ -40,17 +40,17 @@ fn check(buf: &gtk::TextBuffer, live: &Rc<RefCell<LiveModel>>, what: &str) {
     assert_eq!(live.borrow().foreign_edits, 0, "the buffer was edited behind the model's back by {what}");
 }
 
-fn text(buf: &gtk::TextBuffer) -> String {
+pub(super) fn text(buf: &gtk::TextBuffer) -> String {
     buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string()
 }
 
-fn at(buf: &gtk::TextBuffer, needle: &str) -> i32 {
+pub(super) fn at(buf: &gtk::TextBuffer, needle: &str) -> i32 {
     let t = text(buf);
     t[..t.find(needle).unwrap()].chars().count() as i32
 }
 
 /// Type `text` at buffer offset `off`, as the page view does.
-fn type_at(buf: &gtk::TextBuffer, off: i32, text: &str) {
+pub(super) fn type_at(buf: &gtk::TextBuffer, off: i32, text: &str) {
     buf.place_cursor(&buf.iter_at_offset(off));
     crate::page_edit::type_text(buf, text);
 }

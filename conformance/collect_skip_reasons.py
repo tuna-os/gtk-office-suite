@@ -143,13 +143,38 @@ def scan_file(path: str) -> list:
     return out
 
 
-def rust_sources(roots: list) -> list:
-    """Every `.rs` file under the given roots, excluding build output."""
+def _is_nested_workspace(directory: str, root: str) -> bool:
+    """True for a directory with its own `[workspace]` that is not a scan root.
+
+    tools/crdt-spike and tools/collab-spike are excluded from the product
+    workspace on purpose (their dependency trees must not reach its lockfile),
+    so `cargo nextest list --workspace` never lists their tests. Their
+    `#[ignore]` attributes would then read as stale reasons for tests the
+    listing does not report. They are checked by their own workflow.
+    """
+    if os.path.abspath(directory) == os.path.abspath(root):
+        return False
+    manifest = os.path.join(directory, "Cargo.toml")
+    if not os.path.isfile(manifest):
+        return False
+    with open(manifest, encoding="utf-8") as handle:
+        return re.search(r"^\[workspace\]", handle.read(), re.MULTILINE) is not None
+
+
+def rust_sources(roots: list, nested_workspaces: bool = False) -> list:
+    """Every `.rs` file under the given roots, excluding build output.
+
+    Directories that are their own Cargo workspace are skipped unless
+    `nested_workspaces` is true: the listing the caller checks against does not
+    cover them. The bare-`#[ignore]` scan passes True so they still need reasons.
+    """
     found = []
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in sorted(dirnames)
-                           if d not in (".git", "target", "node_modules", ".venv")]
+                           if d not in (".git", "target", "node_modules", ".venv")
+                           and (nested_workspaces
+                                or not _is_nested_workspace(os.path.join(dirpath, d), root))]
             for filename in sorted(filenames):
                 if filename.endswith(".rs"):
                     found.append(os.path.join(dirpath, filename))

@@ -1,0 +1,12 @@
+{
+  "dcp": 1,
+  "algorithm": "loro/1",
+  "doc_model": "tables/1",
+  "base_version": "$head_event_id",
+  "seq": 42,
+  "payload": {
+    "encoding": "base64",
+    "data": "AQIDBA==",
+    "size": 4
+  }
+}

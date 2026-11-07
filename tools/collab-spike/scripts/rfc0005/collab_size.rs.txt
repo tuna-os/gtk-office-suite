@@ -1,0 +1,59 @@
+//! RFC-0005 experiment (throwaway): what a Loro workbook weighs next to its xlsx, and what an
+//! edit costs on the wire. Run: cargo test -p tables-core --features collab --release collab_size -- --ignored --nocapture
+use std::time::Instant;
+
+use super::collab::Replica;
+use super::ops::{apply_all, Op};
+use super::state::WorkbookState;
+use crate::io::save_sheets_to_xlsx_bytes;
+use crate::sheet::SheetModel;
+
+fn xlsx(state: &WorkbookState) -> usize {
+    let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
+    save_sheets_to_xlsx_bytes(&sheets, Some(&state.engine)).unwrap().len()
+}
+
+#[test]
+#[ignore]
+fn collab_size() {
+    println!("rows x cols | cells | xlsx B | genesis ms | all_updates B | snapshot B | import+rebuild ms | 1-cell edit B | 100-cell paste B | xlsx-save ms");
+    for &(rows, cols) in &[(10usize, 6usize), (100, 10), (1_000, 10), (10_000, 10)] {
+        let mut st = WorkbookState::new(rows + 10, cols + 2).unwrap();
+        for r in 0..rows {
+            for c in 0..cols {
+                let v = if c == 0 {
+                    format!("customer {r}")
+                } else if c % 4 == 3 {
+                    format!("=B{}*2", r + 1)
+                } else {
+                    format!("{}", (r * c) as f64 * 1.25)
+                };
+                st.set_cell_input_on_sheet(0, r, c, &v).unwrap();
+            }
+        }
+        let t = Instant::now();
+        let x = xlsx(&st);
+        let save_ms = t.elapsed().as_millis();
+        let t = Instant::now();
+        let mut rep = Replica::new(1, &st);
+        let genesis_ms = t.elapsed().as_millis();
+        let all = rep.export_all();
+        let snap = rep.export_snapshot();
+        let t = Instant::now();
+        let (_, rebuilt) = Replica::from_updates(2, &snap).unwrap();
+        let import_ms = t.elapsed().as_millis();
+        assert_eq!(rebuilt.cell_input_at(0, 1, 0), st.cell_input_at(0, 1, 0));
+        let sheet = st.sheets[0].borrow().sheet_id;
+        let vv = rep.version_bytes();
+        let one = vec![Op::SetCell { sheet, row: 3, col: 1, input: "42".into() }];
+        apply_all(&mut st, &one).unwrap();
+        rep.record(&st, &one);
+        let d1 = rep.export_since(&vv).unwrap().len();
+        let vv = rep.version_bytes();
+        let paste = vec![Op::SetCells { sheet, cells: (0..100).map(|i| (i % rows, 2usize, format!("{}", i * 3))).collect() }];
+        apply_all(&mut st, &paste).unwrap();
+        rep.record(&st, &paste);
+        let d100 = rep.export_since(&vv).unwrap().len();
+        println!("{rows}x{cols} | {} | {x} | {genesis_ms} | {} | {} | {import_ms} | {d1} | {d100} | {save_ms}", rows * cols, all.len(), snap.len());
+    }
+}
