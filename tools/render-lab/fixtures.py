@@ -782,6 +782,21 @@ def tables():
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
     wb, ws = book()
+    # Reduced from real-competition-in-uk-electricity-markets-2025-data
+    # (#1336): its cover sheet has pageSetup scale="46". Keep this grid
+    # small enough to fit the capture, so viewport clipping cannot explain
+    # the difference between screen geometry and the printed reference.
+    for r in range(1, 6):
+        for c in range(1, 5):
+            ws.cell(r, c, r * 10 + c)
+    ws.page_setup.scale = 46
+    save(
+        wb,
+        "print-scale",
+        "The values grid printed at 46% scale; compare with the unscaled values fixture",
+    )
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
