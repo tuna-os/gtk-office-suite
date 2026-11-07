@@ -734,8 +734,10 @@ def letters(img):
 
 
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
-def tables():
+def tables(img=None):
     from openpyxl import Workbook
+    from openpyxl.drawing.image import Image as SheetImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -780,6 +782,29 @@ def tables():
                       "Each view exposes only part of this line of text.")
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
+
+    # Reduced from the missing NHS logo in real-nbs-chis-kpi-submission-template
+    # (#1337). Keep its twoCellAnchor/editAs=oneCell picture relationship,
+    # without the real workbook's print scaling, merges or rich text.
+    wb, ws = book()
+    for col in "ABCD":
+        ws.column_dimensions[col].width = 14
+    for row in range(1, 9):
+        ws.row_dimensions[row].height = 18
+    ws["A1"] = "Worksheet picture"
+    ws["D8"] = "End"
+    picture = SheetImage(img or test_image(os.path.join(d, "worksheet-image.png")))
+    picture.anchor = TwoCellAnchor(
+        editAs="oneCell",
+        _from=AnchorMarker(col=1, row=1),
+        to=AnchorMarker(col=3, row=6),
+    )
+    ws.add_image(picture)
+    save(
+        wb, "worksheet-image",
+        "A red/green/blue/yellow four-quadrant picture anchored from B2 to D7, "
+        "between the Worksheet picture and End labels",
+    )
 
     wb, ws = book()
     ws["A1"] = "Financial statements"
@@ -1380,7 +1405,7 @@ def main():
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
     letters_odt_page_break_spacing()
-    tables()
+    tables(img)
     decks(img)
     with open(os.path.join(OUT, "manifest.json"), "w") as f:
         json.dump(MANIFEST, f, indent=2)
