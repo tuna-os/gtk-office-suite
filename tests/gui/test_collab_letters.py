@@ -83,10 +83,11 @@ class _LettersAtspi:
     # GTK 4.14 gives a popover menu's items no accessible names (the cells'
     # context-menu journey in test_smoke.py says the same), so the items are
     # found by position: the main menu ends with Preferences, Help, Keyboard
-    # Shortcuts and About, and the three Collaborate items sit just before them.
-    MENU_OFFSET = {"Share This Document" + ELLIPSIS: -7,
-                   "Join a Shared Document" + ELLIPSIS: -6,
-                   "Stop Sharing": -5}
+    # Shortcuts, Report a Problem and About, and the three Collaborate items
+    # sit just before them.
+    MENU_OFFSET = {"Share This Document" + ELLIPSIS: -8,
+                   "Join a Shared Document" + ELLIPSIS: -7,
+                   "Stop Sharing": -6}
 
     def _menu_item(self, handle, label, timeout=10.0, need_action=True):
         """The Collaborate menu item labelled `label`, by its place in the open menu."""
