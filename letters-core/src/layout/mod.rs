@@ -978,6 +978,17 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
+    // A marker's font participates in the first line's metrics, even
+    // though the marker hangs outside the text box (Writer's W1 bullets).
+    if let Some(font) = p.style.list_marker_font.as_ref().filter(|_| p.style.list == ListKind::Bullet) {
+        let runs = [Run { text: lists::BULLET.to_string(), style: crate::model::RunStyle { font_family: Some(font.clone()), font_size_hp: p.runs.first().and_then(|r| r.style.font_size_hp), ..Default::default() } }];
+        let mut req = paragraph_request(p, 1000.0, opts);
+        req.runs = &runs;
+        if let (Some(line), Some(marker)) = (lines.first_mut(), shaper.shape(&req).first()) {
+            line.ascent_pt = line.ascent_pt.max(marker.ascent_pt);
+            line.descent_pt = line.descent_pt.max(marker.descent_pt);
+        }
+    }
     Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal: 1 }
 }
 
@@ -1486,10 +1497,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         let mut first_piece = true;
         loop {
             // A cell continued on a new page starts with its next line: the
-            // space between paragraphs at the break stays on the page
-            // before, as Writer lays it out. Its top padding opens the new
-            // piece again, as Writer opens a continued cell.
-            let pad_top = if first_piece { 0.0 } else { pad.top_pt.max(0.0) };
+            // space after the paragraph at the break stays on the page
+            // before. Writer opens the new piece with the cell's padding
+            // and the continuing paragraph's space before, even mid-paragraph.
             if !first_piece {
                 for (c, n) in slices.iter().zip(next.iter_mut()) {
                     while c.get(*n).is_some_and(|s| matches!(s, Slice::Gap(_))) {
@@ -1497,6 +1507,14 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                     }
                 }
             }
+            let insets: Vec<f64> = slices.iter().zip(&next).zip(&row_cells).map(|((cell, &from), (_, _, paras))| {
+                if first_piece { return 0.0 }
+                let before = match cell.get(from) {
+                    Some(Slice::Line(k, _, _)) => doc.paragraphs[paras[*k].0].style.space_before_pt.max(0.0),
+                    _ => 0.0,
+                };
+                pad.top_pt.max(0.0) + before
+            }).collect();
             // How many of each cell's remaining slices fit in `room`.
             let fit = |cell: &[Slice], from: usize, room: f64| -> (usize, f64) {
                 let mut h = 0.0;
@@ -1511,8 +1529,8 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             // the footnotes they reference: take less until they fit.
             let mut notes_h = 0.0;
             let takes: Vec<(usize, f64)> = loop {
-                let room = flow.bottom() - flow.y - rule_pt - notes_h - pad_top;
-                let takes: Vec<(usize, f64)> = slices.iter().zip(&next).map(|(c, &from)| fit(c, from, room)).collect();
+                let room = flow.bottom() - flow.y - rule_pt - notes_h;
+                let takes: Vec<(usize, f64)> = slices.iter().zip(&next).zip(&insets).map(|((c, &from), inset)| fit(c, from, room - inset)).collect();
                 let notes: Vec<usize> = row_cells
                     .iter()
                     .zip(&slices)
@@ -1538,7 +1556,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 takes
             };
             let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
-            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + rule_pt + pad_top;
+            let content = takes.iter().zip(&insets).map(|((_, h), inset)| h + inset).fold(0.0, f64::max) + rule_pt;
             let height = if done {
                 content.max(min_left.min((flow.bottom() - flow.y).max(content)))
             } else {
@@ -1550,13 +1568,13 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             if whole {
                 start_tall(flow, &mut tall, top);
             }
-            for (((col, width, paras), cell), (&from, &(to, used))) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)) {
+            for ((((col, width, paras), cell), (&from, &(to, used))), inset) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)).zip(&insets) {
                 let cx = x0 - pad.left_pt + col_x[*col as usize];
                 flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: height, fill: fill(*col), ruled, open: open(*col) });
                 // A row placed in one piece sets each cell's content where
                 // the cell says; a row split across pages fills from the top.
                 let drop = valign(*col).filter(|_| whole && done).map_or(0.0, |v| (height - rule_pt - used).max(0.0) * v.share());
-                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + pad_top + drop);
+                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top + inset + drop);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
                 *n = *to;
