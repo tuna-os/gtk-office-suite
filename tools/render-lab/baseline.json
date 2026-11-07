@@ -276,6 +276,10 @@
     "B": "amber",
     "C": "amber"
   },
+  "letters/table-cell-content-control": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/table-cell-list-indent": {
     "A": "green",
     "B": "green",
