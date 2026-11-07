@@ -162,7 +162,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@3b728f3d612841223d50b6bc8f2addad110e6918 # nextest
+        uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
         with:
           tool: nextest
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -228,7 +228,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@3b728f3d612841223d50b6bc8f2addad110e6918 # nextest
+        uses: taiki-e/install-action@96601b43a0a57b0296684a021efcfa250db2e2cc # nextest
         with:
           tool: nextest
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
