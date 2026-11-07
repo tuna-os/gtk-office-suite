@@ -2776,6 +2776,44 @@ fn a_runs_raised_or_lowered_position_survives_writer() {
     assert_eq!(of("level"), Some((None, None)));
 }
 
+/// Text raised or lowered at its own size (`style:text-position="<n>% 100%"`
+/// in odt, `w:position` in docx) survives Writer both ways, and is not read
+/// as a superscript or subscript (#1691). Each shift is a whole percent of
+/// the run's size, the run's own or the document's, so Writer's whole
+/// percents carry it exactly.
+#[test]
+fn a_runs_raised_or_lowered_position_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let sized = |text: &str, hp: i32, size: u16| Run { text: text.into(), style: RunStyle { position_hp: Some(hp), font_size_hp: Some(size), ..Default::default() } };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![
+        Run::plain("level "),
+        sized("lowered", -2, 24),
+        sized(" raised", 6, 24),
+        sized(" big", 4, 40),
+        Run { text: " default".into(), style: RunStyle { position_hp: Some(-2), ..Default::default() } },
+    ];
+    let close = |got: &Document, how: &str| {
+        let of = |t: &str| got.paragraphs.iter().flat_map(|p| &p.runs).find(|r| r.text.contains(t)).map(|r| (r.style.position_hp, r.style.vert_align));
+        assert_eq!(of("lowered"), Some((Some(-2), None)), "{how}");
+        assert_eq!(of("raised"), Some((Some(6), None)), "{how}");
+        assert_eq!(of("big"), Some((Some(4), None)), "{how}");
+        assert_eq!(of("default"), Some((Some(-2), None)), "{how}");
+        assert_eq!(of("level"), Some((None, None)), "{how}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("shift.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("shift.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "shift") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
 /// A page's own header and footer distances (`w:pgMar w:header` and
 /// `w:footer`) cross Writer both ways: in odt they are the page margins
 /// the header and footer areas grow from.
