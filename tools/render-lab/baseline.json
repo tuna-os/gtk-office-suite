@@ -395,6 +395,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/print-scale": {
+    "A": "red",
+    "B": "red"
+  },
   "tables/values": {
     "A": "green",
     "B": "green",
