@@ -208,8 +208,29 @@ def wait_editable(driver, label_names, timeout):
     raise SystemExit(f"timed out waiting for the {label_names[0]!r} entry")
 
 
+def is_checked(node):
+    try:
+        return node.get_state_set().contains(Atspi.StateType.CHECKED)
+    except GLib.Error:
+        return False
+
+
 def step_login(driver, args):
     driver.press(driver.wait_for("log-in", named("Log In", roles=BUTTON), 60), "Log In")
+
+    # A homeserver URL (rather than a server name) is only accepted with
+    # auto-discovery off: Advanced… -> Auto-Discovery.
+    driver.press(driver.wait_for("advanced", named("Advanced…", roles=BUTTON), 30), "Advanced…")
+    switch = driver.wait_for("auto-discovery", named("Auto-Discovery"), 10)
+    if is_checked(switch):
+        driver.press(switch, "Auto-Discovery")
+        time.sleep(1)
+    if is_checked(switch):
+        driver.dump("auto-discovery-still-on")
+        raise SystemExit("could not turn auto-discovery off")
+    close = driver.find_all(named("Close", roles=BUTTON))
+    if close:
+        driver.press(close[0], "Close")
 
     entry = wait_editable(driver, ("Homeserver", "Homeserver URL"), 30)
     driver.fill(entry, args.homeserver, "homeserver")
