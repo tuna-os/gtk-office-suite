@@ -395,6 +395,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/unprinted-headings": {
+    "A": "green",
+    "B": "green"
+  },
   "tables/values": {
     "A": "green",
     "B": "green",
