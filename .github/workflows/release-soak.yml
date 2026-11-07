@@ -3,8 +3,8 @@ name: Release candidate soak
 # #442's "larger soak and complete matrix on the release candidate", and the
 # refusal that was missing with it.
 #
-# The nightly campaign (gui-stress.yml) explores *different* seeds every
-# night against whatever main happens to be. That answers "is this codebase
+# The scheduled campaign (gui-stress.yml, weekly) explores *different* seeds each
+# run against whatever main happens to be. That answers "is this codebase
 # stable", which is not the question a release asks. A release asks "is
 # **this** revision stable", and the answer has to be obtained at the
 # revision being published — crash-stress.md's initial stability target is
