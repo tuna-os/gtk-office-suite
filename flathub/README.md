@@ -13,6 +13,9 @@ historical preparation, not verified submission inputs.
 - `cargo-sources.json`: the official Flatpak Cargo generator's offline
   registry archives, checksums, git pins, normalized git crate manifests,
   and Cargo source replacement configuration (including IronCalc and rdocx).
+  `flathub_manifests.py` then moves the git crates into their own directory
+  source, `cargo/git-vendor`: v2.1.0 locks rdocx-oxml 0.1.2 from both
+  crates.io and git, and one shared `cargo/vendor` makes `--locked` fail.
 - `letters-Cargo.lock`: exact lockfile extracted from the tag, for auditing.
 - `letters-source.json`: tag, commit, lockfile digest, and generator digest.
 

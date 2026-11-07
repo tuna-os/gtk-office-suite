@@ -29,9 +29,51 @@ import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 FLATPAK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "flatpak")
+GIT_VENDOR = "cargo/git-vendor"
+GIT_VENDORED_SOURCES = "git-vendored-sources"
+
+
+def separate_git_crates(sources: list) -> list:
+    """Vendor the generator's git crates apart from its crates.io ones.
+
+    The generator puts both in one directory source, `cargo/vendor`. A lock
+    holding the same name and version from crates.io and from git (v2.1.0:
+    rdocx-oxml 0.1.2) then resolves the git package to the registry copy,
+    cargo wants to write that copy's checksum into the lock, and the
+    `--locked` build refuses. A second directory source for the git crates
+    keeps the two apart.
+    """
+    vendor, mkdir = "cargo/vendor/", {"type": "shell", "commands": [f"mkdir -p {GIT_VENDOR}"]}
+    out, names = [], set()
+    for source in sources:
+        source = copy.deepcopy(source)
+        if source["type"] == "shell":
+            for i, command in enumerate(source["commands"]):
+                if command.startswith('cp -r --reflink=auto "flatpak-cargo/git/') and f'"{vendor}' in command:
+                    source["commands"][i] = command.replace(f'"{vendor}', f'"{GIT_VENDOR}/')
+                    names.add(command.rsplit(f'"{vendor}', 1)[1].rstrip('"'))
+                    if mkdir not in out:
+                        out.append(mkdir)
+        elif source["type"] == "inline" and source["dest"].startswith(vendor) \
+                and source["dest"].removeprefix(vendor) in names:
+            source["dest"] = f"{GIT_VENDOR}/{source['dest'].removeprefix(vendor)}"
+        elif source["type"] == "inline" and source["dest"] == "cargo" and source["dest-filename"] == "config":
+            tables = tomllib.loads(source["contents"])["source"]
+            for table in tables.values():
+                if "git" in table:
+                    table["replace-with"] = GIT_VENDORED_SOURCES
+            if any("git" in table for table in tables.values()):
+                tables[GIT_VENDORED_SOURCES] = {"directory": GIT_VENDOR}
+            source["contents"] = "\n".join(
+                f"[source.{json.dumps(name)}]\n"
+                + "".join(f"{key} = {json.dumps(value)}\n" for key, value in table.items())
+                for name, table in tables.items())
+        out.append(source)
+    return out
 
 
 def letters_submission(tag: str, generator: str, out: str) -> None:
@@ -53,6 +95,8 @@ def letters_submission(tag: str, generator: str, out: str) -> None:
         lock_path.write_bytes(lock)
         subprocess.run([sys.executable, str(generator_path), str(lock_path),
                         "-o", str(output / "cargo-sources.json")], check=True)
+    sources_path = output / "cargo-sources.json"
+    sources_path.write_text(json.dumps(separate_git_crates(json.loads(sources_path.read_text())), indent=4))
     dev = json.loads((repo / "flatpak/org.tunaos.letters.json").read_text())
     manifest = flathub(dev, "unused", "unused")
     module = manifest["modules"][-1]

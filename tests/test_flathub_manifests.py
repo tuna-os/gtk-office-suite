@@ -102,6 +102,36 @@ def test_letters_submission_covers_the_tagged_lock():
     assert len(archives) == sum(p.get("source", "").startswith("registry+") for p in lock["package"])
 
 
+def test_git_crates_are_vendored_apart_from_crates_io():
+    """v2.1.0 locks rdocx-oxml 0.1.2 from crates.io *and* from git. In one
+    directory source the git package resolved to the registry copy and the
+    `--locked` submission build refused to add its checksum to the lock."""
+    generated = [
+        {"type": "git", "url": "https://github.com/o/r", "commit": "c" * 40, "dest": "flatpak-cargo/git/r-ccccccc"},
+        {"type": "archive", "dest": "cargo/vendor/dup-0.1.0"},
+        {"type": "inline", "dest": "cargo/vendor/dup-0.1.0", "dest-filename": ".cargo-checksum.json"},
+        {"type": "shell", "commands": ['cp -r --reflink=auto "flatpak-cargo/git/r-ccccccc/dup" "cargo/vendor/dup"']},
+        {"type": "inline", "dest": "cargo/vendor/dup", "dest-filename": "Cargo.toml"},
+        {"type": "inline", "dest": "cargo", "dest-filename": "config", "contents":
+         '[source.vendored-sources]\ndirectory = "cargo/vendor"\n\n'
+         '[source.crates-io]\nreplace-with = "vendored-sources"\n\n'
+         '[source."https://github.com/o/r"]\ngit = "https://github.com/o/r"\n'
+         'replace-with = "vendored-sources"\nrev = "ccccccc"\n'},
+    ]
+    separated = fm.separate_git_crates(generated)
+    assert separated[:3] == generated[:3]
+    assert separated[3] == {"type": "shell", "commands": ["mkdir -p cargo/git-vendor"]}
+    assert separated[4]["commands"] == ['cp -r --reflink=auto "flatpak-cargo/git/r-ccccccc/dup" "cargo/git-vendor/dup"']
+    assert separated[5]["dest"] == "cargo/git-vendor/dup"
+    config = tomllib.loads(separated[6]["contents"])["source"]
+    assert config["crates-io"]["replace-with"] == "vendored-sources"
+    assert config["https://github.com/o/r"] == {
+        "git": "https://github.com/o/r", "replace-with": "git-vendored-sources", "rev": "ccccccc"}
+    assert config["git-vendored-sources"] == {"directory": "cargo/git-vendor"}
+    committed = json.loads((Path(REPO) / "flathub" / "cargo-sources.json").read_text())
+    assert fm.separate_git_crates(committed) == committed, "regenerate via letters_submission"
+
+
 def test_ci_builds_the_committed_submission_on_both_architectures():
     import yaml
 
