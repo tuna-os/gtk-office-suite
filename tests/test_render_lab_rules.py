@@ -276,6 +276,11 @@ try:
 except ImportError:
     docx = None
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 
 @unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
 class BulletSymbolFontLineHeightFixtureTest(unittest.TestCase):
@@ -358,6 +363,40 @@ class TableCellListIndentFixtureTest(unittest.TestCase):
             self.assertEqual(c0.paragraphs[2].style.name, "List Bullet")
             self.assertTrue(len(c0.paragraphs[2].text) > 50)
             self.assertEqual(table.cell(1, 0).paragraphs[0].text, "Signed: ___________________________")
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated xlsx fixtures")
+class WideColumnRightAlignFixtureTest(unittest.TestCase):
+    """The June 2026 forecast evaluation report reduction isolates wide-column
+    right-aligned multiline text and cell indentation in unprinted sheets (#1333)."""
+
+    def test_wide_column_right_align_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-column-right-align")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-column-right-align.xlsx")
+            wb = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(wb.worksheets), 1)
+            ws = wb.active
+            self.assertFalse(ws.print_options.headings)
+            self.assertEqual(ws.column_dimensions["A"].width, 8.78)
+            self.assertEqual(ws.column_dimensions["B"].width, 119)
+            self.assertEqual(ws["B2"].alignment.horizontal, "right")
+            self.assertEqual(ws["B2"].alignment.vertical, "top")
+            self.assertTrue(ws["B2"].alignment.wrap_text)
+            self.assertEqual(ws["B3"].alignment.horizontal, "center")
+            self.assertEqual(ws["B4"].alignment.indent, 2)
 
 
 if __name__ == "__main__":

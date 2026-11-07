@@ -781,6 +781,35 @@ def tables():
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
+    # Reduced from the June 2026 forecast evaluation report (#1333):
+    # Its cover sheet uses a 119-character wide column without printed headings.
+    # Cell B2 places right-aligned, top-aligned multiline heading text in that
+    # wide column, Row 3 has a centered section title, and Row 4 has indented
+    # items (indent=2). In LibreOffice Calc's A4 portrait print, the column
+    # exceeds printable page width and right-aligned text is clipped at the
+    # margin, whereas Tables draws the full column on screen.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 8.78
+    ws.column_dimensions["B"].width = 119
+    ws.row_dimensions[2].height = 48
+    ws.row_dimensions[3].height = 24
+    ws["B2"] = "Forecast evaluation report\nAnnual database"
+    ws["B2"].font = Font(name="Calibri", size=16, color="E7A614")
+    ws["B2"].alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
+    ws["B3"] = "Economic model development database"
+    ws["B3"].font = Font(name="Calibri", size=14)
+    ws["B3"].alignment = Alignment(horizontal="center")
+    ws["B3"].fill = PatternFill("solid", fgColor="F5D0A9")
+    ws["B4"] = "Model improvements"
+    ws["B4"].font = Font(name="Calibri", size=11, underline="single")
+    ws["B4"].alignment = Alignment(horizontal="left", indent=2)
+    save(
+        wb,
+        "wide-column-right-align",
+        "A wide unprinted column with right-aligned multiline heading, centered title and indented entries",
+        headings=False,
+    )
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
