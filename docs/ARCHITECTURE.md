@@ -29,6 +29,13 @@ The rule that keeps it honest: **a GTK window never owns authoritative
 document state.** See [Canonical Document Controllers](#canonical-document-controllers--threading-rules)
 below.
 
+The dependency rule that keeps cores modular: **sibling core crates must never
+depend on one another (ADR 0012).** Sibling applications (`letters-core`,
+`tables-core`, `decks-core`) are peer persistence adapters that may depend on
+`suite-common-core` (and `suite-export`), never on each other. Shared document
+and clipboard primitives live behind `suite-common-core` rather than the Letters
+application boundary.
+
 > **Which `suite-common`?** Two other repositories in the organisation
 > carry this name — a standalone Python/meson library, and
 > `suite-common-rust`, a smaller separately-maintained Rust crate.
@@ -45,7 +52,7 @@ Ten crates, and the `collab/` workspace beside them. Line counts are indicative 
 
 | Crate | GTK? | Published | Holds |
 |---|---|---|---|
-| `suite-common-core` | no | yes | Undo, number formats, styles, property pool, search, print, units, atomic saves, autosave, ZIP bounds, interop reports |
+| `suite-common-core` | no | yes | Undo, number formats, styles, property pool, search, print, units, atomic saves, autosave, ZIP bounds, interop reports, shared document primitives (ADR 0012) |
 | `suite-common` | yes | no | Command palette, shortcuts dialog, file dialogs, toasts, GTK test helpers |
 | `suite-export` | no | yes | PDF export |
 | `suite-collab` | no | no | The shell-to-sidecar protocol of collaboration (`Command`, `Event`, a JSON-lines codec, `SessionClient`); `serde` and `serde_json` only. The sidecar that speaks to Matrix and Durable Streams is `collab/collabd`, a separate cargo workspace (RFC-0005 option B), so the apps' lockfile and default build are unchanged |
