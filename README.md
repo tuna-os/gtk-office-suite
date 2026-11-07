@@ -18,7 +18,7 @@ libadwaita, and an email client built alongside them, shipped as Flatpaks:
 | **Letters** | Word processor | DOCX, ODT, Markdown, TXT | DOCX, ODT, Markdown, HTML, PDF, TXT |
 | **Tables** | Spreadsheet | XLSX, XLS, ODS, CSV, TSV | XLSX, PDF |
 | **Decks** | Presentations | PPTX, ODP | PPTX, ODP, PDF |
-| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/lifafa](https://github.com/tuna-os/lifafa) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
+| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/hylki](https://github.com/tuna-os/hylki) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
 
 CSV and TSV are import-only in Tables, on purpose: saving a spreadsheet
 over an imported `.csv` would write XLSX bytes to a file everything else
@@ -27,13 +27,13 @@ reads as text, so Save As offers `.xlsx` instead.
 Lifafa (a word for envelope) is not built from this repository. It is
 [Hylki](https://github.com/hyprlab/hylki) by hyprlab with native Tuta and
 Proton Mail accounts added, developed in the fork
-[tuna-os/lifafa](https://github.com/tuna-os/lifafa), and it belongs to the
-suite by name, icon and packaging. It is published from that repository as a
-signed Flatpak repository on its GitHub Pages, and as bundles on its
-[releases page](https://github.com/tuna-os/lifafa/releases) (see
-[Install](#install)). Report problems with it in
-[tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
-Everything below this section is about Letters, Tables and Decks.
+[tuna-os/hylki](https://github.com/tuna-os/hylki), and it belongs to the
+suite by name, icon and packaging. Its Flatpak bundles are on that
+repository's [releases page](https://github.com/tuna-os/hylki/releases),
+currently
+[1.47.1-tuna4](https://github.com/tuna-os/hylki/releases/tag/v1.47.1-tuna4).
+Report problems with it in this repository's issues. Everything below this
+section is about Letters, Tables and Decks.
 
 They are not a LibreOffice port. Each app has its own document model in a
 GTK-free `*-core` crate, and compatibility with other office software is
@@ -94,20 +94,13 @@ Then launch them from your application menu, or:
 flatpak run org.tunaos.letters
 ```
 
-Lifafa is not in the TunaOS repository; it has a signed Flatpak repository of
-its own (coming with its first release published there, v1.47.1-tuna6), which
-`flatpak update` follows:
+Lifafa is not in the TunaOS repository yet. Download its bundle from the
+[latest release of tuna-os/hylki](https://github.com/tuna-os/hylki/releases)
+and install that file, for example:
 
 ```bash
-flatpak install --user https://tuna-os.github.io/lifafa/org.tunaos.lifafa.flatpakref
+flatpak install --user org.tunaos.lifafa-1.47.1-tuna4.flatpak
 ```
-
-Until then, or to install a file, download the bundle from the
-[latest release of tuna-os/lifafa](https://github.com/tuna-os/lifafa/releases/latest)
-and install it with `flatpak install --user org.tunaos.lifafa-<version>.flatpak`.
-The signing key, the bundles and moving an older bundle install over to the
-repository are in
-[Lifafa's install instructions](https://github.com/tuna-os/lifafa#install).
 
 Something not working? See [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
 
@@ -144,7 +137,7 @@ on screen while you work, are catching up, and are now measured:
 | App | Single-feature fixtures, Tiers A and B | Real documents | Shipped Flatpak (Tier C) | Status |
 |---|---|---|---|---|
 | **Letters** | 39 / 47 green + `letters/table` (accepted amber); not green: `letters/bullet-symbol-font-line-height`, `letters/floating-image-gap`, `letters/odt-page-break-spacing`, `letters/table-cell-numbered-list-indent`, `letters/table-row-min-height-page-break`, `letters/underline-position`, `letters/url-path-wrapping` | 19 / 30 green | 37 / 77 green | Not yet usable for everyday documents |
-| **Tables** | 20 / 33 green + `tables/wrap-text` (accepted amber); not green: `tables/filtered`, `tables/fit-to-width`, `tables/horizontal-pagination`, `tables/hyperlink-theme-colors`, `tables/paginated-columns`, `tables/print-scale`, `tables/tall-unprinted-sheet`, `tables/unheaded-bordered-musts`, `tables/wide-column-no-headings`, `tables/worksheet-image`, `tables/wrap-merged`, `tables/wrap-wide-default-font` | 2 / 30 green | 16 / 63 green | Not yet usable for everyday documents |
+| **Tables** | 21 / 33 green; not green: `tables/filtered`, `tables/fit-to-width`, `tables/horizontal-pagination`, `tables/hyperlink-theme-colors`, `tables/paginated-columns`, `tables/print-scale`, `tables/tall-unprinted-sheet`, `tables/unheaded-bordered-musts`, `tables/wide-column-no-headings`, `tables/worksheet-image`, `tables/wrap-merged`, `tables/wrap-wide-default-font` | 2 / 30 green | 16 / 63 green | Not yet usable for everyday documents |
 | **Decks** | 17 / 18 green; not green: `decks/pay-centre-reduced-line-breaks` | 1 / 30 green | 15 / 48 green | Not yet usable for everyday documents |
 <!-- render-status:end -->
 
