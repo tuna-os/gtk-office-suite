@@ -263,6 +263,54 @@ fn inline_image_survives() {
     assert!(rt.to_plain_text().contains("before"));
 }
 
+/// A picture in the middle of a paragraph stays in it. It used to be written
+/// as a paragraph of its own, with an empty paragraph after it, so "before
+/// [picture] after" read back as three paragraphs, and every further Save As
+/// added more (#1681).
+#[test]
+fn an_inline_image_between_text_stays_in_its_paragraph_through_every_save() {
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("dot.png");
+    std::fs::write(&img_path, png).unwrap();
+
+    let mut d = Document::from_plain_text("first");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![
+            Run { text: "Before ".into(), style: RunStyle::default() },
+            Run {
+                text: "a dot".into(),
+                style: RunStyle {
+                    image: Some(img_path.to_string_lossy().into_owned()),
+                    image_extent_emu: Some((457_200, 457_200)),
+                    ..Default::default()
+                },
+            },
+            Run { text: " after".into(), style: RunStyle::default() },
+        ],
+    });
+    d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run { text: "last".into(), style: RunStyle::default() }] });
+    let text_of = |p: &Paragraph| p.runs.iter().filter(|r| r.style.image.is_none()).map(|r| r.text.as_str()).collect::<String>();
+
+    let mut doc = d;
+    for save in 1..=3 {
+        doc = round_trip(&doc);
+        assert_eq!(doc.paragraphs.len(), 3, "save {save}: the paragraph count changed");
+        let middle = &doc.paragraphs[1];
+        assert_eq!(text_of(middle), "Before  after", "save {save}: the text left the picture's paragraph");
+        assert_eq!(middle.runs.iter().filter(|r| r.style.image.is_some()).count(), 1, "save {save}: the picture left its paragraph");
+        assert_eq!(text_of(&doc.paragraphs[2]), "last", "save {save}");
+    }
+}
+
 /// A floating picture (the Ofsted logo of the audit-committee minutes,
 /// right-aligned in the margins and raised above its paragraph) is saved
 /// in its own paragraph, as a `wp:anchor`, and reads back placed the same.
