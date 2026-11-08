@@ -455,7 +455,7 @@
       "scope": "Text, styling and formulas survive a round trip through LibreOffice Writer, Calc and Impress in both directions, for docx/odt/xlsx/odp, plus the LibreOffice-authored parity corpus ratchet. Needs LibreOffice installed and REQUIRE_SOFFICE=1, so it runs in the nightly oracle lane and never on a pull request.",
       "issue": 313,
       "status": "verified",
-      "revision": "b92a82ea073cafe2ad3c5cafb4076c017ec28eef",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
       "requires": [
         "format"
       ],
@@ -559,7 +559,217 @@
           "tests/gui/test_collab_letters.py::LettersCollabTwoHeads::test_open_both_leaves_the_shared_session_alone"
         ]
       }
+    },
+    {
+      "id": "letters.review.comments",
+      "app": "letters",
+      "issue": 438,
+      "title": "Comments are anchored threads: add, reply, resolve and delete, one undo step each",
+      "scope": "Threads are marks on the text (RunStyle::comments) with their bodies in Document::comments. DOCX keeps them in the comments part with w:commentRangeStart/End and commentsExtended for replies and resolved; ODT in office:annotation ranges (loext:parent-name, loext:resolved); LibreOffice reads both back. LibreOffice 24.2 writes no reply parent to .docx for a document it read from .odt, so such a reply opens as a comment of its own on the same text. Print and PDF show no comments, as LibreOffice's do not; Markdown, HTML and text save the text after a warning. Does not certify comments on a table, header or footnote body.",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "model",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::comments::tests::a_comment_is_its_body_and_a_mark_and_undoes_exactly",
+          "letters-core::comments::tests::every_step_undoes_exactly",
+          "letters-core::comments::tests::typing_inside_a_comment_is_in_it_and_at_its_edges_is_not",
+          "letters-core::comments::tests::a_comment_spans_paragraphs_and_survives_as_an_orphan"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersCommentsSmoke::test_a_comment_is_added_replied_to_and_resolved",
+          "tests/gui/test_smoke.py::LettersCommentsSmoke::test_a_comment_stays_on_its_word_across_unicode_typed_before_it_and_undo"
+        ],
+        "format": [
+          "letters-core::docx::comments_survive",
+          "letters-core::odt::tests::comments_survive",
+          "letters-core::soffice_oracle::comments_survive_lo_passes"
+        ]
+      }
+    },
+    {
+      "id": "letters.review.tracked-changes",
+      "app": "letters",
+      "issue": 438,
+      "title": "Tracked insertions and deletions are marks on the text, reviewed and accepted or rejected with undo",
+      "scope": "A change is a mark (RunStyle::revision) holding its kind, author and date; deleted text stays, struck through, until accepted. While tracking, typing is an insertion and deleting marks text deleted. DOCX w:ins/w:del and ODT change regions, read back by LibreOffice. Paragraph breaks and formatting changes are not tracked (a tracked deletion across a break keeps the break). Markdown, HTML and text save the text after a warning.",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "model",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::track::tests::tracked_typing_is_an_insertion_and_deleting_it_removes_it",
+          "letters-core::track::tests::tracked_deletion_keeps_the_text_marked_until_accepted",
+          "letters-core::track::tests::accept_and_reject_do_what_they_say_and_undo_exactly",
+          "letters-core::track::tests::reject_all_restores_and_accept_all_is_the_untracked_result"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersTrackChangesSmoke::test_tracked_edits_are_reviewed"
+        ],
+        "format": [
+          "letters-core::docx::tracked_changes_survive",
+          "letters-core::odt::tests::tracked_changes_survive",
+          "letters-core::soffice_oracle::tracked_changes_survive_lo_passes"
+        ]
+      }
+    },
+    {
+      "id": "letters.toc",
+      "app": "letters",
+      "issue": 438,
+      "title": "A table of contents is inserted, updated and kept by Word and LibreOffice",
+      "scope": "Headings of levels 1-3 (Word's default) with their page numbers, regenerated whole by Insert and Update (one undo step each); never inside a table. DOCX keeps it as the TOC field around the entries, ODT as text:table-of-content. Markdown, HTML and text save the entries as text after a warning. Does not certify levels 4-6, custom TOC styles or a table of figures.",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "model",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::toc::tests::a_table_of_contents_lists_the_headings_with_their_pages",
+          "letters-core::toc::tests::updating_follows_the_headings_and_undoes_exactly",
+          "letters-core::toc::tests::page_numbers_settle_when_the_contents_push_headings_on",
+          "letters-core::toc::tests::a_table_of_contents_is_not_put_inside_a_table"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersTableOfContentsSmoke::test_insert_and_update_a_table_of_contents"
+        ],
+        "format": [
+          "letters-core::docx::a_table_of_contents_survives",
+          "letters-core::odt::tests::a_table_of_contents_and_tabs_survive",
+          "letters-core::soffice_oracle::a_table_of_contents_survives_lo_passes"
+        ]
+      }
+    },
+    {
+      "id": "letters.smart-chips",
+      "app": "letters",
+      "issue": 438,
+      "title": "Date, person and link chips are inserted from @ and survive DOCX and ODT",
+      "scope": "The @ menu offers the relative dates and any chip already in the document that matches what is typed; a chosen chip is one inline object, the caret steps over it and Delete removes it whole. The GUI journey proves the date chip; person and link chips are proved by the model and format tests, not by a journey. A chip is saved as its label and, for a link or person, as its hyperlink. DOCX keeps a date as a Word date content control and a link or person as its hyperlink in a tagged control; ODT keeps a date as a fixed text:date and a link or person as a named text:a (a name-only person as a bookmark). LibreOffice reads both back. Only date, person and link chips exist.",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "model",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::chips::tests::dates_are_read_as_people_type_them",
+          "letters-core::chips::tests::an_empty_query_offers_the_relative_dates",
+          "letters-core::chips::tests::people_in_the_document_are_suggested_first",
+          "letters-core::chips::tests::links_and_people_carry_their_hyperlink"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersSmartChipsSmoke::test_at_inserts_a_date_chip"
+        ],
+        "format": [
+          "letters-core::docx::smart_chips_survive",
+          "letters-core::odt::tests::smart_chips_survive",
+          "letters-core::soffice_oracle::smart_chips_survive_lo_passes"
+        ]
+      }
+    },
+    {
+      "id": "letters.footnotes",
+      "app": "letters",
+      "issue": 438,
+      "title": "Footnotes are inserted at the caret, laid out at the foot of their page, and survive DOCX and ODT",
+      "scope": "A footnote is a reference mark on a run plus a plain-text body in Document::footnotes; one undo step takes out the note and its mark. The layout puts the body at the foot of the page that references it and continues one that is too long. DOCX and ODT keep the notes through Writer both ways. This does not imply endnotes or a rich note body (a note is plain text).",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "model",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::layout::tests::footnotes_sit_at_the_foot_of_the_page_that_references_them",
+          "letters-core::layout::tests::a_footnote_too_long_for_its_page_continues_on_the_next",
+          "letters-core::edit::tests::header_footer_footnotes_and_page_are_ops_that_undo"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersFootnoteUndoSmoke::test_one_undo_takes_out_the_note_and_its_mark"
+        ],
+        "format": [
+          "letters-core::docx::footnote_round_trips_through_docx",
+          "letters-core::odt::tests::footnotes_survive",
+          "letters-core::odt::tests::two_footnotes_keep_their_indexes",
+          "letters-core::soffice_oracle::footnote_survives_writer_rewrite",
+          "letters-core::soffice_oracle::footnotes_survive_a_conversion_between_the_two_formats"
+        ]
+      }
+    },
+    {
+      "id": "letters.styles.named-paragraph-styles",
+      "app": "letters",
+      "issue": 438,
+      "title": "A paragraph's named style is picked from previews and kept as a reference through DOCX and ODT",
+      "scope": "Normal, Title, Subtitle, Heading 1-6, Quote and Code are picked from the style picker, restyle the caret's paragraph in the model and feed the outline sidebar. A file's own style names and heading looks are read and written back. A paragraph keeps a named-style reference, not the file's style-definition graph: there is no style editor, and a style's definition is not written back as one (docs/readiness-2026-09/letters-fidelity.md, scope of the model).",
+      "status": "verified",
+      "revision": "1bfa53f91dfe012d15f5d0892515d4453836b9a9",
+      "requires": [
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStylesAndOutlineSmoke::test_pick_a_heading_and_find_it_in_the_outline"
+        ],
+        "format": [
+          "letters-core::docx::heading_levels_survive",
+          "letters-core::docx::a_files_own_title_and_subtitle_styles_are_its_look",
+          "letters-core::odt::tests::a_named_paragraph_style_styles_its_text",
+          "letters-core::soffice_oracle::heading_styles_and_picture_size_survive_writer_rewriting_a_docx",
+          "letters-core::soffice_oracle::heading_looks_survive_writer_in_odt"
+        ]
+      }
+    },
+    {
+      "id": "letters.bidi.paragraph-direction",
+      "app": "letters",
+      "issue": 1281,
+      "title": "A paragraph's own text direction (right-to-left paragraphs) is not a Letters feature yet",
+      "scope": "Right-to-left text is kept: Hebrew, Arabic and mixed lines save and reopen exactly, in logical order, and cross LibreOffice in both formats (letters-core::soffice_oracle::right_to_left_text_survives_a_conversion_between_the_two_formats). Pango and GTK pick each paragraph's direction from its first strong character. There is no control that sets a paragraph's direction, no writer stores one (DOCX w:bidi, ODT style:writing-mode), and a file's own direction is not kept. Promoting it needs a model field, both writers and readers, a control, a GUI journey and an oracle test in each direction.",
+      "status": "deferred",
+      "requires": []
+    },
+    {
+      "id": "letters.encryption.password-protected-files",
+      "app": "letters",
+      "issue": 438,
+      "title": "Password-protected and encrypted documents cannot be opened or written",
+      "scope": "Letters cannot decrypt a document and has no password prompt or encrypted save. A password-protected .docx (an OLE compound file, which a pre-2007 binary file also is) and an ODT with encrypted parts are refused by naming the password, never opened as garbage or with a ZIP or UTF-8 error (letters-core tests/hostile_packages.rs: a_password_protected_docx_is_refused_by_naming_the_password, an_encrypted_odt_is_refused_by_naming_the_password). Sheet and slide protection in Tables and Decks is a different, editing-only feature and is not encryption.",
+      "status": "deferred",
+      "requires": []
     }
   ],
-  "waivers": []
+  "waivers": [
+    {
+      "id": "letters.bidi.paragraph-direction",
+      "issue": 1281,
+      "reason": "Paragraph direction needs a model field, DOCX and ODT writers and readers, a control and tests in each direction; it was listed unavailable rather than half-wired. RTL text itself is kept and proved.",
+      "scope": "Letters paragraph direction (DOCX w:bidi, ODT style:writing-mode). Does not cover RTL text retention, which is verified under the oracle.",
+      "review_date": "2027-02-01"
+    },
+    {
+      "id": "letters.encryption.password-protected-files",
+      "issue": 438,
+      "reason": "Decrypting needs a password prompt, the OOXML and ODF key derivation and an encrypted save. Encryption and signatures are deferred by decision (epic #1190), as they do not block dependable everyday editing. The refusal names the password, so a user is not left with a ZIP or UTF-8 error.",
+      "scope": "Opening, editing and saving password-protected Letters documents. Does not cover Tables or Decks files.",
+      "review_date": "2027-02-01"
+    }
+  ]
 }

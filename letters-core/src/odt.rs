@@ -3255,6 +3255,7 @@ fn heading_style_names(styles: &str) -> [String; 6] {
 /// The document, and the package members its pictures were read from
 /// (which are therefore not opaque, #1292).
 fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
+    suite_common_core::zip_guard::check_not_encrypted(std::path::Path::new(path))?;
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     // An ODT arrives from a download or an attachment; its parts are read
