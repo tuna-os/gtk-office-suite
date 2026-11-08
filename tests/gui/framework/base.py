@@ -703,6 +703,11 @@ class BaseGUITestCase(unittest.TestCase):
                 self.process.kill()
             self._check_gtk_diagnostics()
 
+    # CRITICAL messages (substrings) a journey knows come from inside GTK
+    # rather than from the app, and tolerates. Empty by default: a CRITICAL
+    # fails the journey. A subclass names the exact message and why.
+    tolerated_gtk_criticals: tuple = ()
+
     def _check_gtk_diagnostics(self):
         """Fail the journey on a GLib/GTK CRITICAL its app logged (#1209).
 
@@ -726,7 +731,8 @@ class BaseGUITestCase(unittest.TestCase):
             with open(log, "a") as f:
                 for d in found:
                     f.write(json.dumps({"test": self.id(), **d}) + "\n")
-        critical = gtk_diagnostics.criticals(found)
+        critical = [d for d in gtk_diagnostics.criticals(found)
+                    if not any(t in d["message"] for t in self.tolerated_gtk_criticals)]
         if critical and getattr(self, "_test_failed", None) is False:
             self.fail("the app logged GLib/GTK CRITICALs:\n  " + "\n  ".join(
                 f"{d['domain']}: {d['message']}" for d in critical))
