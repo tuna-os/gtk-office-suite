@@ -845,7 +845,14 @@ class StyledSaveAsJourney:
         self._activate_window()
         rawinput.keyCombo("<Control>End")
         rawinput.typeText(self.EDIT)
-        edited = self.wait_until(self._model, lambda m: m != opened, description="the edit")
+        # All of it: typing is not instant, and a model taken half way
+        # through is not the edited document redo has to bring back.
+        last = "".join(run["text"] for run in opened["paragraphs"][-1]["runs"])
+        edited = self.wait_until(
+            self._model,
+            lambda m: "".join(run["text"] for run in m["paragraphs"][-1]["runs"]) == last + self.EDIT,
+            description="the whole edit",
+        )
         changed = {d.split("]")[0] + "]" for d in self._diff(opened, edited) if d.startswith(".paragraphs[")}
         self.assertEqual(changed, {f".paragraphs[{len(opened['paragraphs']) - 1}]"},
                          f"the edit changed more than its paragraph: {self._diff(opened, edited)[:6]}")
