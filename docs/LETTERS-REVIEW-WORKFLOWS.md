@@ -7,6 +7,30 @@ only the original comments and tracked-changes exclusions in
 [ADR 0003 §2](adr/0003-later-tier-scope.md); that ADR remains the historical
 record of the earlier decision. Other later-tier exclusions are unaffected.
 
+## Which statement governs
+
+For the workflows below this document and the capability ledger
+(`conformance/capabilities.json`) are the current scope. [ADR 0003 §2](adr/0003-later-tier-scope.md)
+is the historical record of the earlier decision: its comments and tracked-
+changes exclusions no longer apply. Its other decisions (CommonMark ceiling,
+chart kinds, conditional formatting, master slides, i18n) are untouched.
+[ADR 0008](adr/0008-letters-structured-editing.md) governs how structured
+editing is owned (model first, buffer as projection). Support a document
+advertises is the ledger's `verified` claims; what is `deferred` has a dated
+waiver there, and nothing is inferred from a model test alone.
+
+| Workflow | Boundary | Ledger entry |
+| --- | --- | --- |
+| Comments | admitted: anchored threads, reply, resolve, delete | `letters.review.comments` |
+| Tracked changes | admitted: insertions and deletions; paragraph breaks and formatting changes are not tracked | `letters.review.tracked-changes` |
+| Table of contents | admitted: levels 1-3, regenerated whole | `letters.toc` |
+| Smart chips | admitted: date, person and link | `letters.smart-chips` |
+| Footnotes | admitted: plain-text notes; no endnotes, no rich note body | `letters.footnotes` |
+| Columns and sections | admitted: next-page sections with their own page and equal columns; unequal columns, continuous, odd and even breaks are loss-reported | `letters.sections.page-setup` |
+| Styles | admitted: a named-style reference and heading looks, picked from the style picker; not a style editor and not the file's style-definition graph | `letters.styles.named-paragraph-styles` |
+| Bidi paragraph direction | deferred (RTL text itself is kept) | `letters.bidi.paragraph-direction` |
+| Encryption | deferred: password-protected files are refused by naming the password; no prompt, no encrypted save | `letters.encryption.password-protected-files` |
+
 ## Canonical semantics
 
 ### Tracked changes are marks on the text (changed 2026-09-25)
@@ -127,6 +151,8 @@ oracle test in each direction.
 | Comments | `RunStyle::comments` marks and `Document::comments` (`letters_core::comments`) | mapped: DOCX comments part with `w:commentRangeStart`/`End` and references, replies and resolved in `commentsExtended`; ODT `office:annotation` ranges with `loext:parent-name` and `loext:resolved`; LibreOffice oracle in both directions. LibreOffice 24.2 writes no reply parent to .docx for a document it read from .odt, so there a reply opens as a comment of its own on the same text | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | Tracked insert/delete | `RunStyle::revision` marks (`letters_core::track`) | mapped: DOCX `w:ins`/`w:del` (nested for a deleted insertion), ODT change regions; LibreOffice oracle in both directions | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | TOC | `ParaStyle::toc` entries (`letters_core::toc`) | mapped: DOCX TOC field, ODT `text:table-of-content`; LibreOffice oracle in both directions | Kept through save and reopen, updatable by Word and LibreOffice; Markdown, HTML and text warn and save the text |
+| Styles | `ParaStyle::named_style` and heading looks (`Document::heading_styles`) | mapped: DOCX style ids and ODT style names for Title, Subtitle, Quote and Heading 1-6, with heading looks; LibreOffice oracle in both directions. The file's style-definition graph is not kept and no style editor exists | A paragraph keeps its named style and look through save and reopen; a style's definition is not written back as one |
+| Encryption | none | unavailable: a password-protected .docx (an OLE compound file) or an ODT with encrypted parts is refused, naming the password (`letters-core/tests/hostile_packages.rs`) | Never opened as garbage or with a ZIP or UTF-8 error; no password prompt and no encrypted save |
 | Bidi paragraph direction | none yet (`letters_core::base_direction` is the helper it will use) | unavailable: no direction is written or read; the text crosses LibreOffice both ways (`right_to_left_text_survives_a_conversion_between_the_two_formats`) | Keep the text exactly; listed as unavailable until it has a model field, writers, a control and tests (#1281) |
 
 Each mapped row is proved by a GUI journey and by LibreOffice oracle tests in

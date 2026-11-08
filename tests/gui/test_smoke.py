@@ -687,6 +687,210 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         )
 
 
+class StyledSaveAsJourney:
+    """#1681: the whole styled document survives open, edit, undo, redo,
+    Save As through the chooser, a restart and a reopen.
+
+    `tests/gui/test_file_corpus.py` compares only paragraph text, so a loss of
+    run styles, list and table state, the header and footer, the page or the
+    review marks could not fail it. This compares the app's full model, as its
+    test-only `test-snapshot` action dumps it (everything but the view), and
+    names the field that differs.
+
+    The fixture is authored outside Letters (tests/gui/fixtures/fixtures.json):
+    CJK, combining marks, emoji and RTL; bold, italic, colour and underline
+    runs; centred and indented paragraphs; a footnote, lists, a table, an
+    image, a comment, a tracked insertion, a table of contents, a header and
+    footer and an A4 page. The journey edits its last paragraph.
+    """
+
+    app_name = "letters"
+    FIXTURE = ""
+    EDIT = " edited"
+
+    def setUp(self):
+        import shutil
+        self._dir = self.temp_dir(prefix="letters-styled-save-as-")
+        self.EXT = os.path.splitext(self.FIXTURE)[1]
+        self._source = os.path.join(self._dir, "source" + self.EXT)
+        shutil.copy(os.path.join(os.path.dirname(__file__), "fixtures", self.FIXTURE), self._source)
+        with open(self._source, "rb") as stream:
+            self._source_bytes = stream.read()
+        self.launch_args = [self._source]
+        self._state = self.isolate_autosave_state()
+        self.isolate_snapshot()
+        self.isolate_gsettings()
+        super().setUp()
+
+    def _model(self):
+        """The document as the app holds it, without view state."""
+        import hashlib
+        snapshot = self.trigger_snapshot("org.tunaos.letters")
+        model = {key: value for key, value in snapshot.items() if key != "view"}
+        # A picture is a file the app extracted to a temporary path of its own:
+        # compare what it holds, not where it is.
+        for paragraph in model.get("paragraphs", []):
+            for run in paragraph["runs"]:
+                path = run["style"].get("image")
+                if path and os.path.isfile(path):
+                    with open(path, "rb") as stream:
+                        run["style"]["image"] = "sha256:" + hashlib.sha256(stream.read()).hexdigest()
+        return model
+
+    @staticmethod
+    def _comparable(model):
+        """The model with the representations a save is free to choose
+        between made one, so that only a real change shows. Undo and redo are
+        compared without this; only the saved file is, because a writer picks
+        among spellings of the same thing. Each was measured on these
+        fixtures, and each says what the app itself treats as equal:
+
+        - a heading is kept with the next paragraph whether or not the flag is
+          set (`layout::keep_with_next` takes either), and both writers give
+          a heading style the flag;
+        - black text is the default colour, so "000000" and none draw alike;
+        - a heading level whose look names no size draws at the body size;
+        - page lengths are written in twips (DOCX) or hundredths of a point
+          (ODF), so they are compared to a tenth of a point.
+        """
+        import copy
+        model = copy.deepcopy(model)
+        for paragraph in model["paragraphs"]:
+            style = paragraph["style"]
+            style["keep_with_next"] = bool(style["keep_with_next"] or style["heading"] is not None)
+            for run in paragraph["runs"]:
+                if run["style"].get("color") == "000000":
+                    run["style"]["color"] = None
+        body = (model.get("base_font") or {}).get("size_hp")
+        for look in model.get("heading_styles", []):
+            if look.get("font_size_hp") is None:
+                look["font_size_hp"] = body
+        page = model.get("page")
+        if page:
+            for key, value in page.items():
+                if isinstance(value, float):
+                    page[key] = round(value, 1)
+        return model
+
+    @staticmethod
+    def _diff(expected, actual, path="", out=None):
+        """Every field that differs, as `path: expected != actual`."""
+        out = [] if out is None else out
+        if isinstance(expected, dict) and isinstance(actual, dict):
+            for key in sorted(set(expected) | set(actual)):
+                if key not in expected:
+                    out.append(f"{path}.{key}: absent != {actual[key]!r}")
+                elif key not in actual:
+                    out.append(f"{path}.{key}: {expected[key]!r} != absent")
+                else:
+                    StyledSaveAsJourney._diff(expected[key], actual[key], f"{path}.{key}", out)
+        elif isinstance(expected, list) and isinstance(actual, list):
+            for k in range(max(len(expected), len(actual))):
+                if k >= len(expected):
+                    out.append(f"{path}[{k}]: absent != {actual[k]!r}")
+                elif k >= len(actual):
+                    out.append(f"{path}[{k}]: {expected[k]!r} != absent")
+                else:
+                    StyledSaveAsJourney._diff(expected[k], actual[k], f"{path}[{k}]", out)
+        elif expected != actual:
+            out.append(f"{path}: {expected!r} != {actual!r}")
+        return out
+
+    def _keep(self, **named):
+        """Retain the snapshots and files a failure needs, where the harness
+        keeps its own artifacts."""
+        import json
+        import shutil
+        folder = os.path.join(self.gui_dir, "failure_artifacts", f"{type(self).__name__}.{self._testMethodName}")
+        os.makedirs(folder, exist_ok=True)
+        for name, value in named.items():
+            if isinstance(value, str) and os.path.isfile(value):
+                shutil.copy(value, os.path.join(folder, name))
+            else:
+                with open(os.path.join(folder, name + ".json"), "w", encoding="utf-8") as stream:
+                    json.dump(value, stream, ensure_ascii=False, indent=1, sort_keys=True)
+
+    def _press_until(self, keys, target, description):
+        """Press `keys` until the model is `target`; if it never is, say which
+        fields differ from it."""
+        from dogtail import rawinput
+        seen = None
+        for _ in range(12):
+            rawinput.keyCombo(keys)
+            try:
+                return self.wait_until(self._model, lambda model: model == target, timeout=1.5, description=description)
+            except AssertionError:
+                seen = self._model()
+        self._keep(target=target, seen=seen)
+        self.fail(f"{description}: differs in {self._diff(target, seen)[:8]}")
+
+    def _save_as(self, path):
+        from dogtail import tree
+        self.gapplication_action("org.tunaos.letters", "save-file-as")
+        entry = self.wait_for_condition(
+            lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text"),
+            description="the Save As name entry",
+        )
+        entry.text = path
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+
+    def test_open_edit_undo_redo_save_as_restart_reopen(self):
+        from dogtail import rawinput
+        self.wait_for_node(roleName="text")
+        opened = self.wait_until(self._model, lambda m: m["paragraphs"], description="the fixture to open")
+        self.assertTrue(any("見出し" in run["text"] for p in opened["paragraphs"] for run in p["runs"]), "the fixture's CJK text")
+
+        # One edit, in the last paragraph, and nothing else changes.
+        self._activate_window()
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(self.EDIT)
+        # All of it: typing is not instant, and a model taken half way
+        # through is not the edited document redo has to bring back.
+        last = "".join(run["text"] for run in opened["paragraphs"][-1]["runs"])
+        edited = self.wait_until(
+            self._model,
+            lambda m: "".join(run["text"] for run in m["paragraphs"][-1]["runs"]) == last + self.EDIT,
+            description="the whole edit",
+        )
+        changed = {d.split("]")[0] + "]" for d in self._diff(opened, edited) if d.startswith(".paragraphs[")}
+        self.assertEqual(changed, {f".paragraphs[{len(opened['paragraphs']) - 1}]"},
+                         f"the edit changed more than its paragraph: {self._diff(opened, edited)[:6]}")
+
+        # Undo is exact, and so is redo.
+        self._press_until("<Control>z", opened, "undo to the opened document")
+        self._press_until("<Control><Shift>z", edited, "redo to the edited document")
+
+        # Save As through the chooser, to the other kind of path than the source.
+        destination = os.path.join(self._dir, "saved" + self.EXT)
+        self._save_as(destination)
+        self.wait_for_condition(lambda: os.path.isfile(destination) and os.path.getsize(destination) > 0,
+                                description="the Save As file")
+        with open(self._source, "rb") as stream:
+            self.assertEqual(stream.read(), self._source_bytes, "Save As changed the source file")
+
+        # Restart on the saved file: the same document, edit and all.
+        self.relaunch_app(launch_args=[destination])
+        reopened = self.wait_until(self._model, lambda m: m["paragraphs"] and any(
+            self.EDIT.strip() in run["text"] for run in m["paragraphs"][-1]["runs"]), description="the saved file to reopen")
+        losses = self._diff(self._comparable(edited), self._comparable(reopened))
+        if losses:
+            self._keep(opened=opened, edited=edited, reopened=reopened, source=self._source, saved=destination)
+        self.assertEqual(losses, [], f"{len(losses)} field(s) changed through Save As and a restart")
+
+
+class LettersStyledDocxSaveAsSmoke(StyledSaveAsJourney, BaseGUITestCase):
+    """#1681 for .docx: the fixture is Writer's own conversion."""
+
+    FIXTURE = "styled-unicode.docx"
+
+
+class LettersStyledOdtSaveAsSmoke(StyledSaveAsJourney, BaseGUITestCase):
+    """#1681 for .odt: the fixture is hand-authored ODF."""
+
+    FIXTURE = "styled-unicode.odt"
+
+
 class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
     """#436: closing a window whose Save All fails on one tab must stop at
     that tab and keep every other one — a failure may not discard work in a
@@ -10614,6 +10818,17 @@ class OpenPathsMixin:
     driven through the file chooser's location entry, and drag and drop,
     through the test-mode `test-drop-files` action that runs the same code
     a real drop does."""
+
+    # The file chooser's location entry completes names from a folder listing
+    # it loads in the background (see _open_through_dialog). When the dialog
+    # closes before that listing lands, GTK's own completion asks a model
+    # that is already gone: `gtk_tree_model_get_iter_first: assertion
+    # 'GTK_IS_TREE_MODEL (tree_model)' failed`, dozens of times, in about one
+    # CI attempt in ten (#1209). The apps use gtk::FileDialog and hold no
+    # GtkTreeModel of their own, so the message comes from GTK's chooser. It
+    # is tolerated here, in the journeys that drive that chooser, and nowhere
+    # else.
+    tolerated_gtk_criticals = ("gtk_tree_model_get_iter_first: assertion 'GTK_IS_TREE_MODEL (tree_model)' failed",)
 
     def _drop(self, *paths):
         import subprocess
