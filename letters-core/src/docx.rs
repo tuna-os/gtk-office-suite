@@ -650,6 +650,8 @@ const READ_STACK_BYTES: usize = 64 << 20;
 /// read on a thread with [`READ_STACK_BYTES`] of stack, whatever thread
 /// asked. A panic in the reader reaches the caller as before.
 pub fn read(path: &str) -> Result<Document, String> {
+    suite_common_core::zip_guard::check_not_encrypted(std::path::Path::new(path))
+        .map_err(|e| format!("Cannot open .docx {path}: {e}"))?;
     suite_common_core::zip_guard::check_xml_depth(std::path::Path::new(path), MAX_XML_DEPTH)
         .map_err(|e| format!("Cannot open .docx {path}: {e}"))?;
     let owned = path.to_string();

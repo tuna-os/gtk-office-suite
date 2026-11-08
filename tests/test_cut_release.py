@@ -45,8 +45,8 @@ class CutRelease(unittest.TestCase):
         self.assertTrue(ids, "no claim rests on a scheduled lane")
         revision = "c" * 40
         after = cut_release.record_revision(text, ids, revision)
-        recorded = {f["id"]: f["revision"] for f in json.loads(after)["features"]}
-        before = {f["id"]: f["revision"] for f in ledger["features"]}
+        recorded = {f["id"]: f.get("revision") for f in json.loads(after)["features"]}
+        before = {f["id"]: f.get("revision") for f in ledger["features"]}
         for fid in recorded:
             self.assertEqual(recorded[fid], revision if fid in ids else before[fid], fid)
         # And the gate then certifies that revision.

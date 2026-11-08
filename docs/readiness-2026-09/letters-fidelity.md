@@ -295,16 +295,21 @@ A per-tab live model owns the complete represented Document and edit history; se
         direction, no writer stores one, and the screen detects it per paragraph. What is promised, right-to-left
         text kept exactly, is tested: `right_to_left_text_survives_a_conversion_between_the_two_formats`. There is no
         entry point to hide.
-- [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
+- [x] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
       **The numbers are reconciled** (#1205). 0004 and 0006 were each two ADRs. The Decks workflows ADR keeps 0004,
       since code and readiness documents cite it as "ADR 0004", and so does the adaptive editor shell's 0006, which
       `tests/adaptive_editor_contract.py` cites by path. Tables advanced analysis became 0007 and Letters structured
       editing became 0008, the two free numbers; nothing cited either by number. Each renumbered file says so at the
       top, and `tests/test_adr_numbers.py` fails on a shared number or a heading that disagrees with its file name.
       ADR 0003 §2 now identifies its review exclusions as historical and points to the bounded current workflow
-      contract; the Letters Tier 3 parity rows no longer repeat those exclusions as current. Still open (#1655):
-      reconcile all advanced-feature boundaries and revision-bound capability evidence, including styles and
-      encryption-adjacent work. This documentation correction does not close LET-011.
+      contract; the Letters Tier 3 parity rows no longer repeat those exclusions as current. **The boundaries are
+      reconciled** (#1655): [the workflow contract](../LETTERS-REVIEW-WORKFLOWS.md#which-statement-governs) lists, for
+      comments, tracked changes, the table of contents, smart chips, footnotes, columns, styles, bidi and encryption,
+      what is admitted or deferred and its ledger entry. Each admitted workflow is a `verified` claim in
+      `conformance/capabilities.json` citing model, GUI and format (LibreOffice oracle) tests, so the claim is bound to
+      a revision; bidi paragraph direction and encryption are `deferred` under dated waivers. ADR 0008's account of
+      the buffer is corrected to the live-model design (#1202). A password-protected file is now refused by naming the
+      password, with tests, rather than failing with a ZIP or UTF-8 error.
 
 ## GUI commands that used to write their own markers (fixed 2026-09-11)
 
