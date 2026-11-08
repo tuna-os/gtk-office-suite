@@ -375,5 +375,170 @@ class TableCellListIndentFixtureTest(unittest.TestCase):
             self.assertEqual(table.cell(1, 0).paragraphs[0].text, "Signed: ___________________________")
 
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class UnheadedBorderedMustsFixtureTest(unittest.TestCase):
+    """The Schedule of musts 2026 reduction isolates the lo_cell_box line-detection
+    false positive and vertical pagination mismatch on unheaded bordered tables (#1323)."""
+
+    def test_unheaded_bordered_musts_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "unheaded-bordered-musts")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/unheaded-bordered-musts.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.page_setup.orientation, sheet.ORIENTATION_LANDSCAPE)
+            self.assertEqual(sheet.cell(1, 1).value, "Schedule of Musts 2026")
+            self.assertEqual(sheet.cell(1, 4).value, "Fully compliant")
+            self.assertEqual(sheet.cell(4, 1).value, "Paragraph")
+            self.assertEqual(sheet.cell(4, 2).value, "Requirement")
+            self.assertEqual(sheet.cell(5, 1).value, "Top 10 ‘musts’ for chairs and other trustees")
+            self.assertEqual(sheet.cell(6, 1).value, "1.11 and 1.12")
+            self.assertEqual(sheet.cell(6, 3).value, "Fully compliant")
+            self.assertEqual(sheet.column_dimensions["A"].width, 13)
+            self.assertEqual(sheet.column_dimensions["B"].width, 115)
+            self.assertEqual(sheet.column_dimensions["C"].width, 26)
+            self.assertEqual(sheet.column_dimensions["D"].width, 49)
+            for r in range(1, 17):
+                for c in range(1, 5):
+                    b = sheet.cell(r, c).border
+                    self.assertIsNotNone(b.left.style)
+                    self.assertIsNotNone(b.right.style)
+                    self.assertIsNotNone(b.top.style)
+                    self.assertIsNotNone(b.bottom.style)
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableCellNumberedListIndentFixtureTest(unittest.TestCase):
+    """The transparency outside appointments reduction isolates table cell
+    numbered list item indents and line wrapping in Letters (#1358)."""
+
+    def test_table_cell_numbered_list_indent_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-cell-numbered-list-indent")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-cell-numbered-list-indent.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 2)
+            c0 = table.cell(0, 0)
+            self.assertEqual(len(c0.paragraphs), 3)
+            self.assertEqual(c0.paragraphs[0].text, "Department’s Decision on Application")
+            self.assertEqual(c0.paragraphs[1].style.name, "List Number")
+            self.assertTrue(len(c0.paragraphs[1].text) > 50)
+            self.assertEqual(c0.paragraphs[2].style.name, "List Number")
+            self.assertTrue(len(c0.paragraphs[2].text) > 50)
+            self.assertEqual(table.cell(1, 0).paragraphs[0].text, "Next row verification text")
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableCellContentControlFixtureTest(unittest.TestCase):
+    """The Tier 2/3 notification reduction isolates cell-level structured
+    document tags (w:sdt wrapping w:tc in w:tr) in Letters (#1359)."""
+
+    def test_table_cell_content_control_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-cell-content-control")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-cell-content-control.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 3)
+            self.assertEqual(table.cell(0, 0).paragraphs[0].text, "Date of activity")
+            self.assertEqual(table.cell(1, 0).paragraphs[0].text, "General Licence")
+            self.assertEqual(table.cell(2, 0).paragraphs[0].text, "Description of activity")
+
+            # Check raw XML in the file for w:sdt containing w:tc
+            with zipfile.ZipFile(Path(tmp_path) / entry["file"]) as z:
+                xml = z.read("word/document.xml").decode("utf-8")
+                self.assertIn("<w:sdt>", xml)
+                self.assertIn("<w:sdtContent>", xml)
+                self.assertIn("Click or tap to enter a date.", xml)
+                self.assertIn("Choose an item.", xml)
+
+
+@unittest.skipIf(docx is None, "python-docx is needed to inspect generated docx fixtures")
+class TableRowMinHeightPageBreakFixtureTest(unittest.TestCase):
+    """The Crime Supervisor Declaration Form reduction isolates table row
+    minimum height (w:trHeight) pagination across page breaks (#1353)."""
+
+    def test_table_row_min_height_page_break_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        import zipfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            img = fixtures.test_image(str(Path(tmp_path) / "test-image.png"))
+            fixtures.letters(img)
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "table-row-min-height-page-break")
+            self.assertEqual(entry["app"], "letters")
+            self.assertEqual(entry["file"], "letters/table-row-min-height-page-break.docx")
+            doc = docx.Document(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(doc.tables), 1)
+            table = doc.tables[0]
+            self.assertEqual(len(table.rows), 2)
+            self.assertIn("Page 1 tall row", table.cell(0, 0).paragraphs[0].text)
+            self.assertIn("Page 2 row with minimum height", table.cell(1, 0).paragraphs[0].text)
+
+            # Check raw XML in the file for w:trHeight elements on both rows
+            with zipfile.ZipFile(Path(tmp_path) / entry["file"]) as z:
+                xml = z.read("word/document.xml").decode("utf-8")
+                self.assertIn('<w:trHeight w:val="10800"/>', xml)
+                self.assertIn('<w:trHeight w:val="3600"/>', xml)
+
+
+
 if __name__ == "__main__":
     unittest.main()
