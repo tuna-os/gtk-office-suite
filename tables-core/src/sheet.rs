@@ -960,6 +960,26 @@ impl ChartSpec {
         }
     }
 
+    /// What the chart plots, read from the sheet: the categories (the first
+    /// series' labels) and every series, each under its name and with a
+    /// value per row of its range. A value that isn't a number plots as 0, as
+    /// in Excel, and a series is named as `series_name` names a single one.
+    pub fn plot(&self, sheet: &SheetModel) -> (Vec<String>, Vec<(String, Vec<f64>)>) {
+        let all = self.canonical_series();
+        let categories = all.first().map_or_else(Vec::new, |s| (s.val.0..=s.val.2).map(|r| sheet.cell(s.cat.0 + (r - s.val.0), s.cat.1).to_string()).collect());
+        let series = all
+            .iter()
+            .map(|s| {
+                let name = if s.name.trim().is_empty() { format!("Column {}", col_label(s.val.1)) } else { s.name.clone() };
+                let values = (s.val.0..=s.val.2)
+                    .map(|r| sheet.cell(r, s.val.1).trim().parse::<f64>().ok().filter(|v| v.is_finite()).unwrap_or(0.0))
+                    .collect();
+                (name, values)
+            })
+            .collect();
+        (categories, series)
+    }
+
     /// The (category, value) points a single-series chart plots, read from
     /// the sheet. A value that isn't a number plots as 0, as in Excel.
     pub fn points(&self, sheet: &SheetModel) -> Vec<(String, f64)> {

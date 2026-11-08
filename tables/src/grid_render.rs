@@ -612,8 +612,24 @@ pub fn draw_grid(
         if w < 1 || h < 1 || x > width || y > height || x + chart.width_px < ROW_HEADER_WIDTH || y + chart.height_px < COL_HEADER_HEIGHT {
             continue;
         }
-        let name = chart.series_name();
-        let surface = crate::charts::render_chart_named(&chart.points(sheet), chart.kind, w, h, Some(&name));
+        // Every series, as the file names them: a chart of two series used to
+        // draw its first alone.
+        let (categories, plotted) = chart.plot(sheet);
+        let series: Vec<crate::charts::Series> = plotted.iter().map(|(name, values)| crate::charts::Series { name: Some(name), values }).collect();
+        use tables_core::sheet::LegendPosition;
+        let decor = crate::charts::Decor {
+            title: &chart.title,
+            x_title: chart.x_axis_title.as_deref(),
+            y_title: chart.y_axis_title.as_deref(),
+            legend: match chart.legend_position {
+                LegendPosition::None => crate::charts::LegendPos::None,
+                LegendPosition::Top => crate::charts::LegendPos::Top,
+                LegendPosition::Bottom => crate::charts::LegendPos::Bottom,
+                LegendPosition::Left => crate::charts::LegendPos::Left,
+                LegendPosition::Right => crate::charts::LegendPos::Right,
+            },
+        };
+        let surface = crate::charts::render_chart_decorated(&categories, &series, chart.kind, w, h, &decor);
         cr.set_source_surface(&surface, x.round(), y.round()).unwrap();
         cr.paint().unwrap();
         cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
