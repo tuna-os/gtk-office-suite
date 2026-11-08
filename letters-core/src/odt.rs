@@ -106,14 +106,29 @@ fn text_position_attr(hp: i32, size_hp: u16) -> String {
 
 /// The size, in half-points, the file this writer makes gives text that
 /// names none of its own, as `effective_size_hp` finds it on reading it
-/// back. A heading's is the explicit size `heading_styles` writes; the body
-/// has none (the document's `base_font` is not written to .odt), so it is
-/// the application's default.
+/// back. A heading's is the explicit size `heading_styles` writes; the
+/// body's is the document's own, which `base_font_styles` writes as the
+/// default style's.
 fn written_size_hp(own: Option<u16>, heading: Option<u8>, doc: &Document) -> u16 {
-    own.filter(|hp| *hp > 0).unwrap_or_else(|| match heading {
-        Some(_) => effective_size_hp(None, heading, doc),
-        None => default_size_hp(),
-    })
+    effective_size_hp(own, heading, doc)
+}
+
+/// The document's body font and size as the file's default paragraph style
+/// (the one `read_base_font` finds them in), with the font declared for it;
+/// (font-face declarations, style), either empty where the document has no
+/// body font. Without it the file's text drew in the reader's own default.
+fn base_font_styles(doc: &Document) -> (String, String) {
+    let font = doc.base_font.family.as_deref().filter(|f| !f.is_empty());
+    let size = doc.base_font.size_hp.filter(|hp| *hp > 0);
+    if font.is_none() && size.is_none() {
+        return (String::new(), String::new());
+    }
+    let faces = font
+        .map(|f| format!("<office:font-face-decls><style:font-face style:name=\"{0}\" svg:font-family=\"{0}\"/></office:font-face-decls>", esc(f)))
+        .unwrap_or_default();
+    let name = font.map(|f| format!(" style:font-name=\"{}\"", esc(f))).unwrap_or_default();
+    let size = size.map(|hp| format!(" fo:font-size=\"{}pt\"", f64::from(hp) / 2.0)).unwrap_or_default();
+    (faces, format!("<style:default-style style:family=\"paragraph\"><style:text-properties{name}{size}/></style:default-style>"))
 }
 
 /// What distinguishes a run's automatic text style: its look, and, where it
@@ -1558,6 +1573,7 @@ fn styles_xml(doc: &Document) -> String {
         hf.push_str("</style:master-page>");
     }
     hf.push_str("</office:master-styles>");
+    let (font_faces, default_style) = base_font_styles(doc);
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-styles \
@@ -1569,11 +1585,12 @@ fn styles_xml(doc: &Document) -> String {
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
-         <office:styles>{contents}</office:styles>\
+         {font_faces}<office:styles>{contents}</office:styles>\
          <office:automatic-styles>\
          {layouts}{graphic}{para_styles}</office:automatic-styles>{hf}\
          </office:document-styles>",
-        contents = CODE_STYLES.to_string()
+        contents = default_style
+            + CODE_STYLES
             + &heading_styles(doc)
             + &if doc.paragraphs.iter().any(|p| p.style.toc.is_some()) { contents_styles(doc) } else { String::new() }
     )
@@ -5391,6 +5408,25 @@ mod tests {
         read(path.to_str().unwrap()).expect("read odt")
     }
 
+    /// The document's body font and size are in the file: a Calibri 11pt
+    /// document used to come back in the application's own 12pt serif, and
+    /// every further save lost it again. A raised run's shift is a
+    /// percentage of the size the file gives its text, so the reader's size
+    /// has to be the one the document drew at.
+    #[test]
+    fn the_body_font_and_size_survive_a_save() {
+        let mut d = Document::from_plain_text("plain words");
+        d.base_font = crate::model::BaseFont { family: Some("Carlito".into()), size_hp: Some(22) };
+        let rt = round_trip(&d);
+        assert_eq!(rt.base_font, d.base_font, "the body font and size");
+        assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.font_family.is_none() && r.style.font_size_hp.is_none()), "its text names none of its own");
+        assert_eq!(round_trip(&rt).base_font, d.base_font, "and again");
+
+        // A document with none writes none.
+        let rt = round_trip(&Document::from_plain_text("plain words"));
+        assert_eq!(rt.base_font.family, None);
+    }
+
     /// Merged cells survive a save: `table:number-columns-spanned` and
     /// `-rows-spanned` on the cell, and a `table:covered-table-cell` at
     /// each position it covers.
@@ -6091,8 +6127,8 @@ mod tests {
     #[test]
     fn a_position_is_written_as_a_percentage_of_the_runs_effective_size() {
         let mut d = Document::from_plain_text("");
-        // The body size is not written to .odt, so the body's 12pt is the
-        // size the file declares; the heading's is written out in full.
+        // The body size is the file's default style's, and the heading's is
+        // written out in full.
         d.base_font.size_hp = Some(28);
         let shifted = |text: &str, hp: i32, size: Option<u16>| Run { text: text.into(), style: RunStyle { position_hp: Some(hp), font_size_hp: size, ..Default::default() } };
         d.paragraphs[0].runs = vec![shifted("down", -2, None), shifted("up", 6, None), shifted("big", 4, Some(40)), shifted("level", 0, None)];
@@ -6102,9 +6138,9 @@ mod tests {
         d.paragraphs.push(h);
         let xml = content_xml(&d);
         let positions: Vec<&str> = xml.split("style:text-position=\"").skip(1).map(|s| s.split('"').next().unwrap()).collect();
-        // −2hp of 12pt, 6hp of 12pt, 4hp of 20pt, and 5hp of the heading's
+        // −2hp of 14pt, 6hp of 14pt, 4hp of 20pt, and 5hp of the heading's
         // 28 × 1.6 = 45hp.
-        assert_eq!(positions, ["-8% 100%", "25% 100%", "10% 100%", "11% 100%"], "{xml}");
+        assert_eq!(positions, ["-7% 100%", "21% 100%", "10% 100%", "11% 100%"], "{xml}");
         assert!(xml.contains("fo:font-size=\"20pt\""), "{xml}");
     }
 
