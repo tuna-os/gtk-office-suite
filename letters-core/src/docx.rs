@@ -2431,10 +2431,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
             }
             if let Some(src) = &run.style.image {
-                // Images embed via add_picture, which appends its own
-                // paragraph — mid-paragraph images therefore split the
-                // paragraph (documented v1 limitation). Unreadable sources
-                // degrade to the alt text.
+                // A picture is written inside the paragraph it is in, as
+                // the floating ones are. It used to go through
+                // `add_picture`, which appends a paragraph of its own, so
+                // text around a picture was split into three paragraphs
+                // that read back as three, and each save added more
+                // (#1681). Unreadable sources degrade to the alt text.
                 match std::fs::read(src) {
                     Ok(bytes) => {
                         let name = std::path::Path::new(src)
@@ -2457,10 +2459,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                             continue;
                         }
                         inline_sides.push(run.style.image_sides_emu.unwrap_or((0, 0)));
-                        let mut pic = out.add_picture(&bytes, &name, w, h);
-                        pic = pic.style("Figure");
-                        let _ = pic;
-                        out.add_paragraph("");
+                        let rel = out.embed_image(&bytes, &name);
+                        out.last_paragraph_mut().expect("paragraph").add_run("").add_picture(&rel, w, h);
                     }
                     Err(_) => {
                         let mut p = out.last_paragraph_mut().expect("paragraph");
