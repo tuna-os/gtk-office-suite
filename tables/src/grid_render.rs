@@ -471,7 +471,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(px, py, pw, ph);
     cr.clip();
-    let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
+    let mut bordered: Vec<(f64, f64, f64, f64, CellBorder)> = Vec::new();
     // Text spilling into empty neighbours is drawn after every cell of the
     // pane, or their backgrounds would paint over it.
     let mut spilled: Vec<(usize, usize, CellRect)> = Vec::new();
@@ -542,9 +542,20 @@ pub fn draw_grid(
 
             // Cell borders are drawn after every cell's background: a 2 or
             // 3 px edge reaches into the neighbouring cell, whose fill
-            // would otherwise paint over it.
-            if !border.is_none() {
-                bordered.push((cx, cy, cw, rh, border));
+            // would otherwise paint over it. Merged blocks only draw borders
+            // along the outer perimeter; interior borders are suppressed.
+            let border_to_draw = if let Some((mr, mc, rs, cs)) = merge {
+                let mut b = border.clone();
+                if r > mr { b.top = BorderStyle::None; }
+                if r + 1 < mr + rs.max(1) { b.bottom = BorderStyle::None; }
+                if c > mc { b.left = BorderStyle::None; }
+                if c + 1 < mc + cs.max(1) { b.right = BorderStyle::None; }
+                b
+            } else {
+                border.clone()
+            };
+            if !border_to_draw.is_none() {
+                bordered.push((cx, cy, cw, rh, border_to_draw));
             }
 
             // Active cell border (a merged block's is the selection outline)
@@ -587,8 +598,8 @@ pub fn draw_grid(
     for &(r, c, rect) in &spilled {
         draw_cell_text(cr, sheet, r, c, rect, cell_text);
     }
-    for &(x, y, w, h, border) in &bordered {
-        draw_border_edges(cr, x, y, w, h, border, is_dark);
+    for (x, y, w, h, border) in &bordered {
+        draw_border_edges(cr, *x, *y, *w, *h, border, is_dark);
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.

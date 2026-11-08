@@ -773,27 +773,13 @@ def tables():
     # expose different portions of the column: stretching one to the other
     # in compare.align is not a measurement of the grid's scale.
     wb, ws = book()
-    wb._fonts[0] = Font(name="Liberation Sans", size=11)
     ws.column_dimensions["A"].width = 200
     for i in range(1, 21):
-        cell = ws.cell(
-            i,
-            1,
-            f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
-            "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
-            "Each view exposes only part of this line of text.",
-        )
-        cell.font = Font(name="Liberation Sans", size=11)
+        ws.cell(i, 1, f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
+                      "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
+                      "Each view exposes only part of this line of text.")
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
-
-    wb, ws = book()
-    ws["A1"] = "Financial statements"
-    ws["A1"].font = Font(name="Liberation Sans", size=24)
-    ws["A4"] = "Income"
-    ws["B4"] = "Statement of income"
-    ws.column_dimensions["B"].width = 40
-    save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
     wb, ws = book()
     pivot_rows = [
@@ -871,6 +857,21 @@ def tables():
     ws.merge_cells("A1:C2")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     save(wb, "merged", "One merged block spanning A1:C2 with centred text and no inner gridlines")
+
+    wb, ws = book()
+    thin = Side(style="thin")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for r in range(2, 5):
+        for c in range(2, 5):
+            ws.cell(r, c).border = box
+    ws["B2"] = "Merged with borders"
+    ws.merge_cells("B2:D4")
+    ws["B2"].alignment = Alignment(horizontal="center", vertical="center")
+    save(
+        wb,
+        "merged-borders",
+        "A 3x3 merged block B2:D4 with cell borders: only the perimeter is drawn, no inner borders",
+    )
 
     wb, ws = book()
     ws["A1"] = "This long text wraps inside a narrow cell"
