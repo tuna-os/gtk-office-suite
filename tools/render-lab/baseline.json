@@ -414,6 +414,10 @@
     "B": "green",
     "C": "green"
   },
+  "tables/oversized-unheaded-instructions": {
+    "A": "amber",
+    "B": "amber"
+  },
   "tables/paginated-columns": {
     "A": "red",
     "B": "red"
@@ -430,6 +434,10 @@
   "tables/print-scale": {
     "A": "red",
     "B": "red"
+  },
+  "tables/tall-unheaded-postcodes": {
+    "A": "amber",
+    "B": "amber"
   },
   "tables/tall-unprinted-sheet": {
     "A": "amber",
@@ -448,10 +456,38 @@
     "B": "green",
     "C": "green"
   },
+  "tables/wide-borderless-hyperlinks": {
+    "A": "amber",
+    "B": "amber"
+  },
   "tables/wide-column-no-headings": {
     "A": "amber",
     "B": "amber",
     "C": "amber"
+  },
+  "tables/wide-column-right-align": {
+    "A": "red",
+    "B": "red"
+  },
+  "tables/wide-unheaded-complaint-log": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/wide-unheaded-consumption-estimates": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/wide-unheaded-contact-list": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/wide-unheaded-deep-sea-stock": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/wide-unheaded-transactions": {
+    "A": "red",
+    "B": "red"
   },
   "tables/worksheet-image": {
     "A": "red",

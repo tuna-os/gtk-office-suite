@@ -539,6 +539,503 @@ class TableRowMinHeightPageBreakFixtureTest(unittest.TestCase):
                 self.assertIn('<w:trHeight w:val="3600"/>', xml)
 
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class TallUnheadedPostcodesFixtureTest(unittest.TestCase):
+    """The Hampshire postcodes reduction isolates vertical multipage split
+    and unprinted headings (#1347)."""
+
+    def test_tall_unheaded_postcodes_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "tall-unheaded-postcodes")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/tall-unheaded-postcodes.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 75)
+            self.assertEqual(sheet.max_column, 2)
+            self.assertEqual(sheet.cell(1, 1).value, "Postcode")
+            self.assertEqual(sheet.cell(1, 2).value, "No of Premises Impacted")
+            self.assertIsInstance(sheet.cell(2, 1).value, str)
+            self.assertIsInstance(sheet.cell(2, 2).value, int)
+            self.assertIsInstance(sheet.cell(75, 1).value, str)
+            self.assertIsInstance(sheet.cell(75, 2).value, int)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedContactListFixtureTest(unittest.TestCase):
+    """The Service reservoir panel engineers reduction isolates horizontal multipage
+    split and unprinted headings (#1346)."""
+
+    def test_wide_unheaded_contact_list_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-contact-list")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-contact-list.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 9)
+            self.assertEqual(sheet.max_column, 15)
+            self.assertEqual(sheet.cell(1, 1).value, "Service Reservoir Panel Engineers Contact Directory")
+            self.assertEqual(sheet.cell(5, 1).value, "Surname")
+            self.assertEqual(sheet.cell(5, 15).value, "Joint corresponding panel")
+            self.assertEqual(sheet.cell(6, 1).value, "Cavanagh")
+            self.assertIsInstance(sheet.cell(6, 13).value, str)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class OversizedUnheadedInstructionsFixtureTest(unittest.TestCase):
+    """The Record of non-lethal actions reduction isolates oversized single-column
+    instruction sheet with vertical multipage pagination and unprinted headings (#1345)."""
+
+    def test_oversized_unheaded_instructions_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "oversized-unheaded-instructions")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/oversized-unheaded-instructions.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 21)
+            self.assertEqual(sheet.max_column, 1)
+            self.assertEqual(sheet.cell(1, 1).value, "Record of Non-Lethal Actions Guidance and Instructions")
+            self.assertEqual(sheet.cell(2, 1).value, "When to use this template")
+            self.assertEqual(sheet.cell(6, 1).value, "New licence applications - daily record requirements")
+            self.assertEqual(sheet.cell(12, 1).value, "Renewing your licence and reporting actions - monthly record")
+            self.assertEqual(sheet.cell(18, 1).value, "Statutory guidance and references")
+            self.assertGreater(sheet.column_dimensions["A"].width, 100)
+            total_height = sum(
+                sheet.row_dimensions[r].height for r in range(1, 22) if sheet.row_dimensions[r].height is not None
+            )
+            self.assertGreater(total_height, 750)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideBorderlessHyperlinksFixtureTest(unittest.TestCase):
+    """The OTSI Annual Review reduction isolates wide borderless column extent,
+    hyperlinked contents, and unprinted headings (#1344)."""
+
+    def test_wide_borderless_hyperlinks_fixture_is_a_wide_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-borderless-hyperlinks")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-borderless-hyperlinks.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 15)
+            self.assertEqual(sheet.max_column, 1)
+            self.assertEqual(sheet.cell(1, 1).value, "OTSI Annual Review 2025/26 Tables")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 1).font.size, 16)
+            self.assertEqual(sheet.cell(2, 1).value, "This dataset contains nine tables for OTSI's annual review")
+            self.assertEqual(sheet.cell(3, 1).value, "Contents")
+            self.assertTrue(sheet.cell(3, 1).font.bold)
+            self.assertGreaterEqual(sheet.column_dimensions["A"].width, 100)
+
+            # Hyperlinks and styling in rows 4..15
+            expected_links = [
+                ("Cover sheet", "#'Cover sheet'!A1"),
+                ("Notes", "#Notes!A1"),
+                ("Table A1", "#'Table A1'!A1"),
+                ("Table A2", "#'Table A2'!A1"),
+                ("Table A3", "#'Table A3'!A1"),
+                ("Table A4", "#'Table A4'!A1"),
+                ("Table B1", "#'Table B1'!A1"),
+                ("Table B2", "#'Table B2'!A1"),
+                ("Table B3", "#'Table B3'!A1"),
+                ("Table B4", "#'Table B4'!A1"),
+                ("Table C1", "#'Table C1'!A1"),
+                ("Contact Sheet", "#'Contact Sheet'!A1"),
+            ]
+            for row_idx, (expected_label, expected_target) in enumerate(expected_links, start=4):
+                cell = sheet.cell(row_idx, 1)
+                self.assertEqual(cell.value, expected_label)
+                self.assertIsNotNone(cell.hyperlink)
+                self.assertEqual(cell.hyperlink.target, expected_target)
+                self.assertTrue(str(cell.font.color.rgb).endswith("0563C1"))
+                self.assertEqual(cell.font.underline, "single")
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedConsumptionEstimatesFixtureTest(unittest.TestCase):
+    """The BICS sectoral consumption estimates reduction isolates horizontal multipage
+    split, 2-tier merged headers, and unprinted headings (#1343)."""
+
+    def test_wide_unheaded_consumption_estimates_fixture_is_a_multipage_unheaded_sheet(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-consumption-estimates")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-consumption-estimates.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 14)
+            self.assertEqual(sheet.max_column, 6)
+
+            # 2-tier merged headers
+            self.assertEqual(sheet.cell(1, 1).value, "SIC07 4-digit")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 2).value, "Sector Description")
+            self.assertTrue(sheet.cell(1, 2).font.bold)
+            self.assertEqual(sheet.cell(1, 3).value, "Consumption Range (GWh)")
+            self.assertTrue(sheet.cell(1, 3).font.bold)
+            self.assertEqual(sheet.cell(2, 3).value, "2027-2028")
+            self.assertEqual(sheet.cell(2, 4).value, "2028-2029")
+            self.assertEqual(sheet.cell(2, 5).value, "2029-2030")
+            self.assertEqual(sheet.cell(2, 6).value, "2030-2031")
+
+            # Data rows
+            self.assertEqual(sheet.cell(3, 1).value, "1041")
+            self.assertEqual(sheet.cell(3, 2).value, "Manufacture of oils and fats")
+            self.assertEqual(sheet.cell(3, 3).value, "2.9 - 4.2")
+
+            # Column dimensions
+            self.assertEqual(sheet.column_dimensions["A"].width, 14)
+            self.assertEqual(sheet.column_dimensions["B"].width, 70)
+            self.assertEqual(sheet.column_dimensions["C"].width, 12)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedComplaintLogFixtureTest(unittest.TestCase):
+    """The Draft schedule 4 - complaint log reduction isolates horizontal multipage split
+    and unprinted headings (#1327)."""
+
+    def test_wide_unheaded_complaint_log_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-complaint-log")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-complaint-log.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 20)
+            self.assertEqual(sheet.max_column, 3)
+
+            # Titles and Headers
+            self.assertEqual(sheet.cell(1, 1).value, "Log of Actionable Complaints")
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(1, 1).font.size, 14)
+
+            self.assertEqual(sheet.cell(3, 1).value, "Field")
+            self.assertEqual(sheet.cell(3, 2).value, "Options")
+            self.assertEqual(sheet.cell(3, 3).value, "Notes")
+            self.assertTrue(sheet.cell(3, 1).font.bold)
+            self.assertIsNotNone(sheet.cell(3, 1).fill.fill_type)
+
+            # Column dimensions (totaling 341 units)
+            self.assertEqual(sheet.column_dimensions["A"].width, 60)
+            self.assertEqual(sheet.column_dimensions["B"].width, 101)
+            self.assertEqual(sheet.column_dimensions["C"].width, 180)
+
+            # Sample specification rows
+            self.assertEqual(sheet.cell(4, 1).value, "Reference")
+            self.assertTrue(sheet.cell(4, 1).font.bold)
+            self.assertEqual(sheet.cell(4, 2).value, "Text and/or numerical field")
+            self.assertFalse(sheet.cell(4, 2).font.bold)
+            self.assertTrue(sheet.cell(4, 3).value.startswith("For Veterinary Business"))
+
+            self.assertEqual(sheet.cell(20, 1).value, "Actions taken by the practice/Veterinary Business")
+            self.assertEqual(sheet.cell(20, 2).value, "Select one or more from a pre-defined list (see Lookups tab)")
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedDeepSeaStockFixtureTest(unittest.TestCase):
+    """The 2020 - Deep sea stock reduction isolates horizontal multipage split,
+    repeated empty cell borders, and unprinted headings (#1340)."""
+
+    def test_wide_unheaded_deep_sea_stock_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-deep-sea-stock")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-deep-sea-stock.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.page_setup.orientation, sheet.ORIENTATION_LANDSCAPE)
+            self.assertEqual(sheet.max_row, 19)
+            self.assertEqual(sheet.max_column, 24)
+
+            # Titles
+            self.assertEqual(
+                sheet.cell(1, 1).value,
+                "Deep Sea Species Statistics: total landings (tonnes live weight) in 2020",
+            )
+            self.assertTrue(sheet.cell(1, 1).font.bold)
+            self.assertEqual(sheet.cell(2, 1).value, "27-Jan-21")
+            self.assertEqual(sheet.cell(2, 2).value, "This weeks report includes swap numbers 1448-1502")
+
+            # Headers and borders
+            self.assertEqual(sheet.cell(4, 3).value, "Landings into")
+            self.assertEqual(sheet.cell(5, 2).value, "Stock")
+            self.assertIsNotNone(sheet.cell(4, 6).border.top.style)  # empty cell F4 has top border
+            self.assertIsNotNone(sheet.cell(4, 7).border.top.style)  # empty cell G4 has top border
+
+            # Data rows
+            self.assertEqual(sheet.cell(9, 1).value, "Deep Sea")
+            self.assertEqual(sheet.cell(10, 2).value, "Tusk IV")
+            self.assertEqual(sheet.cell(10, 3).value, 41.2)
+            self.assertEqual(sheet.cell(10, 24).value, 107)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated workbooks")
+class WideUnheadedTransactionsFixtureTest(unittest.TestCase):
+    """The Insolvency Service Transactions April 2026 reduction isolates horizontal multipage
+    split and unprinted headings (#1331)."""
+
+    def test_wide_unheaded_transactions_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-unheaded-transactions")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-unheaded-transactions.xlsx")
+            workbook = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(workbook.worksheets), 1)
+            sheet = workbook.active
+            self.assertFalse(sheet.print_options.headings)
+            self.assertFalse(sheet.print_options.gridLines)
+            self.assertEqual(sheet.max_row, 21)
+            self.assertEqual(sheet.max_column, 11)
+
+            # Headers
+            self.assertEqual(sheet.cell(1, 1).value, "Department Family")
+            self.assertEqual(sheet.cell(1, 2).value, "Entity")
+            self.assertEqual(sheet.cell(1, 3).value, "Date")
+            self.assertEqual(sheet.cell(1, 4).value, "Expense Type")
+            self.assertEqual(sheet.cell(1, 5).value, "Expense Area")
+            self.assertEqual(sheet.cell(1, 6).value, "Supplier")
+            self.assertEqual(sheet.cell(1, 7).value, "Transaction Number")
+            self.assertEqual(sheet.cell(1, 8).value, "Amount")
+            self.assertEqual(sheet.cell(1, 9).value, "Description")
+            self.assertEqual(sheet.cell(1, 10).value, "Supplier Type")
+            self.assertEqual(sheet.cell(1, 11).value, "VAT RegNo")
+
+            # Column dimensions
+            self.assertEqual(sheet.column_dimensions["A"].width, 13)
+            self.assertEqual(sheet.column_dimensions["B"].width, 21)
+            self.assertEqual(sheet.column_dimensions["D"].width, 43)
+            self.assertEqual(sheet.column_dimensions["E"].width, 56)
+            self.assertEqual(sheet.column_dimensions["F"].width, 55)
+            self.assertEqual(sheet.column_dimensions["I"].width, 45)
+
+            # Sample row
+            self.assertEqual(sheet.cell(2, 1).value, "AGY")
+            self.assertEqual(sheet.cell(2, 2).value, "The Insolvency Service")
+            self.assertEqual(sheet.cell(2, 6).value, "Alexander Mann Solutions")
+            self.assertEqual(sheet.cell(2, 7).value, 300074809)
+            self.assertEqual(sheet.cell(2, 8).value, 115658.80)
+
+            # Standard fixtures must retain default headings=True
+            values_entry = next(e for e in fixtures.MANIFEST if e["feature"] == "values")
+            values_wb = openpyxl.load_workbook(Path(tmp_path) / values_entry["file"])
+            self.assertTrue(values_wb.active.print_options.headings)
+
+@unittest.skipIf(openpyxl is None, "openpyxl is needed to inspect generated xlsx fixtures")
+class WideColumnRightAlignFixtureTest(unittest.TestCase):
+    """The June 2026 forecast evaluation report reduction isolates wide-column
+    right-aligned multiline text and cell indentation in unprinted sheets (#1333)."""
+
+    def test_wide_column_right_align_fixture_properties(self):
+        import importlib.util
+        import tempfile
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location("render_fixtures", root / "tools/render-lab/fixtures.py")
+        fixtures = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixtures)
+        with tempfile.TemporaryDirectory() as tmp_path:
+            fixtures.OUT = str(tmp_path)
+            fixtures.tables()
+
+            entry = next(e for e in fixtures.MANIFEST if e["feature"] == "wide-column-right-align")
+            self.assertEqual(entry["app"], "tables")
+            self.assertEqual(entry["file"], "tables/wide-column-right-align.xlsx")
+            wb = openpyxl.load_workbook(Path(tmp_path) / entry["file"])
+            self.assertEqual(len(wb.worksheets), 1)
+            ws = wb.active
+            self.assertFalse(ws.print_options.headings)
+            self.assertEqual(ws.column_dimensions["A"].width, 8.78)
+            self.assertEqual(ws.column_dimensions["B"].width, 119)
+            self.assertEqual(ws["B2"].alignment.horizontal, "right")
+            self.assertEqual(ws["B2"].alignment.vertical, "top")
+            self.assertTrue(ws["B2"].alignment.wrap_text)
+            self.assertEqual(ws["B3"].alignment.horizontal, "center")
+            self.assertEqual(ws["B4"].alignment.indent, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
