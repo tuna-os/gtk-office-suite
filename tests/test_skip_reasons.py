@@ -316,6 +316,23 @@ class NestedWorkspacesAreNotInTheListing(unittest.TestCase):
                            for p in collector.rust_sources([root], nested_workspaces=True))
             self.assertIn("spike/tests/m.rs", names)
 
+    def test_upstream_crates_in_third_party_are_not_ours_to_explain(self):
+        """Only the root's third_party/ (path-patched upstream crates); a
+        first-party directory of that name deeper down is still scanned."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as root:
+            self._tree(root)
+            for rel in ("third_party/up/src/lib.rs", "plain/third_party/src/lib.rs"):
+                path = os.path.join(root, rel)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write("#[test]\n#[ignore]\nfn upstream_case() {}\n")
+            for nested in (False, True):
+                names = [os.path.relpath(p, root)
+                         for p in collector.rust_sources([root], nested_workspaces=nested)]
+                self.assertNotIn("third_party/up/src/lib.rs", names)
+                self.assertIn("plain/third_party/src/lib.rs", names)
+
 
 class TheScriptRunsAsACommand(unittest.TestCase):
     def test_an_unexplained_skip_exits_nonzero_and_says_which(self):
