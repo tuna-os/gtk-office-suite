@@ -82,3 +82,69 @@ fn a_chart_built_before_the_series_vector_plots_through_its_legacy_ranges() {
     assert_eq!((categories.len(), series.len()), (4, 1));
     assert_eq!(series[0].1, vec![3.0, 7.0, 5.0, 9.0]);
 }
+
+// ── a chart from a selection (#1658) ────────────────────────────────────
+
+fn table() -> SheetModel {
+    let mut sh = SheetModel::new("Sheet1", 8, 5, 0);
+    let rows = [
+        ["", "Sales", "Plan", "Notes"],
+        ["Q1", "3", "2", "a"],
+        ["Q2", "7", "5", "b"],
+        ["Q3", "5", "6", "c"],
+    ];
+    for (r, row) in rows.iter().enumerate() {
+        for (c, v) in row.iter().enumerate() {
+            sh.data[r][c] = v.to_string();
+        }
+    }
+    sh
+}
+
+#[test]
+fn a_selected_table_is_one_series_per_value_column_named_by_its_header() {
+    let sh = table();
+    let spec = ChartSpec::from_selection(&sh, (0, 0, 3, 2), ChartKind::Bar, (6, 0), 480.0, 280.0).unwrap();
+    assert_eq!(spec.series.len(), 2);
+    assert_eq!(spec.series[0].name, "Sales");
+    assert_eq!(spec.series[1].name, "Plan");
+    assert_eq!(spec.series[0].val, (1, 1, 3));
+    assert_eq!(spec.series[1].cat, (1, 0, 3));
+    let (cats, plotted) = spec.plot(&sh);
+    assert_eq!(cats, ["Q1", "Q2", "Q3"]);
+    assert_eq!(plotted, vec![("Sales".to_string(), vec![3.0, 7.0, 5.0]), ("Plan".to_string(), vec![2.0, 5.0, 6.0])]);
+    // The legacy ranges mirror the first series.
+    assert_eq!((spec.cat, spec.val), (spec.series[0].cat, spec.series[0].val));
+}
+
+#[test]
+fn without_a_header_row_every_row_is_data_and_the_series_are_unnamed() {
+    let sh = table();
+    let spec = ChartSpec::from_selection(&sh, (1, 0, 3, 2), ChartKind::Line, (6, 0), 480.0, 280.0).unwrap();
+    assert_eq!(spec.series.len(), 2);
+    assert_eq!(spec.series[0].val, (1, 1, 3));
+    assert!(spec.series.iter().all(|s| s.name.is_empty()));
+}
+
+#[test]
+fn a_column_with_no_number_is_not_a_series() {
+    let sh = table();
+    let spec = ChartSpec::from_selection(&sh, (0, 0, 3, 3), ChartKind::Bar, (6, 0), 480.0, 280.0).unwrap();
+    assert_eq!(spec.series.len(), 2, "the Notes column holds text only");
+}
+
+#[test]
+fn one_selected_column_plots_over_the_first_columns_labels_as_before() {
+    let sh = table();
+    let spec = ChartSpec::from_selection(&sh, (2, 1, 2, 1), ChartKind::Pie, (6, 0), 480.0, 280.0).unwrap();
+    assert_eq!(spec.series.len(), 1);
+    assert_eq!(spec.series[0].cat, (1, 0, 3));
+    assert_eq!(spec.series[0].val, (1, 1, 3));
+}
+
+#[test]
+fn a_selection_with_nothing_to_plot_makes_no_chart() {
+    let sh = table();
+    assert!(ChartSpec::from_selection(&sh, (0, 0, 0, 2), ChartKind::Bar, (6, 0), 480.0, 280.0).is_none(), "a header row alone");
+    assert!(ChartSpec::from_selection(&sh, (1, 3, 1, 3), ChartKind::Bar, (6, 0), 480.0, 280.0).is_none(), "a text column");
+}
