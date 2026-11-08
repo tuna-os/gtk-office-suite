@@ -217,7 +217,7 @@ version = "1"
 version = "0.1.0"
 
 [dependencies.enum-as-inner]
-version = "0.6.0"
+version = "0.7.0"
 
 [dependencies.enum_dispatch]
 version = "0.3.11"
