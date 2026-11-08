@@ -8,6 +8,13 @@
   ],
   "packageRules": [
     {
+      "description": "third_party/ holds unpacked crates.io releases patched for collaboration (#1043; third_party/README.md). Their manifests mirror the upstream release, and their dev-dependencies are never built by the workspace, so a bump there proves nothing and drifts the vendored copy from the release it names. Update them by re-vendoring.",
+      "matchFileNames": [
+        "third_party/**"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Hold the GitHub-hosted runner at ubuntu-24.04. On ubuntu-26.04 (#872) the GUI smoke suite fails wholesale: dogtail stops finding the apps' push buttons over AT-SPI ('New Document', 'Close', 'Add sheet'), and test_gui_harness.py's process-ownership test kills a process it did not start. Moving runners is a migration of the GUI harness, not a version bump. Remove this rule in the PR that makes the suite pass on 26.04.",
       "matchDatasources": [
         "github-runners"
