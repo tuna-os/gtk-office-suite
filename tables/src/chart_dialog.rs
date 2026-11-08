@@ -10,7 +10,7 @@
 //! read the selected column from, and the controller to record an
 //! insertion through — nothing else in `new`'s several hundred locals.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use gtk4::{self as gtk, prelude::*};
@@ -31,37 +31,52 @@ pub fn opener(
     grid: gtk4::DrawingArea,
 ) -> Box<dyn Fn()> {
     Box::new(move || {
-        let st = state.borrow();
-        let active = st.active_sheet;
-        let sheet = st.sheets[active].borrow();
-        let col = sheet.selected_col;
-        let mut data = Vec::new();
-        for r in 0..sheet.rows {
-            let label = sheet.data[r][0].clone();
-            let val_str = &sheet.data[r][col];
-            if let Ok(val) = val_str.parse::<f64>() {
-                let lbl = if label.is_empty() { format!("Row {}", r + 1) } else { label };
-                data.push((lbl, val));
-            }
-        }
-        if data.is_empty() { return; }
-
-        let chart_type = Rc::new(Cell::new(tables_core::sheet::ChartKind::Bar));
-        let data_rc = Rc::new(data);
+        // What the selection asks for: one column over the first column's
+        // labels, or a table of a category column and a series per column to
+        // its right (`ChartSpec::from_selection`).
+        use tables_core::sheet::{ChartKind, ChartSpec, LegendPosition};
+        let (draft, categories, plotted) = {
+            let st = state.borrow();
+            let sheet = st.sheets[st.active_sheet].borrow();
+            let block = sheet.selection_block();
+            let Some(mut spec) = ChartSpec::from_selection(&sheet, block, ChartKind::Bar, (0, 0), 480.0, 280.0) else { return };
+            // Placed under the data, at the selection's left edge.
+            let last = spec.series.iter().map(|s| s.val.2).max().unwrap_or(block.2);
+            spec.anchor = (last + 2, block.1);
+            let (categories, plotted) = spec.plot(&sheet);
+            (spec, categories, plotted)
+        };
+        let draft = Rc::new(RefCell::new(draft));
+        let plot = Rc::new((categories, plotted));
 
         let preview = gtk::DrawingArea::new();
         preview.set_vexpand(true);
         preview.set_hexpand(true);
-        let ct = chart_type.clone();
-        let d = data_rc.clone();
-        preview.set_draw_func(move |_, cr, w, h| {
-            let surface = crate::charts::render_chart(&d, ct.get(), w, h);
-            cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
-            cr.paint().unwrap();
-        });
+        {
+            let (draft, plot) = (draft.clone(), plot.clone());
+            preview.set_draw_func(move |_, cr, w, h| {
+                let spec = draft.borrow();
+                let series: Vec<crate::charts::Series> =
+                    plot.1.iter().map(|(name, values)| crate::charts::Series { name: Some(name), values }).collect();
+                let decor = crate::charts::Decor {
+                    title: &spec.title,
+                    x_title: spec.x_axis_title.as_deref(),
+                    y_title: spec.y_axis_title.as_deref(),
+                    legend: match spec.legend_position {
+                        LegendPosition::None => crate::charts::LegendPos::None,
+                        LegendPosition::Top => crate::charts::LegendPos::Top,
+                        LegendPosition::Bottom => crate::charts::LegendPos::Bottom,
+                        LegendPosition::Left => crate::charts::LegendPos::Left,
+                        LegendPosition::Right => crate::charts::LegendPos::Right,
+                    },
+                };
+                let surface = crate::charts::render_chart_decorated(&plot.0, &series, spec.kind, w, h, &decor);
+                cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+                cr.paint().unwrap();
+            });
+        }
 
         // The kinds Excel and Calc share, in their order.
-        use tables_core::sheet::ChartKind;
         const KINDS: [(&str, ChartKind); 5] = [
             ("Column", ChartKind::Bar),
             ("Line", ChartKind::Line),
@@ -81,10 +96,10 @@ pub fn opener(
                 button.set_active(true);
                 first = Some(button.clone());
             }
-            let (ct2, pv) = (chart_type.clone(), preview.clone());
+            let (draft, pv) = (draft.clone(), preview.clone());
             button.connect_toggled(move |b| {
                 if b.is_active() {
-                    ct2.set(kind);
+                    draft.borrow_mut().kind = kind;
                     pv.queue_draw();
                 }
             });
@@ -97,6 +112,44 @@ pub fn opener(
         type_row.add_suffix(&type_combo);
         let group = adw::PreferencesGroup::new();
         group.add(&type_row);
+
+        // Title, axis titles and legend: what the file keeps and Calc and
+        // Excel draw.
+        let text_row = |label: &str, name: &str, set: fn(&mut ChartSpec, String)| {
+            let row = adw::EntryRow::builder().title(suite_common::i18n(label)).build();
+            row.set_widget_name(name);
+            let (draft, pv) = (draft.clone(), preview.clone());
+            row.connect_changed(move |r| {
+                set(&mut draft.borrow_mut(), r.text().to_string());
+                pv.queue_draw();
+            });
+            row
+        };
+        group.add(&text_row("Title", "chart-title", |c, t| c.title = t));
+        group.add(&text_row("Horizontal axis title", "chart-x-title", |c, t| c.x_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
+        group.add(&text_row("Vertical axis title", "chart-y-title", |c, t| c.y_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
+        const LEGENDS: [(&str, LegendPosition); 5] = [
+            ("Right", LegendPosition::Right),
+            ("Bottom", LegendPosition::Bottom),
+            ("Top", LegendPosition::Top),
+            ("Left", LegendPosition::Left),
+            ("None", LegendPosition::None),
+        ];
+        let names: Vec<String> = LEGENDS.iter().map(|(n, _)| suite_common::i18n(n)).collect();
+        let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let legend_row = adw::ComboRow::builder().title(suite_common::i18n("Legend")).model(&gtk::StringList::new(&name_refs)).build();
+        legend_row.set_widget_name("chart-legend");
+        {
+            let (draft, pv) = (draft.clone(), preview.clone());
+            legend_row.connect_selected_notify(move |r| {
+                if let Some((_, pos)) = LEGENDS.get(r.selected() as usize) {
+                    draft.borrow_mut().legend_position = *pos;
+                    pv.queue_draw();
+                }
+            });
+        }
+        group.add(&legend_row);
+
         preview.set_size_request(-1, 280);
         let card = gtk::Frame::new(None);
         card.add_css_class("card");
@@ -110,39 +163,12 @@ pub fn opener(
         );
         {
             let ctl = controller.clone();
-            let ct = chart_type.clone();
+            let draft = draft.clone();
             let dlg = dialog.clone();
             let grid = grid.clone();
             insert_btn.connect_clicked(move |_| {
-                use tables_core::sheet::ChartSpec;
-                let (col, first, last) = {
-                    let state = ctl.borrow().state.clone();
-                    let st = state.borrow();
-                    let sheet = st.sheet();
-                    let col = sheet.selected_col;
-                    let mut first = None;
-                    let mut last = 0;
-                    for r in 0..sheet.rows {
-                        if sheet.data[r][col].parse::<f64>().is_ok() {
-                            first.get_or_insert(r);
-                            last = r;
-                        }
-                    }
-                    (col, first, last)
-                };
-                let Some(first) = first else { return };
-                let kind = ct.get();
-                // The canonical series vector holds the series from the
-                // start; the legacy ranges mirror it (TBL-002).
-                let chart = ChartSpec::single_series(
-                    kind,
-                    String::new(),
-                    (first, 0, last),
-                    (first, col, last),
-                    (last + 2, col),
-                    480.0,
-                    280.0,
-                );
+                // One undo step, whatever the dialog held.
+                let chart = draft.borrow().clone();
                 crate::sheet_actions::apply(&ctl, &grid, |c| { c.mutate_sheet("Insert Chart", move |sheet| {
                     sheet.charts.push(chart);
                 }); });
