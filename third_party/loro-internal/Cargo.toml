@@ -355,7 +355,7 @@ version = "0.8.5"
 version = "0.10.0"
 
 [dev-dependencies.zstd]
-version = "0.13.0"
+version = "0.14.0"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten"), not(target_os = "wasi")))'.dependencies.getrandom]
 version = "0.2.15"
