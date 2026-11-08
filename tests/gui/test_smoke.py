@@ -10399,6 +10399,85 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         )
 
 
+class TablesChartEditorSmoke(BaseGUITestCase):
+    """The chart dialog charts a selected table, not one column (#1658): a
+    category column and a series per value column, named by the header row,
+    with a title, axis titles and a legend position, inserted as one undo
+    step and saved as a chart with both series."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-chart-editor-")
+        self._doc = os.path.join(self._dir, "table.xlsx")
+        with open(self._doc, "wb") as book:
+            book.write(minimal_xlsx_bytes("1"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _go(self, target):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        rawinput.typeText(target)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+
+    def test_a_selected_table_is_charted_with_its_series_titles_and_legend(self):
+        from dogtail import rawinput
+        import subprocess
+        import zipfile
+
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
+        rows = (("A1", ""), ("B1", "Sales"), ("C1", "Plan"),
+                ("A2", "Q1"), ("B2", "3"), ("C2", "2"),
+                ("A3", "Q2"), ("B3", "7"), ("C3", "5"),
+                ("A4", "Q3"), ("B4", "5"), ("C4", "6"))
+        for cell, text in rows:
+            if not text:
+                continue
+            self._go(cell)
+            rawinput.typeText(text)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
+        self._go("A1:C4")  # the whole table is the selection
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-chart"])
+        insert = self.wait_until(
+            lambda: self.app.findChildren(lambda c: c.roleName == "push button" and c.name == "Insert"),
+            bool, timeout=10.0, description="the chart dialog's Insert button")[0]
+        for label, text in (("Title", "Revenue"), ("Horizontal axis title", "Quarter"),
+                            ("Vertical axis title", "Units")):
+            entry = self.wait_until(
+                lambda label=label: self.app.findChild(
+                    lambda c: c.roleName == "text" and c.name == label and c.showing,
+                    retry=False, requireResult=False),
+                bool, description=f"the {label} entry")
+            entry.text = text
+        self.wait_until(
+            lambda: self.app.findChild(lambda c: c.roleName == "text" and c.name == "Title",
+                                       retry=False, requireResult=False).text,
+            lambda t: t == "Revenue", description="the title to be held")
+        insert.do_action(0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
+        rawinput.keyCombo("<Control>s")
+
+        def saved_chart():
+            try:
+                with zipfile.ZipFile(self._doc) as book:
+                    names = [n for n in book.namelist() if n.startswith("xl/charts/chart")]
+                    return book.read(names[0]).decode() if names else None
+            except (zipfile.BadZipFile, OSError):
+                return None
+        chart = self.wait_until(saved_chart, bool, timeout=10.0, description="a chart part in the saved workbook")
+        self.assertEqual(chart.count("<c:ser>"), 2, "one series per value column")
+        for needle in ("Sales", "Plan", "Revenue", "Quarter", "Units"):
+            self.assertIn(needle, chart, f"{needle} is not in the saved chart")
+        self.assertIsNone(self.process.poll(), "tables crashed charting a table")
+
+
 class DecksUndoSelectionSmoke(BaseGUITestCase):
     """decks-readiness row 10, the window half: undo repairs the selection
     (DecksController::repair_selection). A shape is added to a duplicated

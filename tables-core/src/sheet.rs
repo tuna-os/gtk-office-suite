@@ -934,6 +934,66 @@ impl ChartSpec {
         }
     }
 
+    /// The chart a selection asks for, or `None` when it holds nothing to plot.
+    ///
+    /// A selection of one column plots that column's numbers over the labels
+    /// in the sheet's first column, as the dialog has always done. A
+    /// selection of two or more columns is a table: its left column holds
+    /// the categories and each column to its right is a series. When the
+    /// top row of those series is text, it names them and the numbers start
+    /// below it; otherwise the series are unnamed and every row is data. A
+    /// column with no number in it is not a series.
+    pub fn from_selection(
+        sheet: &SheetModel,
+        block: (usize, usize, usize, usize),
+        kind: ChartKind,
+        anchor: (usize, usize),
+        width_px: f64,
+        height_px: f64,
+    ) -> Option<ChartSpec> {
+        let (r0, c0, r1, c1) = block;
+        let is_number = |r: usize, c: usize| sheet.cell(r, c).trim().parse::<f64>().is_ok();
+        let series = if c1 == c0 {
+            let first = (0..sheet.rows).find(|&r| is_number(r, c0))?;
+            let last = (0..sheet.rows).rev().find(|&r| is_number(r, c0))?;
+            vec![ChartSeries { name: String::new(), cat: (first, 0, last), val: (first, c0, last), color: None }]
+        } else {
+            let value_cols = c0 + 1..=c1;
+            // A text cell above the numbers of any value column is a header row.
+            let header = value_cols.clone().any(|c| {
+                let t = sheet.cell(r0, c).trim();
+                !t.is_empty() && !is_number(r0, c)
+            });
+            let first = if header { r0 + 1 } else { r0 };
+            if first > r1 {
+                return None;
+            }
+            value_cols
+                .filter(|&c| (first..=r1).any(|r| is_number(r, c)))
+                .map(|c| ChartSeries {
+                    name: if header { sheet.cell(r0, c).trim().to_string() } else { String::new() },
+                    cat: (first, c0, r1),
+                    val: (first, c, r1),
+                    color: None,
+                })
+                .collect()
+        };
+        let first = series.first()?.clone();
+        Some(ChartSpec {
+            kind,
+            title: String::new(),
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            cat: first.cat,
+            val: first.val,
+            series,
+            anchor,
+            width_px,
+            height_px,
+        })
+    }
+
     /// Every admitted series, in file order. The legacy `cat`/`val` are a
     /// mirror of the first series, not a second copy: a chart built before
     /// the series vector existed (empty `series`) reads through it.
