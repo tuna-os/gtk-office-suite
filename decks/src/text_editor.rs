@@ -584,7 +584,19 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
     scrolled.set_child(Some(&view));
     let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let (bar, controls) = build_controls();
-    body.append(&bar);
+    // The bar is 443px wide, wider than a phone-sized window: a popover
+    // that cannot fit its screen is never shown, so at 400px the editor
+    // closed as it opened and slide text could not be edited. It keeps its
+    // full width where there is room and scrolls sideways where there is
+    // not.
+    let bar_scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_width(true)
+        .propagate_natural_height(true)
+        .child(&bar)
+        .build();
+    body.append(&bar_scroller);
     body.append(&scrolled);
     let hint = gtk::Label::new(Some(&suite_common::i18n(
         "Enter: new line · Ctrl+Enter: apply · Escape: cancel · Formats apply to the selection. The slide shows exact sizes and layout.",
