@@ -421,6 +421,10 @@
     "B": "amber",
     "C": "amber"
   },
+  "tables/wide-column-right-align": {
+    "A": "red",
+    "B": "red"
+  },
   "tables/wide-unheaded-complaint-log": {
     "A": "amber",
     "B": "amber"
