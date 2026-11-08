@@ -53,6 +53,13 @@ clipped viewport do not establish corresponding ink boxes.
 `tables/unprinted-headings` is the reduced fixture
 for this case (Mining Remediation Authority financial statements, #1348).
 
+When a spreadsheet omits printed row and column headings and starts with a
+column wider than both the printed page and the editor's viewport, each
+side clips the column at its own right edge (`tables/wide-column-no-headings`,
+#1339). The scorer removes the editor's screen headings, aligns the shared
+horizontal width from the cell origin, and measures scale along the
+unclipped vertical axis.
+
 ## Licences and attribution
 
 Every document is published under an open government licence that

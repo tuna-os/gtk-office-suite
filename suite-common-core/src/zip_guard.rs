@@ -259,6 +259,41 @@ pub fn xml_depth(xml: &[u8]) -> usize {
     deepest
 }
 
+/// What a password-protected Office Open XML file starts with. Word, Excel
+/// and PowerPoint wrap an encrypted document in an OLE compound file (an
+/// `EncryptedPackage` stream), not in a ZIP; the pre-2007 binary formats
+/// start the same way.
+const OLE_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+/// The error for a file only a password can open.
+pub const PASSWORD_PROTECTED: &str = "This file is password-protected, which can't be opened here. Remove the password in the app that made it, then open it again.";
+/// The error for an OLE compound file that may be a pre-2007 document.
+pub const PASSWORD_OR_LEGACY: &str = "This file is password-protected or in a pre-2007 Office format, which can't be opened here. Remove the password, or save it in the current format, in the app that made it, then open it again.";
+
+/// Refuse a document that needs a password to open, by saying so.
+///
+/// Neither Letters, Tables nor Decks can decrypt a document: an encrypted
+/// OOXML file is not a ZIP, so the readers reported "invalid Zip archive:
+/// Could not find EOCD"; an encrypted ODF is a ZIP whose parts are
+/// ciphertext, which one reader reported as "content.xml is not valid
+/// UTF-8". Neither points the user at the password. A file that is neither
+/// (not a package at all, or an ordinary one) passes, and the reader's own
+/// error stands.
+pub fn check_not_encrypted(path: &std::path::Path) -> Result<(), String> {
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut head = [0u8; 8];
+    if file.read_exact(&mut head).is_ok() && head == OLE_MAGIC {
+        return Err(PASSWORD_OR_LEGACY.to_string());
+    }
+    let Ok(mut archive) = ZipArchive::new(file) else { return Ok(()) };
+    let Ok(mut manifest) = archive.by_name("META-INF/manifest.xml") else { return Ok(()) };
+    let Ok(bytes) = ZipBudget::default().read_entry(&mut manifest, "META-INF/manifest.xml") else { return Ok(()) };
+    if String::from_utf8_lossy(&bytes).contains("encryption-data") {
+        return Err(PASSWORD_PROTECTED.to_string());
+    }
+    Ok(())
+}
+
 /// Refuse the package at `path` if any member exceeds the default package
 /// limits, or if any XML member nests deeper than `limit`.
 ///
@@ -303,6 +338,53 @@ mod tests {
         assert_eq!(xml_depth(deep.as_bytes()), 3_000);
         // Unclosed or truncated input still measures what it opened.
         assert_eq!(xml_depth(b"<a><b><c"), 3);
+    }
+
+    fn write_zip(parts: &[(&str, &str)]) -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let mut buffer = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buffer));
+            for (name, text) in parts {
+                writer.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+                writer.write_all(text.as_bytes()).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&buffer).unwrap();
+        file
+    }
+
+    #[test]
+    fn an_ole_compound_file_is_named_as_password_protected_or_legacy() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&OLE_MAGIC).unwrap();
+        file.write_all(&[0u8; 512]).unwrap();
+        assert_eq!(check_not_encrypted(file.path()), Err(PASSWORD_OR_LEGACY.to_string()));
+    }
+
+    #[test]
+    fn an_odf_package_with_encrypted_parts_is_named_as_password_protected() {
+        let file = write_zip(&[("META-INF/manifest.xml", "<manifest:file-entry><manifest:encryption-data/></manifest:file-entry>"), ("content.xml", "ciphertext")]);
+        assert_eq!(check_not_encrypted(file.path()), Err(PASSWORD_PROTECTED.to_string()));
+    }
+
+    #[test]
+    fn ordinary_and_unreadable_files_are_left_to_the_reader() {
+        use std::io::Write;
+        let plain = write_zip(&[("META-INF/manifest.xml", "<manifest:manifest/>"), ("content.xml", "<a/>")]);
+        assert_eq!(check_not_encrypted(plain.path()), Ok(()));
+        let no_manifest = write_zip(&[("word/document.xml", "<a/>")]);
+        assert_eq!(check_not_encrypted(no_manifest.path()), Ok(()));
+        let mut text = tempfile::NamedTempFile::new().unwrap();
+        text.write_all(b"just some text, not a package").unwrap();
+        assert_eq!(check_not_encrypted(text.path()), Ok(()));
+        let mut short = tempfile::NamedTempFile::new().unwrap();
+        short.write_all(&OLE_MAGIC[..3]).unwrap();
+        assert_eq!(check_not_encrypted(short.path()), Ok(()));
+        assert!(check_not_encrypted(std::path::Path::new("/no/such/file.docx")).is_err());
     }
 
     fn tiny() -> ZipLimits {
