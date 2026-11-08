@@ -4,7 +4,7 @@
 
 
 Letters keeps tables and paragraph structure in `letters-core`; the GTK text
-buffer is a rendered/editable view. Table cells remain tagged paragraphs so
+buffer is a rendered projection of it. Table cells remain tagged paragraphs so
 global cursor offsets, undo, and clipboard fragments continue to work. Table
 row/column insertion, deletion, and row-major navigation are model operations,
 not string-prefix rewrites.
@@ -16,8 +16,13 @@ levels are retained on import/export. Constructs outside those mappings remain
 covered by the existing interoperability report and opaque-package warning
 path rather than being silently flattened.
 
-The GTK bridge renders list markers from the model level and captures them
-back from four-space indentation. This keeps keyboard continuation and paste
+The GTK bridge renders list markers from the model level. It used to capture
+them back from four-space indentation, reading the document out of the buffer
+on save; since #1202 and LET-003 the live model (`letters/src/live.rs`) is the
+only authority: saving, find, spelling and word count read it, and the buffer
+is kept as the input-method and caret projection. The buffer-to-model readers
+in `letters/src/bridge.rs` remain for tests only (`#[cfg(test)]`), which check
+that the projection loses nothing. This keeps keyboard continuation and paste
 journeys readable while preserving structured state for round-trips.
 
 `letters_core::StructuredEditor` is the GTK-free controller seam for those

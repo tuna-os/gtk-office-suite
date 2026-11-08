@@ -868,6 +868,43 @@ fn docx_page_geometry_round_trips() {
     assert_eq!((pg.header_pt, pg.footer_pt), (Some(18.0), Some(27.5)), "the header and footer distances");
 }
 
+/// A page measured in whole twips, as Word and Writer write it, comes back
+/// as the same twips however often it is saved. rdocx turns points into
+/// twips by truncating, so 595.3pt (11906 twips) used to be written as
+/// 11905, and 70.85pt (1417) as 1416: every save took a twip off.
+#[test]
+fn docx_page_geometry_keeps_every_twip_through_repeated_saves() {
+    use letters_core::model::PageGeometry;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Document::from_plain_text("body");
+    let page = PageGeometry {
+        width_pt: 595.3,
+        height_pt: 841.9,
+        margin_top_pt: 70.85,
+        margin_bottom_pt: 70.85,
+        margin_left_pt: 64.8,
+        margin_right_pt: 64.8,
+        columns: 1,
+        column_gap_pt: 18.0,
+        header_pt: Some(56.7),
+        footer_pt: Some(56.7),
+        border: None,
+    };
+    d.page = Some(page);
+    for save in 1..=3 {
+        let path = dir.path().join(format!("geom{save}.docx"));
+        docx::write(&d, path.to_str().unwrap()).expect("write");
+        d = docx::read(path.to_str().unwrap()).expect("read");
+        let pg = d.page.expect("page geometry lost");
+        let twips = |pt: f64| (pt * 20.0).round() as i64;
+        assert_eq!(
+            [pg.width_pt, pg.height_pt, pg.margin_top_pt, pg.margin_bottom_pt, pg.margin_left_pt, pg.margin_right_pt, pg.header_pt.unwrap(), pg.footer_pt.unwrap()].map(twips),
+            [page.width_pt, page.height_pt, page.margin_top_pt, page.margin_bottom_pt, page.margin_left_pt, page.margin_right_pt, 56.7, 56.7].map(twips),
+            "save {save}: the page's twips"
+        );
+    }
+}
+
 #[test]
 fn docx_font_family_round_trips() {
     use letters_core::model::{Run, RunStyle};

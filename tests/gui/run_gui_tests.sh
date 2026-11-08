@@ -166,7 +166,10 @@ fi
 # is optional.
 WM_NAME="${GUI_TEST_WINDOW_MANAGER:-matchbox}"
 case "$WM_NAME" in
-    matchbox) WM_BIN=matchbox-window-manager; WM_ARGS="-use_titlebar no" ;;
+    matchbox)
+        # Its own key shortcuts: the stock set grabs Alt+letter (see the file).
+        WM_BIN=matchbox-window-manager
+        WM_ARGS="-use_titlebar no -kbdconfig $PWD/matchbox-kbdconfig" ;;
     openbox) WM_BIN=openbox; WM_ARGS="" ;;
     *)
         echo "GUI setup failed: GUI_TEST_WINDOW_MANAGER=${WM_NAME} is not one of matchbox, openbox." >&2
