@@ -142,3 +142,28 @@ fn an_ordinary_document_still_opens() {
     assert!(read_back.to_plain_text().contains("an ordinary letter"));
     let _ = std::fs::remove_file(&path);
 }
+
+/// Letters can't decrypt a document, and said so with an error about ZIP
+/// archives or UTF-8 that never mentions the password (#1655: the admitted
+/// scope has no encryption, and a refusal has to say why). A password-
+/// protected .docx is an OLE compound file, not a ZIP.
+#[test]
+fn a_password_protected_docx_is_refused_by_naming_the_password() {
+    let mut file = NamedTempFile::new().unwrap();
+    file.write_all(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]).unwrap();
+    file.write_all(&[0u8; 4096]).unwrap();
+    file.flush().unwrap();
+    let err = letters_core::docx::read(file.path().to_str().unwrap()).expect_err("an encrypted package must not open");
+    assert!(err.contains("password"), "the error must name the password, got: {err}");
+    assert!(!err.contains("EOCD"), "not the ZIP parser's complaint: {err}");
+}
+
+/// An ODT with encrypted parts is a ZIP whose content is ciphertext.
+#[test]
+fn an_encrypted_odt_is_refused_by_naming_the_password() {
+    let manifest = "<manifest:manifest><manifest:file-entry manifest:full-path=\"content.xml\"><manifest:encryption-data/></manifest:file-entry></manifest:manifest>";
+    let file = package(&[], &[("META-INF/manifest.xml", manifest), ("content.xml", "\u{1}\u{2}\u{3}")]);
+    let err = letters_core::odt::read(file.path().to_str().unwrap()).expect_err("an encrypted package must not open");
+    assert!(err.contains("password"), "the error must name the password, got: {err}");
+    assert!(!err.contains("UTF-8"), "not the XML reader's complaint: {err}");
+}

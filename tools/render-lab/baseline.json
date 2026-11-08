@@ -348,8 +348,8 @@
     "C": "green"
   },
   "tables/chart-multi": {
-    "A": "amber",
-    "B": "amber",
+    "A": "green",
+    "B": "green",
     "C": "amber"
   },
   "tables/chart-pie": {
