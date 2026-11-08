@@ -35,6 +35,18 @@ pub fn render_chart_named(
     surface
 }
 
+/// As [`render_chart_named`], with any number of series over the same
+/// categories (see [`draw_chart_series`]).
+pub fn render_chart_series(categories: &[String], series: &[Series], kind: ChartKind, width: i32, height: i32) -> ImageSurface {
+    let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
+    let cr = Context::new(&surface).unwrap();
+    crate::use_ui_font_rendering(&cr);
+    draw_chart_series(&cr, categories, series, kind, width as f64, height as f64);
+    drop(cr);
+    surface.flush();
+    surface
+}
+
 /// Draw the chart into `cr` at its origin, `width` x `height` in its
 /// units, on a white ground: what [`render_chart_named`] draws onto a
 /// surface, for a caller with a context of its own (a slide on the canvas
