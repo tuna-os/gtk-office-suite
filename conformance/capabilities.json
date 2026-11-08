@@ -559,6 +559,32 @@
           "tests/gui/test_collab_letters.py::LettersCollabTwoHeads::test_open_both_leaves_the_shared_session_alone"
         ]
       }
+    },
+    {
+      "id": "tables.dynamic-arrays.envelope",
+      "app": "tables",
+      "issue": 1659,
+      "title": "Dynamic-array functions spill as the inventory says and survive XLSX save and reopen",
+      "scope": "The functions and shapes in docs/TABLES-DYNAMIC-ARRAYS.md, on the pinned IronCalc 0.9.1: values and shape of each spill, #SPILL! in every direction and its clearing, #CALC! for an empty result, recalculation with source edits and resizes, a source on another sheet, and one undo step per spill. XLSX writes each as an array formula marked dynamic (with the _xlfn. and _xlws. prefixes the newer functions need), stores only the anchor, and the spill is recomputed in full on reopening. Pinned limits: a spill past the grid is clipped with no #SPILL!, and the spill reference operator (E1#) yields the anchor alone. Does not certify Excel itself, a Calc that evaluates these functions (24.8 and later), or a GUI journey for the visible projection; what a Calc 24.2 rewrite does is pinned in tables-core/tests/soffice_oracle.rs and described in the inventory, not cited here.",
+      "status": "verified",
+      "revision": "1fdb4e2f90feb1b8b3041a40e29465c0d8ed03ee",
+      "requires": [
+        "model",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "tables-core::dynamic_arrays::each_admitted_function_spills_the_shape_and_values_its_row_says",
+          "tables-core::dynamic_arrays::a_blocked_spill_shows_spill_in_every_direction_and_clears_with_the_blocker",
+          "tables-core::dynamic_arrays::a_spill_recalculates_with_source_edits_and_resizes",
+          "tables-core::dynamic_arrays::references_into_a_spill_and_a_spill_from_another_sheet_work",
+          "tables-core::dynamic_arrays::undo_and_redo_take_a_spill_out_and_back",
+          "tables-core::engine::tests::a_formula_is_a_spill_anchor_only_when_it_derives_cells"
+        ],
+        "format": [
+          "tables-core::dynamic_arrays::xlsx_keeps_each_formula_and_recomputes_each_spill_on_reopen"
+        ]
+      }
     }
   ],
   "waivers": []
