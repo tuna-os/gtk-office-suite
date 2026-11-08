@@ -79,7 +79,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             libreoffice-writer libreoffice-calc libreoffice-impress
-      - uses: taiki-e/install-action@dd2e657c648186b8f995f901aaf7d95fbd87ee34 # nextest
+      - uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
         with:
           tool: nextest
       # One nextest run over both targets, so the lane leaves one JUnit
