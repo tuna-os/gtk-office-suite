@@ -188,6 +188,18 @@ impl TablesEngine {
     /// canonical numeric text does. This is what undo captures, copy
     /// carries, sort moves and save writes; the displayed value never
     /// stands in for it.
+    /// Whether the formula at (`row`, `col`) spills: the cell to its right
+    /// or below is one of the cells the engine derived from it
+    /// (`Cell::SpillCell` records its anchor). A blocked spill (#SPILL!)
+    /// derives nothing and a scalar formula never does.
+    pub fn is_spill_anchor(&self, sheet: usize, row: usize, col: usize) -> bool {
+        let Ok(ws) = self.model.workbook.worksheet(sheet as u32) else { return false };
+        let anchor = (row as i32 + 1, col as i32 + 1);
+        [(anchor.0, anchor.1 + 1), (anchor.0 + 1, anchor.1)].into_iter().any(|(r, c)| {
+            matches!(ws.cell(r, c).as_deref(), Some(ironcalc_base::types::Cell::SpillCell { a, .. }) if *a == anchor)
+        })
+    }
+
     pub fn editable_input_at(&self, sheet: usize, row: usize, col: usize) -> String {
         if let Ok(ws) = self.model.workbook.worksheet(sheet as u32) {
             if let Some(cell) = ws.cell(row as i32 + 1, col as i32 + 1) {
@@ -609,6 +621,31 @@ mod tests {
         assert_eq!(sheet.data[2][0], "3");
         assert!(sheet.formulas[0][0]);
         assert!(!sheet.formulas[1][0]);
+    }
+
+    /// The XLSX writer asks this to write a spilling formula as a dynamic
+    /// array formula: Excel evaluates a plain TRANSPOSE or MMULT in one cell.
+    #[test]
+    fn a_formula_is_a_spill_anchor_only_when_it_derives_cells() {
+        let mut engine = TablesEngine::new(8, 8).unwrap();
+        for (r, v) in [(0, "1"), (1, "2")] {
+            engine.set_cell_text(r, 0, v).unwrap();
+            engine.set_cell_text(r, 1, v).unwrap();
+        }
+        engine.set_cell_text(0, 3, "=SEQUENCE(3)").unwrap();
+        engine.set_cell_text(0, 4, "=TRANSPOSE(A1:B2)").unwrap();
+        engine.set_cell_text(0, 6, "=A1+1").unwrap();
+        engine.set_cell_text(5, 5, "=SEQUENCE(1,3)").unwrap();
+        assert!(engine.is_spill_anchor(0, 0, 3), "a column spill");
+        assert!(engine.is_spill_anchor(0, 0, 4), "a transposed block");
+        assert!(engine.is_spill_anchor(0, 5, 5), "a row spill");
+        assert!(!engine.is_spill_anchor(0, 0, 6), "a scalar formula");
+        assert!(!engine.is_spill_anchor(0, 1, 3), "a derived cell is not an anchor");
+        assert!(!engine.is_spill_anchor(0, 0, 0), "a constant");
+        let mut blocked = TablesEngine::new(4, 4).unwrap();
+        blocked.set_cell_text(1, 0, "x").unwrap();
+        blocked.set_cell_text(0, 0, "=SEQUENCE(3)").unwrap();
+        assert!(!blocked.is_spill_anchor(0, 0, 0), "a blocked spill derives nothing");
     }
 
     #[test]
