@@ -10819,6 +10819,17 @@ class OpenPathsMixin:
     through the test-mode `test-drop-files` action that runs the same code
     a real drop does."""
 
+    # The file chooser's location entry completes names from a folder listing
+    # it loads in the background (see _open_through_dialog). When the dialog
+    # closes before that listing lands, GTK's own completion asks a model
+    # that is already gone: `gtk_tree_model_get_iter_first: assertion
+    # 'GTK_IS_TREE_MODEL (tree_model)' failed`, dozens of times, in about one
+    # CI attempt in ten (#1209). The apps use gtk::FileDialog and hold no
+    # GtkTreeModel of their own, so the message comes from GTK's chooser. It
+    # is tolerated here, in the journeys that drive that chooser, and nowhere
+    # else.
+    tolerated_gtk_criticals = ("gtk_tree_model_get_iter_first: assertion 'GTK_IS_TREE_MODEL (tree_model)' failed",)
+
     def _drop(self, *paths):
         import subprocess
         variant = "'" + "\\n".join(paths) + "'"
