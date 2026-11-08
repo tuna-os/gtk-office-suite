@@ -795,6 +795,34 @@ def tables():
     ws.column_dimensions["B"].width = 40
     save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
+    # Reduced from Hampshire Public Review: additional postcodes (#1347):
+    # a 251-row, 2-column unheaded list of postcodes and premises counts
+    # paginates across 6 portrait A4 pages in LibreOffice Calc when headings
+    # are disabled (print_options.headings = False), while Tables captures
+    # the continuous unpaginated on-screen grid. In compare.py, without
+    # printed heading boxes, lo_cell_box(ref) returns None, align() does not
+    # crop Tables' header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (50 rows), squashing 73 on-screen rows onto 50 rows.
+    wb, ws = book()
+    ws["A1"] = "Postcode"
+    ws["B1"] = "No of Premises Impacted"
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 25
+    sample_postcodes = [
+        "SO31 1FD", "PO15 7QR", "PO15 7QS", "PO15 7RP", "SO31 8AS",
+        "SO30 0AW", "SO30 2EU", "PO14 4PJ", "RG24 7BB", "GU34 5HN",
+    ]
+    for r in range(2, 76):
+        pc = sample_postcodes[(r - 2) % len(sample_postcodes)]
+        ws.cell(r, 1, f"{pc[:4]} {((r * 7) % 900) + 100:03d}")
+        ws.cell(r, 2, (r % 5) + 1)
+    save(
+        wb,
+        "tall-unheaded-postcodes",
+        "A 75-row, 2-column unheaded list that spans multiple vertical pages in Calc; isolates continuous viewport vs unheaded multipage print",
+        headings=False,
+    )
+
     wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
