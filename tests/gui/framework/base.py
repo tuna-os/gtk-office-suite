@@ -1179,8 +1179,12 @@ class BaseGUITestCase(unittest.TestCase):
             trace("type_text", text=text)
             reactivate()
             subprocess.run(
-                ["xdotool", "type", "--window", self._win_id, "--", text],
-                capture_output=True, timeout=10,
+                # A doubled letter ("apple") lost one of the pair at xdotool's
+                # default 12ms gap, in CI and locally (#1209): the same key
+                # released and pressed again too fast for the client to see
+                # two presses. A longer gap keeps both.
+                ["xdotool", "type", "--delay", "40", "--window", self._win_id, "--", text],
+                capture_output=True, timeout=30,
             )
 
         rawinput.click = click
