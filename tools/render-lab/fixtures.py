@@ -930,6 +930,8 @@ def tables(img=None):
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from datetime import datetime
+    from openpyxl.utils import get_column_letter
 
     d = os.path.join(OUT, "tables")
     os.makedirs(d, exist_ok=True)
@@ -1009,6 +1011,597 @@ def tables(img=None):
     ws["B4"] = "Statement of income"
     ws.column_dimensions["B"].width = 40
     save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
+
+    # Reduced from Hampshire Public Review: additional postcodes (#1347):
+    # a 251-row, 2-column unheaded list of postcodes and premises counts
+    # paginates across 6 portrait A4 pages in LibreOffice Calc when headings
+    # are disabled (print_options.headings = False), while Tables captures
+    # the continuous unpaginated on-screen grid. In compare.py, without
+    # printed heading boxes, lo_cell_box(ref) returns None, align() does not
+    # crop Tables' header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (50 rows), squashing 73 on-screen rows onto 50 rows.
+    wb, ws = book()
+    ws["A1"] = "Postcode"
+    ws["B1"] = "No of Premises Impacted"
+    ws.column_dimensions["A"].width = 15
+    ws.column_dimensions["B"].width = 25
+    sample_postcodes = [
+        "SO31 1FD", "PO15 7QR", "PO15 7QS", "PO15 7RP", "SO31 8AS",
+        "SO30 0AW", "SO30 2EU", "PO14 4PJ", "RG24 7BB", "GU34 5HN",
+    ]
+    for r in range(2, 76):
+        pc = sample_postcodes[(r - 2) % len(sample_postcodes)]
+        ws.cell(r, 1, f"{pc[:4]} {((r * 7) % 900) + 100:03d}")
+        ws.cell(r, 2, (r % 5) + 1)
+    save(
+        wb,
+        "tall-unheaded-postcodes",
+        "A 75-row, 2-column unheaded list that spans multiple vertical pages in Calc; isolates continuous viewport vs unheaded multipage print",
+        headings=False,
+    )
+
+    # Reduced from Service reservoir panel engineers: contact list (#1346):
+    # a 15-column unheaded contact directory (A through O) spanning 74 cm in width
+    # paginates horizontally across multiple portrait A4 pages in LibreOffice Calc
+    # when headings are disabled (print_options.headings = False). Tables captures
+    # the continuous unpaginated on-screen viewport (columns A through G). In
+    # compare.py, without printed heading boxes, lo_cell_box(ref) returns None,
+    # align() skips cropping on-screen header bands (ox=40, oy=20), and candidate page
+    # picking selects page 1 only (columns A through D), squashing columns A through G
+    # onto columns A through D (a 1.45× horizontal squeeze, displacement 79.5pt, SSIM 0.22).
+    wb, ws = book()
+    ws["A1"] = "Service Reservoir Panel Engineers Contact Directory"
+    ws["A1"].font = Font(name="Arial", size=14, bold=True)
+    ws["A2"] = "Panel engineers contact directory with assignments and address details"
+    ws["A2"].font = Font(name="Arial", size=10, italic=True)
+    ws["A3"] = "Columns D through L and O may contain blank contact fields"
+    ws["A3"].font = Font(name="Arial", size=9)
+
+    contact_headers = [
+        "Surname", "Forename", "Title", "Company name", "Address line 2",
+        "Address line 3", "Town", "Post Town", "County", "Post Code",
+        "Phone Number", "Mobile Number", "Email Address", "Existing panel",
+        "Joint corresponding panel",
+    ]
+    col_letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"]
+    col_widths = [16, 18, 10, 22, 20, 22, 16, 18, 16, 14, 18, 18, 26, 22, 26]
+    for c_idx, (header, width) in enumerate(zip(contact_headers, col_widths), start=1):
+        cell = ws.cell(5, c_idx, header)
+        cell.font = Font(name="Arial", size=11, bold=True)
+        col_letter = col_letters[c_idx - 1]
+        ws.column_dimensions[col_letter].width = width
+
+    sample_engineers = [
+        ("Cavanagh", "Stephen Paul", "Mr", "Binnies UK Ltd", "One City Place", "Queens Road",
+         "Chester", "Cheshire", "Cheshire", "CH1 3BQ", "01244 304125", "07795 542996",
+         "cavanaghsp@example.org", "Service Reservoirs Panel", "Joint Technical Panel"),
+        ("Hawley", "Robin William", "Mr", "Independent Consultant", "10 London Road", "Trent Valley",
+         "Lichfield", "Staffordshire", "Staffordshire", "WS14 9EJ", "01543 256618", "07887 896476",
+         "robin.hawley@example.org", "Service Reservoirs Panel", "Supervising Panel"),
+        ("Morgan", "Claire Louise", "Dr", "Arup Engineering", "4 Pierhead Street", "Capital Waterside",
+         "Cardiff", "Cardiff", "Glamorgan", "CF10 4QP", "02920 473727", "07712 345678",
+         "claire.morgan@example.org", "Service Reservoirs Panel", "All Reservoirs Panel"),
+        ("Thurston", "David George", "Eur Ing", "Stantec UK Ltd", "Buckingham Court", "Kingsmead Business Park",
+         "High Wycombe", "High Wycombe", "Buckinghamshire", "HP11 1JU", "01494 526240", "07801 987654",
+         "david.thurston@example.org", "Service Reservoirs Panel", "Service Reservoirs Panel"),
+    ]
+    for r_idx, engineer in enumerate(sample_engineers, start=6):
+        for c_idx, val in enumerate(engineer, start=1):
+            ws.cell(r_idx, c_idx, val)
+
+    save(
+        wb,
+        "wide-unheaded-contact-list",
+        "A 15-column unheaded contact directory spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
+
+    # Reduced from Record of non-lethal actions (template) (#1345):
+    # a single-column unheaded instruction sheet (Column A) spanning ~26 cm in width
+    # and 21 rows totaling >800 pt in height paginates vertically across multiple
+    # portrait A4 pages in LibreOffice Calc when headings are disabled
+    # (print_options.headings = False). Tables captures the continuous unpaginated
+    # on-screen viewport (column A + row/col header bands). In compare.py,
+    # without printed heading boxes, lo_cell_box(ref) returns None, align() skips
+    # cropping on-screen header bands (ox=40, oy=20), and candidate page picking
+    # selects page 1 only (rows 1..17), compressing all 21 rows into the space of
+    # 17 rows and 1019 px into 728 px (scale = 1.37×, displacement 82.1pt, SSIM 0.04).
+    wb, ws = book()
+    instructions_data = [
+        ("Record of Non-Lethal Actions Guidance and Instructions", Font(name="Arial", size=14, bold=True), 45),
+        ("When to use this template", Font(name="Arial", size=12, bold=True), 32),
+        (
+            "You can use this template to record observations of problem bird numbers and non-lethal deterrence measures taken before applying for or renewing wildlife protection licences.",
+            Font(name="Arial", size=10),
+            54,
+        ),
+        (
+            "You do not have to use this template: records may be submitted in another format provided they contain the same statutory fields and dates.",
+            Font(name="Arial", size=10),
+            32,
+        ),
+        ("Find out more about recording non-lethal actions and licence conditions online.", Font(name="Arial", size=10, italic=True), 28),
+        ("New licence applications - daily record requirements", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a record of non-lethal deterrence covering a minimum of one month if applying to shoot wild birds to reinforce scaring activities.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("State the number of birds observed present for each species that you wish to control under the proposed licence.", Font(name="Arial", size=10), 36),
+        (
+            "Include detailed descriptions of all active non-lethal methods deployed, including shooting to scare, acoustic deterrents, or human disturbance.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Use the second sheet of this workbook 'Daily record' to record active control methods on each date of action.", Font(name="Arial", size=10), 38),
+        (
+            "Use the fourth sheet of this workbook 'Long-term methods' to record static deterrents (such as netting, lasers, habitat modification, or visual decoys).",
+            Font(name="Arial", size=10),
+            44,
+        ),
+        ("Renewing your licence and reporting actions - monthly record", Font(name="Arial", size=12, bold=True), 36),
+        (
+            "You must submit a completed non-lethal action log if you have taken action under your licence or wish to apply for an annual renewal.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        (
+            "Record monthly summaries of active deterrents across the entire licence validity period, stating peak and average bird counts.",
+            Font(name="Arial", size=10),
+            42,
+        ),
+        ("Document species-specific reactions to each scaring intervention and note any habituation observed over time.", Font(name="Arial", size=10), 38),
+        ("Use the third sheet of this workbook 'Monthly summary' to record summary statistics and licence reference numbers.", Font(name="Arial", size=10), 38),
+        ("Static deterrent maintenance logs must accompany monthly activity logs to demonstrate ongoing compliance.", Font(name="Arial", size=10), 42),
+        ("Statutory guidance and references", Font(name="Arial", size=12, bold=True), 32),
+        ("Review national wildlife management licensing policies and bird control standards before submitting records:", Font(name="Arial", size=10), 32),
+        ("Licence classes A06 and A07: Protecting fisheries and angling clubs from fish-eating predators", Font(name="Arial", size=10), 36),
+        ("Licence classes A08 and A09: Licences to prevent serious agricultural and horticultural damage", Font(name="Arial", size=10), 36),
+    ]
+
+    ws.column_dimensions["A"].width = 125
+    for r_idx, (text, font_style, r_height) in enumerate(instructions_data, start=1):
+        cell = ws.cell(r_idx, 1, text)
+        cell.font = font_style
+        ws.row_dimensions[r_idx].height = r_height
+
+    save(
+        wb,
+        "oversized-unheaded-instructions",
+        "A single-column unheaded instruction sheet wider and taller than portrait A4; isolates continuous viewport vs unheaded two-dimensional multipage print",
+        headings=False,
+    )
+
+    # Reduced from OTSI Annual Review 2025-2026: Tables (#1344):
+    # a wide borderless single-column sheet (Column A width ~24 cm / ~896px)
+    # with unprinted headings (headings=False) and hyperlinked table contents
+    # styled with font color #0563C1. In headless LibreOffice Calc PDF export,
+    # borderless text crops to ink width (~412px) while Calc overrides hyperlink
+    # colors to #000080. Tables captures the full used extent of Column A (896px)
+    # plus header bands (ox=40, oy=20). In compare.py, lo_cell_box(ref) returns
+    # None due to missing print headings, align() skips cropping header bands,
+    # and resizes 936px onto 412px (scale 1.74×, 2.27× horizontal squash),
+    # yielding displacement 12.5pt, SSIM 0.67, words 84%, and colors 0%.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 115
+    ws.row_dimensions[1].height = 27
+    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 21
+
+    cell1 = ws.cell(1, 1, "OTSI Annual Review 2025/26 Tables")
+    cell1.font = Font(name="Arial", size=16, bold=True, color="000000")
+
+    cell2 = ws.cell(2, 1, "This dataset contains nine tables for OTSI's annual review")
+    cell2.font = Font(name="Arial", size=12)
+
+    cell3 = ws.cell(3, 1, "Contents")
+    cell3.font = Font(name="Arial", size=12, bold=True, color="000000")
+
+    links = [
+        ("Cover sheet", "#'Cover sheet'!A1"),
+        ("Notes", "#Notes!A1"),
+        ("Table A1", "#'Table A1'!A1"),
+        ("Table A2", "#'Table A2'!A1"),
+        ("Table A3", "#'Table A3'!A1"),
+        ("Table A4", "#'Table A4'!A1"),
+        ("Table B1", "#'Table B1'!A1"),
+        ("Table B2", "#'Table B2'!A1"),
+        ("Table B3", "#'Table B3'!A1"),
+        ("Table B4", "#'Table B4'!A1"),
+        ("Table C1", "#'Table C1'!A1"),
+        ("Contact Sheet", "#'Contact Sheet'!A1"),
+    ]
+    for idx, (label, target) in enumerate(links, start=4):
+        ws.row_dimensions[idx].height = 21
+        c = ws.cell(idx, 1, label)
+        c.hyperlink = target
+        c.font = Font(name="Arial", size=12, color="0563C1", underline="single")
+
+    save(
+        wb,
+        "wide-borderless-hyperlinks",
+        "A wide borderless single-column cover sheet with hyperlinked contents and unprinted headings; isolates column ink vs viewport extent and hyperlink styling",
+        headings=False,
+    )
+
+    # Reduced from BICS sectoral consumption estimates (#1343):
+    # a 6-column unheaded worksheet with a 2-tier merged header (SIC07 4-digit,
+    # Sector Description, Consumption Range (GWh) 2027-2031) spanning 27.5 cm in width.
+    # In headless LibreOffice Calc, the wide table paginates horizontally across
+    # multiple portrait A4 pages: Column A (2.54 cm / ~14 units) alone on pages 1-2,
+    # Column B (16.91 cm / ~70 units) alone on pages 3-4, and Columns C-F (~8 cm total)
+    # on pages 5-6. Tables captures the continuous on-screen grid (columns A through F, ~1077 px).
+    # In compare.py, with print_options.headings = False, lo_cell_box(ref) returns None,
+    # align() skips cropping on-screen header bands (ox=40, oy=20), and pick_sheet_page()
+    # selects page 1 (Column A alone, ink width 91 px), resampling the 1077 px wide
+    # 6-column sheet down into 91 px (an 11.8× horizontal squeeze, scale 6.72×, SSIM 0.22,
+    # words found 0%, red verdict).
+    wb, ws = book()
+    font = lambda **kw: Font(name="Calibri", size=kw.pop("size", 11), **kw)
+    ws.merge_cells("A1:A2")
+    ws.merge_cells("B1:B2")
+    ws.merge_cells("C1:F1")
+    ws["A1"] = "SIC07 4-digit"
+    ws["A1"].font = font(bold=True)
+    ws["A1"].alignment = Alignment(vertical="center")
+    ws["B1"] = "Sector Description"
+    ws["B1"].font = font(bold=True)
+    ws["B1"].alignment = Alignment(vertical="center")
+    ws["C1"] = "Consumption Range (GWh)"
+    ws["C1"].font = font(bold=True)
+    ws["C1"].alignment = Alignment(horizontal="center")
+    ws["C2"] = "2027-2028"
+    ws["C2"].font = font(bold=True)
+    ws["D2"] = "2028-2029"
+    ws["D2"].font = font(bold=True)
+    ws["E2"] = "2029-2030"
+    ws["E2"].font = font(bold=True)
+    ws["F2"] = "2030-2031"
+    ws["F2"].font = font(bold=True)
+
+    ws.column_dimensions["A"].width = 14
+    ws.column_dimensions["B"].width = 70
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 10
+    ws.column_dimensions["E"].width = 10
+    ws.column_dimensions["F"].width = 10
+
+    sample_bics_rows = [
+        ("1041", "Manufacture of oils and fats", "2.9 - 4.2", "3 - 4.3", "3.1 - 4.4", "3.2 - 4.6"),
+        ("1062", "Manufacture of starches and starch products", "<1", "<1", "<1", "<1"),
+        ("1081", "Manufacture of sugar", "170 - 190", "180 - 200", "180 - 200", "190 - 210"),
+        ("2011", "Manufacture of industrial gases", "56 - 300", "58 - 300", "59 - 310", "61 - 320"),
+        ("2013", "Manufacture of other inorganic basic chemicals", "81 - 990", "83 - 1000", "85 - 1000", "88 - 1100"),
+        ("2014", "Manufacture of other organic basic chemicals", "29 - 120", "30 - 120", "31 - 120", "32 - 130"),
+        ("2015", "Manufacture of fertilisers and nitrogen compounds", "37 - 360", "37 - 370", "39 - 380", "40 - 390"),
+        ("2016", "Manufacture of plastics in primary forms", "120 - 490", "130 - 500", "130 - 510", "140 - 530"),
+        ("2311", "Manufacture of flat glass", "11 - 25", "11 - 26", "11 - 26", "12 - 27"),
+        ("2312", "Manufacture of hollow glass", "42 - 150", "43 - 150", "44 - 150", "45 - 160"),
+        ("2410", "Manufacture of basic iron and steel and of ferro-alloys", "210 - 890", "220 - 910", "220 - 930", "230 - 960"),
+        ("2420", "Manufacture of tubes, pipes, hollow profiles and related fittings", "15 - 39", "16 - 40", "16 - 41", "17 - 42"),
+    ]
+    for r_idx, row_data in enumerate(sample_bics_rows, start=3):
+        for c_idx, val in enumerate(row_data, start=1):
+            cell = ws.cell(r_idx, c_idx, val)
+            cell.font = font()
+
+    save(
+        wb,
+        "wide-unheaded-consumption-estimates",
+        "A 6-column unheaded consumption estimates sheet with 2-tier header spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
+
+    # Reduced from Draft schedule 4 - complaint log (#1327):
+    # a 3-column unheaded worksheet with wide columns (widths 60, 101, 180)
+    # totaling 341 character units (~2,389 px) paginates horizontally across
+    # multiple A4 pages in LibreOffice Calc (Col A on page 1, Col B on page 2,
+    # Col C on page 3) when headings are disabled, while Tables renders the
+    # continuous used extent in its viewport (showing Col A and Col B side-by-side).
+    # In compare.py, candidate page picking chooses page 1 only and align() skips
+    # cropping on-screen header bands (ox=40, oy=20), compressing both Col A and
+    # Col B onto page 1's bounds, yielding scale 1.66×, displacement 25.7pt,
+    # and SSIM 0.13.
+    wb, ws = book()
+    ws.title = "Actionable Complaints"
+    ws.column_dimensions["A"].width = 60
+    ws.column_dimensions["B"].width = 101
+    ws.column_dimensions["C"].width = 180
+
+    title_cell = ws.cell(1, 1, "Log of Actionable Complaints")
+    title_cell.font = Font(name="Arial", size=14, bold=True)
+
+    headers = ["Field", "Options", "Notes"]
+    header_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(3, col_idx, h)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+        cell.fill = header_fill
+
+    complaint_rows = [
+        (
+            "Reference",
+            "Text and/or numerical field",
+            "For Veterinary Business use as needed. This field does not need to be included if the Complaint Log is submitted to RCVS.",
+        ),
+        ("Practice name", "Text field", ""),
+        ("Veterinary Business name", "Text field", ""),
+        (
+            "Pet Owner name",
+            "Text field",
+            "Field to be anonymised if Complaint Log shared with the RCVS",
+        ),
+        (
+            "Complaint handler name",
+            "Text field",
+            "Field to be anonymised if Complaint Log shared with the RCVS",
+        ),
+        ("Date the complaint became an Actionable Complaint", "Date field", ""),
+        ("Date the Actionable Complaint was acknowledged in writing", "Date field", ""),
+        (
+            "Summary of the Actionable Complaint",
+            "Text field",
+            "For Veterinary Business use as needed. This field does not need to be included if the Complaint Log is submitted to the RCVS.",
+        ),
+        (
+            "Nature of the Actionable Complaint category",
+            "Select one or two options only from a pre-defined list (see Lookups tab)",
+            "Nature of the Actionable Complaint - Veterinary Business interpretation of the Pet Owner concerns. This field can be updated as the Veterinary Business progresses through its Complaint Process.",
+        ),
+        (
+            "Sub nature of the Actionable Complaint",
+            "Select one or two options only per nature of actionable complaint category from a pre-defined list (see Lookups tab)",
+            "Sub-nature of the Actionable Complaint - Veterinary Business interpretation of the Pet Owner concerns. This field can be updated as the Veterinary Business progresses through its Complaint Process.",
+        ),
+        ("Animal species", "Select one from pre-defined list (see Lookups tab)", ""),
+        ("Animal age", "Numerical field", ""),
+        (
+            "Animal alive",
+            "Select one of alive or deceased.",
+            "Animal alive or deceased to be recorded at the point at which the complaint becomes an Actionable Complaint.",
+        ),
+        ("Steps taken by Veterinary Business to investigate the complaint", "Text field", ""),
+        ("Date the final response to the Actionable Complaint was issued", "Date field", ""),
+        ("Outcome", "Select one or more from a pre-defined list (see Lookups tab)", ""),
+        ("Actions taken by the practice/Veterinary Business", "Select one or more from a pre-defined list (see Lookups tab)", ""),
+    ]
+
+    for r_idx, (field, options, notes) in enumerate(complaint_rows, start=4):
+        c1 = ws.cell(r_idx, 1, field)
+        c1.font = Font(name="Calibri", size=11, bold=True)
+        c2 = ws.cell(r_idx, 2, options)
+        c2.font = Font(name="Calibri", size=11)
+        if notes:
+            c3 = ws.cell(r_idx, 3, notes)
+            c3.font = Font(name="Calibri", size=11)
+
+    save(
+        wb,
+        "wide-unheaded-complaint-log",
+        "A 3-column unheaded complaint log worksheet with wide columns (60, 101, 180) spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
+
+    # Reduced from 2020 - Deep sea stock (#1340):
+    # a 24-column landscape unheaded worksheet (Columns A..X, ~28.5 cm wide) with
+    # multi-tier grouped headers and continuous top border spanning repeated empty
+    # cells (F4:G4). In headless LibreOffice Calc PDF export, landscape A4 with
+    # 0.354 in margins has printable width 27.89 cm, so Calc splits Column X
+    # onto Page 2/3. Because the sheet omits printed headings, lo_cell_box(ref)
+    # returns None, align() skips cropping on-screen header bands (ox=40, oy=20),
+    # and pick_sheet_page() selects Page 1 only (columns A..W), compressing
+    # all 24 columns and header bands onto 23 columns, yielding scale 1.52×,
+    # displacement 61.6pt, SSIM 0.09, and words found 14%.
+    wb, ws = book()
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+
+    thin = Side(style="thin", color="000000")
+
+    ws["A1"] = "Deep Sea Species Statistics: total landings (tonnes live weight) in 2020"
+    ws["A1"].font = Font(name="Arial", size=10, bold=True)
+
+    ws["A2"] = "27-Jan-21"
+    ws["A2"].font = Font(name="Arial", size=9, bold=True)
+    ws["B2"] = "This weeks report includes swap numbers 1448-1502"
+    ws["B2"].font = Font(name="Arial", size=9, italic=True)
+
+    # Row 4: Group headers with top border
+    ws["C4"] = "Landings into"
+    ws.merge_cells("C4:G4")
+    ws["C4"].alignment = Alignment(horizontal="center")
+
+    ws["M4"] = "Total landings"
+    ws.merge_cells("M4:O4")
+    ws["M4"].alignment = Alignment(horizontal="center")
+
+    ws["Q4"] = "Uptake of quota"
+    ws.merge_cells("Q4:U4")
+    ws["Q4"].alignment = Alignment(horizontal="center")
+
+    for col in range(2, 25):  # B..X: continuous top border across header
+        ws.cell(4, col).border = Border(top=thin)
+
+    # Rows 5-7: Subheaders
+    ws["B5"] = "Stock"
+    ws.merge_cells("B5:B7")
+    ws["B5"].alignment = Alignment(horizontal="center", vertical="center")
+
+    subheaders = {
+        3: "Scotland",
+        4: "England, Wales & N.I.",
+        5: "Abroad",
+        6: "by UK vessels",
+        7: "U.K",
+        13: "Quota",
+        14: "2019",
+        15: "2020",
+        24: "UK",
+    }
+    for col, text in subheaders.items():
+        ws.cell(5, col, text).font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        ws.cell(6, col, "%" if col < 24 else "Quota").font = Font(name="Arial", size=9)
+
+    for col in (3, 4, 5, 6, 24):
+        txt = "2019" if col in (3, 6) else ("2020" if col == 4 else ("change" if col == 5 else "2016"))
+        ws.cell(7, col, txt).font = Font(name="Arial", size=9)
+
+    for col in range(2, 25):
+        ws.cell(7, col).border = Border(bottom=thin)
+
+    # Data rows
+    species = [
+        ("Tusk IV", [41.2, 63.0, 53.1, 1.7, 0.7], 107),
+        ("Ling IV", [2574.5, 2441.4, -5.2, 458.6, 346.7], 2515),
+        ("Tusk V,VI,VII", [90.9, 85.4, -6.1, 1.2, 0.1], 265),
+        ("Ling VI-X,XII,XIV", [2114.9, 1636.0, -22.6, 403.7, 273.4], 3896),
+        ("Black Scabbardfish V-VII,XII", [44.9, 20.0, -55.6, 0.0, 0.0], 194),
+        ("Roundnose/Roughead Grenadier Vb,VI,VII", [6.2, 5.9, -4.7, 0.0, 0.0], 216),
+        ("Blue Ling Vb,VI,VII", [718.3, 715.5, -0.4, 0.0, 0.0], 979),
+    ]
+
+    ws.cell(9, 1, "Deep Sea").font = Font(name="Arial", size=9, bold=True)
+    for idx, (name, vals, quota) in enumerate(species, start=10):
+        ws.cell(idx, 2, name).font = Font(name="Arial", size=9)
+        for c_idx, val in enumerate(vals, start=3):
+            ws.cell(idx, c_idx, val).font = Font(name="Arial", size=9)
+        ws.cell(idx, 24, quota).font = Font(name="Arial", size=9)
+
+    # Footnote
+    ws.cell(18, 2, "2019 landings are for the nearest comparable week last year therefore").font = Font(
+        name="Arial", size=8, italic=True
+    )
+    ws.cell(19, 2, "comparisons will be approximate, and should be treated accordingly.").font = Font(
+        name="Arial", size=8, italic=True
+    )
+
+    # Columns
+    ws.column_dimensions["A"].width = 3
+    ws.column_dimensions["B"].width = 22
+    for c in range(3, 24):
+        col_letter = get_column_letter(c)
+        ws.column_dimensions[col_letter].width = 7
+    ws.column_dimensions["X"].width = 9
+
+    save(
+        wb,
+        "wide-unheaded-deep-sea-stock",
+        "A 24-column landscape unheaded fisheries statistics sheet with grouped headers, repeated empty cell borders, and horizontal multipage split",
+        headings=False,
+    )
+
+    # Reduced from Insolvency Service Transactions April 2026 (#1331):
+    # an 11-column unheaded ledger of spend transactions exceeding 290 width
+    # units (~75 cm) paginates horizontally across multiple pages in LibreOffice
+    # Calc when headings are disabled, while Tables renders the continuous used
+    # extent. In compare.py, candidate page picking chooses page 1 only and
+    # align() fails to crop on-screen header bands (ox=40, oy=20), compressing
+    # all 11 columns onto page 1's bounds, yielding scale 1.69×, SSIM 0.12, and
+    # 34% words found.
+    wb, ws = book()
+    ws.title = "Transactions"
+    tx_headers = [
+        "Department Family",
+        "Entity",
+        "Date",
+        "Expense Type",
+        "Expense Area",
+        "Supplier",
+        "Transaction Number",
+        "Amount",
+        "Description",
+        "Supplier Type",
+        "VAT RegNo",
+    ]
+    tx_widths = {
+        "A": 13,
+        "B": 21,
+        "C": 11,
+        "D": 43,
+        "E": 56,
+        "F": 55,
+        "G": 19,
+        "H": 11,
+        "I": 45,
+        "J": 13,
+        "K": 14,
+    }
+    for col_letter, width in tx_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    for c_idx, h in enumerate(tx_headers, start=1):
+        cell = ws.cell(1, c_idx, h)
+        cell.font = Font(name="Calibri", size=11)
+
+    transactions = [
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074809, 115658.80, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Change and Technology Services", "Wavenet Limited", 300074673, 58239.90, "ICT", "Large", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Investigations & Enforcement Services", "BlueLight Commercial Limited", 300074568, 41755.19, "ICT", "Small", 349449851),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "IT - Run", "Change and Technology Services", "Nine23 Ltd", 300074501, 29403.85, "ICT", "Small", 141851034),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 1), "Agency Staff & Contractor Costs", "Projects", "SmartSourcing", 300074503, 27957.60, "Staff Costs - Non-Perms", "Medium", 788507869),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 8), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074676, 111388.46, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 8), "Forensic Accounting", "Finance, Commercial, Sustainability & Property", "Ernst & Young LLP", 300074897, 47940.00, "Investigation & Enforcement", "Large", 773831408),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 12), "IT - Transform", "Projects", "Great Wave AI Limited", 300074674, 162000.00, "ICT", "Micro", 464432884),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 13), "IT - Refresh", "Change and Technology Services", "Risk Ledger Ltd", 300074701, 45600.00, "ICT", "Small", 294427378),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074755, 85867.16, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "IT - Transform", "Projects", "NTT Data UK Limited", 300074751, 82692.00, "ICT", "Large", 159334590),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 15), "INSSpire Award Vouchers", "Shared Contracts", "Edenred (UK Group) Limited", 300074753, 65600.00, "Staff Costs - Perms", "Medium", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 21), "IT - Run", "Investigations & Enforcement Services", "NEC Software Solutions UK Ltd", 300074890, 69168.00, "ICT", "Large", ""),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 21), "IT - Run", "Change and Technology Services", "Prolifics", 300074863, 28996.25, "ICT", "Micro", 639210253),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 22), "Agency Staff & Contractor Costs", "Shared Contracts", "Alexander Mann Solutions", 300074903, 81587.87, "Staff Costs - Non-Perms", "Large", 7444926120),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 24), "IT - Run", "Change and Technology Services", "Prolifics", 300074964, 42109.50, "ICT", "Micro", 639210253),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 24), "IT - Run", "Investigations & Enforcement Services", "Insight Direct (UK) Ltd", 300074961, 40935.66, "ICT", "Large", 746075129),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 27), "IT - Run", "Investigations & Enforcement Services", "Intaforensics Ltd", 300074565, 162470.30, "ICT", "Micro", 900353372),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 30), "Solicitors Investigations", "Investigations & Enforcement Services", "Mills & Reeve LLP", 300074602, 52877.05, "Legal - Outsourced Investigation", "Large", 104834588),
+        ("AGY", "The Insolvency Service", datetime(2026, 4, 30), "Storage - OR", "Shared Contracts", "Iron Mountain (UK) Ltd", 300074948, 30890.86, "Off-Site Storage", "Large", 607937516),
+    ]
+
+    for r_idx, row in enumerate(transactions, start=2):
+        for c_idx, val in enumerate(row, start=1):
+            cell = ws.cell(r_idx, c_idx, val)
+            cell.font = Font(name="Calibri", size=11)
+            if isinstance(val, datetime):
+                cell.number_format = "mm-dd-yy"
+            elif isinstance(val, float):
+                cell.number_format = "#,##0.00"
+
+    save(
+        wb,
+        "wide-unheaded-transactions",
+        "An 11-column unheaded financial transactions ledger spanning multiple horizontal pages in Calc; isolates continuous viewport vs unheaded horizontal multipage print",
+        headings=False,
+    )
+
+    # Reduced from the June 2026 forecast evaluation report (#1333):
+    # Its cover sheet uses a 119-character wide column without printed headings.
+    # Cell B2 places right-aligned, top-aligned multiline heading text in that
+    # wide column, Row 3 has a centered section title, and Row 4 has indented
+    # items (indent=2). In LibreOffice Calc's A4 portrait print, the column
+    # exceeds printable page width and right-aligned text is clipped at the
+    # margin, whereas Tables draws the full column on screen.
+    wb, ws = book()
+    ws.column_dimensions["A"].width = 8.78
+    ws.column_dimensions["B"].width = 119
+    ws.row_dimensions[2].height = 48
+    ws.row_dimensions[3].height = 24
+    ws["B2"] = "Forecast evaluation report\nAnnual database"
+    ws["B2"].font = Font(name="Calibri", size=16, color="E7A614")
+    ws["B2"].alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
+    ws["B3"] = "Economic model development database"
+    ws["B3"].font = Font(name="Calibri", size=14)
+    ws["B3"].alignment = Alignment(horizontal="center")
+    ws["B3"].fill = PatternFill("solid", fgColor="F5D0A9")
+    ws["B4"] = "Model improvements"
+    ws["B4"].font = Font(name="Calibri", size=11, underline="single")
+    ws["B4"].alignment = Alignment(horizontal="left", indent=2)
+    save(
+        wb,
+        "wide-column-right-align",
+        "A wide unprinted column with right-aligned multiline heading, centered title and indented entries",
+        headings=False,
+    )
 
     wb, ws = book()
     # Reduced from real-competition-in-uk-electricity-markets-2025-data
