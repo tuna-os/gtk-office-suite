@@ -606,6 +606,31 @@ def letters(img):
 
 
     x = doc()
+    # Reduced from real-affordable-housing-supply-data-dictionary (#1357):
+    # a table row near the bottom of a page whose lines cannot fit in the
+    # remaining space moves whole to the next page, rather than splitting
+    # to place only cell padding and leaving an empty cell box on page 1.
+    # 32 exact 20pt lines fill 640pt of the 648pt body, leaving 8pt: room
+    # for "Table Grid"'s zero top padding, not for a 12pt line.
+    from docx.enum.text import WD_LINE_SPACING
+
+    section = x.sections[0]
+    section.page_height, section.top_margin, section.bottom_margin = Inches(11), Inches(1), Inches(1)
+    for i in range(32):
+        p = x.add_paragraph(f"Paragraph {i + 1} before the table, one exact 20pt line.")
+        p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        p.paragraph_format.line_spacing = Pt(20)
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+    t = x.add_table(rows=2, cols=2)
+    t.style = "Table Grid"
+    t.cell(0, 0).text = "Row 1 Col 1"
+    t.cell(0, 1).text = "Row 1 Col 2"
+    t.cell(1, 0).text = "Row 2 Col 1"
+    t.cell(1, 1).text = "Row 2 Col 2"
+    save(x, "table-row-split", "A table row near the bottom of a page moves whole to the next page when its text lines do not fit")
+
+    x = doc()
     x.add_paragraph("Image below:")
     x.add_picture(img, width=Inches(2))
     save(x, "image", "A 2in-wide four-colour image under the caption")
