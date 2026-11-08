@@ -788,7 +788,7 @@
       "title": "A styled Unicode document survives edit, undo, redo, Save As and a restart, as DOCX and as ODT",
       "scope": "Each journey opens an authored fixture (tests/gui/fixtures/styled-unicode.docx and .odt: CJK, combining marks, emoji, RTL, run and paragraph styles, a footnote, lists, a table, an image, a comment, a tracked insertion, a table of contents, a header, a footer and an A4 page), edits one paragraph, undoes to the exact opened model and redoes to the exact edited one, saves with Save As through the chooser, restarts on the saved file and compares the whole reopened model with the edited one. It checks that only the edited paragraph changed and that the source file's bytes are untouched. Four spellings are compared as equal because the app does: a heading is kept with the next paragraph whether or not the flag is set, black is the default colour, a heading level naming no size draws at the body size, and page lengths agree to a tenth of a point. This does not cover visual page geometry, collaboration or macro compatibility, and the LibreOffice per-field matrix is the oracle claims'.",
       "status": "verified",
-      "revision": "e8b4bdb87f20c21c9dae23f93ada042dba5d996e",
+      "revision": "6ef424a7524c4ec5ad14dada1adfb8842b0b18ee",
       "requires": [
         "gui",
         "format"
