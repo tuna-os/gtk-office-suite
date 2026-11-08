@@ -297,6 +297,10 @@
     "A": "amber",
     "B": "green"
   },
+  "letters/table-row-split": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/text-color": {
     "A": "green",
     "B": "green",
