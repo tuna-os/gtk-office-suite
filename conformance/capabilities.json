@@ -780,6 +780,30 @@
       "scope": "Letters cannot decrypt a document and has no password prompt or encrypted save. A password-protected .docx (an OLE compound file, which a pre-2007 binary file also is) and an ODT with encrypted parts are refused by naming the password, never opened as garbage or with a ZIP or UTF-8 error (letters-core tests/hostile_packages.rs: a_password_protected_docx_is_refused_by_naming_the_password, an_encrypted_odt_is_refused_by_naming_the_password). Sheet and slide protection in Tables and Decks is a different, editing-only feature and is not encryption.",
       "status": "deferred",
       "requires": []
+    },
+    {
+      "id": "letters.save-as.styled-unicode",
+      "app": "letters",
+      "issue": 438,
+      "title": "A styled Unicode document survives edit, undo, redo, Save As and a restart, as DOCX and as ODT",
+      "scope": "Each journey opens an authored fixture (tests/gui/fixtures/styled-unicode.docx and .odt: CJK, combining marks, emoji, RTL, run and paragraph styles, a footnote, lists, a table, an image, a comment, a tracked insertion, a table of contents, a header, a footer and an A4 page), edits one paragraph, undoes to the exact opened model and redoes to the exact edited one, saves with Save As through the chooser, restarts on the saved file and compares the whole reopened model with the edited one. It checks that only the edited paragraph changed and that the source file's bytes are untouched. Four spellings are compared as equal because the app does: a heading is kept with the next paragraph whether or not the flag is set, black is the default colour, a heading level naming no size draws at the body size, and page lengths agree to a tenth of a point. This does not cover visual page geometry, collaboration or macro compatibility, and the LibreOffice per-field matrix is the oracle claims'.",
+      "status": "verified",
+      "revision": "6ef424a7524c4ec5ad14dada1adfb8842b0b18ee",
+      "requires": [
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStyledDocxSaveAsSmoke::test_open_edit_undo_redo_save_as_restart_reopen",
+          "tests/gui/test_smoke.py::LettersStyledOdtSaveAsSmoke::test_open_edit_undo_redo_save_as_restart_reopen"
+        ],
+        "format": [
+          "letters-core::docx::docx_page_geometry_keeps_every_twip_through_repeated_saves",
+          "letters-core::docx::an_inline_image_between_text_stays_in_its_paragraph_through_every_save",
+          "letters-core::odt::tests::the_body_font_and_size_survive_a_save"
+        ]
+      }
     }
   ],
   "waivers": [

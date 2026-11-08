@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "about": "Spreadsheets Tables opens but cannot write, used by the GUI format-safe-save journeys (#1204).",
+  "about": "Spreadsheets Tables opens but cannot write, used by the GUI format-safe-save journeys (#1204), and the styled Unicode documents the Letters Save As journeys open (#1681).",
   "fixtures": {
     "budget.csv": {
       "author": {"app": "hand-written", "version": null},
@@ -32,6 +32,28 @@
       "semantics": [
         "written by LibreOffice (Excel 97 filter) from budget.csv; opens with the same cells",
         "Ctrl+S after an edit leaves the file's bytes unchanged and offers budget.xlsx in Save As"
+      ],
+      "permitted_losses": [],
+      "used_by": ["tests/gui/test_smoke.py"]
+    },
+    "styled-unicode.odt": {
+      "author": {"app": "hand-written (tools/gui-fixtures/make_styled_unicode_odt.py)", "version": null},
+      "format": "odt",
+      "features": ["letters/headings", "letters/table", "letters/image", "letters/header-footer", "letters/undo-redo", "letters/bullet-list", "letters/numbered-list", "letters/page-setup", "letters/odt-read-write"],
+      "semantics": [
+        "opens with the heading, a paragraph of bold, italic, red underlined, combining-mark and emoji runs, RTL text, a centred and an indented paragraph with a footnote, a bullet and a numbered list, a 2x2 table, an inline image, a comment, a tracked insertion, a table of contents, a header, a footer and A4 page margins",
+        "an edit to the last paragraph, undone and redone and saved with Save As through the chooser, comes back from a restart as the same document with only that paragraph changed"
+      ],
+      "permitted_losses": [],
+      "used_by": ["tests/gui/test_smoke.py"]
+    },
+    "styled-unicode.docx": {
+      "author": {"app": "LibreOffice Writer", "version": "24.2.7.2"},
+      "format": "docx",
+      "features": ["letters/headings", "letters/table", "letters/image", "letters/header-footer", "letters/undo-redo", "letters/bullet-list", "letters/numbered-list", "letters/page-setup", "letters/docx-save-load"],
+      "semantics": [
+        "Writer's own conversion of styled-unicode.odt; opens with the heading, a paragraph of bold, italic, red underlined, combining-mark and emoji runs, RTL text, a centred and an indented paragraph with a footnote, a bullet and a numbered list, a 2x2 table, an inline image, a comment, a tracked insertion, a table of contents, a header, a footer and A4 page margins",
+        "an edit to the last paragraph, undone and redone and saved with Save As through the chooser, comes back from a restart as the same document with only that paragraph changed"
       ],
       "permitted_losses": [],
       "used_by": ["tests/gui/test_smoke.py"]

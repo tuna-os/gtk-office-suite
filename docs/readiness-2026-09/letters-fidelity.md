@@ -332,7 +332,7 @@ alignment already use, because anything written into the text would be
 indistinguishable from a user typing it.
 
 ## Acceptance
-For each admitted field: model tests, buffer round-trip on the GTK main thread, ODT and DOCX save/reopen, and LibreOffice rewrite assertions. GUI journeys open a styled Unicode document, change one paragraph, undo/redo, Save As, reopen, and verify both edited and untouched metadata. Include CJK, combining marks, emoji and RTL. Geometry/render tests cover page boundaries, tables and headers at multiple zooms.
+For each admitted field: model tests, buffer round-trip on the GTK main thread, ODT and DOCX save/reopen, and LibreOffice rewrite assertions. GUI journeys open a styled Unicode document, change one paragraph, undo/redo, Save As, reopen, and verify both edited and untouched metadata. Include CJK, combining marks, emoji and RTL. Those are `LettersStyledDocxSaveAsSmoke` and `LettersStyledOdtSaveAsSmoke` (`tests/gui/test_smoke.py`, #1681, ledger claim `letters.save-as.styled-unicode`): each opens an authored fixture, edits the last paragraph, undoes and redoes to the exact model, saves through the Save As chooser, restarts, and compares the whole reopened model, naming any field that differs. Geometry/render tests cover page boundaries, tables and headers at multiple zooms.
 
 Depends on the P0 Letters save transaction, #354 and #374. Collaboration, macro compatibility and a wholesale editor rewrite are outside this issue.
 
