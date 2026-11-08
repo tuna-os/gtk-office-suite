@@ -110,9 +110,21 @@ pub fn save_sheets_to_xlsx_bytes(
                         let cached = eng.cell_at(si, r, c);
                         let formula = Formula::new(&f).set_result(&cached);
                         let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh, &wb_font), &sh.borders[r][c], &sh.cell_protections[r][c]);
-                        match &format {
-                            Some(format) => sheet.write_formula_with_format(r as u32, c as u16, formula, format),
-                            None => sheet.write_formula(r as u32, c as u16, formula),
+                        // A formula that spills is an array formula in the
+                        // file. rust_xlsxwriter makes the newer dynamic
+                        // functions (SEQUENCE, FILTER...) one itself, but
+                        // not TRANSPOSE, MMULT or array arithmetic, which
+                        // classic Excel and Calc evaluate in a single cell
+                        // unless told otherwise: the spill came back as its
+                        // first value (#1659). Only the anchor is written;
+                        // the cells it derives stay empty so they cannot
+                        // block the spill on reopening (TBL-006).
+                        let (row, col) = (r as u32, c as u16);
+                        match (&format, eng.is_spill_anchor(si, r, c)) {
+                            (Some(format), true) => sheet.write_dynamic_array_formula_with_format(row, col, row, col, formula, format),
+                            (None, true) => sheet.write_dynamic_array_formula(row, col, row, col, formula),
+                            (Some(format), false) => sheet.write_formula_with_format(row, col, formula, format),
+                            (None, false) => sheet.write_formula(row, col, formula),
                         }
                         .map_err(|e| format!("Write error: {}", e))?;
                         continue;
