@@ -333,7 +333,7 @@
   },
   "tables/chart-multi": {
     "A": "green",
-    "B": "amber",
+    "B": "green",
     "C": "amber"
   },
   "tables/chart-pie": {
