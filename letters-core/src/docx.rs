@@ -2591,15 +2591,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
     }
     if let Some(pg) = &doc.page {
-        out.set_page_size(rdocx::Length::pt(pg.width_pt), rdocx::Length::pt(pg.height_pt));
-        out.set_margins(
-            rdocx::Length::pt(pg.margin_top_pt),
-            rdocx::Length::pt(pg.margin_right_pt),
-            rdocx::Length::pt(pg.margin_bottom_pt),
-            rdocx::Length::pt(pg.margin_left_pt),
-        );
+        out.set_page_size(twip_length(pg.width_pt), twip_length(pg.height_pt));
+        out.set_margins(twip_length(pg.margin_top_pt), twip_length(pg.margin_right_pt), twip_length(pg.margin_bottom_pt), twip_length(pg.margin_left_pt));
         if pg.header_pt.is_some() || pg.footer_pt.is_some() {
-            out.set_header_footer_distance(rdocx::Length::pt(pg.header_pt.unwrap_or(36.0)), rdocx::Length::pt(pg.footer_pt.unwrap_or(36.0)));
+            out.set_header_footer_distance(twip_length(pg.header_pt.unwrap_or(36.0)), twip_length(pg.footer_pt.unwrap_or(36.0)));
         }
         // A single column is the default section layout, and `w:cols`
         // with `w:num="1"` is noise; more than one has to be written or a
@@ -3565,6 +3560,15 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
 
 fn twips_pt(t: rdocx_oxml::Twips) -> f64 {
     f64::from(t.0) / 20.0
+}
+
+/// `pt` as the whole number of twips nearest it. rdocx turns points into
+/// twips by truncating (`(pt * 20.0) as i32`), so 595.3pt, which is 11906
+/// twips, was written as 11905 (595.25pt), and every save of a page lost a
+/// twip off its width or a margin. The half twip added keeps its truncation
+/// on the nearest one.
+fn twip_length(pt: f64) -> rdocx::Length {
+    rdocx::Length::pt(((pt * 20.0).round() + 0.5) / 20.0)
 }
 
 /// A cell paragraph's properties with its table's style beneath its own
