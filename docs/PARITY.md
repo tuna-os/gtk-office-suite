@@ -83,13 +83,15 @@ claim that it passed on this revision; see the
 
 | Feature | Scope and evidence |
 |---|---|
-| Track changes | Insertions and deletions admitted; paragraph breaks and formatting changes are not tracked. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`; Writer: `tracked_changes_survive_lo_passes`. |
-| Comments | Anchored threads admitted, including replies and resolution. GUI: `LettersCommentsSmoke`; Writer: `comments_survive_lo_passes` (cross-format reply limitation in the workflow contract). |
-| Footnotes | Insert action and DOCX/ODT mapping; see [field map](LETTERS-FIELD-MAP.md) for per-field evidence. This does not imply endnote support. |
+| Track changes | Insertions and deletions admitted; paragraph breaks and formatting changes are not tracked. Ledger: `letters.review.tracked-changes`. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`; Writer: `tracked_changes_survive_lo_passes`. |
+| Comments | Anchored threads admitted, including replies and resolution. Ledger: `letters.review.comments`. GUI: `LettersCommentsSmoke`; Writer: `comments_survive_lo_passes` (cross-format reply limitation in the workflow contract). |
+| Footnotes | Insert action and DOCX/ODT mapping; see [field map](LETTERS-FIELD-MAP.md) for per-field evidence. This does not imply endnote support. Ledger: `letters.footnotes`. |
 | Multi-column sections | Section page setup is bounded by `letters.sections.page-setup` in the [capability ledger](../conformance/capabilities.json); unequal columns are loss-reported. |
-| Bidi/RTL editing | RTL text retention is tested; explicit paragraph direction is unavailable. See [workflow contract](LETTERS-REVIEW-WORKFLOWS.md#paragraph-direction-bidi-not-available-yet). |
-| Table of contents generation | Heading levels 1–3; GUI: `LettersTableOfContentsSmoke`; Writer: `a_table_of_contents_survives_lo_passes`. |
-| Smart chips | GUI: `LettersSmartChipsSmoke`; Writer: `smart_chips_survive_lo_passes`. |
+| Bidi/RTL editing | RTL text retention is tested; explicit paragraph direction is unavailable and deferred under a dated waiver (`letters.bidi.paragraph-direction`). See [workflow contract](LETTERS-REVIEW-WORKFLOWS.md#paragraph-direction-bidi-not-available-yet). |
+| Table of contents generation | Heading levels 1–3. Ledger: `letters.toc`. GUI: `LettersTableOfContentsSmoke`; Writer: `a_table_of_contents_survives_lo_passes`. |
+| Smart chips | Date, person and link. Ledger: `letters.smart-chips`. GUI: `LettersSmartChipsSmoke` (the date chip); Writer: `smart_chips_survive_lo_passes`. |
+| Styles | Named paragraph styles (Normal, Title, Subtitle, Heading 1–6, Quote, Code) as a reference plus heading looks; no style editor and no style-definition graph. Ledger: `letters.styles.named-paragraph-styles`. |
+| Encryption | Not supported and deferred (`letters.encryption.password-protected-files`): a password-protected or encrypted DOCX/ODT is refused by naming the password; there is no prompt and no encrypted save. Not the same as Tables/Decks sheet protection. |
 
 ## Tables (spreadsheet)
 

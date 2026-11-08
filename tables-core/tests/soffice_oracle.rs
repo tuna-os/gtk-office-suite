@@ -4,6 +4,8 @@
 
 use std::process::Command;
 
+mod support;
+
 use tables_core::io::{load_workbook, save_sheets_to_xlsx};
 use tables_core::sheet::SheetModel;
 
@@ -1090,4 +1092,61 @@ fn filter_and_later_rule_survive_calc_rewrite() {
     assert!(!sheets[0].hidden_rows.contains(&0), "the header stays out");
     let rule = sheets[1].cond_rules.iter().find(|r| r.op == CondOp::Greater).expect("the later rule survives Calc");
     assert_eq!(rule.range, (0, 1, 2, 1), "the later rule's range survives Calc: {rule:?}");
+}
+
+/// CALC REWRITE. LibreOffice 24.2 (the CI runner's) does not know these
+/// functions: Calc keeps each formula's text and caches #NAME? for it. A
+/// file Calc has rewritten therefore opens here with its formulas intact,
+/// and the spills recompute here. Calc gained them in 24.8; on a Calc that
+/// has them this test fails, on purpose, so the support inventory is
+/// updated rather than left stale.
+#[test]
+fn a_calc_24_2_rewrite_keeps_the_formulas_and_loses_the_cached_values() {
+    if !require_or_skip() {
+        return;
+    }
+    let version = Command::new("soffice").arg("--version").output().expect("soffice --version");
+    let version = String::from_utf8_lossy(&version.stdout).to_string();
+    let words: Vec<u32> = version.split_whitespace().nth(1).unwrap_or("").split('.').filter_map(|n| n.parse().ok()).collect();
+    assert!(
+        words.len() >= 2 && (words[0], words[1]) < (24, 8),
+        "{version:?}: this Calc may evaluate dynamic arrays; extend this test to check the spills and update docs/TABLES-DYNAMIC-ARRAYS.md"
+    );
+
+    let (c, placed) = support::workbook_with_every_case();
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("spills.xlsx");
+    support::save(&c, &source);
+    let out = dir.path().join("rewritten");
+    std::fs::create_dir(&out).unwrap();
+    let status = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.path().join("profile").display()))
+        .args(["--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir"])
+        .arg(&out)
+        .arg(&source)
+        .status()
+        .unwrap();
+    assert!(status.success(), "soffice failed to rewrite the workbook");
+    let rewritten = out.join("spills.xlsx");
+
+    let xml = support::sheet_xml(&rewritten);
+    for (col, case) in &placed {
+        let anchor = format!("{}1", tables_core::sheet::col_label(*col));
+        let start = xml.find(&format!("<c r=\"{anchor}\"")).unwrap_or_else(|| panic!("{anchor} is not in the rewritten file"));
+        let cell = &xml[start..xml[start..].find("</c>").map(|e| start + e).unwrap()];
+        assert!(cell.to_lowercase().contains(&format!("{}(", case.function.to_lowercase())), "{}: Calc dropped the formula: {cell}", case.formula);
+        if support::CLASSIC.contains(&case.function) {
+            // Known to Calc, which evaluates it over the anchor alone.
+            assert!(!cell.contains("#NAME?"), "{}: Calc 24.2 should know it: {cell}", case.formula);
+            assert!(cell.contains("<v>1</v>") || cell.contains("<v>11</v>"), "{}: Calc's value is the first element: {cell}", case.formula);
+        } else {
+            assert!(cell.contains("#NAME?"), "{}: Calc 24.2 cached a value for it: {cell}", case.formula);
+        }
+    }
+
+    let (reopened, _) = tables_core::io::load_xlsx_workbook(rewritten.to_str().unwrap()).unwrap();
+    for (col, case) in &placed {
+        assert_eq!(support::spilled(&reopened, case, 0, *col), support::expected(case), "{} after a Calc rewrite", case.formula);
+    }
 }

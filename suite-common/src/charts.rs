@@ -35,6 +35,18 @@ pub fn render_chart_named(
     surface
 }
 
+/// As [`render_chart_named`], with any number of series over the same
+/// categories (see [`draw_chart_series`]).
+pub fn render_chart_series(categories: &[String], series: &[Series], kind: ChartKind, width: i32, height: i32) -> ImageSurface {
+    let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
+    let cr = Context::new(&surface).unwrap();
+    crate::use_ui_font_rendering(&cr);
+    draw_chart_series(&cr, categories, series, kind, width as f64, height as f64);
+    drop(cr);
+    surface.flush();
+    surface
+}
+
 /// Draw the chart into `cr` at its origin, `width` x `height` in its
 /// units, on a white ground: what [`render_chart_named`] draws onto a
 /// surface, for a caller with a context of its own (a slide on the canvas
@@ -85,6 +97,155 @@ pub fn draw_chart_series(cr: &Context, categories: &[String], series: &[Series],
             ChartKind::Pie => draw_pie(cr, categories, &series[0], w, h),
             ChartKind::Scatter => draw_scatter(cr, categories, series, w, h),
         }
+    }
+    let _ = cr.restore();
+}
+
+/// Where a chart's legend sits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LegendPos {
+    /// No legend.
+    None,
+    Top,
+    Bottom,
+    Left,
+    /// Beside the plot at its right, where every chart's legend sat.
+    #[default]
+    Right,
+}
+
+/// What surrounds a chart's plot: a title over it, a title for each axis
+/// and a legend where asked. A pie's legend names its categories and stays
+/// at its right whatever is asked, and it has no axes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Decor<'a> {
+    pub title: &'a str,
+    pub x_title: Option<&'a str>,
+    pub y_title: Option<&'a str>,
+    pub legend: LegendPos,
+}
+
+/// As [`render_chart_series`], with the title, axis titles and legend
+/// position of `decor` (see [`draw_chart_decorated`]).
+pub fn render_chart_decorated(categories: &[String], series: &[Series], kind: ChartKind, width: i32, height: i32, decor: &Decor) -> ImageSurface {
+    let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
+    let cr = Context::new(&surface).unwrap();
+    crate::use_ui_font_rendering(&cr);
+    draw_chart_decorated(&cr, categories, series, kind, width as f64, height as f64, decor);
+    drop(cr);
+    surface.flush();
+    surface
+}
+
+/// The height a title takes over the plot, an axis title beside it, and a
+/// legend row above or below it.
+const TITLE_H: f64 = 30.0;
+const AXIS_TITLE: f64 = 22.0;
+const LEGEND_STRIP: f64 = 26.0;
+/// The gap between legend entries in a row.
+const LEGEND_GAP: f64 = 18.0;
+
+/// As [`draw_chart_series`], inside the room `decor` leaves: the title
+/// centred over the plot, the x title under it and the y title turned up
+/// its left side, and the legend where `decor.legend` puts it, in a row for
+/// the top and bottom and a column for the left. With nothing asked for
+/// (no titles, a legend at the right) it is [`draw_chart_series`] exactly.
+pub fn draw_chart_decorated(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64, decor: &Decor) {
+    let title = decor.title.trim();
+    let x_title = decor.x_title.map(str::trim).filter(|t| !t.is_empty());
+    let y_title = decor.y_title.map(str::trim).filter(|t| !t.is_empty());
+    // A pie has no axes and keeps its legend where it is.
+    let pie = kind == ChartKind::Pie;
+    let (x_title, y_title) = if pie { (None, None) } else { (x_title, y_title) };
+    let legend = if pie { LegendPos::Right } else { decor.legend };
+    if title.is_empty() && x_title.is_none() && y_title.is_none() && legend == LegendPos::Right {
+        return draw_chart_series(cr, categories, series, kind, width, height);
+    }
+
+    let _ = cr.save();
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.rectangle(0.0, 0.0, width, height);
+    let _ = cr.fill();
+    cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+    cr.set_font_size(CHART_TEXT_PX);
+
+    // A legend outside the plot takes its names from the plot's own.
+    let key = match kind {
+        ChartKind::Line => Key::Line,
+        ChartKind::Scatter => Key::Marker,
+        _ => Key::Square,
+    };
+    let entries = legend_entries(series);
+    let own_legend = matches!(legend, LegendPos::Top | LegendPos::Bottom | LegendPos::Left);
+    let plot_series: Vec<Series> = if legend == LegendPos::Right { series.to_vec() } else { series.iter().map(|s| Series { name: None, ..*s }).collect() };
+
+    let mut margin = (if title.is_empty() { 0.0 } else { TITLE_H }, 0.0_f64, if y_title.is_some() { AXIS_TITLE } else { 0.0 }); // top, bottom, left
+    if x_title.is_some() {
+        margin.1 += AXIS_TITLE;
+    }
+    if own_legend && !entries.is_empty() {
+        match legend {
+            LegendPos::Top => margin.0 += LEGEND_STRIP,
+            LegendPos::Bottom => margin.1 += LEGEND_STRIP,
+            _ => margin.2 += legend_width(cr, &entries, key) + 14.0,
+        }
+    }
+    let (plot_w, plot_h) = ((width - margin.2).max(1.0), (height - margin.0 - margin.1).max(1.0));
+
+    // The plot, in its own rectangle.
+    let _ = cr.save();
+    cr.translate(margin.2, margin.0);
+    cr.rectangle(0.0, 0.0, plot_w, plot_h);
+    cr.clip();
+    if !series.is_empty() {
+        match kind {
+            ChartKind::Bar => draw_bars(cr, categories, &plot_series, plot_w, plot_h),
+            ChartKind::Line => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Line),
+            ChartKind::Area => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Area),
+            ChartKind::Pie => draw_pie(cr, categories, &plot_series[0], plot_w, plot_h),
+            ChartKind::Scatter => draw_scatter(cr, categories, &plot_series, plot_w, plot_h),
+        }
+    }
+    let _ = cr.restore();
+
+    // The legend outside the plot.
+    if own_legend && !entries.is_empty() {
+        match legend {
+            LegendPos::Left => draw_legend(cr, 8.0 + if y_title.is_some() { AXIS_TITLE } else { 0.0 }, margin.0 + plot_h / 2.0, &entries, key),
+            _ => {
+                let offset = |k: Key| match k {
+                    Key::Square => 12.0,
+                    Key::Marker => 14.0,
+                    Key::Line => 34.0,
+                };
+                let row_w: f64 = entries.iter().map(|(n, _)| offset(key) + text_w(cr, n)).sum::<f64>() + LEGEND_GAP * (entries.len() - 1) as f64;
+                let mid = if legend == LegendPos::Top { margin.0 - LEGEND_STRIP / 2.0 } else { height - if x_title.is_some() { AXIS_TITLE } else { 0.0 } - LEGEND_STRIP / 2.0 };
+                let mut x = margin.2 + (plot_w - row_w) / 2.0;
+                for entry in &entries {
+                    draw_legend(cr, x, mid, std::slice::from_ref(entry), key);
+                    x += offset(key) + text_w(cr, entry.0) + LEGEND_GAP;
+                }
+            }
+        }
+    }
+
+    // Titles last, in the room reserved for them.
+    if !title.is_empty() {
+        cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+        cr.set_font_size(CHART_TEXT_PX * 1.3);
+        show(cr, (width - text_w(cr, title)) / 2.0, TITLE_H * 0.68, title);
+        cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+        cr.set_font_size(CHART_TEXT_PX);
+    }
+    if let Some(t) = x_title {
+        show(cr, margin.2 + (plot_w - text_w(cr, t)) / 2.0, height - 6.0, t);
+    }
+    if let Some(t) = y_title {
+        let _ = cr.save();
+        cr.translate(AXIS_TITLE * 0.7, margin.0 + (plot_h + text_w(cr, t)) / 2.0);
+        cr.rotate(-std::f64::consts::FRAC_PI_2);
+        show(cr, 0.0, 0.0, t);
+        let _ = cr.restore();
     }
     let _ = cr.restore();
 }
@@ -502,6 +663,135 @@ mod tests {
         for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Pie, ChartKind::Scatter] {
             draw(&categories, &[Series { name: None, values: &short }], kind);
             draw(&categories, &[], kind);
+        }
+    }
+
+    // ── The title, axis titles and legend position (#1658) ──────────────
+
+    /// The surface's bytes.
+    fn bytes(s: &mut ImageSurface) -> Vec<u8> {
+        s.data().unwrap().to_vec()
+    }
+
+    /// The rows and columns `rgb` is drawn in: (first row, last row, first
+    /// column, last column, count), or None.
+    fn extent(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> Option<(usize, usize, usize, usize, usize)> {
+        let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+        let px = s.data().unwrap();
+        let mut found: Option<(usize, usize, usize, usize, usize)> = None;
+        for y in 0..h {
+            for x in 0..w {
+                if px[y * stride + x * 4..][..3] == [b, g, r] {
+                    found = Some(match found {
+                        None => (y, y, x, x, 1),
+                        Some((y0, y1, x0, x1, n)) => (y0.min(y), y1.max(y), x0.min(x), x1.max(x), n + 1),
+                    });
+                }
+            }
+        }
+        found
+    }
+
+    fn decorated(series: &[Series], kind: ChartKind, decor: &Decor) -> ImageSurface {
+        let cats: Vec<String> = (1..=4).map(|i| format!("Q{i}")).collect();
+        render_chart_decorated(&cats, series, kind, 400, 260, decor)
+    }
+
+    fn two() -> (Vec<f64>, Vec<f64>) {
+        (vec![3.0, 7.0, 5.0, 9.0], vec![0.0; 4])
+    }
+
+    /// The grid colour as the renderer draws it, for finding gridlines.
+    fn grid_colour() -> (u8, u8, u8) {
+        let mut s = ImageSurface::create(Format::ARgb32, 4, 4).unwrap();
+        {
+            let cr = Context::new(&s).unwrap();
+            set(&cr, GRID);
+            cr.paint().unwrap();
+        }
+        let px = s.data().unwrap();
+        (px[2], px[1], px[0])
+    }
+
+    /// The first and last rows that hold a gridline.
+    fn grid_rows(s: &mut ImageSurface) -> (usize, usize) {
+        let (r, g, b) = grid_colour();
+        let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+        let px = s.data().unwrap();
+        let rows: Vec<usize> = (0..h).filter(|y| (0..w).filter(|x| px[y * stride + x * 4..][..3] == [b, g, r]).count() >= 100).collect();
+        (*rows.first().expect("no gridline"), *rows.last().unwrap())
+    }
+
+    /// With nothing asked for, a decorated chart is the chart that was
+    /// always drawn: Tables' charts and the render lab's baselines don't
+    /// move. A pie, which has no axes and keeps its legend, is the same
+    /// whatever legend position it is given.
+    #[test]
+    fn with_nothing_asked_it_is_draw_chart_series_exactly() {
+        let (a, b) = two();
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
+        let cats: Vec<String> = (1..=4).map(|i| format!("Q{i}")).collect();
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Scatter, ChartKind::Pie] {
+            let mut plain = draw(&cats, &series, kind);
+            // draw() is 400x260, as decorated() is.
+            let mut same = decorated(&series, kind, &Decor::default());
+            assert_eq!(bytes(&mut plain), bytes(&mut same), "{kind:?}");
+        }
+        let mut pie_bottom = decorated(&series, ChartKind::Pie, &Decor { legend: LegendPos::Bottom, ..Decor::default() });
+        let mut pie_right = decorated(&series, ChartKind::Pie, &Decor::default());
+        assert_eq!(bytes(&mut pie_bottom), bytes(&mut pie_right), "a pie's legend stays at its right");
+    }
+
+    /// A title takes the room over the plot and an x title the room under
+    /// it: the first gridline moves down and the last moves up.
+    #[test]
+    fn a_title_and_an_x_title_make_room_for_themselves() {
+        let (a, b) = two();
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
+        let (first, last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor::default()));
+        let (t_first, t_last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor { title: "Sales by quarter", ..Decor::default() }));
+        assert!(t_first >= first + 25 && t_last == last, "title: {first}..{last} -> {t_first}..{t_last}");
+        let (x_first, x_last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor { x_title: Some("Quarter"), ..Decor::default() }));
+        assert!(x_first == first && x_last + 15 <= last, "x title: {first}..{last} -> {x_first}..{x_last}");
+    }
+
+    /// The legend's keys are where the position says. The second series is
+    /// all zeros, so its colour is drawn nowhere but in its legend key.
+    #[test]
+    fn the_legend_sits_where_it_is_asked() {
+        let (a, b) = two();
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
+        let key = (0xc0, 0x50, 0x4d);
+        let at = |pos| extent(&mut decorated(&series, ChartKind::Bar, &Decor { legend: pos, ..Decor::default() }), key);
+        assert_eq!(at(LegendPos::None), None, "no legend, no key");
+        let right = at(LegendPos::Right).expect("a key at the right");
+        assert!(right.2 > 300, "right: {right:?}");
+        let left = at(LegendPos::Left).expect("a key at the left");
+        assert!(left.3 < 100, "left: {left:?}");
+        let top = at(LegendPos::Top).expect("a key above");
+        assert!(top.1 < 30, "top: {top:?}");
+        let bottom = at(LegendPos::Bottom).expect("a key below");
+        assert!(bottom.0 > 260 - 30, "bottom: {bottom:?}");
+        // A row is centred under the plot, not pushed into a corner.
+        assert!((100..300).contains(&(bottom.2 + (bottom.3 - bottom.2) / 2)), "bottom: {bottom:?}");
+    }
+
+    /// Titles, long ones included, and a legend row wider than the chart
+    /// stay inside it and never panic at any size.
+    #[test]
+    fn long_titles_and_tiny_charts_do_not_panic() {
+        let (a, b) = two();
+        let series = [Series { name: Some("A series with a very long name indeed"), values: &a }, Series { name: Some("Another one"), values: &b }];
+        let long = "A chart title far too long to fit in the width this chart has, with 見出し and שלום in it";
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Scatter, ChartKind::Pie] {
+            for legend in [LegendPos::None, LegendPos::Top, LegendPos::Bottom, LegendPos::Left, LegendPos::Right] {
+                let decor = Decor { title: long, x_title: Some(long), y_title: Some(long), legend };
+                let cats: Vec<String> = (1..=4).map(|i| format!("Q{i}")).collect();
+                for (w, h) in [(400, 260), (60, 40), (1, 1)] {
+                    render_chart_decorated(&cats, &series, kind, w, h, &decor);
+                }
+                render_chart_decorated(&[], &[], kind, 200, 100, &decor);
+            }
         }
     }
 }

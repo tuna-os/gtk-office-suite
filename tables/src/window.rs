@@ -302,6 +302,13 @@ impl TablesWindow {
                 // Tables bugs (#354).
                 refresh_grid_a11y(&da, &s);
                 da.queue_draw();
+                // The bar shows the cell the jump landed on. `refresh` leaves
+                // a focused bar alone, and a narrow window's Go to Cell
+                // dialog hands focus back to the bar before the jump runs:
+                // there the bar kept the last cell's input, or "Contents
+                // hidden" after the sheet's protection was undone.
+                let (r, c) = { let st = s.borrow(); let sh = st.sheet(); (sh.selected_row, sh.selected_col) };
+                crate::protection_ui::show_input(&fx, &s, r, c);
                 fx.grab_focus();
                 true
             })

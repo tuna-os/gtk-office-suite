@@ -211,10 +211,16 @@ impl DecksWindow {
                             cur + 1, slides.len(), n_objs
                         ),
                     };
+                    // Relative to the window's surface, not its root
+                    // widget: a window that does not fill the screen has
+                    // client-side decorations (its shadow) around the root,
+                    // and at the display matrix's 400px that offset put the
+                    // double-click on a text box's resize handle.
+                    let (sx, sy) = area.native().map(|n| n.surface_transform()).unwrap_or((0.0, 0.0));
                     let pos_hint = area
                         .root()
                         .and_then(|root| area.compute_point(&root, &gtk::graphene::Point::new(0.0, 0.0)))
-                        .map(|pt| format!(" canvas_at={},{}", pt.x() as i32, pt.y() as i32))
+                        .map(|pt| format!(" canvas_at={},{}", (f64::from(pt.x()) + sx) as i32, (f64::from(pt.y()) + sy) as i32))
                         .unwrap_or_default();
                     format!("{}{}", base, pos_hint)
                 };

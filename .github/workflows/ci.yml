@@ -110,6 +110,7 @@ jobs:
             tests/test_render_lab_rules.py \
             tests/test_render_lab_words.py \
             tests/test_cut_release.py \
+            tests/test_tables_dynamic_arrays.py \
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_unprinted_headings.py \
             tests/test_pixel_scoreboard.py \
@@ -197,6 +198,7 @@ jobs:
             tests/test_render_lab_rules.py \
             tests/test_render_lab_words.py \
             tests/test_cut_release.py \
+            tests/test_tables_dynamic_arrays.py \
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_unprinted_headings.py \
             tests/test_pixel_scoreboard.py \

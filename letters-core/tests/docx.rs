@@ -263,6 +263,54 @@ fn inline_image_survives() {
     assert!(rt.to_plain_text().contains("before"));
 }
 
+/// A picture in the middle of a paragraph stays in it. It used to be written
+/// as a paragraph of its own, with an empty paragraph after it, so "before
+/// [picture] after" read back as three paragraphs, and every further Save As
+/// added more (#1681).
+#[test]
+fn an_inline_image_between_text_stays_in_its_paragraph_through_every_save() {
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("dot.png");
+    std::fs::write(&img_path, png).unwrap();
+
+    let mut d = Document::from_plain_text("first");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![
+            Run { text: "Before ".into(), style: RunStyle::default() },
+            Run {
+                text: "a dot".into(),
+                style: RunStyle {
+                    image: Some(img_path.to_string_lossy().into_owned()),
+                    image_extent_emu: Some((457_200, 457_200)),
+                    ..Default::default()
+                },
+            },
+            Run { text: " after".into(), style: RunStyle::default() },
+        ],
+    });
+    d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run { text: "last".into(), style: RunStyle::default() }] });
+    let text_of = |p: &Paragraph| p.runs.iter().filter(|r| r.style.image.is_none()).map(|r| r.text.as_str()).collect::<String>();
+
+    let mut doc = d;
+    for save in 1..=3 {
+        doc = round_trip(&doc);
+        assert_eq!(doc.paragraphs.len(), 3, "save {save}: the paragraph count changed");
+        let middle = &doc.paragraphs[1];
+        assert_eq!(text_of(middle), "Before  after", "save {save}: the text left the picture's paragraph");
+        assert_eq!(middle.runs.iter().filter(|r| r.style.image.is_some()).count(), 1, "save {save}: the picture left its paragraph");
+        assert_eq!(text_of(&doc.paragraphs[2]), "last", "save {save}");
+    }
+}
+
 /// A floating picture (the Ofsted logo of the audit-committee minutes,
 /// right-aligned in the margins and raised above its paragraph) is saved
 /// in its own paragraph, as a `wp:anchor`, and reads back placed the same.
@@ -818,6 +866,43 @@ fn docx_page_geometry_round_trips() {
     let pg = rt.page.expect("page geometry lost");
     assert!(pg.approx_eq(&d.page.unwrap()), "geometry drifted: {pg:?}");
     assert_eq!((pg.header_pt, pg.footer_pt), (Some(18.0), Some(27.5)), "the header and footer distances");
+}
+
+/// A page measured in whole twips, as Word and Writer write it, comes back
+/// as the same twips however often it is saved. rdocx turns points into
+/// twips by truncating, so 595.3pt (11906 twips) used to be written as
+/// 11905, and 70.85pt (1417) as 1416: every save took a twip off.
+#[test]
+fn docx_page_geometry_keeps_every_twip_through_repeated_saves() {
+    use letters_core::model::PageGeometry;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Document::from_plain_text("body");
+    let page = PageGeometry {
+        width_pt: 595.3,
+        height_pt: 841.9,
+        margin_top_pt: 70.85,
+        margin_bottom_pt: 70.85,
+        margin_left_pt: 64.8,
+        margin_right_pt: 64.8,
+        columns: 1,
+        column_gap_pt: 18.0,
+        header_pt: Some(56.7),
+        footer_pt: Some(56.7),
+        border: None,
+    };
+    d.page = Some(page);
+    for save in 1..=3 {
+        let path = dir.path().join(format!("geom{save}.docx"));
+        docx::write(&d, path.to_str().unwrap()).expect("write");
+        d = docx::read(path.to_str().unwrap()).expect("read");
+        let pg = d.page.expect("page geometry lost");
+        let twips = |pt: f64| (pt * 20.0).round() as i64;
+        assert_eq!(
+            [pg.width_pt, pg.height_pt, pg.margin_top_pt, pg.margin_bottom_pt, pg.margin_left_pt, pg.margin_right_pt, pg.header_pt.unwrap(), pg.footer_pt.unwrap()].map(twips),
+            [page.width_pt, page.height_pt, page.margin_top_pt, page.margin_bottom_pt, page.margin_left_pt, page.margin_right_pt, 56.7, 56.7].map(twips),
+            "save {save}: the page's twips"
+        );
+    }
 }
 
 #[test]
