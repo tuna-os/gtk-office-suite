@@ -337,7 +337,10 @@ def erase_keys(out, ink, rgb):
     coloured (saturated), square or round, solid blob counts: text is
     black or grey, or thin-stroked if coloured, and never that solid."""
     rgbf = rgb.astype(np.float32)
-    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / 255.0
+    # HSV saturation measures chroma relative to brightness. Dividing by
+    # 255 instead misses dark colours such as the purple Q4 legend key
+    # (128, 100, 162), which OCR then joins to the label as "ma".
+    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / np.maximum(rgbf.max(axis=2), 1)
     h, w = ink.shape
     seen = np.zeros_like(ink)
     for y, x in zip(*np.nonzero(ink)):
@@ -639,14 +642,15 @@ def align(app, lo_path, ours_path):
     Then both are cut to their cells (headings are drawn differently on
     paper and on screen, see below) and ours is resampled onto
     LibreOffice's, so cells line up and every metric compares layout within
-    the grid.
+    the grid. For an unruled reference and an unclipped capture, compare
+    ink bounding boxes after removing the screen's header bands; neither
+    side then has a frame defining the used range's whitespace.
     """
-    ref = load(lo_path)
+    ref_raw = load(lo_path)
     if app != "tables":
-        return ref, load(ours_path, ref.size), None
-    ys, xs = np.nonzero(ink_mask(np.asarray(ref)))
-    if len(xs):
-        ref = ref.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+        return ref_raw, load(ours_path, ref_raw.size), None
+    ys_r, xs_r = np.nonzero(ink_mask(np.asarray(ref_raw)))
+    ref = ref_raw.crop((xs_r.min(), ys_r.min(), xs_r.max() + 1, ys_r.max() + 1)) if len(xs_r) else ref_raw
     ours = load(ours_path)
     scale = (ours.width / ref.width + ours.height / ref.height) / 2
     # Headings are furniture and each side draws its own: Calc prints them
@@ -658,6 +662,37 @@ def align(app, lo_path, ours_path):
     if box and 0 < ox < ours.width and 0 < oy < ours.height:
         ref = ref.crop(box)
         ours = ours.crop((ox, oy, ours.width, ours.height))
+    elif box is None and 0 < ox < ours.width and 0 < oy < ours.height:
+        # Published sheets need not print headings. The reference above is
+        # then an ink bounding box, not a framed used range. Remove our
+        # screen headings and crop to ink too, or their labels and the
+        # unused cell padding get stretched into the document (#1348).
+        cells = ours.crop((ox, oy, ours.width, ours.height))
+        ys, xs = np.nonzero(ink_mask(np.asarray(cells)))
+        dark = np.asarray(ref.convert("L")) < 128
+        ruled = long_lines(dark, axis=1) or long_lines(dark, axis=0)
+        # Partial borders are not a heading frame, and a viewport cut
+        # through text need not contain the printed page's whole range.
+        # Neither gives us corresponding ink boxes to align.
+        complete = len(xs) and xs.max() < cells.width - 1 and ys.max() < cells.height - 1
+        # When an unruled, unheaded sheet's column is wider than both the
+        # printed page and the screen viewport, each render clips the column
+        # at its own right edge (#1339). Strip our screen headings, compare
+        # the shared width from the cell origin, and measure scale along the
+        # unclipped vertical axis.
+        ys_c, xs_c = np.nonzero(np.asarray(cells.convert("L")) < 200)
+        v_complete = len(ys_c) and ys_c.max() < cells.height - 1
+        ref_h_clipped = len(xs_r) and xs_r.max() >= ref_raw.width - 4
+        ours_h_clipped = len(xs_c) and xs_c.max() >= cells.width - 4 and ours.width >= 960
+        if complete and not ruled:
+            ours = cells.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+            scale = (ours.width / ref.width + ours.height / ref.height) / 2
+        elif v_complete and not ruled and ref_h_clipped and ours_h_clipped:
+            ours_ink = cells.crop((xs_c.min(), ys_c.min(), xs_c.max() + 1, ys_c.max() + 1))
+            shared_w = min(ref.width, ours_ink.width)
+            ref = ref.crop((0, 0, shared_w, ref.height))
+            ours = ours_ink.crop((0, 0, shared_w, ours_ink.height))
+            scale = ours.height / ref.height
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or

@@ -773,11 +773,17 @@ def tables():
     # expose different portions of the column: stretching one to the other
     # in compare.align is not a measurement of the grid's scale.
     wb, ws = book()
+    wb._fonts[0] = Font(name="Liberation Sans", size=11)
     ws.column_dimensions["A"].width = 200
     for i in range(1, 21):
-        ws.cell(i, 1, f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
-                      "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
-                      "Each view exposes only part of this line of text.")
+        cell = ws.cell(
+            i,
+            1,
+            f"Row {i:02d}: a very wide column continues beyond the printed page and beyond the visible grid viewport. "
+            "The remaining text is deliberately long enough to reach both edges, even with a narrow font. "
+            "Each view exposes only part of this line of text.",
+        )
+        cell.font = Font(name="Liberation Sans", size=11)
     save(wb, "wide-column-no-headings",
          "One extra-wide column of text without printed headings, clipped by the page and viewport", headings=False)
 
@@ -809,6 +815,14 @@ def tables():
         "A wide unprinted column with right-aligned multiline heading, centered title and indented entries",
         headings=False,
     )
+
+    wb, ws = book()
+    ws["A1"] = "Financial statements"
+    ws["A1"].font = Font(name="Liberation Sans", size=24)
+    ws["A4"] = "Income"
+    ws["B4"] = "Statement of income"
+    ws.column_dimensions["B"].width = 40
+    save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
     wb, ws = book()
     pivot_rows = [

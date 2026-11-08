@@ -1,0 +1,11 @@
+# Key shortcuts the GUI harness's window manager keeps (#1209).
+#
+# matchbox's stock /etc/matchbox/kbdconfig grabs Alt+n, Alt+p, Alt+c, Alt+d
+# and Alt+m on the whole display. Journeys that lost exactly one `p` while
+# typing ("Alha", "aple", "ket", "lain", "oaqueedit") are all a dropped `p`,
+# and Alt+p is the one letter binding that would eat it were Alt ever seen as
+# held. A window manager that grabs letter keys has no place under a test
+# that types them, so only the bindings below remain: the ones that do not
+# take a letter.
+<alt>f4=close
+f11=fullscreen

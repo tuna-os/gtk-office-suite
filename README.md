@@ -11,17 +11,29 @@
 [![CI](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml)
 
 Three GNOME-native office applications written in Rust with GTK4 and
-libadwaita, shipped as Flatpaks:
+libadwaita, and an email client built alongside them, shipped as Flatpaks:
 
 | App | What it is | Reads | Writes |
 |---|---|---|---|
 | **Letters** | Word processor | DOCX, ODT, Markdown, TXT | DOCX, ODT, Markdown, HTML, PDF, TXT |
 | **Tables** | Spreadsheet | XLSX, XLS, ODS, CSV, TSV | XLSX, PDF |
 | **Decks** | Presentations | PPTX, ODP | PPTX, ODP, PDF |
+| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/lifafa](https://github.com/tuna-os/lifafa) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
 
 CSV and TSV are import-only in Tables, on purpose: saving a spreadsheet
 over an imported `.csv` would write XLSX bytes to a file everything else
 reads as text, so Save As offers `.xlsx` instead.
+
+Lifafa (a word for envelope) is not built from this repository. It is
+[Hylki](https://github.com/hyprlab/hylki) by hyprlab with native Tuta and
+Proton Mail accounts added, developed in the fork
+[tuna-os/lifafa](https://github.com/tuna-os/lifafa), and it belongs to the
+suite by name, icon and packaging. It is published from that repository as a
+signed Flatpak repository on its GitHub Pages, and as bundles on its
+[releases page](https://github.com/tuna-os/lifafa/releases) (see
+[Install](#install)). Report problems with it in
+[tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
+Everything below this section is about Letters, Tables and Decks.
 
 They are not a LibreOffice port. Each app has its own document model in a
 GTK-free `*-core` crate, and compatibility with other office software is
@@ -82,6 +94,21 @@ Then launch them from your application menu, or:
 flatpak run org.tunaos.letters
 ```
 
+Lifafa is not in the TunaOS repository; it has a signed Flatpak repository of
+its own (coming with its first release published there, v1.47.1-tuna6), which
+`flatpak update` follows:
+
+```bash
+flatpak install --user https://tuna-os.github.io/lifafa/org.tunaos.lifafa.flatpakref
+```
+
+Until then, or to install a file, download the bundle from the
+[latest release of tuna-os/lifafa](https://github.com/tuna-os/lifafa/releases/latest)
+and install it with `flatpak install --user org.tunaos.lifafa-<version>.flatpak`.
+The signing key, the bundles and moving an older bundle install over to the
+repository are in
+[Lifafa's install instructions](https://github.com/tuna-os/lifafa#install).
+
 Something not working? See [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
 
 Flathub submission is prepared but **not yet submitted** — the remaining
@@ -117,7 +144,7 @@ on screen while you work, are catching up, and are now measured:
 | App | Single-feature fixtures, Tiers A and B | Real documents | Shipped Flatpak (Tier C) | Status |
 |---|---|---|---|---|
 | **Letters** | 38 / 43 green + `letters/table` (accepted amber); not green: `letters/bullet-symbol-font-line-height`, `letters/odt-page-break-spacing`, `letters/underline-position`, `letters/url-path-wrapping` | 19 / 30 green | 37 / 73 green | Not yet usable for everyday documents |
-| **Tables** | 17 / 24 green + `tables/wrap-text` (accepted amber); not green: `tables/chart-multi`, `tables/filtered`, `tables/hyperlink-theme-colors`, `tables/wide-column-no-headings`, `tables/wrap-merged`, `tables/wrap-wide-default-font` | 0 / 30 green | 16 / 54 green | Not yet usable for everyday documents |
+| **Tables** | 19 / 25 green + `tables/wrap-text` (accepted amber); not green: `tables/filtered`, `tables/hyperlink-theme-colors`, `tables/wide-column-no-headings`, `tables/wrap-merged`, `tables/wrap-wide-default-font` | 2 / 30 green | 16 / 55 green | Not yet usable for everyday documents |
 | **Decks** | 17 / 18 green; not green: `decks/pay-centre-reduced-line-breaks` | 1 / 30 green | 15 / 48 green | Not yet usable for everyday documents |
 <!-- render-status:end -->
 

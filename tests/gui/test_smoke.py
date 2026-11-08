@@ -42,6 +42,40 @@ class LettersSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while typing")
 
 
+class LettersPrintPreviewSmoke(BaseGUITestCase):
+    """Print Preview must open a real paginated view with an observable page count."""
+
+    app_name = "letters"
+
+    def test_print_preview_reports_single_page(self):
+        from dogtail import rawinput
+
+        self.new_letters_document()
+        rawinput.typeText("print preview page")
+        self.wait_for_node(name="3 words", roleName="label")
+
+        rawinput.keyCombo("<Control><Shift>p")
+        preview = self.wait_until(
+            lambda: next(
+                (
+                    node
+                    for node in self.app.children
+                    if node.roleName == "frame" and node.name == "Print Preview"
+                ),
+                None,
+            ),
+            lambda node: node is not None,
+            description="the Print Preview window",
+        )
+        self.wait_until(
+            lambda: preview.child(name="Page 1 of 1", roleName="label"),
+            lambda node: node is not None,
+            description="the single-page preview indicator",
+        )
+        rawinput.keyCombo("Escape")
+        self.assertIsNone(self.process.poll(), "letters exited while opening Print Preview")
+
+
 class LettersSnapshotSmoke(BaseGUITestCase):
     """State-snapshot interface (#104), same mechanism as
     TablesSnapshotSmoke/DecksSnapshotSmoke: typed text is visible in the
@@ -106,6 +140,10 @@ class LettersTextIsDrawnMixin:
         bottom = min(v.y + v.height, port.y + port.height)
         if right <= left or bottom <= top:
             return 0
+        # AT-SPI gives logical pixels; the screenshot is in device pixels,
+        # twice as many at the display matrix's GDK_SCALE=2.
+        left, top = self.to_device(left, top)
+        right, bottom = self.to_device(right, bottom)
         with mss.mss() as sct:
             shot = sct.grab({"left": left, "top": top, "width": right - left, "height": bottom - top})
         img = Image.frombytes("RGB", shot.size, shot.rgb)
@@ -137,7 +175,12 @@ class LettersTextIsDrawnMixin:
 
         self.new_letters_document()
         blank = self._page_ink()
-        rawinput.typeText("the quick brown fox jumps over the lazy dog")
+        # Three short lines, so they fit the view at the display matrix's
+        # 400px too, where the page stays at 100% and shows its left part.
+        for k, line in enumerate(("the quick brown", "fox jumps over", "the lazy dog")):
+            if k:
+                rawinput.keyCombo("Return")
+            rawinput.typeText(line)
         self.wait_for_node(name="9 words", roleName="label")
         ink = self.wait_until(self._page_ink, lambda n: n - blank >= self.TYPED_INK, timeout=15.0,
                               description="the typed text to be drawn on the page")
@@ -183,9 +226,17 @@ class LettersOpenedTextIsDrawnSmoke(LettersTextIsDrawnMixin, BaseGUITestCase):
 
         path = os.path.join(self.temp_dir(prefix="letters-opened-ink-"), "letter.docx")
         w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        # Short lines: at the display matrix's 400px the page stays at 100%
+        # and the view shows only its left part, so a long line is mostly
+        # off screen and its ink is not counted.
         body = "".join(f"<w:p><w:r><w:t>{t}</w:t></w:r></w:p>" for t in (
             "Dear reader,",
-            "This letter was opened from a file and its text must be drawn on the page.",
+            "This letter",
+            "was opened",
+            "from a file",
+            "and its text",
+            "must be drawn",
+            "on the page.",
             "Yours sincerely,",
         ))
         with zipfile.ZipFile(path, "w") as z:
@@ -634,6 +685,210 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
             lambda snapshot: snapshot == self._edited,
             description="the reopened file to match the edited document",
         )
+
+
+class StyledSaveAsJourney:
+    """#1681: the whole styled document survives open, edit, undo, redo,
+    Save As through the chooser, a restart and a reopen.
+
+    `tests/gui/test_file_corpus.py` compares only paragraph text, so a loss of
+    run styles, list and table state, the header and footer, the page or the
+    review marks could not fail it. This compares the app's full model, as its
+    test-only `test-snapshot` action dumps it (everything but the view), and
+    names the field that differs.
+
+    The fixture is authored outside Letters (tests/gui/fixtures/fixtures.json):
+    CJK, combining marks, emoji and RTL; bold, italic, colour and underline
+    runs; centred and indented paragraphs; a footnote, lists, a table, an
+    image, a comment, a tracked insertion, a table of contents, a header and
+    footer and an A4 page. The journey edits its last paragraph.
+    """
+
+    app_name = "letters"
+    FIXTURE = ""
+    EDIT = " edited"
+
+    def setUp(self):
+        import shutil
+        self._dir = self.temp_dir(prefix="letters-styled-save-as-")
+        self.EXT = os.path.splitext(self.FIXTURE)[1]
+        self._source = os.path.join(self._dir, "source" + self.EXT)
+        shutil.copy(os.path.join(os.path.dirname(__file__), "fixtures", self.FIXTURE), self._source)
+        with open(self._source, "rb") as stream:
+            self._source_bytes = stream.read()
+        self.launch_args = [self._source]
+        self._state = self.isolate_autosave_state()
+        self.isolate_snapshot()
+        self.isolate_gsettings()
+        super().setUp()
+
+    def _model(self):
+        """The document as the app holds it, without view state."""
+        import hashlib
+        snapshot = self.trigger_snapshot("org.tunaos.letters")
+        model = {key: value for key, value in snapshot.items() if key != "view"}
+        # A picture is a file the app extracted to a temporary path of its own:
+        # compare what it holds, not where it is.
+        for paragraph in model.get("paragraphs", []):
+            for run in paragraph["runs"]:
+                path = run["style"].get("image")
+                if path and os.path.isfile(path):
+                    with open(path, "rb") as stream:
+                        run["style"]["image"] = "sha256:" + hashlib.sha256(stream.read()).hexdigest()
+        return model
+
+    @staticmethod
+    def _comparable(model):
+        """The model with the representations a save is free to choose
+        between made one, so that only a real change shows. Undo and redo are
+        compared without this; only the saved file is, because a writer picks
+        among spellings of the same thing. Each was measured on these
+        fixtures, and each says what the app itself treats as equal:
+
+        - a heading is kept with the next paragraph whether or not the flag is
+          set (`layout::keep_with_next` takes either), and both writers give
+          a heading style the flag;
+        - black text is the default colour, so "000000" and none draw alike;
+        - a heading level whose look names no size draws at the body size;
+        - page lengths are written in twips (DOCX) or hundredths of a point
+          (ODF), so they are compared to a tenth of a point.
+        """
+        import copy
+        model = copy.deepcopy(model)
+        for paragraph in model["paragraphs"]:
+            style = paragraph["style"]
+            style["keep_with_next"] = bool(style["keep_with_next"] or style["heading"] is not None)
+            for run in paragraph["runs"]:
+                if run["style"].get("color") == "000000":
+                    run["style"]["color"] = None
+        body = (model.get("base_font") or {}).get("size_hp")
+        for look in model.get("heading_styles", []):
+            if look.get("font_size_hp") is None:
+                look["font_size_hp"] = body
+        page = model.get("page")
+        if page:
+            for key, value in page.items():
+                if isinstance(value, float):
+                    page[key] = round(value, 1)
+        return model
+
+    @staticmethod
+    def _diff(expected, actual, path="", out=None):
+        """Every field that differs, as `path: expected != actual`."""
+        out = [] if out is None else out
+        if isinstance(expected, dict) and isinstance(actual, dict):
+            for key in sorted(set(expected) | set(actual)):
+                if key not in expected:
+                    out.append(f"{path}.{key}: absent != {actual[key]!r}")
+                elif key not in actual:
+                    out.append(f"{path}.{key}: {expected[key]!r} != absent")
+                else:
+                    StyledSaveAsJourney._diff(expected[key], actual[key], f"{path}.{key}", out)
+        elif isinstance(expected, list) and isinstance(actual, list):
+            for k in range(max(len(expected), len(actual))):
+                if k >= len(expected):
+                    out.append(f"{path}[{k}]: absent != {actual[k]!r}")
+                elif k >= len(actual):
+                    out.append(f"{path}[{k}]: {expected[k]!r} != absent")
+                else:
+                    StyledSaveAsJourney._diff(expected[k], actual[k], f"{path}[{k}]", out)
+        elif expected != actual:
+            out.append(f"{path}: {expected!r} != {actual!r}")
+        return out
+
+    def _keep(self, **named):
+        """Retain the snapshots and files a failure needs, where the harness
+        keeps its own artifacts."""
+        import json
+        import shutil
+        folder = os.path.join(self.gui_dir, "failure_artifacts", f"{type(self).__name__}.{self._testMethodName}")
+        os.makedirs(folder, exist_ok=True)
+        for name, value in named.items():
+            if isinstance(value, str) and os.path.isfile(value):
+                shutil.copy(value, os.path.join(folder, name))
+            else:
+                with open(os.path.join(folder, name + ".json"), "w", encoding="utf-8") as stream:
+                    json.dump(value, stream, ensure_ascii=False, indent=1, sort_keys=True)
+
+    def _press_until(self, keys, target, description):
+        """Press `keys` until the model is `target`; if it never is, say which
+        fields differ from it."""
+        from dogtail import rawinput
+        seen = None
+        for _ in range(12):
+            rawinput.keyCombo(keys)
+            try:
+                return self.wait_until(self._model, lambda model: model == target, timeout=1.5, description=description)
+            except AssertionError:
+                seen = self._model()
+        self._keep(target=target, seen=seen)
+        self.fail(f"{description}: differs in {self._diff(target, seen)[:8]}")
+
+    def _save_as(self, path):
+        from dogtail import tree
+        self.gapplication_action("org.tunaos.letters", "save-file-as")
+        entry = self.wait_for_condition(
+            lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text"),
+            description="the Save As name entry",
+        )
+        entry.text = path
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+
+    def test_open_edit_undo_redo_save_as_restart_reopen(self):
+        from dogtail import rawinput
+        self.wait_for_node(roleName="text")
+        opened = self.wait_until(self._model, lambda m: m["paragraphs"], description="the fixture to open")
+        self.assertTrue(any("見出し" in run["text"] for p in opened["paragraphs"] for run in p["runs"]), "the fixture's CJK text")
+
+        # One edit, in the last paragraph, and nothing else changes.
+        self._activate_window()
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(self.EDIT)
+        # All of it: typing is not instant, and a model taken half way
+        # through is not the edited document redo has to bring back.
+        last = "".join(run["text"] for run in opened["paragraphs"][-1]["runs"])
+        edited = self.wait_until(
+            self._model,
+            lambda m: "".join(run["text"] for run in m["paragraphs"][-1]["runs"]) == last + self.EDIT,
+            description="the whole edit",
+        )
+        changed = {d.split("]")[0] + "]" for d in self._diff(opened, edited) if d.startswith(".paragraphs[")}
+        self.assertEqual(changed, {f".paragraphs[{len(opened['paragraphs']) - 1}]"},
+                         f"the edit changed more than its paragraph: {self._diff(opened, edited)[:6]}")
+
+        # Undo is exact, and so is redo.
+        self._press_until("<Control>z", opened, "undo to the opened document")
+        self._press_until("<Control><Shift>z", edited, "redo to the edited document")
+
+        # Save As through the chooser, to the other kind of path than the source.
+        destination = os.path.join(self._dir, "saved" + self.EXT)
+        self._save_as(destination)
+        self.wait_for_condition(lambda: os.path.isfile(destination) and os.path.getsize(destination) > 0,
+                                description="the Save As file")
+        with open(self._source, "rb") as stream:
+            self.assertEqual(stream.read(), self._source_bytes, "Save As changed the source file")
+
+        # Restart on the saved file: the same document, edit and all.
+        self.relaunch_app(launch_args=[destination])
+        reopened = self.wait_until(self._model, lambda m: m["paragraphs"] and any(
+            self.EDIT.strip() in run["text"] for run in m["paragraphs"][-1]["runs"]), description="the saved file to reopen")
+        losses = self._diff(self._comparable(edited), self._comparable(reopened))
+        if losses:
+            self._keep(opened=opened, edited=edited, reopened=reopened, source=self._source, saved=destination)
+        self.assertEqual(losses, [], f"{len(losses)} field(s) changed through Save As and a restart")
+
+
+class LettersStyledDocxSaveAsSmoke(StyledSaveAsJourney, BaseGUITestCase):
+    """#1681 for .docx: the fixture is Writer's own conversion."""
+
+    FIXTURE = "styled-unicode.docx"
+
+
+class LettersStyledOdtSaveAsSmoke(StyledSaveAsJourney, BaseGUITestCase):
+    """#1681 for .odt: the fixture is hand-authored ODF."""
+
+    FIXTURE = "styled-unicode.odt"
 
 
 class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
@@ -3643,24 +3898,35 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
     def _switch_to(self, name):
         """Pick `name` in the sheet switcher, as a user does: open it, step
         towards the sheet, Return. The popup list is not in the AT-SPI tree
-        (see TablesMultiSheetSmoke), so the gesture is retried until the
-        switcher's accessible name, which mirrors the selection, lands."""
+        (see TablesMultiSheetSmoke), but its toggle button is pressed exactly
+        while it is open, so the keys wait for that; the gesture is retried
+        until the switcher's accessible name, which mirrors the selection,
+        lands."""
+        import pyatspi
         from dogtail import rawinput
 
         def step():
             names, active, _ = self._state()
             switcher = self.app.child(roleName="combo box")
             if switcher.name != name:
-                switcher.child(roleName="toggle button").do_action(0)
+                toggle = switcher.child(roleName="toggle button")
+                if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+                    # do_action(0) returns before GTK's keyboard activation
+                    # clicks, 250 ms later: keys sent meanwhile reach the
+                    # grid, and a popup that opens after them is closed by
+                    # the next retry's click before anything is picked.
+                    toggle.do_action(0)
+                    self.wait_until(lambda: toggle.getState().contains(pyatspi.STATE_PRESSED), bool,
+                                    description="the sheet switcher's list to open")
                 rawinput.keyCombo("Down" if names.index(name) > active else "Up")
                 rawinput.keyCombo("Return")
             return self.app.child(roleName="combo box").name
         self.wait_until(step, lambda got: got == name, interval=0.6,
                         description=f"the sheet switcher to select {name}")
-        # The popup is invisible to AT-SPI, so a retry can land the
-        # selection while leaving it open; an open popup holds the
-        # keyboard and every later Ctrl+G misses. Escape dismisses it,
-        # and in the grid it only hands focus back to the grid.
+        # Return closes the list as it picks; should a retry have left it
+        # open, it would hold the keyboard and every later Ctrl+G would
+        # miss. Escape dismisses it, and in the grid it only hands focus
+        # back to the grid.
         rawinput.keyCombo("Escape")
 
     def test_rename_reorder_delete_undo_save_and_reopen(self):
@@ -3709,9 +3975,41 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
                          "the undo to bring Totals back first, formula and all")
 
+        # Redo must delete the restored identity, not whichever sheet is
+        # active after undo. Undo once more before saving the workbook.
+        self.gapplication_action(aid, "redo")
+        self._wait_state((["Sheet1"], 0, ("5", None)), "redo to delete Totals again")
+        self.gapplication_action(aid, "undo")
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "a second undo to restore Totals and its formula")
+
         # Switch to Sheet1 through the switcher: its own value, not the formula.
         self._switch_to("Sheet1")
         self._wait_state((["Totals", "Sheet1"], 1, ("5", None)), "the switcher to show Sheet1's own value")
+
+        rawinput.keyCombo("Escape")
+        self._put("A1", "6")
+        # History belongs to the edited sheet even if the user switches
+        # before undoing. Recalculate the dependent formula after each step.
+        self._switch_to("Totals")
+        self._wait_state((["Totals", "Sheet1"], 0, ("12", "Sheet1!A1*2")),
+                         "Totals to recalculate after the precedent edit")
+        self.gapplication_action(aid, "undo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("5", None)),
+                         "undo from Totals to restore Sheet1's precedent")
+        self._switch_to("Totals")
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "undo to recalculate Totals without overwriting its formula")
+        self.gapplication_action(aid, "redo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("6", None)),
+                         "redo from Totals to restore Sheet1's edit")
+
+        self.gapplication_action(aid, "undo")
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("5", None)),
+                         "undo to restore the precedent before the final edit")
 
         # TBL-006: edit the precedent on Sheet1, then save WITHOUT
         # visiting Totals first. The saved Totals sheet must still carry
@@ -3991,11 +4289,12 @@ class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
     custom code typed into Format Code and applied formats the selection,
     and the cell shows (and says) the value as the code draws it."""
 
-    def test_bold_applies_to_the_selection_and_follows_it(self):
-        self.skipTest("the parent's journey; this class runs its own")
-
-    def test_ctrl_b_toggles_bold_on_the_selection(self):
-        self.skipTest("the parent's journey; this class runs its own")
+    # The parent's journeys, not this class's: unset, so they are not
+    # collected here. Skipped, they read as two journeys that never ran,
+    # and the nightly stress campaign (which counts a skip as a failure,
+    # #442) failed every attempt on them.
+    test_bold_applies_to_the_selection_and_follows_it = None
+    test_ctrl_b_toggles_bold_on_the_selection = None
 
     def test_a_custom_code_formats_the_cell(self):
         import subprocess
@@ -7809,12 +8108,31 @@ class DecksCanvasGeometry:
         """
         import re
 
-        canvas = self.app.child(name="Slide canvas")
-        cw, ch = canvas.size
-        match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas.description)
-        if not match:
-            self.fail(f"canvas_at not found in description: {canvas.description!r}")
-        cx, cy = int(match.group(1)), int(match.group(2))
+        # A snapshot confirms the model changed, but GTK may still be
+        # allocating the canvas after switching from the empty view. Mixing
+        # its new size with the previous draw's canvas_at sent DCK-007's
+        # double-click to stale coordinates on CI. Wait for the size and
+        # draw-published origin together to settle before sending input.
+        previous = None
+        unchanged_since = time.monotonic()
+
+        def geometry():
+            canvas = self.app.child(name="Slide canvas")
+            match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas.description)
+            if not canvas.showing or not match:
+                return None
+            return (*canvas.size, int(match.group(1)), int(match.group(2)))
+
+        def settled(value):
+            nonlocal previous, unchanged_since
+            now = time.monotonic()
+            if value is None or value != previous:
+                previous, unchanged_since = value, now
+                return False
+            return value[0] > 0 and value[1] > 0 and now - unchanged_since >= 0.25
+
+        cw, ch, cx, cy = self.wait_until(
+            geometry, settled, description="stable slide canvas size and origin")
         scale = min(cw / 960.0, ch / 540.0) * 0.92
         ox = (cw - 960.0 * scale) / 2.0
         oy = (ch - 540.0 * scale) / 2.0
@@ -10500,6 +10818,17 @@ class OpenPathsMixin:
     driven through the file chooser's location entry, and drag and drop,
     through the test-mode `test-drop-files` action that runs the same code
     a real drop does."""
+
+    # The file chooser's location entry completes names from a folder listing
+    # it loads in the background (see _open_through_dialog). When the dialog
+    # closes before that listing lands, GTK's own completion asks a model
+    # that is already gone: `gtk_tree_model_get_iter_first: assertion
+    # 'GTK_IS_TREE_MODEL (tree_model)' failed`, dozens of times, in about one
+    # CI attempt in ten (#1209). The apps use gtk::FileDialog and hold no
+    # GtkTreeModel of their own, so the message comes from GTK's chooser. It
+    # is tolerated here, in the journeys that drive that chooser, and nowhere
+    # else.
+    tolerated_gtk_criticals = ("gtk_tree_model_get_iter_first: assertion 'GTK_IS_TREE_MODEL (tree_model)' failed",)
 
     def _drop(self, *paths):
         import subprocess

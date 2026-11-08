@@ -245,8 +245,15 @@ pub fn hit_test_handles(
         (SelectionHandle::LeftCenter, sx, sy + sh / 2.0),
     ];
 
+    // A handle reaches HANDLE_SIZE from its centre, but never past a third
+    // of the box: on a small box (a text box at a narrow window's zoom is
+    // 15px tall) the top and bottom handles otherwise met in its middle,
+    // and a double-click there grabbed a resize handle instead of opening
+    // the text.
+    let reach_x = HANDLE_SIZE.min((sw / 3.0).max(3.0));
+    let reach_y = HANDLE_SIZE.min((sh / 3.0).max(3.0));
     for (handle, hx, hy) in positions {
-        if (cx - hx).abs() <= HANDLE_SIZE && (cy - hy).abs() <= HANDLE_SIZE {
+        if (cx - hx).abs() <= reach_x && (cy - hy).abs() <= reach_y {
             return Some(handle);
         }
     }
@@ -1987,5 +1994,48 @@ mod line_tests {
         assert_eq!(px(50, 20), (255, 255, 255), "the middle of the diagonal, in white");
         assert_eq!(px(80, 5), (0, 0, 0), "no box: its top edge is not drawn");
         assert_eq!(px(70, 30), (0, 0, 0), "nothing filled below the line");
+    }
+}
+
+#[cfg(test)]
+mod handle_tests {
+    use super::{hit_test_handles, slide_geometry, SelectionHandle};
+    use decks_core::engine::SlideObject;
+
+    fn text_box(x: f64, y: f64, w: f64, h: f64) -> SlideObject {
+        SlideObject::TextBox { text: "Text".into(), x, y, w, h, rotation: 0.0, runs: vec![], body: Default::default() }
+    }
+
+    /// Canvas point of slide point (x, y) on a canvas `cw`×`ch`.
+    fn at(x: f64, y: f64, cw: f64, ch: f64) -> (f64, f64) {
+        let (ox, oy, sw, sh) = slide_geometry(cw, ch);
+        (ox + x / 960.0 * sw, oy + y / 540.0 * sh)
+    }
+
+    /// The middle of a small box is the box, not a resize handle: a 40-unit
+    /// text box is 15px tall in a 400px window, where the top and bottom
+    /// handles' 8px reach used to meet in its middle and a double-click
+    /// there grabbed a handle instead of opening the text.
+    #[test]
+    fn the_middle_of_a_small_box_is_not_a_handle() {
+        let (cw, ch) = (390.0, 650.0);
+        let obj = text_box(200.0, 150.0, 200.0, 40.0);
+        let (mx, my) = at(300.0, 170.0, cw, ch);
+        assert_eq!(hit_test_handles(&obj, mx, my, cw, ch), None);
+        // Its handles are still there, on its edges.
+        let (tx, ty) = at(300.0, 150.0, cw, ch);
+        assert_eq!(hit_test_handles(&obj, tx, ty, cw, ch), Some(SelectionHandle::TopCenter));
+        let (bx, by) = at(400.0, 190.0, cw, ch);
+        assert_eq!(hit_test_handles(&obj, bx, by, cw, ch), Some(SelectionHandle::BottomRight));
+    }
+
+    /// A box at full size keeps the handles' whole 8px reach.
+    #[test]
+    fn a_large_box_keeps_the_full_handle_reach() {
+        let (cw, ch) = (1600.0, 900.0);
+        let obj = text_box(200.0, 150.0, 360.0, 60.0);
+        let (tx, ty) = at(380.0, 150.0, cw, ch);
+        assert_eq!(hit_test_handles(&obj, tx, ty + 7.5, cw, ch), Some(SelectionHandle::TopCenter));
+        assert_eq!(hit_test_handles(&obj, tx, ty + 8.5, cw, ch), None);
     }
 }

@@ -129,6 +129,11 @@ jobs:
       - name: Publish the tag
         run: |
           set -euo pipefail
+          # A draft, so `releases/latest` (which FlatPark's update resolvers
+          # read) keeps pointing at the previous release until
+          # publish-flatpak.yml has attached this one's downloads and
+          # published it.
+          gh release create "v$VERSION" --draft --verify-tag --generate-notes --title "v$VERSION"
           gh workflow run publish-flatpak.yml --ref "v$VERSION" -f publish=true
           gh workflow run release-gate.yml --ref "v$VERSION"
           echo "Dispatched publish-flatpak.yml and release-gate.yml on v$VERSION." >> "$GITHUB_STEP_SUMMARY"

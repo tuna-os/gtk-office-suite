@@ -661,5 +661,59 @@ class SecondInstanceContracts(unittest.TestCase):
             self.assertIn(("LettersCollabTwoHeads", name), methods)
 
 
+class DecksCanvasCoordinates(unittest.TestCase):
+    """Exercise the real coordinate helper without importing dogtail/GTK."""
+
+    def _journey(self, frames):
+        import ast
+        from types import SimpleNamespace
+
+        source = os.path.join(os.path.dirname(__file__), "gui", "test_smoke.py")
+        with open(source) as handle:
+            tree = ast.parse(handle.read())
+        helper = next(n for n in tree.body
+                      if isinstance(n, ast.ClassDef) and n.name == "DecksCanvasGeometry")
+        clock = SimpleNamespace(now=0.0)
+        namespace = {"time": SimpleNamespace(monotonic=lambda: clock.now)}
+        exec(compile(ast.Module(body=[helper], type_ignores=[]), source, "exec"), namespace)
+        journey = namespace["DecksCanvasGeometry"]()
+        canvas = SimpleNamespace(size=(0, 0), description="", showing=False)
+        journey.app = SimpleNamespace(child=lambda **kwargs: canvas)
+
+        def wait_until(observe, matches, **kwargs):
+            for now, size, origin, showing in frames:
+                clock.now = now
+                canvas.size, canvas.description, canvas.showing = size, origin, showing
+                value = observe()
+                if matches(value):
+                    return value
+            raise AssertionError(kwargs["description"])
+
+        journey.wait_until = wait_until
+        return journey
+
+    def test_resize_and_late_draw_origin_settle_together(self):
+        journey = self._journey([
+            (0.0, (0, 0), "", False),
+            (0.1, (1600, 900), "canvas_at=260,50", True),
+            (0.2, (1650, 880), "canvas_at=260,50", True),
+            (0.3, (1650, 880), "canvas_at=265,95", True),
+            (0.4, (1650, 880), "canvas_at=265,95", True),
+            (0.5, (1650, 880), "canvas_at=265,95", True),
+            (0.6, (1650, 880), "canvas_at=265,95", True),
+        ])
+        # The slide centre maps to the centre of the final canvas, even
+        # when size and draw-published origin arrive on different polls.
+        self.assertEqual(journey._slide_to_window()(480, 270), (1090, 535))
+
+    def test_hidden_or_changing_canvas_never_supplies_click_coordinates(self):
+        for frames in (
+            [(i / 10, (1650, 880), "canvas_at=265,95", False) for i in range(10)],
+            [(i / 10, (1650, 880), f"canvas_at=265,{i}", True) for i in range(10)],
+        ):
+            with self.subTest(frames=frames), self.assertRaisesRegex(AssertionError, "stable slide canvas"):
+                self._journey(frames)._slide_to_window()
+
+
 if __name__ == "__main__":
     unittest.main()
