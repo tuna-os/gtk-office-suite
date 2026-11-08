@@ -231,7 +231,7 @@ package = "loro_fractional_index"
 version = "^0.10.7"
 
 [dependencies.getrandom]
-version = "0.2.15"
+version = "0.4.0"
 
 [dependencies.imbl]
 version = "7.0.2"
@@ -358,7 +358,7 @@ version = "0.10.0"
 version = "0.13.0"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten"), not(target_os = "wasi")))'.dependencies.getrandom]
-version = "0.2.15"
+version = "0.4.0"
 features = ["js"]
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten"), not(target_os = "wasi")))'.dependencies.wasm-bindgen]
