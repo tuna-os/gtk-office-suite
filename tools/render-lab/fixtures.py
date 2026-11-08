@@ -796,6 +796,22 @@ def tables():
     save(wb, "unprinted-headings", "Text-only sheet without printed headings; screen headings and trailing whitespace are excluded from comparison", headings=False)
 
     wb, ws = book()
+    ws["A1"] = "Available data"
+    ws["A1"].font = Font(name="Liberation Sans", size=18)
+    ws["A3"] = "Notes and details"
+    ws["B3"] = "Wide reference columns"
+    ws["C3"] = "Extended summary description across horizontal pages"
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 70
+    save(
+        wb,
+        "wide-unprinted-sheet",
+        "Wide sheet without printed headings split across horizontal pages in Calc; stitched into one reference for screen viewport alignment",
+        headings=False,
+    )
+
+    wb, ws = book()
     pivot_rows = [
         ("Region", "Apparel - Sum of Sales", "Electronics - Sum of Sales"),
         ("North", 50, 100),
