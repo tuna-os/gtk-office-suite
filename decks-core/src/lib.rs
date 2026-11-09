@@ -52,6 +52,14 @@ pub fn read_deck_with_report(path: &str) -> Result<(engine::Deck, suite_common_c
     for name in opaque.part_names() {
         report.record(suite_common_core::interop::UnsupportedFeature::new("uninterpreted-package-part", "Uninterpreted package part", name, suite_common_core::interop::FeatureDisposition::OpaquePassThrough, "will be copied through on an opaque save"));
     }
+    // Slides the reader could not read (#1977): they are not in the deck,
+    // so nothing else in this report can speak for them. Naming them here
+    // is what stands between the user and a save that drops them forever;
+    // the save-time loss check (`loss::content_a_save_drops`) makes the
+    // same finding from the file under the same id.
+    for skipped in &deck.skipped_slides {
+        report.record(suite_common_core::interop::UnsupportedFeature::new("unreadable-slides", "Slides that could not be read", &skipped.part, suite_common_core::interop::FeatureDisposition::WarnOnLoss, format!("the slide was not read ({}); saving will drop it permanently", skipped.reason)));
+    }
     Ok((deck, report, opaque))
 }
 

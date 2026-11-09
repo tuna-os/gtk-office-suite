@@ -125,6 +125,11 @@ pub struct DecksController {
     /// stable id; edits to masters (SetMaster) carry their `theme_id`
     /// through history, but no edit path retargets themes yet.
     pub themes: Rc<RefCell<Vec<crate::engine::theme::Theme>>>,
+    /// The slides the reader could not read (`Deck.skipped_slides`,
+    /// #1977): installed at open/recovery, saved back by `deck()`. No
+    /// edit path changes it; it rides the session so a save made through
+    /// the controller still knows which source slides it would drop.
+    pub skipped_slides: Rc<RefCell<Vec<crate::engine::SkippedSlide>>>,
     pub dirty: Rc<Cell<bool>>,
     /// The deck's on-disk path, or `None` for an unsaved new document.
     /// Canonical document identity (#103) — window.rs reads/writes this
@@ -259,6 +264,7 @@ impl DecksController {
             masters: Rc::new(RefCell::new(masters)),
             page_size: Rc::new(Cell::new(None)),
             themes: Rc::new(RefCell::new(Vec::new())),
+            skipped_slides: Rc::new(RefCell::new(Vec::new())),
             dirty: Rc::new(Cell::new(false)),
             file_path: Rc::new(RefCell::new(None)),
             history: RefCell::new(History::default()),
@@ -329,6 +335,7 @@ impl DecksController {
         *self.masters.borrow_mut() = deck.masters;
         self.page_size.set(deck.page_size);
         *self.themes.borrow_mut() = deck.themes;
+        *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = Some(context);
         *self.history.borrow_mut() = History::default();
@@ -367,6 +374,7 @@ impl DecksController {
         *self.masters.borrow_mut() = deck.masters;
         self.page_size.set(deck.page_size);
         *self.themes.borrow_mut() = deck.themes;
+        *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = context;
         *self.history.borrow_mut() = History::default();
@@ -586,7 +594,7 @@ impl DecksController {
             }
             None => self.slides.borrow().clone(),
         };
-        crate::engine::Deck { slides, masters, page_size: self.page_size.get(), themes: self.themes.borrow().clone() }
+        crate::engine::Deck { slides, masters, page_size: self.page_size.get(), themes: self.themes.borrow().clone(), skipped_slides: self.skipped_slides.borrow().clone() }
     }
 
     pub fn slide_count(&self) -> usize {
@@ -2263,6 +2271,7 @@ mod tests {
             masters: c.masters.borrow().clone(),
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().with_extension("pptx");

@@ -296,6 +296,7 @@ mod tests {
             masters: vec![],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         }
     }
 

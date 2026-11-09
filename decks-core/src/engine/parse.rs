@@ -326,6 +326,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let mut theme_id_of: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
 
     let mut slides = Vec::new();
+    // Parts of slides that could not be read, in presentation order
+    // (#1977); carried out on the deck.
+    let mut skipped_slides: Vec<super::model::SkippedSlide> = Vec::new();
     // Stable ids minted once at import (DCK-005): one counter for the
     // whole package, so slide, object, master, layout, placeholder and
     // theme ids are all distinct. Slides and objects are stamped as each
@@ -351,8 +354,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             None => format!("ppt/slides/slide{}.xml", slide_index + 1),
         };
 
-        let Ok(slide_xml) = archive.part_to_string(&target_path, &mut budget) else {
-            continue;
+        // A slide whose part cannot be read is skipped, but never
+        // silently (#1977): the skip is recorded on the deck, so the open
+        // report and the save-time loss check can name the slide the save
+        // would otherwise drop without a trace.
+        let slide_xml = match archive.part_to_string(&target_path, &mut budget) {
+            Ok(xml) => xml,
+            Err(e) => {
+                skipped_slides.push(super::model::SkippedSlide { part: target_path.clone(), reason: e.to_string() });
+                continue;
+            }
         };
 
         // Check if there's a slide relationship file (for images)
@@ -1215,7 +1226,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // later edit adds) gets a session id here, still once per document.
     crate::ops::ensure_all_ids(&mut slides, &mut masters);
     crate::ops::ensure_theme_ids(&slides, &masters, &mut model_themes);
-    Ok(Deck { slides, masters, page_size, themes: model_themes })
+    Ok(Deck { slides, masters, page_size, themes: model_themes, skipped_slides })
 }
 
 /// A shape's `p:cNvPr id`.

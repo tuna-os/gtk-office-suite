@@ -1647,7 +1647,7 @@ fn impress_keeps_a_themes_decorations_in_both_formats() {
     };
     for (i, t) in decks_core::templates::templates().iter().enumerate() {
         let (slides, masters) = decks_core::templates::deck(i).unwrap();
-        let deck = Deck { slides, masters, page_size: None, themes: Vec::new() };
+        let deck = Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
         let want: Vec<String> = deck.masters[0].shapes.iter().map(look).collect();
         for ext in ["pptx", "odp"] {
             let dir = tempfile::tempdir().unwrap();
