@@ -707,6 +707,20 @@ mod tests {
     }
 
     #[test]
+    fn csv_import_quoted_fields_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_temp(&dir, "t.csv", "\"Smith, John\",42,\"line1\nline2\"\n\"say \"\"hi\"\"\",7,x\n");
+        let mut e = engine();
+        let (rows, cols) = load_file_into_engine(&path, &mut e).unwrap();
+        assert_eq!((rows, cols), (2, 3), "the quoted newline must not split the record");
+        assert_eq!(e.cell(0, 0), "Smith, John");
+        assert_eq!(e.cell(0, 1), "42");
+        assert_eq!(e.cell(0, 2), "line1\nline2");
+        assert_eq!(e.cell(1, 0), "say \"hi\"");
+        assert_eq!(e.cell(1, 1), "7");
+    }
+
+    #[test]
     fn csv_formulas_evaluate_on_import() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_temp(&dir, "t.csv", "1,2,=A1+B1\n");
