@@ -220,6 +220,48 @@ pub fn sequence_text(doc: &Document) -> String {
     doc.paragraphs.iter().map(|p| crate::layout::layout_text(&p.runs)).collect::<Vec<_>>().join("\n")
 }
 
+/// Case-insensitive matches of `query` in the document's sequence text, as
+/// (start, end) char offsets into that text: non-overlapping, in order.
+/// Empty query: no matches. A query can only match document content: list
+/// markers, table pipes and footnote "[n]" live in the buffer alone and
+/// never match.
+///
+/// Matching compares character by character against the ORIGINAL text,
+/// never against a lowercased copy (#1978): case folding can change a
+/// character's length (Turkish `İ` folds to two chars), so offsets taken
+/// from a folded copy point at the wrong characters in the document —
+/// Find highlighted one range and Replace edited it. A match therefore
+/// requires query and text to agree char for char under per-char case
+/// folding, the same rule `suite_common_core::search` uses.
+pub fn find_matches(doc: &Document, query: &str) -> Vec<(usize, usize)> {
+    find_in_text(&sequence_text(doc), query)
+}
+
+/// The matching core of [`find_matches`] over plain text, split out so it
+/// can be tested without a document.
+pub fn find_in_text(text: &str, query: &str) -> Vec<(usize, usize)> {
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let hay: Vec<char> = text.chars().collect();
+    let needle: Vec<char> = query.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + needle.len() <= hay.len() {
+        if hay[i..i + needle.len()].iter().zip(&needle).all(|(a, b)| chars_eq_ignore_case(*a, *b)) {
+            out.push((i, i + needle.len()));
+            i += needle.len();
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn chars_eq_ignore_case(a: char, b: char) -> bool {
+    a == b || a.to_lowercase().eq(b.to_lowercase())
+}
+
 /// Total sequence length.
 pub fn doc_len(doc: &Document) -> usize {
     doc.paragraphs.iter().map(|p| seq_len(&p.runs)).sum::<usize>() + doc.paragraphs.len().saturating_sub(1)
