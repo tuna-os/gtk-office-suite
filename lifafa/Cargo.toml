@@ -82,7 +82,7 @@ dirs = "5"
 # CSP nonce comes from the OS CSPRNG. All three are already in the dependency
 # graph (keyring, the mail stack, ring), so naming them here adds no new downloads.
 sha2 = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 getrandom = "0.2"
 
 # Gravatar (opt-in): MD5 of the email + a simple blocking HTTPS fetch
