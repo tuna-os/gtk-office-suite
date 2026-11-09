@@ -60,7 +60,7 @@ pub(in crate::worker) fn attachment_parts(
         if Some(id) == legacy {
             continue;
         }
-        let Some(part) = parsed.parts.get(id) else {
+        let Some(part) = parsed.parts.get(id as usize) else {
             continue;
         };
         // What is left where an attachment was removed, here or by

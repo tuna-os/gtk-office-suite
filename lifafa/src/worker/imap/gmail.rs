@@ -164,13 +164,13 @@ where
     let mut out = Vec::new();
     loop {
         let reply = match session.read_response().await {
-            Some(Ok(reply)) => reply,
-            Some(Err(e)) => {
+            Ok(Some(reply)) => reply,
+            Err(e) => {
                 let e = async_imap::error::Error::Io(e);
                 wired_err(&cmd, &e);
                 return Err(e);
             }
-            None => {
+            Ok(None) => {
                 wired::<()>(&cmd, &Err(async_imap::error::Error::ConnectionLost));
                 return Err(async_imap::error::Error::ConnectionLost);
             }
@@ -302,8 +302,8 @@ where
     let mut out = std::collections::HashMap::new();
     loop {
         let reply = match session.read_response().await {
-            Some(Ok(reply)) => reply,
-            Some(Err(e)) => {
+            Ok(Some(reply)) => reply,
+            Err(e) => {
                 let e = async_imap::error::Error::Io(e);
                 wired_err(&cmd, &e);
                 if !is_parse_error(&e) {
@@ -314,7 +314,7 @@ where
                     "unreadable X-GM-LABELS reply",
                 )));
             }
-            None => {
+            Ok(None) => {
                 wired::<()>(&cmd, &Err(async_imap::error::Error::ConnectionLost));
                 return Err(async_imap::error::Error::ConnectionLost);
             }

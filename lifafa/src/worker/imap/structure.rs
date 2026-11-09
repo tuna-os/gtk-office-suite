@@ -463,8 +463,8 @@ mod attachment_scan_tests {
     /// Parse a real server BODYSTRUCTURE response into the structure our IMAP
     /// summary path sees.
     fn bodystructure(raw: &str) -> async_imap::imap_proto::BodyStructure<'_> {
-        use async_imap::imap_proto::{parser::parse_response, AttributeValue, Response};
-        let (_, resp) = parse_response(raw.as_bytes()).expect("parses");
+        use async_imap::imap_proto::{AttributeValue, Response};
+        let (_, resp) = Response::parse(raw.as_bytes()).expect("parses");
         match resp {
             Response::Fetch(_, attrs) => attrs
                 .into_iter()

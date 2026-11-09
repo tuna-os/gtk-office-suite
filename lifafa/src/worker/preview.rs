@@ -113,7 +113,8 @@ fn decode_text(bytes: &[u8], charset: Option<&str>) -> String {
         // 8-bit text with no (usable) charset: read it as Windows-1252, as
         // browsers and mail clients do, which at least shows Western European
         // accents rather than a row of replacement characters.
-        Err(_) => mail_parser::decoders::charsets::single_byte::decoder_cp1252(bytes),
+        Err(_) => mail_parser::decoders::charsets::map::charset_decoder(b"cp1252")
+            .map_or_else(|| String::from_utf8_lossy(bytes).into_owned(), |decode| decode(bytes)),
     }
 }
 
