@@ -327,3 +327,39 @@ fn header_footer_footnotes_and_page_are_ops_that_undo() {
     apply_all(&mut d, &inverse).unwrap();
     assert_eq!(d, before);
 }
+
+// ── find_matches (#1978) ─────────────────────────────────────────────
+// Offsets are char offsets into the ORIGINAL sequence text. Searching a
+// lowercased copy skews every offset after a character whose fold
+// changes length, so Replace edited text the user never saw highlighted.
+
+#[test]
+fn find_matches_ascii_case_insensitive() {
+    assert_eq!(find_in_text("Hello HELLO hello", "hello"), vec![(0, 5), (6, 11), (12, 17)]);
+    assert_eq!(find_in_text("aaa", "aa"), vec![(0, 2)], "non-overlapping");
+    assert!(find_in_text("hello", "").is_empty(), "empty query matches nothing");
+    assert!(find_in_text("hello", "xyz").is_empty());
+}
+
+#[test]
+fn find_matches_offsets_stay_in_original_text_after_length_changing_folds() {
+    // 'İ' lowercases to two chars ('i' + combining dot). On a folded copy
+    // the plain "istanbul" in this string sits at folded offset 10; in the
+    // document it starts at char 9, and that is the range Replace must get.
+    let text = "İSTANBUL istanbul İSTANBUL";
+    assert_eq!(find_in_text(text, "istanbul"), vec![(9, 17)]);
+    // The folded query agrees char for char, so it matches both copies at
+    // their true offsets.
+    assert_eq!(find_in_text(text, "İSTANBUL"), vec![(0, 8), (18, 26)]);
+    // A lone 'i' does not match 'İ' (their folds differ in length), and
+    // the real 'i' after it is found at its own offset, not a skewed one.
+    assert_eq!(find_in_text("İi", "i"), vec![(1, 2)]);
+}
+
+#[test]
+fn find_matches_reads_the_document_sequence_text() {
+    let mut d = Document::new();
+    d.paragraphs[0].runs = vec![Run::plain("Fox İSTANBUL fox")];
+    assert_eq!(find_matches(&d, "fox"), vec![(0, 3), (13, 16)]);
+    assert_eq!(find_matches(&d, "İSTANBUL"), vec![(4, 12)]);
+}
