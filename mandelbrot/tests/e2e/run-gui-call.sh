@@ -25,8 +25,8 @@
 #
 # Usage: JOIN_CALL_BIN=... ./run-gui-call.sh path/to/Mandelbrot.flatpak
 # Host:  flatpak, mutter, dbus, at-spi2-core, python3-gi + gir1.2-atspi-2.0,
-#        gnome-keyring, xdg-desktop-portal(-gtk), pulseaudio, jq, curl.
-# Env:   KEEP_STACK=1  keep the containers afterwards.
+#        gnome-keyring, libsecret-tools, xdg-desktop-portal-gnome, pulseaudio,
+#        xdg-desktop-portal(-gtk), jq, curl.
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 2
