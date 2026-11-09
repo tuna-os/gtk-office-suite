@@ -76,15 +76,15 @@ siphasher = "1"
 
 # Configuration
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-dirs = "5"
+toml = "1"
+dirs = "7"
 
 # OAuth: PKCE S256 (RFC 7636) needs SHA-256 + base64url, and every token and
 # CSP nonce comes from the OS CSPRNG. All three are already in the dependency
 # graph (keyring, the mail stack, ring), so naming them here adds no new downloads.
-sha2 = "0.10"
-base64 = "0.22"
-getrandom = "0.2"
+sha2 = "0.11"
+base64 = "0.23"
+getrandom = "0.4"
 
 # Gravatar (opt-in): MD5 of the email + a simple blocking HTTPS fetch
 ureq = { version = "2", features = ["json"] }
@@ -97,9 +97,9 @@ ammonia = "4.1.4"
 ksni = { version = "0.3.6", default-features = false, features = ["tokio", "blocking"] }
 gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
-markup5ever_rcdom = "0.39.0"
-html5ever = "0.39"
-css-inline = { version = "0.21.2", default-features = false }
+markup5ever_rcdom = "0.40"
+html5ever = "0.40"
+css-inline = { version = "0.23", default-features = false }
 # A notification button that shows no window has to tell GNOME Shell its
 # launch is over (see src/desktop/startup.rs). On Wayland that takes
 # gtk_shell1, which GTK binds but keeps private, so a second binding is made on
@@ -111,11 +111,11 @@ wayland-scanner = "0.31"
 # Message translation (#327): which language a message is in is found here,
 # offline, so a Translate offer sends nothing until it is clicked.
 whatlang = "0.18"
-cfb = "0.15.0"
+cfb = "0.16"
 # Whether an X server can attach this process's shared memory, before GTK
 # picks a renderer (#547): libxcb is opened at run time, and the segment made
 # with shmget. Both crates are already in the graph.
-libloading = "0.8"
+libloading = "0.9"
 libc = "0.2"
 # Grammar checking (#452): unpacking Harper, LanguageTool and the Java
 # runtime LanguageTool runs on, which a user can download from Settings.
