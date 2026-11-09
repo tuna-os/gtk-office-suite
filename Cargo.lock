@@ -4972,6 +4972,7 @@ name = "tables"
 version = "0.1.0"
 dependencies = [
  "cairo-rs",
+ "gdk-pixbuf",
  "gtk4",
  "libadwaita",
  "pangocairo",

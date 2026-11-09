@@ -41,13 +41,14 @@
 // | Unsupported rule shapes (non-cellIs, unknown operator, multi-range, stop-if-true, missing style) | WarnOnLoss (`unsupported-rules`) | unit tests | `scan_sheet_content` |
 // | Pivot definitions, unwritable validation, passwords | WarnOnLoss | unit tests | `model_drops`, `protection_drops` |
 // | Allow Edit Ranges, workbook structure/window protection | WarnOnLoss (`protected-ranges`, `workbook-protection`) | unit tests | `protection_drops`, `inspect_package`, `inspect_ods` |
-// | Macros, pictures, comments, Excel tables, slicers, links, connections, OLE, sparklines | WarnOnLoss | unit tests | `inspect_package`, `inspect_ods` |
+// | Macros, comments, Excel tables, slicers, links, connections, OLE, sparklines, pictures in formats Tables can't keep, shapes | WarnOnLoss | unit tests | `inspect_package`, `inspect_ods` |
 // | A binary .xls source (cannot be enumerated) | WarnOnLoss (`legacy-xls-content`) | unit tests | `source_drops` |
 // | An xlsx/xlsm/ods source that cannot be inspected | HardError (`source-inspection-failed`) | unit tests | `source_drops` |
 // | A missing source, or a csv/tsv source | clean: nothing on disk to lose | unit tests | — |
 //
-// A drawing that holds only supported charts is not a loss; a drawing that
-// holds pictures or shapes still is. Chart and rule scans are deliberately
+// A drawing that holds only supported charts and pictures in kept formats
+// is not a loss; a drawing that holds shapes, or media no reader admits,
+// still is. Chart and rule scans are deliberately
 // independent of the readers: the readers are best-effort and skip what
 // they cannot model, so "the reader found nothing" must never read as "the
 // file held nothing".
@@ -226,10 +227,11 @@ fn read_part(
         .map_err(|e| format!("inspect {name}: {e:?}"))
 }
 
-/// Whether every drawing in the package holds only charts, which Tables
-/// reads (io/charts.rs) and writes back. Pictures and shapes are a loss;
-/// what the charts themselves hold is scanned separately per part.
-fn drawings_hold_only_charts(
+/// Whether every drawing in the package holds only charts and pictures,
+/// which Tables reads (io/charts.rs, io/pictures.rs) and writes back.
+/// Shapes and groups are a loss; what the charts themselves hold is
+/// scanned separately per part.
+fn drawings_hold_only_kept_graphics(
     zip: &mut zip::ZipArchive<std::fs::File>,
     names: &BTreeSet<String>,
     budget: &mut ZipBudget,
@@ -237,11 +239,24 @@ fn drawings_hold_only_charts(
     let mut clean = true;
     for n in names.iter().filter(|n| n.starts_with("xl/drawings/drawing") && n.ends_with(".xml")) {
         let xml = read_part(zip, n, budget)?;
-        if xml.contains("<xdr:pic") || xml.contains("<xdr:sp>") || xml.contains("<xdr:sp ") || xml.contains("<xdr:grpSp") {
+        if xml.contains("<xdr:sp>") || xml.contains("<xdr:sp ") || xml.contains("<xdr:sp/") || xml.contains("<xdr:grpSp") {
             clean = false;
         }
     }
     Ok(clean)
+}
+
+/// Whether every `xl/media` member is an image format the picture reader
+/// admits (io/pictures.rs): media the reader cannot model is a loss, while
+/// a kept picture is not one just for living in the media part.
+fn media_hold_only_kept_images(names: &BTreeSet<String>) -> bool {
+    names
+        .iter()
+        .filter(|n| n.starts_with("xl/media/"))
+        .all(|n| {
+            let ext = n.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+            matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp")
+        })
 }
 
 fn inspect_package(
@@ -258,7 +273,7 @@ fn inspect_package(
     if names.contains("xl/vbaProject.bin") {
         record(report, MACROS, "xl/vbaProject.bin", "macros aren't kept");
     }
-    if any("xl/media/") || any("xl/drawings/drawing") && !drawings_hold_only_charts(zip, names, budget)? {
+    if !media_hold_only_kept_images(names) || any("xl/drawings/drawing") && !drawings_hold_only_kept_graphics(zip, names, budget)? {
         record(report, PICTURES, "xl/drawings", "pictures and shapes on the sheet aren't kept");
     }
     if any("xl/threadedComments/") {
@@ -581,8 +596,6 @@ mod tests {
         package(&path, &[
             ("xl/workbook.xml", "<workbook/>"),
             ("xl/vbaProject.bin", "x"),
-            ("xl/media/image1.png", "png"),
-            ("xl/drawings/drawing1.xml", "<xdr:wsDr><xdr:pic/></xdr:wsDr>"),
             ("xl/threadedComments/threadedComment1.xml", "<x/>"),
             ("xl/pivotTables/pivotTable1.xml", "<x/>"),
             ("xl/tables/table1.xml", "<x/>"),
@@ -595,7 +608,7 @@ mod tests {
         let r = content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()]);
         assert_eq!(
             ids(&r),
-            ["data-connections", "embedded-objects", "excel-tables", "external-links", "macros", "pictures", "pivot-tables", "slicers", "sparklines", "threaded-comments"]
+            ["data-connections", "embedded-objects", "excel-tables", "external-links", "macros", "pivot-tables", "slicers", "sparklines", "threaded-comments"]
         );
         assert!(r.requires_confirmation());
     }
@@ -606,6 +619,28 @@ mod tests {
         let path = dir.path().join("chart.xlsx");
         package(&path, &[("xl/drawings/drawing1.xml", "<xdr:wsDr><xdr:graphicFrame/></xdr:wsDr>"), ("xl/charts/chart1.xml", "<c/>")]);
         assert!(content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()]).features.is_empty());
+    }
+
+    #[test]
+    fn a_drawing_with_only_kept_pictures_is_not_a_loss() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("picture.xlsx");
+        package(&path, &[
+            ("xl/media/image1.png", "png"),
+            ("xl/drawings/drawing1.xml", "<xdr:wsDr><xdr:twoCellAnchor><xdr:pic/></xdr:twoCellAnchor></xdr:wsDr>"),
+        ]);
+        assert!(content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()]).features.is_empty());
+    }
+
+    #[test]
+    fn shapes_and_unkept_media_are_still_a_picture_loss() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shapes.xlsx");
+        package(&path, &[("xl/drawings/drawing1.xml", "<xdr:wsDr><xdr:twoCellAnchor><xdr:sp/></xdr:twoCellAnchor></xdr:wsDr>")]);
+        assert_eq!(ids(&content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()])), ["pictures"]);
+        let path = dir.path().join("vector.xlsx");
+        package(&path, &[("xl/media/image1.wmf", "wmf")]);
+        assert_eq!(ids(&content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()])), ["pictures"]);
     }
 
     #[test]

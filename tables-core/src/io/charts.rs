@@ -16,7 +16,7 @@
 /// are the producer's choice: we and Calc write `c:`/`xdr:`, openpyxl writes
 /// a default namespace and no prefixes at all, and a reader matching literal
 /// prefixed tags found no chart in its files (render lab `tables/chart`).
-fn unprefix(xml: &str) -> String {
+pub(crate) fn unprefix(xml: &str) -> String {
     let mut out = String::with_capacity(xml.len());
     let mut rest = xml;
     while let Some(i) = rest.find('<') {
@@ -38,7 +38,7 @@ fn unprefix(xml: &str) -> String {
 }
 
 /// `name="value"` inside one already-isolated tag.
-fn attr(tag: &str, name: &str) -> Option<String> {
+pub(crate) fn attr(tag: &str, name: &str) -> Option<String> {
     tag.split(&format!("{name}=\""))
         .nth(1)?
         .split('"')
@@ -48,7 +48,7 @@ fn attr(tag: &str, name: &str) -> Option<String> {
 
 /// XML text to plain text: the five named entities plus numeric references
 /// (a title can hold `&#233;` where a note holds `&#10;`).
-fn unescape(s: &str) -> String {
+pub(crate) fn unescape(s: &str) -> String {
     let mut out = s
         .replace("&lt;", "<")
         .replace("&gt;", ">")
@@ -222,12 +222,12 @@ fn grab_num(block: &str, tag: &str) -> Option<f64> {
 /// against the owning sheet's real column/row geometry (EMU offsets folded
 /// in, never ignored). `Absolute` anchors carry no cell and no size, so the
 /// chart is reported rather than placed at a guessed cell.
-enum Anchor {
+pub(crate) enum Anchor {
     Placed { cell: (usize, usize), size_px: (f64, f64) },
     Absolute,
 }
 
-fn anchor_cell(cell_xml: &str) -> Option<(usize, usize, f64, f64)> {
+pub(crate) fn anchor_cell(cell_xml: &str) -> Option<(usize, usize, f64, f64)> {
     let col = grab_num(cell_xml, "col")?;
     let row = grab_num(cell_xml, "row")?;
     // A negative or fractional cell is malformed, not cell A1: the caller
@@ -280,7 +280,7 @@ fn valid_size(size_px: (f64, f64)) -> Option<(f64, f64)> {
 /// are the owning sheet's real geometry; missing entries read as this app's
 /// own defaults, which is also what the writer lays two-cell anchors out
 /// on.
-fn resolve_anchor(
+pub(crate) fn resolve_anchor(
     anchor_xml: &str,
     kind: &str,
     widths: &[f64],
@@ -627,7 +627,7 @@ fn legend_position(chart_xml: &str, location: &str, issues: &mut Vec<ChartReadIs
 
 /// Resolve one `.rels` part's `Id → Target`, with each target joined onto
 /// the part's own directory: rel targets are relative (`../charts/…`).
-fn rel_targets(rels_xml: &str, part_dir: &str) -> std::collections::HashMap<String, String> {
+pub(crate) fn rel_targets(rels_xml: &str, part_dir: &str) -> std::collections::HashMap<String, String> {
     let mut out = std::collections::HashMap::new();
     for (id, target) in super::props::parse_rels(rels_xml) {
         out.insert(id, join_part(part_dir, &target));
@@ -654,13 +654,13 @@ fn join_part(dir: &str, target: &str) -> String {
     parts.join("/")
 }
 
-fn part_dir(name: &str) -> &str {
+pub(crate) fn part_dir(name: &str) -> &str {
     name.rsplit_once('/').map(|(d, _)| d).unwrap_or("")
 }
 
 /// Read one bounded package part, or `None` where it is absent or
 /// unreadable: a missing rels part means "resolve nothing", not failure.
-fn read_part(
+pub(crate) fn read_part(
     zip: &mut zip::ZipArchive<std::fs::File>,
     name: &str,
     budget: &mut suite_common_core::zip_guard::ZipBudget,
@@ -671,7 +671,7 @@ fn read_part(
 
 /// sheet name → worksheet part, via workbook.xml and the workbook rels —
 /// the same resolution the sheet-props reader uses, not a filename guess.
-fn resolve_sheet_parts(
+pub(crate) fn resolve_sheet_parts(
     zip: &mut zip::ZipArchive<std::fs::File>,
     budget: &mut suite_common_core::zip_guard::ZipBudget,
 ) -> Vec<(String, String)> {
@@ -701,7 +701,7 @@ fn resolve_sheet_parts(
 
 /// The `<drawing r:id="…">` a worksheet part names, resolved through the
 /// sheet's own rels part to a drawing part.
-fn drawing_part_for_sheet(
+pub(crate) fn drawing_part_for_sheet(
     zip: &mut zip::ZipArchive<std::fs::File>,
     sheet_part: &str,
     budget: &mut suite_common_core::zip_guard::ZipBudget,

@@ -220,6 +220,7 @@ fn direct(state: &mut WorkbookState, op: &Op) -> Result<(), String> {
                 SheetProp::Protection(v) => s.protection = v,
                 SheetProp::CondRules(v) => s.cond_rules = v,
                 SheetProp::Charts(v) => s.charts = v,
+                SheetProp::Pictures(v) => s.pictures = v,
                 SheetProp::Pivots(v) => s.pivot_tables = v,
                 SheetProp::PageSetup(v) => s.page_setup = v,
             }

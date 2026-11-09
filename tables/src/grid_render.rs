@@ -637,6 +637,30 @@ pub fn draw_grid(
         cr.rectangle(x.round() + 0.5, y.round() + 0.5, w as f64 - 1.0, h as f64 - 1.0);
         cr.stroke().unwrap();
     }
+    // Pictures float above the cells at their anchor, drawn from the image
+    // bytes the file carried (render lab `tables/worksheet-image`). The
+    // surface is scaled to the anchor's logical size, like LibreOffice
+    // scales the same two-cell anchor.
+    for pic in sheet.pictures.iter().filter(|p| in_pane(p.anchor.0, p.anchor.1)) {
+        let x = tables_core::sheet::col_x(pic.anchor.1, scroll_x, sheet);
+        let y = tables_core::sheet::row_y(pic.anchor.0, scroll_y, sheet);
+        if pic.width_px < 1.0 || pic.height_px < 1.0 || x > width || y > height || x + pic.width_px < ROW_HEADER_WIDTH || y + pic.height_px < COL_HEADER_HEIGHT {
+            continue;
+        }
+        let Some(surface) = picture_surface(pic) else {
+            continue;
+        };
+        let (iw, ih) = (f64::from(surface.width()), f64::from(surface.height()));
+        if iw < 1.0 || ih < 1.0 {
+            continue;
+        }
+        cr.save().unwrap();
+        cr.translate(x.round(), y.round());
+        cr.scale(pic.width_px / iw, pic.height_px / ih);
+        cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+        cr.paint().unwrap();
+        cr.restore().unwrap();
+    }
     cr.restore().unwrap();
     }
 
@@ -768,6 +792,54 @@ pub fn render_sheet_pdf(
         Ok(()) => Ok(()),
         Err(e) => Err(format!("cannot write {}: {e}", path.display())),
     }
+}
+
+/// A picture's bytes as a Cairo surface, or `None` where they do not
+/// decode. PNG decodes through Cairo itself; anything else (JPEG, GIF,
+/// BMP) goes through gdk-pixbuf and a manual pixel copy, premultiplying
+/// into the ARGB32 Cairo paints. Lives here (not tables-core) because it
+/// produces a Cairo type; the core only carries the bytes.
+fn picture_surface(pic: &tables_core::sheet::PictureSpec) -> Option<gtk4::cairo::ImageSurface> {
+    use gtk4::cairo::{Format, ImageSurface};
+    if pic.format == tables_core::sheet::PictureFormat::Png {
+        let mut bytes = &pic.bytes[..];
+        if let Ok(surface) = ImageSurface::create_from_png(&mut bytes) {
+            return Some(surface);
+        }
+    }
+    // `from_read` takes ownership of its stream, so the bytes ride a
+    // cursor rather than a borrow.
+    let pixbuf = gdk_pixbuf::Pixbuf::from_read(std::io::Cursor::new(pic.bytes.clone())).ok()?;
+    let (w, h) = (pixbuf.width(), pixbuf.height());
+    if w < 1 || h < 1 {
+        return None;
+    }
+    let mut surface = ImageSurface::create(Format::ARgb32, w, h).ok()?;
+    {
+        let mut data = surface.data().ok()?;
+        let src = pixbuf.read_pixel_bytes();
+        let stride = pixbuf.rowstride() as usize;
+        let channels = pixbuf.n_channels() as usize;
+        if channels < 3 {
+            return None;
+        }
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                let s = y * stride + x * channels;
+                let (r, g, b) = (src[s] as u32, src[s + 1] as u32, src[s + 2] as u32);
+                let a = if pixbuf.has_alpha() { src[s + 3] as u32 } else { 255 };
+                // Cairo ARGB32 is premultiplied: an opaque image keeps its
+                // bytes bit-for-bit, and anything else blends correctly.
+                let d = (y * w as usize + x) * 4;
+                data[d] = ((b * a / 255) & 255) as u8;
+                data[d + 1] = ((g * a / 255) & 255) as u8;
+                data[d + 2] = ((r * a / 255) & 255) as u8;
+                data[d + 3] = (a & 255) as u8;
+            }
+        }
+    }
+    surface.flush();
+    Some(surface)
 }
 
 #[cfg(test)]
@@ -906,5 +978,33 @@ mod tests {
         let err = render_sheet_pdf(&state, 0.0, 0.0, 5000.0, 5000.0, (0.2, 0.4, 0.8), &dir.join("out.pdf"))
             .unwrap_err();
         assert!(err.contains("no cells"), "{err}");
+    }
+
+    /// A carried picture decodes to a surface of its own pixel size: PNG
+    /// through Cairo, JPEG through gdk-pixbuf. Garbage decodes to nothing,
+    /// and the grid skips it instead of hanging a broken image.
+    #[test]
+    fn picture_bytes_decode_to_their_own_pixel_size() {
+        use tables_core::sheet::{PictureFormat, PictureSpec};
+        let spec = |format, bytes: &[u8]| PictureSpec {
+            anchor: (0, 0),
+            width_px: 8.0,
+            height_px: 8.0,
+            format,
+            bytes: bytes.to_vec(),
+        };
+        let png = picture_surface(&spec(
+            PictureFormat::Png,
+            include_bytes!("../../tables-core/tests/fixtures/picture-quad.png"),
+        ))
+        .expect("the quadrant png decodes");
+        assert_eq!((png.width(), png.height()), (8, 8));
+        let jpeg = picture_surface(&spec(
+            PictureFormat::Jpeg,
+            include_bytes!("../../tables-core/tests/fixtures/picture-red.jpg"),
+        ))
+        .expect("the red jpeg decodes");
+        assert_eq!((jpeg.width(), jpeg.height()), (8, 8));
+        assert!(picture_surface(&spec(PictureFormat::Png, b"not a png at all")).is_none());
     }
 }

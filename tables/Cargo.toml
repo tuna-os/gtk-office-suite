@@ -10,6 +10,7 @@ libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
 tables-core = { path = "../tables-core" }
 cairo-rs = { version = "0.22", features = ["png", "pdf"] }
+gdk-pixbuf = "0.22"
 pangocairo = "0.22"
 
 [[bin]]
