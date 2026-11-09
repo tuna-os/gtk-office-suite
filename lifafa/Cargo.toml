@@ -128,7 +128,7 @@ schemars = "1"
 [build-dependencies]
 # Compiles resources/veem.gresource.xml (the bundled symbolic icons) into a
 # .gresource blob embedded in the binary. See build.rs.
-glib-build-tools = "0.20"
+glib-build-tools = "0.22"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
