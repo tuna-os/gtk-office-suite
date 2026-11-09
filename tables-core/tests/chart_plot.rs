@@ -148,3 +148,34 @@ fn a_selection_with_nothing_to_plot_makes_no_chart() {
     assert!(ChartSpec::from_selection(&sh, (0, 0, 0, 2), ChartKind::Bar, (6, 0), 480.0, 280.0).is_none(), "a header row alone");
     assert!(ChartSpec::from_selection(&sh, (1, 3, 1, 3), ChartKind::Bar, (6, 0), 480.0, 280.0).is_none(), "a text column");
 }
+
+// ── which chart a cell lies under (#1658) ───────────────────────────────
+
+#[test]
+fn a_chart_covers_the_cells_under_it_and_only_those() {
+    let sh = {
+        let mut sh = SheetModel::new("Sheet1", 20, 8, 0);
+        // A chart anchored at row 6, column 0, about 3 columns by 5 rows.
+        let mut c = ChartSpec::single_series(ChartKind::Bar, String::new(), (1, 0, 3), (1, 1, 3), (6, 0), 3.0 * tables_core::sheet::COL_WIDTH, 5.0 * tables_core::sheet::ROW_HEIGHT);
+        c.title = "T".into();
+        sh.charts.push(c);
+        sh
+    };
+    assert_eq!(sh.chart_at_cell(6, 0), Some(0), "its anchor cell");
+    assert_eq!(sh.chart_at_cell(8, 2), Some(0), "a cell inside it");
+    assert_eq!(sh.chart_at_cell(10, 0), Some(0), "its last row");
+    assert_eq!(sh.chart_at_cell(11, 0), None, "below it");
+    assert_eq!(sh.chart_at_cell(6, 3), None, "right of it");
+    assert_eq!(sh.chart_at_cell(5, 0), None, "above it");
+}
+
+#[test]
+fn when_two_charts_overlap_the_one_drawn_last_wins() {
+    let mut sh = SheetModel::new("Sheet1", 20, 8, 0);
+    for title in ["first", "second"] {
+        let mut c = ChartSpec::single_series(ChartKind::Bar, title.to_string(), (1, 0, 3), (1, 1, 3), (6, 0), 200.0, 100.0);
+        c.title = title.to_string();
+        sh.charts.push(c);
+    }
+    assert_eq!(sh.chart_at_cell(6, 0), Some(1));
+}

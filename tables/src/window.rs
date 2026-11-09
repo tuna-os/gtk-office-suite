@@ -1097,6 +1097,8 @@ impl TablesWindow {
         let win_ref = Rc::new(RefCell::new(None::<adw::ApplicationWindow>));
         let show_chart_dialog = crate::chart_dialog::opener(
             win_ref.clone(), state.clone(), controller.clone(), drawing_area.clone());
+        let edit_chart_dialog = crate::chart_dialog::edit_opener(
+            win_ref.clone(), state.clone(), controller.clone(), drawing_area.clone());
 
         let s_pdf = state.clone();
         let win_ref = Rc::new(RefCell::new(None));
@@ -1211,6 +1213,7 @@ impl TablesWindow {
             mk("cycle-cell-border", toggle_border);
             mk("merge-cells", toggle_merge);
             mk("insert-chart", show_chart_dialog);
+            mk("edit-chart", edit_chart_dialog);
             {
                 let ctl = controller.clone();
                 let da = drawing_area.clone();
@@ -1329,6 +1332,7 @@ impl TablesWindow {
             ("app.cycle-cell-border", &suite_common::i18n("Cycle Cell Border")),
             ("app.merge-cells", &suite_common::i18n("Merge Cells")),
             ("app.insert-chart", &suite_common::i18n("Insert Chart…")),
+            ("app.edit-chart", &suite_common::i18n("Edit Chart…")),
             ("app.conditional-format", &suite_common::i18n("Conditional Formatting…")),
             ("app.filter-by-column", &suite_common::i18n("Filter by Selected Column…")),
             ("app.clear-filter", &suite_common::i18n("Clear Filter")),

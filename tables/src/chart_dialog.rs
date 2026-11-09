@@ -30,21 +30,50 @@ pub fn opener(
     controller: Rc<RefCell<WorkbookController>>,
     grid: gtk4::DrawingArea,
 ) -> Box<dyn Fn()> {
+    dialog(parent, state, controller, grid, false)
+}
+
+/// Returns the callback the `edit-chart` action runs: the same dialog,
+/// opened on the chart that covers the selected cell. Applying replaces that
+/// chart as one undo step. It does nothing when no chart is under the cell.
+pub fn edit_opener(
+    parent: Rc<RefCell<Option<adw::ApplicationWindow>>>,
+    state: Rc<RefCell<WorkbookState>>,
+    controller: Rc<RefCell<WorkbookController>>,
+    grid: gtk4::DrawingArea,
+) -> Box<dyn Fn()> {
+    dialog(parent, state, controller, grid, true)
+}
+
+fn dialog(
+    parent: Rc<RefCell<Option<adw::ApplicationWindow>>>,
+    state: Rc<RefCell<WorkbookState>>,
+    controller: Rc<RefCell<WorkbookController>>,
+    grid: gtk4::DrawingArea,
+    edit: bool,
+) -> Box<dyn Fn()> {
     Box::new(move || {
         // What the selection asks for: one column over the first column's
         // labels, or a table of a category column and a series per column to
         // its right (`ChartSpec::from_selection`).
         use tables_core::sheet::{ChartKind, ChartSpec, LegendPosition};
-        let (draft, categories, plotted) = {
+        let (draft, categories, plotted, edit_index) = {
             let st = state.borrow();
             let sheet = st.sheets[st.active_sheet].borrow();
-            let block = sheet.selection_block();
-            let Some(mut spec) = ChartSpec::from_selection(&sheet, block, ChartKind::Bar, (0, 0), 480.0, 280.0) else { return };
-            // Placed under the data, at the selection's left edge.
-            let last = spec.series.iter().map(|s| s.val.2).max().unwrap_or(block.2);
-            spec.anchor = (last + 2, block.1);
-            let (categories, plotted) = spec.plot(&sheet);
-            (spec, categories, plotted)
+            if edit {
+                let Some(i) = sheet.chart_at_cell(sheet.selected_row, sheet.selected_col) else { return };
+                let spec = sheet.charts[i].clone();
+                let (categories, plotted) = spec.plot(&sheet);
+                (spec, categories, plotted, Some(i))
+            } else {
+                let block = sheet.selection_block();
+                let Some(mut spec) = ChartSpec::from_selection(&sheet, block, ChartKind::Bar, (0, 0), 480.0, 280.0) else { return };
+                // Placed under the data, at the selection's left edge.
+                let last = spec.series.iter().map(|s| s.val.2).max().unwrap_or(block.2);
+                spec.anchor = (last + 2, block.1);
+                let (categories, plotted) = spec.plot(&sheet);
+                (spec, categories, plotted, None)
+            }
         };
         let draft = Rc::new(RefCell::new(draft));
         let plot = Rc::new((categories, plotted));
@@ -92,8 +121,10 @@ pub fn opener(
         for (name, kind) in KINDS {
             let button = gtk::ToggleButton::with_label(&suite_common::i18n(name));
             button.set_group(first.as_ref());
-            if first.is_none() {
+            if std::mem::discriminant(&kind) == std::mem::discriminant(&draft.borrow().kind) {
                 button.set_active(true);
+            }
+            if first.is_none() {
                 first = Some(button.clone());
             }
             let (draft, pv) = (draft.clone(), preview.clone());
@@ -115,9 +146,10 @@ pub fn opener(
 
         // Title, axis titles and legend: what the file keeps and Calc and
         // Excel draw.
-        let text_row = |label: &str, name: &str, set: fn(&mut ChartSpec, String)| {
+        let text_row = |label: &str, name: &str, initial: String, set: fn(&mut ChartSpec, String)| {
             let row = adw::EntryRow::builder().title(suite_common::i18n(label)).build();
             row.set_widget_name(name);
+            row.set_text(&initial);
             let (draft, pv) = (draft.clone(), preview.clone());
             row.connect_changed(move |r| {
                 set(&mut draft.borrow_mut(), r.text().to_string());
@@ -125,9 +157,13 @@ pub fn opener(
             });
             row
         };
-        group.add(&text_row("Title", "chart-title", |c, t| c.title = t));
-        group.add(&text_row("Horizontal axis title", "chart-x-title", |c, t| c.x_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
-        group.add(&text_row("Vertical axis title", "chart-y-title", |c, t| c.y_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
+        let (title0, x0, y0) = {
+            let d = draft.borrow();
+            (d.title.clone(), d.x_axis_title.clone().unwrap_or_default(), d.y_axis_title.clone().unwrap_or_default())
+        };
+        group.add(&text_row("Title", "chart-title", title0, |c, t| c.title = t));
+        group.add(&text_row("Horizontal axis title", "chart-x-title", x0, |c, t| c.x_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
+        group.add(&text_row("Vertical axis title", "chart-y-title", y0, |c, t| c.y_axis_title = Some(t).filter(|t| !t.trim().is_empty())));
         const LEGENDS: [(&str, LegendPosition); 5] = [
             ("Right", LegendPosition::Right),
             ("Bottom", LegendPosition::Bottom),
@@ -139,6 +175,8 @@ pub fn opener(
         let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
         let legend_row = adw::ComboRow::builder().title(suite_common::i18n("Legend")).model(&gtk::StringList::new(&name_refs)).build();
         legend_row.set_widget_name("chart-legend");
+        let legend0 = LEGENDS.iter().position(|(_, p)| *p == draft.borrow().legend_position).unwrap_or(0);
+        legend_row.set_selected(legend0 as u32);
         {
             let (draft, pv) = (draft.clone(), preview.clone());
             legend_row.connect_selected_notify(move |r| {
@@ -156,8 +194,8 @@ pub fn opener(
         card.set_child(Some(&preview));
         // Insert puts the chart on the sheet (saved into xlsx).
         let suite_common::dialogs::ActionDialog { dialog, action: insert_btn } = suite_common::dialogs::action_dialog(
-            &suite_common::i18n("Insert Chart"),
-            &suite_common::i18n("_Insert"),
+            &suite_common::i18n(if edit { "Edit Chart" } else { "Insert Chart" }),
+            &suite_common::i18n(if edit { "_Apply" } else { "_Insert" }),
             600,
             &suite_common::dialogs::form_body(&[group.upcast_ref(), card.upcast_ref()]),
         );
@@ -169,9 +207,16 @@ pub fn opener(
             insert_btn.connect_clicked(move |_| {
                 // One undo step, whatever the dialog held.
                 let chart = draft.borrow().clone();
-                crate::sheet_actions::apply(&ctl, &grid, |c| { c.mutate_sheet("Insert Chart", move |sheet| {
-                    sheet.charts.push(chart);
-                }); });
+                match edit_index {
+                    Some(i) => crate::sheet_actions::apply(&ctl, &grid, |c| { c.mutate_sheet("Edit Chart", move |sheet| {
+                        if let Some(slot) = sheet.charts.get_mut(i) {
+                            *slot = chart;
+                        }
+                    }); }),
+                    None => crate::sheet_actions::apply(&ctl, &grid, |c| { c.mutate_sheet("Insert Chart", move |sheet| {
+                        sheet.charts.push(chart);
+                    }); }),
+                };
                 dlg.close();
             });
         }
