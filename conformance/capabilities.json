@@ -826,10 +826,10 @@
           "tables-core::chart_plot::when_two_charts_overlap_the_one_drawn_last_wins"
         ],
         "format": [
-          "tables-core::io::charts::tests::chart_round_trips_through_xlsx",
-          "tables-core::io::charts::tests::every_kind_round_trips_with_its_ranges",
-          "tables-core::io::charts::tests::tbl002_all_chart_fields_later_sheet",
-          "tables-core::io::charts::tests::tbl002_chart_unsupported_report"
+          "tables-core::io::charts::chart_tests::chart_round_trips_through_xlsx",
+          "tables-core::io::charts::chart_tests::every_kind_round_trips_with_its_ranges",
+          "tables-core::io::charts::chart_tests::tbl002_all_chart_fields_later_sheet",
+          "tables-core::io::charts::chart_tests::tbl002_chart_unsupported_report"
         ],
         "gui": [
           "tests/gui/test_smoke.py::TablesChartEditorSmoke::test_a_selected_table_is_charted_with_its_series_titles_and_legend",
