@@ -32,6 +32,18 @@ use ironcalc_base::expressions::types::{Area, CellReferenceIndex};
 use ironcalc_base::{cell::CellValue, Model};
 
 /// The Tables spreadsheet engine.
+/// A cell's value with its engine type, in this crate's own vocabulary
+/// (#1980): writers dispatch on this instead of re-inferring a type from
+/// the value's text. A date is a `Number` whose number format renders it
+/// as one; the format travels separately, as it does today.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedValue {
+    Empty,
+    Number(f64),
+    Boolean(bool),
+    Text(String),
+}
+
 pub struct TablesEngine {
     pub model: Model<'static>,
     pub rows: usize,
@@ -165,6 +177,20 @@ impl TablesEngine {
         self.model
             .get_localized_cell_content(sheet as u32, row as i32 + 1, col as i32 + 1)
             .unwrap_or_default()
+    }
+
+    /// The cell's value with the type the engine holds for it (#1980):
+    /// the XLSX writer writes values from this, never from re-parsing
+    /// the cell's text, because text does not remember whether it was a
+    /// string — `"00123"` the string and `123` the number render alike,
+    /// and `"true"` the string is not `TRUE` the boolean.
+    pub fn typed_value_at(&self, sheet: usize, row: usize, col: usize) -> TypedValue {
+        match self.model.get_cell_value_by_index(sheet as u32, row as i32 + 1, col as i32 + 1) {
+            Ok(CellValue::Number(n)) => TypedValue::Number(n),
+            Ok(CellValue::Boolean(b)) => TypedValue::Boolean(b),
+            Ok(CellValue::String(s)) => TypedValue::Text(s),
+            _ => TypedValue::Empty,
+        }
     }
 
     /// Whether the cell holds a plain number (not text, bool, error or an
