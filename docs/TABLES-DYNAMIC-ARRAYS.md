@@ -87,9 +87,9 @@ is now always written as a dynamic array formula.
 - **Calc 24.8 and later.** The Calc test fails on a Calc that may evaluate
   these functions, so the table above is revisited when the runner's
   LibreOffice moves.
-- **A GUI journey** for the visible projection and the `#SPILL!` and
-  `#CALC!` presentation. The grid renders the engine's projection
-  (`tables/src/grid_render.rs`) and the engine and controller behaviour above
-  is tested; no AT-SPI journey drives it yet.
+- **A GUI journey for `#CALC!`.** One AT-SPI journey
+  (`TablesDynamicArraySmoke`) drives the visible grid through a spill,
+  `#SPILL!` when a cell blocks it, its clearing, and undo and redo. The
+  `#CALC!` presentation for an empty result has no journey yet.
 - **Dynamic-array functions the engine does not implement**, such as `SORTBY`,
   `XLOOKUP` spills and `LET`-built arrays.
