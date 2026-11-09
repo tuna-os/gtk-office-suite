@@ -43,9 +43,11 @@ jobs:
     name: Real documents (${{ matrix.app }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    # Read-only: on a pull request this runs the pull request's own code,
+    # so it gets no token that can write (#1678). `publish` posts from main.
     permissions:
       contents: read
-      issues: write
+      issues: read
     strategy:
       fail-fast: false
       matrix:
@@ -144,30 +146,10 @@ jobs:
           cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
           { echo; cat render-lab-out/pixel-scoreboard.md; } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
-      # The ranked pixel scoreboard, one pinned issue per app: the queue to
-      # fix from the top of. Only from main, whatever the ratchet said.
-      - name: Publish the pixel scoreboard
-        if: always() && steps.scope.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && hashFiles('render-lab-out/pixel-scores.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/pixel_board.py publish
-          render-lab-out/pixel-scoreboard.md render-lab-out/pixel-scores.json
-          --key "real-${{ matrix.app }}" --title "Pixel scoreboard: ${{ matrix.app }} real documents"
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      # One `render-real` issue per document that is not green, closed
-      # when it turns green; only from main, and only from a run whose
-      # ratchet passed, so a regression is a failed run, not an issue.
-      - name: Sync render-real issues
-        if: always() && steps.scope.outputs.run == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.run.outcome == 'success' && hashFiles('render-lab-out/summary.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json --mode real
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      # Tells `publish` the ratchet passed, so it may sync issues.
+      - name: Mark a passing run
+        if: steps.scope.outputs.run == 'true' && steps.run.outcome == 'success'
+        run: touch render-lab-out/run-ok 2>/dev/null || sudo touch render-lab-out/run-ok
 
       - name: Upload report
         if: always() && steps.scope.outputs.run == 'true'
@@ -182,6 +164,58 @@ jobs:
             render-lab-out/pixel-scoreboard.md
             render-lab-out/pixel-*.json
             render-lab-out/fixtures/manifest.json
+            render-lab-out/run-ok
             render-lab-out/${{ matrix.app }}/*/*.png
             render-lab-out/${{ matrix.app }}/*/*.log
           retention-days: 14
+
+  # The scoreboards and the issue sync, with the write token `lab` does not
+  # get (#1678). Only from main (schedule, or a dispatch on main), never on
+  # a pull request, so the code it checks out is main's.
+  publish:
+    name: Publish real-document results (${{ matrix.app }})
+    needs: lab
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download the report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: render-real-${{ matrix.app }}
+          path: render-lab-out
+
+      # The ranked pixel scoreboard, one pinned issue per app: the queue to
+      # fix from the top of, whatever the ratchet said.
+      - name: Publish the pixel scoreboard
+        if: hashFiles('render-lab-out/pixel-scores.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/pixel_board.py publish
+          render-lab-out/pixel-scoreboard.md render-lab-out/pixel-scores.json
+          --key "real-${{ matrix.app }}" --title "Pixel scoreboard: ${{ matrix.app }} real documents"
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      # One `render-real` issue per document that is not green, closed
+      # when it turns green; only from a run whose ratchet passed, so a
+      # regression is a failed run, not an issue.
+      - name: Sync render-real issues
+        if: always() && hashFiles('render-lab-out/run-ok') != '' && hashFiles('render-lab-out/summary.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json --mode real
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

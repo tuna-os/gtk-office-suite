@@ -151,10 +151,15 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Read-only: this job runs the pull request's own code (the lab
+    # scripts), so it gets no token that can write (#1678). The comment,
+    # the scoreboard and the issue sync are posted by `report-post`.
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
+      issues: read
+    outputs:
+      any: ${{ steps.inscope.outputs.any }}
+      skipped: ${{ steps.inscope.outputs.skipped }}
     steps:
       # Which apps this run rendered. None: a pull request that reaches no
       # app's rendering passes here in seconds, with nothing compared.
@@ -305,20 +310,6 @@ jobs:
           fi
           cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
 
-      # The ranked pixel scoreboard in its pinned issue: the queue to fix
-      # from the top of. Only from main, and only from a run that rendered
-      # every app, so the board is never a partial list.
-      - name: Publish the pixel scoreboard
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.inscope.outputs.any == 'true' && steps.inscope.outputs.skipped == '' && hashFiles('render-lab-out/pixel-scores.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/pixel_board.py publish
-          render-lab-out/pixel-scoreboard.md render-lab-out/pixel-scores.json
-          --key fixtures --title "Pixel scoreboard: fixtures"
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
       - name: Upload report
         if: always() && steps.inscope.outputs.any == 'true'
         id: upload
@@ -338,36 +329,28 @@ jobs:
             render-lab-out/*/*/*.log
           retention-days: 14
 
-      - name: Sticky PR comment
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      # The sticky comment's text, posted by `report-post`, which runs none
+      # of this pull request's code.
+      - name: PR comment body
+        if: always() && github.event_name == 'pull_request'
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
           REPORT: ${{ steps.upload.outputs.artifact-url }}
           ANY: ${{ steps.inscope.outputs.any }}
         run: |
           [ -f render-lab-out/summary.md ] || exit 0
+          mkdir -p comment
           { echo '<!-- render-parity-comment -->'; cat render-lab-out/summary.md
             if [ "$ANY" = true ]; then
               echo; echo "Side-by-side report (LibreOffice | ours | diff), with \`baseline.proposed.json\`: ${REPORT}"
-            fi; } > comment.md
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-               --jq '.[] | select(.body | startswith("<!-- render-parity-comment -->")) | .id' | head -1)
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
-          elif [ "$ANY" = true ]; then
-            gh pr comment "$PR" --body-file comment.md
-          fi
-          # Rendered nothing and never commented: nothing to say.
+            fi; } > comment/comment.md
 
-      - name: Sync render-parity issues
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.lab.result == 'success' && hashFiles('render-lab-out/summary.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Upload PR comment body
+        if: always() && github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: render-parity-comment
+          path: comment/comment.md
+          retention-days: 1
 
       # The verdict for the labs as well as the comparison: the lab jobs are
       # only started for the apps in scope, so this check, which reports on
@@ -381,6 +364,82 @@ jobs:
             echo "::error::a Render lab job in scope ended '$LAB'; see its log"
             exit 1
           fi
+
+  # Posts what `report` found, with the write token that job does
+  # not get (#1678). On a pull request it runs none of the pull request's
+  # code: no checkout, only the comment text `report` uploaded. On
+  # main it checks out main, which is trusted, for the publishing scripts.
+  report-post:
+    name: Post the render parity report
+    needs: [lab, report]
+    if: >-
+      ${{ !cancelled() && needs.report.result != 'skipped' && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download the comment text
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: render-parity-comment
+          path: comment
+
+      - name: Sticky PR comment
+        if: github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ANY: ${{ needs.report.outputs.any }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+               --jq '.[] | select(.body | startswith("<!-- render-parity-comment -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment/comment.md >/dev/null
+          elif [ "$ANY" = true ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment/comment.md >/dev/null
+          fi
+          # Rendered nothing and never commented: nothing to say.
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name != 'pull_request' && needs.report.outputs.any == 'true'
+
+      - name: Download the report
+        if: github.event_name != 'pull_request' && needs.report.outputs.any == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: render-parity-report
+          path: render-lab-out
+
+      # The ranked pixel scoreboard in its pinned issue: the queue to fix
+      # from the top of. Only from main, and only from a run that rendered
+      # every app, so the board is never a partial list.
+      - name: Publish the pixel scoreboard
+        if: github.event_name != 'pull_request' && needs.report.outputs.any == 'true' && needs.report.outputs.skipped == '' && hashFiles('render-lab-out/pixel-scores.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/pixel_board.py publish
+          render-lab-out/pixel-scoreboard.md render-lab-out/pixel-scores.json
+          --key fixtures --title "Pixel scoreboard: fixtures"
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Sync render-parity issues
+        if: github.event_name != 'pull_request' && needs.lab.result == 'success' && hashFiles('render-lab-out/summary.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
   # Export parity (docs/EXPORT-PARITY-SPEC.md): each app's own PDF export of
   # the opted-in fixtures (`export: true` in the manifest, docx/pptx only)
@@ -461,10 +520,11 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # Read-only, as `report` (#1678); `export-report-post` posts.
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
+    outputs:
+      any: ${{ steps.inscope.outputs.any }}
     steps:
       - name: Apps in scope
         id: inscope
@@ -597,36 +657,26 @@ jobs:
             render-lab-out/*/*/export.log
           retention-days: 14
 
-      - name: Sticky PR comment
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      - name: PR comment body
+        if: always() && github.event_name == 'pull_request'
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
           REPORT: ${{ steps.upload.outputs.artifact-url }}
           ANY: ${{ steps.inscope.outputs.any }}
         run: |
           [ -f render-lab-out/summary-export.md ] || exit 0
+          mkdir -p comment
           { echo '<!-- export-parity-comment -->'; cat render-lab-out/summary-export.md
             if [ "$ANY" = true ]; then
               echo; echo "Side-by-side export report (LibreOffice PDF | our PDF | diff), with \`baseline-export.proposed.json\`: ${REPORT}"
-            fi; } > export-comment.md
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-               --jq '.[] | select(.body | startswith("<!-- export-parity-comment -->")) | .id' | head -1)
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@export-comment.md >/dev/null
-          elif [ "$ANY" = true ]; then
-            gh pr comment "$PR" --body-file export-comment.md
-          fi
-          # Exported nothing and never commented: nothing to say.
+            fi; } > comment/comment.md
 
-      - name: Sync export-parity issues
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.export-lab.result == 'success' && hashFiles('render-lab-out/summary-export.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/sync_issues.py render-lab-out/summary-export.json --mode export
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Upload PR comment body
+        if: always() && github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: export-parity-comment
+          path: comment/comment.md
+          retention-days: 1
 
       - name: Every export lab in scope succeeded
         if: always() && steps.inscope.outputs.any == 'true'
@@ -815,3 +865,65 @@ jobs:
             render-lab-out/upgrade*
             vm-work/*.log
           retention-days: 14
+
+  # Posts what `export-report` found, with the write token that job does
+  # not get (#1678). On a pull request it runs none of the pull request's
+  # code: no checkout, only the comment text `export-report` uploaded. On
+  # main it checks out main, which is trusted, for the publishing scripts.
+  export-report-post:
+    name: Post the export parity report
+    needs: [export-lab, export-report]
+    if: >-
+      ${{ !cancelled() && needs.export-report.result != 'skipped' && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download the comment text
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: export-parity-comment
+          path: comment
+
+      - name: Sticky PR comment
+        if: github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ANY: ${{ needs.export-report.outputs.any }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+               --jq '.[] | select(.body | startswith("<!-- export-parity-comment -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment/comment.md >/dev/null
+          elif [ "$ANY" = true ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment/comment.md >/dev/null
+          fi
+          # Rendered nothing and never commented: nothing to say.
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name != 'pull_request' && needs.export-report.outputs.any == 'true'
+
+      - name: Download the export report
+        if: github.event_name != 'pull_request' && needs.export-report.outputs.any == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: export-parity-report
+          path: render-lab-out
+
+      - name: Sync export-parity issues
+        if: github.event_name != 'pull_request' && needs.export-lab.result == 'success' && hashFiles('render-lab-out/summary-export.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary-export.json --mode export
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
