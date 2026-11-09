@@ -10537,7 +10537,8 @@ class TablesChartEditorSmoke(BaseGUITestCase):
 class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):
     """A dynamic-array formula spills into the grid, a blocked spill shows
     #SPILL! in its anchor, and the grid recovers when the blocker goes and
-    follows undo and redo (#1659). The spill, its blocking and its clearing
+    follows undo and redo; an empty result shows #CALC! until its source
+    matches (#1659). The spill, its blocking, its clearing and the errors
     are the engine's (tables-core/tests/dynamic_arrays.rs pins them); this
     proves they reach the visible grid, with no spill logic in the widget
     code."""
@@ -10610,6 +10611,44 @@ class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.wait_until(self._column_a, lambda col: col == ["1", "2", "3", ""],
                         description="redo to clear the blocker and spill again")
         self.assertIsNone(self.process.poll(), "tables crashed spilling an array")
+
+    def _column_d(self, n=4):
+        values = self._values()
+        return [values.get((r, 3), "") for r in range(n)]
+
+    def test_an_empty_result_shows_calc_and_spills_when_its_source_matches(self):
+        """A FILTER that matches nothing shows the engine's #CALC! in its
+        anchor rather than an empty cell; a source value that matches makes
+        it spill, and undoing that entry brings #CALC! back. Every cell is
+        written while empty, so no step depends on how fx treats a cell's
+        existing input."""
+        from dogtail import rawinput
+
+        self.gapplication_action(self.aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
+        self._wait_for_a_new_document()
+
+        self._enter("B1", "1")
+        self._enter("D1", "=FILTER(B1:B3,B1:B3>5)")
+        self.wait_until(self._column_d, lambda col: col[0] == "#CALC!",
+                        description="a FILTER with no match to show #CALC! in D1")
+        self.assertEqual(self._column_d()[1], "", "an empty result spills nothing")
+
+        # B2 and B3 now match: the FILTER spills them.
+        self._enter("B2", "9")
+        self._enter("B3", "7")
+        self.wait_until(self._column_d, lambda col: col == ["9", "7", "", ""],
+                        description="the FILTER to spill 9 and 7 once its source matches")
+
+        # Undo B3 and B2: one match, then none, and #CALC! comes back.
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._column_d, lambda col: col == ["9", "", "", ""],
+                        description="undoing B3 to leave one match")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._column_d, lambda col: col[0] == "#CALC!" and col[1] == "",
+                        description="undoing B2 to bring #CALC! back")
+        self.assertIsNone(self.process.poll(), "tables crashed on an empty array result")
 
 
 class DecksUndoSelectionSmoke(BaseGUITestCase):
