@@ -1,0 +1,13 @@
+# Lint config for this repo's Python sources (prototypes/*.py). Mandelbrot
+# is a Rust/GTK app, but prototypes/webrtc-probe.py is real, maintained
+# Python, so it gets a real linter rather than a placeholder file.
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "W"]
+# E402: gi.require_version(...) must run before `from gi.repository import
+# ...` (PyGObject's own required pattern — see prototypes/webrtc-probe.py)
+# or the wrong typelib version can bind silently. Flagging it here would be
+# a false positive against a correct, idiomatic GTK pattern.
+ignore = ["E402"]

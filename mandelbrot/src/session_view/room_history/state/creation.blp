@@ -1,0 +1,23 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentStateCreation: Adw.Bin {
+  focusable: true;
+  valign: center;
+  halign: center;
+
+  Gtk.Box {
+    spacing: 6;
+
+    Gtk.Label description {
+      wrap: true;
+      wrap-mode: word_char;
+    }
+
+    Gtk.Button previous_room_btn {
+      can-shrink: true;
+      action-name: "session.show-room";
+      label: _("View");
+    }
+  }
+}

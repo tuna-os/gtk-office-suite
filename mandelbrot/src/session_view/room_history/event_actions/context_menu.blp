@@ -1,0 +1,124 @@
+using Gtk 4.0;
+
+menu event-actions-menu {
+  section {
+    item {
+      // Translators: In this string, 'Reply' is a verb.
+      label: _("_Reply");
+      action: "event.reply";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      // Translators: In this string, 'Reply' is a verb.
+      label: _("Reply in T_hread");
+      action: "event.reply-in-thread";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      // Translators: In this string, 'Edit' is a verb.
+      label: _("_Edit");
+      action: "event.edit";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      // Translators: In this string, 'Forward' is a verb, this is to re-send
+      // the same message in another room, like forwarding an e-mail.
+      label: _("_Forward");
+      action: "event.forward";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Select");
+      action: "event.select";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("End _Poll");
+      action: "event.end-poll";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("Revoke _Invite");
+      action: "event.revoke-invite";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Copy Text");
+      action: "event.copy-text";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Copy T_humbnail");
+      action: "event.copy-image";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("S_ave Image");
+      action: "event.save-image";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("S_ave Video");
+      action: "event.save-video";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("S_ave Audio");
+      action: "event.save-audio";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Copy Message _Link");
+      action: "event.permalink";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("_Properties");
+      action: "event.properties";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Discard");
+      action: "event.cancel-send";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("Rep_ort…");
+      action: "event.report";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Re_move");
+      action: "event.remove";
+      hidden-when: "action-missing";
+    }
+  }
+}

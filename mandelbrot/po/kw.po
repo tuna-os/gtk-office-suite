@@ -1,0 +1,5438 @@
+# Cornish translation for fractal.
+# Copyright (C) 2026 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Flynn Peck <cirilla@tuta.io>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal main\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2026-05-27 15:22+0000\n"
+"PO-Revision-Date: 2026-06-04 11:15+0100\n"
+"Last-Translator: Flynn Peck <cirilla@tuta.io>\n"
+"Language-Team: kw\n"
+"Language: kw\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-DL-VCS-Web: https://gitlab.gnome.org/World/fractal\n"
+"X-DL-Lang: kw\n"
+"X-DL-Module: fractal\n"
+"X-DL-Branch: main\n"
+"X-DL-Domain: po\n"
+"X-DL-State: Translating\n"
+"X-Generator: Gtranslator 50.0\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:2
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7
+#: src/login/session_setup_view.blp:22 src/window.blp:9
+msgid "Fractal"
+msgstr "Fraktal"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr ""
+"Fraktl yw kliens messajys angresennys ha saw rag keskomunyans bagas "
+"kesoberus."
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid "Fractal group messaging"
+msgstr "Messajys vagas Fraktal"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:13
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "Matrix;matrix.org;keskows;irc;keskomunyans;kows;riot;element;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Lester fenester"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Ughelder fenester"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Studh fenester kowlvoghhys"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Bywhe ow furvasa markdown"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Mar dhe argerdhes messajys avel markdown pan ow tanvon"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Settyansow esedhek"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Rol gesresek a settyansow der esedhek"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Esedhek a-lemmyn"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Keskewsel war Vatrix"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+msgstr ""
+"Fraktal yw app messajys Matrix rag GNOME skrifys yn Rust. Y ynterfas yw "
+"desinys rag kesoberyans yn bagasow vras, kepar ha ragdresow vedhelweyth "
+"rydh, hag y a wra omdhesedha oll skrinyow, bras po byghan."
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "Golowboyntys:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"Kavos keskowsvaow rag omgussulya a-dro dh'gas testennow drudh, po kewsel dhe "
+"dus yn privedh, yn saw drefen argelesans penn-dhe-benn"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "Danvon messajys furvasys yn rych, restrennow, po agas tyller a-lemmyn"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+msgstr ""
+"Gorthebi dhe vessajys gomparek, gorthebi gans emoji, kampolla devnydhyoryon "
+"po keskowsvaow, golegi po dilea messajys"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "Gweles skeusennow, ha gwari son ha gwydhyow y'n keskows distowgh"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "Gweles piw re redyas messajys, ha piw yw ow jynnskrifa"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr ""
+"Omgelmi dhe akontys liesek yn kettermyn (gans skoodhyans Omgelmyans Unnik)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Pennfenester a Fraktal"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "Gweles an istori media a geskowsva Matrix"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "An ynterfas a Fraktal a omdhesedh dhe skrinyow byghan"
+
+#: src/account_chooser_dialog/mod.blp:5 src/account_chooser_dialog/mod.blp:35
+msgid "Select an Account"
+msgstr "Dewis Akont"
+
+#: src/account_chooser_dialog/mod.blp:62
+msgid "Select the account you want to open the URI with"
+msgstr "Dewisewgh an akont may hwi a vynn ygeri an worgevren"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:68
+msgid "Passphrase"
+msgstr "Lavaren-tremena"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:87
+msgid "Confirm Passphrase"
+msgstr "Afydhya Lavaren-tremena"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:117
+#: src/session_view/room_details/history_viewer/file.blp:5
+#: src/session_view/room_history/message_row/file.rs:63
+msgid "File"
+msgstr "Restren"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:121
+msgid "Choose…"
+msgstr "Dewis…"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:150
+#: src/account_settings/encryption_page/mod.blp:150
+msgid "Export Room Encryption Keys"
+msgstr "Esperthi Alhwedhow Argelesans an Geskowsva"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:153
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+msgstr ""
+"Owth esperthi agas alhwedhow argelesans an geskowsva a alloseg dhywgh dhe "
+"dhiargeles agas messajys yn keskowsvaow argelys penn-dhe-benn war dhevis "
+"aral po gans kliens Matrix aral."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:156
+msgid ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+msgstr ""
+"Res yw dhe'n backup bos gwithys yn tyller saw ha bos gwithys gans lavaren-"
+"tremena a vydh devnydhys dhe argeles an data."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:159
+msgid "Export Keys"
+msgstr "Esperthi Alhwedhow"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:162
+#: src/account_settings/encryption_page/mod.blp:159
+msgid "Import Room Encryption Keys"
+msgstr "Ynperthi Alhwedhow Argelesans an Geskowsva"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:165
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"Owth ynperthi agas alhwedhow argelesans an geskowsva a alloseg dhywgh dhe "
+"dhiargeles agas messajys yn keskowsvaow argelys penn-dhe-benn gans backup "
+"kyns dhyworth kliens Matrix."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:168
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "Ynworrewgh an lavaren-tremena provys pan an restren vackup o gwrys."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:171
+msgid "Import Keys"
+msgstr "Ynperthi Alhwedhow"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:184
+#: src/components/avatar/editable.rs:513
+msgid "Choose"
+msgstr "Dewis"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:193
+msgid "fractal-encryption-keys"
+msgstr "alhwedhow-argelesans-fraktal"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:199
+msgid "Save Encryption Keys To…"
+msgstr "Sawya Alhwedhow Argelesans Dhe…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:202
+msgid "Import Encryption Keys From…"
+msgstr "Ynperthi Alhwedhow Argelesans Dhyworth…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:215
+#: src/utils/matrix/media_message.rs:258
+msgid "Could not access file"
+msgstr "Ny yllir drehedhes restren"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:244
+msgid "Passphrases do not match"
+msgstr "Lavarennow-tremena nag omdhesedha"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:321
+msgid "Room encryption keys exported successfully"
+msgstr "Alhwedhow argelesans an geskowsva esperthys yn sewen"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:327
+#, rust-format
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "Ynperthys 1 alhwedh argelesans an geskowsva"
+msgstr[1] "Ynperthys {n} alhwedhow argelesans an geskowsva"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:341
+msgid "Could not export the keys"
+msgstr "Ny yllir esperthi an alhwedhow"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:354
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr ""
+"An lavaren-tremena nag a omdhesedh an lavaren devndyhys rag esperthi an "
+"alhwedhow."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:359
+msgid "Could not import the keys"
+msgstr "Ny yllir ynperthi an alhwedhow"
+
+#: src/account_settings/encryption_page/mod.blp:6
+msgid "Encryption"
+msgstr "Argelesans"
+
+#: src/account_settings/encryption_page/mod.blp:10
+msgid "Crypto Identity"
+msgstr "Honanieth Grypto"
+
+#: src/account_settings/encryption_page/mod.blp:11
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"Gallosegi dhywgh dhe wirhe akontys Matrix erel hag afydhya yn awtomatek aga "
+"esedhegow wirhes"
+
+#: src/account_settings/encryption_page/mod.blp:75
+msgid "Account Recovery"
+msgstr "Daskavos Akont"
+
+#: src/account_settings/encryption_page/mod.blp:77
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+msgstr ""
+"Gasa dhe dhaskavos agas akont gans alhwedh daskavos po lavaren-tremena, mar "
+"hwi a gell hedhas dhe oll a'gas esedhegow"
+
+#: src/account_settings/encryption_page/mod.rs:151
+msgid "No Crypto Identity"
+msgstr "Honanieth Grypto Vyth"
+
+#: src/account_settings/encryption_page/mod.rs:153
+msgid "Verifying your own devices or other users is not possible"
+msgstr "Ow kwirhe devisyow a'gas honan po devnydhoryon erel nag yw possybyl"
+
+#: src/account_settings/encryption_page/mod.rs:156
+#: src/account_settings/encryption_page/mod.rs:229
+msgid "Enable…"
+msgstr "Bywhe…"
+
+#: src/account_settings/encryption_page/mod.rs:159
+msgid "Enable Crypto Identity"
+msgstr "Bywhe Honanieth Grypto"
+
+#: src/account_settings/encryption_page/mod.rs:175
+msgid "Crypto Identity Enabled"
+msgstr "Honanieth Grypto Byw"
+
+#: src/account_settings/encryption_page/mod.rs:177
+msgid "The crypto identity exists and this device is verified"
+msgstr "Yma an honanieth grypto hag an devis ma yw gwirhes"
+
+#: src/account_settings/encryption_page/mod.rs:180
+#: src/account_settings/encryption_page/mod.rs:248
+msgid "Reset…"
+msgstr "Dassettya…"
+
+#: src/account_settings/encryption_page/mod.rs:183
+#: src/components/crypto/identity_setup_view.blp:195
+#: src/components/crypto/identity_setup_view.blp:220
+#: src/components/crypto/recovery_setup_view.blp:167
+msgid "Reset Crypto Identity"
+msgstr "Dassettya Honanieth Grypto"
+
+#: src/account_settings/encryption_page/mod.rs:195
+msgid "Crypto Identity Incomplete"
+msgstr "Honanieth Grypto Andhien"
+
+#: src/account_settings/encryption_page/mod.rs:197
+msgid "The crypto identity exists but this device is not verified"
+msgstr "Yma an honanieth grypto mes an devis ma nag yw gwirhes"
+
+#: src/account_settings/encryption_page/mod.rs:200
+msgid "Verify…"
+msgstr "Gwirhe…"
+
+#: src/account_settings/encryption_page/mod.rs:203
+msgid "Verify This Session"
+msgstr "Gwirhe an Esedhek ma"
+
+#: src/account_settings/encryption_page/mod.rs:224
+msgid "Account Recovery Disabled"
+msgstr "Daskavos Akont Marow"
+
+#: src/account_settings/encryption_page/mod.rs:226
+msgid ""
+"Enable recovery to be able to restore your account without another device"
+msgstr "Bywhe daskavos akont rag daskavos agas akont heb devis aral"
+
+#: src/account_settings/encryption_page/mod.rs:232
+msgid "Enable Account Recovery"
+msgstr "Bywhe Daskavos Akont"
+
+#: src/account_settings/encryption_page/mod.rs:243
+msgid "Account Recovery Enabled"
+msgstr "Daskavos Akont Byw"
+
+#: src/account_settings/encryption_page/mod.rs:245
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "Agas alhwedhow sinans hag alhwedhow argelesans yw kettermynyegys"
+
+#: src/account_settings/encryption_page/mod.rs:251
+msgid "Reset Account Recovery Key"
+msgstr "Dassettya Alhwedh Daskavos Akont"
+
+#: src/account_settings/encryption_page/mod.rs:263
+#: src/components/crypto/recovery_setup_view.blp:424
+#: src/components/crypto/recovery_setup_view.blp:450
+msgid "Account Recovery Incomplete"
+msgstr "Daskavos Akont Andhien"
+
+#: src/account_settings/encryption_page/mod.rs:265
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr ""
+"Daskavos rag kettermynyegi agas alhwedhow sinans hag alhwedhow argelesans"
+
+#: src/account_settings/encryption_page/mod.rs:268
+msgid "Recover…"
+msgstr "Daskavos…"
+
+#: src/account_settings/encryption_page/mod.rs:271
+msgid "Recover Account Data"
+msgstr "Daskavos Data Akont"
+
+#: src/account_settings/general_page/change_password_subpage.rs:104
+msgid "Password must be at least 8 characters long"
+msgstr "Res yw dhe'n ger-tremena bos 8 lytherennow hir dhe'n lyha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:107
+msgid "Password must have at least one lower-case letter"
+msgstr "Res yw dhe'n ger-tremena kavos 1 lytheren vyghan dhe'n lyha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:111
+msgid "Password must have at least one upper-case letter"
+msgstr "Res yw dhe'n ger-tremena kavos 1 lytheren vras dhe'n lyha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:114
+msgid "Password must have at least one digit"
+msgstr "Res yw dhe'n ger-tremena kavos 1 niver dhe'n lyha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:116
+msgid "Password must have at least one symbol"
+msgstr "Res yw dhe'n ger-tremena kavos 1 arwodh dhe'n lyha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:146
+msgid "Passwords do not match"
+msgstr "Geryow-tremena nag omdhesedha"
+
+#: src/account_settings/general_page/change_password_subpage.rs:192
+msgid "Password changed successfully"
+msgstr "Ger-tremena chanjys yn sewen"
+
+#: src/account_settings/general_page/change_password_subpage.rs:206
+msgid "Password rejected for being too weak"
+msgstr "Ger-tremena denaghys drefen ev o re wann"
+
+#: src/account_settings/general_page/change_password_subpage.rs:210
+msgid "Could not change password"
+msgstr "Ny yllir chanjya ger-tremena"
+
+#: src/account_settings/general_page/change_password_subpage.ui:7
+#: src/account_settings/general_page/mod.blp:59
+msgid "Change Password"
+msgstr "Chanjya Ger-tremena"
+
+#: src/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr ""
+"Ow chanjya agas ger-tremena a wra omdhigelmi dhywgh dhyworth oll a'gas "
+"esedhegow erel."
+
+#: src/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "Ger-tremena Nowydh"
+
+#: src/account_settings/general_page/change_password_subpage.ui:125
+msgid "Confirm New Password"
+msgstr "Afydhya Ger-tremena Nowydh"
+
+#: src/account_settings/general_page/change_password_subpage.ui:162
+#: src/account_settings/general_page/deactivate_account_subpage.blp:83
+#: src/account_settings/general_page/deactivate_account_subpage.blp:94
+#: src/account_settings/general_page/log_out_subpage.blp:86
+#: src/session_view/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "Pesya"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:6
+#: src/account_settings/general_page/mod.blp:88
+msgid "Deactivate Account"
+msgstr "Marowhe Akont"
+
+#: src/account_settings/general_page/deactivate_account_subpage.blp:46
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"Ow marowhe agas akont a styr hwi a wra kelli hedhas dhe oll a'gas messajys, "
+"kestavow, restrennow, ha moy, bys vykken."
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:59
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"Rag afydhya hwi a vynn marowhe an akont yn hwir, jynnskrifewgh agas ID "
+"devnydhyer Matrix:"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:156
+msgid "Account successfully deactivated"
+msgstr "Akont marowhes yn sewen"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:164
+msgid "Could not deactivate account"
+msgstr "Ny yllir marowhe akont"
+
+#: src/account_settings/general_page/log_out_subpage.blp:5
+#: src/account_settings/general_page/mod.blp:75
+#: src/account_settings/user_session/user_session_subpage.blp:62
+msgid "Log Out"
+msgstr "Omdhigelmi"
+
+#: src/account_settings/general_page/log_out_subpage.blp:16
+msgid "Log Out of This Session"
+msgstr "Omdhigelmi dhyworth an Esedhek ma"
+
+#: src/account_settings/general_page/log_out_subpage.blp:43
+msgid "Are you sure you want to log out of this session?"
+msgstr "Owgh hwi sur hwi a vynn omdhigelmi dhyworth an esedhek ma?"
+
+#: src/account_settings/general_page/log_out_subpage.blp:72
+msgid "Review Account Security"
+msgstr "Dashwithra Sawder Akont"
+
+#: src/account_settings/general_page/log_out_subpage.blp:102
+msgid "Logout Failed"
+msgstr "Omdhigelmyans re Fyllis"
+
+#: src/account_settings/general_page/log_out_subpage.blp:121
+msgid ""
+"Logging out of this session failed. You can try again, or, if this is a "
+"permanent error, you can remove the session."
+msgstr ""
+"Owth omdhigelmi dhyworth an esedhek ma re fyllis. Hwi a yll assaya arta, po, "
+"mar hemm yw kamm parghus, hwi a yll remova an esedhek."
+
+#: src/account_settings/general_page/log_out_subpage.blp:136
+#: src/account_settings/user_session/user_session_list_subpage.blp:83
+#: src/components/action_button.blp:46 src/components/rows/loading_row.blp:26
+#: src/session_view/room_details/history_viewer/audio.blp:50
+#: src/session_view/room_details/history_viewer/file.blp:49
+#: src/session_view/room_details/history_viewer/visual_media.blp:55
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:77
+#: src/session_view/room_history/mod.blp:111
+msgid "Try Again"
+msgstr "Assaya Arta"
+
+#: src/account_settings/general_page/log_out_subpage.blp:147
+msgid ""
+"Removing the session deletes the associated data from the system, but your "
+"homeserver and other sessions will not be aware that this session was logged "
+"out."
+msgstr ""
+"Ow remova an esedhek a dhile an data kowethys dhyworth an system, mes agas "
+"servell dre hag esedhegow erel ny vydh war a'n omdhigelmyans a'n esedhek ma."
+
+#: src/account_settings/general_page/log_out_subpage.blp:162
+msgid "Remove Session"
+msgstr "Remova Esedhek"
+
+#: src/account_settings/general_page/log_out_subpage.rs:83
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"An honanieth grypto ha daskavos akont nag yw selys yn ta. Mar hemm yw agas "
+"esedhek junys diwettha ha nyns eus dhywgh backup leel a-dhiwedhes a'gas "
+"alhwedhow argelesans, ny yllowgh hwi daskavos agas akont."
+
+#: src/account_settings/general_page/log_out_subpage.rs:91
+msgid ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+msgstr ""
+"Hemm yw agas esedhek junys diwettha. Surhewgh hwi a yll drehedhes agas "
+"alhwedh daskavos po lavaren-tremena hwath, po gwrewgh backup a'gas alhwedhow "
+"argelesans kyns owth omdhigelmi."
+
+#: src/account_settings/general_page/mod.blp:6
+msgid "General"
+msgstr "Ollgemmyn"
+
+#: src/account_settings/general_page/mod.blp:16
+msgid "Account Avatar"
+msgstr "Skeusennik Akont"
+
+#: src/account_settings/general_page/mod.blp:23
+#: src/session_view/create_room_dialog.blp:48
+#: src/session_view/create_room_dialog.blp:51
+#: src/session_view/room_details/edit_details_subpage.blp:40
+#: src/session_view/room_details/edit_details_subpage.blp:44
+msgid "Name"
+msgstr "Hanow"
+
+#: src/account_settings/general_page/mod.blp:40
+msgid "Matrix User ID"
+msgstr "ID Devndyhyer Matrix"
+
+#: src/account_settings/general_page/mod.blp:42 src/components/user_page.blp:57
+msgid "Copy Matrix User ID"
+msgstr "Kopia ID Devnydhyer Matrix"
+
+#: src/account_settings/general_page/mod.blp:43 src/components/user_page.rs:256
+msgid "Matrix user ID copied to clipboard"
+msgstr "ID devnydhyer Matrix kopys war astel glypp"
+
+#: src/account_settings/general_page/mod.blp:47
+#: src/account_settings/user_session/user_session_list_subpage.blp:5
+msgid "Sessions"
+msgstr "Esedhegow"
+
+#: src/account_settings/general_page/mod.blp:68
+msgid "Manage Account"
+msgstr "Dyghtya Akont"
+
+#: src/account_settings/general_page/mod.blp:101
+#: src/session_view/room_details/general_page.blp:229
+msgid "Advanced Information"
+msgstr "Kedhlow Avonsys"
+
+#: src/account_settings/general_page/mod.blp:104
+#: src/login/homeserver_page.blp:6 src/login/homeserver_page.blp:44
+msgid "Homeserver"
+msgstr "Servell Dre"
+
+#: src/account_settings/general_page/mod.blp:106
+msgid "Copy Homeserver Address"
+msgstr "Kopia Trigva Servell Dre"
+
+#: src/account_settings/general_page/mod.blp:107
+msgid "Homeserver address copied to clipboard"
+msgstr "Trigva servell dre kopys war astel glypp"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:112
+msgid "Local Session ID"
+msgstr "ID Esedhek Leel"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:115
+msgid "Copy Local Session ID"
+msgstr "Kopia ID Esedhek Leel"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:117
+msgid "Local session ID copied to clipboard"
+msgstr "ID Esedhek Leel kopys war astel glypp"
+
+#: src/account_settings/general_page/mod.rs:309
+#: src/session_view/room_details/edit_details_subpage.rs:149
+msgid "Avatar removed successfully"
+msgstr "Skeusennik removys yn sewen"
+
+#: src/account_settings/general_page/mod.rs:311
+#: src/session_view/room_details/edit_details_subpage.rs:151
+msgid "Avatar changed successfully"
+msgstr "Skeusennik chanjys yn sewen"
+
+#: src/account_settings/general_page/mod.rs:329
+#: src/account_settings/general_page/mod.rs:339
+#: src/session_view/room_details/edit_details_subpage.rs:176
+#: src/session_view/room_details/edit_details_subpage.rs:186
+msgid "Could not load file"
+msgstr "Ny yllir karga restren"
+
+#: src/account_settings/general_page/mod.rs:358
+#: src/session_view/room_details/edit_details_subpage.rs:213
+msgid "Could not upload avatar"
+msgstr "Ny yllir ughkarga skeusennik"
+
+#: src/account_settings/general_page/mod.rs:389
+#: src/session_view/room_details/edit_details_subpage.rs:236
+msgid "Could not change avatar"
+msgstr "Ny yllir chanjya skeusennik"
+
+#: src/account_settings/general_page/mod.rs:406
+#: src/session_view/room_details/edit_details_subpage.rs:261
+msgid "Remove Avatar?"
+msgstr "Remova Skeusennik?"
+
+#: src/account_settings/general_page/mod.rs:407
+msgid "Do you really want to remove your avatar?"
+msgstr "A vynnowgh remova agas skeusennik yn hwir?"
+
+#: src/account_settings/general_page/mod.rs:410
+#: src/components/dialogs/message_dialogs.rs:58
+#: src/components/dialogs/message_dialogs.rs:323
+#: src/components/dialogs/message_dialogs.rs:409
+#: src/components/dialogs/message_dialogs.rs:469
+#: src/components/dialogs/message_dialogs.rs:491
+#: src/components/dialogs/message_dialogs.rs:513
+#: src/identity_verification_view/confirm_qr_code_page.blp:55
+#: src/session_view/room_details/edit_details_subpage.rs:267
+#: src/session_view/room_details/general_page.rs:1001
+#: src/session_view/room_details/upgrade_dialog/mod.blp:134
+#: src/session_view/room_history/event_actions/group.rs:584
+#: src/session_view/room_history/event_actions/group.rs:648
+#: src/session_view/room_history/message_toolbar/mod.blp:72
+#: src/session_view/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "Hedhi"
+
+#: src/account_settings/general_page/mod.rs:411
+#: src/components/dialogs/message_dialogs.rs:232
+#: src/session_view/room_details/edit_details_subpage.rs:268
+#: src/session_view/room_history/event_actions/group.rs:585
+msgid "Remove"
+msgstr "Remova"
+
+#: src/account_settings/general_page/mod.rs:445
+#: src/session_view/room_details/edit_details_subpage.rs:293
+msgid "Could not remove avatar"
+msgstr "Ny yllir remova skeusennik"
+
+#: src/account_settings/general_page/mod.rs:494
+msgid "Name changed successfully"
+msgstr "Hanow chanjys yn sewen"
+
+#: src/account_settings/general_page/mod.rs:544
+msgid "Could not change display name"
+msgstr "Ny yllir chanjya hanow displetyans"
+
+#: src/account_settings/mod.blp:5 src/account_switcher/session_item.blp:58
+msgid "Account Settings"
+msgstr "Settyansow Akont"
+
+#: src/account_settings/notifications_page.blp:6
+#: src/session_view/room_details/general_page.blp:111
+msgid "Notifications"
+msgstr "Gwarnyansow"
+
+#: src/account_settings/notifications_page.blp:11
+msgid "Enable for This Account"
+msgstr "Bywhe rag an Akont ma"
+
+#: src/account_settings/notifications_page.blp:18
+msgid "Enable for This Session"
+msgstr "Bywhe rag an Esedhek ma"
+
+#: src/account_settings/notifications_page.blp:24
+msgid "Global"
+msgstr "Ollvysel"
+
+#: src/account_settings/notifications_page.blp:25
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr "Py messajys a gaws gwarnyansow yn keskowsvaow heb rewlys moy komparek"
+
+#: src/account_settings/notifications_page.blp:28
+msgid "All messages in all rooms"
+msgstr "Oll messajys yn oll keskowsvaow"
+
+#: src/account_settings/notifications_page.blp:34
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr ""
+"Oll messajys yn keskowsow dhidro, ha kampollow ha geryow-alhwedh yn oll "
+"keskowsvaow"
+
+#: src/account_settings/notifications_page.blp:40
+msgid "Only mentions and keywords in all rooms"
+msgstr "Kampollow ha geryow-alhwedh hepken yn oll keskowsvaow"
+
+#: src/account_settings/notifications_page.blp:47
+msgid "Keywords"
+msgstr "Geryow-alhwedh"
+
+#: src/account_settings/notifications_page.blp:49
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+msgstr ""
+"Messajys ow synsi unn a'n er-yow alhwedh ma a gaws gwarnyansow. Owth "
+"omdhesedha war'n eryow-alhwedh ma yw kas-anserghek."
+
+#: src/account_settings/notifications_page.blp:61
+#: src/account_settings/notifications_page.blp:62
+msgid "Add Keyword"
+msgstr "Keworra Ger-alhwedh"
+
+#: src/account_settings/notifications_page.rs:195
+msgid "Could not enable account notifications"
+msgstr "Ny yllir bywhe gwarnyansow akont"
+
+#: src/account_settings/notifications_page.rs:197
+msgid "Could not disable account notifications"
+msgstr "Ny yllri marowhe gwaryansow akont"
+
+#: src/account_settings/notifications_page.rs:284
+msgid "Could not change global notifications setting"
+msgstr "Ny yllir chanjya settyans gwarnyansow ollvysel"
+
+#: src/account_settings/notifications_page.rs:337
+#, rust-format
+msgid "Remove “{keyword}”"
+msgstr "Dilea “{keyword}”"
+
+#: src/account_settings/notifications_page.rs:368
+msgid "Could not remove notification keyword"
+msgstr "Ny yllir dilea ger-alhwedh gwarnyans"
+
+#: src/account_settings/notifications_page.rs:435
+msgid "Could not add notification keyword"
+msgstr "Ny yllri keworra ger-alhwedh gwarnyans"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.blp:30
+#: src/components/user_page.rs:746
+msgid "Stop Ignoring"
+msgstr "Astel ow Skonya Aswon"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.rs:85
+#: src/components/user_page.rs:767
+msgid "Could not stop ignoring user"
+msgstr "Ny yllir astel ow skonya aswon a dhevnydhyer"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:5
+#: src/account_settings/safety_page/mod.blp:11
+msgid "Ignored Users"
+msgstr "Devnydhyoryon Skonys a Aswon"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:18
+msgid "Toggle Ignored Users Search"
+msgstr "Dewis Hwithrans Devnydhyoryon Skonys a Aswon"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:32
+msgid "Search for ignored users"
+msgstr "Hwilas devnydhyoryon skonys a aswon"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:64
+msgid "No Ignored Users"
+msgstr "Devnydhyoryon Skonys a Aswon Vyth"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:65
+msgid "You can add users to this list from their room member profile"
+msgstr ""
+"Hwi a yll keworra devnydhyoryon dhe'n rol ma dhyworth aga frofil esel "
+"keskowsva"
+
+#: src/account_settings/safety_page/mod.blp:6
+msgid "Safety"
+msgstr "Sawder"
+
+#: src/account_settings/safety_page/mod.blp:13
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"Oll messajys po galowyow danvenys gans an dhevnydhyoryon ma a vydh skonys a "
+"aswon. Hwi a wra gweles nebes a'ga aktivita hwath, kepar ha pan i a omjun po "
+"diberth keskowsva."
+
+#: src/account_settings/safety_page/mod.blp:21
+msgid "Privacy"
+msgstr "Privetter"
+
+#: src/account_settings/safety_page/mod.blp:25
+msgid "Send Read Receipts"
+msgstr "Danvon Akwytyansow Redys"
+
+#: src/account_settings/safety_page/mod.blp:26
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"Gallosegi dhe eseli erel a'n keskowsvaow le may hwi a vos kevrennek rag "
+"helerghi py messajys hwi re welas"
+
+#: src/account_settings/safety_page/mod.blp:31
+msgid "Send Typing Notifications"
+msgstr "Danvon Gwarnyansow Ow Jynnskrifa"
+
+#: src/account_settings/safety_page/mod.blp:32
+msgid ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+msgstr ""
+"Gallosegi dhe eseli erel a'n keskowsvaow le may hwi a vos kevrennek rag "
+"gweles pan hwi owth jynnskrifa messach"
+
+#: src/account_settings/safety_page/mod.blp:37
+msgid "Media Previews"
+msgstr "Ragwologow Media"
+
+#: src/account_settings/safety_page/mod.blp:39
+msgid ""
+"Which rooms automatically show previews for images and videos. Hidden "
+"previews can always be shown by clicking on the media."
+msgstr ""
+"Py keskowsvaow diskwedhes yn awtomatek ragwologow rag skeusennow ha "
+"gwydhyowyow. Ragwologow kudh a yll bos diskwedhys yn neb eur gans ow klyckya "
+"war'n media."
+
+#: src/account_settings/safety_page/mod.blp:43
+msgid "Show in all rooms"
+msgstr "Diskwedhes yn oll keskowsvaow"
+
+#: src/account_settings/safety_page/mod.blp:49
+msgid "Show only in private rooms"
+msgstr "Diskwedhes yn keskowsvaow brivedh hepken"
+
+#: src/account_settings/safety_page/mod.blp:55
+msgid "Hide in all rooms"
+msgstr "Kudha yn oll keskowsvaow"
+
+#: src/account_settings/safety_page/mod.blp:63
+msgid "Show Avatars for Invites"
+msgstr "Diskwedhes Skeusennigow rag Galowyow"
+
+#: src/account_settings/safety_page/mod.blp:64
+msgid "Display the avatars of the room and the inviter"
+msgstr "Diskwedhes an skeusennigow a'n geskowsva ha'n galowyer"
+
+#: src/account_settings/safety_page/mod.rs:232
+msgid "Could not change media previews setting"
+msgstr "Ny yllir chanjya settyans ragwologow media"
+
+#: src/account_settings/safety_page/mod.rs:289
+msgid "Could not enable avatars for invites"
+msgstr "Ny yllir bywhe skeusennigow rag galowyow"
+
+#: src/account_settings/safety_page/mod.rs:291
+msgid "Could not disable avatars for invites"
+msgstr "Ny yllir marowhe skeusennigow rag galowyow"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:13
+#: src/account_settings/user_session/user_session_list_subpage.blp:23
+msgid "Current Session"
+msgstr "Esedhek A-lemmyn"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:29
+#: src/account_settings/user_session/user_session_list_subpage.blp:57
+msgid "Other Active Sessions"
+msgstr "Esedhegow Vyw Erel"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:74
+msgid "Could not load the list of connected devices"
+msgstr "Ny yllir karga an rol a dhevisyow junys"
+
+#. Translators: As in 'The session is verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:40
+#: src/account_settings/user_session/user_session_subpage.rs:118
+msgid "Verified"
+msgstr "Gwirhes"
+
+#. Translators: As in 'The session is not verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:51
+#: src/account_settings/user_session/user_session_subpage.rs:122
+msgid "Not verified"
+msgstr "Na wirhes"
+
+#: src/account_settings/user_session/user_session_subpage.blp:14
+msgid "Matrix Session ID"
+msgstr "ID Esedhek Matrix"
+
+#: src/account_settings/user_session/user_session_subpage.blp:16
+msgid "Copy Matrix Session ID"
+msgstr "Kopia ID Esedhek Matrix"
+
+#: src/account_settings/user_session/user_session_subpage.blp:17
+msgid "Matrix session ID copied to clipboard"
+msgstr "ID Esedhek Matrix kopys war astel glypp"
+
+#: src/account_settings/user_session/user_session_subpage.blp:22
+msgid "Public Name"
+msgstr "Hanow Poblek"
+
+#: src/account_settings/user_session/user_session_subpage.blp:38
+msgid "Last Seen"
+msgstr "Gwelys Diwettha"
+
+#: src/account_settings/user_session/user_session_subpage.blp:50
+msgid "Last Location"
+msgstr "Tyller Diwettha"
+
+#: src/account_settings/user_session/user_session_subpage.blp:73
+#: src/account_settings/user_session/user_session_subpage.blp:83
+msgid "Disconnect"
+msgstr "Disjunya"
+
+#: src/account_settings/user_session/user_session_subpage.rs:214
+msgid "Session renamed"
+msgstr "Esedhek dashenwys"
+
+#: src/account_settings/user_session/user_session_subpage.rs:218
+msgid "Could not rename session"
+msgstr "Ny yllir dashenwel esedhek"
+
+#: src/account_settings/user_session/user_session_subpage.rs:248
+#, rust-format
+msgid "Could not disconnect session “{device_name}”"
+msgstr "Ny yllir disjunya esedhek “{device_name}”"
+
+#: src/account_switcher/account_switcher_button.blp:18
+msgid "Switch Accounts"
+msgstr "Skwychella Akontys"
+
+#: src/account_switcher/account_switcher_popover.blp:40
+msgid "_Add Account"
+msgstr "_Keworra Akont"
+
+#: src/application.rs:244
+msgid "The Fractal Team"
+msgstr "An Bagas Fraktal"
+
+#: src/application.rs:250
+msgid "© The Fractal Team"
+msgstr "© An Bagas Fraktal"
+
+#: src/application.rs:264
+msgid "translator-credits"
+msgstr "Flynn <cirilla@tuta.io>"
+
+#. This can't be added via the builder
+#: src/application.rs:268
+msgid "Name by"
+msgstr "Hanow gans"
+
+#: src/application.rs:382
+msgid "Session not found"
+msgstr "Esedhek nag o kevys"
+
+#: src/components/action_button.blp:28
+msgid "Confirm Change"
+msgstr "Afydhya Chanj"
+
+#: src/components/action_button.blp:62
+#: src/components/camera/qrcode_scanner.blp:14
+#: src/login/session_setup_view.blp:16 src/session_view/explore/mod.blp:63
+#: src/session_view/room_details/history_viewer/audio.blp:17
+#: src/session_view/room_details/history_viewer/file.blp:16
+#: src/session_view/room_details/history_viewer/visual_media.blp:22
+#: src/session_view/room_history/mod.blp:92 src/window.blp:17
+msgid "Loading"
+msgstr "Ow karga"
+
+#: src/components/action_button.blp:84
+msgid "Success"
+msgstr "Sewen"
+
+#: src/components/action_button.blp:102
+msgid "Warning"
+msgstr "Gwarnyans"
+
+#: src/components/action_button.blp:119 src/error_page.blp:9
+#: src/session_view/create_direct_chat_dialog/mod.blp:93
+#: src/session_view/explore/mod.blp:113 src/session_view/explore/mod.blp:117
+#: src/session_view/room_details/invite_subpage/mod.blp:109
+#: src/session_view/room_details/invite_subpage/mod.blp:113
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:68
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:72
+#: src/window.blp:87
+msgid "Error"
+msgstr "Kamm"
+
+#: src/components/avatar/editable.blp:64
+msgid "Remove Avatar"
+msgstr "Remova Skeusennik"
+
+#: src/components/avatar/editable.blp:81
+msgid "Select New Avatar"
+msgstr "Dewis Skeusennik Nowydh"
+
+#: src/components/avatar/editable.rs:505
+msgid "Images"
+msgstr "Skeusennow"
+
+#: src/components/avatar/editable.rs:511
+msgid "Choose Avatar"
+msgstr "Dewis Skeusennik"
+
+#: src/components/avatar/editable.rs:527
+msgid "Could not open avatar file"
+msgstr "Ny yllir ygeri restren skeusennik"
+
+#: src/components/avatar/editable.rs:548
+msgid "The chosen file is not an image"
+msgstr "An restren dhewisys nag yw skeusen"
+
+#: src/components/avatar/editable.rs:554
+msgid "Could not determine the type of the chosen file"
+msgstr "Ny yllir determya an eghen a'n restren dhewisys"
+
+#: src/components/camera/qrcode_scanner.blp:6
+msgid "QR Code Scanner"
+msgstr "Arhwilell QR-Kod"
+
+#: src/components/camera/qrcode_scanner.blp:21
+#: src/components/camera/qrcode_scanner.blp:33
+msgid "Could Not Connect to Camera"
+msgstr "Ny yllir junya dhe gamera"
+
+#: src/components/camera/qrcode_scanner.rs:91
+msgid "Camera"
+msgstr "Kamera"
+
+#: src/components/camera/viewfinder.rs:74
+msgid "Viewfinder"
+msgstr "Gwelkerghell"
+
+#: src/components/crypto/identity_setup_view.blp:8
+#: src/components/crypto/identity_setup_view.blp:33
+msgid "Verify Your New Session"
+msgstr "Gwirhe Agas Esedhek Nowydh"
+
+#: src/components/crypto/identity_setup_view.blp:45
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"Ow kwirhe agas esedhek a alloseg dhywgh ha'n dus hwi a geskews orth dhe vos "
+"sur nag eus nebonan owth assaya dhe omwul dhywgh po kontrewaytya agas "
+"keskowsow."
+
+#: src/components/crypto/identity_setup_view.blp:58
+msgid "Verify With Another Session"
+msgstr "Gwirhe gans Esedhek Aral"
+
+#: src/components/crypto/identity_setup_view.blp:68
+msgid "No other devices logged into this account?"
+msgstr "Devisyow erel vyth omgelmys y'n akont ma?"
+
+#: src/components/crypto/identity_setup_view.blp:76
+#: src/components/crypto/recovery_setup_view.blp:8
+#: src/components/crypto/recovery_setup_view.blp:33
+msgid "Recover Account"
+msgstr "Daskavos Akont"
+
+#: src/components/crypto/identity_setup_view.blp:87
+#: src/components/crypto/identity_setup_view.blp:269
+#: src/components/crypto/recovery_setup_view.blp:97
+#: src/components/crypto/recovery_setup_view.blp:210
+#: src/components/crypto/recovery_setup_view.blp:507
+msgid "Reset"
+msgstr "Dassettya"
+
+#: src/components/crypto/identity_setup_view.blp:103
+#: src/identity_verification_view/mod.blp:6 src/session_view/content.blp:68
+msgid "Identity Verification"
+msgstr "Gwirheans Honanieth"
+
+#: src/components/crypto/identity_setup_view.blp:118
+#: src/components/crypto/identity_setup_view.blp:143
+msgid "Set Up Crypto Identity"
+msgstr "Selya Honanieth Grypto"
+
+#: src/components/crypto/identity_setup_view.blp:155
+#: src/components/crypto/identity_setup_view.blp:232
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"Agas honanieth grypto a alloseg dhywgh dhe wirhe akontys Matrix erel hag "
+"afydhya yn awtomatek aga esedhegow wirhes."
+
+#: src/components/crypto/identity_setup_view.blp:167
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr "Res yw dhywgh selya honanieth grypto, drefen nyns eus bythkweth."
+
+#: src/components/crypto/identity_setup_view.blp:178
+#: src/components/crypto/recovery_setup_view.blp:311
+msgid "Set Up"
+msgstr "Selya"
+
+#: src/components/crypto/identity_setup_view.blp:245
+msgid ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+msgstr ""
+"Y kodh dhywgh dassettya agas honanieth grypto mar devis na longya dhywgh yw "
+"gwirhes."
+
+#: src/components/crypto/identity_setup_view.blp:257
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr ""
+"Rag mos yn-rag, res yw dhywgh dassettya agas alhwedh daskavos akont ynwedh."
+
+#: src/components/crypto/identity_setup_view.rs:415
+#: src/identity_verification_view/cancelled_page.rs:196
+msgid "Could not send a new verification request"
+msgstr "Ny yllir danvon govyn gwirheans nowydh"
+
+#: src/components/crypto/identity_setup_view.rs:467
+msgid "Could not create the crypto identity"
+msgstr "Ny yllir gwruthyl an honanieth grypto"
+
+#: src/components/crypto/recovery_setup_view.blp:44
+msgid "Restore full access to your account."
+msgstr "Daskavos hedhas leun dh'gas akont."
+
+#: src/components/crypto/recovery_setup_view.blp:52
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"Rag drehedhas an data daskavos, yma edhom dhyn an lavaren-tremena daskavos "
+"po an alhwedh daskavos, dell yw usys selys pan hwi a wrewgh agas akont."
+
+#: src/components/crypto/recovery_setup_view.blp:69
+msgid "Recovery Passphrase or Key"
+msgstr "Lavaren-Tremena po Alhwedh Daskavos"
+
+#: src/components/crypto/recovery_setup_view.blp:77
+#: src/session_view/sidebar/mod.rs:362
+msgid "Recover"
+msgstr "Daskavos"
+
+#: src/components/crypto/recovery_setup_view.blp:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "Kellys agas lavaren-tremena po alhwedh?"
+
+#: src/components/crypto/recovery_setup_view.blp:113
+#: src/components/crypto/recovery_setup_view.blp:138
+msgid "Reset Account Recovery"
+msgstr "Dassettya Daskavos Akont"
+
+#: src/components/crypto/recovery_setup_view.blp:150
+msgid ""
+"Resetting account recovery can allow you to fix or reset part or all of your "
+"recovery setup."
+msgstr ""
+"Ow tassettya daskavos akont a yll gallosegi dhywgh dhe ewnhe po dassettya "
+"rann po oll a'gas selyans daskavos."
+
+#: src/components/crypto/recovery_setup_view.blp:171
+msgid "Reset Room Encryption Keys Backup"
+msgstr "Dassettya Backup Alhwedhow Argelesans an Geskowsva"
+
+#: src/components/crypto/recovery_setup_view.blp:176
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr ""
+"Mar ny broviowgh lavaren-tremena daskavos nowydh, alhwedh daskavos a vydh "
+"gwrys."
+
+#: src/components/crypto/recovery_setup_view.blp:188
+#: src/components/crypto/recovery_setup_view.blp:288
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"Y telledh na'n dasdhevnydhyowgh an ger-tremena a'gas akont Matrix avel "
+"lavaren-tremena. Mar nebonan a gavos agas ger-tremena akont, i a yll "
+"drehedhes oll a'gas keskowsow argelys hag omwul dhywgh ynwedh."
+
+#: src/components/crypto/recovery_setup_view.blp:205
+#: src/components/crypto/recovery_setup_view.blp:305
+msgid "Recovery Passphrase (Optional)"
+msgstr "Lavaren-tremena Daskavos (Dre Dhewis)"
+
+#: src/components/crypto/recovery_setup_view.blp:227
+#: src/components/crypto/recovery_setup_view.blp:252
+msgid "Set Up Account Recovery"
+msgstr "Selya Daskavos Akont"
+
+#: src/components/crypto/recovery_setup_view.blp:264
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"Daskavos akont a allosegi dhywgh daskavos agas honanieth grypto ha redya "
+"agas messajys argelys hwath mar kellowgh hedhas dhe oll a'gas esedhegow."
+
+#: src/components/crypto/recovery_setup_view.blp:276
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr ""
+"Mar ny broviowgh lavaren-tremena daskavos, alhwedh daskavos a vydh gwrys."
+
+#: src/components/crypto/recovery_setup_view.blp:328
+#: src/components/crypto/recovery_setup_view.blp:354
+msgid "Account Recovery Set Up Successfully"
+msgstr "Daskavos Akont Selys yn Sewen"
+
+#: src/components/crypto/recovery_setup_view.blp:389
+msgid "Copy Recovery Key"
+msgstr "Kopia Alhwedh Daskavos"
+
+#: src/components/crypto/recovery_setup_view.blp:406
+#: src/components/crypto/recovery_setup_view.blp:487
+#: src/identity_verification_view/cancelled_page.blp:50
+#: src/identity_verification_view/completed_page.blp:51
+#: src/identity_verification_view/room_left_page.blp:48
+msgid "_Done"
+msgstr "_Deu"
+
+#: src/components/crypto/recovery_setup_view.blp:461
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "An daskavos o sewen mes a data daskavos o andhien."
+
+#: src/components/crypto/recovery_setup_view.blp:469
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"Rag ewnhe hemma, res yw dhywgh dassettya an daskavos dhyworth esedhek gans "
+"oll an data, hag assayewgh dhe dhaskavos an esedhek ma arta."
+
+#: src/components/crypto/recovery_setup_view.blp:478
+msgid ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+msgstr ""
+"Notyewgh: daskavos akont a yll kavos hanow dihaval yn kliensow Matrix erel, "
+"kepar ha “key backup” or “secure backup”."
+
+#: src/components/crypto/recovery_setup_view.blp:499
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "Yn ken dewis, hwi a yll dassettya Daskavos Akont"
+
+#: src/components/crypto/recovery_setup_view.rs:221
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "Drokhe an wirheansow a oll devnydhyoryon hag esedhegow"
+
+#: src/components/crypto/recovery_setup_view.rs:227
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. "
+"Invalidates the verifications of all users and sessions."
+msgstr ""
+"Hemm yw res drefen an honanieth grypto y'n data daskavos yw andhien. Hemm a "
+"dhrokhe an wirheansow a oll devnydhyoryon hag esedhegow."
+
+#: src/components/crypto/recovery_setup_view.rs:238
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr "Martesen, ny yllowgh hwi redya agas messajys argelys passys namoy"
+
+#: src/components/crypto/recovery_setup_view.rs:244
+msgid ""
+"Required because the backup is not set up properly. You might not be able to "
+"read your past encrypted messages anymore."
+msgstr ""
+"Hemm yw res drefen an backup nag yw selys yn ta. Martesen, ny yllowgh hwi "
+"redya agas messajys argelys passys namoy."
+
+#: src/components/crypto/recovery_setup_view.rs:265
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"Surhewgh dhe witha an alhwedh daskavos ma yn tyller saw. Y vydh edhom dhywgh "
+"henna dhe dhaskavos agas akont mar kellowgh hedhas dhe oll a'gas esedhegow."
+
+#: src/components/crypto/recovery_setup_view.rs:269
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"Surhewgh hwi a berth kov a'gas lavaren-tremena po gwitha yn tyller saw. Y "
+"vydh edhom dhywgh henna dhe dhaskavos agas akont mar kellowgh hedhas dhe oll "
+"a'gas esedhegow."
+
+#: src/components/crypto/recovery_setup_view.rs:330
+msgid "The recovery passphrase or key is invalid"
+msgstr "An lavaren-tremena po alhwedh yw anewn"
+
+#: src/components/crypto/recovery_setup_view.rs:333
+msgid "Could not access recovery data"
+msgstr "Ny yllir drehedhes data daskavos"
+
+#: src/components/crypto/recovery_setup_view.rs:384
+msgid "Could not reset the crypto identity"
+msgstr "Ny yllir dassettya an honanieth grypto"
+
+#: src/components/crypto/recovery_setup_view.rs:437
+#: src/components/crypto/recovery_setup_view.rs:446
+#: src/components/crypto/recovery_setup_view.rs:471
+msgid "Could not reset account recovery"
+msgstr "Ny yllir dassettya daskavos akont"
+
+#: src/components/crypto/recovery_setup_view.rs:506
+msgid "Could not reset account recovery key"
+msgstr "Ny yllir daskavos alhwedh daskavos akont"
+
+#: src/components/crypto/recovery_setup_view.rs:544
+msgid "Could not enable account recovery"
+msgstr "Ny yllir bywhe daskavos akont"
+
+#: src/components/dialogs/auth/in_browser_page.blp:36
+#: src/components/dialogs/auth/mod.blp:4
+#: src/components/dialogs/auth/password_page.blp:36
+#: src/login/in_browser_page.blp:6 src/login/in_browser_page.blp:39
+msgid "Authentication"
+msgstr "Omgelmyans"
+
+#: src/components/dialogs/auth/in_browser_page.blp:50
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"Omgelmewgh an oberyans y'n beurell mar pleg ha, wosa deu, tevewgh afydhya"
+
+#: src/components/dialogs/auth/in_browser_page.blp:74
+#: src/login/in_browser_page.blp:77
+msgid "Contin_ue"
+msgstr "_Pesya"
+
+#: src/components/dialogs/auth/in_browser_page.blp:103
+#: src/components/dialogs/auth/password_page.blp:81
+#: src/session_view/room_details/invite_subpage/mod.blp:15
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:15
+msgid "_Cancel"
+msgstr "_Hedhi"
+
+#: src/components/dialogs/auth/in_browser_page.blp:110
+#: src/components/dialogs/auth/password_page.blp:88
+msgid "C_onfirm"
+msgstr "_Afydhya"
+
+#: src/components/dialogs/auth/mod.rs:313
+msgid "The password is invalid."
+msgstr "An ger-tremena yw anewn."
+
+#: src/components/dialogs/auth/mod.rs:315 src/login/in_browser_page.rs:130
+msgid "An unexpected error occurred."
+msgstr "Yth esa kamm anwaytys."
+
+#: src/components/dialogs/auth/password_page.blp:50
+msgid "Please authenticate the operation with your password"
+msgstr "Omgelmewgh an oberyans gans agas ger-tremena"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "Denagha Galow?"
+
+#: src/components/dialogs/message_dialogs.rs:27
+msgid ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+msgstr ""
+"A vynnowgh denagha an galow ma yn hwir? Hwi a yll omjunya an geskowsva ma yn "
+"agas honan wosa henna."
+
+#: src/components/dialogs/message_dialogs.rs:31
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr ""
+"A vynnowgh denagha an galow ma yn hwir? Ny yllowgh hwi omjunya an geskowsva "
+"ma yn agas honan wosa henna."
+
+#: src/components/dialogs/message_dialogs.rs:34
+#: src/identity_verification_view/accept_request_page.blp:55
+#: src/session_view/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "Denagha"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Leave Room?"
+msgstr "Diberth Keskowsva?"
+
+#: src/components/dialogs/message_dialogs.rs:41
+msgid "Do you really want to leave this room? You can come back later."
+msgstr ""
+"A vynnowgh diberth an geskowsva ma yn hwir? Hwi a yll dehweles wosa henna."
+
+#: src/components/dialogs/message_dialogs.rs:44
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr ""
+"A vynnowgh diberth an geskowsva ma yn hwir? Ny yllowgh dehweles heb galow."
+
+#: src/components/dialogs/message_dialogs.rs:47
+msgid "Leave"
+msgstr "Diberth"
+
+#: src/components/dialogs/message_dialogs.rs:67
+#, rust-format
+msgid "Ignore {user}"
+msgstr "Skonya Aswon {user}"
+
+#: src/components/dialogs/message_dialogs.rs:71
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr ""
+"Oll messajys po galowyow danvenys gans an devnydhyer ma a vydh skonys a aswon"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:132
+#, rust-format
+msgid "Ban {user}?"
+msgstr "Emskemuna {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:136
+#, rust-format
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+msgstr ""
+"Owgh hwi sur hwi a vynn emskemuna {user_id}? Ny yll i omjunya an geskowsva "
+"arta bys dhe nebonan a dhiemskemuna dhedha."
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:139
+#: src/components/user_page.blp:142
+#: src/session_view/room_details/permissions/permissions_subpage.blp:234
+msgid "Ban"
+msgstr "Emskemuna"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:150
+#, rust-format
+msgid "Revoke Invite for {user}?"
+msgstr "Dilea Galow rag {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:157
+#, rust-format
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"Owgh hwi sur hwi a vynn dilea an galow rag {user_id}? I a yll omjunya an "
+"geskowsva yn i honan wosa henna hwath."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:164
+#, rust-format
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"Owgh hwi sur hwi a vynn dilea an galow rag {user_id}? Ny yll i omjunya an "
+"geskowsva arta bys dhe nebonan a dhaselwel dhedha."
+
+#: src/components/dialogs/message_dialogs.rs:168
+#: src/components/user_page.rs:390
+msgid "Revoke Invite"
+msgstr "Dilea Galow"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:175
+#, rust-format
+msgid "Deny Access to {user}?"
+msgstr "Denagha Hedhas dhe {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:181
+#, rust-format
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "Owgh hwi sur hwi a vynn denagha hedhas dhe {user_id}?"
+
+#: src/components/dialogs/message_dialogs.rs:184
+msgid "Deny Access"
+msgstr "Denagha Hedhas"
+
+#: src/components/dialogs/message_dialogs.rs:191
+#, rust-format
+msgid "Kick {user}?"
+msgstr "Potya {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:196
+#, rust-format
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"Owgh hwi sur hwi a vynn potya {user_id}? I a yll omjunya an geskowsva arta "
+"yn i honan wosa henna."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:203
+#, rust-format
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"Owgh hwi sur hwi a vynn potya {user_id}? Ny yll i omjunya an geskowsva arta "
+"bys dhe nebonan a dhaselwel dhedha."
+
+#. Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:207
+#: src/components/user_page.rs:393
+#: src/session_view/room_details/permissions/permissions_subpage.blp:222
+msgid "Kick"
+msgstr "Potya"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:218
+#, rust-format
+msgid "Remove Messages Sent by {user}?"
+msgstr "Dilea Messajys Danvenys gans {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:224
+#, rust-format
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"Hemm a dhile oll an vessajys degemerys dhyworth an servell dre. Owgh hwi sur "
+"hwi a vynn dilea 1 messach danvenys gans {user_id}? Ny yllowgh hwi digelmi "
+"hemma."
+msgstr[1] ""
+"Hemm a dhile oll an vessajys degemerys dhyworth an servell dre. Owgh hwi sur "
+"hwi a vynn dilea {n} messajys danvenys gans {user_id}? Ny yllowgh hwi "
+"digelmi hemma."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:238
+#, rust-format
+msgid "No Messages Sent by {user}"
+msgstr "Messajys Vyth Danvenys gans {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:244
+#, rust-format
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+msgstr ""
+"Nyns eus messajys degemerys dhyworth an servell dre danvenys gans {user_id}. "
+"Hwi a yll assaya dhe garga moy gans ow mos pella y'n istori an geskowsva."
+
+#: src/components/dialogs/message_dialogs.rs:272
+#: src/session_view/room_history/event_actions/group.rs:630
+msgid "Reason (optional)"
+msgstr "Acheson (dre dhewis)"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:296
+#, rust-format
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "Dilea an messach diwettha danvenys gans an devnydhyer"
+msgstr[1] "Dilea an {n} messajys dhiwettha danvenys gans an devnydhyer"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:380
+#, rust-format
+msgid "Mute {user}?"
+msgstr "Tawhe {user}?"
+
+#: src/components/dialogs/message_dialogs.rs:384
+msgid "Mute Members?"
+msgstr "Tawhe Eseli?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:393
+#, rust-format
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages to this room."
+msgstr ""
+"Owgh hwi sur hwi a vynn tawhe {user_id}? Ny yll i danvon messajys nowydh "
+"dhe'n geskowsva ma."
+
+#: src/components/dialogs/message_dialogs.rs:398
+msgid ""
+"Are you sure you want to mute these members? They will not be able to send "
+"new messages to this room."
+msgstr ""
+"Owgh hwi sur hwi a vynn tawhe an eseli ma? Ny yll i danvon messajys nowydh "
+"dhe'n geskowsva ma."
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:411
+msgid "Mute"
+msgstr "Tawhe"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:440
+#, rust-format
+msgid "Promote {user}?"
+msgstr "Avonsya {user}?"
+
+#: src/components/dialogs/message_dialogs.rs:444
+msgid "Promote Members?"
+msgstr "Avonsya Eseli?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:453
+#, rust-format
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgstr ""
+"Mars avonsyowgh {user_id} dhe'n nivel keth a'gas re, ny yllowgh hwi "
+"diavonsya dhedha yn termyn a dheu."
+
+#: src/components/dialogs/message_dialogs.rs:458
+msgid ""
+"If you promote these members to the same level as yours, you will not be "
+"able to demote them in the future."
+msgstr ""
+"Mars avonsyowgh an eseli ma dhe'n nivel keth a'gas re, ny yllowgh hwi "
+"diavonsya dhedha yn termyn a dheu."
+
+#: src/components/dialogs/message_dialogs.rs:470
+msgid "Promote"
+msgstr "Avonsya"
+
+#. / Show a dialog to confirm the demotion of our own user.
+#: src/components/dialogs/message_dialogs.rs:479
+msgid "Demote Yourself?"
+msgstr "Diavonsya Agas Honan?"
+
+#: src/components/dialogs/message_dialogs.rs:481
+msgid ""
+"Are you sure you want to lower your power level? You will need to ask "
+"another member with a higher power level to undo this."
+msgstr ""
+"Owgh hwi sur hwi a vynn iselhe agas nivel nerth? Res yw dhywgh pesi esel "
+"aral gans nivel nerth ughella mar mynnowgh digelmi hemma."
+
+#: src/components/dialogs/message_dialogs.rs:492
+msgid "Demote"
+msgstr "Diavonsya"
+
+#: src/components/dialogs/message_dialogs.rs:503
+msgid "Save Changes?"
+msgstr "Sawya Chanjyow?"
+
+#: src/components/dialogs/message_dialogs.rs:505
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr "An folen ma a syns chanjyow ansawys. Chanjyow ansawys a vydh kellys."
+
+#: src/components/dialogs/message_dialogs.rs:514
+msgid "Discard"
+msgstr "Dilea"
+
+#: src/components/dialogs/message_dialogs.rs:515
+#: src/session_view/room_details/edit_details_subpage.blp:98
+#: src/session_view/room_details/history_viewer/file_row.rs:144
+#: src/utils/matrix/media_message.rs:233
+msgid "Save"
+msgstr "Sawya"
+
+#: src/components/dialogs/room_preview.blp:5
+#: src/components/dialogs/room_preview.blp:39
+msgid "Join a Room"
+msgstr "Omjunya Keskowsva"
+
+#: src/components/dialogs/room_preview.blp:19 src/login/greeter.blp:17
+#: src/login/greeter.blp:20 src/session_view/media_viewer.blp:76
+#: src/session_view/media_viewer.blp:79
+#: src/session_view/room_details/edit_details_subpage.blp:15
+#: src/session_view/room_details/history_visibility_subpage.blp:19
+#: src/session_view/room_details/join_rule_subpage.blp:19
+#: src/session_view/room_details/permissions/permissions_subpage.blp:20
+msgid "Back"
+msgstr "Dehweles"
+
+#: src/components/dialogs/room_preview.blp:70
+msgid "Enter an address or link to look up a room"
+msgstr "Ynworrewgh trigva po gorgevren rag hwithra keskowsva"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/room_preview.blp:90
+#: src/components/dialogs/room_preview.rs:242
+msgid "Look Up"
+msgstr "Hwithra"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/room_preview.rs:239
+#: src/components/dialogs/room_preview.rs:347
+#: src/session_view/explore/public_room_row.rs:182
+#: src/session_view/room_history/message_toolbar/mod.rs:382
+#: src/session_view/room_history/mod.blp:82
+#: src/session_view/room_history/state/creation.blp:20
+msgid "View"
+msgstr "Gweles"
+
+#: src/components/dialogs/room_preview.rs:302
+msgid ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+msgstr ""
+"An manylyon keskowsva ny allons bos ragwelys. Martesen hemm yw drefen an "
+"geskowsva nag yw aswonys gans an servell dre po drefen an manylyon yw "
+"privedh. Hwi a yll assaya dhe omjunya hwath."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/room_preview.rs:325
+#: src/session_view/explore/public_room_row.rs:161
+#, rust-format
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "1 esel"
+msgstr[1] "{n} eseli"
+
+#: src/components/dialogs/room_preview.rs:349
+#: src/session_view/explore/public_room_row.rs:187
+msgid "Request an Invite"
+msgstr "Pesi Galow"
+
+#: src/components/dialogs/room_preview.rs:351
+#: src/session_view/explore/public_room_row.rs:195
+#: src/session_view/room_history/message_toolbar/mod.rs:384
+msgid "Join"
+msgstr "Omjunya"
+
+#: src/components/dialogs/user_profile.blp:5
+msgid "User Profile"
+msgstr "Profil Devnydhyer"
+
+#: src/components/media/audio_player/mod.rs:304
+msgid "Pause"
+msgstr "Powes"
+
+#: src/components/media/audio_player/mod.rs:306
+msgid "Play"
+msgstr "Gwari"
+
+#: src/components/media/audio_player/mod.rs:387
+msgid "Error reading audio file"
+msgstr "Kamm dres ow redya restren son"
+
+#: src/components/media/audio_player/mod.rs:475
+msgid "Could not retrieve audio file"
+msgstr "Ny yllir kerghes restren son"
+
+#: src/components/media/content_viewer.rs:121
+msgid "Image not Viewable"
+msgstr "Skeusen nag yw Gweladow"
+
+#: src/components/media/content_viewer.rs:122
+msgid "Audio Clip not Playable"
+msgstr "Klypp Son nag yw Gwariadow"
+
+#: src/components/media/content_viewer.rs:123
+msgid "Video not Playable"
+msgstr "Gwydhyow nag yw Gwariadow"
+
+#: src/components/media/content_viewer.rs:124
+msgid "File not Viewable"
+msgstr "Restren nag yw Gweladow"
+
+#: src/components/media/location_viewer.rs:146
+#, rust-format
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "Tyller yn lester {latitude} ha ughelder {longitude}"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "Dhywarlinen"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "Junyans rosweyth vyth"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "Junyans kesrosweyth vyth"
+
+#: src/components/pill/at_room.rs:32
+msgid "Notify the whole room"
+msgstr "Gwarnya oll an geskowsva"
+
+#. Translators: As in 'Custom role'.
+#: src/components/power_level_selection/popover.blp:127
+msgctxt "role"
+msgid "Custom"
+msgstr "A-vusur"
+
+#: src/components/power_level_selection/popover.blp:141
+msgid "Confirm Custom Role"
+msgstr "Afydhya Rann A-vusur"
+
+#: src/components/power_level_selection/row.blp:99
+msgid "More Information"
+msgstr "Moy Kedhlow"
+
+#: src/components/power_level_selection/row.blp:118
+msgid ""
+"Creator is an immutable role that can be attributed to several users when "
+"creating a room. Creators always have a higher power level than any other "
+"room members, except other creators, and have the permission to do anything "
+"in the room. The only way to demote a creator is to replace the current room "
+"with another one with a different creator, by upgrading the room for example."
+msgstr ""
+"Gwrier yw rann andawhadow may a yll bos askrifys dhe nebes devnydhyoryon pan "
+"ow kwruthyl keskowsva. Yma nivel nerth ughella dhe wrioryon es neb eseli "
+"erel, saw gwrioryon erel, hag yma dhedha an kummyas dhe wul neppyth y'n "
+"geskowsva. An method unnik rag diavonsya gwrier yw dhe aslea an geskowsva a-"
+"lemmyn gans unn aral gans gwrier dihaval, gans owth ughradha an geskowsva "
+"rag ensampel."
+
+#: src/components/user_page.blp:107
+msgid "Role"
+msgstr "Rann"
+
+#. Translators: value used to assign room member roles.
+#: src/components/user_page.blp:122
+msgid "Power Level"
+msgstr "Nivel Nerth"
+
+#. Translators: In this string, 'Invite' is a verb.
+#. Translators: This is a verb.
+#: src/components/user_page.blp:128 src/session_view/invite.blp:14
+#: src/session_view/invite.blp:39
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:145
+#: src/session_view/room_details/permissions/permissions_subpage.blp:210
+msgid "Invite"
+msgstr "Gelwel"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.blp:152
+msgid "Unban"
+msgstr "Diemskemuna"
+
+#: src/components/user_page.blp:157
+msgid "Remove Messages"
+msgstr "Dilea Messajys"
+
+#: src/components/user_page.blp:172
+msgid "Security"
+msgstr "Sawder"
+
+#: src/components/user_page.blp:199
+#: src/identity_verification_view/accept_request_page.blp:66
+#: src/session_view/room_history/verification_info_bar.rs:172
+#: src/session_view/sidebar/mod.rs:355
+msgid "Verify"
+msgstr "Gwirhe"
+
+#: src/components/user_page.rs:283
+msgid "Open Direct Chat"
+msgstr "Ygeri Keskows Didro"
+
+#: src/components/user_page.rs:285
+msgid "Create Direct Chat"
+msgstr "Gwruthyl Keskows Didro"
+
+#: src/components/user_page.rs:305
+#: src/session_view/create_direct_chat_dialog/mod.rs:202
+msgid "Could not create a new Direct Chat"
+msgstr "Ny yllir gwruthyl Keskows Didro nowydh"
+
+#: src/components/user_page.rs:336
+#, rust-format
+msgid "In {room_name}"
+msgstr "Yn {room_name}"
+
+#. Translators: As in, 'The room member was invited'.
+#. Translators: This is singular, as in 'Invited Room Member'.
+#: src/components/user_page.rs:347
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:121
+msgctxt "member"
+msgid "Invited"
+msgstr "Gelwys"
+
+#. Translators: As in, 'The room member was banned'.
+#. Translators: This is singular, as in 'Banned Room Member'.
+#: src/components/user_page.rs:351
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:130
+msgctxt "member"
+msgid "Banned"
+msgstr "Emskemunys"
+
+#. Translators: As in, 'The room member requested an invite'.
+#: src/components/user_page.rs:355
+msgctxt "member"
+msgid "Requested an Invite"
+msgstr "Pesys Galow"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:359
+msgctxt "member"
+msgid "Unknown"
+msgstr "Ankoth"
+
+#: src/components/user_page.rs:391
+msgid "Deny Request"
+msgstr "Nagha Govyn"
+
+#: src/components/user_page.rs:499
+msgid "Could not change the role"
+msgstr "Ny yllir chanjya an rann"
+
+#: src/components/user_page.rs:520
+msgid "Could not invite user"
+msgstr "Ny yllir gelwel devnydhyer"
+
+#: src/components/user_page.rs:554
+#: src/session_view/room_history/event_actions/group.rs:722
+msgid "Could not revoke invite of user"
+msgstr "Ny yllir dilea galow a dhevnydhyer"
+
+#: src/components/user_page.rs:555
+msgid "Could not deny access to user"
+msgstr "Ny yllir nagha hedhas dhe dhevnydhyer"
+
+#: src/components/user_page.rs:556
+msgid "Could not kick user"
+msgstr "Ny yllir potya devnydhyer"
+
+#: src/components/user_page.rs:602
+msgid "Could not ban user"
+msgstr "Ny yllir emskemuna devnydhyer"
+
+#: src/components/user_page.rs:633
+msgid "Could not unban user"
+msgstr "Ny yllir diemskemuna devnydhyer"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:681
+#, rust-format
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "Ny yllir dilea 1 messach danvenys gans an devnydhyer"
+msgstr[1] "Ny yllir dilea {n} messach danvenys gans an devnydhyer"
+
+#: src/components/user_page.rs:697
+msgid "Identity verified"
+msgstr "Honanieth yw gwirhes"
+
+#: src/components/user_page.rs:704
+msgid "Identity not verified"
+msgstr "Honanieth nag yw gwirhes"
+
+#: src/components/user_page.rs:719
+msgid "Could not start user verification"
+msgstr "Ny yllir dalleth gwirheans devnydhyer"
+
+#: src/components/user_page.rs:744
+msgid "Ignored"
+msgstr "Skonys a Aswon"
+
+#: src/components/user_page.rs:749
+msgid "Not Ignored"
+msgstr "Nyns yw Skonys a Aswon"
+
+#: src/components/user_page.rs:750
+msgid "Ignore"
+msgstr "Skonya Aswon"
+
+#: src/components/user_page.rs:770 src/session_view/invite.rs:290
+#: src/session_view/sidebar/row.rs:770
+msgid "Could not ignore user"
+msgstr "Ny yllir skonya aswon a dhevnydhyer"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "QR-Kod"
+
+#: src/error_page.blp:19 src/error_page.blp:23 src/error_page.blp:31
+#: src/error_page.blp:35 src/login/greeter.blp:28 src/login/greeter.blp:32
+#: src/login/greeter.blp:40 src/login/greeter.blp:44 src/window.blp:29
+#: src/window.blp:33
+msgid "About Fractal"
+msgstr "A-dro dhe Fraktal"
+
+#: src/error_page.blp:45
+msgid "Secret Portal Error"
+msgstr "Kamm Portal Kevrinyow"
+
+#: src/error_page.blp:59
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session "
+"information and an error occurred while we were trying to restore your "
+"sessions."
+msgstr ""
+"Fraktal a fydh war Bortal Kevrin rag dyghtya agas kedhlow esedhek privedh "
+"hag yth esa kamm dres ni a assaysyn dhe dhaskavos agas esedhegow."
+
+#: src/error_page.blp:75
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr ""
+"Ottomma nebes taklow rag gweres dhywgh owth ewnhe kudynnow gans an Portal "
+"Kevrinyow:"
+
+#: src/error_page.blp:94
+msgid ""
+"Make sure you have a Secret Portal Backend Provider installed, like gnome-"
+"keyring."
+msgstr ""
+"Surhewgh yma dhywgh Provier Portal Kevrin leys, kepar ha gnome-keyring."
+
+#: src/error_page.blp:119
+msgid ""
+"If you prefer to use a Secret Service Provider instead, you need to allow "
+"Fractal to interact with it, like this:"
+msgstr ""
+"Mar preferyowgh dhe dhevnydhya Provier Gonis Kevrinek yn le, res yw dhywgh "
+"gasa Fraktal dhe geskomunya dhodho, avel hemma:"
+
+#: src/error_page.blp:152
+msgid "Copy Command"
+msgstr "Kopia Arghadow"
+
+#: src/error_page.blp:178
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "Checkyewgh yma dhywgh alhwedh-kylgh defowt hag hemm yw dialhwedhys."
+
+#: src/error_page.blp:191
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr ""
+"Checkyewgh an kovskrif app ha'n gowethlyvrow a'gas lesrannans rag moy "
+"manylyon."
+
+#: src/error_page.blp:206
+msgid "Could Not Initialize Session"
+msgstr "Ny yllir dalleth esedhek"
+
+#: src/error_page.rs:102
+msgid "Command copied to clipboard"
+msgstr "Arghadow kopys war astel glypp"
+
+#: src/identity_verification_view/accept_request_page.rs:130
+#: src/session/notifications/mod.rs:396
+msgid "Login Request From Another Session"
+msgstr "Govyn Omgelmyans dhyworth Esedhek Aral"
+
+#: src/identity_verification_view/accept_request_page.rs:132
+msgid "Verify the new session from the current session."
+msgstr "Gwirhe an esedhek nowydh dhyworth an esedhek a-lemmyn."
+
+#: src/identity_verification_view/accept_request_page.rs:135
+#: src/identity_verification_view/choose_method_page.rs:184
+#: src/identity_verification_view/sas_page.rs:160
+#: src/identity_verification_view/scan_qr_code_page.rs:159
+#: src/session/notifications/mod.rs:334
+msgid "Verification Request"
+msgstr "Govyn Gwirheans"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:139
+#, rust-format
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} re besi dhe vos gwirhes. Ow kwirhe devnydhyer a gress an sawder a'n "
+"keskows."
+
+#: src/identity_verification_view/accept_request_page.rs:162
+msgid "Could not decline verification request"
+msgstr "Ny yllir denagha govyn gwirheans"
+
+#: src/identity_verification_view/accept_request_page.rs:178
+msgid "Could not accept verification request"
+msgstr "Ny yllir degemeres govyn gwirheans"
+
+#: src/identity_verification_view/cancelled_page.blp:60
+msgid "Send New Request"
+msgstr "Danvon Govyn Nowydh"
+
+#: src/identity_verification_view/cancelled_page.rs:140
+msgid "The verification was cancelled from the other session."
+msgstr "An gwirheans o hedhys dhyworth an esedhek aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:146
+#, rust-format
+msgid "The verification was cancelled by {user}."
+msgstr "An gwirheans o hedhys gans {user}."
+
+#: src/identity_verification_view/cancelled_page.rs:152
+msgid "The verification process failed because it reached a timeout."
+msgstr "An argerdh gwirheans a fyllis drefen yth esa termyn yn-mes."
+
+#: src/identity_verification_view/cancelled_page.rs:154
+msgid "You accepted the request from another session."
+msgstr "Hwi a dhegemeras an govyn dhyworth esedhek aral."
+
+#: src/identity_verification_view/cancelled_page.rs:157
+msgid "The emoji did not match."
+msgstr "An emoji nag omdhesedhas."
+
+#: src/identity_verification_view/cancelled_page.rs:159
+msgid "The numbers did not match."
+msgstr "An niverow nag omdhesedhas."
+
+#: src/identity_verification_view/cancelled_page.rs:162
+msgid "An unexpected error happened during the verification process."
+msgstr "Yth esa kamm anwaytys dres an argerdh gwirheans."
+
+#: src/identity_verification_view/cancelled_page.rs:167
+#: src/identity_verification_view/mod.blp:88
+#: src/identity_verification_view/mod.blp:97
+#: src/identity_verification_view/room_left_page.blp:22
+msgid "Verification Cancelled"
+msgstr "Gwirheans Hedhys"
+
+#: src/identity_verification_view/cancelled_page.rs:169
+msgid "Verification Error"
+msgstr "Kamm Gwirheans"
+
+#: src/identity_verification_view/choose_method_page.blp:55
+#: src/identity_verification_view/scan_qr_code_page.blp:51
+msgid "Can’t scan QR code?"
+msgstr "Ny yllowgh arhwilas QR-kod?"
+
+#: src/identity_verification_view/choose_method_page.blp:63
+msgid "Scan QR code with this session"
+msgstr "Arhwilas QR-kod gans an esedhek ma"
+
+#: src/identity_verification_view/choose_method_page.blp:72
+#: src/identity_verification_view/scan_qr_code_page.blp:73
+msgid "Compare Emoji"
+msgstr "Heveli Emoji"
+
+#: src/identity_verification_view/choose_method_page.blp:83
+#: src/identity_verification_view/no_supported_methods_page.rs:168
+#: src/identity_verification_view/qr_code_scanned_page.blp:51
+#: src/identity_verification_view/scan_qr_code_page.blp:84
+msgid "Cancel Verification"
+msgstr "Hedhi Gwirheans"
+
+#: src/identity_verification_view/choose_method_page.rs:176
+#: src/identity_verification_view/sas_page.rs:148
+#: src/identity_verification_view/scan_qr_code_page.rs:154
+msgid "Verify Session"
+msgstr "Gwirhe Esedhek"
+
+#: src/identity_verification_view/choose_method_page.rs:180
+msgid "Scan this QR code from the other session."
+msgstr "Arhwilas an QR-kod ma dhyworth an esedhek aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:190
+#, rust-format
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "Pesi {user} dhe arhwilas an QR-kod dhyworth aga esedhek."
+
+#: src/identity_verification_view/choose_method_page.rs:199
+msgid "Select a verification method to proceed."
+msgstr "Dewis method gwirheans rag mos yn-rag."
+
+#: src/identity_verification_view/choose_method_page.rs:202
+msgid "Click on the verification method to proceed."
+msgstr "Klyckyewgh war'n method gwirheans rag mos yn-rag."
+
+#: src/identity_verification_view/choose_method_page.rs:234
+msgid "Could not access camera"
+msgstr "Ny yllir drehedhes kamera"
+
+#: src/identity_verification_view/choose_method_page.rs:251
+#: src/identity_verification_view/scan_qr_code_page.rs:222
+msgid "Could not start emoji verification"
+msgstr "Ny yllir dalleth gwirheans emoji"
+
+#: src/identity_verification_view/choose_method_page.rs:267
+#: src/identity_verification_view/confirm_qr_code_page.rs:177
+#: src/identity_verification_view/qr_code_scanned_page.rs:145
+#: src/identity_verification_view/scan_qr_code_page.rs:234
+#: src/identity_verification_view/wait_for_other_page.rs:164
+msgid "Could not cancel the verification"
+msgstr "Ny yllir hedhi an gwirheans"
+
+#: src/identity_verification_view/completed_page.rs:122
+msgid "Request Complete"
+msgstr "Govyn Deu"
+
+#: src/identity_verification_view/completed_page.rs:124
+msgid "The new session is now ready to send and receive secure messages."
+msgstr ""
+"An esedhek nowydh yw parys dhe dhanvon ha degemeres messajys saw lemmyn."
+
+#: src/identity_verification_view/completed_page.rs:128
+msgid "Verification Complete"
+msgstr "Gwirheans Deu"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:131
+#, rust-format
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr ""
+"{user} yw gwirhes ha lemmyn hwi a yll bos sur a'n privetter a'gas "
+"keskomunyans."
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:19
+msgid "Confirm Scan"
+msgstr "Afydhya Arhwilyans"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:72
+msgid "Confirm"
+msgstr "Afydhya"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:129
+msgid "Does the other session show a confirmation?"
+msgstr "Yw an esedhek aral ow tiskwedhes afydhyans?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:135
+#, rust-format
+msgid "Does {user} see a confirmation on their session?"
+msgstr "Gweles {user} afydhyans war aga esedhek?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:161
+msgid "Could not confirm the scan of the QR Code"
+msgstr "Ny yllir afydhya an arhwilyans a'n QR-Kod"
+
+#: src/identity_verification_view/mod.blp:16
+msgid "New Identity Verification Request"
+msgstr "Govyn Gwirheans Honanieth Nowydh"
+
+#: src/identity_verification_view/mod.blp:25
+msgid "Wait for Other Party"
+msgstr "Gortos rag Parti Aral"
+
+#: src/identity_verification_view/mod.blp:34
+#: src/identity_verification_view/no_supported_methods_page.blp:22
+msgid "No Supported Verification Methods"
+msgstr "Methodys Wirheans Skoodhys Vyth"
+
+#: src/identity_verification_view/mod.blp:43
+msgid "Verification Request Methods"
+msgstr "Methodys Wovyn Gwirheans"
+
+#: src/identity_verification_view/mod.blp:52
+#: src/identity_verification_view/qr_code_scanned_page.blp:19
+msgid "Scan Complete"
+msgstr "Arhwilyans Deu"
+
+#: src/identity_verification_view/mod.blp:61
+msgid "Confirm Scan Result"
+msgstr "Afydhya Sewyans Arhwilyans"
+
+#: src/identity_verification_view/mod.blp:70
+msgid "Short Authentication String Verification"
+msgstr "Gwirheans Tekst Berr"
+
+#: src/identity_verification_view/mod.blp:79
+msgid "Verification Successful"
+msgstr "Gwirheans Sewen"
+
+#: src/identity_verification_view/mod.rs:200
+msgid "Scan QR Code"
+msgstr "Arhwilas QR-Kod"
+
+#: src/identity_verification_view/no_supported_methods_page.blp:48
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"Hwi a yll degemeres an gwirheans ma dhyworth esedhek aral po denagha rag oll "
+"a'gas esedhegow"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:139
+msgid ""
+"None of the methods offered by the other client are supported by Fractal."
+msgstr "Vyth a'n vethodys offrys gans an kliens aral yw skoodhys gans Fraktal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:142
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"Yth esa govyn omgelmyans degemerys, mes vyth a'n vethodys offrys gans an "
+"kliens aral yw skoodhys gans Fraktal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:151
+#, rust-format
+msgid ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+msgstr ""
+"Vyth a'n vethodys offrys gans an kliens a {user} yw skoodhys gans Fraktal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:158
+#, rust-format
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} re dhanvonsa govyn gwirheans, mes vyth a'n vethodys offrys gans an "
+"kliens aral yw skoodhys gans Fraktal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:170
+msgid "Decline Verification"
+msgstr "Denagha Gwirheans"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:192
+msgid "Could not decline the verification"
+msgstr "Ny yllir denagha an gwirheans"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:119
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+msgstr ""
+"Hwi re arhwilsewgh an QR-Kod yn sewen. Martesen res yw dhywgh afydhya an "
+"gwirheans dhyworth an esedhek aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:124
+#, rust-format
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"Hwi re arhwilsewgh an QR-Kod yn sewen. Martesen res yw dhe {user} afydhya an "
+"gwirheans."
+
+#: src/identity_verification_view/room_left_page.blp:38
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "Yth owgh hwi na fella y'n geskowsva le may yth esa an gwirheans."
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis do not match.
+#: src/identity_verification_view/sas_page.blp:65
+msgid "Do Not Match"
+msgstr "Omdhesedhans Vyth"
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis match.
+#: src/identity_verification_view/sas_page.blp:78
+msgid "Match"
+msgstr "Omdhesedhans"
+
+#: src/identity_verification_view/sas_page.rs:151
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr ""
+"Checkyewgh mars an emojys geth a omdhiskwedh y'n aray keth war'n klient aral."
+
+#: src/identity_verification_view/sas_page.rs:155
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr ""
+"Checkyewgh mars an niverow geth a omdhiskwedh y'n aray keth war'n klient "
+"aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:165
+#, rust-format
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"Pesewgh dhe {user} mar kwel i an emojys a sewn a omdhiskwedh y'n aray keth "
+"war aga skrin."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:172
+#, rust-format
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+msgstr ""
+"Pesewgh dhe {user} mar kwel i an niverow a sew a omdhiskwedh y'n aray keth "
+"war aga skrin."
+
+#: src/identity_verification_view/sas_page.rs:253
+msgid "Could not send that the data does not match"
+msgstr "Ny yllir danvon an sewyans: omdhesedhans vyth"
+
+#: src/identity_verification_view/sas_page.rs:270
+msgid "Could not send confirmation that the data matches"
+msgstr "Ny yllir danvon an sewyans: yma omdhesedhans"
+
+#: src/identity_verification_view/scan_qr_code_page.blp:64
+msgid "Show a QR code to scan with another device"
+msgstr "Diskwedhes QR-Kod rag arwilas gans devis aral"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:156
+msgid "Scan the QR code displayed by the other session."
+msgstr "Arhwilewgh an QR-Kod diskwedhys gans an esedhek aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:163
+#, rust-format
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "Arwilewgh an QR-Kod diskwedhys war'n devis a {user}."
+
+#: src/identity_verification_view/scan_qr_code_page.rs:201
+msgid "Could not validate scanned QR Code"
+msgstr "Ny yllir gwirhe QR-Kod arhwilys"
+
+#: src/identity_verification_view/wait_for_other_page.blp:45
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+msgstr ""
+"Rag bos saw, res yw dhe'n gwirheans bos yn person po devnydhyewgh method "
+"afydhys a geskomunyans."
+
+#: src/identity_verification_view/wait_for_other_page.blp:61
+msgid "The request is not showing up on the other device?"
+msgstr "An govyn nag yw ow tiskwedhes war'n devis aral?"
+
+#: src/identity_verification_view/wait_for_other_page.blp:73
+msgid "Cancel Verification Request"
+msgstr "Hedhi Govyn Gwirheans"
+
+#: src/identity_verification_view/wait_for_other_page.rs:124
+msgid "Get Another Device"
+msgstr "Kavos Devis Aral"
+
+#: src/identity_verification_view/wait_for_other_page.rs:126
+msgid "Accept the verification request from another session or device."
+msgstr "Degemerewgh an govyn gwirheans dhyworth esedhek po devis aral."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:134
+#, rust-format
+msgid "Waiting for {user}"
+msgstr "Ow kortos rag {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:140
+#, rust-format
+msgid "Ask {user} to accept the verification request."
+msgstr "Pesewgh {user} dhe dhegemeres an govyn gwirheans."
+
+#: src/login/advanced_dialog.blp:5
+msgid "Homeserver Discovery"
+msgstr "Diskudhans Servell Dre"
+
+#: src/login/advanced_dialog.blp:12
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+msgstr ""
+"Awto-diskudhans, aswonys ynwedh avel “well-known lookup”, a allosegi dhywgh "
+"dhe drovya an worgevren a servell dre Matrix dhyworth hanow arlotteth. Res "
+"yw dhywgh marowhe dhe hemma hepken mars agas servell dre nag a skoodh awto-"
+"diskudhans po mar mynnogh provia an worgevren yn agas honan."
+
+#: src/login/advanced_dialog.blp:16
+msgid "_Auto-Discovery"
+msgstr "_Awto-Diskudhans"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.blp:7 src/login/greeter.blp:84
+msgid "Welcome to Fractal"
+msgstr "Dynnargh dhe Fraktal"
+
+#: src/login/greeter.blp:104
+msgid "_Log In"
+msgstr "_Omgelmi"
+
+#: src/login/greeter.blp:118
+msgid "_Create Account"
+msgstr "_Gwruthyl Akont"
+
+#: src/login/homeserver_page.blp:103 src/login/method_page.blp:129
+msgid "Next"
+msgstr "Nessa"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.blp:118
+msgid "Advanced…"
+msgstr "Avonsys…"
+
+#: src/login/homeserver_page.rs:102
+msgid "Domain Name"
+msgstr "Hanow Arlotteth"
+
+#: src/login/homeserver_page.rs:104
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "An arlotteh a'gas servell dre Matrix, rag ensampel gnome.org"
+
+#: src/login/homeserver_page.rs:107 src/login/method_page.blp:69
+msgid "Homeserver URL"
+msgstr "Gorgevren Servell Dre"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:111
+#, rust-format
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "An worgevren a'gas servell dre Matrix, rag ensampel {address}"
+
+#: src/login/homeserver_page.rs:254 src/login/mod.rs:324 src/login/mod.rs:348
+#: src/login/mod.rs:397
+msgid "Could not set up login"
+msgstr "Ny yllir selya omgelmyans"
+
+#: src/login/in_browser_page.blp:55
+msgid "Click on the button below and follow the steps in the browser"
+msgstr "Klyckyewgh war'n boton a-woles ha holyewgh an danvonadow y'n beurell"
+
+#: src/login/in_browser_page.rs:103
+msgid "Could not open URL"
+msgstr "Ny yllir ygeri gorgevren"
+
+#: src/login/local_server.rs:35
+msgid "Authorization Completed"
+msgstr "Reythheans Deu"
+
+#: src/login/local_server.rs:40
+msgid ""
+"The authorization step is complete. You can close this page and go back to "
+"Fractal."
+msgstr ""
+"An reythheans yw deu. Hwi a yll degea an folen ma ha dehweles dhe Fraktal."
+
+#: src/login/method_page.blp:6 src/window.blp:73
+msgid "Log In"
+msgstr "Omgelmi"
+
+#: src/login/method_page.blp:94
+msgid "Matrix Username"
+msgstr "Hanow Devnydhyer Matrix"
+
+#: src/login/method_page.blp:109
+msgid "Password"
+msgstr "Ger-tremena"
+
+#: src/login/method_page.blp:122
+msgid "Login via SSO"
+msgstr "Omgelmi dre SSO"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:90
+#, rust-format
+msgid "Log in to {domain_name}"
+msgstr "Omgelmi dhe {domain_name}"
+
+#: src/login/method_page.rs:97
+msgid "Log in"
+msgstr "Omgelmi"
+
+#: src/login/mod.blp:22 src/login/mod.blp:54
+msgid "Login Complete"
+msgstr "Omgelmyans Deu"
+
+#: src/login/mod.blp:75
+msgid "This session is ready to send and receive secure messages"
+msgstr "An esedhek ma yw parys dhe dhanvon ha degemeres messajys saw"
+
+#: src/login/mod.blp:84
+msgid "Start Chatting"
+msgstr "Dalleth ow Keskewsel"
+
+#: src/login/mod.rs:467
+msgid "Could not store session"
+msgstr "Ny yllri gwitha esedhek"
+
+#: src/login/session_setup_view.blp:6
+msgid "Session Setup"
+msgstr "Selyans Esedhek"
+
+#: src/login/session_setup_view.blp:47 src/window.blp:59
+msgid "Fetching Account Data…"
+msgstr "Ow Kerghes Data Akont…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:175
+#, rust-format
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Fraktal: manylyon Matrix rag {user_id}"
+
+#: src/secret/linux.rs:529
+msgid "The secret storage file is corrupted."
+msgstr "An restren withva kevrinoyw yw legrys"
+
+#: src/secret/linux.rs:532
+msgid "Could not access the secret storage file location."
+msgstr "Ny yllir drehedhes an tyller restren gwithva kevrinyow."
+
+#: src/secret/linux.rs:535
+msgid "An unexpected error occurred when accessing the secret storage file."
+msgstr "Yth esa kamm anwaytys dres ow trehedhes an restren withva kevrinyow."
+
+#: src/secret/linux.rs:538
+msgid "The secret storage file has been changed by another process."
+msgstr "An restren withva kevrinyow re veu chanjys gans argerdh aral."
+
+#: src/secret/linux.rs:541
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"An govyn dhe'n Portal Kevrinyow Flatpak o hedhys. Surhewgh dhe dhegemeres "
+"neb govyn ow pesi dhe dhrehedhes."
+
+#: src/secret/linux.rs:544
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"An Portal Kevrinyow Flatpak nag yw kavadow. Surhewgh xdg-desktop-portal yw "
+"leys, orth dyllans 1.5.0 dhe'n lyha."
+
+#: src/secret/linux.rs:547
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr ""
+"Yth esa kamm anwaytys dres ow keskomunya gans an oberer Portal Kevrinyow D-"
+"Bus."
+
+#: src/secret/linux.rs:550
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr "An Portal Kevrinyow Flatpak a brovyas alhwedh re wan dhe vos saw."
+
+#: src/secret/linux.rs:552 src/secret/linux.rs:569
+msgid "The collection or item is locked."
+msgstr "An kuntel po tra yw alhwedhys."
+
+#: src/secret/linux.rs:564
+msgid "The item was deleted."
+msgstr "An dra o dileys."
+
+#: src/secret/linux.rs:567 src/secret/linux.rs:582
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Service."
+msgstr ""
+"Yth esa kamm anwaytys dres ow keskomunya gans an Gonis Kevrinyow D-Bus."
+
+#: src/secret/linux.rs:571
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "Nyns eus an esedhek Gonis Kevrinyow D-Bus."
+
+#: src/secret/linux.rs:573
+msgid "The collection or item does not exist."
+msgstr "Nyns eus an kuntel po tra."
+
+#: src/secret/linux.rs:576
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"An govyn dhe'n Gonis Kevrinyow D-Bus o hedhys. Surhewgh dhe dhegemeres neb "
+"govyn ow pesi dhe dhrehedhes."
+
+#: src/secret/linux.rs:579
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"Ny yllir drehedhes an kuntel defowt. Surhewgh yth esa alhwedh-klygh gwrys ha "
+"settyewgh avel defowt."
+
+#: src/session/mod.rs:837
+msgid "Could not log the session out"
+msgstr "Ny yllir omdhigelmi an esedhek"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:338
+#, rust-format
+msgid "{user} sent a verification request"
+msgstr "{user} a dhanvenas govyn gwirheans"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:400
+#, rust-format
+msgid "Verify your new session “{name}”"
+msgstr "Gwirhe agas esedhek nowydh “{name}”"
+
+#: src/session/notifications/mod.rs:492
+#, rust-format
+msgid "{user} sent an audio file."
+msgstr "{user} a dhanvenas restren son."
+
+#: src/session/notifications/mod.rs:495
+#, rust-format
+msgid "{user} sent a file."
+msgstr "{user} a dhanvenas restren."
+
+#: src/session/notifications/mod.rs:497
+#, rust-format
+msgid "{user} sent an image."
+msgstr "{user} a dhanvenas skeusen."
+
+#: src/session/notifications/mod.rs:500
+#, rust-format
+msgid "{user} sent their location."
+msgstr "{user} a dhanvenas aga thyller."
+
+#: src/session/notifications/mod.rs:512
+#, rust-format
+msgid "{user} sent a video."
+msgstr "{user} a dhanvenas gwydhyow."
+
+#: src/session/notifications/mod.rs:519
+#, rust-format
+msgid "{user} sent a sticker."
+msgstr "{user} a dhanvenas glenysen."
+
+#: src/session/notifications/mod.rs:529
+#, rust-format
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:579
+#, rust-format
+msgid "{user} invited you"
+msgstr "{user} a elwas dhywgh"
+
+#: src/session/notifications/mod.rs:607
+msgid "Incoming video call. Use another client to answer."
+msgstr "Yma galow gwydhyow ow tos. Devnydhyewgh kliens aral rag gorthebi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:613
+#: src/session_view/room_history/call_row.rs:127
+#, rust-format
+msgid "Incoming video call from {user}. Use another client to answer."
+msgstr ""
+"Yma galow gwydhyow ow tos dhyworth {user}. Devnydhyewgh kliens aral rag "
+"gorthebi."
+
+#: src/session/notifications/mod.rs:617
+msgid "Incoming call. Use another client to answer."
+msgstr "Yma galow ow tos. Devnydhyewgh kliens aral rag gorthebi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:621
+#: src/session_view/room_history/call_row.rs:141
+#, rust-format
+msgid "Incoming call from {user}. Use another client to answer."
+msgstr ""
+"Yma galow ow tos dhyworth {user}. Devnydhyewgh kliens aral rag gorthebi."
+
+#: src/session/room/join_rule.rs:259
+msgid "Only invited users, and users can request an invite"
+msgstr "Devnydhyoroyn elwys ha devnydhyoryon hepken a yll pesi galow"
+
+#: src/session/room/join_rule.rs:261
+msgid "Only invited users"
+msgstr "Devnydhyoryon elwys hepken"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:275
+#, rust-format
+msgid "Members of {room}, and users can request an invite"
+msgstr "Eseli a {room}, ha devnydhyoryon a yll govyn galow."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:282
+#, rust-format
+msgid "Members of {room}"
+msgstr "Eseli a {room}"
+
+#: src/session/room/join_rule.rs:287
+msgid "Any registered user"
+msgstr "Neb devnydhyer kovskrifys"
+
+#: src/session/room/join_rule.rs:288
+#: src/session_view/room_details/general_page.rs:946
+msgid "Unsupported rule"
+msgstr "Rewl anskoodhys"
+
+#. Translators: This is the name of a room that is empty but had another
+#. user before. Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/room/mod.rs:392
+#, rust-format
+msgid "Empty Room (was {user})"
+msgstr "Keskowva Wag (o {user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/room/mod.rs:395
+msgid "Empty Room"
+msgstr "Keskowsva Wag"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/room/mod.rs:405
+msgid "Unknown"
+msgstr "Ankoth"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/room/permissions.rs:64
+msgid "Default"
+msgstr "Defowt"
+
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/session/room/permissions.rs:66
+msgctxt "power level"
+msgid "Custom"
+msgstr "A-vusur"
+
+#: src/session/room/permissions.rs:67
+msgid "Moderator"
+msgstr "Temprer"
+
+#: src/session/room/permissions.rs:68
+msgid "Admin"
+msgstr "Menystrer"
+
+#: src/session/room/permissions.rs:69
+msgid "Creator"
+msgstr "Gwrier"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/room/permissions.rs:71
+msgid "Muted"
+msgstr "Tawhes"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:329
+#, rust-format
+msgid "Could not join room {room_name}"
+msgstr "Ny yllir omjunya keskowsva {room_name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:361
+#, rust-format
+msgid "Could not request an invite to room {room_name}"
+msgstr "Ny yllri pesi galow dhe geskowsva {room_name}"
+
+#: src/session/sidebar_data/icon_item.rs:31
+msgid "Explore"
+msgstr "Trovya"
+
+#: src/session/sidebar_data/icon_item.rs:32
+msgid "Forget Room"
+msgstr "Ankevi Keskowsva"
+
+#: src/session/sidebar_data/section/name.rs:82
+msgid "Verifications"
+msgstr "Gwirheansow"
+
+#: src/session/sidebar_data/section/name.rs:83
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:140
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:385
+msgid "Invite Requests"
+msgstr "Govynnow Alow"
+
+#: src/session/sidebar_data/section/name.rs:84
+#: src/session_view/room_details/invite_subpage/list.rs:262
+msgid "Invited"
+msgstr "Gelwys"
+
+#: src/session/sidebar_data/section/name.rs:85
+msgid "Favorites"
+msgstr "Drudh"
+
+#: src/session/sidebar_data/section/name.rs:86
+msgid "Rooms"
+msgstr "Keskowsvaow"
+
+#: src/session/sidebar_data/section/name.rs:87
+msgid "Low Priority"
+msgstr "Ragwir Isel"
+
+#: src/session/sidebar_data/section/name.rs:88
+msgid "Historical"
+msgstr "Istorek"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:324
+msgid "Last seen at %H:%M"
+msgstr "Gwelys diwettha %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:329
+msgid "Last seen at %I:%M %p"
+msgstr "Gwelys diwettha %I:%M %p"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:339
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "Gwelys diwettha de %H:%M"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:346
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "Gwelys diwettha de %I:%M %p"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:357
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "Gwelys diwettha %A %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:364
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "Gwelys diwettha %A %I:%M %p"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:373
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "Gwelys diwettha %B %-e %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:380
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "Gwelys diwettha %B %-e %I:%M %p"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:388
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "Gwelys diwettha %B %-e %Y %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:395
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "Gwelys diwettha %B %-e %Y, %I:%M %p"
+
+#: src/session_list/mod.rs:164 src/session_list/mod.rs:199
+msgid "Could not restore previous sessions"
+msgstr "Ny yllir daskavos esedhegow gyns"
+
+#: src/session_list/mod.rs:200
+msgid "An unexpected error happened while accessing the data directory"
+msgstr "Yth esa kamm anwaytys dres ow trehedhes an restrenva dhata"
+
+#: src/session_view/content.blp:5
+msgid "Main Content"
+msgstr "Synsas Chif"
+
+#: src/session_view/content.blp:14 src/session_view/content.blp:28
+msgid "No Room Selected"
+msgstr "Keskowsva Dhewisys Vyth"
+
+#: src/session_view/content.blp:29
+msgid "Join a room to start chatting"
+msgstr "Omjunyewgh keskowsva rag dalleth ow keskewsel"
+
+#: src/session_view/content.blp:36 src/session_view/room_history/mod.blp:124
+msgid "Room History"
+msgstr "Istori Keskowsva"
+
+#: src/session_view/content.blp:45 src/session_view/invite_request.blp:13
+#: src/session_view/invite_request.blp:37
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:138
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:383
+msgid "Invite Request"
+msgstr "Govyn Galow"
+
+#: src/session_view/content.blp:52
+msgid "Room Invite"
+msgstr "Galow Keskowsva"
+
+#: src/session_view/content.blp:59
+msgid "Explore Rooms"
+msgstr "Trovya Keskowsvaow"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:5
+msgid "Direct Chat"
+msgstr "Keskows Didro"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:31
+msgid "New Direct Chat"
+msgstr "Keskows Didro Nowydh"
+
+#. Translators: In this string, 'Search' is a verb.
+#. Translators: In this string, this is a verb.
+#: src/session_view/create_direct_chat_dialog/mod.blp:50
+#: src/session_view/room_details/invite_subpage/mod.blp:53
+#: src/session_view/room_details/invite_subpage/mod.blp:59
+msgid "Search"
+msgstr "Hwilas"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:51
+msgid "Search for people to start a new chat with"
+msgstr "Hwilas tus rag dalleth keskows nowydh"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:83
+#: src/session_view/room_details/invite_subpage/mod.blp:98
+#: src/session_view/room_details/invite_subpage/mod.blp:102
+msgid "No Users Found"
+msgstr "Devnydhyoryon Gevys Vyth"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:84
+msgid "No users matching the search pattern were found"
+msgstr "Devnydhyoryon vyth owth omdhesedha an patron hwithrans o kevys"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:94
+#: src/session_view/explore/mod.blp:118
+#: src/session_view/room_details/invite_subpage/mod.blp:114
+msgid "An error occurred while searching for matches"
+msgstr "Yth esa kamm dres ow hwilas omdhesedhansow"
+
+#: src/session_view/create_direct_chat_dialog/mod.rs:160
+msgid "An error occurred while searching for users"
+msgstr "Yth esa kamm dres ow hwilas devnydhyoryon"
+
+#: src/session_view/create_room_dialog.blp:36
+msgid "New Room"
+msgstr "Keskowsva Nowydh"
+
+#: src/session_view/create_room_dialog.blp:58
+msgid "Description (Optional)"
+msgstr "Deskrifans (Dre Dhewis)"
+
+#: src/session_view/create_room_dialog.blp:85
+msgid "Room Visibility"
+msgstr "Gweladewder Keskowsva"
+
+#: src/session_view/create_room_dialog.blp:88
+msgid "Private"
+msgstr "Privedh"
+
+#: src/session_view/create_room_dialog.blp:89
+msgid "Only invited people can join this room"
+msgstr "Tus elwys hepken a yll omjunya an geskowsva ma"
+
+#: src/session_view/create_room_dialog.blp:101
+msgid "Public"
+msgstr "Poblek"
+
+#: src/session_view/create_room_dialog.blp:102
+msgid "Anyone can find and join this room"
+msgstr "Nebonan a yll omjunya an geskowsva ma"
+
+#: src/session_view/create_room_dialog.blp:118
+msgid "End-to-End Encryption"
+msgstr "Argelesans Penn-dhe-Benn"
+
+#: src/session_view/create_room_dialog.blp:119
+msgid "Cannot be disabled later"
+msgstr "Ny yllir bos marowhes wosa henna"
+
+#: src/session_view/create_room_dialog.blp:128
+#: src/session_view/room_details/addresses_subpage/mod.rs:431
+#: src/session_view/room_details/general_page.rs:689
+msgid "Main Address"
+msgstr "Trigva Jif"
+
+#. Translators: This is the placeholder for the first part of a room address,
+#. as in '@my-room:example.org'.
+#: src/session_view/create_room_dialog.blp:131
+#: src/session_view/room_details/addresses_subpage/mod.blp:87
+msgid "my-room"
+msgstr "ow-keskowsva"
+
+#: src/session_view/create_room_dialog.blp:132
+#: src/session_view/room_details/addresses_subpage/mod.blp:88
+msgid "First part of the address, for example “my-room”"
+msgstr "Rann gynsa a'n drigva, rag ensampel “ow-keskowsva”"
+
+#: src/session_view/create_room_dialog.blp:155
+msgid "_Create Room"
+msgstr "_Gwruthyl Keskowsva"
+
+#: src/session_view/create_room_dialog.rs:120
+msgid "Cannot contain “:”"
+msgstr "Ny yllir synsi “:”"
+
+#: src/session_view/create_room_dialog.rs:123
+msgid "Cannot contain “#”"
+msgstr "Ny yllir synsi “#”"
+
+#: src/session_view/create_room_dialog.rs:126
+msgid "Too long. Use a shorter address."
+msgstr "Re hir. Devnydhyewgh trigva gottha."
+
+#: src/session_view/create_room_dialog.rs:241
+msgid "The address is already taken."
+msgstr "An drigva yw kemerys seulabrys."
+
+#: src/session_view/explore/mod.blp:26
+msgid "Public Rooms Search"
+msgstr "Hwithrans Keskowsvaow Poblek"
+
+#: src/session_view/explore/mod.blp:27
+msgid "Search for a room in the public directory of the selected server"
+msgstr "Hwilas keskowsvaow y'n rol boblek a'n servell dhewisys"
+
+#: src/session_view/explore/mod.blp:38
+msgid "Switch servers"
+msgstr "Skwychella servellow"
+
+#: src/session_view/explore/mod.blp:70 src/session_view/sidebar/mod.blp:188
+msgid "No Rooms"
+msgstr "Keskowsvaow Vyth"
+
+#: src/session_view/explore/mod.blp:76 src/session_view/sidebar/mod.blp:189
+msgid "No rooms matching the search were found"
+msgstr "Keskowsvaow vyth owth omdhesedha an hwithrans o kevys"
+
+#: src/session_view/explore/mod.blp:86
+msgid "List of Public Rooms"
+msgstr "Rol a Geskowsvaow Poblek"
+
+#: src/session_view/explore/public_room_row.rs:183
+#, rust-format
+msgid "View {room_name}"
+msgstr "Gweles {room_name}"
+
+#: src/session_view/explore/public_room_row.rs:189
+#, rust-format
+msgid "Request an invite to {room_name}"
+msgstr "Pesi galow dhe {room_name}"
+
+#: src/session_view/explore/public_room_row.rs:196
+#, rust-format
+msgid "Join {room_name}"
+msgstr "Omjunya {room_name}"
+
+#: src/session_view/explore/server_row.blp:18
+msgid "Remove Server"
+msgstr "Remova Servell"
+
+#: src/session_view/explore/servers_popover.blp:27
+msgid "Server List"
+msgstr "Rol Servellow"
+
+#: src/session_view/explore/servers_popover.blp:40
+#: src/session_view/explore/servers_popover.blp:48
+msgid "Add Server"
+msgstr "Keworra Servell"
+
+#: src/session_view/invite.blp:102
+msgid "_Decline"
+msgstr "_Denagha"
+
+#: src/session_view/invite.blp:112 src/session_view/sidebar/mod.blp:38
+msgid "_Accept"
+msgstr "D_egemeres"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/invite.rs:189
+#, rust-format
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) a'gas gelwis"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:239 src/session_view/sidebar/row.rs:724
+#, rust-format
+msgid "Could not accept invitation for {room}"
+msgstr "Ny yllir degemeres galow rag {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:278 src/session_view/sidebar/row.rs:714
+#, rust-format
+msgid "Could not decline invitation for {room}"
+msgstr "Ny yllir denagha galow rag {room}"
+
+#: src/session_view/invite_request.blp:88
+msgid "You requested an invite to this room"
+msgstr "Hwi a govynas galow dhe'n geskowsva ma"
+
+#: src/session_view/invite_request.blp:101 src/session_view/sidebar/mod.blp:50
+msgid "_Retract"
+msgstr "_Omdhenagha"
+
+#: src/session_view/invite_request.rs:168
+msgid "Could not retract invite request"
+msgstr "Ny yllir omdhenagha govyn galow"
+
+#: src/session_view/media_viewer.blp:7 src/session_view/media_viewer.blp:35
+msgid "_Copy Image"
+msgstr "_Kopia Skeusen"
+
+#: src/session_view/media_viewer.blp:13 src/session_view/media_viewer.blp:41
+#: src/session_view/room_history/event_actions/context_menu.blp:58
+msgid "S_ave Image"
+msgstr "_Sawya Skeusen"
+
+#: src/session_view/media_viewer.blp:19 src/session_view/media_viewer.blp:47
+#: src/session_view/room_history/event_actions/context_menu.blp:64
+msgid "S_ave Video"
+msgstr "Sawya _Gwydhyow"
+
+#: src/session_view/media_viewer.blp:25
+#: src/session_view/room_history/event_actions/context_menu.blp:76
+msgid "Copy Message _Link"
+msgstr "Kopia Gorgevren _Vessach"
+
+#: src/session_view/media_viewer.blp:87 src/session_view/media_viewer.blp:91
+msgid "Media Menu"
+msgstr "Rol Vedia"
+
+#: src/session_view/media_viewer.blp:100 src/session_view/media_viewer.blp:103
+msgid "Fullscreen"
+msgstr "Leunskrin"
+
+#: src/session_view/media_viewer.blp:112 src/session_view/media_viewer.blp:115
+msgid "Exit Fullscreen"
+msgstr "Diberth Leunskrin"
+
+#: src/session_view/media_viewer.rs:478
+msgid "Image copied to clipboard"
+msgstr "Skeusen kopys war astel glypp"
+
+#: src/session_view/media_viewer.rs:518
+#: src/session_view/room_history/event_actions/group.rs:63
+msgid "Message link copied to clipboard"
+msgstr "Gorgevren vessach kopys war astel glypp"
+
+#: src/session_view/room_details/addresses_subpage/completion_popover.blp:16
+msgid "Address auto-completion"
+msgstr "Awto-kowlwul trigvaow"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:5
+msgid "Edit Room Addresses"
+msgstr "Golegi Trigvaow Keskowsva"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:13
+#: src/session_view/room_details/general_page.blp:140
+msgid "Public Addresses"
+msgstr "Trigvaow Poblek"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+msgstr ""
+"Trigvaow poblek yw argemynnys rag oll devnydhyoryon y'n geskowsva ha'n "
+"drigva jif yw devnydhyer rag sinya keskowsva yn poblek. Kyns ow keworra "
+"trigva dhe'n rol ma, res yw dhedhi bos kovskrifys avel trigva leel."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:45
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"Trigvaow leel a yll bos kovskrifys gans agas honan servell dre hepken. Mar "
+"ny wrys poblek, tus war agas servell dre hepken a yll trovya dhedha hepken."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:77
+#: src/session_view/room_details/addresses_subpage/mod.blp:78
+msgid "Add Public Address"
+msgstr "Keworra Trigva Boblek"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:84
+#: src/session_view/room_details/addresses_subpage/mod.blp:90
+msgid "Register Local Address"
+msgstr "Kovskrifa Trigva Leel"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:328
+#, rust-format
+msgid "Local Addresses on {homeserver}"
+msgstr "Trigvaow Leel war {homeserver}"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:390
+msgid "Remove address"
+msgstr "Remova trigva"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:394
+#, rust-format
+msgid "Remove “{address}”"
+msgstr "Remova “{address}”"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:455
+msgid "Set as main address"
+msgstr "Settya avel trigva jif"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:461
+#, rust-format
+msgid "Set “{address}” as main address"
+msgstr "Settya “{address}” avel trigva jif"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:504
+msgid "Could not remove public address"
+msgstr "Ny yllir remova trigva boblek"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:529
+msgid "Could not set main public address"
+msgstr "Ny yllir settya trigva jif poblek"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:577
+msgid "Could not add public address"
+msgstr "Ny yllir keworra trigva boblek"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:581
+msgid "This address is not registered as a local address"
+msgstr "An drigva ma nag yw kovskrifys avel trigva leel"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:584
+msgid "This address does not belong to this room"
+msgstr "An drigva ma na lonya dhe'n geskowsva ma"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:639
+msgid "Unregister local address"
+msgstr "Digovskrifa trigva leel"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:643
+#, rust-format
+msgid "Unregister “{address}”"
+msgstr "Digovskrifa “{address}”"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:679
+msgid "Could not unregister local address"
+msgstr "Ny yllri digovskrifa trigva leel"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:712
+#, rust-format
+msgid "Register “{address}”"
+msgstr "Kovskrifa “{address}”"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:749
+msgid "Could not register local address"
+msgstr "Ny yllir kovskrifa trigva leel"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:753
+msgid "This address is already registered"
+msgstr "An drigva ma yw kovskrifys seulabrys"
+
+#: src/session_view/room_details/edit_details_subpage.blp:5
+msgid "Edit Room Details"
+msgstr "Golegi Manylyon Keskowsva"
+
+#: src/session_view/room_details/edit_details_subpage.blp:34
+msgid "Room Avatar"
+msgstr "Skeusennik an Geskowsva"
+
+#: src/session_view/room_details/edit_details_subpage.blp:60
+msgid "Description"
+msgstr "Deskrifans"
+
+#: src/session_view/room_details/edit_details_subpage.blp:107
+msgid "Save Description"
+msgstr "Sawya Deskrifans"
+
+#: src/session_view/room_details/edit_details_subpage.rs:263
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "A vynnowgh remova an skeusennik rag an geskowsva ma yn hwir?"
+
+#: src/session_view/room_details/edit_details_subpage.rs:326
+msgid "Room name saved successfully"
+msgstr "Hanow keskowsva sawys yn sewen"
+
+#: src/session_view/room_details/edit_details_subpage.rs:397
+msgid "Could not change room name"
+msgstr "Ny yllir chanjya hanow keskowsva"
+
+#: src/session_view/room_details/edit_details_subpage.rs:435
+msgid "Room description saved successfully"
+msgstr "Deskrifans keskowsva sawys yn sewen"
+
+#: src/session_view/room_details/edit_details_subpage.rs:511
+msgid "Could not change room description"
+msgstr "Ny yllir chanjya deskrifans keskowsva"
+
+#: src/session_view/room_details/general_page.blp:5
+#: src/session_view/room_details/mod.blp:5
+msgid "Room Details"
+msgstr "Manylyon Keskowsva"
+
+#: src/session_view/room_details/general_page.blp:48
+msgid "Edit Details"
+msgstr "Golegi Manylyon"
+
+#: src/session_view/room_details/general_page.blp:72
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:425
+msgid "There are no members in this room"
+msgstr "Nyns eus eseli y'n geskowsva ma"
+
+#: src/session_view/room_details/general_page.blp:91
+#: src/session_view/room_details/history_viewer/visual_media.blp:5
+msgid "Media"
+msgstr "Media"
+
+#: src/session_view/room_details/general_page.blp:97
+msgid "Files"
+msgstr "Restrennow"
+
+#. Translators: As in 'Audio file'.
+#: src/session_view/room_details/general_page.blp:104
+#: src/session_view/room_details/history_viewer/audio.blp:6
+#: src/session_view/room_history/message_row/audio.rs:63
+msgid "Audio"
+msgstr "Son"
+
+#: src/session_view/room_details/general_page.blp:112
+msgid "Which messages trigger notifications in this room"
+msgstr "Py messajys a gaws gwarnyansow y'n geskowsva ma"
+
+#: src/session_view/room_details/general_page.blp:115
+msgid "Use Global Setting"
+msgstr "Devnydhya Settyans Ollvysel"
+
+#: src/session_view/room_details/general_page.blp:121
+msgid "All Messages"
+msgstr "Oll Messajys"
+
+#: src/session_view/room_details/general_page.blp:127
+msgid "Only Mentions and Keywords"
+msgstr "Kampollansow ha Geryow-alhwedh Hepken"
+
+#: src/session_view/room_details/general_page.blp:133
+msgid "Disable Notifications"
+msgstr "Marowhe Gwarnyansow"
+
+#: src/session_view/room_details/general_page.blp:153
+msgid "Edit Public Addresses"
+msgstr "Golegi Trigvaow Poblek"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session_view/room_details/general_page.blp:160
+#: src/session_view/room_history/event_actions/context_menu.blp:14
+msgid "_Edit"
+msgstr "_Golegi"
+
+#: src/session_view/room_details/general_page.blp:168
+msgid "This room has no public addresses"
+msgstr "Nyns eus trigvaow poblek dhe'n geskowsva ma"
+
+#: src/session_view/room_details/general_page.blp:186
+msgid "Copy Room Link"
+msgstr "Kopia Gorgrevren Geskowsva"
+
+#: src/session_view/room_details/general_page.blp:193
+msgid "Access and Visibility"
+msgstr "Hedhas ha Gweladewder"
+
+#: src/session_view/room_details/general_page.blp:197
+#: src/session_view/room_details/join_rule_subpage.blp:5
+msgid "Who Can Join"
+msgstr "Piw a yll Omjunya"
+
+#: src/session_view/room_details/general_page.blp:208
+msgid "Allow Guests"
+msgstr "Gasa Ostysi"
+
+#: src/session_view/room_details/general_page.blp:209
+msgid "Guests are Matrix users without a registered account"
+msgstr "Ostysi yw devnydhyoryon Matrix heb akont kovskrifys"
+
+#: src/session_view/room_details/general_page.blp:218
+#: src/session_view/room_details/history_visibility_subpage.blp:5
+msgid "Who Can Read History"
+msgstr "Piw a yll Redya Istori"
+
+#: src/session_view/room_details/general_page.blp:232
+msgid "Matrix Room ID"
+msgstr "ID Keskowsva Matrix"
+
+#: src/session_view/room_details/general_page.blp:235
+msgid "Copy Matrix Room ID"
+msgstr "Kopia ID Keskowsva Matrix"
+
+#: src/session_view/room_details/general_page.blp:236
+msgid "Matrix room ID copied to clipboard"
+msgstr "ID keskowsva Matrix kopys war astel glypp"
+
+#: src/session_view/room_details/general_page.blp:240
+#: src/session_view/room_details/permissions/permissions_subpage.blp:159
+msgid "Enable Encryption"
+msgstr "Bywhe Argelesans"
+
+#: src/session_view/room_details/general_page.blp:246
+#: src/session_view/room_details/permissions/permissions_subpage.blp:5
+#: src/session_view/room_details/permissions/permissions_subpage.blp:9
+msgid "Permissions"
+msgstr "Kumyasow"
+
+#: src/session_view/room_details/general_page.blp:254
+msgid "Room Version"
+msgstr "Versyon Keskowsva"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/general_page.blp:263
+msgid "Upgrade…"
+msgstr "Ughradha…"
+
+#: src/session_view/room_details/general_page.blp:275
+msgid "Federation"
+msgstr "Keffrysyans"
+
+#: src/session_view/room_details/general_page.rs:466
+#: src/session_view/room_details/general_page.rs:517
+#: src/session_view/room_details/invite_subpage/list.rs:260
+msgid "Member"
+msgstr "Esel"
+
+#: src/session_view/room_details/general_page.rs:468
+#: src/session_view/room_details/general_page.rs:519
+msgid "Members"
+msgstr "Eseli"
+
+#: src/session_view/room_details/general_page.rs:644
+msgid "Could not change notifications setting"
+msgstr "Ny yllir chanjya settyans gwaryansow"
+
+#: src/session_view/room_details/general_page.rs:684
+#: src/session_view/room_details/general_page.rs:723
+msgid "Copy address"
+msgstr "Kopia trigva"
+
+#: src/session_view/room_details/general_page.rs:685
+#: src/session_view/room_details/general_page.rs:724
+msgid "Address copied to clipboard"
+msgstr "Trigva kopys war astel glypp"
+
+#: src/session_view/room_details/general_page.rs:766
+msgid "Room link copied to clipboard"
+msgstr "Gorgevren geskowsva kopys war astel glypp"
+
+#: src/session_view/room_details/general_page.rs:825
+msgid "Could not change guest access"
+msgstr "Ny yllir chanjya hedhas ostysi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/general_page.rs:842
+#, rust-format
+msgid "Publish in the {homeserver} directory"
+msgstr "Dyllo y'n rol {homeserver}"
+
+#: src/session_view/room_details/general_page.rs:917
+msgid "Could not publish room in directory"
+msgstr "Ny yllir dyllo keskowsva yn rol"
+
+#: src/session_view/room_details/general_page.rs:919
+msgid "Could not unpublish room from directory"
+msgstr "Ny yllri didhyllo keskowsva dhyworth rol"
+
+#: src/session_view/room_details/general_page.rs:937
+#: src/session_view/room_details/history_visibility_subpage.blp:53
+msgid "Anyone, even if they are not in the room"
+msgstr "Nebonan, hwath mar nag i y'n geskowsva"
+
+#: src/session_view/room_details/general_page.rs:940
+#: src/session_view/room_details/history_visibility_subpage.blp:59
+msgid "Members only, since this option was selected"
+msgstr "Eseli hepken, drefen an dewis ma o dewisys"
+
+#: src/session_view/room_details/general_page.rs:942
+#: src/session_view/room_details/history_visibility_subpage.blp:65
+msgid "Members only, since they were invited"
+msgstr "Eseli hepken, drefen i o gelwys"
+
+#: src/session_view/room_details/general_page.rs:944
+#: src/session_view/room_details/history_visibility_subpage.blp:71
+msgid "Members only, since they joined the room"
+msgstr "Eseli hepken, drefen i a omjunyas an geskowsva"
+
+#: src/session_view/room_details/general_page.rs:996
+msgid "Enable Encryption?"
+msgstr "Bywhe Argelesans?"
+
+#: src/session_view/room_details/general_page.rs:997
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"Ow pywhe argelesans a wra lettya eseli nowydh orth ow redya an istori kyns i "
+"a hedhas. Ny yllowgh hwi bow marowhys wosa henna."
+
+#: src/session_view/room_details/general_page.rs:1002
+#: src/session_view/sidebar/mod.rs:353 src/session_view/sidebar/mod.rs:359
+msgid "Enable"
+msgstr "Bywhe"
+
+#: src/session_view/room_details/general_page.rs:1013
+msgid "Could not enable encryption"
+msgstr "Ny yllir bywhe argelesans"
+
+#. Translators: As in, 'Room federated'.
+#: src/session_view/room_details/general_page.rs:1073
+msgid "Federated"
+msgstr "Keffrysek"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session_view/room_details/general_page.rs:1076
+msgid "Not federated"
+msgstr "Na geffrysek"
+
+#: src/session_view/room_details/general_page.rs:1110
+msgid "Room upgraded successfully"
+msgstr "Keskowsva ughradhys yn sewen"
+
+#: src/session_view/room_details/general_page.rs:1114
+msgid "Could not upgrade room"
+msgstr "Ny yllir ughradha keskowsva"
+
+#: src/session_view/room_details/history_viewer/audio.blp:24
+#: src/session_view/room_details/history_viewer/audio.blp:31
+msgid "No Audio"
+msgstr "Son Vyth"
+
+#: src/session_view/room_details/history_viewer/audio.blp:32
+msgid "This room does not contain any audio"
+msgstr "An geskowsva ma ny synsi neb son"
+
+#: src/session_view/room_details/history_viewer/audio.blp:38
+#: src/session_view/room_details/history_viewer/audio.blp:45
+msgid "Could Not Load Audio"
+msgstr "Ny yllir karga son"
+
+#: src/session_view/room_details/history_viewer/audio.blp:46
+#: src/session_view/room_details/history_viewer/file.blp:45
+#: src/session_view/room_details/history_viewer/visual_media.blp:51
+#: src/session_view/room_history/mod.blp:107
+msgid "Check your network connection"
+msgstr "Checkyewgh agas junyans kesrosweyth"
+
+#: src/session_view/room_details/history_viewer/audio.blp:63
+msgid "Audio History"
+msgstr "Istori Son"
+
+#: src/session_view/room_details/history_viewer/file.blp:23
+#: src/session_view/room_details/history_viewer/file.blp:30
+msgid "No Files"
+msgstr "Restrennow Vyth"
+
+#: src/session_view/room_details/history_viewer/file.blp:31
+msgid "This room does not contain any files"
+msgstr "An geskowsva ma ny synsi neb restrennow"
+
+#: src/session_view/room_details/history_viewer/file.blp:37
+#: src/session_view/room_details/history_viewer/file.blp:44
+msgid "Could Not Load Files"
+msgstr "Ny yllir karga restrennow"
+
+#: src/session_view/room_details/history_viewer/file.blp:62
+msgid "File History"
+msgstr "Istori Restren"
+
+#: src/session_view/room_details/history_viewer/file_row.blp:12
+#: src/session_view/room_details/history_viewer/file_row.rs:101
+#: src/session_view/room_details/history_viewer/file_row.rs:143
+#: src/session_view/room_history/message_row/file.blp:24
+#: src/session_view/room_history/message_row/file.blp:28
+#: src/utils/matrix/media_message.rs:231
+msgid "Save File"
+msgstr "Sawya Restren"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/history_viewer/file_row.rs:74
+#, rust-format
+msgid "Save {filename}"
+msgstr "Sawya {filename}"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:82
+msgid "Unknown size"
+msgstr "Braster ankoth"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:98
+msgid "Open File"
+msgstr "Ygeri Restren"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:157
+#: src/utils/matrix/media_message.rs:250
+msgid "Could not save file"
+msgstr "Ny yllir sawya restren"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:29
+#: src/session_view/room_details/history_viewer/visual_media.blp:36
+msgid "No Media"
+msgstr "Media Vyth"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:37
+msgid "This room does not contain any media"
+msgstr "An geskowsva ma ny synsi neb media"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:43
+#: src/session_view/room_details/history_viewer/visual_media.blp:50
+msgid "Could Not Load Media"
+msgstr "Ny yllir karga media"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:68
+msgid "Media History"
+msgstr "Istori Media"
+
+#: src/session_view/room_details/history_visibility_subpage.blp:30
+#: src/session_view/room_details/join_rule_subpage.blp:30
+#: src/session_view/room_details/permissions/permissions_subpage.blp:32
+msgid "_Save"
+msgstr "_Sawya"
+
+#: src/session_view/room_details/history_visibility_subpage.rs:189
+msgid "Could not change who can read history"
+msgstr "Ny yllir chanjya piw a yll redya istori"
+
+#: src/session_view/room_details/invite_subpage/list.rs:261
+msgid "Banned"
+msgstr "Emskemunys"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:5
+msgid "Invite New Members"
+msgstr "Gelwel Eseli Nowydh"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:22
+msgid "I_nvite"
+msgstr "_Gelwel"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:60
+msgid "Search for users to invite them to this room"
+msgstr "Hwilas devnydhyoryon rag gelwel dhedha dhe'n geskowsva ma"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:66
+msgid "Matching Users"
+msgstr "Devnydhyoryon Owth Omdhesedha"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:103
+msgid "No users matching the search were found"
+msgstr "Devnydhyoryon vyth owth omdhesedha an hwithrans o kevys"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:120
+msgid "Searching for Users"
+msgstr "Ow Hwilas Devnydhyoryon"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/room_details/invite_subpage/mod.rs:235
+#, rust-format
+msgid "Could not invite {user} to {room}"
+msgstr "Ny yllir gelwel {user} dhe {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names. The count is always greater than 1.
+#: src/session_view/room_details/invite_subpage/mod.rs:247
+#, rust-format
+msgid "Could not invite 1 user to {room}"
+msgid_plural "Could not invite {n} users to {room}"
+msgstr[0] "Ny yllir gelwel 1 devnydhyer dhe {room}"
+msgstr[1] "Ny yllir gelwel {n} devnydhyoryon dhe {room}"
+
+#: src/session_view/room_details/join_rule_subpage.blp:80
+msgid "Only Invited Users"
+msgstr "Devnydhyoryon Elwys Hepken"
+
+#: src/session_view/room_details/join_rule_subpage.blp:86
+msgid "Any Registered User"
+msgstr "Neb Devnydhyer Kovskrifys"
+
+#: src/session_view/room_details/join_rule_subpage.blp:99
+msgid "Allow Invite Requests"
+msgstr "Gasa Govynnow Galow"
+
+#: src/session_view/room_details/join_rule_subpage.rs:112
+msgid ""
+"The version of this room does not support all possibilities. Upgrade this "
+"room to the latest version to see more options."
+msgstr ""
+"An versyon ma a'n geskowsva ny skoodhya oll possybyltas. Ughradhewgh an "
+"geskowsva ma dhe'n versyon diwettha rag gweles moy dewisyow."
+
+#: src/session_view/room_details/join_rule_subpage.rs:230
+msgid "Could not change who can join"
+msgstr "Ny yllir chanjya piw a yll omjunya"
+
+#: src/session_view/room_details/member_row.blp:38
+msgid "Identity Verified"
+msgstr "Honanieth Wirhes"
+
+#. Translators: This is plural, as in 'Invited Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:124
+msgctxt "members"
+msgid "Invited"
+msgstr "Gelwys"
+
+#. Translators: This is plural, as in 'Banned Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:133
+msgctxt "members"
+msgid "Banned"
+msgstr "Emskemunys"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:11
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:17
+msgid "Toggle Room Members Search"
+msgstr "Dewis Hwithrans Eseli Keskowsva"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:29
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:33
+#: src/session_view/room_details/permissions/members_subpage.blp:32
+#: src/session_view/room_details/permissions/members_subpage.blp:36
+msgid "Search for room members"
+msgstr "Hwilas eseli geskowsva"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:73
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:339
+msgid "Could not load the full list of room members"
+msgstr "Ny yllir karga an rol leun a eseli geskowsva"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:362
+msgid "Room Member"
+msgstr "Esel Keskowsva"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:364
+msgid "Room Members"
+msgstr "Eseli Geskowsva"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:369
+msgid "Invited Room Member"
+msgstr "Esel Keskowva Gelwys"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:371
+msgid "Invited Room Members"
+msgstr "Eseli Geskowva Gelwys"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:376
+msgid "Banned Room Member"
+msgstr "Esel Keskowva Emskemunys"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:378
+msgid "Banned Room Members"
+msgstr "Eseli Geskowva Emskemunys"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:424
+#: src/session_view/room_details/permissions/members_subpage.blp:51
+msgid "No Room Members"
+msgstr "Eseli Geskowsva Vyth"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:429
+msgid "No Invited Room Members"
+msgstr "Eseli Geskowva Gelwys Vyth"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:430
+msgid "There are no invited members in this room"
+msgstr "Nyns eus eseli elwys y'n geskowsva ma"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:434
+msgid "No Banned Room Members"
+msgstr "Eseli Geskowva Emskemunys Vyth"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:435
+msgid "There are no banned members in this room"
+msgstr "Nyns eus eseli emskemunys y'n geskowsva ma"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:439
+msgid "No Invite Requests"
+msgstr "Govynnow Alow Vyth"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:440
+msgid "There are no invite requests in this room"
+msgstr "Nyns eus govynnow alow y'n geskowsva ma"
+
+#: src/session_view/room_details/mod.rs:154
+msgid "The user is not in the room members list anymore"
+msgstr "An devnydhyer nag yw y'n rol eseli an geskowsva namoy"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:5
+msgid "Add Custom Permissions"
+msgstr "Keworra Kumyasow A-vusur"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:12
+msgid "_Add"
+msgstr "_Keworra"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/add_members_subpage.blp:46
+msgid "Assign Power Level"
+msgstr "Charjya Nivel Nerth"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:64
+msgid "Search Results"
+msgstr "Sewyansow Hwithrans"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:84
+#: src/session_view/room_details/permissions/add_members_subpage.blp:88
+msgid "No Matching Members Found"
+msgstr "Eseli Owth Omdhesedha Kevys Vyth"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:89
+msgid "No room members matching the search were found"
+msgstr "Eseli geskowsva vyth owth omdhesedha an hwithrans o kevys"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/members_subpage.blp:6
+#: src/session_view/room_details/permissions/permissions_subpage.blp:282
+msgid "Members With Assigned Power Levels"
+msgstr "Eseli agns Nivelyow Nerth Charjys"
+
+#: src/session_view/room_details/permissions/members_subpage.blp:103
+msgid "Add"
+msgstr "Keworra"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:195
+msgid "There are no room members with assigned power levels in this room"
+msgstr "Nyns eus eseli geskowsva gans nivelyow nerth charjys y'n geskowsva ma"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:197
+msgid ""
+"There are no room members with assigned power levels matching the search"
+msgstr ""
+"Nyns eus eseli geskowsva gans nivelyow nerth charjys owth omdhesedha an "
+"hwithrans"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:44
+msgid "Room Actions"
+msgstr "Gwriansow Geskowsva"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:46
+msgid "Power level required to perform different actions in the room"
+msgstr "Nivel nerth a res rag gul gwriansow dhyffrans y'n geskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:49
+msgid "Send Messages"
+msgstr "Danvon Messajys"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:60
+msgid "Remove Own Messages"
+msgstr "Dilea Messajys I Honan"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:71
+msgid "Remove Messages of Other Members"
+msgstr "Dilea Messajys a Eseli Erel"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:82
+msgid "Notify Entire Room"
+msgstr "Gwarnya Oll an Geskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:93
+msgid "Change Room Settings"
+msgstr "Chanjya Settyansow Geskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:104
+msgid "Change Room Name"
+msgstr "Chanjya Hanow Keskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:115
+msgid "Change Room Description"
+msgstr "Chanjya Deskrifans Keskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:126
+msgid "Change Room Avatar"
+msgstr "Chanjya Skeusennik Geskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:137
+msgid "Change Addresses"
+msgstr "Chanjya Trigvaow"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:148
+msgid "Change Who Can Read History"
+msgstr "Chanjya Piw a yll Redya Istori"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:170
+msgid "Change Permissions"
+msgstr "Chanjya Kumyasow"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:181
+msgid "Change Server Access Control List"
+msgstr "Chanjya Rol Routyans Hedhas Servell"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:192
+msgid "Upgrade Room"
+msgstr "Ughradha Keskowsva"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:204
+msgid "Member Actions"
+msgstr "Gwriansow Esel"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:206
+msgid "Power level required to perform different actions on room members"
+msgstr "Nivel nerth a res rag gul gwriansow dhyffrans war eseli geskowsva"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:247
+msgid "Members Power Levels"
+msgstr "Nivelyow Nerth Eseli"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:249
+msgid "Power levels defined for all members of the room"
+msgstr "Nivelyow nerth styrys rag oll eseli a'n geskowsva"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:253
+#: src/session_view/room_details/permissions/permissions_subpage.blp:267
+msgid "Default Power Level"
+msgstr "Nivel Nerth Defowt"
+
+#: src/session_view/room_details/permissions/permissions_subpage.rs:584
+msgid "Could not save permissions"
+msgstr "Ny yllri sawya kumyasow"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:5
+#: src/session_view/room_details/upgrade_dialog/mod.blp:49
+msgctxt "dialog title"
+msgid "Upgrade Room"
+msgstr "Ughradha Keskowsva"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:65
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+msgstr ""
+"Owth ughradha keskowsva dhe versyon moy a-dhiwedhes a allosegi dhywgh dhe "
+"waynya dhyworth nasyow nowydh dhyworth an ragnotyans Matrix. Ynwedh, y a yll "
+"bos devnydhys rag dassettya an studh keskowsva, ow kul an geskowsva snella "
+"dhe omjunya. Byttegyns, y kodh bos devnydhys namenowgh drefen y a yll bos "
+"goderrus, drefen y vydh res yw dhe eseli geskowsva dasomjunya an geskowsva "
+"nowydh dre dhorn."
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:85
+msgid "Version"
+msgstr "Versyon"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:97
+msgid ""
+"After the upgrade, you will be the only member of the room and other members "
+"will need to be re-invited manually. This could be avoided by using third-"
+"party upgrade tooling that handles this for you."
+msgstr ""
+"Wosa an ughradh, hwi a vydh an esel unni a'n geskowsva ha res yw dhe eseli "
+"erel bos daswelys dre dhorn. Hemm a yll bos gohelys gans ow tevnydhya toulys "
+"ughradh parti-tressa ow handla hemma rag hwi."
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/upgrade_dialog/mod.blp:141
+msgid "Upgrade"
+msgstr "Ughradha"
+
+#. Translators: As in 'Stable version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:116
+msgid "Stable"
+msgstr "Fast"
+
+#. Translators: As in 'Experimental version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:119
+msgid "Experimental"
+msgstr "Arbrovel"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:204
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other "
+"creator will be demoted to the default power level."
+msgstr ""
+"Wosa an ughradh, hwi a vydh an gwrier unnik y'n geskowsva. An gwrier aral a "
+"vydh diavonsys dhe'n nivel nerth defowt."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:208
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other "
+"creators will be demoted to the default power level."
+msgstr ""
+"Wosa an ughradh, hwi a vydh an gwrier unnik y'n geskowsva. An gwrioryon erel "
+"a vydh diavonsys dhe'n nivel nerth defowt."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:213
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creator will be demoted to the default power level."
+msgstr ""
+"Wosa an ughradh, hwi a vydh an gwrier unnik y'n geskowsva. An gwrier a-"
+"lemmyn a vydh diavonsys dhe'n nivel nerth defowt."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:217
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creators will be demoted to the default power level."
+msgstr ""
+"Wosa an ughradh, hwi a vydh an gwrier unnik y'n geskowsva. An gwrioryon a-"
+"lemmyn a vydh diavonsys dhe'n nivel nerth defowt."
+
+#: src/session_view/room_history/call_row.rs:122
+msgid "Outgoing video call."
+msgstr "Galow gwydhyow ow mos dhe-ves."
+
+#: src/session_view/room_history/call_row.rs:136
+msgid "Outgoing call."
+msgstr "Galow ow mos dhe-ves."
+
+#: src/session_view/room_history/divider_row.rs:90
+msgid "This is the start of the visible history"
+msgstr "Hemm yw an dalleth a'n istori gweladow"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:102
+msgid "%A, %B %-e"
+msgstr "%A, %B %-e"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:108
+msgid "%A, %B %-e, %Y"
+msgstr "%A, %B %-e, %Y"
+
+#: src/session_view/room_history/divider_row.rs:115
+msgid "New Messages"
+msgstr "Messajys Nowydh"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session_view/room_history/event_actions/context_menu.blp:7
+msgid "_Reply"
+msgstr "_Gorthebi"
+
+#. Translators: In this string, 'Forward' is a verb, this is to re-send
+#. the same message in another room, like forwarding an e-mail.
+#: src/session_view/room_history/event_actions/context_menu.blp:22
+msgid "_Forward"
+msgstr "Danvon dhe _Nebonan"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:30
+msgid "_Select"
+msgstr "_Dewis"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:38
+msgid "Revoke _Invite"
+msgstr "Dilea Ga_low"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:46
+msgid "_Copy Text"
+msgstr "_Kopia Tekst"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:52
+msgid "Copy T_humbnail"
+msgstr "Kopia _Skeusennik"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:70
+msgid "S_ave Audio"
+msgstr "S_awya Son"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:82
+msgid "_Properties"
+msgstr "_Teythiennow"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:90
+msgid "_Discard"
+msgstr "_Dilea"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:98
+msgid "Rep_ort…"
+msgstr "De_rivas…"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:104
+msgid "Re_move"
+msgstr "Re_mova"
+
+#: src/session_view/room_history/event_actions/context_menu.rs:83
+#: src/session_view/sidebar/mod.rs:405
+msgid "Context Menu"
+msgstr "Rol Gettesten"
+
+#: src/session_view/room_history/event_actions/group.rs:337
+msgid "Thumbnail copied to clipboard"
+msgstr "Skeusennik kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/group.rs:511
+msgid "Text copied to clipboard"
+msgstr "Tekst kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/group.rs:578
+msgid "Remove Message?"
+msgstr "Dilea Messach?"
+
+#: src/session_view/room_history/event_actions/group.rs:580
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr "A vynnowgh dilea an messach ma yn hwir? Ny yllowgh hwi digelmi hemma."
+
+#: src/session_view/room_history/event_actions/group.rs:594
+msgid "Could not remove message"
+msgstr "Ny yllir remova messach"
+
+#: src/session_view/room_history/event_actions/group.rs:609
+msgid "Could not toggle reaction"
+msgstr "Ny yllir dewis gorthyp"
+
+#: src/session_view/room_history/event_actions/group.rs:641
+msgid "Report Event?"
+msgstr "Derivas Hwarvos?"
+
+#: src/session_view/room_history/event_actions/group.rs:643
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+msgstr ""
+"Ow terivas hwarvos a wra danvon y ID unnik dhe'n menystrer a'gas servell "
+"dre. An menystrer ny vydh abel dhe weles an synsas a'n hwarvos mars yw "
+"argelys po sensorys."
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session_view/room_history/event_actions/group.rs:650
+msgid "Report"
+msgstr "Derivas"
+
+#: src/session_view/room_history/event_actions/group.rs:668
+msgid "Could not report event"
+msgstr "Ny yllir derivas hwarvos"
+
+#: src/session_view/room_history/event_actions/group.rs:688
+msgid "Could not discard message"
+msgstr "Ny yllir dilea messach"
+
+#: src/session_view/room_history/event_actions/group.rs:717
+msgid "Revoking invite…"
+msgstr "Ow tilea galow…"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:6
+#: src/session_view/room_history/event_actions/properties_dialog.blp:12
+msgid "Event Properties"
+msgstr "Teythiennow Hwarvos"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:40
+msgid "Original Event"
+msgstr "Hwarvos Gwreydhek"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:56
+#: src/session_view/room_history/event_actions/properties_dialog.blp:134
+msgid "Event ID"
+msgstr "ID Hwarvos"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:58
+#: src/session_view/room_history/event_actions/properties_dialog.blp:136
+msgid "Copy Event ID"
+msgstr "Kopia ID Hwarvos"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:59
+#: src/session_view/room_history/event_actions/properties_dialog.blp:137
+msgid "Event ID copied to clipboard"
+msgstr "ID Hwarvos kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:64
+msgid "Room ID"
+msgstr "ID Keskowsva"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:70
+msgid "Copy Room ID"
+msgstr "Kopia ID Keskowsva"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:71
+msgid "Room ID copied to clipboard"
+msgstr "ID Keskowsva kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:75
+msgid "Sender ID"
+msgstr "ID Danvener"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:85
+msgid "Show Profile"
+msgstr "Diskwedhes Profil"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:96
+#: src/session_view/room_history/event_actions/properties_dialog.blp:142
+msgid "Timestamp"
+msgstr "Termyn"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:98
+#: src/session_view/room_history/event_actions/properties_dialog.blp:144
+msgid "Copy Timestamp"
+msgstr "Kopia Termyn"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:99
+#: src/session_view/room_history/event_actions/properties_dialog.blp:145
+msgid "Timestamp copied to clipboard"
+msgstr "Termyn kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:105
+#: src/session_view/room_history/event_actions/properties_dialog.blp:150
+msgid "View Source"
+msgstr "Gweles Pennfenten"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:118
+msgid "Latest Edit"
+msgstr "Golegyans Diwettha"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:172
+msgid "Copy Source"
+msgstr "Kopia Pennfenten"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:108
+msgid "Original Event Source"
+msgstr "Pennfenten Hwarvos Gwreydhek"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:110
+msgid "Event Source"
+msgstr "Pennfenten Hwarvos"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:124
+msgid "Latest Edit Source"
+msgstr "Pennfenten Wolegyans Diwettha"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:138
+msgid "Source copied to clipboard"
+msgstr "Pennfenten kopys war astel glypp"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:15
+msgid "Send a Reaction"
+msgstr "Danvon Gorthyp"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:19
+msgid "More Reactions"
+msgstr "Moy Gorthebow"
+
+#: src/session_view/room_history/event_timestamp.rs:96
+#, rust-format
+msgid "Sent at {time}"
+msgstr "Danvenys {time}"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:109
+msgid "%B %-e at %I:%M %p"
+msgstr "%B %-e, %I:%M %p"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:115
+msgid "%B %-e at %H:%M"
+msgstr "%B %-e, %H:%M"
+
+#: src/session_view/room_history/message_row/audio.rs:65
+#, rust-format
+msgid "Audio: {filename}"
+msgstr "Son: {filename}"
+
+#: src/session_view/room_history/message_row/content.rs:317
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"Ny yllri diargeles an messach ma, diargelesans a vyth dasassayys wosa an "
+"alhwedhow yw kavadow."
+
+#: src/session_view/room_history/message_row/content.rs:322
+msgid "This message was removed."
+msgstr "An messach ma o dileys."
+
+#: src/session_view/room_history/message_row/content.rs:327
+#: src/session_view/room_history/message_row/content.rs:333
+#: src/session_view/room_history/message_row/content.rs:403
+msgid "Unsupported event"
+msgstr "Hwarvos anskoodhys"
+
+#: src/session_view/room_history/message_row/file.rs:61
+#, rust-format
+msgid "File: {filename}"
+msgstr "Restren: {filename}"
+
+#: src/session_view/room_history/message_row/location.blp:12
+msgid "User Location"
+msgstr "Tyller Devnydhyer"
+
+#: src/session_view/room_history/message_row/location.rs:91
+msgid "Location is invalid and cannot be displayed"
+msgstr "Tyller yw anewn ha ny allas bos diskwedhys"
+
+#. Translators: As in 'Sending message…'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:21
+msgid "Sending…"
+msgstr "Ow tanvon…"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:31
+msgid "Temporary Error Sending Message"
+msgstr "Kamm Anbarghus ow Tanvon Messach"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:45
+msgid "Message Cannot Be Sent"
+msgstr "Messach Ny Allas Bos Danvenys"
+
+#. Translators: As in 'Sent message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:60
+msgid "Sent"
+msgstr "Danvenys"
+
+#. Translators: As in 'Edited message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:75
+msgid "Edited"
+msgstr "Golegys"
+
+#: src/session_view/room_history/message_row/mod.blp:13
+msgid "Show Sender Profile"
+msgstr "Diskwedhes Profil an Danvener"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_row/reaction/mod.rs:200
+#, rust-format
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "1 esel a worthebas gans {reaction_key}"
+msgstr[1] "{n} eseli a worthebas gans {reaction_key}"
+
+#: src/session_view/room_history/message_row/reaction/mod.rs:220
+#, rust-format
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} a worthebas gans {reaction_key}"
+
+#: src/session_view/room_history/message_row/reaction_list.blp:6
+msgid "Reactions"
+msgstr "Gorthebow"
+
+#: src/session_view/room_history/message_row/reply.blp:16
+msgid "In Reply To"
+msgstr "Yn Gorthyp Dhe"
+
+#. Translators: This is a verb, as in 'Mention user'.
+#: src/session_view/room_history/message_row/sender_name.rs:186
+msgid "Mention"
+msgstr "Kampol"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session_view/room_history/message_row/text/widgets.rs:465
+msgid "Details"
+msgstr "Manylyon"
+
+#: src/session_view/room_history/message_row/visual_media.blp:49
+msgid "Click to show preview"
+msgstr "Klyckyewgh rag diskwedhes ragwolok"
+
+#: src/session_view/room_history/message_row/visual_media.blp:77
+msgid "Hide media preview"
+msgstr "Kudha ragwolok vedia"
+
+#: src/session_view/room_history/message_row/visual_media.rs:553
+msgid "Image"
+msgstr "Skeusen"
+
+#: src/session_view/room_history/message_row/visual_media.rs:554
+msgid "Sticker"
+msgstr "Glenysen"
+
+#: src/session_view/room_history/message_row/visual_media.rs:555
+msgid "Video"
+msgstr "Gwydhyow"
+
+#: src/session_view/room_history/message_row/visual_media.rs:560
+#, rust-format
+msgid "Image: {filename}"
+msgstr "Skeusen: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:563
+#, rust-format
+msgid "Sticker: {filename}"
+msgstr "Glenysen: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:566
+#, rust-format
+msgid "Video: {filename}"
+msgstr "Gwydhyow: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:740
+#: src/utils/media/image/mod.rs:932
+msgid "Could not retrieve media"
+msgstr "Ny yllir kerghes media"
+
+#: src/session_view/room_history/message_row/visual_media.rs:789
+#: src/utils/media/image/mod.rs:934
+msgid "An unexpected error occurred"
+msgstr "Yth esa kamm anwaytys"
+
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:22
+msgid "_Send"
+msgstr "_Danvon"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:685
+msgid "Public Room Mention Auto-completion"
+msgstr "Awto-kowlwrians Kampol Keskowsva Boblek"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:687
+msgid "Room Member Mention Auto-completion"
+msgstr "Awto-kowlwrians Kampol Esel Keskowsva"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:8
+msgid "_Location"
+msgstr "_Tyller"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:15
+msgid "_Markdown"
+msgstr "_Markdown"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:89
+msgid "Send a File"
+msgstr "Danvon Restren"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:96
+msgid "Insert an Emoji"
+msgstr "Gorra a-bervedh Emoji"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session_view/room_history/message_toolbar/mod.blp:121
+msgid "Message Composer"
+msgstr "Komposell Vessach"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:136
+#: src/session_view/room_history/message_toolbar/mod.blp:139
+msgid "More Options"
+msgstr "Moy Dewisyow"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:147
+msgid "Send Message"
+msgstr "Danvon Messach"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:171
+msgid "You don’t have permission to send messages to this room"
+msgstr "Nyn eus kummyas dhywgh dhe dhanvon messajys dhe'n geskowsva ma"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:372
+msgid "The conversation continues in a new room"
+msgstr "An keskows a bes yn keskowsva nowydh"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:374
+msgid "The conversation has ended"
+msgstr "An keskows re dhiwedhys"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:540
+#, rust-format
+msgid "Reply to {user}"
+msgstr "Gorthyp dhe {user}"
+
+#. / Update the displayed related event for the given edit.
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:558
+msgctxt "room-history"
+msgid "Edit"
+msgstr "Golegyans"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:735
+msgid "Could not send reply"
+msgstr "Ny yllir danvon gorthyp"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:751
+msgid "Could not send edit"
+msgstr "Ny yllir danvon golegyans"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:762
+msgid "Could not send message"
+msgstr "Ny yllir danvon messach"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:808
+msgid "Your Location"
+msgstr "Agas Tyller"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_toolbar/mod.rs:868
+#, rust-format
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "Tyller Devnydhyer {geo_uri}, {iso8601_datetime}"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:890
+msgid "Could not send location"
+msgstr "Ny yllir danvon tyller"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:897
+msgid "The location request has been cancelled"
+msgstr "An govyn tyller re beu hedhys"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:898
+msgid "The location services are disabled"
+msgstr "An gonisyow tyller yw marow"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:899
+msgid "Could not retrieve current location"
+msgstr "Ny yllir kerghes tyller a-lemmyn"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:934
+msgid "Could not send file"
+msgstr "Ny yllir danvon restren"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:988
+msgid "Select File"
+msgstr "Dewis Restren"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:990
+msgid "Select"
+msgstr "Dewis"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1005
+msgid "Could not open file"
+msgstr "Ny yllir ygeri restren"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1031
+#: src/session_view/room_history/message_toolbar/mod.rs:1039
+msgid "Error reading file"
+msgstr "Kamm dres ow redya restren"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1100
+msgid "Error getting image from clipboard"
+msgstr "Kamm dres ow kerghes skeusen dhyworth astel glypp"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1117
+msgid "Error getting file from clipboard"
+msgstr "Kamm dres ow kerghes restren dhyworth astel glypp"
+
+#: src/session_view/room_history/mod.blp:7
+msgid "Room _Details"
+msgstr "Manylyon _Keskowsva"
+
+#: src/session_view/room_history/mod.blp:13
+msgid "_Invite New Members…"
+msgstr "_Gelwel Eseli Nowydh…"
+
+#: src/session_view/room_history/mod.blp:21
+#: src/session_view/sidebar/mod.blp:104
+msgid "_Leave Room"
+msgstr "_Diberth Keskowsva?"
+
+#: src/session_view/room_history/mod.blp:27
+#: src/session_view/sidebar/mod.blp:110
+msgid "Re_join Room"
+msgstr "Dasom_junya Keskowsva"
+
+#: src/session_view/room_history/mod.blp:33
+#: src/session_view/sidebar/mod.blp:116
+msgid "_Forget Room"
+msgstr "_Ankevi Keskowsva"
+
+#: src/session_view/room_history/mod.blp:64
+msgid "Room Menu"
+msgstr "Rol Geskowsva"
+
+#: src/session_view/room_history/mod.blp:72
+msgid "Call room - other clients may not show messages you send in this room."
+msgstr ""
+"Keskowsva gelwel - martesen kliensow erel ny allas diskwedhes messajys hwi a "
+"dhanvon y'n geskowsva ma."
+
+#: src/session_view/room_history/mod.blp:99
+#: src/session_view/room_history/mod.blp:106
+msgid "Could Not Load Room"
+msgstr "Ny Yllir Karga Keskowsva"
+
+#: src/session_view/room_history/mod.blp:138
+msgid "Scroll to Bottom"
+msgstr "Mos dhe Ven"
+
+#: src/session_view/room_history/mod.blp:150
+msgid "Drop Here to Send"
+msgstr "Droppyewgh Omma rag Danvon"
+
+#: src/session_view/room_history/mod.rs:422
+msgid "Error getting file from drop"
+msgstr "Kamm dres ow kerghes restren dhyworth droppyans"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1027
+#: src/session_view/sidebar/row.rs:747
+#, rust-format
+msgid "Could not leave {room}"
+msgstr "Ny yllir diberth {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1050
+#: src/session_view/sidebar/row.rs:736
+#, rust-format
+msgid "Could not join {room}"
+msgstr "Ny yllir omjunya {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1067
+#: src/session_view/sidebar/row.rs:780
+#, rust-format
+msgid "Could not forget {room}"
+msgstr "Ny yllir ankevi {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/mod.rs:1111
+#, rust-format
+msgid "There is a pending invite request"
+msgid_plural "There are {n} pending invite requests"
+msgstr[0] "Yma govyn galow ow kortos"
+msgstr[1] "Yma {n} govynnow galow ow kortos"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:257
+#, rust-format
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "Gwelys gans 1 esel"
+msgstr[1] "Gwelys gans {n} eseli"
+
+#. / Update the tooltip of this list for a single member.
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:271
+#, rust-format
+msgid "Seen by {name}"
+msgstr "Gwelys gans {name}"
+
+#: src/session_view/room_history/state/content.rs:100
+msgid "This room is encrypted from this point on."
+msgstr "An geskowsva ma yw argelys dhyworth omma."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/state/content.rs:115
+#: src/session_view/room_history/state/content.rs:203
+#, rust-format
+msgid "{sender} invited {user}."
+msgstr "{sender} a elwas {user}."
+
+#: src/session_view/room_history/state/content.rs:127
+msgid "An unsupported state event was received."
+msgstr "Yth esa hwarvos studh anskoodhys degemerys."
+
+#: src/session_view/room_history/state/content.rs:164
+#: src/session_view/room_history/state/content.rs:389
+#, rust-format
+msgid "{user} joined this room."
+msgstr "{user} a omjunyas an geskowsva ma."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/state/content.rs:171
+#, rust-format
+msgid "{user} left the room."
+msgstr "{user} a dhiberthas an geskowsva ma."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:176
+#, rust-format
+msgid "{sender} banned {user}."
+msgstr "{sender} a emskemunas {user}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:185
+#, rust-format
+msgid "{sender} unbanned {user}."
+msgstr "{sender} a dhisemskemuna {user}."
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:194
+#, rust-format
+msgid "{sender} kicked {user} out."
+msgstr "{sender} a botyas {user} dhe-ves."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:212
+#, rust-format
+msgid "{user} accepted the invite."
+msgstr "{user} a dhegemeras an galow."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:218
+#, rust-format
+msgid "{user} declined the invite."
+msgstr "{user} a dhenaghas an galow."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:227
+#, rust-format
+msgid "{sender} revoked the invitation for {user}."
+msgstr "{sender} a dhileas an galow rag {user}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/content.rs:239
+#, rust-format
+msgid "{user} requested to be invited to this room."
+msgstr "{user} a wovynas dhe vos gelwys dhe'n geskowsva ma."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:246
+#, rust-format
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} a dhenaghas aga govyn dhe vos gelweys dhe'n geskowsva ma."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:252
+#, rust-format
+msgid "{sender} denied {user}’s request to be invited to this room."
+msgstr ""
+"{sender} a dhenaghas an govyn {user} dhe vos gelwys dhe'n geskowsva ma."
+
+#: src/session_view/room_history/state/content.rs:263
+msgid "An unsupported room member event was received."
+msgstr "Yth esa hwarvos esel keskowsva anskoodhys degemerys."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:330
+#, rust-format
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr ""
+"{previous_user_name} a janjyas aga hanow displetyans dhe {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:340
+#, rust-format
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} a dhileas aga hanow displetyans."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:352
+#, rust-format
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} a settyas aga hanow displetyans dhe {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:366
+#, rust-format
+msgid "{user} set their avatar."
+msgstr "{user} a settyas aga skeusennik."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:373
+#, rust-format
+msgid "{user} removed their avatar."
+msgstr "{user} a dhileas aga skeusennik."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:380
+#, rust-format
+msgid "{user} changed their avatar."
+msgstr "{user} a janjyas aga skeusennik."
+
+#: src/session_view/room_history/state/creation.rs:55
+msgid "This conversation started in another room."
+msgstr "An keskows ma a dhallathas yn keskowsva aral."
+
+#: src/session_view/room_history/state/creation.rs:60
+msgid "The conversation starts here."
+msgstr "An keskows a dhalleth omma."
+
+#. Translators: This is a change in the room, not a change between
+#. rooms. Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/group_row.rs:224
+#, rust-format
+msgid "1 room change"
+msgid_plural "{n} room changes"
+msgstr[0] "1 chanj keskowsva"
+msgstr[1] "{n} chanjyow keskowsva"
+
+#: src/session_view/room_history/title.blp:7
+msgid "Open Room Details"
+msgstr "Ygeri Manylyon Keskowsva"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:135
+#, rust-format
+msgid "{user} is typing…"
+msgstr "{user} ow jynnskrifa…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:142
+#, rust-format
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} esel ow jynnskrifa…"
+msgstr[1] "{n} eseli ow jynnskrifa…"
+
+#: src/session_view/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "Ny yllir degemeres gwirheans"
+
+#: src/session_view/room_history/verification_info_bar.rs:88
+msgid "Could not decline verification"
+msgstr "Ny yllir denagha gwirheans"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/verification_info_bar.rs:166
+#, rust-format
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} a vynn dhe vos gwirhys"
+
+#: src/session_view/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "Gwirheans yn avonsyans"
+
+#: src/session_view/sidebar/mod.blp:7
+msgid "New _Direct Chat…"
+msgstr "Keskows _Didro Nowydh…"
+
+#: src/session_view/sidebar/mod.blp:12
+msgid "_New Room…"
+msgstr "Keskowsva _Nowydh…"
+
+#: src/session_view/sidebar/mod.blp:17
+msgid "_Join Room…"
+msgstr "Om_junya Keskowsva…"
+
+#: src/session_view/sidebar/mod.blp:24
+msgid "_Keyboard Shortcuts"
+msgstr "_Kesunyansow Bysowek"
+
+#: src/session_view/sidebar/mod.blp:29
+msgid "_About Fractal"
+msgstr "_A-dro dhe Fraktal"
+
+#: src/session_view/sidebar/mod.blp:44
+msgid "Dec_line"
+msgstr "De_nagha"
+
+#: src/session_view/sidebar/mod.blp:58
+msgid "_Mark as Read"
+msgstr "_Merkya avel Redys"
+
+#: src/session_view/sidebar/mod.blp:64
+msgid "_Mark as Unread"
+msgstr "_Merkya avel Anredys"
+
+#: src/session_view/sidebar/mod.blp:72
+msgid "Move to _Favorites"
+msgstr "Gwaya dhe _Dhrudh"
+
+#: src/session_view/sidebar/mod.blp:78
+msgid "Move to _Rooms"
+msgstr "Gwaya dhe _Geskowsvaow"
+
+#: src/session_view/sidebar/mod.blp:84
+msgid "Move to Low _Priority"
+msgstr "Gwaya dhe _Ragwir Isel"
+
+#: src/session_view/sidebar/mod.blp:90
+msgid "Mark as _Direct Chat"
+msgstr "Merkya avel Keskows _Didro"
+
+#: src/session_view/sidebar/mod.blp:96
+msgid "Unmark as _Direct Chat"
+msgstr "Anverkya avel Keskows _Didro"
+
+#: src/session_view/sidebar/mod.blp:124
+msgid "Sidebar"
+msgstr "Bordh lestri"
+
+#: src/session_view/sidebar/mod.blp:142
+msgid "Main Menu"
+msgstr "Pennrol"
+
+#: src/session_view/sidebar/mod.blp:151
+msgid "Toggle Room Search"
+msgstr "Dewis Hwithrans Keskowsva"
+
+#: src/session_view/sidebar/mod.blp:163
+msgid "Room Search"
+msgstr "Hwithrans Keskowsva"
+
+#: src/session_view/sidebar/mod.blp:164
+msgid "Search for a room"
+msgstr "Hwilas keskowsva"
+
+#: src/session_view/sidebar/mod.blp:214
+msgid "Room List"
+msgstr "Rol Geskowsva"
+
+#: src/session_view/sidebar/mod.blp:215
+msgid "Allows to navigate between rooms"
+msgstr "Gasa dhe navigacya yntra keskowsvaow"
+
+#: src/session_view/sidebar/mod.rs:353
+msgid "No crypto identity"
+msgstr "Honanieth grypto vyth"
+
+#: src/session_view/sidebar/mod.rs:355
+msgid "Crypto identity incomplete"
+msgstr "Honanieth grypto andhien"
+
+#: src/session_view/sidebar/mod.rs:359
+msgid "Account recovery disabled"
+msgstr "Daskavos akont marow"
+
+#: src/session_view/sidebar/mod.rs:362
+msgid "Account recovery incomplete"
+msgstr "Daskavos akont Andhien"
+
+#. Translators: A "call room" is a room where an audio or video call
+#. is always active, that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:257
+msgid "Call room"
+msgstr "Keskowsva galow"
+
+#: src/session_view/sidebar/room_row.rs:262
+msgid "Direct chat"
+msgstr "Keskows didro"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers for "call rooms".
+#. A "call room" is a room where an audio or video call is always active,
+#. that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:289
+#, rust-format
+msgid "{name} (call room)"
+msgstr "{name} (keskowsva galow)"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room is a direct chat with
+#. another user.
+#: src/session_view/sidebar/room_row.rs:297
+#, rust-format
+msgid "Direct chat with {name}"
+msgstr "Keskows didro gans {name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session_view/sidebar/room_row.rs:309
+#, rust-format
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "1 gwarnyans"
+msgstr[1] "{count} gwarnyansow"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/sidebar/row.rs:756
+#, rust-format
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "Ny yllir gwaya {room} dhyworth {previous_category} dhe {new_category}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:798
+#, rust-format
+msgid "Could not mark {room} as direct chat"
+msgstr "Ny yllir merkya {room} avel keskows didro"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:803
+#, rust-format
+msgid "Could not unmark {room} as direct chat"
+msgstr "Ny yllir anverkya {room} avel keskows didro"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:124
+msgid "Join Room as Favorite"
+msgstr "Omjunya Keskowsva avel Drudh"
+
+#: src/session_view/sidebar/section_row.rs:125
+msgid "Join Room"
+msgstr "Omjunya Keskowsva"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:128
+msgid "Join Room as Low Priority"
+msgstr "Omjunya Keskowsva avel Ragwir Isel"
+
+#: src/session_view/sidebar/section_row.rs:129
+msgid "Reject Invite"
+msgstr "Denagha Galow"
+
+#: src/session_view/sidebar/section_row.rs:133
+#: src/session_view/sidebar/section_row.rs:146
+msgid "Move to Rooms"
+msgstr "Gwaya dhe Geskowsvaow"
+
+#: src/session_view/sidebar/section_row.rs:134
+#: src/session_view/sidebar/section_row.rs:140
+msgid "Move to Low Priority"
+msgstr "Gwaya dhe Ragwir Isel"
+
+#: src/session_view/sidebar/section_row.rs:135
+#: src/session_view/sidebar/section_row.rs:141
+#: src/session_view/sidebar/section_row.rs:147
+msgid "Leave Room"
+msgstr "Diberth Keskowsva"
+
+#: src/session_view/sidebar/section_row.rs:139
+#: src/session_view/sidebar/section_row.rs:145
+msgid "Move to Favorites"
+msgstr "Gwaya dhe Dhrudh"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:153
+msgid "Rejoin Room as Favorite"
+msgstr "Dasomjunya Keskowsva avel Drudh"
+
+#: src/session_view/sidebar/section_row.rs:154
+msgid "Rejoin Room"
+msgstr "Dasomjunya Keskowsva"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:157
+msgid "Rejoin Room as Low Priority"
+msgstr "Dasomjunya Keskowsva avel Ragwir Isel"
+
+#: src/shortcuts-dialog.blp:6
+msgctxt "shortcut window"
+msgid "General"
+msgstr "Ollgemmyn"
+
+#: src/shortcuts-dialog.blp:9
+msgctxt "shortcut window"
+msgid "Search Room by Address or Link"
+msgstr "Hwilas keskowsva gans Trigva po Gorgevren"
+
+#: src/shortcuts-dialog.blp:14
+msgctxt "shortcut window"
+msgid "Account Settings"
+msgstr "Settyansow Akont"
+
+#: src/shortcuts-dialog.blp:19
+msgctxt "shortcut window"
+msgid "Open Menu"
+msgstr "Ygeri Rol"
+
+#: src/shortcuts-dialog.blp:24
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "Kesunyansow Bysowek"
+
+#: src/shortcuts-dialog.blp:29
+msgctxt "shortcut window"
+msgid "Close Window"
+msgstr "Degea Fenester"
+
+#: src/shortcuts-dialog.blp:34
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Kwytya"
+
+#: src/shortcuts-dialog.blp:40
+msgctxt "shortcut window"
+msgid "Room List"
+msgstr "Istori Keskowsva"
+
+#: src/shortcuts-dialog.blp:43
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "Rol Hwithrans Keskowsva"
+
+#: src/shortcuts-dialog.blp:48
+msgctxt "shortcut window"
+msgid "Next Room"
+msgstr "Keskowsva Nessa"
+
+#: src/shortcuts-dialog.blp:53
+msgctxt "shortcut window"
+msgid "Previous Room"
+msgstr "Keskowsva Gyns"
+
+#: src/shortcuts-dialog.blp:60
+msgctxt "shortcut window"
+msgid "First Room With Unread Messages"
+msgstr "Keskowsva Gynsa gans Messajys Anredys"
+
+#: src/shortcuts-dialog.blp:65
+msgctxt "shortcut window"
+msgid "Next Room With Unread Messages"
+msgstr "Keskowsva Nessa gans Messajys Anredys"
+
+#: src/shortcuts-dialog.blp:70
+msgctxt "shortcut window"
+msgid "Previous Room With Unread Messages"
+msgstr "Keskowsva Gyns gans Messajys Anredys"
+
+#: src/shortcuts-dialog.blp:76
+msgctxt "shortcut window"
+msgid "Room History"
+msgstr "Istori Keskowsva"
+
+#: src/shortcuts-dialog.blp:79
+msgctxt "shortcut window"
+msgid "Event Properties"
+msgstr "Teythiennow Hwarvos"
+
+#: src/shortcuts-dialog.blp:84
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "Degea Keskowsva"
+
+#: src/user_facing_error.rs:18
+msgid "Connection timed out."
+msgstr "Junyans yn termyn yn-mes."
+
+#: src/user_facing_error.rs:20
+msgid "Could not connect to the homeserver."
+msgstr "Ny yllir junya dhe'n servell dre."
+
+#: src/user_facing_error.rs:26
+msgid "Invalid credentials."
+msgstr "Manylyon anewn."
+
+#: src/user_facing_error.rs:27
+msgid "Account deactivated."
+msgstr "Akont marowhes."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:43
+#, rust-format
+msgid "Rate limit exceeded, retry in 1 second."
+msgid_plural "Rate limit exceeded, retry in {n} seconds."
+msgstr[0] "Finweth kevradh eksedys, dasassayewgh yn 1 eylen."
+msgstr[1] "Finweth kevradh eksedys, dasassayewgh yn {n} eylennow."
+
+#: src/user_facing_error.rs:49
+msgid "Rate limit exceeded, try again later."
+msgstr "Finweth kevradh eksedys, dasassayewgh wosa henna."
+
+#: src/user_facing_error.rs:59
+msgid "Unexpected connection error."
+msgstr "Kamm junyans anwaytys."
+
+#: src/user_facing_error.rs:67
+msgid "Could not decrypt the event."
+msgstr "Ny yllir diargeles an hwarvos."
+
+#: src/user_facing_error.rs:69 src/user_facing_error.rs:81
+msgid "Unexpected error."
+msgstr "Kamm anwaytys."
+
+#: src/user_facing_error.rs:77
+msgid "Invalid URL."
+msgstr "Gorgevren anewn."
+
+#: src/user_facing_error.rs:78
+msgid "Could not discover homeserver."
+msgstr "Ny yllir trovya servell dre."
+
+#: src/user_facing_error.rs:80
+msgid "Could not open the store."
+msgstr "Ny yllir ygeri an withva."
+
+#: src/utils/matrix/media_message.rs:90
+msgid "Voice Message"
+msgstr "Messach Lev"
+
+#: src/utils/matrix/media_message.rs:125
+#, rust-format
+msgid "Voice Message From {datetime}"
+msgstr "Messach Lev, {datetime}"
+
+#: src/utils/matrix/mod.rs:175
+msgid "Could not generate unique session ID"
+msgstr "Ny yllir dinythi ID esedhek unnik"
+
+#: src/utils/matrix/mod.rs:176
+msgid "Could not access the session tokens"
+msgstr "Ny yllir drehedhes an toknys esedhek"
+
+#: src/utils/media/image/mod.rs:933
+msgid "Image format not supported"
+msgstr "Furvas skeusenk nag yw skoodhys"
+
+#. Translators: Default name for image files.
+#: src/utils/media/mod.rs:36
+msgid "image"
+msgstr "skeusen"
+
+#. Translators: Default name for video files.
+#: src/utils/media/mod.rs:38
+msgid "video"
+msgstr "gwydhyow"
+
+#. Translators: Default name for audio files.
+#: src/utils/media/mod.rs:40
+msgid "audio"
+msgstr "son"
+
+#. Translators: Default name for files.
+#: src/utils/media/mod.rs:42
+msgid "file"
+msgstr "restren"
+
+#: src/window.blp:80
+msgid "Session"
+msgstr "Esedhek"

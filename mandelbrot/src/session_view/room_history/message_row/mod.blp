@@ -1,0 +1,126 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessageRow: Adw.Bin {
+  Gtk.Grid {
+    column-spacing: 8;
+
+    styles [
+      "event-content",
+    ]
+
+    Gtk.Button avatar_button {
+      tooltip-text: _("Show Sender Profile");
+      valign: start;
+      clicked => $view_sender_profile() swapped;
+
+      styles [
+        "circular",
+        "flat",
+        "sender-avatar",
+      ]
+
+      layout {
+        column: 0;
+        row: 0;
+        row-span: 4;
+      }
+
+      child: $Avatar avatar {
+        size: 36;
+        accessible-role: presentation;
+        data: bind template.sender as <$Member>.avatar-data;
+      };
+    }
+
+    Gtk.Box header {
+      spacing: 5;
+      margin-bottom: 3;
+
+      layout {
+        column: 1;
+        row: 0;
+        column-span: 2;
+      }
+
+      $ContentMessageSenderName display_name {
+        hexpand: true;
+        halign: start;
+      }
+
+      $EventTimestamp timestamp {
+        hexpand: true;
+        datetime: bind template.event as <$RoomEvent>.timestamp;
+      }
+    }
+
+    $ContentMessageContent content {
+      hexpand: true;
+      vexpand: true;
+
+      layout {
+        column: 1;
+        row: 1;
+      }
+    }
+
+    $MessageStateStack message_state {
+      valign: end;
+
+      layout {
+        column: 2;
+        row: 1;
+      }
+    }
+
+    $ContentMessageReactionList reactions {
+      layout {
+        column: 1;
+        row: 2;
+        column-span: 2;
+      }
+    }
+
+    Gtk.Button thread_indicator {
+      visible: false;
+      halign: start;
+      clicked => $open_thread() swapped;
+
+      styles [
+        "flat",
+        "message-thread-indicator",
+      ]
+
+      layout {
+        column: 1;
+        row: 3;
+        column-span: 2;
+      }
+
+      child: Gtk.Box {
+        spacing: 6;
+
+        Gtk.Label thread_indicator_label {
+          ellipsize: end;
+        }
+
+        Gtk.Image {
+          icon-name: "go-next-symbolic";
+          accessible-role: presentation;
+        }
+      };
+    }
+
+    $ContentReadReceiptsList read_receipts {
+      visible: bind template.event as <$RoomEvent>.has-read-receipts;
+      members: bind template.event as <$RoomEvent>.timeline as <$Timeline>.room as <$Room>.members;
+      source: bind template.event as <$RoomEvent>.read-receipts;
+
+      layout {
+        column: 1;
+        row: 4;
+        column-span: 2;
+      }
+    }
+  }
+}

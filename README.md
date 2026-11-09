@@ -11,7 +11,7 @@
 [![CI](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml)
 
 Three GNOME-native office applications written in Rust with GTK4 and
-libadwaita, and an email client built alongside them, shipped as Flatpaks:
+libadwaita, an email client and a Matrix chat client built alongside them, shipped as Flatpaks:
 
 | App | What it is | Reads | Writes |
 |---|---|---|---|
@@ -19,6 +19,7 @@ libadwaita, and an email client built alongside them, shipped as Flatpaks:
 | **Tables** | Spreadsheet | XLSX, XLS, ODS, CSV, TSV | XLSX, PDF |
 | **Decks** | Presentations | PPTX, ODP | PPTX, ODP, PDF |
 | **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/lifafa](https://github.com/tuna-os/lifafa) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
+| **Mandelbrot** | Matrix chat client with native voice and video calls, a [Fractal](https://gitlab.gnome.org/World/fractal/) fork; source in [`mandelbrot/`](mandelbrot/) | Matrix rooms, threads, polls, voice messages | The same, end-to-end encrypted |
 
 CSV and TSV are import-only in Tables, on purpose: saving a spreadsheet
 over an imported `.csv` would write XLSX bytes to a file everything else
@@ -33,6 +34,10 @@ signed Flatpak repository on its GitHub Pages, and as bundles on its
 [releases page](https://github.com/tuna-os/lifafa/releases) (see
 [Install](#install)). Report problems with it in
 [tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
+Mandelbrot is built from `mandelbrot/` (its own Cargo workspace and Flatpak
+manifest); see [docs/SUITE-INTEGRATION.md](docs/SUITE-INTEGRATION.md) for how
+the whole suite fits together.
+
 The three apps can send the open document by email from the main menu (see
 [docs/LIFAFA-INTEGRATION.md](docs/LIFAFA-INTEGRATION.md)).
 Everything below this section is about Letters, Tables and Decks.

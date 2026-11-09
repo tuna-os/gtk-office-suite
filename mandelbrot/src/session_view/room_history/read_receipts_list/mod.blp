@@ -1,0 +1,34 @@
+using Gtk 4.0;
+
+template $ContentReadReceiptsList: Gtk.Widget {
+  focusable: true;
+  halign: end;
+
+  accessibility {
+    has-popup: true;
+  }
+
+  Gtk.Box content {
+    spacing: 6;
+
+    Gtk.Label label {
+      margin-start: 2;
+
+      styles [
+        "caption",
+        "dimmed",
+      ]
+    }
+
+    $OverlappingAvatars avatar_list {
+      valign: center;
+      avatar-size: 20;
+      spacing: 1;
+      max-avatars: 5;
+    }
+  }
+
+  Gtk.GestureClick {
+    released => $show_popover() swapped;
+  }
+}

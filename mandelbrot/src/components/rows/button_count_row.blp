@@ -1,0 +1,24 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ButtonCountRow: Adw.ActionRow {
+  activatable: true;
+  selectable: false;
+  accessible-role: button;
+
+  [suffix]
+  Gtk.Label count_label {
+    valign: center;
+    halign: center;
+    accessible-role: presentation;
+  }
+
+  [suffix]
+  Gtk.Image {
+    visible: bind template.activatable;
+    valign: center;
+    halign: center;
+    icon-name: "go-next-symbolic";
+    accessible-role: presentation;
+  }
+}

@@ -1,0 +1,24 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CopyableRow: Adw.ActionRow {
+  selectable: false;
+
+  Adw.Bin extra_suffix_bin {}
+
+  [suffix]
+  Gtk.Box {
+    valign: center;
+    spacing: 6;
+
+    Gtk.Button copy_button {
+      icon-name: "copy-symbolic";
+      action-name: "copyable-row.copy";
+      valign: center;
+
+      styles [
+        "flat",
+      ]
+    }
+  }
+}

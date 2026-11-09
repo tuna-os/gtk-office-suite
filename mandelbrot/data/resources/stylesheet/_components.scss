@@ -1,0 +1,167 @@
+// Components.
+
+@use "sass:math";
+@use 'vendor';
+
+inline-pill {
+  border-radius: 9999px;
+  background-color: vendor.$button_color;
+
+  @include vendor.focus-ring();
+
+  &.activatable {
+    &:hover {
+      background-color: vendor.$button_hover_color;
+
+      image {
+        filter: brightness(1.07) ;
+      }
+    }
+
+    &:active {
+      background-color: vendor.$button_active_color;
+
+      image {
+        filter: brightness(1.16) ;
+      }
+    }
+  }
+}
+
+.selected-avatar avatar {
+  border: 2px solid var(--accent-bg-color);
+}
+
+role-badge {
+  color: var(--dark-5);
+  background-color: var(--light-3);
+  border-radius: 0.4em;
+  padding: 0.1em 0.5em;
+  font-size: 0.8em;
+
+  &.creator {
+    color: var(--accent-fg-color);
+    background-color: var(--accent-purple);
+  }
+
+  &.admin {
+    color: var(--accent-fg-color);
+    background-color: var(--accent-red);
+  }
+
+  &.mod {
+    color: var(--accent-fg-color);
+    background-color: var(--accent-yellow);
+  }
+
+  &.muted {
+    color: var(--light-1);
+    background-color: var(--dark-2);
+  }
+}
+
+media-viewer toolbarview headerbar {
+  background: black;
+  color: white;
+}
+
+media-content-viewer controls {
+  min-width: 300px;
+}
+
+location-viewer .map-marker {
+  color: var(--accent-bg-color);
+}
+
+entry inline-pill {
+	margin-bottom: -0.5em;
+}
+
+editable-avatar {
+  .cutout {
+    background-color: var(--window-bg-color);
+    border-radius: 9999px;
+    padding: 2px;
+  }
+
+  .osd.circular {
+    $size: 64px;
+    min-width: $size;
+    min-height: $size;
+    border-radius: math.div($size, 2);
+  }
+}
+
+.substring-entry-row .header {
+  .subtitle {
+    margin-top: 4px;
+    margin-bottom: -4px;
+  }
+
+  text placeholder {
+    opacity: var(--dim-opacity);
+  }
+}
+
+.role-selection-popover {
+  viewport > box {
+    padding: 6px;
+  }
+
+  list row {
+    margin: 0;
+    padding: 2px 6px;
+    border-radius: vendor.$menu_radius;
+
+    &.spin {
+      padding: 0;
+
+      > box {
+        min-height: 30px;
+      }
+
+      spinbutton > button {
+        margin-top: 6px;
+        margin-bottom: 6px;
+      }
+
+      button.spin-confirm {
+        min-height: 22px;
+        min-width: 22px;
+        padding: 0;
+        margin-left: 2px;
+
+        &:dir(rtl) {
+          margin-left: 0;
+          margin-right: 2px;
+        }
+
+        image {
+          padding: 7px;
+        }
+      }
+    }
+  }
+}
+
+row.button loading-bin label.title {
+  margin-left: 12px;
+  margin-right: 12px;
+  min-height: 40px;
+}
+
+crop-circle > .mask {
+  background: black;
+  border-radius: 9999px;
+}
+
+user-page scrolledwindow > viewport > clamp > box {
+  margin: 12px;
+  border-spacing: 24px;
+}
+
+audio-player waveform {
+  &:focus {
+    color: var(--accent-color);
+  }
+}

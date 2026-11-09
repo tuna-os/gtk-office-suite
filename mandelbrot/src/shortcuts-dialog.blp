@@ -1,0 +1,107 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ShortcutsDialog shortcuts_dialog {
+  Adw.ShortcutsSection {
+    title: C_("shortcut window", "General");
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Search Room by Address or Link");
+      accelerator: "<ctrl>L";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Account Settings");
+      accelerator: "<ctrl>comma";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Open Menu");
+      accelerator: "F10";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Keyboard Shortcuts");
+      action-name: "app.shortcuts";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Close Window");
+      action-name: "window.close";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Quit");
+      action-name: "app.quit";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: C_("shortcut window", "Room List");
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Search Room List");
+      accelerator: "<ctrl>K";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Next Room");
+      accelerator: "<ctrl>Page_Down";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Previous Room");
+      accelerator: "<ctrl>Page_Up";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "First Room With Unread Messages");
+      accelerator: "<ctrl>asterisk";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Next Room With Unread Messages");
+      accelerator: "<ctrl><shift>Page_Down";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Previous Room With Unread Messages");
+      accelerator: "<ctrl><shift>Page_Up";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: C_("shortcut window", "Spaces");
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Next Space");
+      accelerator: "<ctrl><alt>Page_Down";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Previous Space");
+      accelerator: "<ctrl><alt>Page_Up";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Home");
+      accelerator: "<ctrl><alt>Home";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: C_("shortcut window", "Room History");
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Event Properties");
+      accelerator: "<alt>Return";
+    }
+
+    Adw.ShortcutsItem {
+      title: C_("shortcut window", "Close Room");
+      accelerator: "Escape";
+    }
+  }
+}

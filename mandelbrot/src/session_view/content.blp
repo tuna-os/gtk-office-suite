@@ -1,0 +1,87 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Content: Adw.NavigationPage {
+  title: _("Main Content");
+  vexpand: true;
+  hexpand: true;
+
+  child: Gtk.Stack stack {
+    transition-type: crossfade;
+
+    Gtk.StackPage {
+      name: "empty";
+      title: _("No Room Selected");
+
+      child: Adw.ToolbarView empty_page {
+        [top]
+        Adw.HeaderBar empty_page_header_bar {
+          show-title: false;
+        }
+
+        content: Adw.StatusPage {
+          visible: true;
+          hexpand: true;
+          vexpand: true;
+          can-focus: false;
+          icon-name: "empty-page";
+          title: _("No Room Selected");
+          description: _("Join a room to start chatting");
+        };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "room-history";
+      title: _("Room History");
+
+      child: $ContentRoomHistory room_history {
+        is-only-view: bind template.only-view;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "invite-request";
+      title: _("Invite Request");
+
+      child: $ContentInviteRequest invite_request {};
+    }
+
+    Gtk.StackPage {
+      name: "invite";
+      title: _("Room Invite");
+
+      child: $ContentInvite invite {};
+    }
+
+    Gtk.StackPage {
+      name: "explore";
+      title: _("Explore Rooms");
+
+      child: $ContentExplore explore {
+        session: bind template.session;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "space-overview";
+      title: _("Space Overview");
+
+      child: $ContentSpaceOverview space_overview {};
+    }
+
+    Gtk.StackPage {
+      name: "verification";
+      title: _("Identity Verification");
+
+      child: Adw.ToolbarView verification_page {
+        [top]
+        Adw.HeaderBar verification_page_header_bar {
+          show-title: false;
+        }
+
+        content: $IdentityVerificationView identity_verification_widget {};
+      };
+    }
+  };
+}

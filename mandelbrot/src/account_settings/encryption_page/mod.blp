@@ -1,0 +1,166 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $EncryptionPage: Adw.PreferencesPage {
+  icon-name: "encryption-symbolic";
+  title: _("Encryption");
+  name: "encryption";
+
+  Adw.PreferencesGroup {
+    title: _("Crypto Identity");
+    description: _("Allows you to verify other Matrix accounts and automatically trust their verified sessions");
+
+    Adw.PreferencesRow crypto_identity_row {
+      activatable: false;
+      selectable: false;
+
+      accessibility {
+        labelled-by: [
+          crypto_identity_title,
+        ];
+
+        described-by: [
+          crypto_identity_description,
+        ];
+      }
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 6;
+        margin-start: 12;
+        margin-end: 12;
+        margin-top: 12;
+        margin-bottom: 12;
+
+        Gtk.Image crypto_identity_icon {
+          accessible-role: presentation;
+          halign: center;
+
+          styles [
+            "card-icon",
+          ]
+        }
+
+        Gtk.Label crypto_identity_title {
+          label: bind crypto_identity_row.title;
+          wrap: true;
+          wrap-mode: word_char;
+
+          styles [
+            "heading",
+          ]
+        }
+
+        Gtk.Label crypto_identity_description {
+          wrap: true;
+          wrap-mode: word_char;
+
+          styles [
+            "caption",
+          ]
+        }
+
+        Gtk.Button crypto_identity_btn {
+          halign: center;
+          margin-top: 6;
+          can-shrink: true;
+          action-name: "account-settings.show-subpage";
+          action-target: "'crypto-identity-setup'";
+        }
+      };
+    }
+  }
+
+  Adw.PreferencesGroup {
+    title: _("Account Recovery");
+    description: _(
+      "Allows to fully recover your account with a recovery key or passphrase, if you ever lose access to all your sessions"
+    );
+
+    Adw.PreferencesRow recovery_row {
+      activatable: false;
+      selectable: false;
+
+      accessibility {
+        labelled-by: [
+          recovery_title,
+        ];
+
+        described-by: [
+          recovery_description,
+        ];
+      }
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 6;
+        margin-start: 12;
+        margin-end: 12;
+        margin-top: 12;
+        margin-bottom: 12;
+
+        Gtk.Image recovery_icon {
+          accessible-role: presentation;
+          halign: center;
+
+          styles [
+            "card-icon",
+          ]
+        }
+
+        Gtk.Label recovery_title {
+          label: bind recovery_row.title;
+          wrap: true;
+          wrap-mode: word_char;
+
+          styles [
+            "heading",
+          ]
+        }
+
+        Gtk.Label recovery_description {
+          wrap: true;
+          wrap-mode: word_char;
+
+          styles [
+            "caption",
+          ]
+        }
+
+        Gtk.Button recovery_btn {
+          halign: center;
+          margin-top: 6;
+          can-shrink: true;
+          action-name: "account-settings.show-subpage";
+          action-target: "'recovery-setup'";
+        }
+      };
+    }
+
+    Gtk.ListBox {
+      margin-top: 12;
+
+      styles [
+        "boxed-list",
+      ]
+
+      Adw.ButtonRow {
+        selectable: false;
+        // Translators: 'Room encryption keys' are encryption keys for all rooms.
+        title: _("Export Room Encryption Keys");
+        end-icon-name: "go-next-symbolic";
+        action-name: "account-settings.show-subpage";
+        action-target: "'export-keys'";
+      }
+
+      Adw.ButtonRow {
+        selectable: false;
+        // Translators: 'Room encryption keys' are encryption keys for all rooms.
+        title: _("Import Room Encryption Keys");
+        end-icon-name: "go-next-symbolic";
+        action-name: "account-settings.show-subpage";
+        action-target: "'import-keys'";
+      }
+    }
+  }
+}

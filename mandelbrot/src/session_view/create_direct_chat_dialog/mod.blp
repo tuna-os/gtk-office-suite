@@ -1,0 +1,105 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CreateDirectChatDialog: Adw.Dialog {
+  title: _("Direct Chat");
+  content-width: 380;
+  content-height: 620;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    [top]
+    Adw.Clamp {
+      hexpand: true;
+
+      Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-start: 24;
+        margin-end: 24;
+
+        Gtk.Label heading {
+          wrap: true;
+          wrap-mode: word_char;
+          max-width-chars: 20;
+          justify: center;
+          xalign: 0.5;
+          label: _("New Direct Chat");
+
+          styles [
+            "title-2",
+          ]
+        }
+
+        Gtk.SearchEntry search_entry {}
+      }
+    }
+
+    content: Gtk.Stack stack {
+      Gtk.StackPage {
+        name: "no-search-term";
+
+        child: Adw.StatusPage {
+          vexpand: true;
+          icon-name: "system-search-symbolic";
+          // Translators: In this string, 'Search' is a verb.
+          title: _("Search");
+          description: _("Search for people to start a new chat with");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "results";
+
+        child: Gtk.ScrolledWindow matching_page {
+          styles [
+            "avatar-row-list",
+          ]
+
+          child: Adw.Clamp {
+            child: Gtk.ListBox list_box {
+              activate-on-single-click: true;
+              margin-start: 16;
+              margin-end: 16;
+              row-activated => $create_direct_chat() swapped;
+
+              styles [
+                "navigation-sidebar",
+              ]
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "system-search-symbolic";
+          title: _("No Users Found");
+          description: _("No users matching the search pattern were found");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+
+        child: Adw.StatusPage error_page {
+          icon-name: "error-symbolic";
+          title: _("Error");
+          description: _("An error occurred while searching for matches");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "loading";
+
+        child: Adw.Spinner {};
+      }
+    };
+  };
+}

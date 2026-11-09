@@ -1,0 +1,104 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationView: Adw.Bin {
+  accessibility {
+    label: _("Identity Verification");
+  }
+
+  Gtk.Stack main_stack {
+    transition-type: crossfade;
+    vexpand: true;
+    notify::transition-running => $handle_transition_running() swapped;
+
+    Gtk.StackPage {
+      name: "accept-request";
+      title: _("New Identity Verification Request");
+
+      child: $IdentityVerificationAcceptRequestPage accept_request_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "wait-for-other-party";
+      title: _("Wait for Other Party");
+
+      child: $IdentityVerificationWaitForOtherPage wait_for_other_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "no-supported-methods";
+      title: _("No Supported Verification Methods");
+
+      child: $IdentityVerificationNoSupportedMethodsPage no_supported_methods_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "choose-method";
+      title: _("Verification Request Methods");
+
+      child: $IdentityVerificationChooseMethodPage choose_method_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "qr-code-scanned";
+      title: _("Scan Complete");
+
+      child: $IdentityVerificationQrCodeScannedPage qr_code_scanned_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "confirm-qr-code";
+      title: _("Confirm Scan Result");
+
+      child: $IdentityVerificationConfirmQrCodePage confirm_qr_code_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "sas";
+      title: _("Short Authentication String Verification");
+
+      child: $IdentityVerificationSasPage sas_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "completed";
+      title: _("Verification Successful");
+
+      child: $IdentityVerificationCompletedPage completed_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "cancelled";
+      title: _("Verification Cancelled");
+
+      child: $IdentityVerificationCancelledPage cancelled_page {
+        verification: bind template.verification;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "room-left";
+      title: _("Verification Cancelled");
+
+      child: $IdentityVerificationRoomLeftPage room_left_page {
+        verification: bind template.verification;
+      };
+    }
+  }
+}

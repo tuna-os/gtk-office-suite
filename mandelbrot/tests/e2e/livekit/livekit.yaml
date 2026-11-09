@@ -1,0 +1,23 @@
+# LiveKit SFU configuration for the MatrixRTC interop e2e stack.
+# Adapted from element-call's backend/dev_livekit.yaml.
+# The server runs with host networking (see compose.yml), so these ports
+# bind directly on the host.
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+rtc:
+  tcp_port: 7881
+  port_range_start: 50100
+  port_range_end: 50200
+  use_external_ip: false
+turn:
+  enabled: false
+keys:
+  devkey: secret
+room:
+  auto_create: false
+webhook:
+  api_key: devkey
+  urls:
+    # lk-jwt-service, published on the host at 6080.
+    - http://127.0.0.1:6080/sfu_webhook

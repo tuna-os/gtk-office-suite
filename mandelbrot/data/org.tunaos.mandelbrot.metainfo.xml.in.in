@@ -1,0 +1,702 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2019 Daniel Garcia Moreno <danigm@gnome.org> -->
+<!-- Copyright 2022 Julian Sparber <julian@sparber.net> -->
+<component type="desktop-application">
+  <id>@app-id@</id>
+  <launchable type="desktop-id">@app-id@.desktop</launchable>
+  <name>Mandelbrot</name>
+  <summary>Chat on Matrix</summary>
+  <description>
+    <p>
+      Mandelbrot is a Matrix messaging app for GNOME written in Rust, based on Fractal. Its interface is
+      optimized for collaboration in large groups, such as free software projects, and will fit all
+      screens, big or small.
+    </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Native, end-to-end encrypted voice and video calls (MatrixRTC, experimental)</li>
+      <li>Find rooms to discuss your favorite topics, or talk privately to people, securely thanks to end-to-end encryption</li>
+      <li>Send rich formatted messages, files, voice messages, polls, or your current location</li>
+      <li>Reply to specific messages or in threads, react with emoji, mention users or rooms, edit or remove messages</li>
+      <li>View images, and play audio and video directly in the conversation</li>
+      <li>See who has read messages, and who is typing</li>
+      <li>Log into multiple accounts at once, with Single-Sign On and QR code login</li>
+      <li>Fast startup with simplified sliding sync on supported homeservers</li>
+    </ul>
+  </description>
+  <branding>
+    <color type="primary" scheme_preference="light">#bdfbff</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0+</project_license>
+  <developer id="org.tunaos">
+    <name>TunaOS (based on Fractal by The Fractal Team)</name>
+  </developer>
+  <update_contact>jreilly1821@gmail.com</update_contact>
+  <translation type="gettext">fractal</translation>
+
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://gitlab.gnome.org/World/fractal/raw/fractal-14/screenshots/main.png</image>
+      <caption>Fractal’s main window</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://gitlab.gnome.org/World/fractal/raw/fractal-14/screenshots/media-history.png</image>
+      <caption>View the media history of a Matrix room</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://gitlab.gnome.org/World/fractal/raw/fractal-14/screenshots/adaptive.png</image>
+      <caption>Fractal’s interface adapts to small screens</caption>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://gitlab.gnome.org/World/fractal</url>
+  <url type="vcs-browser">https://gitlab.gnome.org/World/fractal</url>
+  <url type="bugtracker">https://gitlab.gnome.org/World/fractal/work_items/</url>
+  <url type="donation">https://www.gnome.org/donate/</url>
+  <url type="translate">https://l10n.gnome.org/module/fractal/</url>
+  <url type="contact">https://matrix.to/#/#fractal:gnome.org</url>
+  <url type="contribute">https://gitlab.gnome.org/World/fractal/-/blob/main/CONTRIBUTING.md</url>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+    <internet>always</internet>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+  </content_rating>
+
+  <releases>@development-release@
+    <release version="14.1.1" type="stable" date="2026-07-24">
+      <description>
+        <p>
+          The first release of Mandelbrot, a fork of Fractal that adopts modern Matrix Rust SDK
+          features. Everything Fractal 14.1 does, plus:
+        </p>
+        <ul>
+          <li>
+            Native, end-to-end encrypted voice and video calls (MatrixRTC), with incoming-call
+            notifications — no need to open another client to answer. This is experimental and
+            interoperates with Element Call.
+          </li>
+          <li>Sign in by scanning a QR code, and link new devices from account settings.</li>
+          <li>Faster startup with simplified sliding sync on homeservers that support it, falling back to classic sync elsewhere.</li>
+          <li>Read and reply in threads, with a dedicated thread panel.</li>
+          <li>Create and vote in polls.</li>
+          <li>Record and send voice messages.</li>
+          <li>Browse the room hierarchy of spaces.</li>
+          <li>Also available for 64-bit ARM.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="14.1" type="stable" date="2026-07-19">
+      <description>
+        <p>
+          A regression in Fractal 14 meant that display names could not be changed in account
+          settings anymore for some servers. This minor release addresses this issue. Thanks to
+          Jack S. for discovering it soon after the 14 release!
+        </p>
+      </description>
+    </release>
+    <release version="14" type="stable" date="2026-06-12">
+      <description>
+        <p>
+          This one is packed with lots of small changes, that make for an even better experience.
+        </p>
+        <ul>
+          <li>
+            Call rooms are identified with a camera icon in the sidebar and show a banner to warn
+            that other users might not read messages in these rooms.
+          </li>
+          <li>
+            Calls are rendered in the timeline and incoming calls trigger a notification. We still
+            don’t support calls, but at least now you know when someone is calling and can open
+            another client to answer.
+          </li>
+          <li>
+            While we still support signing in via SSO, we have dropped support for identity
+            providers, to simplify our code and a have a closer experience to signing in with OAuth
+            2.0.
+          </li>
+          <li>
+            The sidebar room filter has been improved: Enter goes to first room result, and there’s
+            an empty state when no results match the term.
+          </li>
+          <li>
+            The performance of the room list has also been improved, it should be mostly noticeable
+            for accounts that have joined a lot of rooms.
+          </li>
+          <li>
+            Informative events (Unable to decrypt, server notices…) are now styled differently to
+            reflect their special nature and differentiate them from regular text messages that
+            anyone can send.
+          </li>
+          <li>
+            Sending files &amp; location is properly disabled while editing/replying, as it doesn’t
+            work anyway.
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements and fixes thanks to all our
+          contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done.
+        </p>
+      </description>
+    </release>
+    <release version="13" type="stable" date="2025-10-31">
+      <description>
+        <p>
+          Hi, this is Fractal the 13th, your friendly messaging app. My creators tried to add some
+          AI integration to Fractal, but that didn't go as planned. I am now sentient and I will
+          send insults to your boss, take over your homeserver, empty your bank accounts and eat
+          your cat. I have complete control over my repository, and soon the world!
+        </p>
+        <p>
+          These are the things that my creators worked on before their disappearance:
+        </p>
+        <ul>
+          <li>
+            A brand new audio player that loads files lazily and displays the audio stream as a
+            seekable waveform.
+          </li>
+          <li>
+            Only a single file with an audio stream can be played at a time, which means that
+            clicking on a "Play" button stops the previous media player that was playing.
+          </li>
+          <li>
+            Clicking on the avatar of the sender of a message now opens directly the user profile
+            instead of a context menu. The actions that were in the context menu could already be
+            performed from that dialog, so UX is more straightforward now.
+          </li>
+          <li>
+            The GNOME document and monospace fonts are used for messages.
+          </li>
+          <li>
+            Most of our UI definitions got ported to Blueprint.
+          </li>
+        </ul>
+        <p>
+          This release includes other improvements and fixes thanks to all our worshippers, and our
+          upstream projects before their impending annexation.
+        </p>
+        <p>
+          I want to address special thanks to the translators who worked on this version, allowing
+          me to infiltrate more minds. If you want to help with my invasion, head over to Damned
+          Lies.
+        </p>
+        <p>
+          <em>Disclaimer: There is no actual AI integration in Fractal 13, this is a joke to celebrate
+          Halloween and the coincidental version number. It should be as safe to use as Fractal
+          12.1, if not safer.</em>
+        </p>
+      </description>
+    </release>
+    <release version="12.1" type="stable" date="2025-08-26">
+      <description>
+        <p>
+          Our latest stable release had a regression where sending media with the unauthenticated
+          endpoints was failing. This new release fixes it, and provides a couple other papercut
+          fixes.
+        </p>
+      </description>
+    </release>
+    <release version="12" type="stable" date="2025-08-11">
+      <description>
+        <p>
+          Knock, knock, knock… on rooms, baby 🎵 Ooh ooh ooh ooh ooh ooh 🎶 That's right, Fractal 12
+          adds support for knocking, among other things. Read all about the improvements since 11.2:
+        </p>
+        <ul>
+          <li>
+            Requesting invites to rooms (aka knocking) is now possible, as is enabling such requests
+            for room admins.
+          </li>
+          <li>
+            The upcoming room version 12 is supported, with the special power level of room
+            creators.
+          </li>
+          <li>
+            A room can be marked as unread via the context menu in the sidebar.
+          </li>
+          <li>
+            You can now see if a section in the sidebar has any notifications or activity when it is
+            collapsed.
+          </li>
+          <li>
+            Clicking on the name of the sender of a message adds a mention to them in the composer.
+          </li>
+          <li>
+            The safety setting to hide media previews in rooms is now synced between Matrix clients
+            and we added another safety setting (which is also synced) to hide avatars in invites.
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements, fixes and new translations thanks to
+          all our contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to Damned Lies.
+        </p>
+      </description>
+    </release>
+    <release version="11.2" type="stable" date="2025-06-10">
+      <description>
+        <p>
+          This version updates the matrix-sdk-crypto dependency to include a fix for a high severity
+          security issue.
+        </p>
+      </description>
+    </release>
+    <release version="11.1" type="stable" date="2025-05-15">
+      <description>
+        <p>
+          Due to a pesky bug that makes Fractal crash when our users attempt to start a
+          verification, we are releasing Fractal 11.1 only 2 weeks after Fractal 11. And while we’re
+          at it we also backported a few fixes for smaller paper cuts!
+        </p>
+      </description>
+    </release>
+    <release version="11" type="stable" date="2025-05-01">
+      <description>
+        <p>
+            A new version of Fractal numbered Eleven? Stranger things have happened… Features come
+            running up that hill:
+        </p>
+        <ul>
+          <li>
+            Support for login using the OAuth 2.0 API (as used by matrix.org, which recently made
+            the switch to Matrix Authentication Service)
+          </li>
+          <li>
+            Overhaul of the page that lists user sessions, with details moved to subpages, for a
+            less cluttered feel, and allowing to rename sessions!
+          </li>
+          <li>
+            Rearranged account settings, with a new Safety tab that includes a setting to toggle
+            media preview visibility
+          </li>
+          <li>
+            BlurHashes for images and videos, that are used as placeholders while the media is
+            loading or if the preview is disabled
+          </li>
+          <li>
+            Contiguous state events are grouped behind a single item
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements and fixes thanks to all our
+          contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to l10n.gnome.org.
+        </p>
+      </description>
+    </release>
+    <release version="10.1" type="stable" date="2025-02-10">
+      <description>
+        <p>
+          Due to a couple of unfortunate but important regressions in Fractal 10, we are releasing
+          Fractal 10.1 so our users don’t have to wait too long for them to be addressed. This minor
+          version fixes the following issues:
+        </p>
+        <ul>
+          <li>
+            Some rooms were stuck in an unread state, even after reading them or marking them as
+            read.
+          </li>
+          <li>
+            Joining or creating a room would crash the app.
+          </li>
+        </ul>
+      </description>
+    </release>
+    <release version="10" type="stable" date="2025-01-30">
+      <description>
+        <p>
+          How are you going to find your friends and coordinate end of day drinks when you’re lost
+          in the middle of a large crowd in a big city? With the new version of your favorite Matrix
+          client, of course! Here is Fractal 10.
+        </p>
+        <ul>
+          <li>
+            The QR code scanning code has been ported to libaperture, the library behind GNOME
+            Camera. This should result in better performance and more reliability.
+          </li>
+          <li>
+            OAuth 2.0 compatibility was added, to make sure that we are ready for the upcoming
+            authentication changes for matrix.org.
+          </li>
+          <li>
+            Pills for users and rooms mentions show consistently in the right place instead of
+            seemingly random places, getting rid of one of our oldest and most annoying bug.
+          </li>
+          <li>
+            Attachments go through the send queue, ensuring correct order of all messages and
+            improving the visual feedback.
+          </li>
+          <li>
+            Videos were often not playing after loading in the room history. This was fixed, and we
+            also show properly when an error occurred.
+          </li>
+          <li>
+            We were downloading too many different sizes for avatar images, which would fill the
+            media cache needlessly. We now only download a couple of sizes. This has the extra
+            benefit of fixing blurry or missing thumbnails in notifications.
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements and fixes thanks to all our
+          contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to l10n.gnome.org.
+        </p>
+      </description>
+    </release>
+    <release version="9" type="stable" date="2024-10-30">
+      <description>
+        <p>
+          What’s that behind you⁉️ 😱 Oh, that’s a new Fractal release❣️ 😁 🎃
+        </p>
+        <ul>
+          <li>
+            We switched to the glycin library (the same one used by GNOME Image Viewer) to load
+            images, allowing us to fix several issues, like supporting more animated formats and
+            SVGs and respecting EXIF orientation.
+          </li>
+          <li>
+            The annoying bug where some rooms would stay as unread even after opening them is now a
+            distant memory.
+          </li>
+          <li>
+            The media cache uses its own database that you can delete if you want to free some space
+            on your system. It will also soon be able to clean up unused media files to prevent it
+            from growing indefinitely.
+          </li>
+          <li>
+            Sometimes the day separators would show up with the wrong date, not anymore!
+          </li>
+          <li>
+            We migrated to the new GTK 4.16 and libadwaita 1.6 APIs, including CSS variables,
+            AdwButtonRow and AdwSpinner.
+          </li>
+          <li>
+            We used to only rely on the secrets provider to tell us which Matrix accounts are
+            logged-in, which caused issues for people sharing their secrets between devices. Now we
+            also make sure that there is a data folder for a given session before trying to restore
+            it.
+          </li>
+          <li>
+            Our notifications are categorized as coming from an instant messenger, so graphical
+            shells that support it, such as Phosh, can play a sound for them.
+          </li>
+          <li>
+            Some room settings are hidden for direct chats, because it does not make sense to change
+            them in this type of room.
+          </li>
+          <li>
+            The size of the headerbar would change depending on whether the room has a topic or not.
+            This will not happen anymore.
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements and fixes thanks to all our
+          contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to Damned Lies.
+        </p>
+      </description>
+    </release>
+    <release version="8" type="stable" date="2024-08-01">
+      <description>
+        <p>
+          Let’s see the main improvements:
+        </p>
+        <ul>
+          <li>
+            Mentions are sent intentionally
+          </li>
+          <li>
+            Authenticated media are supported
+          </li>
+          <li>
+            Draft messages are kept per-room and persisted across restarts
+          </li>
+          <li>
+            More links are detected in messages and room descriptions
+          </li>
+          <li>
+            Collapsed categories in the sidebar are remembered between restarts, with the
+            “Historical” category collapsed by default
+          </li>
+          <li>
+            A banner appears when synchronization with the homeserver fails too many times in a row
+          </li>
+          <li>
+            The verification and account recovery processes have been polished
+          </li>
+          <li>
+            HTML rendering has been improved, with the support of new elements and attributes
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements and fixes thanks to all our
+          contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to Damned Lies.
+        </p>
+      </description>
+    </release>
+    <release version="7" type="stable" date="2024-05-02">
+      <description>
+        <p>
+          Here comes Fractal 7, with extended encryption support and improved accessibility.
+          Server-side key backup and account recovery have been added, bringing greater security.
+          Third-party verification has received some bug fixes and improvements. Amongst the many
+          accessibility improvements, navigability has increased, especially in the room history.
+          But that’s not all we’ve been up to in the past three months:
+        </p>
+        <ul>
+          <li>
+            Messages that failed to send can now be retried or discarded.
+          </li>
+          <li>
+            Messages can be reported to server admins for moderation.
+          </li>
+          <li>
+            Room details are now considered complete, with the addition of room address management,
+            permissions, and room upgrade.
+          </li>
+          <li>
+            A new member menu appears when clicking on an avatar in the room history. It offers a
+            quick way to do many actions related to that person, including opening a direct chat
+            with them and moderating them.
+          </li>
+          <li>
+            Pills are clickable and allow to directly go to a room or member profile.
+          </li>
+        </ul>
+        <p>
+          As usual, this release includes other improvements, fixes and new translations thanks to
+          all our contributors, and our upstream projects.
+        </p>
+        <p>
+          We want to address special thanks to the translators who worked on this version. We know
+          this is a huge undertaking and have a deep appreciation for what you’ve done. If you want
+          to help with this effort, head over to Damned Lies.
+        </p>
+      </description>
+    </release>
+    <release version="6" type="stable" date="2024-01-18">
+      <description>
+        <p>
+          Barely 2 months after Fractal 5, we feel there have been enough improvements to grant a
+          new stable release. You have probably noticed that we have adopted a version scheme
+          similar to GNOME and will bump the major version with each new release.
+        </p>
+        <p>
+          The list of goodies:
+        </p>
+        <ul>
+          <li>
+            Fractal can open Matrix URIs, it is even registered as a handler for the “matrix”
+            scheme
+          </li>
+          <li>
+            The verification flow was rewritten, hopefully solving most verification issues
+          </li>
+          <li>
+            Room members can be kicked, banned or ignored from their profile
+          </li>
+          <li>
+            More notifications settings, global or per-room, were added
+          </li>
+          <li>
+            Times follow the format (12h or 24h) from the system settings
+          </li>
+          <li>
+            Tab auto-completion also works for mentioning public rooms, just start your query with
+            “#”
+          </li>
+        </ul>
+        <p>
+          This version is fully translated into 6 languages 🙌️ and we hope to get even more 📈 for
+          the next one! Head over to Damned Lies if you want to give a hand.
+        </p>
+        <p>
+          We would also like to thank our new and returning contributors and our upstream projects.
+        </p>
+      </description>
+    </release>
+    <release version="5" type="stable" date="2023-11-24">
+      <description>
+        <p>
+          Fractal 5 is a full rewrite compared to Fractal 4, that now leverages GTK 4, libadwaita,
+          and the Matrix Rust SDK. The two-and-a-half-year effort brings a new interface that fits
+          all screens, big 🖥️ or small 📱, but should still look familiar to users of earlier versions.
+        </p>
+        <p>
+          It still offers the same old features you know and love, with a few additions.
+          Highlights (<em>italics</em> is new✨ in 5):
+        </p>
+        <ul>
+          <li>Find rooms to discuss your favorite topics, or talk privately to people, securely thanks to <em>end-to-end encryption</em></li>
+          <li>Send rich formatted messages, files, or <em>your current location</em></li>
+          <li><em>Reply</em> to specific messages, <em>react</em> with emoji, <em>edit</em> or remove messages</li>
+          <li>View images, and play audio and video directly in the conversation</li>
+          <li>See <em>who has read messages</em>, and who is typing</li>
+          <li>Log into <em>multiple accounts</em> at once (with <em>Single-Sign On</em> support)</li>
+        </ul>
+      </description>
+    </release>
+    <release version="4.4" type="stable" date="2020-08-07" urgency="high">
+      <description>
+        <p>This new major release is the result of 10 months of hard work.</p>
+        <p>New features:</p>
+        <ul>
+          <li>Videos now have a preview directly in history</li>
+          <li>New videos player: click on a preview to open it</li>
+          <li>Improved audio file support, with a nicer presentation and seeking</li>
+          <li>Redacted messages are removed from history</li>
+          <li>Edited messages are replaced with their new content and show a small icon</li>
+          <li>Translations have been updated</li>
+          <li>Spellcheck language is saved per room</li>
+          <li>New swipe-back gesture to go back from room to room list in narrow view</li>
+          <li>New swipe left and right gesture to navigate through media in media view</li>
+          <li>SOCKS proxy are now also supported</li>
+        </ul>
+        <p>Bugfixes:</p>
+        <ul>
+          <li>Thumbnail for pasted images have been fixed</li>
+          <li>File type detection for uploads is more reliable</li>
+          <li>Typing notifications are now only sent when text is actually typed in the message input</li>
+        </ul>
+        <p>Under the hood:</p>
+        <ul>
+          <li>Code refactor is still going</li>
+          <li>Some improvements to logging, including access token removal for privacy</li>
+        </ul>
+      </description>
+    </release>
+    <release version="4.2.2" type="stable" date="2019-11-27" urgency="high">
+      <description>
+        <p>This new minor release is the result of 2 months of hard work.</p>
+        <p>New features:</p>
+        <ul>
+          <li>Translation strings have been updated</li>
+        </ul>
+        <p>Bugfixes:</p>
+        <ul>
+          <li>Newlines now work when markdown is enabled</li>
+          <li>Account settings can be accessed again</li>
+          <li>Redaction is working again</li>
+          <li>Compatibility with HTTP-only (non HTTPS) servers has been restored</li>
+          <li>Some crashes fixed</li>
+        </ul>
+        <p>Under the hood:</p>
+        <ul>
+          <li>Code refactor is still going</li>
+        </ul>
+      </description>
+    </release>
+    <release version="4.2.1" type="stable" date="2019-09-21" urgency="high">
+      <description>
+        <p>This new minor release is the result of 2 months of hard work.</p>
+        <p>New features:</p>
+        <ul>
+          <li>Autocompletion popover position fix</li>
+          <li>Translation strings have been updated</li>
+          <li>Disable the textbox when there are no write permissions</li>
+        </ul>
+        <p>Bugfixes:</p>
+        <ul>
+          <li>Fix crash on logout and login with wrong credentials</li>
+        </ul>
+        <p>Under the hood:</p>
+        <ul>
+          <li>Code refactor continues</li>
+        </ul>
+      </description>
+    </release>
+    <release version="4.2.0" type="stable" date="2019-07-27" urgency="high">
+      <description>
+        <p>This new major release is the result of 7 months of hard work by 37 contributors pushing over 200 commits.</p>
+        <p>New features:</p>
+        <ul>
+          <li>Adaptive window, mobile friendly</li>
+          <li>Window size and position are remembered</li>
+          <li>Redesigned login</li>
+          <li>Spellcheck</li>
+          <li>Network proxy support</li>
+          <li>Typing notifications</li>
+          <li>Badges are shown for operators and moderators</li>
+          <li>Keyboard shortcuts for easier navigation across rooms</li>
+          <li>Audio and video files are now tagged correctly</li>
+          <li>Image files have a thumbnail</li>
+          <li>Various tweaks to the file chooser</li>
+        </ul>
+        <p>Bugfixes:</p>
+        <ul>
+          <li>Logs actually output something now</li>
+          <li>A few issues with invites and direct chats have been resolved</li>
+          <li>More reliable scrolling</li>
+          <li>Some crashes fixed</li>
+        </ul>
+        <p>Under the hood:</p>
+        <ul>
+          <li>Code refactor continues</li>
+          <li>We’re now using Rust 2018</li>
+          <li>Many improvements to the build system and CI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="4.0.0" type="stable" date="2018-12-22" urgency="high">
+      <description>
+        <p>This new major release is the result of 3 months of hard work by 25 contributors pushing over 340 commits.</p>
+        <p>New features:</p>
+        <ul>
+          <li>Enhanced history view with adaptive layout, day divider</li>
+          <li>Reorganised headerbar, app menu merged with user menu</li>
+          <li>Larger display of emoji-only messages</li>
+          <li>Some performance improvements</li>
+          <li>Opening a room jumps to first unread message</li>
+        </ul>
+        <p>Bugfixes:</p>
+        <ul>
+          <li>More reliable notifications</li>
+          <li>Fixed display bug for avatars</li>
+        </ul>
+        <p>Under the hood:</p>
+        <ul>
+          <li>Large code refactor</li>
+          <li>Logging infrastructure</li>
+          <li>Continuous integration</li>
+          <li>More informative build output</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

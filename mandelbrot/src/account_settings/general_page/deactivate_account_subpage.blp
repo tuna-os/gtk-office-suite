@@ -1,0 +1,108 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $DeactivateAccountSubpage: Adw.NavigationPage {
+  // Translators: Deactivation is a permanent action that occurs on the server.
+  title: _("Deactivate Account");
+
+  styles [
+    "form-page",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      vexpand: true;
+
+      child: Adw.Clamp {
+        maximum-size: 444;
+
+        child: Gtk.Box box {
+          orientation: vertical;
+
+          Gtk.Image {
+            icon-name: "warning-symbolic";
+
+            styles [
+              "extra-large-icon",
+              "error",
+            ]
+          }
+
+          Gtk.Box {
+            orientation: vertical;
+
+            styles [
+              "paragraphs",
+            ]
+
+            Gtk.Label {
+              // Translators: Deactivation is a permanent action that occurs on the server.
+              label: _(
+                "Deactivating your account means you will lose access to all your messages, contacts, files, and more, forever."
+              );
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0.0;
+
+              styles [
+                "body",
+              ]
+            }
+
+            Gtk.Label {
+              // Translators: Deactivation is a permanent action that occurs on the server.
+              label: _("To confirm that you really want to deactivate this account, type in your Matrix user ID:");
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0.0;
+
+              styles [
+                "body",
+              ]
+            }
+          }
+
+          Gtk.ListBox {
+            styles [
+              "boxed-list-separate",
+            ]
+
+            Adw.EntryRow confirmation {
+              selectable: false;
+              changed => $update_buttons_state() swapped;
+              entry-activated => $deactivate_account() swapped;
+            }
+
+            $LoadingButtonRow loading_button {
+              visible: false;
+              title: _("Continue");
+              sensitive: false;
+              activated => $deactivate_account_with_request() swapped;
+
+              styles [
+                "destructive-action",
+              ]
+            }
+
+            Adw.ButtonRow open_url_button {
+              visible: false;
+              title: _("Continue");
+              end-icon-name: "external-link-symbolic";
+              sensitive: false;
+              activated => $open_deactivate_account_url() swapped;
+
+              styles [
+                "destructive-action",
+              ]
+            }
+          }
+        };
+      };
+    };
+  };
+}

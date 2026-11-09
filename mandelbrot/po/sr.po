@@ -1,0 +1,4975 @@
+# Serbian translation for fractal.
+# Copyright © 2021 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Мирослав Николић <miroslavnikolic@rocketmail.com>, 2021.
+# Марко Костић <marko.m.kostic@gmail.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal master\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2026-07-27 00:32+0000\n"
+"PO-Revision-Date: 2026-07-31 13:22+0200\n"
+"Last-Translator: Марко Костић <marko.m.kostic@gmail.com>\n"
+"Language-Team: српски <gnome-sr@googlegroups.org>\n"
+"Language: sr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=4; plural=n==1? 3 : n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : "
+"2;\n"
+"X-Generator: Poedit 3.9\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:2 data/org.gnome.Fractal.metainfo.xml.in.in:7 src/login/session_setup_view.blp:22
+#: src/window.blp:9
+msgid "Fractal"
+msgstr "Фрактал"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+msgid "Fractal is a decentralized, secure messaging client for collaborative group communication."
+msgstr "Фрактал је децентрализован, безбедан клијент за дописивање за заједничку групну комуникацију."
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid "Fractal group messaging"
+msgstr "Фрактал групно дописивање"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:13
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "Матрикс;matrix.org;ћаскање;ирц;комуникације;разговор;риот;елемент;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Ширина прозора"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Висина прозора"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Стање увећаног прозора"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Омогући маркдаун форматирање"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Да ли поруке треба да буду обрађене као маркдаун приликом слања"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Подешавања сесије"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Серијализовани списак подешавања по сесији"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Тренутна сесија"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Ћаскање на Матриксу"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface is optimized for collaboration in large "
+"groups, such as free software projects, and will fit all screens, big or small."
+msgstr "Фрактал је Матриксов програм за дописивање за Гном написан у Расту. Његово прочеље је прилагођено за сарадњу у великим групама, као што су пројекти слободног софтвера, и прилагођава се свим екранима, било малим или великим."
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "Истакнуто:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid "Find rooms to discuss your favorite topics, or talk privately to people, securely thanks to end-to-end encryption"
+msgstr ""
+"Пронађите собе за разговор о вашим омиљеним темама, или разговарајте приватно са људима, безбедно захваљујући шифровању "
+"са краја на крај"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "Шаљите богато форматиране поруке, датотеке или вашу тренутну локацију"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid "Reply to specific messages, react with emoji, mention users or rooms, edit or remove messages"
+msgstr "Одговорите на одређене поруке, реагујте емоџијима, помените кориснике или собе, уредите или уклоните поруке"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "Прегледајте слике и пуштајте звук и видео директно у разговору"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "Видите ко је прочитао поруке и ко куца"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr "Пријавите се на више налога одједном (уз подршку за јединствену пријаву)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:31 src/application.rs:244
+msgid "The Fractal Team"
+msgstr "Тим Фрактала"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Главни прозор Фрактала"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "Прегледајте историју медија Матрикс собе"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "Прочеље Фрактала се прилагођава малим екранима"
+
+#: src/account_chooser_dialog/mod.blp:5 src/account_chooser_dialog/mod.blp:35
+msgid "Select an Account"
+msgstr "Изаберите налог"
+
+#: src/account_chooser_dialog/mod.blp:62
+msgid "Select the account you want to open the URI with"
+msgstr "Изаберите налог којим желите да отворите УРИ"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:68
+msgid "Passphrase"
+msgstr "Лозинка"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:87
+msgid "Confirm Passphrase"
+msgstr "Потврда лозинке"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:117
+#: src/session_view/room_details/history_viewer/file.blp:5 src/session_view/room_history/message_row/file.rs:63
+msgid "File"
+msgstr "Датотека"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:121
+msgid "Choose…"
+msgstr "Изабери…"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:150 src/account_settings/encryption_page/mod.blp:150
+msgid "Export Room Encryption Keys"
+msgstr "Извези кључеве за шифровање соба"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:153
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able to decrypt your messages in end-to-end "
+"encrypted rooms on another device or with another Matrix client."
+msgstr ""
+"Извожење кључева за шифровање соба омогућава вам да направите резервну копију како бисте могли да дешифрујете ваше поруке "
+"у собама шифрованим са краја на крај на другом уређају или помоћу другог Матрикс клијента."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:156
+msgid ""
+"The backup must be stored in a safe place and must be protected with a strong passphrase that will be used to encrypt the "
+"data."
+msgstr "Резервна копија мора бити сачувана на безбедном месту и мора бити заштићена јаком лозинком која ће се користити за шифровање података."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:159
+msgid "Export Keys"
+msgstr "Извези кључеве"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:162 src/account_settings/encryption_page/mod.blp:159
+msgid "Import Room Encryption Keys"
+msgstr "Увези кључеве за шифровање соба"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:165
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in end-to-end encrypted rooms with a previous "
+"backup from a Matrix client."
+msgstr "Увоз кључева за шифровање соба омогућава вам да дешифрујете своје поруке у собама шифрованим са краја на крај помоћу претходне резервне копије из Матрикс клијента."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:168
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "Унесите лозинку дату када је датотека резервне копије направљена."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:171
+msgid "Import Keys"
+msgstr "Увези кључеве"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:184 src/components/avatar/editable.rs:513
+msgid "Choose"
+msgstr "Изабери"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:193
+msgid "fractal-encryption-keys"
+msgstr "kljucevi-za-sifrovanje-fraktala"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:199
+msgid "Save Encryption Keys To…"
+msgstr "Сачувај кључеве шифровања у…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:202
+msgid "Import Encryption Keys From…"
+msgstr "Увези кључеве шифровања из…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:215 src/utils/matrix/media_message.rs:258
+msgid "Could not access file"
+msgstr "Не могу да приступим датотеци"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:244
+msgid "Passphrases do not match"
+msgstr "Фразе се не подударају"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:321
+msgid "Room encryption keys exported successfully"
+msgstr "Кључеви шифровања собе су успешно извезени"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:327
+#, rust-format
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "Увезено је {n} кључ шифровања собе"
+msgstr[1] "Увезено је {n} кључа шифровања собе"
+msgstr[2] "Увезено је {n} кључева шифровања собе"
+msgstr[3] "Увезено је {n} кључ шифровања собе"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:341
+msgid "Could not export the keys"
+msgstr "Не могу да извезем кључеве"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:354
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr "Фраза се не подудара са оном која је коришћена за извоз кључева."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:359
+msgid "Could not import the keys"
+msgstr "Не могу да увезем кључеве"
+
+#: src/account_settings/encryption_page/mod.blp:6
+msgid "Encryption"
+msgstr "Шифровање"
+
+#: src/account_settings/encryption_page/mod.blp:10
+msgid "Crypto Identity"
+msgstr "Крипто идентитет"
+
+#: src/account_settings/encryption_page/mod.blp:11
+msgid "Allows you to verify other Matrix accounts and automatically trust their verified sessions"
+msgstr "Омогућава вам да потврдите друге Матрикс налоге и аутоматски верујете њиховим потврђеним сесијама"
+
+#: src/account_settings/encryption_page/mod.blp:75
+msgid "Account Recovery"
+msgstr "Опоравак налога"
+
+#: src/account_settings/encryption_page/mod.blp:77
+msgid "Allows to fully recover your account with a recovery key or passphrase, if you ever lose access to all your sessions"
+msgstr ""
+"Омогућава потпуни опоравак вашег налога помоћу кључа за опоравак или фразе, ако икада изгубите приступ свим својим "
+"сесијама"
+
+#: src/account_settings/encryption_page/mod.rs:151
+msgid "No Crypto Identity"
+msgstr "Нема крипто идентитета"
+
+#: src/account_settings/encryption_page/mod.rs:153
+msgid "Verifying your own devices or other users is not possible"
+msgstr "Провера сопствених уређаја или других корисника није могућа"
+
+#: src/account_settings/encryption_page/mod.rs:156 src/account_settings/encryption_page/mod.rs:229
+msgid "Enable…"
+msgstr "Омогући…"
+
+#: src/account_settings/encryption_page/mod.rs:159
+msgid "Enable Crypto Identity"
+msgstr "Омогући криптографски идентитет"
+
+#: src/account_settings/encryption_page/mod.rs:175
+msgid "Crypto Identity Enabled"
+msgstr "Криптографски идентитет је омогућен"
+
+#: src/account_settings/encryption_page/mod.rs:177
+msgid "The crypto identity exists and this device is verified"
+msgstr "Криптографски идентитет постоји и овај уређај је потврђен"
+
+#: src/account_settings/encryption_page/mod.rs:180 src/account_settings/encryption_page/mod.rs:248
+msgid "Reset…"
+msgstr "Врати…"
+
+#: src/account_settings/encryption_page/mod.rs:183 src/components/crypto/identity_setup_view.blp:195
+#: src/components/crypto/identity_setup_view.blp:220 src/components/crypto/recovery_setup_view.blp:167
+msgid "Reset Crypto Identity"
+msgstr "Поново постави криптографски идентитет"
+
+#: src/account_settings/encryption_page/mod.rs:195
+msgid "Crypto Identity Incomplete"
+msgstr "Криптографски идентитет је непотпун"
+
+#: src/account_settings/encryption_page/mod.rs:197
+msgid "The crypto identity exists but this device is not verified"
+msgstr "Криптографски идентитет постоји, али овај уређај није потврђен"
+
+#: src/account_settings/encryption_page/mod.rs:200
+msgid "Verify…"
+msgstr "Потврди…"
+
+#: src/account_settings/encryption_page/mod.rs:203
+msgid "Verify This Session"
+msgstr "Потврди ову сесију"
+
+#: src/account_settings/encryption_page/mod.rs:224
+msgid "Account Recovery Disabled"
+msgstr "Опоравак налога је онемогућен"
+
+#: src/account_settings/encryption_page/mod.rs:226
+msgid "Enable recovery to be able to restore your account without another device"
+msgstr "Омогућите опоравак да бисте могли да повратите свој налог без другог уређаја"
+
+#: src/account_settings/encryption_page/mod.rs:232
+msgid "Enable Account Recovery"
+msgstr "Омогући опоравак налога"
+
+#: src/account_settings/encryption_page/mod.rs:243
+msgid "Account Recovery Enabled"
+msgstr "Опоравак налога је омогућен"
+
+#: src/account_settings/encryption_page/mod.rs:245
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "Ваши кључеви за потписивање и кључеви за шифровање су усклађени"
+
+#: src/account_settings/encryption_page/mod.rs:251
+msgid "Reset Account Recovery Key"
+msgstr "Поново постави кључ за опоравак налога"
+
+#: src/account_settings/encryption_page/mod.rs:263 src/components/crypto/recovery_setup_view.blp:424
+#: src/components/crypto/recovery_setup_view.blp:450
+msgid "Account Recovery Incomplete"
+msgstr "Опоравак налога је непотпун"
+
+#: src/account_settings/encryption_page/mod.rs:265
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr "Опоравите да бисте ускладили своје кључеве за потписивање и кључеве за шифровање"
+
+#: src/account_settings/encryption_page/mod.rs:268
+msgid "Recover…"
+msgstr "Опорави…"
+
+#: src/account_settings/encryption_page/mod.rs:271
+msgid "Recover Account Data"
+msgstr "Опоравак података налога"
+
+#: src/account_settings/general_page/change_password_subpage.rs:104
+msgid "Password must be at least 8 characters long"
+msgstr "Лозинка мора имати најмање 8 знакова"
+
+#: src/account_settings/general_page/change_password_subpage.rs:107
+msgid "Password must have at least one lower-case letter"
+msgstr "Лозинка мора имати најмање једно мало слово"
+
+#: src/account_settings/general_page/change_password_subpage.rs:111
+msgid "Password must have at least one upper-case letter"
+msgstr "Лозинка мора имати најмање једно велико слово"
+
+#: src/account_settings/general_page/change_password_subpage.rs:114
+msgid "Password must have at least one digit"
+msgstr "Лозинка мора имати најмање једну цифру"
+
+#: src/account_settings/general_page/change_password_subpage.rs:116
+msgid "Password must have at least one symbol"
+msgstr "Лозинка мора имати најмање један симбол"
+
+#: src/account_settings/general_page/change_password_subpage.rs:146
+msgid "Passwords do not match"
+msgstr "Лозинке се не подударају"
+
+#: src/account_settings/general_page/change_password_subpage.rs:192
+msgid "Password changed successfully"
+msgstr "Лозинка је успешно промењена"
+
+#: src/account_settings/general_page/change_password_subpage.rs:206
+msgid "Password rejected for being too weak"
+msgstr "Лозинка је одбијена јер је преслаба"
+
+#: src/account_settings/general_page/change_password_subpage.rs:210
+msgid "Could not change password"
+msgstr "Не могу да променим лозинку"
+
+#: src/account_settings/general_page/change_password_subpage.ui:7 src/account_settings/general_page/mod.blp:59
+msgid "Change Password"
+msgstr "Промени лозинку"
+
+#: src/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr "Промена лозинке ће вас одјавити из осталих сесија."
+
+#: src/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "Нова лозинка"
+
+#: src/account_settings/general_page/change_password_subpage.ui:125
+msgid "Confirm New Password"
+msgstr "Потврди нову лозинку"
+
+#: src/account_settings/general_page/change_password_subpage.ui:162
+#: src/account_settings/general_page/deactivate_account_subpage.blp:83
+#: src/account_settings/general_page/deactivate_account_subpage.blp:94
+#: src/account_settings/general_page/log_out_subpage.blp:86 src/session_view/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "Настави"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:6 src/account_settings/general_page/mod.blp:88
+msgid "Deactivate Account"
+msgstr "Поништи налог"
+
+#: src/account_settings/general_page/deactivate_account_subpage.blp:46
+msgid "Deactivating your account means you will lose access to all your messages, contacts, files, and more, forever."
+msgstr "Поништавањем налога изгубићете приступ свим својим порукама, контактима, датотекама и осталим подацима, заувек."
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:59
+msgid "To confirm that you really want to deactivate this account, type in your Matrix user ID:"
+msgstr "Да потврдите да заиста желите да поништите овај налог, упишите ваш Матрикс кориснички ИД:"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:156
+msgid "Account successfully deactivated"
+msgstr "Налог је успешно поништен"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:164
+msgid "Could not deactivate account"
+msgstr "Не могу да поништим налог"
+
+#: src/account_settings/general_page/log_out_subpage.blp:5 src/account_settings/general_page/mod.blp:75
+#: src/account_settings/user_session/user_session_subpage.blp:62
+msgid "Log Out"
+msgstr "Одјава"
+
+#: src/account_settings/general_page/log_out_subpage.blp:16
+msgid "Log Out of This Session"
+msgstr "Одјави се из ове сесије"
+
+#: src/account_settings/general_page/log_out_subpage.blp:43
+msgid "Are you sure you want to log out of this session?"
+msgstr "Желите ли заиста да се одјавите из ове сесије?"
+
+#: src/account_settings/general_page/log_out_subpage.blp:72
+msgid "Review Account Security"
+msgstr "Прегледај безбедност налога"
+
+#: src/account_settings/general_page/log_out_subpage.blp:102
+msgid "Logout Failed"
+msgstr "Одјављивање није успело"
+
+#: src/account_settings/general_page/log_out_subpage.blp:121
+msgid "Logging out of this session failed. You can try again, or, if this is a permanent error, you can remove the session."
+msgstr ""
+"Одјављивање из ове сесије није успело. Можете покушати поново, или, ако је ово трајна грешка, можете уклонити сесију."
+
+#: src/account_settings/general_page/log_out_subpage.blp:136
+#: src/account_settings/user_session/user_session_list_subpage.blp:83 src/components/action_button.blp:46
+#: src/components/rows/loading_row.blp:26 src/session_view/room_details/history_viewer/audio.blp:50
+#: src/session_view/room_details/history_viewer/file.blp:49 src/session_view/room_details/history_viewer/visual_media.blp:55
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:77 src/session_view/room_history/mod.blp:111
+msgid "Try Again"
+msgstr "Покушај поново"
+
+#: src/account_settings/general_page/log_out_subpage.blp:147
+msgid ""
+"Removing the session deletes the associated data from the system, but your homeserver and other sessions will not be "
+"aware that this session was logged out."
+msgstr "Уклањање сесије брише придружене податке из система, али ваш матични сервер и остале сесије неће знати да је ова сесија одјављена."
+
+#: src/account_settings/general_page/log_out_subpage.blp:162
+msgid "Remove Session"
+msgstr "Уклони сесију"
+
+#: src/account_settings/general_page/log_out_subpage.rs:83
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is your last connected session and you have no "
+"recent local backup of your encryption keys, you will not be able to restore your account."
+msgstr "Шифровани идентитет и опоравак налога нису исправно подешени. Ако је ово ваша последња повезана сесија и немате недавну локалну резервну копију ваших кључева за шифровање, нећете моћи да повратите свој налог."
+
+#: src/account_settings/general_page/log_out_subpage.rs:91
+msgid ""
+"This is your last connected session. Make sure that you can still access your recovery key or passphrase, or to backup "
+"your encryption keys before logging out."
+msgstr "Ово је ваша последња повезана сесија. Уверите се да и даље можете приступити свом кључу за опоравак или фрази, или направите резервну копију кључева за шифровање пре одјављивања."
+
+#: src/account_settings/general_page/mod.blp:6
+msgid "General"
+msgstr "Опште"
+
+#: src/account_settings/general_page/mod.blp:16
+msgid "Account Avatar"
+msgstr "Аватар налога"
+
+#: src/account_settings/general_page/mod.blp:23 src/session_view/create_room_dialog.blp:48
+#: src/session_view/create_room_dialog.blp:51 src/session_view/room_details/edit_details_subpage.blp:40
+#: src/session_view/room_details/edit_details_subpage.blp:44
+msgid "Name"
+msgstr "Име"
+
+#: src/account_settings/general_page/mod.blp:40
+msgid "Matrix User ID"
+msgstr "Матрикс кориснички ИД"
+
+#: src/account_settings/general_page/mod.blp:42 src/components/user_page.blp:57
+msgid "Copy Matrix User ID"
+msgstr "Копирај Матрикс кориснички ИД"
+
+#: src/account_settings/general_page/mod.blp:43 src/components/user_page.rs:256
+msgid "Matrix user ID copied to clipboard"
+msgstr "Матрикс кориснички ИД је копиран у оставу"
+
+#: src/account_settings/general_page/mod.blp:47 src/account_settings/user_session/user_session_list_subpage.blp:5
+msgid "Sessions"
+msgstr "Сесије"
+
+#: src/account_settings/general_page/mod.blp:68
+msgid "Manage Account"
+msgstr "Управљај налогом"
+
+#: src/account_settings/general_page/mod.blp:101 src/session_view/room_details/general_page.blp:229
+msgid "Advanced Information"
+msgstr "Додатни подаци"
+
+#: src/account_settings/general_page/mod.blp:104 src/login/homeserver_page.blp:6 src/login/homeserver_page.blp:44
+msgid "Homeserver"
+msgstr "Матични сервер"
+
+#: src/account_settings/general_page/mod.blp:106
+msgid "Copy Homeserver Address"
+msgstr "Копирај адресу матичног сервера"
+
+#: src/account_settings/general_page/mod.blp:107
+msgid "Homeserver address copied to clipboard"
+msgstr "Адреса матичног сервера је копирана у оставу"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:112
+msgid "Local Session ID"
+msgstr "Локални ИД сесије"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:115
+msgid "Copy Local Session ID"
+msgstr "Умножи локални ИД сесије"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:117
+msgid "Local session ID copied to clipboard"
+msgstr "Локални ИД сесије је ископиран у оставу"
+
+#: src/account_settings/general_page/mod.rs:309 src/session_view/room_details/edit_details_subpage.rs:149
+msgid "Avatar removed successfully"
+msgstr "Аватар је успешно уклоњен"
+
+#: src/account_settings/general_page/mod.rs:311 src/session_view/room_details/edit_details_subpage.rs:151
+msgid "Avatar changed successfully"
+msgstr "Аватар је успешно измењен"
+
+#: src/account_settings/general_page/mod.rs:329 src/account_settings/general_page/mod.rs:339
+#: src/session_view/room_details/edit_details_subpage.rs:176 src/session_view/room_details/edit_details_subpage.rs:186
+msgid "Could not load file"
+msgstr "Не могу да учитам датотеку"
+
+#: src/account_settings/general_page/mod.rs:358 src/session_view/room_details/edit_details_subpage.rs:213
+msgid "Could not upload avatar"
+msgstr "Не могу да отпремим аватар"
+
+#: src/account_settings/general_page/mod.rs:389 src/session_view/room_details/edit_details_subpage.rs:236
+msgid "Could not change avatar"
+msgstr "Не могу да изменим аватар"
+
+#: src/account_settings/general_page/mod.rs:406 src/session_view/room_details/edit_details_subpage.rs:261
+msgid "Remove Avatar?"
+msgstr "Уклонити аватар?"
+
+#: src/account_settings/general_page/mod.rs:407
+msgid "Do you really want to remove your avatar?"
+msgstr "Желите ли заиста да уклоните свој аватар?"
+
+#: src/account_settings/general_page/mod.rs:410 src/components/dialogs/message_dialogs.rs:58
+#: src/components/dialogs/message_dialogs.rs:323 src/components/dialogs/message_dialogs.rs:409
+#: src/components/dialogs/message_dialogs.rs:469 src/components/dialogs/message_dialogs.rs:491
+#: src/components/dialogs/message_dialogs.rs:513 src/identity_verification_view/confirm_qr_code_page.blp:55
+#: src/session_view/room_details/edit_details_subpage.rs:267 src/session_view/room_details/general_page.rs:1001
+#: src/session_view/room_details/upgrade_dialog/mod.blp:134 src/session_view/room_history/event_actions/group.rs:584
+#: src/session_view/room_history/event_actions/group.rs:648 src/session_view/room_history/message_toolbar/mod.blp:72
+#: src/session_view/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "Откажи"
+
+#: src/account_settings/general_page/mod.rs:411 src/components/dialogs/message_dialogs.rs:232
+#: src/session_view/room_details/edit_details_subpage.rs:268 src/session_view/room_history/event_actions/group.rs:585
+msgid "Remove"
+msgstr "Уклони"
+
+#: src/account_settings/general_page/mod.rs:445 src/session_view/room_details/edit_details_subpage.rs:293
+msgid "Could not remove avatar"
+msgstr "Не могу да уклоним аватар"
+
+#: src/account_settings/general_page/mod.rs:494
+msgid "Name changed successfully"
+msgstr "Име је успешно измењено"
+
+#: src/account_settings/general_page/mod.rs:544
+msgid "Could not change display name"
+msgstr "Не могу да изменим приказано име"
+
+#: src/account_settings/mod.blp:5 src/account_switcher/session_item.blp:58
+msgid "Account Settings"
+msgstr "Подешавања налога"
+
+#: src/account_settings/notifications_page.blp:6 src/session_view/room_details/general_page.blp:111
+msgid "Notifications"
+msgstr "Обавештења"
+
+#: src/account_settings/notifications_page.blp:11
+msgid "Enable for This Account"
+msgstr "Омогући за овај налог"
+
+#: src/account_settings/notifications_page.blp:18
+msgid "Enable for This Session"
+msgstr "Омогући за ову сесију"
+
+#: src/account_settings/notifications_page.blp:24
+msgid "Global"
+msgstr "Опште"
+
+#: src/account_settings/notifications_page.blp:25
+msgid "Which messages trigger notifications in rooms that do not have more specific rules"
+msgstr "Које поруке покрећу обавештења у собама које немају посебнија правила"
+
+#: src/account_settings/notifications_page.blp:28
+msgid "All messages in all rooms"
+msgstr "Све поруке у свим собама"
+
+#: src/account_settings/notifications_page.blp:34
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr "Све поруке у директним ћаскањима, и помињања и кључне речи у свим собама"
+
+#: src/account_settings/notifications_page.blp:40
+msgid "Only mentions and keywords in all rooms"
+msgstr "Само помињања и кључне речи у свим собама"
+
+#: src/account_settings/notifications_page.blp:47
+msgid "Keywords"
+msgstr "Кључне речи"
+
+#: src/account_settings/notifications_page.blp:49
+msgid "Messages that contain one of these keywords trigger notifications. Matching on these keywords is case-insensitive."
+msgstr ""
+"Поруке које садрже неку од ових кључних речи покрећу обавештења. Поклапање ових кључних речи не разликује мала и велика "
+"слова."
+
+#: src/account_settings/notifications_page.blp:61 src/account_settings/notifications_page.blp:62
+msgid "Add Keyword"
+msgstr "Додај кључну реч"
+
+#: src/account_settings/notifications_page.rs:195
+msgid "Could not enable account notifications"
+msgstr "Не могу да омогућим обавештења налога"
+
+#: src/account_settings/notifications_page.rs:197
+msgid "Could not disable account notifications"
+msgstr "Не могу да онемогућим обавештења налога"
+
+#: src/account_settings/notifications_page.rs:284
+msgid "Could not change global notifications setting"
+msgstr "Не могу да променим опште подешавање обавештења"
+
+#: src/account_settings/notifications_page.rs:337
+#, rust-format
+msgid "Remove “{keyword}”"
+msgstr "Уклони „{keyword}“"
+
+#: src/account_settings/notifications_page.rs:368
+msgid "Could not remove notification keyword"
+msgstr "Не могу да уклоним кључну реч обавештења"
+
+#: src/account_settings/notifications_page.rs:435
+msgid "Could not add notification keyword"
+msgstr "Не могу да додам кључну реч обавештења"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.blp:30 src/components/user_page.rs:746
+msgid "Stop Ignoring"
+msgstr "Престани да занемарујеш"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.rs:85 src/components/user_page.rs:767
+msgid "Could not stop ignoring user"
+msgstr "Не могу да престанем да занемарујем корисника"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:5 src/account_settings/safety_page/mod.blp:11
+msgid "Ignored Users"
+msgstr "Занемарени корисници"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:18
+msgid "Toggle Ignored Users Search"
+msgstr "Прекидач за претрагу занемарених корисника"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:32
+msgid "Search for ignored users"
+msgstr "Тражи занемарене кориснике"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:64
+msgid "No Ignored Users"
+msgstr "Нема занемарених корисника"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:65
+msgid "You can add users to this list from their room member profile"
+msgstr "Можете додати кориснике на овај списак из њиховог профила члана собе"
+
+#: src/account_settings/safety_page/mod.blp:6
+msgid "Safety"
+msgstr "Безбедност"
+
+#: src/account_settings/safety_page/mod.blp:13
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will still see some of their activity, like when "
+"they join or leave a room."
+msgstr ""
+"Све поруке или позивнице које пошаљу ови корисници ће бити занемарене. И даље ћете видети неке од њихових активности, као "
+"када се придруже или напусте собу."
+
+#: src/account_settings/safety_page/mod.blp:21
+msgid "Privacy"
+msgstr "Приватност"
+
+#: src/account_settings/safety_page/mod.blp:25
+msgid "Send Read Receipts"
+msgstr "Шаљи потврде о читању"
+
+#: src/account_settings/safety_page/mod.blp:26
+msgid "Allow other members of the rooms you participate in to track which messages you have seen"
+msgstr "Дозволи осталим члановима соба у којима учествујете да прате које сте поруке видели"
+
+#: src/account_settings/safety_page/mod.blp:31
+msgid "Send Typing Notifications"
+msgstr "Шаљи обавештења о куцању"
+
+#: src/account_settings/safety_page/mod.blp:32
+msgid "Allow other members of the rooms you participate in to see when you are typing a message"
+msgstr "Дозволи осталим члановима соба у којима учествујете да виде када куцате поруку"
+
+#: src/account_settings/safety_page/mod.blp:37
+msgid "Media Previews"
+msgstr "Прегледи медија"
+
+#: src/account_settings/safety_page/mod.blp:39
+msgid ""
+"Which rooms automatically show previews for images and videos. Hidden previews can always be shown by clicking on the "
+"media."
+msgstr ""
+"У којим собама се аутоматски приказују прегледи за слике и видео снимке. Скривени прегледи се увек могу приказати кликом "
+"на медиј."
+
+#: src/account_settings/safety_page/mod.blp:43
+msgid "Show in all rooms"
+msgstr "Прикажи у свим собама"
+
+#: src/account_settings/safety_page/mod.blp:49
+msgid "Show only in private rooms"
+msgstr "Прикажи само у приватним собама"
+
+#: src/account_settings/safety_page/mod.blp:55
+msgid "Hide in all rooms"
+msgstr "Сакриј у свим собама"
+
+#: src/account_settings/safety_page/mod.blp:63
+msgid "Show Avatars for Invites"
+msgstr "Прикажи аватаре за позиве"
+
+#: src/account_settings/safety_page/mod.blp:64
+msgid "Display the avatars of the room and the inviter"
+msgstr "Прикажи аватаре собе и позиваоца"
+
+#: src/account_settings/safety_page/mod.rs:232
+msgid "Could not change media previews setting"
+msgstr "Не могу да изменим подешавање прегледа медија"
+
+#: src/account_settings/safety_page/mod.rs:289
+msgid "Could not enable avatars for invites"
+msgstr "Не могу да омогућим аватаре за позиве"
+
+#: src/account_settings/safety_page/mod.rs:291
+msgid "Could not disable avatars for invites"
+msgstr "Не могу да онемогућим аватаре за позиве"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:13
+#: src/account_settings/user_session/user_session_list_subpage.blp:23
+msgid "Current Session"
+msgstr "Тренутна сесија"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:29
+#: src/account_settings/user_session/user_session_list_subpage.blp:57
+msgid "Other Active Sessions"
+msgstr "Остале активне сесије"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:74
+msgid "Could not load the list of connected devices"
+msgstr "Не могу да учитам списак повезаних уређаја"
+
+#. Translators: As in 'The session is verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:40 src/account_settings/user_session/user_session_subpage.rs:118
+msgid "Verified"
+msgstr "Потврђена"
+
+#. Translators: As in 'The session is not verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:51 src/account_settings/user_session/user_session_subpage.rs:122
+msgid "Not verified"
+msgstr "Није потврђена"
+
+#: src/account_settings/user_session/user_session_subpage.blp:14
+msgid "Matrix Session ID"
+msgstr "ИД Матрикс сесије"
+
+#: src/account_settings/user_session/user_session_subpage.blp:16
+msgid "Copy Matrix Session ID"
+msgstr "Умножи ИД Матрикс сесије"
+
+#: src/account_settings/user_session/user_session_subpage.blp:17
+msgid "Matrix session ID copied to clipboard"
+msgstr "ИД Матрикс сесије је копиран у оставу"
+
+#: src/account_settings/user_session/user_session_subpage.blp:22
+msgid "Public Name"
+msgstr "Јавно име"
+
+#: src/account_settings/user_session/user_session_subpage.blp:38
+msgid "Last Seen"
+msgstr "Последња посета"
+
+#: src/account_settings/user_session/user_session_subpage.blp:50
+msgid "Last Location"
+msgstr "Последње место"
+
+#: src/account_settings/user_session/user_session_subpage.blp:73
+#: src/account_settings/user_session/user_session_subpage.blp:83
+msgid "Disconnect"
+msgstr "Прекини везу"
+
+#: src/account_settings/user_session/user_session_subpage.rs:214
+msgid "Session renamed"
+msgstr "Сесија је преименована"
+
+#: src/account_settings/user_session/user_session_subpage.rs:218
+msgid "Could not rename session"
+msgstr "Не могу да преименујем сесију"
+
+#: src/account_settings/user_session/user_session_subpage.rs:248
+#, rust-format
+msgid "Could not disconnect session “{device_name}”"
+msgstr "Не могу да прекинем везу са сесијом „{device_name}“"
+
+#: src/account_switcher/account_switcher_button.blp:18
+msgid "Switch Accounts"
+msgstr "Промени налоге"
+
+#: src/account_switcher/account_switcher_popover.blp:40
+msgid "_Add Account"
+msgstr "Дод_ај налог"
+
+#: src/application.rs:250
+msgid "© The Fractal Team"
+msgstr "© Тим Фрактала"
+
+#: src/application.rs:264
+msgid "translator-credits"
+msgstr ""
+"Мирослав Николић <miroslavnikolic@rocketmail.com>\n"
+"Марко Костић <marko.m.kostic@gmail.com>\n"
+"Превод на српски језик https://гном.срб"
+
+#. This can't be added via the builder
+#: src/application.rs:268
+msgid "Name by"
+msgstr "Именуј по"
+
+#: src/application.rs:382
+msgid "Session not found"
+msgstr "Сесија није пронађена"
+
+#: src/components/action_button.blp:28
+msgid "Confirm Change"
+msgstr "Потврди измену"
+
+#: src/components/action_button.blp:62 src/components/camera/qrcode_scanner.blp:14 src/login/session_setup_view.blp:16
+#: src/session_view/explore/mod.blp:63 src/session_view/room_details/history_viewer/audio.blp:17
+#: src/session_view/room_details/history_viewer/file.blp:16 src/session_view/room_details/history_viewer/visual_media.blp:22
+#: src/session_view/room_history/mod.blp:92 src/window.blp:17
+msgid "Loading"
+msgstr "Учитавам"
+
+#: src/components/action_button.blp:84
+msgid "Success"
+msgstr "Успех"
+
+#: src/components/action_button.blp:102
+msgid "Warning"
+msgstr "Упозорење"
+
+#: src/components/action_button.blp:119 src/error_page.blp:9 src/session_view/create_direct_chat_dialog/mod.blp:93
+#: src/session_view/explore/mod.blp:108 src/session_view/explore/mod.blp:112
+#: src/session_view/room_details/invite_subpage/mod.blp:109 src/session_view/room_details/invite_subpage/mod.blp:113
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:68
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:72 src/window.blp:87
+msgid "Error"
+msgstr "Грешка"
+
+#: src/components/avatar/editable.blp:64
+msgid "Remove Avatar"
+msgstr "Уклони аватар"
+
+#: src/components/avatar/editable.blp:81
+msgid "Select New Avatar"
+msgstr "Изабери нови аватар"
+
+#: src/components/avatar/editable.rs:505
+msgid "Images"
+msgstr "Слике"
+
+#: src/components/avatar/editable.rs:511
+msgid "Choose Avatar"
+msgstr "Изабери аватар"
+
+#: src/components/avatar/editable.rs:527
+msgid "Could not open avatar file"
+msgstr "Не могу да отворим датотеку аватара"
+
+#: src/components/avatar/editable.rs:548
+msgid "The chosen file is not an image"
+msgstr "Изабрана датотека није слика"
+
+#: src/components/avatar/editable.rs:554
+msgid "Could not determine the type of the chosen file"
+msgstr "Не могу да одредим врсту изабране датотеке"
+
+#: src/components/camera/qrcode_scanner.blp:6
+msgid "QR Code Scanner"
+msgstr "Скенер КР кода"
+
+#: src/components/camera/qrcode_scanner.blp:21 src/components/camera/qrcode_scanner.blp:33
+msgid "Could Not Connect to Camera"
+msgstr "Не могу да се повежем са камером"
+
+#: src/components/camera/qrcode_scanner.rs:91
+msgid "Camera"
+msgstr "Камера"
+
+#: src/components/camera/viewfinder.rs:74
+msgid "Viewfinder"
+msgstr "Тражило"
+
+#: src/components/crypto/identity_setup_view.blp:8 src/components/crypto/identity_setup_view.blp:33
+msgid "Verify Your New Session"
+msgstr "Потврдите вашу нову сесију"
+
+#: src/components/crypto/identity_setup_view.blp:45
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure that no one is trying to impersonate you or "
+"intercept your conversations."
+msgstr "Потврђивање ваше сесије омогућава вама и људима са којима ћаскате да будете сигурни да нико не покушава да се представи као ви или да пресретне вашу комуникацију."
+
+#: src/components/crypto/identity_setup_view.blp:58
+msgid "Verify With Another Session"
+msgstr "Потврди помоћу друге сесије"
+
+#: src/components/crypto/identity_setup_view.blp:68
+msgid "No other devices logged into this account?"
+msgstr "Нема других уређаја пријављених на овај налог?"
+
+#: src/components/crypto/identity_setup_view.blp:76 src/components/crypto/recovery_setup_view.blp:8
+#: src/components/crypto/recovery_setup_view.blp:33
+msgid "Recover Account"
+msgstr "Опоравак налога"
+
+#: src/components/crypto/identity_setup_view.blp:87 src/components/crypto/identity_setup_view.blp:269
+#: src/components/crypto/recovery_setup_view.blp:97 src/components/crypto/recovery_setup_view.blp:210
+#: src/components/crypto/recovery_setup_view.blp:507
+msgid "Reset"
+msgstr "Врати"
+
+#: src/components/crypto/identity_setup_view.blp:103 src/identity_verification_view/mod.blp:6
+#: src/session_view/content.blp:68
+msgid "Identity Verification"
+msgstr "Потврда идентитета"
+
+#: src/components/crypto/identity_setup_view.blp:118 src/components/crypto/identity_setup_view.blp:143
+msgid "Set Up Crypto Identity"
+msgstr "Подешавање крипто идентитета"
+
+#: src/components/crypto/identity_setup_view.blp:155 src/components/crypto/identity_setup_view.blp:232
+msgid "Your crypto identity allows you to verify other Matrix accounts and automatically trust their verified sessions."
+msgstr ""
+"Ваш крипто идентитет вам омогућава да потврдите друге Матрикс налоге и да аутоматски верујете њиховим потврђеним сесијама."
+
+#: src/components/crypto/identity_setup_view.blp:167
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr "Треба да подесите крипто идентитет, пошто никада није био направљен."
+
+#: src/components/crypto/identity_setup_view.blp:178 src/components/crypto/recovery_setup_view.blp:311
+msgid "Set Up"
+msgstr "Подеси"
+
+#: src/components/crypto/identity_setup_view.blp:245
+msgid "You should reset your crypto identity if a device that does not belong to you managed to be verified."
+msgstr "Требало би да поново подесите крипто идентитет ако је уређај који вам не припада успео да буде потврђен."
+
+#: src/components/crypto/identity_setup_view.blp:257
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr "Да бисте наставили, мораћете и поново да подесите кључ за опоравак налога."
+
+#: src/components/crypto/identity_setup_view.rs:415 src/identity_verification_view/cancelled_page.rs:196
+msgid "Could not send a new verification request"
+msgstr "Нисам успео да пошаљем нови захтев за потврду"
+
+#: src/components/crypto/identity_setup_view.rs:467
+msgid "Could not create the crypto identity"
+msgstr "Нисам успео да направим крипто идентитет"
+
+#: src/components/crypto/recovery_setup_view.blp:44
+msgid "Restore full access to your account."
+msgstr "Поврати потпуни приступ свом налогу."
+
+#: src/components/crypto/recovery_setup_view.blp:52
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery key that is usually set up when you create "
+"your account."
+msgstr ""
+"Да бисмо приступили подацима за опоравак, потребна нам је фраза за опоравак или кључ за опоравак који се обично "
+"подешавају када правите налог."
+
+#: src/components/crypto/recovery_setup_view.blp:69
+msgid "Recovery Passphrase or Key"
+msgstr "Фраза или кључ за опоравак"
+
+#: src/components/crypto/recovery_setup_view.blp:77 src/session_view/sidebar/mod.rs:362
+msgid "Recover"
+msgstr "Опорави"
+
+#: src/components/crypto/recovery_setup_view.blp:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "Изгубили сте фразу или кључ за опоравак?"
+
+#: src/components/crypto/recovery_setup_view.blp:113 src/components/crypto/recovery_setup_view.blp:138
+msgid "Reset Account Recovery"
+msgstr "Поново постави опоравак налога"
+
+#: src/components/crypto/recovery_setup_view.blp:150
+msgid "Resetting account recovery can allow you to fix or reset part or all of your recovery setup."
+msgstr ""
+"Поновно постављање опоравка налога вам може омогућити да поправите или поново поставите део или целокупно подешавање "
+"опоравка."
+
+#: src/components/crypto/recovery_setup_view.blp:171
+msgid "Reset Room Encryption Keys Backup"
+msgstr "Поново постави резервну копију кључева за шифровање собе"
+
+#: src/components/crypto/recovery_setup_view.blp:176
+msgid "If you do not provide a new recovery passphrase, a recovery key will be created."
+msgstr "Ако не обезбедите нову фразу за опоравак, биће направљен кључ за опоравак."
+
+#: src/components/crypto/recovery_setup_view.blp:188 src/components/crypto/recovery_setup_view.blp:288
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. Otherwise, if someone manages to get your "
+"account password, they will also be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"Не би требало да поново користите лозинку вашег Матрикс налога као фразу за опоравак. У супротном, ако неко успе да "
+"набави лозинку вашег налога, такође ће моћи да приступи свим вашим шифрованим разговорима и да се представља као ви."
+
+#: src/components/crypto/recovery_setup_view.blp:205 src/components/crypto/recovery_setup_view.blp:305
+msgid "Recovery Passphrase (Optional)"
+msgstr "Фраза за опоравак (необавезно)"
+
+#: src/components/crypto/recovery_setup_view.blp:227 src/components/crypto/recovery_setup_view.blp:252
+msgid "Set Up Account Recovery"
+msgstr "Подеси опоравак налога"
+
+#: src/components/crypto/recovery_setup_view.blp:264
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your encrypted messages even if you lose access "
+"to all your sessions."
+msgstr ""
+"Опоравак налога вам омогућава да повратите свој крипто идентитет и да читате своје шифроване поруке чак и ако изгубите "
+"приступ свим својим сесијама."
+
+#: src/components/crypto/recovery_setup_view.blp:276
+msgid "If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr "Ако не обезбедите лозинку за опоравак, биће направљен кључ за опоравак."
+
+#: src/components/crypto/recovery_setup_view.blp:328 src/components/crypto/recovery_setup_view.blp:354
+msgid "Account Recovery Set Up Successfully"
+msgstr "Опоравак налога успешно подешен"
+
+#: src/components/crypto/recovery_setup_view.blp:389
+msgid "Copy Recovery Key"
+msgstr "Копирај кључ за опоравак"
+
+#: src/components/crypto/recovery_setup_view.blp:406 src/components/crypto/recovery_setup_view.blp:487
+#: src/identity_verification_view/cancelled_page.blp:50 src/identity_verification_view/completed_page.blp:51
+#: src/identity_verification_view/room_left_page.blp:48
+msgid "_Done"
+msgstr "_Готово"
+
+#: src/components/crypto/recovery_setup_view.blp:461
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "Опоравак је успео, али су подаци за опоравак били непотпуни."
+
+#: src/components/crypto/recovery_setup_view.blp:469
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the data, and attempt to recover this session "
+"again."
+msgstr "Да бисте ово поправили, требало би да поново подесите опоравак из сесије која има све податке и поново покушате опоравак ове сесије."
+
+#: src/components/crypto/recovery_setup_view.blp:478
+msgid "Note that account recovery can have a different name in other Matrix clients, like “key backup” or “secure backup”."
+msgstr ""
+"Имајте на уму да опоравак налога може имати другачији назив у другим Матрикс клијентима, попут „резервна копија кључева“ "
+"или „безбедна резервна копија“."
+
+#: src/components/crypto/recovery_setup_view.blp:499
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "По избору, можете поново подесити опоравак налога"
+
+#: src/components/crypto/recovery_setup_view.rs:221
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "Поништава потврде свих корисника и сесија"
+
+#: src/components/crypto/recovery_setup_view.rs:227
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. Invalidates the verifications of all users and "
+"sessions."
+msgstr "Потребно је јер је крипто идентитет у подацима за опоравак непотпун. Поништава потврде свих корисника и сесија."
+
+#: src/components/crypto/recovery_setup_view.rs:238
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr "Можда више нећете моћи да читате своје прошле шифроване поруке"
+
+#: src/components/crypto/recovery_setup_view.rs:244
+msgid ""
+"Required because the backup is not set up properly. You might not be able to read your past encrypted messages anymore."
+msgstr ""
+"Потребно је јер резервна копија није исправно подешена. Можда више нећете моћи да читате своје прошле шифроване поруке."
+
+#: src/components/crypto/recovery_setup_view.rs:265
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to recover your account if you lose access to all "
+"your sessions."
+msgstr ""
+"Обавезно сачувајте овај кључ за опоравак на безбедном месту. Требаће вам да опоравите свој налог ако изгубите приступ "
+"свим својим сесијама."
+
+#: src/components/crypto/recovery_setup_view.rs:269
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You will need it to recover your account if you "
+"lose access to all your sessions."
+msgstr "Обавезно запамтите своју лозинку или је сачувајте на безбедном месту. Требаће вам да опоравите свој налог ако изгубите приступ свим својим сесијама."
+
+#: src/components/crypto/recovery_setup_view.rs:330
+msgid "The recovery passphrase or key is invalid"
+msgstr "Лозинка или кључ за опоравак су неважећи"
+
+#: src/components/crypto/recovery_setup_view.rs:333
+msgid "Could not access recovery data"
+msgstr "Не могу да приступим подацима за опоравак"
+
+#: src/components/crypto/recovery_setup_view.rs:384
+msgid "Could not reset the crypto identity"
+msgstr "Не могу да поново подесим крипто идентитет"
+
+#: src/components/crypto/recovery_setup_view.rs:437 src/components/crypto/recovery_setup_view.rs:446
+#: src/components/crypto/recovery_setup_view.rs:471
+msgid "Could not reset account recovery"
+msgstr "Не могу да поново подесим опоравак налога"
+
+#: src/components/crypto/recovery_setup_view.rs:506
+msgid "Could not reset account recovery key"
+msgstr "Не могу да поново подесим кључ за опоравак налога"
+
+#: src/components/crypto/recovery_setup_view.rs:544
+msgid "Could not enable account recovery"
+msgstr "Не могу да омогућим опоравак налога"
+
+#: src/components/dialogs/auth/in_browser_page.blp:36 src/components/dialogs/auth/mod.blp:4
+#: src/components/dialogs/auth/password_page.blp:36 src/login/in_browser_page.blp:6 src/login/in_browser_page.blp:39
+msgid "Authentication"
+msgstr "Потврђивање идентитета"
+
+#: src/components/dialogs/auth/in_browser_page.blp:50
+msgid "Please authenticate the operation via the browser and, once completed, press confirm"
+msgstr "Потврдите идентитет за ову радњу путем прегледача и, када завршите, притисните „Потврди“"
+
+#: src/components/dialogs/auth/in_browser_page.blp:74 src/login/in_browser_page.blp:77
+msgid "Contin_ue"
+msgstr "Настав_и"
+
+#: src/components/dialogs/auth/in_browser_page.blp:103 src/components/dialogs/auth/password_page.blp:81
+#: src/session_view/room_details/invite_subpage/mod.blp:15
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:15
+msgid "_Cancel"
+msgstr "_Откажи"
+
+#: src/components/dialogs/auth/in_browser_page.blp:110 src/components/dialogs/auth/password_page.blp:88
+msgid "C_onfirm"
+msgstr "П_отврди"
+
+#: src/components/dialogs/auth/mod.rs:313
+msgid "The password is invalid."
+msgstr "Лозинка је неисправна."
+
+#: src/components/dialogs/auth/mod.rs:315 src/login/in_browser_page.rs:130
+msgid "An unexpected error occurred."
+msgstr "Десила се неочекивана грешка."
+
+#: src/components/dialogs/auth/password_page.blp:50
+msgid "Please authenticate the operation with your password"
+msgstr "Потврдите идентитет за ову радњу својом лозинком"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "Одбити позив?"
+
+#: src/components/dialogs/message_dialogs.rs:27
+msgid "Do you really want to decline this invite? You can join this room on your own later."
+msgstr "Желите ли заиста да одбијете овај позив? Овој соби се можете сами придружити касније."
+
+#: src/components/dialogs/message_dialogs.rs:31
+msgid "Do you really want to decline this invite? You will not be able to join this room without it."
+msgstr "Желите ли заиста да одбијете овај позив? Нећете моћи да се придружите овој соби без њега."
+
+#: src/components/dialogs/message_dialogs.rs:34 src/identity_verification_view/accept_request_page.blp:55
+#: src/session_view/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "Одбиј"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Leave Room?"
+msgstr "Напустити собу?"
+
+#: src/components/dialogs/message_dialogs.rs:41
+msgid "Do you really want to leave this room? You can come back later."
+msgstr "Желите ли заиста да напустите ову собу? Можете се вратити касније."
+
+#: src/components/dialogs/message_dialogs.rs:44
+msgid "Do you really want to leave this room? You will not be able to come back without an invitation."
+msgstr "Желите ли заиста да напустите ову собу? Нећете моћи да се вратите без позива."
+
+#: src/components/dialogs/message_dialogs.rs:47
+msgid "Leave"
+msgstr "Напусти"
+
+#: src/components/dialogs/message_dialogs.rs:67
+#, rust-format
+msgid "Ignore {user}"
+msgstr "Занемари {user}"
+
+#: src/components/dialogs/message_dialogs.rs:71
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr "Све поруке или позивнице које пошаље овај корисник биће занемарене"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:132
+#, rust-format
+msgid "Ban {user}?"
+msgstr "Забрани {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:136
+#, rust-format
+msgid "Are you sure you want to ban {user_id}? They will not be able to join the room again until someone unbans them."
+msgstr ""
+"Да ли сте сигурни да желите да забраните приступ кориснику {user_id}? Он неће моћи поново да се придружи соби док му неко "
+"не укине забрану."
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:139 src/components/user_page.blp:142
+#: src/session_view/room_details/permissions/permissions_subpage.blp:234
+msgid "Ban"
+msgstr "Забрани"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:150
+#, rust-format
+msgid "Revoke Invite for {user}?"
+msgstr "Опозвати позив за {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:157
+#, rust-format
+msgid "Are you sure you want to revoke the invite for {user_id}? They will still be able to join the room on their own."
+msgstr "Да ли сте сигурни да желите да опозовете позив за корисника {user_id}? И даље ће моћи самостално да приступи соби."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:164
+#, rust-format
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be able to join the room again until someone "
+"reinvites them."
+msgstr "Да ли сте сигурни да желите да опозовете позив за корисника {user_id}? Неће моћи поново да приступи соби док неко не пошаље нови позив."
+
+#: src/components/dialogs/message_dialogs.rs:168 src/components/user_page.rs:390
+msgid "Revoke Invite"
+msgstr "Опозови позив"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:175
+#, rust-format
+msgid "Deny Access to {user}?"
+msgstr "Забранити приступ кориснику {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:181
+#, rust-format
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "Да ли сте сигурни да желите да забраните приступ кориснику {user_id}?"
+
+#: src/components/dialogs/message_dialogs.rs:184
+msgid "Deny Access"
+msgstr "Забрани приступ"
+
+#: src/components/dialogs/message_dialogs.rs:191
+#, rust-format
+msgid "Kick {user}?"
+msgstr "Избацити корисника {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:196
+#, rust-format
+msgid "Are you sure you want to kick {user_id}? They will still be able to join the room again on their own."
+msgstr "Да ли сте сигурни да желите да избаците корисника {user_id}? И даље ће моћи самостално поново да приступи соби."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:203
+#, rust-format
+msgid "Are you sure you want to kick {user_id}? They will not be able to join the room again until someone invites them."
+msgstr "Да ли сте сигурни да желите да избаците корисника {user_id}? Неће моћи поново да приступи соби док неко не пошаље нови позив."
+
+#. Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:207 src/components/user_page.rs:393
+#: src/session_view/room_details/permissions/permissions_subpage.blp:222
+msgid "Kick"
+msgstr "Избаци"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:218
+#, rust-format
+msgid "Remove Messages Sent by {user}?"
+msgstr "Уклонити поруке које је послао корисник {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:224
+#, rust-format
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you want to remove 1 message sent by {user_id}? "
+"This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you want to remove {n} messages sent by "
+"{user_id}? This cannot be undone."
+msgstr[0] "Ово уклања све поруке примљене са матичног сервера. Да ли сте сигурни да желите да уклоните {n} порука које је послао корисник {user_id}? Ово се не може поништити."
+msgstr[1] "Ово уклања све поруке примљене са матичног сервера. Да ли сте сигурни да желите да уклоните {n} поруке које је послао корисник {user_id}? Ово се не може поништити."
+msgstr[2] "Ово уклања све поруке примљене са матичног сервера. Да ли сте сигурни да желите да уклоните {n} порука које је послао корисник {user_id}? Ово се не може поништити."
+msgstr[3] "Ово уклања све поруке примљене са матичног сервера. Да ли сте сигурни да желите да уклоните {n} поруку коју је послао корисник {user_id}? Ово се не може поништити."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:238
+#, rust-format
+msgid "No Messages Sent by {user}"
+msgstr "Нема порука послатих од стране корисника {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:244
+#, rust-format
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You can try to load more by going further back in "
+"the room history."
+msgstr "Нема порука примљених са матичног сервера које је послао корисник {user_id}. Можете покушати да учитате још тако што ћете се вратити даље уназад у историјату собе."
+
+#: src/components/dialogs/message_dialogs.rs:272 src/session_view/room_history/event_actions/group.rs:630
+msgid "Reason (optional)"
+msgstr "Придружи се"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:296
+#, rust-format
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "Уклоните {n} најновијих порука послатих од стране корисника"
+msgstr[1] "Уклоните {n} најновије поруке послате од стране корисника"
+msgstr[2] "Уклоните {n} најновијих порука послатих од стране корисника"
+msgstr[3] "Уклоните најновију поруку послату од стране корисника"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:380
+#, rust-format
+msgid "Mute {user}?"
+msgstr "Утишати корисника {user}?"
+
+#: src/components/dialogs/message_dialogs.rs:384
+msgid "Mute Members?"
+msgstr "Утишати чланове?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:393
+#, rust-format
+msgid "Are you sure you want to mute {user_id}? They will not be able to send new messages to this room."
+msgstr "Желите ли заиста да утишате корисника {user_id}? Он неће моћи да шаље нове поруке у ову собу."
+
+#: src/components/dialogs/message_dialogs.rs:398
+msgid "Are you sure you want to mute these members? They will not be able to send new messages to this room."
+msgstr "Желите ли заиста да утишате ове чланове? Они неће моћи да шаљу нове поруке у ову собу."
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:411
+msgid "Mute"
+msgstr "Утишај"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:440
+#, rust-format
+msgid "Promote {user}?"
+msgstr "Унапредити {user}?"
+
+#: src/components/dialogs/message_dialogs.rs:444
+msgid "Promote Members?"
+msgstr "Унапредити чланове?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:453
+#, rust-format
+msgid "If you promote {user_id} to the same level as yours, you will not be able to demote them in the future."
+msgstr "Ако унапредите корисника {user_id} на исти ниво као што је ваш, нећете моћи да га уназадите у будућности."
+
+#: src/components/dialogs/message_dialogs.rs:458
+msgid "If you promote these members to the same level as yours, you will not be able to demote them in the future."
+msgstr "Ако унапредите ове чланове на исти ниво као што је ваш, нећете моћи да их уназадите у будућности."
+
+#: src/components/dialogs/message_dialogs.rs:470
+msgid "Promote"
+msgstr "Унапреди"
+
+#. / Show a dialog to confirm the demotion of our own user.
+#: src/components/dialogs/message_dialogs.rs:479
+msgid "Demote Yourself?"
+msgstr "Уназадити себе?"
+
+#: src/components/dialogs/message_dialogs.rs:481
+msgid ""
+"Are you sure you want to lower your power level? You will need to ask another member with a higher power level to undo "
+"this."
+msgstr "Желите ли заиста да смањите свој ниво овлашћења? Мораћете да замолите другог члана са вишим нивоом овлашћења да ово поништи."
+
+#: src/components/dialogs/message_dialogs.rs:492
+msgid "Demote"
+msgstr "Уназади"
+
+#: src/components/dialogs/message_dialogs.rs:503
+msgid "Save Changes?"
+msgstr "Сачувати измене?"
+
+#: src/components/dialogs/message_dialogs.rs:505
+msgid "This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr "Ова страница садржи несачуване измене. Измене које нису сачуване биће изгубљене."
+
+#: src/components/dialogs/message_dialogs.rs:514
+msgid "Discard"
+msgstr "Одбаци"
+
+#: src/components/dialogs/message_dialogs.rs:515 src/session_view/room_details/edit_details_subpage.blp:98
+#: src/session_view/room_details/history_viewer/file_row.rs:144 src/utils/matrix/media_message.rs:233
+msgid "Save"
+msgstr "Сачувај"
+
+#: src/components/dialogs/room_preview.blp:5 src/components/dialogs/room_preview.blp:39
+msgid "Join a Room"
+msgstr "Придружи се соби"
+
+#: src/components/dialogs/room_preview.blp:19 src/login/greeter.blp:17 src/login/greeter.blp:20
+#: src/session_view/media_viewer.blp:76 src/session_view/media_viewer.blp:79
+#: src/session_view/room_details/edit_details_subpage.blp:15 src/session_view/room_details/history_visibility_subpage.blp:19
+#: src/session_view/room_details/join_rule_subpage.blp:19
+#: src/session_view/room_details/permissions/permissions_subpage.blp:20
+msgid "Back"
+msgstr "Назад"
+
+#: src/components/dialogs/room_preview.blp:70
+msgid "Enter an address or link to look up a room"
+msgstr "Унеси адресу или везу да потражиш собу"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/room_preview.blp:90 src/components/dialogs/room_preview.rs:242
+msgid "Look Up"
+msgstr "Потражи"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/room_preview.rs:239 src/components/dialogs/room_preview.rs:347
+#: src/session_view/explore/public_room_row.rs:182 src/session_view/room_history/message_toolbar/mod.rs:382
+#: src/session_view/room_history/mod.blp:82 src/session_view/room_history/state/creation.blp:20
+msgid "View"
+msgstr "Прегледај"
+
+#: src/components/dialogs/room_preview.rs:302
+msgid ""
+"The room details cannot be previewed. It can be because the room is not known by the homeserver or because its details "
+"are private. You can still try to join it."
+msgstr "Није могуће прегледати појединости собе. То може бити зато што соба није позната матичном серверу или зато што су њене појединости приватне. И даље можете покушати да јој се придружите."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/room_preview.rs:325 src/session_view/explore/public_room_row.rs:161
+#, rust-format
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "{n} чланова"
+msgstr[1] "{n} члана"
+msgstr[2] "{n} чланова"
+msgstr[3] "{n} члан"
+
+#: src/components/dialogs/room_preview.rs:349 src/session_view/explore/public_room_row.rs:187
+msgid "Request an Invite"
+msgstr "Затражи позивницу"
+
+#: src/components/dialogs/room_preview.rs:351 src/session_view/explore/public_room_row.rs:195
+#: src/session_view/room_history/message_toolbar/mod.rs:384
+msgid "Join"
+msgstr "Придружи се"
+
+#: src/components/dialogs/user_profile.blp:5
+msgid "User Profile"
+msgstr "Кориснички профил"
+
+#: src/components/media/audio_player/mod.rs:304
+msgid "Pause"
+msgstr "Паузирај"
+
+#: src/components/media/audio_player/mod.rs:306
+msgid "Play"
+msgstr "Пусти"
+
+#: src/components/media/audio_player/mod.rs:387
+msgid "Error reading audio file"
+msgstr "Грешка при читању звучне датотеке"
+
+#: src/components/media/audio_player/mod.rs:475
+msgid "Could not retrieve audio file"
+msgstr "Не могу да дохватим звучну датотеку"
+
+#: src/components/media/content_viewer.rs:121
+msgid "Image not Viewable"
+msgstr "Слика није видљива"
+
+#: src/components/media/content_viewer.rs:122
+msgid "Audio Clip not Playable"
+msgstr "Звучни снимак се не може пустити"
+
+#: src/components/media/content_viewer.rs:123
+msgid "Video not Playable"
+msgstr "Видео се не може пустити"
+
+#: src/components/media/content_viewer.rs:124
+msgid "File not Viewable"
+msgstr "Датотека није видљива"
+
+#: src/components/media/location_viewer.rs:146
+#, rust-format
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "Место на географској ширини {latitude} и дужини {longitude}"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "Ван мреже"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "Нема мрежне везе"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "Нема интернет везе"
+
+#: src/components/pill/at_room.rs:32
+msgid "Notify the whole room"
+msgstr "Обавести целу собу"
+
+#. Translators: As in 'Custom role'.
+#: src/components/power_level_selection/popover.blp:127
+msgctxt "role"
+msgid "Custom"
+msgstr "Прилагођено"
+
+#: src/components/power_level_selection/popover.blp:141
+msgid "Confirm Custom Role"
+msgstr "Потврди произвољну улогу"
+
+#: src/components/power_level_selection/row.blp:99
+msgid "More Information"
+msgstr "Више података"
+
+#: src/components/power_level_selection/row.blp:118
+msgid ""
+"Creator is an immutable role that can be attributed to several users when creating a room. Creators always have a higher "
+"power level than any other room members, except other creators, and have the permission to do anything in the room. The "
+"only way to demote a creator is to replace the current room with another one with a different creator, by upgrading the "
+"room for example."
+msgstr ""
+"Творац је непроменљива улога која се може доделити неколицини корисника приликом стварања собе. Творци увек имају виши "
+"ниво моћи од било ког другог члана собе, осим других твораца, и имају овлашћење да ураде било шта у соби. Једини начин да "
+"се творцу одузме улога јесте да се тренутна соба замени другом са другачијим творцем, на пример надоградњом собе."
+
+#: src/components/user_page.blp:107
+msgid "Role"
+msgstr "Улога"
+
+#. Translators: value used to assign room member roles.
+#: src/components/user_page.blp:122
+msgid "Power Level"
+msgstr "Ниво моћи"
+
+#. Translators: In this string, 'Invite' is a verb.
+#. Translators: This is a verb.
+#: src/components/user_page.blp:128 src/session_view/invite.blp:14 src/session_view/invite.blp:39
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:145
+#: src/session_view/room_details/permissions/permissions_subpage.blp:210
+msgid "Invite"
+msgstr "Позови"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.blp:152
+msgid "Unban"
+msgstr "Поништи забрану"
+
+#: src/components/user_page.blp:157
+msgid "Remove Messages"
+msgstr "Уклони поруке"
+
+#: src/components/user_page.blp:172
+msgid "Security"
+msgstr "Безбедност"
+
+#: src/components/user_page.blp:199 src/identity_verification_view/accept_request_page.blp:66
+#: src/session_view/room_history/verification_info_bar.rs:172 src/session_view/sidebar/mod.rs:355
+msgid "Verify"
+msgstr "Потврди"
+
+#: src/components/user_page.rs:283
+msgid "Open Direct Chat"
+msgstr "Отвори директно ћаскање"
+
+#: src/components/user_page.rs:285
+msgid "Create Direct Chat"
+msgstr "Направи директно ћаскање"
+
+#: src/components/user_page.rs:305 src/session_view/create_direct_chat_dialog/mod.rs:202
+msgid "Could not create a new Direct Chat"
+msgstr "Не могу да направим ново директно ћаскање"
+
+#: src/components/user_page.rs:336
+#, rust-format
+msgid "In {room_name}"
+msgstr "У {room_name}"
+
+#. Translators: As in, 'The room member was invited'.
+#. Translators: This is singular, as in 'Invited Room Member'.
+#: src/components/user_page.rs:347
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:121
+msgctxt "member"
+msgid "Invited"
+msgstr "Позван"
+
+#. Translators: As in, 'The room member was banned'.
+#. Translators: This is singular, as in 'Banned Room Member'.
+#: src/components/user_page.rs:351
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:130
+msgctxt "member"
+msgid "Banned"
+msgstr "Забрањен приступ"
+
+#. Translators: As in, 'The room member requested an invite'.
+#: src/components/user_page.rs:355
+msgctxt "member"
+msgid "Requested an Invite"
+msgstr "Затражио позивницу"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:359
+msgctxt "member"
+msgid "Unknown"
+msgstr "Непознат"
+
+#: src/components/user_page.rs:391
+msgid "Deny Request"
+msgstr "Одбиј захтев"
+
+#: src/components/user_page.rs:499
+msgid "Could not change the role"
+msgstr "Не могу да променим улогу"
+
+#: src/components/user_page.rs:520
+msgid "Could not invite user"
+msgstr "Не могу да позовем корисника"
+
+#: src/components/user_page.rs:554 src/session_view/room_history/event_actions/group.rs:722
+msgid "Could not revoke invite of user"
+msgstr "Не могу да опозовем позивницу корисника"
+
+#: src/components/user_page.rs:555
+msgid "Could not deny access to user"
+msgstr "Не могу да забраним приступ кориснику"
+
+#: src/components/user_page.rs:556
+msgid "Could not kick user"
+msgstr "Не могу да избацим корисника"
+
+#: src/components/user_page.rs:602
+msgid "Could not ban user"
+msgstr "Не могу да забраним корисника"
+
+#: src/components/user_page.rs:633
+msgid "Could not unban user"
+msgstr "Не могу да поништим забрану корисника"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:681
+#, rust-format
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "Не могу да уклоним {n} порука које је послао корисник"
+msgstr[1] "Не могу да уклоним {n} поруке које је послао корисник"
+msgstr[2] "Не могу да уклоним {n} порука које је послао корисник"
+msgstr[3] "Не могу да уклоним {n} поруку коју је послао корисник"
+
+#: src/components/user_page.rs:697
+msgid "Identity verified"
+msgstr "Идентитет потврђен"
+
+#: src/components/user_page.rs:704
+msgid "Identity not verified"
+msgstr "Идентитет није потврђен"
+
+#: src/components/user_page.rs:719
+msgid "Could not start user verification"
+msgstr "Не могу започети потврђивање корисника"
+
+#: src/components/user_page.rs:744
+msgid "Ignored"
+msgstr "Занемарен"
+
+#: src/components/user_page.rs:749
+msgid "Not Ignored"
+msgstr "Није занемарен"
+
+#: src/components/user_page.rs:750
+msgid "Ignore"
+msgstr "Занемари"
+
+#: src/components/user_page.rs:770 src/session_view/invite.rs:290 src/session_view/sidebar/row.rs:770
+msgid "Could not ignore user"
+msgstr "Не могу да занемарим корисника"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "КР код"
+
+#: src/error_page.blp:19 src/error_page.blp:23 src/error_page.blp:31 src/error_page.blp:35 src/login/greeter.blp:28
+#: src/login/greeter.blp:32 src/login/greeter.blp:40 src/login/greeter.blp:44 src/window.blp:29 src/window.blp:33
+msgid "About Fractal"
+msgstr "О Фракталу"
+
+#: src/error_page.blp:45
+msgid "Secret Portal Error"
+msgstr "Грешка тајног портала"
+
+#: src/error_page.blp:59
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session information and an error occurred while we were trying "
+"to restore your sessions."
+msgstr ""
+"Фрактал се ослања на тајни портал за управљање вашим осетљивим подацима о сесији и дошло је до грешке док смо покушавали "
+"да повратимо ваше сесије."
+
+#: src/error_page.blp:75
+msgid "Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr "Ево неколико ствари које могу помоћи да поправите проблеме са Тајним порталом:"
+
+#: src/error_page.blp:94
+msgid "Make sure you have a Secret Portal Backend Provider installed, like gnome-keyring."
+msgstr "Проверите да ли имате инсталираног пружаоца позадинца Тајног портала, као што је gnome-keyring."
+
+#: src/error_page.blp:119
+msgid "If you prefer to use a Secret Service Provider instead, you need to allow Fractal to interact with it, like this:"
+msgstr "Ако радије желите да користите пружаоца Тајне услуге, морате дозволити Фракталу да комуницира са њим, овако:"
+
+#: src/error_page.blp:152
+msgid "Copy Command"
+msgstr "Копирај наредбу"
+
+#: src/error_page.blp:178
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "Проверите да ли имате подразумевани привезак и да ли је откључан."
+
+#: src/error_page.blp:191
+msgid "Check the application logs and your distribution’s documentation for more details."
+msgstr "Проверите дневнике програма и документацију ваше дистрибуције за више појединости."
+
+#: src/error_page.blp:206
+msgid "Could Not Initialize Session"
+msgstr "Не могу да успоставим сесију"
+
+#: src/error_page.rs:102
+msgid "Command copied to clipboard"
+msgstr "Наредба је копирана у оставу"
+
+#: src/identity_verification_view/accept_request_page.rs:130 src/session/notifications/mod.rs:396
+msgid "Login Request From Another Session"
+msgstr "Захтев за пријаву са друге сесије"
+
+#: src/identity_verification_view/accept_request_page.rs:132
+msgid "Verify the new session from the current session."
+msgstr "Потврдите нову сесију са тренутне сесије."
+
+#: src/identity_verification_view/accept_request_page.rs:135 src/identity_verification_view/choose_method_page.rs:184
+#: src/identity_verification_view/sas_page.rs:160 src/identity_verification_view/scan_qr_code_page.rs:159
+#: src/session/notifications/mod.rs:334
+msgid "Verification Request"
+msgstr "Захтев за потврду"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:139
+#, rust-format
+msgid "{user} asked to be verified. Verifying a user increases the security of the conversation."
+msgstr "{user} жели потврду. Потврда корисника повећава безбедност преписке."
+
+#: src/identity_verification_view/accept_request_page.rs:162
+msgid "Could not decline verification request"
+msgstr "Не могу да одбијем захтев за потврду"
+
+#: src/identity_verification_view/accept_request_page.rs:178
+msgid "Could not accept verification request"
+msgstr "Не могу да прихватим захтев за потврду"
+
+#: src/identity_verification_view/cancelled_page.blp:60
+msgid "Send New Request"
+msgstr "Пошаљи нови захтев"
+
+#: src/identity_verification_view/cancelled_page.rs:140
+msgid "The verification was cancelled from the other session."
+msgstr "Потврда је отказана са друге сесије."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:146
+#, rust-format
+msgid "The verification was cancelled by {user}."
+msgstr "Корисник {user} је отказао потврђивање."
+
+#: src/identity_verification_view/cancelled_page.rs:152
+msgid "The verification process failed because it reached a timeout."
+msgstr "Поступак потврде није успео јер је време истекло."
+
+#: src/identity_verification_view/cancelled_page.rs:154
+msgid "You accepted the request from another session."
+msgstr "Прихватили сте захтев са друге сесије."
+
+#: src/identity_verification_view/cancelled_page.rs:157
+msgid "The emoji did not match."
+msgstr "Емоџији се не подударају."
+
+#: src/identity_verification_view/cancelled_page.rs:159
+msgid "The numbers did not match."
+msgstr "Бројеви се не подударају."
+
+#: src/identity_verification_view/cancelled_page.rs:162
+msgid "An unexpected error happened during the verification process."
+msgstr "Дошло је до неочекиване грешке током поступка потврде."
+
+#: src/identity_verification_view/cancelled_page.rs:167 src/identity_verification_view/mod.blp:88
+#: src/identity_verification_view/mod.blp:97 src/identity_verification_view/room_left_page.blp:22
+msgid "Verification Cancelled"
+msgstr "Потврда је отказана"
+
+#: src/identity_verification_view/cancelled_page.rs:169
+msgid "Verification Error"
+msgstr "Грешка потврде"
+
+#: src/identity_verification_view/choose_method_page.blp:55 src/identity_verification_view/scan_qr_code_page.blp:51
+msgid "Can’t scan QR code?"
+msgstr "Не можете да скенирате КР код?"
+
+#: src/identity_verification_view/choose_method_page.blp:63
+msgid "Scan QR code with this session"
+msgstr "Скенирај КР код у овој сесији"
+
+#: src/identity_verification_view/choose_method_page.blp:72 src/identity_verification_view/scan_qr_code_page.blp:73
+msgid "Compare Emoji"
+msgstr "Упоредите емоџије"
+
+#: src/identity_verification_view/choose_method_page.blp:83 src/identity_verification_view/no_supported_methods_page.rs:168
+#: src/identity_verification_view/qr_code_scanned_page.blp:51 src/identity_verification_view/scan_qr_code_page.blp:84
+msgid "Cancel Verification"
+msgstr "Откажи потврду"
+
+#: src/identity_verification_view/choose_method_page.rs:176 src/identity_verification_view/sas_page.rs:148
+#: src/identity_verification_view/scan_qr_code_page.rs:154
+msgid "Verify Session"
+msgstr "Потврди сесију"
+
+#: src/identity_verification_view/choose_method_page.rs:180
+msgid "Scan this QR code from the other session."
+msgstr "Скенирајте овај КР код из друге сесије."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:190
+#, rust-format
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "Замолите корисника {user} да скенира овај КР код из своје сесије."
+
+#: src/identity_verification_view/choose_method_page.rs:199
+msgid "Select a verification method to proceed."
+msgstr "Изаберите начин потврде за наставак."
+
+#: src/identity_verification_view/choose_method_page.rs:202
+msgid "Click on the verification method to proceed."
+msgstr "Кликните на начин потврде за наставак."
+
+#: src/identity_verification_view/choose_method_page.rs:234
+msgid "Could not access camera"
+msgstr "Не могу да приступим камери"
+
+#: src/identity_verification_view/choose_method_page.rs:251 src/identity_verification_view/scan_qr_code_page.rs:222
+msgid "Could not start emoji verification"
+msgstr "Не могу да покренем потврду емоџијима"
+
+#: src/identity_verification_view/choose_method_page.rs:267 src/identity_verification_view/confirm_qr_code_page.rs:177
+#: src/identity_verification_view/qr_code_scanned_page.rs:145 src/identity_verification_view/scan_qr_code_page.rs:234
+#: src/identity_verification_view/wait_for_other_page.rs:164
+msgid "Could not cancel the verification"
+msgstr "Не могу да откажем потврду"
+
+#: src/identity_verification_view/completed_page.rs:122
+msgid "Request Complete"
+msgstr "Захтев је завршен"
+
+#: src/identity_verification_view/completed_page.rs:124
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "Нова сесија је сада спремна за слање и примање безбедних порука."
+
+#: src/identity_verification_view/completed_page.rs:128
+msgid "Verification Complete"
+msgstr "Потврда је завршена"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:131
+#, rust-format
+msgid "{user} is verified and you can now be sure that your communication will be private."
+msgstr "{user} је потврђен и сада можете бити сигурни да ће ваша комуникација бити приватна."
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:19
+msgid "Confirm Scan"
+msgstr "Потврди скенирање"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:72
+msgid "Confirm"
+msgstr "Потврди"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:129
+msgid "Does the other session show a confirmation?"
+msgstr "Да ли се на другој сесији приказује потврда?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:135
+#, rust-format
+msgid "Does {user} see a confirmation on their session?"
+msgstr "Да ли {user} види потврду на својој сесији?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:161
+msgid "Could not confirm the scan of the QR Code"
+msgstr "Не могу да потврдим скенирање КР кода"
+
+#: src/identity_verification_view/mod.blp:16
+msgid "New Identity Verification Request"
+msgstr "Нови захтев за потврду идентитета"
+
+#: src/identity_verification_view/mod.blp:25
+msgid "Wait for Other Party"
+msgstr "Сачекајте другу страну"
+
+#: src/identity_verification_view/mod.blp:34 src/identity_verification_view/no_supported_methods_page.blp:22
+msgid "No Supported Verification Methods"
+msgstr "Нема подржаних начина потврде"
+
+#: src/identity_verification_view/mod.blp:43
+msgid "Verification Request Methods"
+msgstr "Начини за захтев потврде"
+
+#: src/identity_verification_view/mod.blp:52 src/identity_verification_view/qr_code_scanned_page.blp:19
+msgid "Scan Complete"
+msgstr "Скенирање је завршено"
+
+#: src/identity_verification_view/mod.blp:61
+msgid "Confirm Scan Result"
+msgstr "Потврдите резултат скенирања"
+
+#: src/identity_verification_view/mod.blp:70
+msgid "Short Authentication String Verification"
+msgstr "Потврда кратке ниске за потврђивање идентитета"
+
+#: src/identity_verification_view/mod.blp:79
+msgid "Verification Successful"
+msgstr "Потврда је успела"
+
+#: src/identity_verification_view/mod.rs:200
+msgid "Scan QR Code"
+msgstr "Скенирај КР код"
+
+#: src/identity_verification_view/no_supported_methods_page.blp:48
+msgid "You can accept this verification from another session or decline it for all your sessions"
+msgstr "Можете прихватити ову потврду из друге сесије или је одбити за све ваше сесије"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:139
+msgid "None of the methods offered by the other client are supported by Fractal."
+msgstr "Фрактал не подржава ниједан од начина које нуди други клијент."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:142
+msgid "A login request was received, but none of the methods offered by the other client are supported by Fractal."
+msgstr "Примљен је захтев за пријаву, али Фрактал не подржава ниједан од начина које нуди други клијент."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:151
+#, rust-format
+msgid "None of the methods offered by {user}’s client are supported by Fractal."
+msgstr "Фрактал не подржава ниједан од начина које нуди клијент корисника {user}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:158
+#, rust-format
+msgid "{user} sent a verification request, but none of the methods offered by the other client are supported by Fractal."
+msgstr "{user} посла захтев за потврду, али Фрактал не подржава ниједан од начина које нуди други клијент."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:170
+msgid "Decline Verification"
+msgstr "Одбиј потврду"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:192
+msgid "Could not decline the verification"
+msgstr "Не могу да одбијем потврду"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:119
+msgid "You scanned the QR code successfully. You may need to confirm the verification from the other session."
+msgstr "Успешно сте скенирали КР код. Можда ћете морати да потврдите захтев из друге сесије."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:124
+#, rust-format
+msgid "You scanned the QR code successfully. {user} may need to confirm the verification."
+msgstr "Успешно сте скенирали КР код. Можда ће {user} морати да потврди захтев."
+
+#: src/identity_verification_view/room_left_page.blp:38
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "Нисте више у соби у којој се обављала потврда"
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis do not match.
+#: src/identity_verification_view/sas_page.blp:65
+msgid "Do Not Match"
+msgstr "Не подударају се"
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis match.
+#: src/identity_verification_view/sas_page.blp:78
+msgid "Match"
+msgstr "Подударају се"
+
+#: src/identity_verification_view/sas_page.rs:151
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr "Проверите да ли се исти емоџији појављују у истом редоследу на другом клијенту."
+
+#: src/identity_verification_view/sas_page.rs:155
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr "Проверите да ли се исти бројеви појављују у истом редоследу на другом клијенту."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:165
+#, rust-format
+msgid "Ask {user} if they see the following emoji appear in the same order on their screen."
+msgstr "Питајте корисника {user} да ли види следеће емоџије у истом редоследу на свом екрану."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:172
+#, rust-format
+msgid "Ask {user} if they see the following numbers appear in the same order on their screen."
+msgstr "Питајте корисника {user} да ли види следеће бројеве у истом редоследу на свом екрану."
+
+#: src/identity_verification_view/sas_page.rs:253
+msgid "Could not send that the data does not match"
+msgstr "Не могу да пошаљем обавештење о неподударању података"
+
+#: src/identity_verification_view/sas_page.rs:270
+msgid "Could not send confirmation that the data matches"
+msgstr "Не могу да пошаљем потврду о подударању података"
+
+#: src/identity_verification_view/scan_qr_code_page.blp:64
+msgid "Show a QR code to scan with another device"
+msgstr "Приказ КР кода за скенирање другим уређајем"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:156
+msgid "Scan the QR code displayed by the other session."
+msgstr "Скенирајте КР код приказан у другој сесији."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:163
+#, rust-format
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "Скенирајте КР код приказан на уређају корисника {user}."
+
+#: src/identity_verification_view/scan_qr_code_page.rs:201
+msgid "Could not validate scanned QR Code"
+msgstr "Не могу да потврдим скенирани КР код"
+
+#: src/identity_verification_view/wait_for_other_page.blp:45
+msgid "To be secure, the verification should happen in person or use a trusted way of communication."
+msgstr "Ради безбедности, потврда би требало да се обави лично или коришћењем поузданог начина комуникације."
+
+#: src/identity_verification_view/wait_for_other_page.blp:61
+msgid "The request is not showing up on the other device?"
+msgstr "Захтев се не појављује на другом уређају?"
+
+#: src/identity_verification_view/wait_for_other_page.blp:73
+msgid "Cancel Verification Request"
+msgstr "Откажи захтев за потврду"
+
+#: src/identity_verification_view/wait_for_other_page.rs:124
+msgid "Get Another Device"
+msgstr "Користи други уређај"
+
+#: src/identity_verification_view/wait_for_other_page.rs:126
+msgid "Accept the verification request from another session or device."
+msgstr "Прихватите захтев за потврду са друге сесије или уређаја."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:134
+#, rust-format
+msgid "Waiting for {user}"
+msgstr "Чекам корисника {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:140
+#, rust-format
+msgid "Ask {user} to accept the verification request."
+msgstr "Питајте корисника {user} да прихвати захтев за потврду."
+
+#: src/login/advanced_dialog.blp:5
+msgid "Homeserver Discovery"
+msgstr "Откривање матичног сервера"
+
+#: src/login/advanced_dialog.blp:12
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the URL of a Matrix homeserver from a domain name. "
+"This should only be disabled if your homeserver doesn’t support auto-discovery or if you want to provide the URL yourself."
+msgstr "Аутоматско откривање, познато и као „well-known lookup“, омогућава откривање адресе матичног сервера Матрикса из назива домена. Ово треба онемогућити само ако ваш матични сервер не подржава аутоматско откривање или ако желите сами да унесете адресу."
+
+#: src/login/advanced_dialog.blp:16
+msgid "_Auto-Discovery"
+msgstr "_Аутоматско откривање"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.blp:7 src/login/greeter.blp:84
+msgid "Welcome to Fractal"
+msgstr "Добродошли у Фрактал"
+
+#: src/login/greeter.blp:104
+msgid "_Log In"
+msgstr "_Пријави се"
+
+#: src/login/greeter.blp:118
+msgid "_Create Account"
+msgstr "_Направи налог"
+
+#: src/login/homeserver_page.blp:103 src/login/method_page.blp:129
+msgid "Next"
+msgstr "Следеће"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.blp:118
+msgid "Advanced…"
+msgstr "Напредно…"
+
+#: src/login/homeserver_page.rs:102
+msgid "Domain Name"
+msgstr "Назив домена"
+
+#: src/login/homeserver_page.rs:104
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "Домен матичног сервера Матрикса, на пример gnome.org"
+
+#: src/login/homeserver_page.rs:107 src/login/method_page.blp:69
+msgid "Homeserver URL"
+msgstr "Адреса матичног сервера"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:111
+#, rust-format
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "Адреса матичног сервера Матрикса, на пример {address}"
+
+#: src/login/homeserver_page.rs:254 src/login/mod.rs:324 src/login/mod.rs:348 src/login/mod.rs:397
+msgid "Could not set up login"
+msgstr "Не могу да подесим пријаву"
+
+#: src/login/in_browser_page.blp:55
+msgid "Click on the button below and follow the steps in the browser"
+msgstr "Кликните на дугме испод и пратите кораке у прегледачу"
+
+#: src/login/in_browser_page.rs:103
+msgid "Could not open URL"
+msgstr "Не могу да отворим адресу"
+
+#: src/login/local_server.rs:35
+msgid "Authorization Completed"
+msgstr "Овлашћивање је завршено"
+
+#: src/login/local_server.rs:40
+msgid "The authorization step is complete. You can close this page and go back to Fractal."
+msgstr "Корак овлашћивања је завршен. Можете затворити ову страницу и вратити се у Фрактал."
+
+#: src/login/method_page.blp:6 src/window.blp:73
+msgid "Log In"
+msgstr "Пријави се"
+
+#: src/login/method_page.blp:94
+msgid "Matrix Username"
+msgstr "Корисничко име на Матриксу"
+
+#: src/login/method_page.blp:109
+msgid "Password"
+msgstr "Лозинка"
+
+#: src/login/method_page.blp:122
+msgid "Login via SSO"
+msgstr "Пријава преко SSO-а"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:90
+#, rust-format
+msgid "Log in to {domain_name}"
+msgstr "Пријави се на {domain_name}"
+
+#: src/login/method_page.rs:97
+msgid "Log in"
+msgstr "Пријави се"
+
+#: src/login/mod.blp:22 src/login/mod.blp:54
+msgid "Login Complete"
+msgstr "Пријава је завршена"
+
+#: src/login/mod.blp:75
+msgid "This session is ready to send and receive secure messages"
+msgstr "Ова сесија је спремна за слање и примање безбедних порука"
+
+#: src/login/mod.blp:84
+msgid "Start Chatting"
+msgstr "Започни ћаскање"
+
+#: src/login/mod.rs:467
+msgid "Could not store session"
+msgstr "Не могу да сачувам сесију"
+
+#: src/login/session_setup_view.blp:6
+msgid "Session Setup"
+msgstr "Подешавање сесије"
+
+#: src/login/session_setup_view.blp:47 src/window.blp:59
+msgid "Fetching Account Data…"
+msgstr "Преузимање података о налогу…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:175
+#, rust-format
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Фрактал: акредитиви за Матрикс за {user_id}"
+
+#: src/secret/linux.rs:529
+msgid "The secret storage file is corrupted."
+msgstr "Датотека тајног складишта је оштећена."
+
+#: src/secret/linux.rs:532
+msgid "Could not access the secret storage file location."
+msgstr "Не могу да приступим месту датотеке тајног складишта."
+
+#: src/secret/linux.rs:535
+msgid "An unexpected error occurred when accessing the secret storage file."
+msgstr "Дошло је до неочекиване грешке приликом приступа датотеци тајног складишта."
+
+#: src/secret/linux.rs:538
+msgid "The secret storage file has been changed by another process."
+msgstr "Датотеку тајног складишта је изменио други процес."
+
+#: src/secret/linux.rs:541
+msgid "The request to the Flatpak Secret Portal was cancelled. Make sure to accept any prompt asking to access it."
+msgstr "Захтев Флетпек порталу за тајне је отказан. Обавезно прихватите сваки упит који тражи приступ."
+
+#: src/secret/linux.rs:544
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is installed, and it is at least at version "
+"1.5.0."
+msgstr "Флетпек портал за тајне није доступан. Уверите се да је xdg-desktop-portal инсталиран и да је издања барем 1.5.0."
+
+#: src/secret/linux.rs:547
+msgid "An unexpected error occurred when interacting with the D-Bus Secret Portal backend."
+msgstr "Дошло је до неочекиване грешке приликом интеракције са позадинцем портала за тајне на Д-сабирници."
+
+#: src/secret/linux.rs:550
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr "Флетпек портал за тајне је доставио кључ који је превише слаб да би био безбедан."
+
+#: src/secret/linux.rs:552 src/secret/linux.rs:569
+msgid "The collection or item is locked."
+msgstr "Збирка или ставка је закључана."
+
+#: src/secret/linux.rs:564
+msgid "The item was deleted."
+msgstr "Ставка је обрисана."
+
+#: src/secret/linux.rs:567 src/secret/linux.rs:582
+msgid "An unexpected error occurred when interacting with the D-Bus Secret Service."
+msgstr "Дошло је до неочекиване грешке приликом интеракције са услугом тајни Д-сабирнице."
+
+#: src/secret/linux.rs:571
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "Сесија услуге тајни Д-сабирнице не постоји."
+
+#: src/secret/linux.rs:573
+msgid "The collection or item does not exist."
+msgstr "Збирка или ставка не постоји."
+
+#: src/secret/linux.rs:576
+msgid "The request to the D-Bus Secret Service was cancelled. Make sure to accept any prompt asking to access it."
+msgstr "Захтев услузи тајни Д-сабирнице је отказан. Обавезно прихватите сваки упит који тражи приступ."
+
+#: src/secret/linux.rs:579
+msgid "Could not access the default collection. Make sure a keyring was created and set as default."
+msgstr "Не могу да приступим подразумеваној збирци. Проверите да ли је привезак направљен и постављен као подразумевани."
+
+#: src/session/mod.rs:837
+msgid "Could not log the session out"
+msgstr "Не могу да одјавим сесију"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:338
+#, rust-format
+msgid "{user} sent a verification request"
+msgstr "{user} посла захтев за потврду"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:400
+#, rust-format
+msgid "Verify your new session “{name}”"
+msgstr "Потврди своју нову сесију „{name}“"
+
+#: src/session/notifications/mod.rs:492
+#, rust-format
+msgid "{user} sent an audio file."
+msgstr "{user} посла звучну датотеку."
+
+#: src/session/notifications/mod.rs:495
+#, rust-format
+msgid "{user} sent a file."
+msgstr "{user} посла датотеку."
+
+#: src/session/notifications/mod.rs:497
+#, rust-format
+msgid "{user} sent an image."
+msgstr "{user} посла слику."
+
+#: src/session/notifications/mod.rs:500
+#, rust-format
+msgid "{user} sent their location."
+msgstr "{user} посла своју локацију."
+
+#: src/session/notifications/mod.rs:512
+#, rust-format
+msgid "{user} sent a video."
+msgstr "{user} посла видео-снимак."
+
+#: src/session/notifications/mod.rs:519
+#, rust-format
+msgid "{user} sent a sticker."
+msgstr "{user} посла налепницу."
+
+#: src/session/notifications/mod.rs:529
+#, rust-format
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:579
+#, rust-format
+msgid "{user} invited you"
+msgstr "{user} позва вас"
+
+#: src/session/notifications/mod.rs:607
+msgid "Incoming video call. Use another client to answer."
+msgstr "Долазни видео позив. Употреби други клијент да одговориш."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:613 src/session_view/room_history/call_row.rs:127
+#, rust-format
+msgid "Incoming video call from {user}. Use another client to answer."
+msgstr "Долазни видео позив од {user}. Употреби други клијент да одговориш."
+
+#: src/session/notifications/mod.rs:617
+msgid "Incoming call. Use another client to answer."
+msgstr "Долазни позив. Употреби други клијент да одговориш."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:621 src/session_view/room_history/call_row.rs:141
+#, rust-format
+msgid "Incoming call from {user}. Use another client to answer."
+msgstr "Долазни позив од {user}. Употреби други клијент да одговориш."
+
+#: src/session/room/join_rule.rs:259
+msgid "Only invited users, and users can request an invite"
+msgstr "Само позвани корисници, а корисници могу да затраже позив"
+
+#: src/session/room/join_rule.rs:261
+msgid "Only invited users"
+msgstr "Само позвани корисници"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:275
+#, rust-format
+msgid "Members of {room}, and users can request an invite"
+msgstr "Чланови собе {room}, а корисници могу да затраже позив"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:282
+#, rust-format
+msgid "Members of {room}"
+msgstr "Чланови собе {room}"
+
+#: src/session/room/join_rule.rs:287
+msgid "Any registered user"
+msgstr "Било који регистровани корисник"
+
+#: src/session/room/join_rule.rs:288 src/session_view/room_details/general_page.rs:946
+msgid "Unsupported rule"
+msgstr "Неподржано правило"
+
+#. Translators: This is the name of a room that is empty but had another
+#. user before. Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/room/mod.rs:392
+#, rust-format
+msgid "Empty Room (was {user})"
+msgstr "Празна соба (претходно {user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/room/mod.rs:395
+msgid "Empty Room"
+msgstr "Празна соба"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/room/mod.rs:405
+msgid "Unknown"
+msgstr "Непознато"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/room/permissions.rs:64
+msgid "Default"
+msgstr "Подразумевано"
+
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/session/room/permissions.rs:66
+msgctxt "power level"
+msgid "Custom"
+msgstr "Прилагођено"
+
+#: src/session/room/permissions.rs:67
+msgid "Moderator"
+msgstr "Модератор"
+
+#: src/session/room/permissions.rs:68
+msgid "Admin"
+msgstr "Админ"
+
+#: src/session/room/permissions.rs:69
+msgid "Creator"
+msgstr "Творац"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/room/permissions.rs:71
+msgid "Muted"
+msgstr "Утишано"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:329
+#, rust-format
+msgid "Could not join room {room_name}"
+msgstr "Не могу да се придружим соби {room_name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:361
+#, rust-format
+msgid "Could not request an invite to room {room_name}"
+msgstr "Не могу да затражим позив за собу {room_name}"
+
+#: src/session/sidebar_data/icon_item.rs:31
+msgid "Explore"
+msgstr "Истражи"
+
+#: src/session/sidebar_data/icon_item.rs:32
+msgid "Forget Room"
+msgstr "Заборави собу"
+
+#: src/session/sidebar_data/section/name.rs:82
+msgid "Verifications"
+msgstr "Потврде"
+
+#: src/session/sidebar_data/section/name.rs:83
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:140
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:385
+msgid "Invite Requests"
+msgstr "Позивнице"
+
+#: src/session/sidebar_data/section/name.rs:84 src/session_view/room_details/invite_subpage/list.rs:262
+msgid "Invited"
+msgstr "Позвани"
+
+#: src/session/sidebar_data/section/name.rs:85
+msgid "Favorites"
+msgstr "Омиљено"
+
+#: src/session/sidebar_data/section/name.rs:86
+msgid "Rooms"
+msgstr "Собе"
+
+#: src/session/sidebar_data/section/name.rs:87
+msgid "Low Priority"
+msgstr "Нижа важност"
+
+#: src/session/sidebar_data/section/name.rs:88
+msgid "Historical"
+msgstr "Историјске"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:324
+msgid "Last seen at %H:%M"
+msgstr "Последњи пут виђен у %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:329
+msgid "Last seen at %I:%M %p"
+msgstr "Последњи пут виђен у %I:%M %p"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:339
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "Последњи пут виђен јуче у %H:%M"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:346
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "Последњи пут виђен јуче у %I:%M %p"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:357
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "Последњи пут виђен у %A у %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:364
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "Последњи пут виђен у %A у %I:%M %p"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:373
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "Последњи пут виђен %-e. %B у %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:380
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "Последњи пут виђен %-e. %B у %I:%M %p"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:388
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "Последњи пут виђен %-e. %B %Y. у %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:395
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "Последњи пут виђен %-e. %B %Y. у %I:%M %p"
+
+#: src/session_list/mod.rs:164 src/session_list/mod.rs:199
+msgid "Could not restore previous sessions"
+msgstr "Не могу да вратим претходне сесије"
+
+#: src/session_list/mod.rs:200
+msgid "An unexpected error happened while accessing the data directory"
+msgstr "Дошло је до неочекиване грешке приликом приступања директоријуму са подацима"
+
+#: src/session_view/content.blp:5
+msgid "Main Content"
+msgstr "Главни садржај"
+
+#: src/session_view/content.blp:14 src/session_view/content.blp:28
+msgid "No Room Selected"
+msgstr "Није изабрана соба"
+
+#: src/session_view/content.blp:29
+msgid "Join a room to start chatting"
+msgstr "Придружите се соби да бисте почели да ћаскате"
+
+#: src/session_view/content.blp:36 src/session_view/room_history/mod.blp:124
+msgid "Room History"
+msgstr "Историјат собе"
+
+#: src/session_view/content.blp:45 src/session_view/invite_request.blp:13 src/session_view/invite_request.blp:37
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:138
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:383
+msgid "Invite Request"
+msgstr "Захтев за позив"
+
+#: src/session_view/content.blp:52
+msgid "Room Invite"
+msgstr "Позив у собу"
+
+#: src/session_view/content.blp:59
+msgid "Explore Rooms"
+msgstr "Истражите собе"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:5
+msgid "Direct Chat"
+msgstr "Директно ћаскање"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:31
+msgid "New Direct Chat"
+msgstr "Ново директно ћаскање"
+
+#. Translators: In this string, 'Search' is a verb.
+#. Translators: In this string, this is a verb.
+#: src/session_view/create_direct_chat_dialog/mod.blp:50 src/session_view/room_details/invite_subpage/mod.blp:53
+#: src/session_view/room_details/invite_subpage/mod.blp:59
+msgid "Search"
+msgstr "Претражи"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:51
+msgid "Search for people to start a new chat with"
+msgstr "Потражите људе да бисте започели ново ћаскање"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:83 src/session_view/room_details/invite_subpage/mod.blp:98
+#: src/session_view/room_details/invite_subpage/mod.blp:102
+msgid "No Users Found"
+msgstr "Нису пронађени корисници"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:84
+msgid "No users matching the search pattern were found"
+msgstr "Нису пронађени корисници који одговарају обрасцу претраге"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:94 src/session_view/explore/mod.blp:113
+#: src/session_view/room_details/invite_subpage/mod.blp:114
+msgid "An error occurred while searching for matches"
+msgstr "Дошло је до грешке приликом претраживања поклапања"
+
+#: src/session_view/create_direct_chat_dialog/mod.rs:160
+msgid "An error occurred while searching for users"
+msgstr "Дошло је до грешке приликом претраживања корисника"
+
+#: src/session_view/create_room_dialog.blp:36
+msgid "New Room"
+msgstr "Нова соба"
+
+#: src/session_view/create_room_dialog.blp:58
+msgid "Description (Optional)"
+msgstr "Опис (необавезно)"
+
+#: src/session_view/create_room_dialog.blp:85
+msgid "Room Visibility"
+msgstr "Видљивост собе"
+
+#: src/session_view/create_room_dialog.blp:88
+msgid "Private"
+msgstr "Приватна"
+
+#: src/session_view/create_room_dialog.blp:89
+msgid "Only invited people can join this room"
+msgstr "Само позвани људи могу да се придруже овој соби"
+
+#: src/session_view/create_room_dialog.blp:101
+msgid "Public"
+msgstr "Јавна"
+
+#: src/session_view/create_room_dialog.blp:102
+msgid "Anyone can find and join this room"
+msgstr "Свако може да пронађе ову собу и да јој се придружи"
+
+#: src/session_view/create_room_dialog.blp:118
+msgid "End-to-End Encryption"
+msgstr "Шифровање са краја на крај"
+
+#: src/session_view/create_room_dialog.blp:119
+msgid "Cannot be disabled later"
+msgstr "Не може се накнадно онемогућити"
+
+#: src/session_view/create_room_dialog.blp:128 src/session_view/room_details/addresses_subpage/mod.rs:431
+#: src/session_view/room_details/general_page.rs:689
+msgid "Main Address"
+msgstr "Главна адреса"
+
+#. Translators: This is the placeholder for the first part of a room address,
+#. as in '@my-room:example.org'.
+#: src/session_view/create_room_dialog.blp:131 src/session_view/room_details/addresses_subpage/mod.blp:87
+msgid "my-room"
+msgstr "moja-soba"
+
+#: src/session_view/create_room_dialog.blp:132 src/session_view/room_details/addresses_subpage/mod.blp:88
+msgid "First part of the address, for example “my-room”"
+msgstr "Први део адресе, на пример „moja-soba“"
+
+#: src/session_view/create_room_dialog.blp:155
+msgid "_Create Room"
+msgstr "_Направи собу"
+
+#: src/session_view/create_room_dialog.rs:120
+msgid "Cannot contain “:”"
+msgstr "Не може да садржи „:“"
+
+#: src/session_view/create_room_dialog.rs:123
+msgid "Cannot contain “#”"
+msgstr "Не може да садржи „#“"
+
+#: src/session_view/create_room_dialog.rs:126
+msgid "Too long. Use a shorter address."
+msgstr "Предугачко. Користите краћу адресу."
+
+#: src/session_view/create_room_dialog.rs:241
+msgid "The address is already taken."
+msgstr "Адреса је већ заузета."
+
+#: src/session_view/explore/mod.blp:26
+msgid "Public Rooms Search"
+msgstr "Претрага јавних соба"
+
+#: src/session_view/explore/mod.blp:27
+msgid "Search for a room in the public directory of the selected server"
+msgstr "Потражите собу у јавном директоријуму изабраног сервера"
+
+#: src/session_view/explore/mod.blp:38
+msgid "Switch servers"
+msgstr "Промени сервере"
+
+#: src/session_view/explore/mod.blp:70 src/session_view/explore/mod.blp:74 src/session_view/sidebar/mod.blp:188
+msgid "No Rooms"
+msgstr "Нема соба"
+
+#: src/session_view/explore/mod.blp:75 src/session_view/sidebar/mod.blp:189
+msgid "No rooms matching the search were found"
+msgstr "Нису пронађене собе које се подударају са претрагом"
+
+#: src/session_view/explore/mod.blp:81
+msgid "List of Public Rooms"
+msgstr "Списак јавних соба"
+
+#: src/session_view/explore/public_room_row.rs:183
+#, rust-format
+msgid "View {room_name}"
+msgstr "Прикажи {room_name}"
+
+#: src/session_view/explore/public_room_row.rs:189
+#, rust-format
+msgid "Request an invite to {room_name}"
+msgstr "Затражи позивницу за {room_name}"
+
+#: src/session_view/explore/public_room_row.rs:196
+#, rust-format
+msgid "Join {room_name}"
+msgstr "Приступи соби {room_name}"
+
+#: src/session_view/explore/server_row.blp:18
+msgid "Remove Server"
+msgstr "Уклони сервер"
+
+#: src/session_view/explore/servers_popover.blp:27
+msgid "Server List"
+msgstr "Списак сервера"
+
+#: src/session_view/explore/servers_popover.blp:40 src/session_view/explore/servers_popover.blp:48
+msgid "Add Server"
+msgstr "Додај сервер"
+
+#: src/session_view/invite.blp:102
+msgid "_Decline"
+msgstr "О_дбиј"
+
+#: src/session_view/invite.blp:112 src/session_view/sidebar/mod.blp:38
+msgid "_Accept"
+msgstr "Прихв_ати"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/invite.rs:189
+#, rust-format
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) вас позва"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:239 src/session_view/sidebar/row.rs:724
+#, rust-format
+msgid "Could not accept invitation for {room}"
+msgstr "Нисам могао да прихватим позив за собу „{room}“"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:278 src/session_view/sidebar/row.rs:714
+#, rust-format
+msgid "Could not decline invitation for {room}"
+msgstr "Нисам могао да одбијем позив за собу „{room}“"
+
+#: src/session_view/invite_request.blp:88
+msgid "You requested an invite to this room"
+msgstr "Затражили сте позив за ову собу"
+
+#: src/session_view/invite_request.blp:101 src/session_view/sidebar/mod.blp:50
+msgid "_Retract"
+msgstr "_Повуци"
+
+#: src/session_view/invite_request.rs:168
+msgid "Could not retract invite request"
+msgstr "Не могу да повучем захтев за позив"
+
+#: src/session_view/media_viewer.blp:7 src/session_view/media_viewer.blp:35
+msgid "_Copy Image"
+msgstr "_Копирај слику"
+
+#: src/session_view/media_viewer.blp:13 src/session_view/media_viewer.blp:41
+#: src/session_view/room_history/event_actions/context_menu.blp:58
+msgid "S_ave Image"
+msgstr "С_ачувај слику"
+
+#: src/session_view/media_viewer.blp:19 src/session_view/media_viewer.blp:47
+#: src/session_view/room_history/event_actions/context_menu.blp:64
+msgid "S_ave Video"
+msgstr "С_ачувај снимак"
+
+#: src/session_view/media_viewer.blp:25 src/session_view/room_history/event_actions/context_menu.blp:76
+msgid "Copy Message _Link"
+msgstr "Копирај _везу поруке"
+
+#: src/session_view/media_viewer.blp:87 src/session_view/media_viewer.blp:91
+msgid "Media Menu"
+msgstr "Мени медија"
+
+#: src/session_view/media_viewer.blp:100 src/session_view/media_viewer.blp:103
+msgid "Fullscreen"
+msgstr "Цео екран"
+
+#: src/session_view/media_viewer.blp:112 src/session_view/media_viewer.blp:115
+msgid "Exit Fullscreen"
+msgstr "Изађи из целог екрана"
+
+#: src/session_view/media_viewer.rs:478
+msgid "Image copied to clipboard"
+msgstr "Слика је копирана у оставу"
+
+#: src/session_view/media_viewer.rs:518 src/session_view/room_history/event_actions/group.rs:63
+msgid "Message link copied to clipboard"
+msgstr "Веза поруке је копирана у оставу"
+
+#: src/session_view/room_details/addresses_subpage/completion_popover.blp:16
+msgid "Address auto-completion"
+msgstr "Самодопуњавање адресе"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:5
+msgid "Edit Room Addresses"
+msgstr "Уреди адресе собе"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:13 src/session_view/room_details/general_page.blp:140
+msgid "Public Addresses"
+msgstr "Јавне адресе"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main address is used to identify a room publicly. "
+"Before adding an address to this list, it must be registered as a local address."
+msgstr ""
+"Јавне адресе се оглашавају свим корисницима у соби, а главна адреса се користи за јавну идентификацију собе. Пре додавања "
+"адресе на овај списак, она мора бити регистрована као локална адреса."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:45
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are not made public, only people on your "
+"homeserver can discover them."
+msgstr ""
+"Локалне адресе се могу регистровати само на вашем матичном серверу. Ако нису јавне, само људи на вашем матичном серверу "
+"их могу открити."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:77 src/session_view/room_details/addresses_subpage/mod.blp:78
+msgid "Add Public Address"
+msgstr "Додај јавну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:84 src/session_view/room_details/addresses_subpage/mod.blp:90
+msgid "Register Local Address"
+msgstr "Региструј локалну адресу"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:328
+#, rust-format
+msgid "Local Addresses on {homeserver}"
+msgstr "Локалне адресе на {homeserver}"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:390
+msgid "Remove address"
+msgstr "Уклони адресу"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:394
+#, rust-format
+msgid "Remove “{address}”"
+msgstr "Уклони „{address}“"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:455
+msgid "Set as main address"
+msgstr "Постави као главну адресу"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:461
+#, rust-format
+msgid "Set “{address}” as main address"
+msgstr "Постави „{address}“ као главну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:504
+msgid "Could not remove public address"
+msgstr "Не могу да уклоним јавну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:529
+msgid "Could not set main public address"
+msgstr "Не могу да поставим главну јавну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:577
+msgid "Could not add public address"
+msgstr "Не могу да додам јавну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:581
+msgid "This address is not registered as a local address"
+msgstr "Ова адреса није регистрована као локална адреса"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:584
+msgid "This address does not belong to this room"
+msgstr "Ова адреса не припада овој соби"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:639
+msgid "Unregister local address"
+msgstr "Откажи регистрацију локалне адресе"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:643
+#, rust-format
+msgid "Unregister “{address}”"
+msgstr "Откажи регистрацију „{address}“"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:679
+msgid "Could not unregister local address"
+msgstr "Не могу да откажем регистрацију локалне адресе"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:712
+#, rust-format
+msgid "Register “{address}”"
+msgstr "Региструј „{address}“"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:749
+msgid "Could not register local address"
+msgstr "Не могу да региструјем локалну адресу"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:753
+msgid "This address is already registered"
+msgstr "Ова адреса је већ регистрована"
+
+#: src/session_view/room_details/edit_details_subpage.blp:5
+msgid "Edit Room Details"
+msgstr "Уреди детаље собе"
+
+#: src/session_view/room_details/edit_details_subpage.blp:34
+msgid "Room Avatar"
+msgstr "Аватар собе"
+
+#: src/session_view/room_details/edit_details_subpage.blp:60
+msgid "Description"
+msgstr "Опис"
+
+#: src/session_view/room_details/edit_details_subpage.blp:107
+msgid "Save Description"
+msgstr "Сачувај опис"
+
+#: src/session_view/room_details/edit_details_subpage.rs:263
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "Желите ли заиста да уклоните аватар за ову собу?"
+
+#: src/session_view/room_details/edit_details_subpage.rs:326
+msgid "Room name saved successfully"
+msgstr "Назив собе је успешно сачуван"
+
+#: src/session_view/room_details/edit_details_subpage.rs:397
+msgid "Could not change room name"
+msgstr "Не могу да променим назив собе"
+
+#: src/session_view/room_details/edit_details_subpage.rs:435
+msgid "Room description saved successfully"
+msgstr "Опис собе је успешно сачуван"
+
+#: src/session_view/room_details/edit_details_subpage.rs:511
+msgid "Could not change room description"
+msgstr "Не могу да изменим опис собе"
+
+#: src/session_view/room_details/general_page.blp:5 src/session_view/room_details/mod.blp:5
+msgid "Room Details"
+msgstr "Појединости собе"
+
+#: src/session_view/room_details/general_page.blp:48
+msgid "Edit Details"
+msgstr "Уреди појединости"
+
+#: src/session_view/room_details/general_page.blp:72 src/session_view/room_details/members_page/members_list_view/mod.rs:425
+msgid "There are no members in this room"
+msgstr "У овој соби нема чланова"
+
+#: src/session_view/room_details/general_page.blp:91 src/session_view/room_details/history_viewer/visual_media.blp:5
+msgid "Media"
+msgstr "Медији"
+
+#: src/session_view/room_details/general_page.blp:97
+msgid "Files"
+msgstr "Датотеке"
+
+#. Translators: As in 'Audio file'.
+#: src/session_view/room_details/general_page.blp:104 src/session_view/room_details/history_viewer/audio.blp:6
+#: src/session_view/room_history/message_row/audio.rs:63
+msgid "Audio"
+msgstr "Звук"
+
+#: src/session_view/room_details/general_page.blp:112
+msgid "Which messages trigger notifications in this room"
+msgstr "Које поруке покрећу обавештења у овој соби"
+
+#: src/session_view/room_details/general_page.blp:115
+msgid "Use Global Setting"
+msgstr "Користи опште подешавање"
+
+#: src/session_view/room_details/general_page.blp:121
+msgid "All Messages"
+msgstr "Све поруке"
+
+#: src/session_view/room_details/general_page.blp:127
+msgid "Only Mentions and Keywords"
+msgstr "Само помињања и кључне речи"
+
+#: src/session_view/room_details/general_page.blp:133
+msgid "Disable Notifications"
+msgstr "Онемогући обавештења"
+
+#: src/session_view/room_details/general_page.blp:153
+msgid "Edit Public Addresses"
+msgstr "Уреди јавне адресе"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session_view/room_details/general_page.blp:160 src/session_view/room_history/event_actions/context_menu.blp:14
+msgid "_Edit"
+msgstr "Ур_еди"
+
+#: src/session_view/room_details/general_page.blp:168
+msgid "This room has no public addresses"
+msgstr "Ова соба нема јавне адресе"
+
+#: src/session_view/room_details/general_page.blp:186
+msgid "Copy Room Link"
+msgstr "Умножи везу собе"
+
+#: src/session_view/room_details/general_page.blp:193
+msgid "Access and Visibility"
+msgstr "Приступ и видљивост"
+
+#: src/session_view/room_details/general_page.blp:197 src/session_view/room_details/join_rule_subpage.blp:5
+msgid "Who Can Join"
+msgstr "Ко може да се придружи"
+
+#: src/session_view/room_details/general_page.blp:208
+msgid "Allow Guests"
+msgstr "Дозволи гостима"
+
+#: src/session_view/room_details/general_page.blp:209
+msgid "Guests are Matrix users without a registered account"
+msgstr "Гости су корисници Матрикса без регистрованог налога"
+
+#: src/session_view/room_details/general_page.blp:218 src/session_view/room_details/history_visibility_subpage.blp:5
+msgid "Who Can Read History"
+msgstr "Ко може да чита историјат"
+
+#: src/session_view/room_details/general_page.blp:232
+msgid "Matrix Room ID"
+msgstr "ИД Матрикс собе"
+
+#: src/session_view/room_details/general_page.blp:235
+msgid "Copy Matrix Room ID"
+msgstr "Умножи ИД Матрикс собе"
+
+#: src/session_view/room_details/general_page.blp:236
+msgid "Matrix room ID copied to clipboard"
+msgstr "ИД Матрикс собе је копиран у оставу"
+
+#: src/session_view/room_details/general_page.blp:240 src/session_view/room_details/permissions/permissions_subpage.blp:159
+msgid "Enable Encryption"
+msgstr "Омогући шифровање"
+
+#: src/session_view/room_details/general_page.blp:246 src/session_view/room_details/permissions/permissions_subpage.blp:5
+#: src/session_view/room_details/permissions/permissions_subpage.blp:9
+msgid "Permissions"
+msgstr "Овлашћења"
+
+#: src/session_view/room_details/general_page.blp:254
+msgid "Room Version"
+msgstr "Издање собе"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/general_page.blp:263
+msgid "Upgrade…"
+msgstr "Надогради…"
+
+#: src/session_view/room_details/general_page.blp:275
+msgid "Federation"
+msgstr "Федерација"
+
+#: src/session_view/room_details/general_page.rs:466 src/session_view/room_details/general_page.rs:517
+#: src/session_view/room_details/invite_subpage/list.rs:260
+msgid "Member"
+msgstr "Члан"
+
+#: src/session_view/room_details/general_page.rs:468 src/session_view/room_details/general_page.rs:519
+msgid "Members"
+msgstr "Чланови"
+
+#: src/session_view/room_details/general_page.rs:644
+msgid "Could not change notifications setting"
+msgstr "Не могу да променим подешавање обавештења"
+
+#: src/session_view/room_details/general_page.rs:684 src/session_view/room_details/general_page.rs:723
+msgid "Copy address"
+msgstr "Копирај адресу"
+
+#: src/session_view/room_details/general_page.rs:685 src/session_view/room_details/general_page.rs:724
+msgid "Address copied to clipboard"
+msgstr "Адреса је копирана у оставу"
+
+#: src/session_view/room_details/general_page.rs:766
+msgid "Room link copied to clipboard"
+msgstr "Веза собе је копирана у оставу"
+
+#: src/session_view/room_details/general_page.rs:825
+msgid "Could not change guest access"
+msgstr "Не могу да променим приступ гостију"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/general_page.rs:842
+#, rust-format
+msgid "Publish in the {homeserver} directory"
+msgstr "Објави у {homeserver} директоријуму"
+
+#: src/session_view/room_details/general_page.rs:917
+msgid "Could not publish room in directory"
+msgstr "Не могу да објавим собу у директоријуму"
+
+#: src/session_view/room_details/general_page.rs:919
+msgid "Could not unpublish room from directory"
+msgstr "Не могу да повучем објаву собе из директоријума"
+
+#: src/session_view/room_details/general_page.rs:937 src/session_view/room_details/history_visibility_subpage.blp:53
+msgid "Anyone, even if they are not in the room"
+msgstr "Било ко, чак и ако није у соби"
+
+#: src/session_view/room_details/general_page.rs:940 src/session_view/room_details/history_visibility_subpage.blp:59
+msgid "Members only, since this option was selected"
+msgstr "Само чланови, јер је ова могућност изабрана"
+
+#: src/session_view/room_details/general_page.rs:942 src/session_view/room_details/history_visibility_subpage.blp:65
+msgid "Members only, since they were invited"
+msgstr "Само чланови, јер су позвани"
+
+#: src/session_view/room_details/general_page.rs:944 src/session_view/room_details/history_visibility_subpage.blp:71
+msgid "Members only, since they joined the room"
+msgstr "Само чланови, откако су се придружили соби"
+
+#: src/session_view/room_details/general_page.rs:996
+msgid "Enable Encryption?"
+msgstr "Омогућити шифровање?"
+
+#: src/session_view/room_details/general_page.rs:997
+msgid "Enabling encryption will prevent new members to read the history before they arrived. This cannot be disabled later."
+msgstr ""
+"Омогућавање шифровања ће спречити нове чланове да читају историјат пре него што су дошли. Ово се не може накнадно "
+"онемогућити."
+
+#: src/session_view/room_details/general_page.rs:1002 src/session_view/sidebar/mod.rs:353
+#: src/session_view/sidebar/mod.rs:359
+msgid "Enable"
+msgstr "Омогући"
+
+#: src/session_view/room_details/general_page.rs:1013
+msgid "Could not enable encryption"
+msgstr "Не могу да омогућим шифровање"
+
+#. Translators: As in, 'Room federated'.
+#: src/session_view/room_details/general_page.rs:1073
+msgid "Federated"
+msgstr "Федерализована"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session_view/room_details/general_page.rs:1076
+msgid "Not federated"
+msgstr "Није федерализована"
+
+#: src/session_view/room_details/general_page.rs:1110
+msgid "Room upgraded successfully"
+msgstr "Соба је успешно надограђена"
+
+#: src/session_view/room_details/general_page.rs:1114
+msgid "Could not upgrade room"
+msgstr "Не могу да надоградим собу"
+
+#: src/session_view/room_details/history_viewer/audio.blp:24 src/session_view/room_details/history_viewer/audio.blp:31
+msgid "No Audio"
+msgstr "Без звука"
+
+#: src/session_view/room_details/history_viewer/audio.blp:32
+msgid "This room does not contain any audio"
+msgstr "Ова соба не садржи никакав звук"
+
+#: src/session_view/room_details/history_viewer/audio.blp:38 src/session_view/room_details/history_viewer/audio.blp:45
+msgid "Could Not Load Audio"
+msgstr "Не могу да учитам звук"
+
+#: src/session_view/room_details/history_viewer/audio.blp:46 src/session_view/room_details/history_viewer/file.blp:45
+#: src/session_view/room_details/history_viewer/visual_media.blp:51 src/session_view/room_history/mod.blp:107
+msgid "Check your network connection"
+msgstr "Проверите вашу интернет везу"
+
+#: src/session_view/room_details/history_viewer/audio.blp:63
+msgid "Audio History"
+msgstr "Историјат звука"
+
+#: src/session_view/room_details/history_viewer/file.blp:23 src/session_view/room_details/history_viewer/file.blp:30
+msgid "No Files"
+msgstr "Нема датотека"
+
+#: src/session_view/room_details/history_viewer/file.blp:31
+msgid "This room does not contain any files"
+msgstr "Ова соба не садржи никакве датотеке"
+
+#: src/session_view/room_details/history_viewer/file.blp:37 src/session_view/room_details/history_viewer/file.blp:44
+msgid "Could Not Load Files"
+msgstr "Не могу да учитам датотеке"
+
+#: src/session_view/room_details/history_viewer/file.blp:62
+msgid "File History"
+msgstr "Историјат датотека"
+
+#: src/session_view/room_details/history_viewer/file_row.blp:12 src/session_view/room_details/history_viewer/file_row.rs:101
+#: src/session_view/room_details/history_viewer/file_row.rs:143 src/session_view/room_history/message_row/file.blp:24
+#: src/session_view/room_history/message_row/file.blp:28 src/utils/matrix/media_message.rs:231
+msgid "Save File"
+msgstr "Сачувај датотеку"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/history_viewer/file_row.rs:74
+#, rust-format
+msgid "Save {filename}"
+msgstr "Сачувај {filename}"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:82
+msgid "Unknown size"
+msgstr "Непозната величина"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:98
+msgid "Open File"
+msgstr "Отвори датотеку"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:157 src/utils/matrix/media_message.rs:250
+msgid "Could not save file"
+msgstr "Не могу да сачувам датотеку"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:29
+#: src/session_view/room_details/history_viewer/visual_media.blp:36
+msgid "No Media"
+msgstr "Нема медија"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:37
+msgid "This room does not contain any media"
+msgstr "Ова соба не садржи никакве медије"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:43
+#: src/session_view/room_details/history_viewer/visual_media.blp:50
+msgid "Could Not Load Media"
+msgstr "Не могу да учитам медије"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:68
+msgid "Media History"
+msgstr "Историјат медија"
+
+#: src/session_view/room_details/history_visibility_subpage.blp:30 src/session_view/room_details/join_rule_subpage.blp:30
+#: src/session_view/room_details/permissions/permissions_subpage.blp:32
+msgid "_Save"
+msgstr "_Сачувај"
+
+#: src/session_view/room_details/history_visibility_subpage.rs:189
+msgid "Could not change who can read history"
+msgstr "Не могу да изменим ко може да чита историјат"
+
+#: src/session_view/room_details/invite_subpage/list.rs:261
+msgid "Banned"
+msgstr "Забрањен приступ"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:5
+msgid "Invite New Members"
+msgstr "Позови нове чланове"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:22
+msgid "I_nvite"
+msgstr "По_зови"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:60
+msgid "Search for users to invite them to this room"
+msgstr "Потражите кориснике да бисте их позвали у ову собу"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:66
+msgid "Matching Users"
+msgstr "Подударни корисници"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:103
+msgid "No users matching the search were found"
+msgstr "Нису пронађени корисници који се подударају са претрагом"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:120
+msgid "Searching for Users"
+msgstr "Претраживање корисника"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/room_details/invite_subpage/mod.rs:235
+#, rust-format
+msgid "Could not invite {user} to {room}"
+msgstr "Не могу да позовем корисника {user} у собу {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names. The count is always greater than 1.
+#: src/session_view/room_details/invite_subpage/mod.rs:247
+#, rust-format
+msgid "Could not invite 1 user to {room}"
+msgid_plural "Could not invite {n} users to {room}"
+msgstr[0] "Не могу да позовем {n} корисника у собу {room}"
+msgstr[1] "Не могу да позовем {n} корисника у собу {room}"
+msgstr[2] "Не могу да позовем {n} корисника у собу {room}"
+msgstr[3] "Не могу да позовем {n} корисника у собу {room}"
+
+#: src/session_view/room_details/join_rule_subpage.blp:80
+msgid "Only Invited Users"
+msgstr "Само позвани корисници"
+
+#: src/session_view/room_details/join_rule_subpage.blp:86
+msgid "Any Registered User"
+msgstr "Било који регистровани корисник"
+
+#: src/session_view/room_details/join_rule_subpage.blp:99
+msgid "Allow Invite Requests"
+msgstr "Дозволи захтеве за позив"
+
+#: src/session_view/room_details/join_rule_subpage.rs:112
+msgid ""
+"The version of this room does not support all possibilities. Upgrade this room to the latest version to see more options."
+msgstr "Издање ове собе не подржава све могућности. Надоградите ову собу на најновије издање да бисте видели више опција."
+
+#: src/session_view/room_details/join_rule_subpage.rs:230
+msgid "Could not change who can join"
+msgstr "Не могу да променим ко може да приступи"
+
+#: src/session_view/room_details/member_row.blp:38
+msgid "Identity Verified"
+msgstr "Идентитет је потврђен"
+
+#. Translators: This is plural, as in 'Invited Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:124
+msgctxt "members"
+msgid "Invited"
+msgstr "Позвани"
+
+#. Translators: This is plural, as in 'Banned Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:133
+msgctxt "members"
+msgid "Banned"
+msgstr "Забрањени"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:11
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:17
+msgid "Toggle Room Members Search"
+msgstr "Окини претрагу чланова собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:29
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:33
+#: src/session_view/room_details/permissions/members_subpage.blp:32
+#: src/session_view/room_details/permissions/members_subpage.blp:36
+msgid "Search for room members"
+msgstr "Претражи чланове собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:73
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:339
+msgid "Could not load the full list of room members"
+msgstr "Не могу да учитам пун списак чланова собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:362
+msgid "Room Member"
+msgstr "Члан собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:364
+msgid "Room Members"
+msgstr "Чланови собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:369
+msgid "Invited Room Member"
+msgstr "Позвани члан собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:371
+msgid "Invited Room Members"
+msgstr "Позвани чланови собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:376
+msgid "Banned Room Member"
+msgstr "Забрањени члан собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:378
+msgid "Banned Room Members"
+msgstr "Забрањени чланови собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:424
+#: src/session_view/room_details/permissions/members_subpage.blp:51
+msgid "No Room Members"
+msgstr "Нема чланова собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:429
+msgid "No Invited Room Members"
+msgstr "Нема позваних чланова собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:430
+msgid "There are no invited members in this room"
+msgstr "У овој соби нема позваних чланова"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:434
+msgid "No Banned Room Members"
+msgstr "Нема забрањених чланова собе"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:435
+msgid "There are no banned members in this room"
+msgstr "У овој соби нема забрањених чланова"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:439
+msgid "No Invite Requests"
+msgstr "Нема захтева за позив"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:440
+msgid "There are no invite requests in this room"
+msgstr "У овој соби нема захтева за позив"
+
+#: src/session_view/room_details/mod.rs:154
+msgid "The user is not in the room members list anymore"
+msgstr "Корисник више није на списку чланова собе"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:5
+msgid "Add Custom Permissions"
+msgstr "Додај произвољна овлашћења"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:12
+msgid "_Add"
+msgstr "Дод_ај"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/add_members_subpage.blp:46
+msgid "Assign Power Level"
+msgstr "Додели ниво моћи"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:64
+msgid "Search Results"
+msgstr "Резултати претраге"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:84
+#: src/session_view/room_details/permissions/add_members_subpage.blp:88
+msgid "No Matching Members Found"
+msgstr "Нису пронађени одговарајући чланови"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:89
+msgid "No room members matching the search were found"
+msgstr "Нису пронађени чланови собе који одговарају претрази"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/members_subpage.blp:6
+#: src/session_view/room_details/permissions/permissions_subpage.blp:282
+msgid "Members With Assigned Power Levels"
+msgstr "Чланови са додељеним нивоима моћи"
+
+#: src/session_view/room_details/permissions/members_subpage.blp:103
+msgid "Add"
+msgstr "Додај"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:195
+msgid "There are no room members with assigned power levels in this room"
+msgstr "У овој соби нема чланова са додељеним нивоима моћи"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:197
+msgid "There are no room members with assigned power levels matching the search"
+msgstr "Нема чланова са додељеним нивоима моћи који одговарају претрази"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:44
+msgid "Room Actions"
+msgstr "Радње собе"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:46
+msgid "Power level required to perform different actions in the room"
+msgstr "Ниво моћи потребан за обављање различитих радњи у соби"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:49
+msgid "Send Messages"
+msgstr "Слање порука"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:60
+msgid "Remove Own Messages"
+msgstr "Уклањање сопствених порука"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:71
+msgid "Remove Messages of Other Members"
+msgstr "Уклањање порука других чланова"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:82
+msgid "Notify Entire Room"
+msgstr "Обавештавање целе собе"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:93
+msgid "Change Room Settings"
+msgstr "Измена подешавања собе"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:104
+msgid "Change Room Name"
+msgstr "Измена назива собе"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:115
+msgid "Change Room Description"
+msgstr "Измена описа собе"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:126
+msgid "Change Room Avatar"
+msgstr "Измена аватара собе"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:137
+msgid "Change Addresses"
+msgstr "Измена адреса"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:148
+msgid "Change Who Can Read History"
+msgstr "Измена права читања историјата"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:170
+msgid "Change Permissions"
+msgstr "Измена овлашћења"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:181
+msgid "Change Server Access Control List"
+msgstr "Измена серверског списка управљања приступом"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:192
+msgid "Upgrade Room"
+msgstr "Надогради собу"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:204
+msgid "Member Actions"
+msgstr "Радње чланова"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:206
+msgid "Power level required to perform different actions on room members"
+msgstr "Ниво овлашћења потребан за обављање различитих радњи над члановима собе"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:247
+msgid "Members Power Levels"
+msgstr "Нивои овлашћења чланова"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:249
+msgid "Power levels defined for all members of the room"
+msgstr "Нивои овлашћења одређени за све чланове собе"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:253
+#: src/session_view/room_details/permissions/permissions_subpage.blp:267
+msgid "Default Power Level"
+msgstr "Подразумевани ниво овлашћења"
+
+#: src/session_view/room_details/permissions/permissions_subpage.rs:584
+msgid "Could not save permissions"
+msgstr "Не могу да сачувам овлашћења"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:5 src/session_view/room_details/upgrade_dialog/mod.blp:49
+msgctxt "dialog title"
+msgid "Upgrade Room"
+msgstr "Надоградња собе"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:65
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new features from the Matrix specification. It can also "
+"be used to reset the room state, which should make the room faster to join. However it should be used sparingly because "
+"it can be disruptive, as room members need to join the new room manually."
+msgstr ""
+"Надоградња собе на новије издање омогућава коришћење нових могућности из Матрикс спецификације. Такође се може користити "
+"за поновно постављање стања собе, што би требало да убрза приступање соби. Ипак, ово треба користити штедљиво јер може "
+"бити ометајуће, пошто чланови собе морају ручно да приступе новој соби."
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:85
+msgid "Version"
+msgstr "Издање"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:97
+msgid ""
+"After the upgrade, you will be the only member of the room and other members will need to be re-invited manually. This "
+"could be avoided by using third-party upgrade tooling that handles this for you."
+msgstr ""
+"Након надоградње, бићете једини члан собе и остали чланови ће морати да буду поново позвани ручно. Ово се може избећи "
+"коришћењем алата за надоградњу треће стране који ово обавља уместо вас."
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/upgrade_dialog/mod.blp:141
+msgid "Upgrade"
+msgstr "Надогради"
+
+#. Translators: As in 'Stable version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:116
+msgid "Stable"
+msgstr "Стабилно"
+
+#. Translators: As in 'Experimental version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:119
+msgid "Experimental"
+msgstr "Експериментално"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:204
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other creator will be demoted to the default power level."
+msgstr "Након надоградње, бићете једини творац у соби. Други творац ће бити враћен на подразумевани ниво овлашћења."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:208
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other creators will be demoted to the default power "
+"level."
+msgstr "Након надоградње, бићете једини творац у соби. Други творци ће бити враћени на подразумевани ниво овлашћења."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:213
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current creator will be demoted to the default power "
+"level."
+msgstr "Након надоградње, бићете једини творац у соби. Тренутни творац ће бити враћен на подразумевани ниво овлашћења."
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:217
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current creators will be demoted to the default power "
+"level."
+msgstr "Након надоградње, бићете једини творац у соби. Тренутни творци ће бити враћени на подразумевани ниво овлашћења."
+
+#: src/session_view/room_history/call_row.rs:122
+msgid "Outgoing video call."
+msgstr "Одлазни видео позив."
+
+#: src/session_view/room_history/call_row.rs:136
+msgid "Outgoing call."
+msgstr "Одлазни позив."
+
+#: src/session_view/room_history/divider_row.rs:90
+msgid "This is the start of the visible history"
+msgstr "Ово је почетак видљивог историјата"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:102
+msgid "%A, %B %-e"
+msgstr "%A, %-e. %B"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:108
+msgid "%A, %B %-e, %Y"
+msgstr "%A, %-e. %B %Y"
+
+#: src/session_view/room_history/divider_row.rs:115
+msgid "New Messages"
+msgstr "Нове поруке"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session_view/room_history/event_actions/context_menu.blp:7
+msgid "_Reply"
+msgstr "Одгово_ри"
+
+#. Translators: In this string, 'Forward' is a verb, this is to re-send
+#. the same message in another room, like forwarding an e-mail.
+#: src/session_view/room_history/event_actions/context_menu.blp:22
+msgid "_Forward"
+msgstr "Просл_еди"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:30
+msgid "_Select"
+msgstr "_Изабери"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:38
+msgid "Revoke _Invite"
+msgstr "Опозови _позив"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:46
+msgid "_Copy Text"
+msgstr "_Копирај текст"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:52
+msgid "Copy T_humbnail"
+msgstr "Копирај с_личицу"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:70
+msgid "S_ave Audio"
+msgstr "С_ачувај звук"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:82
+msgid "_Properties"
+msgstr "_Својства"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:90
+msgid "_Discard"
+msgstr "О_дбаци"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:98
+msgid "Rep_ort…"
+msgstr "Прија_ви…"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:104
+msgid "Re_move"
+msgstr "Укло_ни"
+
+#: src/session_view/room_history/event_actions/context_menu.rs:83 src/session_view/sidebar/mod.rs:405
+msgid "Context Menu"
+msgstr "Контекстни мени"
+
+#: src/session_view/room_history/event_actions/group.rs:337
+msgid "Thumbnail copied to clipboard"
+msgstr "Сличица је копирана у оставу"
+
+#: src/session_view/room_history/event_actions/group.rs:511
+msgid "Text copied to clipboard"
+msgstr "Текст је копиран у оставу"
+
+#: src/session_view/room_history/event_actions/group.rs:578
+msgid "Remove Message?"
+msgstr "Уклонити поруку?"
+
+#: src/session_view/room_history/event_actions/group.rs:580
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr "Желите ли заиста да уклоните ову поруку? Ово се не може поништити."
+
+#: src/session_view/room_history/event_actions/group.rs:594
+msgid "Could not remove message"
+msgstr "Не могу да уклоним поруку"
+
+#: src/session_view/room_history/event_actions/group.rs:609
+msgid "Could not toggle reaction"
+msgstr "Не могу да окинем реакцију"
+
+#: src/session_view/room_history/event_actions/group.rs:641
+msgid "Report Event?"
+msgstr "Пријавити догађај?"
+
+#: src/session_view/room_history/event_actions/group.rs:643
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your homeserver. The administrator will not be able to "
+"see the content of the event if it is encrypted or redacted."
+msgstr "Пријављивање догађаја ће послати његов јединствени ИД администратору вашег матичног сервера. Администратор неће моћи да види садржај догађаја ако је шифрован или скривен."
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session_view/room_history/event_actions/group.rs:650
+msgid "Report"
+msgstr "Пријави"
+
+#: src/session_view/room_history/event_actions/group.rs:668
+msgid "Could not report event"
+msgstr "Не могу да пријавим догађај"
+
+#: src/session_view/room_history/event_actions/group.rs:688
+msgid "Could not discard message"
+msgstr "Не могу да одбацим поруку"
+
+#: src/session_view/room_history/event_actions/group.rs:717
+msgid "Revoking invite…"
+msgstr "Опозивам позивницу…"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:6
+#: src/session_view/room_history/event_actions/properties_dialog.blp:12
+msgid "Event Properties"
+msgstr "Својства догађаја"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:40
+msgid "Original Event"
+msgstr "Изворни догађај"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:56
+#: src/session_view/room_history/event_actions/properties_dialog.blp:134
+msgid "Event ID"
+msgstr "ИД догађаја"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:58
+#: src/session_view/room_history/event_actions/properties_dialog.blp:136
+msgid "Copy Event ID"
+msgstr "Копирај ИД догађаја"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:59
+#: src/session_view/room_history/event_actions/properties_dialog.blp:137
+msgid "Event ID copied to clipboard"
+msgstr "Копирао сам ИД догађаја у оставу"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:64
+msgid "Room ID"
+msgstr "ИД собе"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:70
+msgid "Copy Room ID"
+msgstr "Копирај ИД собе"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:71
+msgid "Room ID copied to clipboard"
+msgstr "Копирао сам ИД собе у оставу"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:75
+msgid "Sender ID"
+msgstr "ИД пошиљаоца"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:85
+msgid "Show Profile"
+msgstr "Прикажи профил"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:96
+#: src/session_view/room_history/event_actions/properties_dialog.blp:142
+msgid "Timestamp"
+msgstr "Временска ознака"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:98
+#: src/session_view/room_history/event_actions/properties_dialog.blp:144
+msgid "Copy Timestamp"
+msgstr "Копирај временску ознаку"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:99
+#: src/session_view/room_history/event_actions/properties_dialog.blp:145
+msgid "Timestamp copied to clipboard"
+msgstr "Копирао сам временску ознаку у оставу"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:105
+#: src/session_view/room_history/event_actions/properties_dialog.blp:150
+msgid "View Source"
+msgstr "Прикажи изворни код"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:118
+msgid "Latest Edit"
+msgstr "Последња измена"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:172
+msgid "Copy Source"
+msgstr "Копирај извор"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:108
+msgid "Original Event Source"
+msgstr "Извор првобитног догађаја"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:110
+msgid "Event Source"
+msgstr "Извор догађаја"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:124
+msgid "Latest Edit Source"
+msgstr "Извор последње измене"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:138
+msgid "Source copied to clipboard"
+msgstr "Извор је копиран у оставу"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:15
+msgid "Send a Reaction"
+msgstr "Пошаљи реакцију"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:19
+msgid "More Reactions"
+msgstr "Више реакција"
+
+#: src/session_view/room_history/event_timestamp.rs:96
+#, rust-format
+msgid "Sent at {time}"
+msgstr "Послато у {time}"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:109
+msgid "%B %-e at %I:%M %p"
+msgstr "%-e. %B у %I:%M %p"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:115
+msgid "%B %-e at %H:%M"
+msgstr "%-e. %B у %H:%M"
+
+#: src/session_view/room_history/message_row/audio.rs:65
+#, rust-format
+msgid "Audio: {filename}"
+msgstr "Звук: {filename}"
+
+#: src/session_view/room_history/message_row/content.rs:317
+msgid "Could not decrypt this message, decryption will be retried once the keys are available."
+msgstr "Не могу да дешифрујем ову поруку; поново ћу покушати дешифровање када кључеви буду доступни."
+
+#: src/session_view/room_history/message_row/content.rs:322
+msgid "This message was removed."
+msgstr "Ова порука је уклоњена."
+
+#: src/session_view/room_history/message_row/content.rs:327 src/session_view/room_history/message_row/content.rs:333
+#: src/session_view/room_history/message_row/content.rs:403
+msgid "Unsupported event"
+msgstr "Неподржан догађај"
+
+#: src/session_view/room_history/message_row/file.rs:61
+#, rust-format
+msgid "File: {filename}"
+msgstr "Датотека: {filename}"
+
+#: src/session_view/room_history/message_row/location.blp:12
+msgid "User Location"
+msgstr "Локација корисника"
+
+#: src/session_view/room_history/message_row/location.rs:91
+msgid "Location is invalid and cannot be displayed"
+msgstr "Локација је неисправна и не може се приказати"
+
+#. Translators: As in 'Sending message…'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:21
+msgid "Sending…"
+msgstr "Шаљем…"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:31
+msgid "Temporary Error Sending Message"
+msgstr "Привремена грешка при слању поруке"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:45
+msgid "Message Cannot Be Sent"
+msgstr "Порука се не може послати"
+
+#. Translators: As in 'Sent message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:60
+msgid "Sent"
+msgstr "Послато"
+
+#. Translators: As in 'Edited message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:75
+msgid "Edited"
+msgstr "Измењено"
+
+#: src/session_view/room_history/message_row/mod.blp:13
+msgid "Show Sender Profile"
+msgstr "Прикажи профил пошиљаоца"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_row/reaction/mod.rs:200
+#, rust-format
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "{n} члан је реаговао са {reaction_key}"
+msgstr[1] "{n} члана су реаговали са {reaction_key}"
+msgstr[2] "{n} чланова је реаговало са {reaction_key}"
+msgstr[3] "{n} члан је реаговао са {reaction_key}"
+
+#: src/session_view/room_history/message_row/reaction/mod.rs:220
+#, rust-format
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} је реаговао са {reaction_key}"
+
+#: src/session_view/room_history/message_row/reaction_list.blp:6
+msgid "Reactions"
+msgstr "Реакције"
+
+#: src/session_view/room_history/message_row/reply.blp:16
+msgid "In Reply To"
+msgstr "У одговору на"
+
+#. Translators: This is a verb, as in 'Mention user'.
+#: src/session_view/room_history/message_row/sender_name.rs:186
+msgid "Mention"
+msgstr "Спомени"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session_view/room_history/message_row/text/widgets.rs:465
+msgid "Details"
+msgstr "Појединости"
+
+#: src/session_view/room_history/message_row/visual_media.blp:49
+msgid "Click to show preview"
+msgstr "Кликните за приказ прегледа"
+
+#: src/session_view/room_history/message_row/visual_media.blp:77
+msgid "Hide media preview"
+msgstr "Сакриј преглед медија"
+
+#: src/session_view/room_history/message_row/visual_media.rs:553
+msgid "Image"
+msgstr "Слика"
+
+#: src/session_view/room_history/message_row/visual_media.rs:554
+msgid "Sticker"
+msgstr "Налепница"
+
+#: src/session_view/room_history/message_row/visual_media.rs:555
+msgid "Video"
+msgstr "Видео"
+
+#: src/session_view/room_history/message_row/visual_media.rs:560
+#, rust-format
+msgid "Image: {filename}"
+msgstr "Слика: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:563
+#, rust-format
+msgid "Sticker: {filename}"
+msgstr "Налепница: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:566
+#, rust-format
+msgid "Video: {filename}"
+msgstr "Видео: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:740 src/utils/media/image/mod.rs:932
+msgid "Could not retrieve media"
+msgstr "Не могу да преузмем медиј"
+
+#: src/session_view/room_history/message_row/visual_media.rs:789 src/utils/media/image/mod.rs:934
+msgid "An unexpected error occurred"
+msgstr "Дошло је до неочекиване грешке"
+
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:22
+msgid "_Send"
+msgstr "_Пошаљи"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:685
+msgid "Public Room Mention Auto-completion"
+msgstr "Самодовршавање помињања јавних соба"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:687
+msgid "Room Member Mention Auto-completion"
+msgstr "Самодовршавање помињања чланова соба"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:8
+msgid "_Location"
+msgstr "_Место"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:15
+msgid "_Markdown"
+msgstr "_Маркдаун"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:89
+msgid "Send a File"
+msgstr "Пошаљи датотеку"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:96
+msgid "Insert an Emoji"
+msgstr "Убаци емоџи"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session_view/room_history/message_toolbar/mod.blp:121
+msgid "Message Composer"
+msgstr "Састављач порука"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:136 src/session_view/room_history/message_toolbar/mod.blp:139
+msgid "More Options"
+msgstr "Више могућности"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:147
+msgid "Send Message"
+msgstr "Пошаљи поруку"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:171
+msgid "You don’t have permission to send messages to this room"
+msgstr "Немате овлашћење за слање порука у овој соби"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:372
+msgid "The conversation continues in a new room"
+msgstr "Преписка се наставља у новој соби"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:374
+msgid "The conversation has ended"
+msgstr "Преписка је завршена"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:540
+#, rust-format
+msgid "Reply to {user}"
+msgstr "Одговор кориснику {user}"
+
+#. / Update the displayed related event for the given edit.
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:558
+msgctxt "room-history"
+msgid "Edit"
+msgstr "Уређивање"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:735
+msgid "Could not send reply"
+msgstr "Не могу да пошаљем одговор"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:751
+msgid "Could not send edit"
+msgstr "Не могу да пошаљем измену"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:762
+msgid "Could not send message"
+msgstr "Не могу да пошаљем поруку"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:808
+msgid "Your Location"
+msgstr "Ваше место"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_toolbar/mod.rs:868
+#, rust-format
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "Локација корисника {geo_uri} у {iso8601_datetime}"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:890
+msgid "Could not send location"
+msgstr "Не могу да пошаљем локацију"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:897
+msgid "The location request has been cancelled"
+msgstr "Захтев за локацијом је отказан"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:898
+msgid "The location services are disabled"
+msgstr "Услуге локације су онемогућене"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:899
+msgid "Could not retrieve current location"
+msgstr "Не могу да дохватим тренутну локацију"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:934
+msgid "Could not send file"
+msgstr "Не могу да пошаљем датотеку"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:988
+msgid "Select File"
+msgstr "Изабери датотеку"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:990
+msgid "Select"
+msgstr "Изабери"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1005
+msgid "Could not open file"
+msgstr "Не могу да отворим датотеку"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1031 src/session_view/room_history/message_toolbar/mod.rs:1039
+msgid "Error reading file"
+msgstr "Грешка при читању датотеке"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1100
+msgid "Error getting image from clipboard"
+msgstr "Грешка при преузимању слике из оставе"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1117
+msgid "Error getting file from clipboard"
+msgstr "Грешка при преузимању датотеке из оставе"
+
+#: src/session_view/room_history/mod.blp:7
+msgid "Room _Details"
+msgstr "_Појединости о соби"
+
+#: src/session_view/room_history/mod.blp:13
+msgid "_Invite New Members…"
+msgstr "_Позови нове чланове…"
+
+#: src/session_view/room_history/mod.blp:21 src/session_view/sidebar/mod.blp:104
+msgid "_Leave Room"
+msgstr "_Напусти собу"
+
+#: src/session_view/room_history/mod.blp:27 src/session_view/sidebar/mod.blp:110
+msgid "Re_join Room"
+msgstr "_Поново приступи соби"
+
+#: src/session_view/room_history/mod.blp:33 src/session_view/sidebar/mod.blp:116
+msgid "_Forget Room"
+msgstr "_Заборави собу"
+
+#: src/session_view/room_history/mod.blp:64
+msgid "Room Menu"
+msgstr "Мени собе"
+
+#: src/session_view/room_history/mod.blp:72
+msgid "Call room - other clients may not show messages you send in this room."
+msgstr "Соба за позив - остали клијенти можда неће приказати поруке које шаљете у овој соби."
+
+#: src/session_view/room_history/mod.blp:99 src/session_view/room_history/mod.blp:106
+msgid "Could Not Load Room"
+msgstr "Не могу да учитам собу"
+
+#: src/session_view/room_history/mod.blp:138
+msgid "Scroll to Bottom"
+msgstr "Помакни на дно"
+
+#: src/session_view/room_history/mod.blp:150
+msgid "Drop Here to Send"
+msgstr "Спусти овде за слање"
+
+#: src/session_view/room_history/mod.rs:422
+msgid "Error getting file from drop"
+msgstr "Грешка при преузимању датотеке при спуштању"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1027 src/session_view/sidebar/row.rs:747
+#, rust-format
+msgid "Could not leave {room}"
+msgstr "Не могу да напустим {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1050 src/session_view/sidebar/row.rs:736
+#, rust-format
+msgid "Could not join {room}"
+msgstr "Не могу да приступим {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1067 src/session_view/sidebar/row.rs:780
+#, rust-format
+msgid "Could not forget {room}"
+msgstr "Не могу да заборавим {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/mod.rs:1111
+#, rust-format
+msgid "There is a pending invite request"
+msgid_plural "There are {n} pending invite requests"
+msgstr[0] "Постоје {n} захтева за позив на чекању"
+msgstr[1] "Постоје {n} захтева за позив на чекању"
+msgstr[2] "Постоје {n} захтева за позив на чекању"
+msgstr[3] "Постоји {n} захтев за позив на чекању"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:257
+#, rust-format
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "Видело је {n} чланова"
+msgstr[1] "Видело је {n} члана"
+msgstr[2] "Видело је {n} чланова"
+msgstr[3] "Видео је {n} члан"
+
+#. / Update the tooltip of this list for a single member.
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:271
+#, rust-format
+msgid "Seen by {name}"
+msgstr "Видео је {name}"
+
+#: src/session_view/room_history/state/content.rs:100
+msgid "This room is encrypted from this point on."
+msgstr "Ова соба је шифрована од ове тачке надаље."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/state/content.rs:115 src/session_view/room_history/state/content.rs:203
+#, rust-format
+msgid "{sender} invited {user}."
+msgstr "{sender} је позвао корисника {user}."
+
+#: src/session_view/room_history/state/content.rs:127
+msgid "An unsupported state event was received."
+msgstr "Примљен је неподржан догађај стања."
+
+#: src/session_view/room_history/state/content.rs:164 src/session_view/room_history/state/content.rs:389
+#, rust-format
+msgid "{user} joined this room."
+msgstr "{user} се придружио соби."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/state/content.rs:171
+#, rust-format
+msgid "{user} left the room."
+msgstr "{user} је напустио собу."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:176
+#, rust-format
+msgid "{sender} banned {user}."
+msgstr "{sender} је забранио приступ кориснику {user}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:185
+#, rust-format
+msgid "{sender} unbanned {user}."
+msgstr "{sender} је укинуо забрану приступа кориснику {user}."
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:194
+#, rust-format
+msgid "{sender} kicked {user} out."
+msgstr "{sender} је избацио корисника {user}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:212
+#, rust-format
+msgid "{user} accepted the invite."
+msgstr "{user} је прихватио позив."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:218
+#, rust-format
+msgid "{user} declined the invite."
+msgstr "{user} је одбио позив."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:227
+#, rust-format
+msgid "{sender} revoked the invitation for {user}."
+msgstr "{sender} је повукао позив за корисника {user}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/content.rs:239
+#, rust-format
+msgid "{user} requested to be invited to this room."
+msgstr "{user} је затражио да буде позван у ову собу."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:246
+#, rust-format
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} је повукао свој захтев за позив у ову собу."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:252
+#, rust-format
+msgid "{sender} denied {user}’s request to be invited to this room."
+msgstr "{sender} је одбио захтев корисника {user} за позив у ову собу."
+
+#: src/session_view/room_history/state/content.rs:263
+msgid "An unsupported room member event was received."
+msgstr "Примљен је неподржан догађај члана собе."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:330
+#, rust-format
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr "{previous_user_name} је променио своје име за приказ у {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:340
+#, rust-format
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} је уклонио своје име за приказ."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:352
+#, rust-format
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} је поставио своје име за приказ на {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:366
+#, rust-format
+msgid "{user} set their avatar."
+msgstr "{user} је поставио свој аватар."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:373
+#, rust-format
+msgid "{user} removed their avatar."
+msgstr "{user} је уклонио свој аватар."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:380
+#, rust-format
+msgid "{user} changed their avatar."
+msgstr "{user} је променио свој аватар."
+
+#: src/session_view/room_history/state/creation.rs:55
+msgid "This conversation started in another room."
+msgstr "Ова преписка је започета у другој соби."
+
+#: src/session_view/room_history/state/creation.rs:60
+msgid "The conversation starts here."
+msgstr "Преписка почиње овде."
+
+#. Translators: This is a change in the room, not a change between
+#. rooms. Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/group_row.rs:224
+#, rust-format
+msgid "1 room change"
+msgid_plural "{n} room changes"
+msgstr[0] "{n} промена собе"
+msgstr[1] "{n} промена собе"
+msgstr[2] "{n} промене собе"
+msgstr[3] "{n} промене собе"
+
+#: src/session_view/room_history/title.blp:7
+msgid "Open Room Details"
+msgstr "Отвори појединости собе"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:135
+#, rust-format
+msgid "{user} is typing…"
+msgstr "{user} куца…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:142
+#, rust-format
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} чланова куцају…"
+msgstr[1] "{n} члан куца…"
+msgstr[2] "{n} члана куцају…"
+msgstr[3] "{n} члана куцају…"
+
+#: src/session_view/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "Није могуће прихватити потврду"
+
+#: src/session_view/room_history/verification_info_bar.rs:88
+msgid "Could not decline verification"
+msgstr "Није могуће одбити потврду"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/verification_info_bar.rs:166
+#, rust-format
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} жели да буде потврђен"
+
+#: src/session_view/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "Потврда је у току"
+
+#: src/session_view/sidebar/mod.blp:7
+msgid "New _Direct Chat…"
+msgstr "Ново _директно ћаскање…"
+
+#: src/session_view/sidebar/mod.blp:12
+msgid "_New Room…"
+msgstr "_Нова соба…"
+
+#: src/session_view/sidebar/mod.blp:17
+msgid "_Join Room…"
+msgstr "_Приступи соби…"
+
+#: src/session_view/sidebar/mod.blp:24
+msgid "_Keyboard Shortcuts"
+msgstr "_Пречице тастатуре"
+
+#: src/session_view/sidebar/mod.blp:29
+msgid "_About Fractal"
+msgstr "_О Фракталу"
+
+#: src/session_view/sidebar/mod.blp:44
+msgid "Dec_line"
+msgstr "_Одбиј"
+
+#: src/session_view/sidebar/mod.blp:58
+msgid "_Mark as Read"
+msgstr "_Означи као прочитано"
+
+#: src/session_view/sidebar/mod.blp:64
+msgid "_Mark as Unread"
+msgstr "_Означи као непрочитано"
+
+#: src/session_view/sidebar/mod.blp:72
+msgid "Move to _Favorites"
+msgstr "Премести у _омиљене"
+
+#: src/session_view/sidebar/mod.blp:78
+msgid "Move to _Rooms"
+msgstr "Премести у _собе"
+
+#: src/session_view/sidebar/mod.blp:84
+msgid "Move to Low _Priority"
+msgstr "Премести у ниску _важност"
+
+#: src/session_view/sidebar/mod.blp:90
+msgid "Mark as _Direct Chat"
+msgstr "Означи као _директно ћаскање"
+
+#: src/session_view/sidebar/mod.blp:96
+msgid "Unmark as _Direct Chat"
+msgstr "Скини ознаку _директног ћаскања"
+
+#: src/session_view/sidebar/mod.blp:124
+msgid "Sidebar"
+msgstr "Бочна трака"
+
+#: src/session_view/sidebar/mod.blp:142
+msgid "Main Menu"
+msgstr "Главни мени"
+
+#: src/session_view/sidebar/mod.blp:151
+msgid "Toggle Room Search"
+msgstr "Прикажи претрагу соба"
+
+#: src/session_view/sidebar/mod.blp:163
+msgid "Room Search"
+msgstr "Претрага соба"
+
+#: src/session_view/sidebar/mod.blp:164
+msgid "Search for a room"
+msgstr "Претражи собу"
+
+#: src/session_view/sidebar/mod.blp:214
+msgid "Room List"
+msgstr "Списак соба"
+
+#: src/session_view/sidebar/mod.blp:215
+msgid "Allows to navigate between rooms"
+msgstr "Омогућава кретање између соба"
+
+#: src/session_view/sidebar/mod.rs:353
+msgid "No crypto identity"
+msgstr "Нема криптографског идентитета"
+
+#: src/session_view/sidebar/mod.rs:355
+msgid "Crypto identity incomplete"
+msgstr "Криптографски идентитет је непотпун"
+
+#: src/session_view/sidebar/mod.rs:359
+msgid "Account recovery disabled"
+msgstr "Опоравак налога је онемогућен"
+
+#: src/session_view/sidebar/mod.rs:362
+msgid "Account recovery incomplete"
+msgstr "Опоравак налога је непотпун"
+
+#. Translators: A "call room" is a room where an audio or video call
+#. is always active, that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:257
+msgid "Call room"
+msgstr "Позивна соба"
+
+#: src/session_view/sidebar/room_row.rs:262
+msgid "Direct chat"
+msgstr "Директно ћаскање"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers for "call rooms".
+#. A "call room" is a room where an audio or video call is always active,
+#. that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:289
+#, rust-format
+msgid "{name} (call room)"
+msgstr "{name} (позивна соба)"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room is a direct chat with
+#. another user.
+#: src/session_view/sidebar/room_row.rs:297
+#, rust-format
+msgid "Direct chat with {name}"
+msgstr "Директно ћаскање са корисником {name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session_view/sidebar/room_row.rs:309
+#, rust-format
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "{count} обавештење"
+msgstr[1] "{count} обавештења"
+msgstr[2] "{count} обавештења"
+msgstr[3] "{count} обавештења"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/sidebar/row.rs:756
+#, rust-format
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "Не могу да преместим собу {room} из категорије {previous_category} у {new_category}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:798
+#, rust-format
+msgid "Could not mark {room} as direct chat"
+msgstr "Не могу да означим собу {room} као директно ћаскање"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:803
+#, rust-format
+msgid "Could not unmark {room} as direct chat"
+msgstr "Не могу да скинем ознаку директног ћаскања са собе {room}"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:124
+msgid "Join Room as Favorite"
+msgstr "Приступи соби као омиљеној"
+
+#: src/session_view/sidebar/section_row.rs:125
+msgid "Join Room"
+msgstr "Приступи соби"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:128
+msgid "Join Room as Low Priority"
+msgstr "Приступи соби са ниском важношћу"
+
+#: src/session_view/sidebar/section_row.rs:129
+msgid "Reject Invite"
+msgstr "Одбаци позив"
+
+#: src/session_view/sidebar/section_row.rs:133 src/session_view/sidebar/section_row.rs:146
+msgid "Move to Rooms"
+msgstr "Премести у собе"
+
+#: src/session_view/sidebar/section_row.rs:134 src/session_view/sidebar/section_row.rs:140
+msgid "Move to Low Priority"
+msgstr "Премести у ниску важност"
+
+#: src/session_view/sidebar/section_row.rs:135 src/session_view/sidebar/section_row.rs:141
+#: src/session_view/sidebar/section_row.rs:147
+msgid "Leave Room"
+msgstr "Напусти собу"
+
+#: src/session_view/sidebar/section_row.rs:139 src/session_view/sidebar/section_row.rs:145
+msgid "Move to Favorites"
+msgstr "Премести у омиљене"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:153
+msgid "Rejoin Room as Favorite"
+msgstr "Поново се придружи соби као омиљеној"
+
+#: src/session_view/sidebar/section_row.rs:154
+msgid "Rejoin Room"
+msgstr "Поново се придружи соби"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:157
+msgid "Rejoin Room as Low Priority"
+msgstr "Поново се придружи соби са ниском важношћу"
+
+#: src/shortcuts-dialog.blp:6
+msgctxt "shortcut window"
+msgid "General"
+msgstr "Опште"
+
+#: src/shortcuts-dialog.blp:9
+msgctxt "shortcut window"
+msgid "Search Room by Address or Link"
+msgstr "Тражи собу према адреси или вези"
+
+#: src/shortcuts-dialog.blp:14
+msgctxt "shortcut window"
+msgid "Account Settings"
+msgstr "Подешавања налога"
+
+#: src/shortcuts-dialog.blp:19
+msgctxt "shortcut window"
+msgid "Open Menu"
+msgstr "Отвори мени"
+
+#: src/shortcuts-dialog.blp:24
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "Пречице на тастатури"
+
+#: src/shortcuts-dialog.blp:29
+msgctxt "shortcut window"
+msgid "Close Window"
+msgstr "Затвори прозор"
+
+#: src/shortcuts-dialog.blp:34
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Изађи"
+
+#: src/shortcuts-dialog.blp:40
+msgctxt "shortcut window"
+msgid "Room List"
+msgstr "Списак соба"
+
+#: src/shortcuts-dialog.blp:43
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "Претражи списак соба"
+
+#: src/shortcuts-dialog.blp:48
+msgctxt "shortcut window"
+msgid "Next Room"
+msgstr "Следећа соба"
+
+#: src/shortcuts-dialog.blp:53
+msgctxt "shortcut window"
+msgid "Previous Room"
+msgstr "Претходна соба"
+
+#: src/shortcuts-dialog.blp:60
+msgctxt "shortcut window"
+msgid "First Room With Unread Messages"
+msgstr "Прва соба са непрочитаним порукама"
+
+#: src/shortcuts-dialog.blp:65
+msgctxt "shortcut window"
+msgid "Next Room With Unread Messages"
+msgstr "Следећа соба са непрочитаним порукама"
+
+#: src/shortcuts-dialog.blp:70
+msgctxt "shortcut window"
+msgid "Previous Room With Unread Messages"
+msgstr "Претходна соба са непрочитаним порукама"
+
+#: src/shortcuts-dialog.blp:76
+msgctxt "shortcut window"
+msgid "Room History"
+msgstr "Историјат собе"
+
+#: src/shortcuts-dialog.blp:79
+msgctxt "shortcut window"
+msgid "Event Properties"
+msgstr "Својства догађаја"
+
+#: src/shortcuts-dialog.blp:84
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "Затвори собу"
+
+#: src/user_facing_error.rs:18
+msgid "Connection timed out."
+msgstr "Веза је истекла."
+
+#: src/user_facing_error.rs:20
+msgid "Could not connect to the homeserver."
+msgstr "Не могу да се повежем са матичним сервером."
+
+#: src/user_facing_error.rs:26
+msgid "Invalid credentials."
+msgstr "Неисправни подаци за приступ."
+
+#: src/user_facing_error.rs:27
+msgid "Account deactivated."
+msgstr "Налог је поништен."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:43
+#, rust-format
+msgid "Rate limit exceeded, retry in 1 second."
+msgid_plural "Rate limit exceeded, retry in {n} seconds."
+msgstr[0] "Број захтева је превелик, пробајте поново за {n} секунду."
+msgstr[1] "Број захтева је превелик, пробајте поново за {n} секунде."
+msgstr[2] "Број захтева је превелик, пробајте поново за {n} секунди."
+msgstr[3] "Број захтева је превелик, пробајте поново за {n} секунду."
+
+#: src/user_facing_error.rs:49
+msgid "Rate limit exceeded, try again later."
+msgstr "Прекорачено је ограничење броја захтева, покушајте поново касније."
+
+#: src/user_facing_error.rs:59
+msgid "Unexpected connection error."
+msgstr "Неочекивана грешка у вези."
+
+#: src/user_facing_error.rs:67
+msgid "Could not decrypt the event."
+msgstr "Не могу да дешифрујем догађај."
+
+#: src/user_facing_error.rs:69 src/user_facing_error.rs:81
+msgid "Unexpected error."
+msgstr "Неочекивана грешка."
+
+#: src/user_facing_error.rs:77
+msgid "Invalid URL."
+msgstr "Неисправна адреса."
+
+#: src/user_facing_error.rs:78
+msgid "Could not discover homeserver."
+msgstr "Не могу да откријем матични сервер."
+
+#: src/user_facing_error.rs:80
+msgid "Could not open the store."
+msgstr "Не могу да отворим складиште."
+
+#: src/utils/matrix/media_message.rs:90
+msgid "Voice Message"
+msgstr "Гласовна порука"
+
+#: src/utils/matrix/media_message.rs:125
+#, rust-format
+msgid "Voice Message From {datetime}"
+msgstr "Гласовна порука од {datetime}"
+
+#: src/utils/matrix/mod.rs:175
+msgid "Could not generate unique session ID"
+msgstr "Не могу да створим јединствени ИД сесије"
+
+#: src/utils/matrix/mod.rs:176
+msgid "Could not access the session tokens"
+msgstr "Не могу да приступим жетонима сесије"
+
+#: src/utils/media/image/mod.rs:933
+msgid "Image format not supported"
+msgstr "Формат слике није подржан"
+
+#. Translators: Default name for image files.
+#: src/utils/media/mod.rs:36
+msgid "image"
+msgstr "слика"
+
+#. Translators: Default name for video files.
+#: src/utils/media/mod.rs:38
+msgid "video"
+msgstr "видео"
+
+#. Translators: Default name for audio files.
+#: src/utils/media/mod.rs:40
+msgid "audio"
+msgstr "аудио"
+
+#. Translators: Default name for files.
+#: src/utils/media/mod.rs:42
+msgid "file"
+msgstr "датотека"
+
+#: src/window.blp:80
+msgid "Session"
+msgstr "Сесија"

@@ -1,0 +1,65 @@
+[package]
+name = "mandelbrot-matrixrtc"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Pure-logic MatrixRTC session and membership management for Mandelbrot"
+
+[dependencies]
+async-trait = "0.1"
+base64 = "0.23"
+getrandom = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+tracing = "0.1"
+
+[dependencies.ruma]
+version = "0.17"
+features = ["events", "unstable-msc3401"]
+
+# Optional media layer (feature `livekit`).
+[dependencies.livekit]
+version = "0.10"
+optional = true
+default-features = false
+features = ["tokio", "rustls-tls-webpki-roots"]
+
+[dependencies.reqwest]
+version = "0.13"
+optional = true
+default-features = false
+features = ["rustls", "json", "query"]
+
+[features]
+# Media layer using the LiveKit Rust SDK. Off by default to keep the
+# conformance test builds dependency-light.
+livekit = ["dep:livekit", "dep:reqwest"]
+
+[[example]]
+name = "join_call"
+required-features = ["livekit"]
+
+[dev-dependencies]
+# For the `join_call` example (audio frame streams).
+futures = "0.3"
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "sync",
+    "time",
+    "test-util",
+] }
+# For the `join_call` example: clears the access token from memory on drop.
+zeroize = "1"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

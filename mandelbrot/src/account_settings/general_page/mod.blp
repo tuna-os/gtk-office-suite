@@ -1,0 +1,121 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AccountSettingsGeneralPage: Adw.PreferencesPage {
+  icon-name: "settings-symbolic";
+  title: _("General");
+  name: "general";
+
+  Adw.PreferencesGroup {
+    $EditableAvatar avatar {
+      data: bind template.session as <$Session>.user as <$User>.avatar-data;
+      edit-avatar => $change_avatar() swapped;
+      remove-avatar => $remove_avatar() swapped;
+
+      accessibility {
+        label: _("Account Avatar");
+      }
+    }
+  }
+
+  Adw.PreferencesGroup {
+    Adw.EntryRow display_name {
+      title: _("Name");
+      selectable: false;
+      text: bind template.session as <$Session>.user as <$User>.display-name;
+      changed => $display_name_changed() swapped;
+      entry-activated => $change_display_name() swapped;
+
+      [suffix]
+      $ActionButton display_name_button {
+        visible: false;
+        state: confirm;
+        clicked => $change_display_name() swapped;
+      }
+    }
+  }
+
+  Adw.PreferencesGroup {
+    $CopyableRow user_id {
+      title: _("Matrix User ID");
+      main-title: "subtitle";
+      copy-button-tooltip-text: _("Copy Matrix User ID");
+      toast-text: _("Matrix user ID copied to clipboard");
+    }
+
+    $ButtonCountRow user_sessions_row {
+      title: _("Sessions");
+      action-name: "account-settings.show-subpage";
+      action-target: "'user-session-list'";
+    }
+  }
+
+  Adw.PreferencesGroup {
+    separate-rows: true;
+
+    Adw.ButtonRow change_password_row {
+      visible: false;
+      selectable: false;
+      title: _("Change Password");
+      end-icon-name: "go-next-symbolic";
+      action-name: "account-settings.show-subpage";
+      action-target: "'change-password'";
+    }
+
+    Adw.ButtonRow manage_account_row {
+      visible: false;
+      selectable: false;
+      title: _("Manage Account");
+      end-icon-name: "external-link-symbolic";
+      activated => $manage_account() swapped;
+    }
+
+    Adw.ButtonRow {
+      selectable: false;
+      title: _("Log Out");
+      end-icon-name: "go-next-symbolic";
+      action-name: "account-settings.show-subpage";
+      action-target: "'log-out'";
+
+      styles [
+        "destructive-action",
+      ]
+    }
+
+    Adw.ButtonRow deactivate_account_button {
+      selectable: false;
+      // Translators: Deactivation is a permanent action that occurs on the server.
+      title: _("Deactivate Account");
+      end-icon-name: "go-next-symbolic";
+      action-name: "account-settings.show-subpage";
+      action-target: "'deactivate-account'";
+
+      styles [
+        "destructive-action",
+      ]
+    }
+  }
+
+  Adw.PreferencesGroup {
+    Adw.ExpanderRow {
+      title: _("Advanced Information");
+
+      $CopyableRow homeserver {
+        title: _("Homeserver");
+        main-title: "subtitle";
+        copy-button-tooltip-text: _("Copy Homeserver Address");
+        toast-text: _("Homeserver address copied to clipboard");
+      }
+
+      $CopyableRow session_id {
+        // Translators: local refers to the ID, not the session.
+        title: _("Local Session ID");
+        main-title: "subtitle";
+        // Translators: local refers to the ID, not the session.
+        copy-button-tooltip-text: _("Copy Local Session ID");
+        // Translators: local refers to the ID, not the session.
+        toast-text: _("Local session ID copied to clipboard");
+      }
+    }
+  }
+}

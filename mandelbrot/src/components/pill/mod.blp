@@ -1,0 +1,18 @@
+using Gtk 4.0;
+
+template $Pill: Gtk.Widget {
+  valign: center;
+
+  Gtk.Box content {
+    spacing: 6;
+    margin-end: 6;
+
+    $Avatar avatar {
+      size: 24;
+      accessible-role: presentation;
+      data: bind template.source as <$PillSource>.avatar-data;
+    }
+
+    Gtk.Label display_name {}
+  }
+}

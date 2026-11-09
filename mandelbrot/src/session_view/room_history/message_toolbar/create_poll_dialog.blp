@@ -1,0 +1,105 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CreatePollDialog: Adw.Dialog {
+  title: _("Create Poll");
+  content-width: 480;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      Gtk.Button {
+        label: _("_Cancel");
+        use-underline: true;
+        action-name: "window.close";
+      }
+
+      [end]
+      Gtk.Button create_button {
+        label: _("C_reate");
+        use-underline: true;
+        sensitive: false;
+        clicked => $create() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: Gtk.ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      max-content-height: 600;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-top: 12;
+        margin-bottom: 24;
+        margin-start: 12;
+        margin-end: 12;
+
+        Gtk.ListBox {
+          selection-mode: none;
+          accessible-role: group;
+
+          styles [
+            "boxed-list",
+          ]
+
+          Adw.EntryRow question_entry {
+            title: _("Question");
+            changed => $validate() swapped;
+          }
+        }
+
+        Gtk.Box {
+          orientation: vertical;
+          spacing: 6;
+
+          Gtk.Label {
+            label: _("Answers");
+            xalign: 0;
+
+            styles [
+              "heading",
+            ]
+          }
+
+          Gtk.ListBox answers_list {
+            selection-mode: none;
+            accessible-role: group;
+
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.ButtonRow add_answer_row {
+              title: _("Add Answer");
+              start-icon-name: "add-symbolic";
+              activated => $add_answer() swapped;
+            }
+          }
+        }
+
+        Gtk.ListBox {
+          selection-mode: none;
+          accessible-role: group;
+
+          styles [
+            "boxed-list",
+          ]
+
+          Adw.SwitchRow disclosed_row {
+            title: _("Show Results While Poll Is Ongoing");
+            subtitle: _("Voters can see the current results before the poll ends");
+          }
+        }
+      };
+    };
+  };
+}

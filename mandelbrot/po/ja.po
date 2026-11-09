@@ -1,0 +1,5413 @@
+# Japanese translation for fractal.
+# Copyright (C) 2020 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Yuki Okushi <huyuumi.dev@gmail.com>, 2020.
+# Ryo Nakano <ryonakaknock3@gmail.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal main\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2026-05-27 15:22+0000\n"
+"PO-Revision-Date: 2026-05-28 06:56+0900\n"
+"Last-Translator: Ryo Nakano <ryonakaknock3@gmail.com>\n"
+"Language-Team: Japanese <https://l10n.gnome.org/teams/ja/>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:2
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7
+#: src/login/session_setup_view.blp:22 src/window.blp:9
+msgid "Fractal"
+msgstr "Fractal"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr ""
+"Fractal は協力してグループコミュニケーションを行うための、分散型で安全なメッ"
+"セージングクライアントです。"
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid "Fractal group messaging"
+msgstr "Fractal グループメッセージング"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:13
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr ""
+"Matrix;matrix.org;chat;irc;communications;talk;riot;element;チャット;コミュニ"
+"ケーション;会話;トーク;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Window width"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Window height"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Window maximized state"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Enable markdown formatting"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Whether messages should be processed as markdown when sending them"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Session settings"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Serialized list of settings per session"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Current session"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Matrix でチャットします"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+msgstr ""
+"Fractal は Rust で書かれた GNOME 用 Matrix メッセージングアプリケーションで"
+"す。インターフェースはフリーソフトウェアプロジェクトのような大きなグループで"
+"の協力作業のために最適化されていて、大小どんなサイズの画面にも合います。"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "主な機能:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"好きな話題について話し合えるルームの探索やプライベートな会話が、エンドツーエ"
+"ンド暗号化によって安全に行えます"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "書式付きのメッセージやファイル、現在地の位置情報などを送信できます"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+msgstr ""
+"特定のメッセージへの返信、絵文字でのリアクション、ユーザーやルームのメンショ"
+"ン、メッセージの編集や削除"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "会話から直接画像を表示したり、音声やビデオを再生したりできます"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "メッセージを読んだ人や、入力中の人を確認できます"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr ""
+"同時に複数のアカウントにログインできます (シングルサインオン機能利用時)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Fractal のメインウィンドウ"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "Matrix ルームのメディア履歴を確認します"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "Fractal のインターフェースは小さな画面にも対応しています"
+
+#: src/account_chooser_dialog/mod.blp:5 src/account_chooser_dialog/mod.blp:35
+msgid "Select an Account"
+msgstr "アカウントを選択"
+
+#: src/account_chooser_dialog/mod.blp:62
+msgid "Select the account you want to open the URI with"
+msgstr "URI を開きたいアカウントを選択してください"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:68
+msgid "Passphrase"
+msgstr "パスフレーズ"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:87
+msgid "Confirm Passphrase"
+msgstr "パスフレーズを確認"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:117
+#: src/session_view/room_details/history_viewer/file.blp:5
+#: src/session_view/room_history/message_row/file.rs:63
+msgid "File"
+msgstr "ファイル"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:121
+msgid "Choose…"
+msgstr "選択…"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:150
+#: src/account_settings/encryption_page/mod.blp:150
+msgid "Export Room Encryption Keys"
+msgstr "ルームの暗号鍵をエクスポート"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:153
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+msgstr ""
+"ルームの暗号鍵をエクスポートすることで、他のデバイス上で、または他の Matrix "
+"クライアントを使って、エンドツーエンドで暗号化されたルームのメッセージを復号"
+"できるようにするためのバックアップを作成できます。"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:156
+msgid ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+msgstr ""
+"バックアップは安全な場所に保存し、中のデータを暗号化するのに使うため強力なパ"
+"スフレーズで保護する必要があります。"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:159
+msgid "Export Keys"
+msgstr "鍵をエクスポート"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:162
+#: src/account_settings/encryption_page/mod.blp:159
+msgid "Import Room Encryption Keys"
+msgstr "ルームの暗号鍵をインポート"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:165
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"ルームの暗号鍵をインポートすることで、過去に Matrix クライアントで作成した"
+"バックアップを使ってエンドツーエンドで暗号化されたルームのメッセージを復号で"
+"きます。"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:168
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr ""
+"バックアップファイルを作成した時に決めたパスフレーズを入力してください。"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:171
+msgid "Import Keys"
+msgstr "鍵をインポート"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:184
+#: src/components/avatar/editable.rs:513
+msgid "Choose"
+msgstr "選択"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:193
+msgid "fractal-encryption-keys"
+msgstr "fractal-encryption-keys"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:199
+msgid "Save Encryption Keys To…"
+msgstr "暗号鍵の保存先を選択…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:202
+msgid "Import Encryption Keys From…"
+msgstr "暗号鍵のインポート元を選択…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:215
+#: src/utils/matrix/media_message.rs:258
+msgid "Could not access file"
+msgstr "ファイルにアクセスできませんでした"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:244
+msgid "Passphrases do not match"
+msgstr "パスフレーズが一致しません"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:321
+msgid "Room encryption keys exported successfully"
+msgstr "ルームの暗号鍵をエクスポートしました"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:327
+#, rust-format
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "{n} 個のルームの暗号鍵をインポートしました"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:341
+msgid "Could not export the keys"
+msgstr "鍵をエクスポートできませんでした"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:354
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr "パスフレーズが鍵をエクスポートするのに使われたものと一致しません。"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:359
+msgid "Could not import the keys"
+msgstr "鍵をインポートできませんでした"
+
+#: src/account_settings/encryption_page/mod.blp:6
+msgid "Encryption"
+msgstr "暗号化"
+
+#: src/account_settings/encryption_page/mod.blp:10
+msgid "Crypto Identity"
+msgstr "暗号化のための身分情報"
+
+#: src/account_settings/encryption_page/mod.blp:11
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"他の Matrix アカウントを確認したり、その確認済みのセッションを自動的に信頼し"
+"たりできます"
+
+#: src/account_settings/encryption_page/mod.blp:75
+msgid "Account Recovery"
+msgstr "アカウントの回復機能"
+
+#: src/account_settings/encryption_page/mod.blp:77
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+msgstr ""
+"すべてのセッションにアクセスできなくなってしまった場合に、回復鍵または回復用"
+"パスフレーズを用いてアカウントを完全に回復できます"
+
+#: src/account_settings/encryption_page/mod.rs:151
+msgid "No Crypto Identity"
+msgstr "暗号化のための身分情報なし"
+
+#: src/account_settings/encryption_page/mod.rs:153
+msgid "Verifying your own devices or other users is not possible"
+msgstr "自分のデバイスや他のユーザーを確認できません"
+
+#: src/account_settings/encryption_page/mod.rs:156
+#: src/account_settings/encryption_page/mod.rs:229
+msgid "Enable…"
+msgstr "有効にする…"
+
+#: src/account_settings/encryption_page/mod.rs:159
+msgid "Enable Crypto Identity"
+msgstr "暗号化のための身分情報を有効にする"
+
+#: src/account_settings/encryption_page/mod.rs:175
+msgid "Crypto Identity Enabled"
+msgstr "暗号化のための身分情報が有効"
+
+#: src/account_settings/encryption_page/mod.rs:177
+msgid "The crypto identity exists and this device is verified"
+msgstr "暗号化のための身分情報が存在しており、このデバイスは確認済みです"
+
+#: src/account_settings/encryption_page/mod.rs:180
+#: src/account_settings/encryption_page/mod.rs:248
+msgid "Reset…"
+msgstr "リセット…"
+
+#: src/account_settings/encryption_page/mod.rs:183
+#: src/components/crypto/identity_setup_view.blp:195
+#: src/components/crypto/identity_setup_view.blp:220
+#: src/components/crypto/recovery_setup_view.blp:167
+msgid "Reset Crypto Identity"
+msgstr "暗号化のための身分情報をリセット"
+
+#: src/account_settings/encryption_page/mod.rs:195
+msgid "Crypto Identity Incomplete"
+msgstr "暗号化のための身分情報が不完全です"
+
+#: src/account_settings/encryption_page/mod.rs:197
+msgid "The crypto identity exists but this device is not verified"
+msgstr "暗号化のための身分情報は存在しますが、このデバイスが未確認です"
+
+#: src/account_settings/encryption_page/mod.rs:200
+msgid "Verify…"
+msgstr "確認…"
+
+#: src/account_settings/encryption_page/mod.rs:203
+msgid "Verify This Session"
+msgstr "このセッションを確認"
+
+#: src/account_settings/encryption_page/mod.rs:224
+msgid "Account Recovery Disabled"
+msgstr "アカウントの回復機能が無効"
+
+#: src/account_settings/encryption_page/mod.rs:226
+msgid ""
+"Enable recovery to be able to restore your account without another device"
+msgstr ""
+"他のデバイスを使わずにアカウントを復元できるようにするには、回復機能を有効に"
+"してください"
+
+#: src/account_settings/encryption_page/mod.rs:232
+msgid "Enable Account Recovery"
+msgstr "アカウントの回復機能を有効にする"
+
+#: src/account_settings/encryption_page/mod.rs:243
+msgid "Account Recovery Enabled"
+msgstr "アカウントの回復機能が有効"
+
+#: src/account_settings/encryption_page/mod.rs:245
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "署名鍵と暗号鍵は同期されています"
+
+#: src/account_settings/encryption_page/mod.rs:251
+msgid "Reset Account Recovery Key"
+msgstr "アカウントの回復鍵をリセット"
+
+#: src/account_settings/encryption_page/mod.rs:263
+#: src/components/crypto/recovery_setup_view.blp:424
+#: src/components/crypto/recovery_setup_view.blp:450
+msgid "Account Recovery Incomplete"
+msgstr "アカウントの回復機能が不完全です"
+
+#: src/account_settings/encryption_page/mod.rs:265
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr "署名鍵と暗号鍵を同期するには回復してください"
+
+#: src/account_settings/encryption_page/mod.rs:268
+msgid "Recover…"
+msgstr "回復…"
+
+#: src/account_settings/encryption_page/mod.rs:271
+msgid "Recover Account Data"
+msgstr "アカウントのデータを回復"
+
+#: src/account_settings/general_page/change_password_subpage.rs:104
+msgid "Password must be at least 8 characters long"
+msgstr "パスワードは少なくとも 8 文字にする必要があります"
+
+#: src/account_settings/general_page/change_password_subpage.rs:107
+msgid "Password must have at least one lower-case letter"
+msgstr "パスワードには小文字を少なくとも 1 文字は含める必要があります"
+
+#: src/account_settings/general_page/change_password_subpage.rs:111
+msgid "Password must have at least one upper-case letter"
+msgstr "パスワードには大文字を少なくとも 1 文字は含める必要があります"
+
+#: src/account_settings/general_page/change_password_subpage.rs:114
+msgid "Password must have at least one digit"
+msgstr "パスワードには数字を少なくとも 1 文字は含める必要があります"
+
+#: src/account_settings/general_page/change_password_subpage.rs:116
+msgid "Password must have at least one symbol"
+msgstr "パスワードには記号を少なくとも 1 文字は含める必要があります"
+
+#: src/account_settings/general_page/change_password_subpage.rs:146
+msgid "Passwords do not match"
+msgstr "パスワードが一致しません"
+
+#: src/account_settings/general_page/change_password_subpage.rs:192
+msgid "Password changed successfully"
+msgstr "パスワードを変更しました"
+
+#: src/account_settings/general_page/change_password_subpage.rs:206
+msgid "Password rejected for being too weak"
+msgstr "パスワードが弱すぎるため拒否しました"
+
+#: src/account_settings/general_page/change_password_subpage.rs:210
+msgid "Could not change password"
+msgstr "パスワードを変更できませんでした"
+
+#: src/account_settings/general_page/change_password_subpage.ui:7
+#: src/account_settings/general_page/mod.blp:59
+msgid "Change Password"
+msgstr "パスワードを変更"
+
+#: src/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr "パスワードを変更すると、他のセッションはログアウトされます。"
+
+#: src/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "新しいパスワード"
+
+#: src/account_settings/general_page/change_password_subpage.ui:125
+msgid "Confirm New Password"
+msgstr "新しいパスワードを確認"
+
+#: src/account_settings/general_page/change_password_subpage.ui:162
+#: src/account_settings/general_page/deactivate_account_subpage.blp:83
+#: src/account_settings/general_page/deactivate_account_subpage.blp:94
+#: src/account_settings/general_page/log_out_subpage.blp:86
+#: src/session_view/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "続行"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:6
+#: src/account_settings/general_page/mod.blp:88
+msgid "Deactivate Account"
+msgstr "アカウントを無効にする"
+
+#: src/account_settings/general_page/deactivate_account_subpage.blp:46
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"アカウントを無効にすると、すべてのメッセージ、連絡先、ファイルなどに、今後一"
+"切アクセスできなくなります。"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:59
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"本当にこのアカウントを無効にするかの確認のため、Matrix ユーザー ID を入力して"
+"ください:"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:156
+msgid "Account successfully deactivated"
+msgstr "アカウントを無効にしました"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:164
+msgid "Could not deactivate account"
+msgstr "アカウントを無効にできませんでした"
+
+#: src/account_settings/general_page/log_out_subpage.blp:5
+#: src/account_settings/general_page/mod.blp:75
+#: src/account_settings/user_session/user_session_subpage.blp:62
+msgid "Log Out"
+msgstr "ログアウト"
+
+#: src/account_settings/general_page/log_out_subpage.blp:16
+msgid "Log Out of This Session"
+msgstr "このセッションからログアウト"
+
+#: src/account_settings/general_page/log_out_subpage.blp:43
+msgid "Are you sure you want to log out of this session?"
+msgstr "このセッションからログアウトしてもよろしいですか?"
+
+#: src/account_settings/general_page/log_out_subpage.blp:72
+msgid "Review Account Security"
+msgstr "アカウントのセキュリティを見直す"
+
+#: src/account_settings/general_page/log_out_subpage.blp:102
+msgid "Logout Failed"
+msgstr "ログアウトに失敗しました"
+
+#: src/account_settings/general_page/log_out_subpage.blp:121
+msgid ""
+"Logging out of this session failed. You can try again, or, if this is a "
+"permanent error, you can remove the session."
+msgstr ""
+"このセッションのログアウトに失敗しました。後でもう一度試すか、このエラーが再"
+"発するようであればセッションを削除できます。"
+
+#: src/account_settings/general_page/log_out_subpage.blp:136
+#: src/account_settings/user_session/user_session_list_subpage.blp:83
+#: src/components/action_button.blp:46 src/components/rows/loading_row.blp:26
+#: src/session_view/room_details/history_viewer/audio.blp:50
+#: src/session_view/room_details/history_viewer/file.blp:49
+#: src/session_view/room_details/history_viewer/visual_media.blp:55
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:77
+#: src/session_view/room_history/mod.blp:111
+msgid "Try Again"
+msgstr "もう一度試す"
+
+#: src/account_settings/general_page/log_out_subpage.blp:147
+msgid ""
+"Removing the session deletes the associated data from the system, but your "
+"homeserver and other sessions will not be aware that this session was logged "
+"out."
+msgstr ""
+"セッションを削除するとシステムからは関連するデータが削除されますが、ホーム"
+"サーバーと他のセッションはこのセッションがログアウトされたことの影響を受けま"
+"せん。"
+
+#: src/account_settings/general_page/log_out_subpage.blp:162
+msgid "Remove Session"
+msgstr "セッションを削除"
+
+#: src/account_settings/general_page/log_out_subpage.rs:83
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"暗号化のための身分情報とアカウントの回復機能が適切にセットアップされていませ"
+"ん。これが現在唯一接続されたセッションで、かつ暗号鍵をローカルに最近バック"
+"アップしていない場合、アカウントを復元できなくなります。"
+
+#: src/account_settings/general_page/log_out_subpage.rs:91
+msgid ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+msgstr ""
+"これは現在唯一接続されたセッションです。ログアウトする前に、回復鍵や回復用の"
+"パスフレーズにアクセスできることを確認するか、暗号鍵をバックアップしてくださ"
+"い。"
+
+#: src/account_settings/general_page/mod.blp:6
+msgid "General"
+msgstr "全般"
+
+#: src/account_settings/general_page/mod.blp:16
+msgid "Account Avatar"
+msgstr "アカウントのアバター"
+
+#: src/account_settings/general_page/mod.blp:23
+#: src/session_view/create_room_dialog.blp:48
+#: src/session_view/create_room_dialog.blp:51
+#: src/session_view/room_details/edit_details_subpage.blp:40
+#: src/session_view/room_details/edit_details_subpage.blp:44
+msgid "Name"
+msgstr "名前"
+
+#: src/account_settings/general_page/mod.blp:40
+msgid "Matrix User ID"
+msgstr "Matrix ユーザー ID"
+
+#: src/account_settings/general_page/mod.blp:42 src/components/user_page.blp:57
+msgid "Copy Matrix User ID"
+msgstr "Matrix ユーザー ID をコピー"
+
+#: src/account_settings/general_page/mod.blp:43 src/components/user_page.rs:256
+msgid "Matrix user ID copied to clipboard"
+msgstr "Matrix ユーザー ID をクリップボードにコピーしました"
+
+#: src/account_settings/general_page/mod.blp:47
+#: src/account_settings/user_session/user_session_list_subpage.blp:5
+msgid "Sessions"
+msgstr "セッション"
+
+#: src/account_settings/general_page/mod.blp:68
+msgid "Manage Account"
+msgstr "アカウントを管理"
+
+#: src/account_settings/general_page/mod.blp:101
+#: src/session_view/room_details/general_page.blp:229
+msgid "Advanced Information"
+msgstr "詳細情報"
+
+#: src/account_settings/general_page/mod.blp:104
+#: src/login/homeserver_page.blp:6 src/login/homeserver_page.blp:44
+msgid "Homeserver"
+msgstr "ホームサーバー"
+
+#: src/account_settings/general_page/mod.blp:106
+msgid "Copy Homeserver Address"
+msgstr "ホームサーバーのアドレスをコピー"
+
+#: src/account_settings/general_page/mod.blp:107
+msgid "Homeserver address copied to clipboard"
+msgstr "ホームサーバーのアドレスをクリップボードにコピーしました"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:112
+msgid "Local Session ID"
+msgstr "ローカルセッション ID"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:115
+msgid "Copy Local Session ID"
+msgstr "ローカルセッション ID をコピー"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:117
+msgid "Local session ID copied to clipboard"
+msgstr "ローカルセッション ID をクリップボードにコピーしました"
+
+#: src/account_settings/general_page/mod.rs:309
+#: src/session_view/room_details/edit_details_subpage.rs:149
+msgid "Avatar removed successfully"
+msgstr "アバターを削除しました"
+
+#: src/account_settings/general_page/mod.rs:311
+#: src/session_view/room_details/edit_details_subpage.rs:151
+msgid "Avatar changed successfully"
+msgstr "アバターを変更しました"
+
+#: src/account_settings/general_page/mod.rs:329
+#: src/account_settings/general_page/mod.rs:339
+#: src/session_view/room_details/edit_details_subpage.rs:176
+#: src/session_view/room_details/edit_details_subpage.rs:186
+msgid "Could not load file"
+msgstr "ファイルを読み込めませんでした"
+
+#: src/account_settings/general_page/mod.rs:358
+#: src/session_view/room_details/edit_details_subpage.rs:213
+msgid "Could not upload avatar"
+msgstr "アバターをアップロードできませんでした"
+
+#: src/account_settings/general_page/mod.rs:389
+#: src/session_view/room_details/edit_details_subpage.rs:236
+msgid "Could not change avatar"
+msgstr "アバターを変更できませんでした"
+
+#: src/account_settings/general_page/mod.rs:406
+#: src/session_view/room_details/edit_details_subpage.rs:261
+msgid "Remove Avatar?"
+msgstr "アバターを削除しますか?"
+
+#: src/account_settings/general_page/mod.rs:407
+msgid "Do you really want to remove your avatar?"
+msgstr "本当にアバターを削除してもよろしいですか?"
+
+#: src/account_settings/general_page/mod.rs:410
+#: src/components/dialogs/message_dialogs.rs:58
+#: src/components/dialogs/message_dialogs.rs:323
+#: src/components/dialogs/message_dialogs.rs:409
+#: src/components/dialogs/message_dialogs.rs:469
+#: src/components/dialogs/message_dialogs.rs:491
+#: src/components/dialogs/message_dialogs.rs:513
+#: src/identity_verification_view/confirm_qr_code_page.blp:55
+#: src/session_view/room_details/edit_details_subpage.rs:267
+#: src/session_view/room_details/general_page.rs:1001
+#: src/session_view/room_details/upgrade_dialog/mod.blp:134
+#: src/session_view/room_history/event_actions/group.rs:584
+#: src/session_view/room_history/event_actions/group.rs:648
+#: src/session_view/room_history/message_toolbar/mod.blp:72
+#: src/session_view/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: src/account_settings/general_page/mod.rs:411
+#: src/components/dialogs/message_dialogs.rs:232
+#: src/session_view/room_details/edit_details_subpage.rs:268
+#: src/session_view/room_history/event_actions/group.rs:585
+msgid "Remove"
+msgstr "削除"
+
+#: src/account_settings/general_page/mod.rs:445
+#: src/session_view/room_details/edit_details_subpage.rs:293
+msgid "Could not remove avatar"
+msgstr "アバターを削除できませんでした"
+
+#: src/account_settings/general_page/mod.rs:494
+msgid "Name changed successfully"
+msgstr "名前を変更しました"
+
+#: src/account_settings/general_page/mod.rs:544
+msgid "Could not change display name"
+msgstr "表示名を変更できませんでした"
+
+#: src/account_settings/mod.blp:5 src/account_switcher/session_item.blp:58
+msgid "Account Settings"
+msgstr "アカウント設定"
+
+#: src/account_settings/notifications_page.blp:6
+#: src/session_view/room_details/general_page.blp:111
+msgid "Notifications"
+msgstr "通知"
+
+#: src/account_settings/notifications_page.blp:11
+msgid "Enable for This Account"
+msgstr "このアカウントに対して有効にする"
+
+#: src/account_settings/notifications_page.blp:18
+msgid "Enable for This Session"
+msgstr "このセッションに対して有効にする"
+
+#: src/account_settings/notifications_page.blp:24
+msgid "Global"
+msgstr "全体設定"
+
+#: src/account_settings/notifications_page.blp:25
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr "個別設定をしていないルームにおいて通知の表示対象とするメッセージ"
+
+#: src/account_settings/notifications_page.blp:28
+msgid "All messages in all rooms"
+msgstr "すべてのルームでのすべてのメッセージ"
+
+#: src/account_settings/notifications_page.blp:34
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr ""
+"ダイレクトチャットでのすべてのメッセージと、すべてのルームでのメンションと"
+"キーワードを含むメッセージ"
+
+#: src/account_settings/notifications_page.blp:40
+msgid "Only mentions and keywords in all rooms"
+msgstr "すべてのルームでのメンションとキーワードを含むメッセージのみ"
+
+#: src/account_settings/notifications_page.blp:47
+msgid "Keywords"
+msgstr "キーワード"
+
+#: src/account_settings/notifications_page.blp:49
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+msgstr ""
+"メッセージにこれらのキーワードのいずれかが含まれると、通知が表示されます。こ"
+"れらのキーワードは大文字/小文字を区別しません。"
+
+#: src/account_settings/notifications_page.blp:61
+#: src/account_settings/notifications_page.blp:62
+msgid "Add Keyword"
+msgstr "キーワードを追加"
+
+#: src/account_settings/notifications_page.rs:195
+msgid "Could not enable account notifications"
+msgstr "アカウントの通知を有効にできませんでした"
+
+#: src/account_settings/notifications_page.rs:197
+msgid "Could not disable account notifications"
+msgstr "アカウントの通知を無効にできませんでした"
+
+#: src/account_settings/notifications_page.rs:284
+msgid "Could not change global notifications setting"
+msgstr "全体の通知設定を変更できませんでした"
+
+#: src/account_settings/notifications_page.rs:337
+#, rust-format
+msgid "Remove “{keyword}”"
+msgstr "“{keyword}” を削除"
+
+#: src/account_settings/notifications_page.rs:368
+msgid "Could not remove notification keyword"
+msgstr "通知キーワードを削除できませんでした"
+
+#: src/account_settings/notifications_page.rs:435
+msgid "Could not add notification keyword"
+msgstr "通知キーワードを追加できませんでした"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.blp:30
+#: src/components/user_page.rs:746
+msgid "Stop Ignoring"
+msgstr "無視をやめる"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.rs:85
+#: src/components/user_page.rs:767
+msgid "Could not stop ignoring user"
+msgstr "ユーザーの無視をやめることができませんでした"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:5
+#: src/account_settings/safety_page/mod.blp:11
+msgid "Ignored Users"
+msgstr "無視したユーザー"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:18
+msgid "Toggle Ignored Users Search"
+msgstr "無視したユーザーの検索を切り替え"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:32
+msgid "Search for ignored users"
+msgstr "無視したユーザーを検索"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:64
+msgid "No Ignored Users"
+msgstr "無視したユーザーなし"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:65
+msgid "You can add users to this list from their room member profile"
+msgstr "ユーザーのルームメンバープロフィールからこの一覧に追加できます"
+
+#: src/account_settings/safety_page/mod.blp:6
+msgid "Safety"
+msgstr "セーフティ"
+
+#: src/account_settings/safety_page/mod.blp:13
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"これらのユーザーから送信されたすべてのメッセージと招待は無視されます。ユー"
+"ザーを無視しても、ルームへの参加や退出といった一部のアクティビティは引き続き"
+"表示されます。"
+
+#: src/account_settings/safety_page/mod.blp:21
+msgid "Privacy"
+msgstr "プライバシー"
+
+#: src/account_settings/safety_page/mod.blp:25
+msgid "Send Read Receipts"
+msgstr "開封証明を送信"
+
+#: src/account_settings/safety_page/mod.blp:26
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"あなたが参加するルームの他のメンバーが、あなたがどのメッセージまで読んだかを"
+"確認できるようにします"
+
+#: src/account_settings/safety_page/mod.blp:31
+msgid "Send Typing Notifications"
+msgstr "入力中通知を送信"
+
+#: src/account_settings/safety_page/mod.blp:32
+msgid ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+msgstr ""
+"あなたが参加するルームの他のメンバーが、あなたがメッセージを入力中であること"
+"を確認できるようにします"
+
+#: src/account_settings/safety_page/mod.blp:37
+msgid "Media Previews"
+msgstr "メディアプレビュー"
+
+#: src/account_settings/safety_page/mod.blp:39
+msgid ""
+"Which rooms automatically show previews for images and videos. Hidden "
+"previews can always be shown by clicking on the media."
+msgstr ""
+"画像とビデオに対してプレビューを自動的に表示するルームを選択します。非表示の"
+"プレビューはメディアをクリックすることでいつでも表示可能です。"
+
+#: src/account_settings/safety_page/mod.blp:43
+msgid "Show in all rooms"
+msgstr "すべてのルームで表示"
+
+#: src/account_settings/safety_page/mod.blp:49
+msgid "Show only in private rooms"
+msgstr "プライベートなルームでのみ表示"
+
+#: src/account_settings/safety_page/mod.blp:55
+msgid "Hide in all rooms"
+msgstr "すべてのルームで非表示"
+
+#: src/account_settings/safety_page/mod.blp:63
+msgid "Show Avatars for Invites"
+msgstr "招待時にアバターを表示"
+
+#: src/account_settings/safety_page/mod.blp:64
+msgid "Display the avatars of the room and the inviter"
+msgstr "ルームと招待した人のアバターを表示します"
+
+#: src/account_settings/safety_page/mod.rs:232
+msgid "Could not change media previews setting"
+msgstr "メディアプレビューの設定を変更できませんでした"
+
+#: src/account_settings/safety_page/mod.rs:289
+msgid "Could not enable avatars for invites"
+msgstr "招待時のアバター表示を有効にできませんでした"
+
+#: src/account_settings/safety_page/mod.rs:291
+msgid "Could not disable avatars for invites"
+msgstr "招待時のアバター表示を無効にできませんでした"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:13
+#: src/account_settings/user_session/user_session_list_subpage.blp:23
+msgid "Current Session"
+msgstr "現在のセッション"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:29
+#: src/account_settings/user_session/user_session_list_subpage.blp:57
+msgid "Other Active Sessions"
+msgstr "他のアクティブなセッション"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:74
+msgid "Could not load the list of connected devices"
+msgstr "接続済みデバイスの一覧を読み込めませんでした"
+
+#. Translators: As in 'The session is verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:40
+#: src/account_settings/user_session/user_session_subpage.rs:118
+msgid "Verified"
+msgstr "確認済み"
+
+#. Translators: As in 'The session is not verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:51
+#: src/account_settings/user_session/user_session_subpage.rs:122
+msgid "Not verified"
+msgstr "未確認"
+
+#: src/account_settings/user_session/user_session_subpage.blp:14
+msgid "Matrix Session ID"
+msgstr "Matrix セッション ID"
+
+#: src/account_settings/user_session/user_session_subpage.blp:16
+msgid "Copy Matrix Session ID"
+msgstr "Matrix セッション ID をコピー"
+
+#: src/account_settings/user_session/user_session_subpage.blp:17
+msgid "Matrix session ID copied to clipboard"
+msgstr "Matrix セッション ID をクリップボードにコピーしました"
+
+#: src/account_settings/user_session/user_session_subpage.blp:22
+msgid "Public Name"
+msgstr "公開名"
+
+#: src/account_settings/user_session/user_session_subpage.blp:38
+msgid "Last Seen"
+msgstr "最終アクティブ日時"
+
+#: src/account_settings/user_session/user_session_subpage.blp:50
+msgid "Last Location"
+msgstr "最終使用場所"
+
+#: src/account_settings/user_session/user_session_subpage.blp:73
+#: src/account_settings/user_session/user_session_subpage.blp:83
+msgid "Disconnect"
+msgstr "切断"
+
+#: src/account_settings/user_session/user_session_subpage.rs:214
+msgid "Session renamed"
+msgstr "セッション名を変更しました"
+
+#: src/account_settings/user_session/user_session_subpage.rs:218
+msgid "Could not rename session"
+msgstr "セッション名を変更できませんでした"
+
+#: src/account_settings/user_session/user_session_subpage.rs:248
+#, rust-format
+msgid "Could not disconnect session “{device_name}”"
+msgstr "セッション “{device_name}” を切断できませんでした"
+
+#: src/account_switcher/account_switcher_button.blp:18
+msgid "Switch Accounts"
+msgstr "アカウントを切り替え"
+
+#: src/account_switcher/account_switcher_popover.blp:40
+msgid "_Add Account"
+msgstr "アカウントを追加(_A)"
+
+#: src/application.rs:244
+msgid "The Fractal Team"
+msgstr "The Fractal Team"
+
+#: src/application.rs:250
+msgid "© The Fractal Team"
+msgstr "© The Fractal Team"
+
+#: src/application.rs:264
+msgid "translator-credits"
+msgstr ""
+"Yuki Okushi <huyuumi.dev@gmail.com>\n"
+"Ryo Nakano <ryonakaknock3@gmail.com>"
+
+#. This can't be added via the builder
+#: src/application.rs:268
+msgid "Name by"
+msgstr "命名担当"
+
+#: src/application.rs:382
+msgid "Session not found"
+msgstr "セッションが見つかりません"
+
+#: src/components/action_button.blp:28
+msgid "Confirm Change"
+msgstr "変更を確認"
+
+#: src/components/action_button.blp:62
+#: src/components/camera/qrcode_scanner.blp:14
+#: src/login/session_setup_view.blp:16 src/session_view/explore/mod.blp:63
+#: src/session_view/room_details/history_viewer/audio.blp:17
+#: src/session_view/room_details/history_viewer/file.blp:16
+#: src/session_view/room_details/history_viewer/visual_media.blp:22
+#: src/session_view/room_history/mod.blp:92 src/window.blp:17
+msgid "Loading"
+msgstr "読み込み中"
+
+#: src/components/action_button.blp:84
+msgid "Success"
+msgstr "成功"
+
+#: src/components/action_button.blp:102
+msgid "Warning"
+msgstr "警告"
+
+#: src/components/action_button.blp:119 src/error_page.blp:9
+#: src/session_view/create_direct_chat_dialog/mod.blp:93
+#: src/session_view/explore/mod.blp:113 src/session_view/explore/mod.blp:117
+#: src/session_view/room_details/invite_subpage/mod.blp:109
+#: src/session_view/room_details/invite_subpage/mod.blp:113
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:68
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:72
+#: src/window.blp:87
+msgid "Error"
+msgstr "エラー"
+
+#: src/components/avatar/editable.blp:64
+msgid "Remove Avatar"
+msgstr "アバターを削除"
+
+#: src/components/avatar/editable.blp:81
+msgid "Select New Avatar"
+msgstr "新しいアバターを選択"
+
+#: src/components/avatar/editable.rs:505
+msgid "Images"
+msgstr "画像"
+
+#: src/components/avatar/editable.rs:511
+msgid "Choose Avatar"
+msgstr "アバターを選択"
+
+#: src/components/avatar/editable.rs:527
+msgid "Could not open avatar file"
+msgstr "アバターファイルを開けませんでした"
+
+#: src/components/avatar/editable.rs:548
+msgid "The chosen file is not an image"
+msgstr "選択されたファイルは画像ではありません"
+
+#: src/components/avatar/editable.rs:554
+msgid "Could not determine the type of the chosen file"
+msgstr "選択されたファイルの種別を判断できませんでした"
+
+#: src/components/camera/qrcode_scanner.blp:6
+msgid "QR Code Scanner"
+msgstr "QR コードスキャナー"
+
+#: src/components/camera/qrcode_scanner.blp:21
+#: src/components/camera/qrcode_scanner.blp:33
+msgid "Could Not Connect to Camera"
+msgstr "カメラに接続できませんでした"
+
+#: src/components/camera/qrcode_scanner.rs:91
+msgid "Camera"
+msgstr "カメラ"
+
+#: src/components/camera/viewfinder.rs:74
+msgid "Viewfinder"
+msgstr "ファインダー"
+
+#: src/components/crypto/identity_setup_view.blp:8
+#: src/components/crypto/identity_setup_view.blp:33
+msgid "Verify Your New Session"
+msgstr "新しいセッションを確認"
+
+#: src/components/crypto/identity_setup_view.blp:45
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"セッションを確認することで、あなたやあなたがチャットする相手は、第三者があな"
+"たになりすましたり会話を傍受したりしようとしていないことを確認できます。"
+
+#: src/components/crypto/identity_setup_view.blp:58
+msgid "Verify With Another Session"
+msgstr "他のセッションで確認"
+
+#: src/components/crypto/identity_setup_view.blp:68
+msgid "No other devices logged into this account?"
+msgstr "このアカウントにログイン済みのデバイスがありませんか?"
+
+#: src/components/crypto/identity_setup_view.blp:76
+#: src/components/crypto/recovery_setup_view.blp:8
+#: src/components/crypto/recovery_setup_view.blp:33
+msgid "Recover Account"
+msgstr "アカウントを回復"
+
+#: src/components/crypto/identity_setup_view.blp:87
+#: src/components/crypto/identity_setup_view.blp:269
+#: src/components/crypto/recovery_setup_view.blp:97
+#: src/components/crypto/recovery_setup_view.blp:210
+#: src/components/crypto/recovery_setup_view.blp:507
+msgid "Reset"
+msgstr "リセット"
+
+#: src/components/crypto/identity_setup_view.blp:103
+#: src/identity_verification_view/mod.blp:6 src/session_view/content.blp:68
+msgid "Identity Verification"
+msgstr "本人確認"
+
+#: src/components/crypto/identity_setup_view.blp:118
+#: src/components/crypto/identity_setup_view.blp:143
+msgid "Set Up Crypto Identity"
+msgstr "暗号化のための身分情報をセットアップ"
+
+#: src/components/crypto/identity_setup_view.blp:155
+#: src/components/crypto/identity_setup_view.blp:232
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"暗号化のための身分情報により、他の Matrix アカウントを確認したり、その確認済"
+"みのセッションを自動的に信頼したりできます。"
+
+#: src/components/crypto/identity_setup_view.blp:167
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr ""
+"暗号化のための身分情報をセットアップする必要があります (一度も作成したことが"
+"ないため)。"
+
+#: src/components/crypto/identity_setup_view.blp:178
+#: src/components/crypto/recovery_setup_view.blp:311
+msgid "Set Up"
+msgstr "セットアップ"
+
+#: src/components/crypto/identity_setup_view.blp:245
+msgid ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+msgstr ""
+"あなたが所有していないデバイスが検証済みになっている場合、暗号化のための身分"
+"情報をリセットしてください。"
+
+#: src/components/crypto/identity_setup_view.blp:257
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr "続行するには、アカウントの回復鍵も併せてリセットする必要があります。"
+
+#: src/components/crypto/identity_setup_view.rs:415
+#: src/identity_verification_view/cancelled_page.rs:196
+msgid "Could not send a new verification request"
+msgstr "新しい認証要求を送信できませんでした"
+
+#: src/components/crypto/identity_setup_view.rs:467
+msgid "Could not create the crypto identity"
+msgstr "暗号化のための身分情報を作成できませんでした"
+
+#: src/components/crypto/recovery_setup_view.blp:44
+msgid "Restore full access to your account."
+msgstr "アカウントに再びアクセスできるようにします。"
+
+#: src/components/crypto/recovery_setup_view.blp:52
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"回復データにアクセスするには、通常はアカウントを作成する際にセットアップする"
+"回復用パスフレーズまたは回復鍵が必要です。"
+
+#: src/components/crypto/recovery_setup_view.blp:69
+msgid "Recovery Passphrase or Key"
+msgstr "回復用パスフレーズまたは回復鍵"
+
+#: src/components/crypto/recovery_setup_view.blp:77
+#: src/session_view/sidebar/mod.rs:362
+msgid "Recover"
+msgstr "回復"
+
+#: src/components/crypto/recovery_setup_view.blp:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "回復用パスフレーズまたは回復鍵が見つかりませんか?"
+
+#: src/components/crypto/recovery_setup_view.blp:113
+#: src/components/crypto/recovery_setup_view.blp:138
+msgid "Reset Account Recovery"
+msgstr "アカウントの回復機能をリセット"
+
+#: src/components/crypto/recovery_setup_view.blp:150
+msgid ""
+"Resetting account recovery can allow you to fix or reset part or all of your "
+"recovery setup."
+msgstr ""
+"アカウントの回復機能をリセットすると、回復用に設定した内容の一部または全部を"
+"修正またはリセットできます。"
+
+#: src/components/crypto/recovery_setup_view.blp:171
+msgid "Reset Room Encryption Keys Backup"
+msgstr "ルームの暗号鍵のバックアップをリセット"
+
+#: src/components/crypto/recovery_setup_view.blp:176
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr "新しい回復用パスフレーズが未指定の場合、回復鍵が作成されます。"
+
+#: src/components/crypto/recovery_setup_view.blp:188
+#: src/components/crypto/recovery_setup_view.blp:288
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"Matrix アカウントのパスワードは再利用しないでください。第三者がアカウントのパ"
+"スワードを入手した場合に、暗号化されたすべての会話にアクセスし、あなたになり"
+"すますことが可能になってしまうためです。"
+
+#: src/components/crypto/recovery_setup_view.blp:205
+#: src/components/crypto/recovery_setup_view.blp:305
+msgid "Recovery Passphrase (Optional)"
+msgstr "回復用パスフレーズ (任意)"
+
+#: src/components/crypto/recovery_setup_view.blp:227
+#: src/components/crypto/recovery_setup_view.blp:252
+msgid "Set Up Account Recovery"
+msgstr "アカウントの回復機能をセットアップ"
+
+#: src/components/crypto/recovery_setup_view.blp:264
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"アカウントの回復機能により、仮にすべてのセッションにアクセスできなくなって"
+"も、暗号化のための身分情報を回復したり暗号化されたメッセージを読んだりできま"
+"す。"
+
+#: src/components/crypto/recovery_setup_view.blp:276
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr "回復用パスフレーズが未指定の場合、回復鍵が作成されます。"
+
+#: src/components/crypto/recovery_setup_view.blp:328
+#: src/components/crypto/recovery_setup_view.blp:354
+msgid "Account Recovery Set Up Successfully"
+msgstr "アカウントの回復機能をセットアップしました"
+
+#: src/components/crypto/recovery_setup_view.blp:389
+msgid "Copy Recovery Key"
+msgstr "回復鍵をコピー"
+
+#: src/components/crypto/recovery_setup_view.blp:406
+#: src/components/crypto/recovery_setup_view.blp:487
+#: src/identity_verification_view/cancelled_page.blp:50
+#: src/identity_verification_view/completed_page.blp:51
+#: src/identity_verification_view/room_left_page.blp:48
+msgid "_Done"
+msgstr "完了(_D)"
+
+#: src/components/crypto/recovery_setup_view.blp:461
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "回復処理は成功しましたが、回復データが不完全でした。"
+
+#: src/components/crypto/recovery_setup_view.blp:469
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"これを修正するには、すべてのデータが存在するセッションから回復機能をリセット"
+"したうえで、もう一度このセッションを回復してみてください。"
+
+#: src/components/crypto/recovery_setup_view.blp:478
+msgid ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+msgstr ""
+"なお、アカウントの回復機能は、他の Matrix クライアントでは “鍵のバックアッ"
+"プ” や “セキュアバックアップ” といった別の名前で呼ばれていることがあります。"
+
+#: src/components/crypto/recovery_setup_view.blp:499
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "もしくは、アカウントの回復機能をリセットすることもできます"
+
+#: src/components/crypto/recovery_setup_view.rs:221
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "すべてのユーザーとセッションの認証状態をリセットします"
+
+#: src/components/crypto/recovery_setup_view.rs:227
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. "
+"Invalidates the verifications of all users and sessions."
+msgstr ""
+"回復データに含まれる暗号化のための身分情報が不完全なため、必須です。すべての"
+"ユーザーとセッションの認証状態をリセットします。"
+
+#: src/components/crypto/recovery_setup_view.rs:238
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr "過去の暗号化されたメッセージを今後読めなくなる可能性があります"
+
+#: src/components/crypto/recovery_setup_view.rs:244
+msgid ""
+"Required because the backup is not set up properly. You might not be able to "
+"read your past encrypted messages anymore."
+msgstr ""
+"バックアップが適切にセットアップされていないため、必須です。過去の暗号化され"
+"たメッセージを今後読めなくなる可能性があります。"
+
+#: src/components/crypto/recovery_setup_view.rs:265
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"この回復鍵は安全な場所に保存してください。これは、すべてのセッションにアクセ"
+"スできなくなってしまった場合に、アカウントを回復するために必要になります。"
+
+#: src/components/crypto/recovery_setup_view.rs:269
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"パスフレーズは覚えるか安全な場所に控えてください。これは、すべてのセッション"
+"にアクセスできなくなってしまった場合に、アカウントを回復するために必要になり"
+"ます。"
+
+#: src/components/crypto/recovery_setup_view.rs:330
+msgid "The recovery passphrase or key is invalid"
+msgstr "回復用パスフレーズまたは回復鍵が無効です"
+
+#: src/components/crypto/recovery_setup_view.rs:333
+msgid "Could not access recovery data"
+msgstr "回復データにアクセスできませんでした"
+
+#: src/components/crypto/recovery_setup_view.rs:384
+msgid "Could not reset the crypto identity"
+msgstr "暗号化のための身分情報をリセットできませんでした"
+
+#: src/components/crypto/recovery_setup_view.rs:437
+#: src/components/crypto/recovery_setup_view.rs:446
+#: src/components/crypto/recovery_setup_view.rs:471
+msgid "Could not reset account recovery"
+msgstr "アカウントの回復機能をリセットできませんでした"
+
+#: src/components/crypto/recovery_setup_view.rs:506
+msgid "Could not reset account recovery key"
+msgstr "アカウントの回復鍵をリセットできませんでした"
+
+#: src/components/crypto/recovery_setup_view.rs:544
+msgid "Could not enable account recovery"
+msgstr "アカウントの回復機能を有効にできませんでした"
+
+#: src/components/dialogs/auth/in_browser_page.blp:36
+#: src/components/dialogs/auth/mod.blp:4
+#: src/components/dialogs/auth/password_page.blp:36
+#: src/login/in_browser_page.blp:6 src/login/in_browser_page.blp:39
+msgid "Authentication"
+msgstr "認証"
+
+#: src/components/dialogs/auth/in_browser_page.blp:50
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"ブラウザー経由で操作を認証してください。完了したら、“確認”を押してください"
+
+#: src/components/dialogs/auth/in_browser_page.blp:74
+#: src/login/in_browser_page.blp:77
+msgid "Contin_ue"
+msgstr "続行(_U)"
+
+#: src/components/dialogs/auth/in_browser_page.blp:103
+#: src/components/dialogs/auth/password_page.blp:81
+#: src/session_view/room_details/invite_subpage/mod.blp:15
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:15
+msgid "_Cancel"
+msgstr "キャンセル(_C)"
+
+#: src/components/dialogs/auth/in_browser_page.blp:110
+#: src/components/dialogs/auth/password_page.blp:88
+msgid "C_onfirm"
+msgstr "確認(_O)"
+
+#: src/components/dialogs/auth/mod.rs:313
+msgid "The password is invalid."
+msgstr "パスワードが無効です。"
+
+#: src/components/dialogs/auth/mod.rs:315 src/login/in_browser_page.rs:130
+msgid "An unexpected error occurred."
+msgstr "予期しないエラーが発生しました。"
+
+#: src/components/dialogs/auth/password_page.blp:50
+msgid "Please authenticate the operation with your password"
+msgstr "パスワードで操作を認証してください"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "招待を辞退しますか?"
+
+#: src/components/dialogs/message_dialogs.rs:27
+msgid ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+msgstr ""
+"本当にこの招待を辞退してもよろしいですか? このルームには後でも自分から参加で"
+"きます。"
+
+#: src/components/dialogs/message_dialogs.rs:31
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr ""
+"本当にこの招待を辞退してもよろしいですか? このルームには招待されないと参加で"
+"きません。"
+
+#: src/components/dialogs/message_dialogs.rs:34
+#: src/identity_verification_view/accept_request_page.blp:55
+#: src/session_view/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "辞退"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Leave Room?"
+msgstr "ルームから退出しますか?"
+
+#: src/components/dialogs/message_dialogs.rs:41
+msgid "Do you really want to leave this room? You can come back later."
+msgstr "本当にこのルームから退出してもよろしいですか? 後から再参加できます。"
+
+#: src/components/dialogs/message_dialogs.rs:44
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr ""
+"本当にこのルームから退出してもよろしいですか? 招待されない限り、後から再参加"
+"できません。"
+
+#: src/components/dialogs/message_dialogs.rs:47
+msgid "Leave"
+msgstr "退出"
+
+#: src/components/dialogs/message_dialogs.rs:67
+#, rust-format
+msgid "Ignore {user}"
+msgstr "{user} を無視"
+
+#: src/components/dialogs/message_dialogs.rs:71
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr "このユーザーから送信されたすべてのメッセージと招待は無視されます"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:132
+#, rust-format
+msgid "Ban {user}?"
+msgstr "{user} を BAN しますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:136
+#, rust-format
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+msgstr ""
+"{user_id} を BAN してもよろしいですか? BAN されると、ユーザーは誰かが BAN 解"
+"除するまでルームに再参加できません。"
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:139
+#: src/components/user_page.blp:142
+#: src/session_view/room_details/permissions/permissions_subpage.blp:234
+msgid "Ban"
+msgstr "BAN"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:150
+#, rust-format
+msgid "Revoke Invite for {user}?"
+msgstr "{user} の招待を取り消しますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:157
+#, rust-format
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"{user_id} の招待を取り消してもよろしいですか? 招待を取り消しても、ユーザーは"
+"自分からルームに参加できます。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:164
+#, rust-format
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"{user_id} の招待を取り消してもよろしいですか? 招待を取り消すと、ユーザーは誰"
+"かが再招待するまでルームに再参加できません。"
+
+#: src/components/dialogs/message_dialogs.rs:168
+#: src/components/user_page.rs:390
+msgid "Revoke Invite"
+msgstr "招待を取り消す"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:175
+#, rust-format
+msgid "Deny Access to {user}?"
+msgstr "{user} のアクセスを拒否しますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:181
+#, rust-format
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "{user_id} のアクセスを拒否してもよろしいですか?"
+
+#: src/components/dialogs/message_dialogs.rs:184
+msgid "Deny Access"
+msgstr "アクセスを拒否"
+
+#: src/components/dialogs/message_dialogs.rs:191
+#, rust-format
+msgid "Kick {user}?"
+msgstr "{user} をキックしますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:196
+#, rust-format
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"{user_id} をキックしてもよろしいですか? キックされても、ユーザーは自分から"
+"ルームに再参加できます。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:203
+#, rust-format
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"{user_id} をキックしてもよろしいですか? キックされると、ユーザーは誰かが招待"
+"するまでルームに再参加できません。"
+
+#. Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:207
+#: src/components/user_page.rs:393
+#: src/session_view/room_details/permissions/permissions_subpage.blp:222
+msgid "Kick"
+msgstr "キック"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:218
+#, rust-format
+msgid "Remove Messages Sent by {user}?"
+msgstr "{user} から送信されたメッセージを削除しますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:224
+#, rust-format
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"この操作はホームサーバーから受信したすべてのメッセージを削除します。"
+"{user_id} から送信された {n} 件のメッセージを削除してもよろしいですか? この操"
+"作は元に戻せません。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:238
+#, rust-format
+msgid "No Messages Sent by {user}"
+msgstr "{user} から送信されたメッセージなし"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:244
+#, rust-format
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+msgstr ""
+"{user_id} から送信されてホームサーバーから受信したメッセージはありません。"
+"ルームの履歴をさらに遡ることで、メッセージをさらに読み込んでみてください。"
+
+#: src/components/dialogs/message_dialogs.rs:272
+#: src/session_view/room_history/event_actions/group.rs:630
+msgid "Reason (optional)"
+msgstr "理由 (任意)"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:296
+#, rust-format
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "ユーザーから送信された最新 {n} 件のメッセージを削除"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:380
+#, rust-format
+msgid "Mute {user}?"
+msgstr "{user} をミュートしますか?"
+
+#: src/components/dialogs/message_dialogs.rs:384
+msgid "Mute Members?"
+msgstr "メンバーをミュートしますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:393
+#, rust-format
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages to this room."
+msgstr ""
+"{user_id} をミュートしてもよろしいですか? このルームに新しいメッセージを送信"
+"できなくなります。"
+
+#: src/components/dialogs/message_dialogs.rs:398
+msgid ""
+"Are you sure you want to mute these members? They will not be able to send "
+"new messages to this room."
+msgstr ""
+"これらのメンバーをミュートしてもよろしいですか? このルームに新しいメッセージ"
+"を送信できなくなります。"
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:411
+msgid "Mute"
+msgstr "ミュート"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:440
+#, rust-format
+msgid "Promote {user}?"
+msgstr "{user} を昇格させますか?"
+
+#: src/components/dialogs/message_dialogs.rs:444
+msgid "Promote Members?"
+msgstr "メンバーを昇格させますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:453
+#, rust-format
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgstr ""
+"{user_id} をあなたと同じレベルに昇格させると、今後降格させることができませ"
+"ん。"
+
+#: src/components/dialogs/message_dialogs.rs:458
+msgid ""
+"If you promote these members to the same level as yours, you will not be "
+"able to demote them in the future."
+msgstr ""
+"これらのメンバーをあなたと同じレベルに昇格させると、今後降格させることができ"
+"ません。"
+
+#: src/components/dialogs/message_dialogs.rs:470
+msgid "Promote"
+msgstr "昇格させる"
+
+#. / Show a dialog to confirm the demotion of our own user.
+#: src/components/dialogs/message_dialogs.rs:479
+msgid "Demote Yourself?"
+msgstr "自分自身を降格させますか?"
+
+#: src/components/dialogs/message_dialogs.rs:481
+msgid ""
+"Are you sure you want to lower your power level? You will need to ask "
+"another member with a higher power level to undo this."
+msgstr ""
+"あなたの権限を下げてもよろしいですか? この操作を元に戻すには、自分よりも高い"
+"権限を持つメンバーに依頼する必要があります。"
+
+#: src/components/dialogs/message_dialogs.rs:492
+msgid "Demote"
+msgstr "降格させる"
+
+#: src/components/dialogs/message_dialogs.rs:503
+msgid "Save Changes?"
+msgstr "変更を保存しますか?"
+
+#: src/components/dialogs/message_dialogs.rs:505
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr ""
+"このページに未保存の変更内容が含まれています。保存しないと変更内容が完全に失"
+"われます。"
+
+#: src/components/dialogs/message_dialogs.rs:514
+msgid "Discard"
+msgstr "破棄"
+
+#: src/components/dialogs/message_dialogs.rs:515
+#: src/session_view/room_details/edit_details_subpage.blp:98
+#: src/session_view/room_details/history_viewer/file_row.rs:144
+#: src/utils/matrix/media_message.rs:233
+msgid "Save"
+msgstr "保存"
+
+#: src/components/dialogs/room_preview.blp:5
+#: src/components/dialogs/room_preview.blp:39
+msgid "Join a Room"
+msgstr "ルームに参加"
+
+#: src/components/dialogs/room_preview.blp:19 src/login/greeter.blp:17
+#: src/login/greeter.blp:20 src/session_view/media_viewer.blp:76
+#: src/session_view/media_viewer.blp:79
+#: src/session_view/room_details/edit_details_subpage.blp:15
+#: src/session_view/room_details/history_visibility_subpage.blp:19
+#: src/session_view/room_details/join_rule_subpage.blp:19
+#: src/session_view/room_details/permissions/permissions_subpage.blp:20
+msgid "Back"
+msgstr "戻る"
+
+#: src/components/dialogs/room_preview.blp:70
+msgid "Enter an address or link to look up a room"
+msgstr "ルームを探すにはアドレスまたはリンクを入力してください"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/room_preview.blp:90
+#: src/components/dialogs/room_preview.rs:242
+msgid "Look Up"
+msgstr "探す"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/room_preview.rs:239
+#: src/components/dialogs/room_preview.rs:347
+#: src/session_view/explore/public_room_row.rs:182
+#: src/session_view/room_history/message_toolbar/mod.rs:382
+#: src/session_view/room_history/mod.blp:82
+#: src/session_view/room_history/state/creation.blp:20
+msgid "View"
+msgstr "表示"
+
+#: src/components/dialogs/room_preview.rs:302
+msgid ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+msgstr ""
+"このルームの詳細はプレビューできません。ホームサーバーがこのルームの存在を把"
+"握できていないか、ルームの詳細が非公開となっている可能性があります。ルームへ"
+"の参加は可能です。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/room_preview.rs:325
+#: src/session_view/explore/public_room_row.rs:161
+#, rust-format
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "{n} 人のメンバー"
+
+#: src/components/dialogs/room_preview.rs:349
+#: src/session_view/explore/public_room_row.rs:187
+msgid "Request an Invite"
+msgstr "招待を要求"
+
+#: src/components/dialogs/room_preview.rs:351
+#: src/session_view/explore/public_room_row.rs:195
+#: src/session_view/room_history/message_toolbar/mod.rs:384
+msgid "Join"
+msgstr "参加"
+
+#: src/components/dialogs/user_profile.blp:5
+msgid "User Profile"
+msgstr "ユーザープロフィール"
+
+#: src/components/media/audio_player/mod.rs:304
+msgid "Pause"
+msgstr "一時停止"
+
+#: src/components/media/audio_player/mod.rs:306
+msgid "Play"
+msgstr "再生"
+
+#: src/components/media/audio_player/mod.rs:387
+msgid "Error reading audio file"
+msgstr "音声ファイルを読み込む際にエラーが発生しました"
+
+#: src/components/media/audio_player/mod.rs:475
+msgid "Could not retrieve audio file"
+msgstr "音声ファイルを取得できませんでした"
+
+#: src/components/media/content_viewer.rs:121
+msgid "Image not Viewable"
+msgstr "表示不可能な画像です"
+
+#: src/components/media/content_viewer.rs:122
+msgid "Audio Clip not Playable"
+msgstr "再生不可能な音声クリップです"
+
+#: src/components/media/content_viewer.rs:123
+msgid "Video not Playable"
+msgstr "再生不可能なビデオです"
+
+#: src/components/media/content_viewer.rs:124
+msgid "File not Viewable"
+msgstr "表示不可能なファイルです"
+
+#: src/components/media/location_viewer.rs:146
+#, rust-format
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "緯度 {latitude} / 経度 {longitude} の位置情報"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "オフライン"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "ネットワーク接続がありません"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "インターネット接続がありません"
+
+#: src/components/pill/at_room.rs:32
+msgid "Notify the whole room"
+msgstr "ルーム全体に通知"
+
+#. Translators: As in 'Custom role'.
+#: src/components/power_level_selection/popover.blp:127
+msgctxt "role"
+msgid "Custom"
+msgstr "カスタム"
+
+#: src/components/power_level_selection/popover.blp:141
+msgid "Confirm Custom Role"
+msgstr "カスタムロールを確認"
+
+#: src/components/power_level_selection/row.blp:99
+msgid "More Information"
+msgstr "詳細情報"
+
+#: src/components/power_level_selection/row.blp:118
+msgid ""
+"Creator is an immutable role that can be attributed to several users when "
+"creating a room. Creators always have a higher power level than any other "
+"room members, except other creators, and have the permission to do anything "
+"in the room. The only way to demote a creator is to replace the current room "
+"with another one with a different creator, by upgrading the room for example."
+msgstr ""
+"作成者とは、ルーム作成時に複数のユーザーに割り当てられる、変更不可能なロール"
+"です。作成者は、他の作成者を除くすべてのルームメンバーよりも常に高い権限を持"
+"ち、ルーム内であらゆる操作を行う権限を有します。作成者の権限を降格させる唯一"
+"の方法は、例えばルームをアップグレードするなどして、現在のルームを別の作成者"
+"がいる別のルームに置き換えることです。"
+
+#: src/components/user_page.blp:107
+msgid "Role"
+msgstr "ロール"
+
+#. Translators: value used to assign room member roles.
+#: src/components/user_page.blp:122
+msgid "Power Level"
+msgstr "権限"
+
+#. Translators: In this string, 'Invite' is a verb.
+#. Translators: This is a verb.
+#: src/components/user_page.blp:128 src/session_view/invite.blp:14
+#: src/session_view/invite.blp:39
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:145
+#: src/session_view/room_details/permissions/permissions_subpage.blp:210
+msgid "Invite"
+msgstr "招待"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.blp:152
+msgid "Unban"
+msgstr "BAN 解除"
+
+#: src/components/user_page.blp:157
+msgid "Remove Messages"
+msgstr "メッセージを削除"
+
+#: src/components/user_page.blp:172
+msgid "Security"
+msgstr "セキュリティ"
+
+#: src/components/user_page.blp:199
+#: src/identity_verification_view/accept_request_page.blp:66
+#: src/session_view/room_history/verification_info_bar.rs:172
+#: src/session_view/sidebar/mod.rs:355
+msgid "Verify"
+msgstr "確認"
+
+#: src/components/user_page.rs:283
+msgid "Open Direct Chat"
+msgstr "ダイレクトチャットを開く"
+
+#: src/components/user_page.rs:285
+msgid "Create Direct Chat"
+msgstr "ダイレクトチャットを作成"
+
+#: src/components/user_page.rs:305
+#: src/session_view/create_direct_chat_dialog/mod.rs:202
+msgid "Could not create a new Direct Chat"
+msgstr "新しいダイレクトチャットを作成できませんでした"
+
+#: src/components/user_page.rs:336
+#, rust-format
+msgid "In {room_name}"
+msgstr "{room_name}"
+
+#. Translators: As in, 'The room member was invited'.
+#. Translators: This is singular, as in 'Invited Room Member'.
+#: src/components/user_page.rs:347
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:121
+msgctxt "member"
+msgid "Invited"
+msgstr "招待中"
+
+#. Translators: As in, 'The room member was banned'.
+#. Translators: This is singular, as in 'Banned Room Member'.
+#: src/components/user_page.rs:351
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:130
+msgctxt "member"
+msgid "Banned"
+msgstr "BAN 中"
+
+#. Translators: As in, 'The room member requested an invite'.
+#: src/components/user_page.rs:355
+msgctxt "member"
+msgid "Requested an Invite"
+msgstr "招待を要求中"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:359
+msgctxt "member"
+msgid "Unknown"
+msgstr "不明"
+
+#: src/components/user_page.rs:391
+msgid "Deny Request"
+msgstr "要求を拒否"
+
+#: src/components/user_page.rs:499
+msgid "Could not change the role"
+msgstr "ロールを変更できませんでした"
+
+#: src/components/user_page.rs:520
+msgid "Could not invite user"
+msgstr "ユーザーを招待できませんでした"
+
+#: src/components/user_page.rs:554
+#: src/session_view/room_history/event_actions/group.rs:722
+msgid "Could not revoke invite of user"
+msgstr "ユーザーの招待を取り消しできませんでした"
+
+#: src/components/user_page.rs:555
+msgid "Could not deny access to user"
+msgstr "ユーザーのアクセスを拒否できませんでした"
+
+#: src/components/user_page.rs:556
+msgid "Could not kick user"
+msgstr "ユーザーをキックできませんでした"
+
+#: src/components/user_page.rs:602
+msgid "Could not ban user"
+msgstr "ユーザーを BAN できませんでした"
+
+#: src/components/user_page.rs:633
+msgid "Could not unban user"
+msgstr "ユーザーを BAN 解除できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:681
+#, rust-format
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "ユーザーから送信された {n} 件のメッセージを削除できませんでした"
+
+#: src/components/user_page.rs:697
+msgid "Identity verified"
+msgstr "本人確認済み"
+
+#: src/components/user_page.rs:704
+msgid "Identity not verified"
+msgstr "本人確認未実施"
+
+#: src/components/user_page.rs:719
+msgid "Could not start user verification"
+msgstr "ユーザーの認証を開始できませんでした"
+
+#: src/components/user_page.rs:744
+msgid "Ignored"
+msgstr "無視しています"
+
+#: src/components/user_page.rs:749
+msgid "Not Ignored"
+msgstr "無視していません"
+
+#: src/components/user_page.rs:750
+msgid "Ignore"
+msgstr "無視"
+
+#: src/components/user_page.rs:770 src/session_view/invite.rs:290
+#: src/session_view/sidebar/row.rs:770
+msgid "Could not ignore user"
+msgstr "ユーザーを無視できませんでした"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "QR コード"
+
+#: src/error_page.blp:19 src/error_page.blp:23 src/error_page.blp:31
+#: src/error_page.blp:35 src/login/greeter.blp:28 src/login/greeter.blp:32
+#: src/login/greeter.blp:40 src/login/greeter.blp:44 src/window.blp:29
+#: src/window.blp:33
+msgid "About Fractal"
+msgstr "Fractal について"
+
+#: src/error_page.blp:45
+msgid "Secret Portal Error"
+msgstr "シークレットポータルのエラー"
+
+#: src/error_page.blp:59
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session "
+"information and an error occurred while we were trying to restore your "
+"sessions."
+msgstr ""
+"Fractal は機密なセッション情報を管理するのにシークレットポータルを使用してい"
+"ますが、セッションの復元を試行中にエラーが発生しました。"
+
+#: src/error_page.blp:75
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr ""
+"以下に、シークレットポータルに関する問題を解決するのに役立つ可能性がある内容"
+"を示します:"
+
+#: src/error_page.blp:94
+msgid ""
+"Make sure you have a Secret Portal Backend Provider installed, like gnome-"
+"keyring."
+msgstr ""
+"シークレットポータルバックエンドプロバイダー (gnome-keyring など) がインス"
+"トールされていることを確認してください。"
+
+#: src/error_page.blp:119
+msgid ""
+"If you prefer to use a Secret Service Provider instead, you need to allow "
+"Fractal to interact with it, like this:"
+msgstr ""
+"代わりにシークレットサービスプロバイダーを使用したい場合は、次のように "
+"Fractal にアクセスを許可する必要があります:"
+
+#: src/error_page.blp:152
+msgid "Copy Command"
+msgstr "コマンドをコピー"
+
+#: src/error_page.blp:178
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "デフォルトの鍵束が存在し、ロック解除されていることを確認してください。"
+
+#: src/error_page.blp:191
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr ""
+"詳細は、アプリケーションのログと、お使いのディストリビューションのドキュメン"
+"テーションを確認してください。"
+
+#: src/error_page.blp:206
+msgid "Could Not Initialize Session"
+msgstr "セッションを初期化できませんでした"
+
+#: src/error_page.rs:102
+msgid "Command copied to clipboard"
+msgstr "コマンドをクリップボードにコピーしました"
+
+#: src/identity_verification_view/accept_request_page.rs:130
+#: src/session/notifications/mod.rs:396
+msgid "Login Request From Another Session"
+msgstr "他のセッションからのログイン要求"
+
+#: src/identity_verification_view/accept_request_page.rs:132
+msgid "Verify the new session from the current session."
+msgstr "現在のセッションから新しいセッションを確認してください。"
+
+#: src/identity_verification_view/accept_request_page.rs:135
+#: src/identity_verification_view/choose_method_page.rs:184
+#: src/identity_verification_view/sas_page.rs:160
+#: src/identity_verification_view/scan_qr_code_page.rs:159
+#: src/session/notifications/mod.rs:334
+msgid "Verification Request"
+msgstr "認証要求"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:139
+#, rust-format
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} が確認を依頼しました。ユーザーを確認することで、会話のセキュリティが向"
+"上されます。"
+
+#: src/identity_verification_view/accept_request_page.rs:162
+msgid "Could not decline verification request"
+msgstr "認証要求を辞退できませんでした"
+
+#: src/identity_verification_view/accept_request_page.rs:178
+msgid "Could not accept verification request"
+msgstr "認証要求を承諾できませんでした"
+
+#: src/identity_verification_view/cancelled_page.blp:60
+msgid "Send New Request"
+msgstr "新しい要求を送信"
+
+#: src/identity_verification_view/cancelled_page.rs:140
+msgid "The verification was cancelled from the other session."
+msgstr "認証は他のセッションからキャンセルされました。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:146
+#, rust-format
+msgid "The verification was cancelled by {user}."
+msgstr "認証は {user} によってキャンセルされました。"
+
+#: src/identity_verification_view/cancelled_page.rs:152
+msgid "The verification process failed because it reached a timeout."
+msgstr "タイムアウトしたため認証処理が失敗しました。"
+
+#: src/identity_verification_view/cancelled_page.rs:154
+msgid "You accepted the request from another session."
+msgstr "他のセッションから要求を承認しました。"
+
+#: src/identity_verification_view/cancelled_page.rs:157
+msgid "The emoji did not match."
+msgstr "絵文字が一致しませんでした。"
+
+#: src/identity_verification_view/cancelled_page.rs:159
+msgid "The numbers did not match."
+msgstr "番号が一致しませんでした。"
+
+#: src/identity_verification_view/cancelled_page.rs:162
+msgid "An unexpected error happened during the verification process."
+msgstr "認証処理中に予期しないエラーが発生しました。"
+
+#: src/identity_verification_view/cancelled_page.rs:167
+#: src/identity_verification_view/mod.blp:88
+#: src/identity_verification_view/mod.blp:97
+#: src/identity_verification_view/room_left_page.blp:22
+msgid "Verification Cancelled"
+msgstr "認証がキャンセルされました"
+
+#: src/identity_verification_view/cancelled_page.rs:169
+msgid "Verification Error"
+msgstr "認証エラー"
+
+#: src/identity_verification_view/choose_method_page.blp:55
+#: src/identity_verification_view/scan_qr_code_page.blp:51
+msgid "Can’t scan QR code?"
+msgstr "QR コードをスキャンできませんか?"
+
+#: src/identity_verification_view/choose_method_page.blp:63
+msgid "Scan QR code with this session"
+msgstr "このセッションで QR コードをスキャン"
+
+#: src/identity_verification_view/choose_method_page.blp:72
+#: src/identity_verification_view/scan_qr_code_page.blp:73
+msgid "Compare Emoji"
+msgstr "絵文字を比較"
+
+#: src/identity_verification_view/choose_method_page.blp:83
+#: src/identity_verification_view/no_supported_methods_page.rs:168
+#: src/identity_verification_view/qr_code_scanned_page.blp:51
+#: src/identity_verification_view/scan_qr_code_page.blp:84
+msgid "Cancel Verification"
+msgstr "認証をキャンセル"
+
+#: src/identity_verification_view/choose_method_page.rs:176
+#: src/identity_verification_view/sas_page.rs:148
+#: src/identity_verification_view/scan_qr_code_page.rs:154
+msgid "Verify Session"
+msgstr "セッションを確認"
+
+#: src/identity_verification_view/choose_method_page.rs:180
+msgid "Scan this QR code from the other session."
+msgstr "他のセッションからこの QR コードをスキャンしてください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:190
+#, rust-format
+msgid "Ask {user} to scan this QR code from their session."
+msgstr ""
+"{user} に、自分のセッションからこの QR コードをスキャンするように依頼してくだ"
+"さい。"
+
+#: src/identity_verification_view/choose_method_page.rs:199
+msgid "Select a verification method to proceed."
+msgstr "続行するには、認証方法を選択してください。"
+
+#: src/identity_verification_view/choose_method_page.rs:202
+msgid "Click on the verification method to proceed."
+msgstr "続行するには、認証方法をクリックしてください。"
+
+#: src/identity_verification_view/choose_method_page.rs:234
+msgid "Could not access camera"
+msgstr "カメラにアクセスできませんでした"
+
+#: src/identity_verification_view/choose_method_page.rs:251
+#: src/identity_verification_view/scan_qr_code_page.rs:222
+msgid "Could not start emoji verification"
+msgstr "絵文字認証を開始できませんでした"
+
+#: src/identity_verification_view/choose_method_page.rs:267
+#: src/identity_verification_view/confirm_qr_code_page.rs:177
+#: src/identity_verification_view/qr_code_scanned_page.rs:145
+#: src/identity_verification_view/scan_qr_code_page.rs:234
+#: src/identity_verification_view/wait_for_other_page.rs:164
+msgid "Could not cancel the verification"
+msgstr "認証をキャンセルできませんでした"
+
+#: src/identity_verification_view/completed_page.rs:122
+msgid "Request Complete"
+msgstr "要求が完了しました"
+
+#: src/identity_verification_view/completed_page.rs:124
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "新しいセッションで安全なメッセージを送受信する準備ができました。"
+
+#: src/identity_verification_view/completed_page.rs:128
+msgid "Verification Complete"
+msgstr "認証が完了しました"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:131
+#, rust-format
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr ""
+"{user} の確認が完了しました。今後の通信内容はプライベートに保たれることが保証"
+"されます。"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:19
+msgid "Confirm Scan"
+msgstr "スキャンを確認"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:72
+msgid "Confirm"
+msgstr "確認"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:129
+msgid "Does the other session show a confirmation?"
+msgstr "他のセッションに確認画面が表示されていますか?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:135
+#, rust-format
+msgid "Does {user} see a confirmation on their session?"
+msgstr "{user} のセッションに確認画面が表示されていますか?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:161
+msgid "Could not confirm the scan of the QR Code"
+msgstr "QR コードのスキャンを確認できませんでした"
+
+#: src/identity_verification_view/mod.blp:16
+msgid "New Identity Verification Request"
+msgstr "新しい本人確認要求"
+
+#: src/identity_verification_view/mod.blp:25
+msgid "Wait for Other Party"
+msgstr "他方の操作を待機中"
+
+#: src/identity_verification_view/mod.blp:34
+#: src/identity_verification_view/no_supported_methods_page.blp:22
+msgid "No Supported Verification Methods"
+msgstr "対応している認証方法がありません"
+
+#: src/identity_verification_view/mod.blp:43
+msgid "Verification Request Methods"
+msgstr "認証要求の方法"
+
+#: src/identity_verification_view/mod.blp:52
+#: src/identity_verification_view/qr_code_scanned_page.blp:19
+msgid "Scan Complete"
+msgstr "スキャン完了"
+
+#: src/identity_verification_view/mod.blp:61
+msgid "Confirm Scan Result"
+msgstr "スキャン結果を確認"
+
+#: src/identity_verification_view/mod.blp:70
+msgid "Short Authentication String Verification"
+msgstr "短い文字列による認証"
+
+#: src/identity_verification_view/mod.blp:79
+msgid "Verification Successful"
+msgstr "認証成功"
+
+#: src/identity_verification_view/mod.rs:200
+msgid "Scan QR Code"
+msgstr "QR コードをスキャン"
+
+#: src/identity_verification_view/no_supported_methods_page.blp:48
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"他のセッションからのこの認証要求を、すべてのセッションに対して承諾または辞退"
+"できます"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:139
+msgid ""
+"None of the methods offered by the other client are supported by Fractal."
+msgstr ""
+"Fractal は他のクライアントから提示された方法のいずれにも対応していません。"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:142
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"ログイン要求を受信しましたが、Fractal は他のクライアントから提示された方法の"
+"いずれにも対応していません。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:151
+#, rust-format
+msgid ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+msgstr ""
+"Fractal は {user} のクライアントから提示された方法のいずれにも対応していませ"
+"ん。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:158
+#, rust-format
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} が認証要求を送信しましたが、Fractal は他のクライアントから提示された方"
+"法のいずれにも対応していません。"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:170
+msgid "Decline Verification"
+msgstr "認証を辞退"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:192
+msgid "Could not decline the verification"
+msgstr "認証を辞退できませんでした"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:119
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+msgstr ""
+"QR コードをスキャンしました。他のセッションからの認証要求を確認する必要がある"
+"可能性があります。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:124
+#, rust-format
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"QR コードをスキャンしました。{user} は認証要求を確認する必要がある可能性があ"
+"ります。"
+
+#: src/identity_verification_view/room_left_page.blp:38
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "あなたは認証が行なわれたルームにはすでにいません"
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis do not match.
+#: src/identity_verification_view/sas_page.blp:65
+msgid "Do Not Match"
+msgstr "一致しない"
+
+#. Translators: During emoji comparison, this is the label of the button to click
+#. when the emojis match.
+#: src/identity_verification_view/sas_page.blp:78
+msgid "Match"
+msgstr "一致する"
+
+#: src/identity_verification_view/sas_page.rs:151
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr ""
+"他のクライアントで同じ絵文字が同じ順番で表示されているか確認してください。"
+
+#: src/identity_verification_view/sas_page.rs:155
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr ""
+"他のクライアントで同じ番号が同じ順番で表示されているか確認してください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:165
+#, rust-format
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"{user} に、画面上に同じ絵文字が同じ順番で表示されているか確認してください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:172
+#, rust-format
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+msgstr ""
+"{user} に、画面上に同じ番号が同じ順番で表示されているか確認してください。"
+
+#: src/identity_verification_view/sas_page.rs:253
+msgid "Could not send that the data does not match"
+msgstr "データが一致しないことを送信できませんでした"
+
+#: src/identity_verification_view/sas_page.rs:270
+msgid "Could not send confirmation that the data matches"
+msgstr "データが一致することの確認を送信できませんでした"
+
+#: src/identity_verification_view/scan_qr_code_page.blp:64
+msgid "Show a QR code to scan with another device"
+msgstr "他のデバイスでスキャンするための QR コードを表示"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:156
+msgid "Scan the QR code displayed by the other session."
+msgstr "他のセッションに表示されている QR コードをスキャンしてください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:163
+#, rust-format
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "{user} のデバイスに表示されている QR コードをスキャンしてください。"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:201
+msgid "Could not validate scanned QR Code"
+msgstr "スキャンした QR コードを検証できませんでした"
+
+#: src/identity_verification_view/wait_for_other_page.blp:45
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+msgstr "安全のため、認証は対面または信頼済みの連絡手段で行ってください。"
+
+#: src/identity_verification_view/wait_for_other_page.blp:61
+msgid "The request is not showing up on the other device?"
+msgstr "他のデバイスに要求が表示されていませんか?"
+
+#: src/identity_verification_view/wait_for_other_page.blp:73
+msgid "Cancel Verification Request"
+msgstr "認証要求をキャンセル"
+
+#: src/identity_verification_view/wait_for_other_page.rs:124
+msgid "Get Another Device"
+msgstr "他のデバイスを確認してください"
+
+#: src/identity_verification_view/wait_for_other_page.rs:126
+msgid "Accept the verification request from another session or device."
+msgstr "他のセッションまたはデバイスから認証要求を承認してください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:134
+#, rust-format
+msgid "Waiting for {user}"
+msgstr "{user} を待機中"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:140
+#, rust-format
+msgid "Ask {user} to accept the verification request."
+msgstr "{user} に、認証要求を承諾するように依頼してください。"
+
+#: src/login/advanced_dialog.blp:5
+msgid "Homeserver Discovery"
+msgstr "ホームサーバーの探索"
+
+#: src/login/advanced_dialog.blp:12
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+msgstr ""
+"自動探索は“ウェルノウン検索”としても知られており、ドメイン名から Matrix ホー"
+"ムサーバーの URL を探索できます。この設定は、自分のホームサーバーが自動探索に"
+"対応していないか、URL を自分自身で指定したい場合のみ無効にしてください。"
+
+#: src/login/advanced_dialog.blp:16
+msgid "_Auto-Discovery"
+msgstr "自動探索(_A)"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.blp:7 src/login/greeter.blp:84
+msgid "Welcome to Fractal"
+msgstr "Fractal へようこそ"
+
+#: src/login/greeter.blp:104
+msgid "_Log In"
+msgstr "ログイン(_L)"
+
+#: src/login/greeter.blp:118
+msgid "_Create Account"
+msgstr "アカウントを作成(_C)"
+
+#: src/login/homeserver_page.blp:103 src/login/method_page.blp:129
+msgid "Next"
+msgstr "次へ"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.blp:118
+msgid "Advanced…"
+msgstr "詳細設定…"
+
+#: src/login/homeserver_page.rs:102
+msgid "Domain Name"
+msgstr "ドメイン名"
+
+#: src/login/homeserver_page.rs:104
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "Matrix ホームサーバーのドメイン (例: gnome.org)"
+
+#: src/login/homeserver_page.rs:107 src/login/method_page.blp:69
+msgid "Homeserver URL"
+msgstr "ホームサーバー URL"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:111
+#, rust-format
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "Matrix ホームサーバーの URL (例: {address})"
+
+#: src/login/homeserver_page.rs:254 src/login/mod.rs:324 src/login/mod.rs:348
+#: src/login/mod.rs:397
+msgid "Could not set up login"
+msgstr "ログイン機能をセットアップできませんでした"
+
+#: src/login/in_browser_page.blp:55
+msgid "Click on the button below and follow the steps in the browser"
+msgstr "以下のボタンをクリックして、ブラウザーに表示される手順に従ってください"
+
+#: src/login/in_browser_page.rs:103
+msgid "Could not open URL"
+msgstr "URL を開けませんでした"
+
+#: src/login/local_server.rs:35
+msgid "Authorization Completed"
+msgstr "認証が完了しました"
+
+#: src/login/local_server.rs:40
+msgid ""
+"The authorization step is complete. You can close this page and go back to "
+"Fractal."
+msgstr ""
+"認証手順が完了しました。このページを閉じて Fractal に戻ることができます。"
+
+#: src/login/method_page.blp:6 src/window.blp:73
+msgid "Log In"
+msgstr "ログイン"
+
+#: src/login/method_page.blp:94
+msgid "Matrix Username"
+msgstr "Matrix ユーザー名"
+
+#: src/login/method_page.blp:109
+msgid "Password"
+msgstr "パスワード"
+
+#: src/login/method_page.blp:122
+msgid "Login via SSO"
+msgstr "SSO でログイン"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:90
+#, rust-format
+msgid "Log in to {domain_name}"
+msgstr "{domain_name} にログイン"
+
+#: src/login/method_page.rs:97
+msgid "Log in"
+msgstr "ログイン"
+
+#: src/login/mod.blp:22 src/login/mod.blp:54
+msgid "Login Complete"
+msgstr "ログイン完了"
+
+#: src/login/mod.blp:75
+msgid "This session is ready to send and receive secure messages"
+msgstr "このセッションで安全なメッセージを送受信する準備ができました"
+
+#: src/login/mod.blp:84
+msgid "Start Chatting"
+msgstr "チャットを始める"
+
+#: src/login/mod.rs:467
+msgid "Could not store session"
+msgstr "セッションを保存できませんでした"
+
+#: src/login/session_setup_view.blp:6
+msgid "Session Setup"
+msgstr "セッションのセットアップ"
+
+#: src/login/session_setup_view.blp:47 src/window.blp:59
+msgid "Fetching Account Data…"
+msgstr "アカウントのデータを取得中…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:175
+#, rust-format
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Fractal: {user_id} に対する Matrix 認証情報"
+
+#: src/secret/linux.rs:529
+msgid "The secret storage file is corrupted."
+msgstr "シークレットストレージファイルが破損しています。"
+
+#: src/secret/linux.rs:532
+msgid "Could not access the secret storage file location."
+msgstr "シークレットストレージファイルの場所にアクセスできませんでした。"
+
+#: src/secret/linux.rs:535
+msgid "An unexpected error occurred when accessing the secret storage file."
+msgstr ""
+"シークレットストレージファイルにアクセスする際に予期しないエラーが発生しまし"
+"た。"
+
+#: src/secret/linux.rs:538
+msgid "The secret storage file has been changed by another process."
+msgstr "シークレットストレージファイルが他のプロセスによって変更されています。"
+
+#: src/secret/linux.rs:541
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"Flatpak シークレットポータルへの要求がキャンセルされました。アクセスを求める"
+"確認画面はすべて許可するようにしてください。"
+
+#: src/secret/linux.rs:544
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"Flatpak シークレットポータルが利用できません。xdg-desktop-portal がインストー"
+"ルされていて、少なくともバージョン 1.5.0 であることを確認してください。"
+
+#: src/secret/linux.rs:547
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr ""
+"D-Bus シークレットポータルのバックエンドと通信する際に予期しないエラーが発生"
+"しました。"
+
+#: src/secret/linux.rs:550
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr ""
+"Flatpak シークレットポータルがデータ保護の目的には弱すぎる鍵を提示しました。"
+
+#: src/secret/linux.rs:552 src/secret/linux.rs:569
+msgid "The collection or item is locked."
+msgstr "コレクションまたは項目がロックされています。"
+
+#: src/secret/linux.rs:564
+msgid "The item was deleted."
+msgstr "項目が削除されています。"
+
+#: src/secret/linux.rs:567 src/secret/linux.rs:582
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Service."
+msgstr ""
+"D-Bus シークレットサービスと通信する際に予期しないエラーが発生しました。"
+
+#: src/secret/linux.rs:571
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "D-Bus シークレットサービスのセッションが存在しません。"
+
+#: src/secret/linux.rs:573
+msgid "The collection or item does not exist."
+msgstr "コレクションまたは項目が存在しません。"
+
+#: src/secret/linux.rs:576
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"Flatpak シークレットサービスへの要求がキャンセルされました。アクセスを求める"
+"確認画面はすべて許可するようにしてください。"
+
+#: src/secret/linux.rs:579
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"デフォルトのコレクションにアクセスできませんでした。鍵束が作成済みでデフォル"
+"トとして設定されていることを確認してください。"
+
+#: src/session/mod.rs:837
+msgid "Could not log the session out"
+msgstr "セッションからログアウトできませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:338
+#, rust-format
+msgid "{user} sent a verification request"
+msgstr "{user} が認証要求を送信しました"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:400
+#, rust-format
+msgid "Verify your new session “{name}”"
+msgstr "新しいセッション “{name}” を確認してください"
+
+#: src/session/notifications/mod.rs:492
+#, rust-format
+msgid "{user} sent an audio file."
+msgstr "{user} が音声ファイルを送信しました。"
+
+#: src/session/notifications/mod.rs:495
+#, rust-format
+msgid "{user} sent a file."
+msgstr "{user} がファイルを送信しました。"
+
+#: src/session/notifications/mod.rs:497
+#, rust-format
+msgid "{user} sent an image."
+msgstr "{user} が画像を送信しました。"
+
+#: src/session/notifications/mod.rs:500
+#, rust-format
+msgid "{user} sent their location."
+msgstr "{user} が位置情報を送信しました。"
+
+#: src/session/notifications/mod.rs:512
+#, rust-format
+msgid "{user} sent a video."
+msgstr "{user} がビデオを送信しました。"
+
+#: src/session/notifications/mod.rs:519
+#, rust-format
+msgid "{user} sent a sticker."
+msgstr "{user} がステッカーを送信しました。"
+
+#: src/session/notifications/mod.rs:529
+#, rust-format
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:579
+#, rust-format
+msgid "{user} invited you"
+msgstr "{user} があなたを招待しました"
+
+#: src/session/notifications/mod.rs:607
+msgid "Incoming video call. Use another client to answer."
+msgstr ""
+"ビデオ通話の着信があります。応答するには他のクライアントを使用してください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:613
+#: src/session_view/room_history/call_row.rs:127
+#, rust-format
+msgid "Incoming video call from {user}. Use another client to answer."
+msgstr ""
+"{user} からのビデオ通話の着信があります。応答するには他のクライアントを使用し"
+"てください。"
+
+#: src/session/notifications/mod.rs:617
+msgid "Incoming call. Use another client to answer."
+msgstr "着信があります。応答するには他のクライアントを使用してください。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/notifications/mod.rs:621
+#: src/session_view/room_history/call_row.rs:141
+#, rust-format
+msgid "Incoming call from {user}. Use another client to answer."
+msgstr ""
+"{user} からの着信があります。応答するには他のクライアントを使用してください。"
+
+#: src/session/room/join_rule.rs:259
+msgid "Only invited users, and users can request an invite"
+msgstr "招待されたユーザーのみ。ユーザーが招待を要求可能"
+
+#: src/session/room/join_rule.rs:261
+msgid "Only invited users"
+msgstr "招待されたユーザーのみ"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:275
+#, rust-format
+msgid "Members of {room}, and users can request an invite"
+msgstr "{room} のメンバー。ユーザーが招待を要求可能"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:282
+#, rust-format
+msgid "Members of {room}"
+msgstr "{room} のメンバー"
+
+#: src/session/room/join_rule.rs:287
+msgid "Any registered user"
+msgstr "すべての登録済みユーザー"
+
+#: src/session/room/join_rule.rs:288
+#: src/session_view/room_details/general_page.rs:946
+msgid "Unsupported rule"
+msgstr "非対応のルール"
+
+#. Translators: This is the name of a room that is empty but had another
+#. user before. Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/room/mod.rs:392
+#, rust-format
+msgid "Empty Room (was {user})"
+msgstr "誰もいないルーム (旧: {user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/room/mod.rs:395
+msgid "Empty Room"
+msgstr "誰もいないルーム"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/room/mod.rs:405
+msgid "Unknown"
+msgstr "不明"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/room/permissions.rs:64
+msgid "Default"
+msgstr "デフォルト"
+
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/session/room/permissions.rs:66
+msgctxt "power level"
+msgid "Custom"
+msgstr "カスタム"
+
+#: src/session/room/permissions.rs:67
+msgid "Moderator"
+msgstr "モデレーター"
+
+#: src/session/room/permissions.rs:68
+msgid "Admin"
+msgstr "管理者"
+
+#: src/session/room/permissions.rs:69
+msgid "Creator"
+msgstr "作成者"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/room/permissions.rs:71
+msgid "Muted"
+msgstr "ミュートされたユーザー"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:329
+#, rust-format
+msgid "Could not join room {room_name}"
+msgstr "ルーム {room_name} に参加できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:361
+#, rust-format
+msgid "Could not request an invite to room {room_name}"
+msgstr "ルーム {room_name} への招待を要求できませんでした"
+
+#: src/session/sidebar_data/icon_item.rs:31
+msgid "Explore"
+msgstr "探す"
+
+#: src/session/sidebar_data/icon_item.rs:32
+msgid "Forget Room"
+msgstr "ルームを削除"
+
+#: src/session/sidebar_data/section/name.rs:82
+msgid "Verifications"
+msgstr "認証"
+
+#: src/session/sidebar_data/section/name.rs:83
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:140
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:385
+msgid "Invite Requests"
+msgstr "招待要求"
+
+#: src/session/sidebar_data/section/name.rs:84
+#: src/session_view/room_details/invite_subpage/list.rs:262
+msgid "Invited"
+msgstr "招待済み"
+
+#: src/session/sidebar_data/section/name.rs:85
+msgid "Favorites"
+msgstr "お気に入り"
+
+#: src/session/sidebar_data/section/name.rs:86
+msgid "Rooms"
+msgstr "ルーム"
+
+#: src/session/sidebar_data/section/name.rs:87
+msgid "Low Priority"
+msgstr "優先度低"
+
+#: src/session/sidebar_data/section/name.rs:88
+msgid "Historical"
+msgstr "履歴"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:324
+msgid "Last seen at %H:%M"
+msgstr "最終アクティブ日時: %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:329
+msgid "Last seen at %I:%M %p"
+msgstr "最終アクティブ日時: %p %I:%M"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:339
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "最終アクティブ日時: 昨日 %H:%M"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:346
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "最終アクティブ日時: 昨日 %p %I:%M"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:357
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "最終アクティブ日時: %A %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:364
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "最終アクティブ日時: %A %p %I:%M"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:373
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "最終アクティブ日時: %B%-e日 %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:380
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "最終アクティブ日時: %B%-e日 %p %I:%M"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:388
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "最終アクティブ日時: %Y年%B%-e日 %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:395
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "最終アクティブ日時: %Y年%B%-e日 %p %I:%M"
+
+#: src/session_list/mod.rs:164 src/session_list/mod.rs:199
+msgid "Could not restore previous sessions"
+msgstr "以前のセッションを復元できませんでした"
+
+#: src/session_list/mod.rs:200
+msgid "An unexpected error happened while accessing the data directory"
+msgstr "データディレクトリにアクセスする際に予期しないエラーが発生しました"
+
+#: src/session_view/content.blp:5
+msgid "Main Content"
+msgstr "メインコンテンツ"
+
+#: src/session_view/content.blp:14 src/session_view/content.blp:28
+msgid "No Room Selected"
+msgstr "ルームが選択されていません"
+
+#: src/session_view/content.blp:29
+msgid "Join a room to start chatting"
+msgstr "チャットを始めるにはルームに参加してください"
+
+#: src/session_view/content.blp:36 src/session_view/room_history/mod.blp:124
+msgid "Room History"
+msgstr "ルームの履歴"
+
+#: src/session_view/content.blp:45 src/session_view/invite_request.blp:13
+#: src/session_view/invite_request.blp:37
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:138
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:383
+msgid "Invite Request"
+msgstr "招待要求"
+
+#: src/session_view/content.blp:52
+msgid "Room Invite"
+msgstr "ルームへの招待"
+
+#: src/session_view/content.blp:59
+msgid "Explore Rooms"
+msgstr "ルームを探す"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:5
+msgid "Direct Chat"
+msgstr "ダイレクトチャット"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:31
+msgid "New Direct Chat"
+msgstr "新しいダイレクトチャット"
+
+#. Translators: In this string, 'Search' is a verb.
+#. Translators: In this string, this is a verb.
+#: src/session_view/create_direct_chat_dialog/mod.blp:50
+#: src/session_view/room_details/invite_subpage/mod.blp:53
+#: src/session_view/room_details/invite_subpage/mod.blp:59
+msgid "Search"
+msgstr "検索"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:51
+msgid "Search for people to start a new chat with"
+msgstr "新しいチャットを開始する人を検索します"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:83
+#: src/session_view/room_details/invite_subpage/mod.blp:98
+#: src/session_view/room_details/invite_subpage/mod.blp:102
+msgid "No Users Found"
+msgstr "ユーザーが見つかりません"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:84
+msgid "No users matching the search pattern were found"
+msgstr "検索パターンに一致するユーザーが見つかりません"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:94
+#: src/session_view/explore/mod.blp:118
+#: src/session_view/room_details/invite_subpage/mod.blp:114
+msgid "An error occurred while searching for matches"
+msgstr "一致する項目の検索中にエラーが発生しました"
+
+#: src/session_view/create_direct_chat_dialog/mod.rs:160
+msgid "An error occurred while searching for users"
+msgstr "ユーザーの検索中にエラーが発生しました"
+
+#: src/session_view/create_room_dialog.blp:36
+msgid "New Room"
+msgstr "新しいルーム"
+
+#: src/session_view/create_room_dialog.blp:58
+msgid "Description (Optional)"
+msgstr "説明 (任意)"
+
+#: src/session_view/create_room_dialog.blp:85
+msgid "Room Visibility"
+msgstr "ルームの公開設定"
+
+#: src/session_view/create_room_dialog.blp:88
+msgid "Private"
+msgstr "非公開"
+
+#: src/session_view/create_room_dialog.blp:89
+msgid "Only invited people can join this room"
+msgstr "招待された人だけがこのルームに参加できます"
+
+#: src/session_view/create_room_dialog.blp:101
+msgid "Public"
+msgstr "公開"
+
+#: src/session_view/create_room_dialog.blp:102
+msgid "Anyone can find and join this room"
+msgstr "誰でもこのルームの存在を確認でき、参加できます"
+
+#: src/session_view/create_room_dialog.blp:118
+msgid "End-to-End Encryption"
+msgstr "エンドツーエンド暗号化"
+
+#: src/session_view/create_room_dialog.blp:119
+msgid "Cannot be disabled later"
+msgstr "後から無効にできません"
+
+#: src/session_view/create_room_dialog.blp:128
+#: src/session_view/room_details/addresses_subpage/mod.rs:431
+#: src/session_view/room_details/general_page.rs:689
+msgid "Main Address"
+msgstr "メインアドレス"
+
+#. Translators: This is the placeholder for the first part of a room address,
+#. as in '@my-room:example.org'.
+#: src/session_view/create_room_dialog.blp:131
+#: src/session_view/room_details/addresses_subpage/mod.blp:87
+msgid "my-room"
+msgstr "my-room"
+
+#: src/session_view/create_room_dialog.blp:132
+#: src/session_view/room_details/addresses_subpage/mod.blp:88
+msgid "First part of the address, for example “my-room”"
+msgstr "アドレスの最初の部分 (例: “my-room”)"
+
+#: src/session_view/create_room_dialog.blp:155
+msgid "_Create Room"
+msgstr "ルームを作成(_C)"
+
+#: src/session_view/create_room_dialog.rs:120
+msgid "Cannot contain “:”"
+msgstr "“:” は使用できません"
+
+#: src/session_view/create_room_dialog.rs:123
+msgid "Cannot contain “#”"
+msgstr "“#” は使用できません"
+
+#: src/session_view/create_room_dialog.rs:126
+msgid "Too long. Use a shorter address."
+msgstr "長すぎます。アドレスを短くしてください。"
+
+#: src/session_view/create_room_dialog.rs:241
+msgid "The address is already taken."
+msgstr "このアドレスはすでに使用されています。"
+
+#: src/session_view/explore/mod.blp:26
+msgid "Public Rooms Search"
+msgstr "公開ルーム検索"
+
+#: src/session_view/explore/mod.blp:27
+msgid "Search for a room in the public directory of the selected server"
+msgstr "選択されたサーバーの公開ディレクトリでルームを検索します"
+
+#: src/session_view/explore/mod.blp:38
+msgid "Switch servers"
+msgstr "サーバーを切り替え"
+
+#: src/session_view/explore/mod.blp:70 src/session_view/sidebar/mod.blp:188
+msgid "No Rooms"
+msgstr "ルームなし"
+
+#: src/session_view/explore/mod.blp:76 src/session_view/sidebar/mod.blp:189
+msgid "No rooms matching the search were found"
+msgstr "キーワードに一致するルームが見つかりません"
+
+#: src/session_view/explore/mod.blp:86
+msgid "List of Public Rooms"
+msgstr "公開ルームの一覧"
+
+#: src/session_view/explore/public_room_row.rs:183
+#, rust-format
+msgid "View {room_name}"
+msgstr "{room_name} を表示"
+
+#: src/session_view/explore/public_room_row.rs:189
+#, rust-format
+msgid "Request an invite to {room_name}"
+msgstr "{room_name} への招待を要求"
+
+#: src/session_view/explore/public_room_row.rs:196
+#, rust-format
+msgid "Join {room_name}"
+msgstr "{room_name} に参加"
+
+#: src/session_view/explore/server_row.blp:18
+msgid "Remove Server"
+msgstr "リモートサーバー"
+
+#: src/session_view/explore/servers_popover.blp:27
+msgid "Server List"
+msgstr "サーバー一覧"
+
+#: src/session_view/explore/servers_popover.blp:40
+#: src/session_view/explore/servers_popover.blp:48
+msgid "Add Server"
+msgstr "サーバーを追加"
+
+#: src/session_view/invite.blp:102
+msgid "_Decline"
+msgstr "辞退(_D)"
+
+#: src/session_view/invite.blp:112 src/session_view/sidebar/mod.blp:38
+msgid "_Accept"
+msgstr "承諾(_A)"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/invite.rs:189
+#, rust-format
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) があなたを招待しました"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:239 src/session_view/sidebar/row.rs:724
+#, rust-format
+msgid "Could not accept invitation for {room}"
+msgstr "{room} への招待を承諾できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:278 src/session_view/sidebar/row.rs:714
+#, rust-format
+msgid "Could not decline invitation for {room}"
+msgstr "{room} への招待を辞退できませんでした"
+
+#: src/session_view/invite_request.blp:88
+msgid "You requested an invite to this room"
+msgstr "以前このルームへの招待を要求しました"
+
+#: src/session_view/invite_request.blp:101 src/session_view/sidebar/mod.blp:50
+msgid "_Retract"
+msgstr "撤回(_R)"
+
+#: src/session_view/invite_request.rs:168
+msgid "Could not retract invite request"
+msgstr "招待要求を撤回できませんでした"
+
+#: src/session_view/media_viewer.blp:7 src/session_view/media_viewer.blp:35
+msgid "_Copy Image"
+msgstr "画像をコピー(_C)"
+
+#: src/session_view/media_viewer.blp:13 src/session_view/media_viewer.blp:41
+#: src/session_view/room_history/event_actions/context_menu.blp:58
+msgid "S_ave Image"
+msgstr "画像を保存(_A)"
+
+#: src/session_view/media_viewer.blp:19 src/session_view/media_viewer.blp:47
+#: src/session_view/room_history/event_actions/context_menu.blp:64
+msgid "S_ave Video"
+msgstr "ビデオを保存(_A)"
+
+#: src/session_view/media_viewer.blp:25
+#: src/session_view/room_history/event_actions/context_menu.blp:76
+msgid "Copy Message _Link"
+msgstr "メッセージのリンクをコピー(_L)"
+
+#: src/session_view/media_viewer.blp:87 src/session_view/media_viewer.blp:91
+msgid "Media Menu"
+msgstr "メディアメニュー"
+
+#: src/session_view/media_viewer.blp:100 src/session_view/media_viewer.blp:103
+msgid "Fullscreen"
+msgstr "全画面表示"
+
+#: src/session_view/media_viewer.blp:112 src/session_view/media_viewer.blp:115
+msgid "Exit Fullscreen"
+msgstr "全画面表示を終了"
+
+#: src/session_view/media_viewer.rs:478
+msgid "Image copied to clipboard"
+msgstr "画像をクリップボートにコピーしました"
+
+#: src/session_view/media_viewer.rs:518
+#: src/session_view/room_history/event_actions/group.rs:63
+msgid "Message link copied to clipboard"
+msgstr "メッセージのリンクをクリップボードにコピーしました"
+
+#: src/session_view/room_details/addresses_subpage/completion_popover.blp:16
+msgid "Address auto-completion"
+msgstr "アドレスの自動補完"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:5
+msgid "Edit Room Addresses"
+msgstr "ルームのアドレスを編集"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:13
+#: src/session_view/room_details/general_page.blp:140
+msgid "Public Addresses"
+msgstr "公開アドレス"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+msgstr ""
+"公開アドレスはルームの全ユーザーに公開され、メインアドレスは対外的にルームを"
+"識別するために使われます。この一覧に追加するアドレスは、事前にローカルアドレ"
+"スとして登録されている必要があります。"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:45
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"ローカルアドレスは、自分のホームサーバーでのみ登録できます。公開しない限り、"
+"同じホームサーバーにいるユーザーだけが知ることができます。"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:77
+#: src/session_view/room_details/addresses_subpage/mod.blp:78
+msgid "Add Public Address"
+msgstr "公開アドレスを追加"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:84
+#: src/session_view/room_details/addresses_subpage/mod.blp:90
+msgid "Register Local Address"
+msgstr "ローカルアドレスを登録"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:328
+#, rust-format
+msgid "Local Addresses on {homeserver}"
+msgstr "{homeserver} 上のローカルアドレス"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:390
+msgid "Remove address"
+msgstr "アドレスを削除"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:394
+#, rust-format
+msgid "Remove “{address}”"
+msgstr "“{address}” を削除"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:455
+msgid "Set as main address"
+msgstr "メインアドレスとして設定"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:461
+#, rust-format
+msgid "Set “{address}” as main address"
+msgstr "“{address}” をメインアドレスとして設定"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:504
+msgid "Could not remove public address"
+msgstr "公開アドレスを削除できませんでした"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:529
+msgid "Could not set main public address"
+msgstr "メイン公開アドレスを設定できませんでした"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:577
+msgid "Could not add public address"
+msgstr "公開アドレスを追加できませんでした"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:581
+msgid "This address is not registered as a local address"
+msgstr "このアドレスはローカルアドレスとして登録されていません"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:584
+msgid "This address does not belong to this room"
+msgstr "このアドレスはこのルームに紐付いていません"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:639
+msgid "Unregister local address"
+msgstr "ローカルアドレスを登録解除"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:643
+#, rust-format
+msgid "Unregister “{address}”"
+msgstr "“{address}” を登録解除"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:679
+msgid "Could not unregister local address"
+msgstr "ローカルアドレスを登録解除できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:712
+#, rust-format
+msgid "Register “{address}”"
+msgstr "“{address}” を登録"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:749
+msgid "Could not register local address"
+msgstr "ローカルアドレスを登録できませんでした"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:753
+msgid "This address is already registered"
+msgstr "このアドレスはすでに登録されています"
+
+#: src/session_view/room_details/edit_details_subpage.blp:5
+msgid "Edit Room Details"
+msgstr "ルームの詳細を編集"
+
+#: src/session_view/room_details/edit_details_subpage.blp:34
+msgid "Room Avatar"
+msgstr "ルームのアバター"
+
+#: src/session_view/room_details/edit_details_subpage.blp:60
+msgid "Description"
+msgstr "説明"
+
+#: src/session_view/room_details/edit_details_subpage.blp:107
+msgid "Save Description"
+msgstr "説明を保存"
+
+#: src/session_view/room_details/edit_details_subpage.rs:263
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "本当にこのルームからアバターを削除してもよろしいですか?"
+
+#: src/session_view/room_details/edit_details_subpage.rs:326
+msgid "Room name saved successfully"
+msgstr "ルーム名を保存しました"
+
+#: src/session_view/room_details/edit_details_subpage.rs:397
+msgid "Could not change room name"
+msgstr "ルーム名を変更できませんでした"
+
+#: src/session_view/room_details/edit_details_subpage.rs:435
+msgid "Room description saved successfully"
+msgstr "ルームの説明を保存しました"
+
+#: src/session_view/room_details/edit_details_subpage.rs:511
+msgid "Could not change room description"
+msgstr "ルームの説明を変更できませんでした"
+
+#: src/session_view/room_details/general_page.blp:5
+#: src/session_view/room_details/mod.blp:5
+msgid "Room Details"
+msgstr "ルームの詳細"
+
+#: src/session_view/room_details/general_page.blp:48
+msgid "Edit Details"
+msgstr "詳細を編集"
+
+#: src/session_view/room_details/general_page.blp:72
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:425
+msgid "There are no members in this room"
+msgstr "このルームにメンバーはいません"
+
+#: src/session_view/room_details/general_page.blp:91
+#: src/session_view/room_details/history_viewer/visual_media.blp:5
+msgid "Media"
+msgstr "メディア"
+
+#: src/session_view/room_details/general_page.blp:97
+msgid "Files"
+msgstr "ファイル"
+
+#. Translators: As in 'Audio file'.
+#: src/session_view/room_details/general_page.blp:104
+#: src/session_view/room_details/history_viewer/audio.blp:6
+#: src/session_view/room_history/message_row/audio.rs:63
+msgid "Audio"
+msgstr "音声"
+
+#: src/session_view/room_details/general_page.blp:112
+msgid "Which messages trigger notifications in this room"
+msgstr "このルームにおいて通知の表示対象とするメッセージ"
+
+#: src/session_view/room_details/general_page.blp:115
+msgid "Use Global Setting"
+msgstr "全体設定を使う"
+
+#: src/session_view/room_details/general_page.blp:121
+msgid "All Messages"
+msgstr "すべてのメッセージ"
+
+#: src/session_view/room_details/general_page.blp:127
+msgid "Only Mentions and Keywords"
+msgstr "メンションとキーワードを含むメッセージのみ"
+
+#: src/session_view/room_details/general_page.blp:133
+msgid "Disable Notifications"
+msgstr "通知を無効にする"
+
+#: src/session_view/room_details/general_page.blp:153
+msgid "Edit Public Addresses"
+msgstr "公開アドレスを編集"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session_view/room_details/general_page.blp:160
+#: src/session_view/room_history/event_actions/context_menu.blp:14
+msgid "_Edit"
+msgstr "編集(_E)"
+
+#: src/session_view/room_details/general_page.blp:168
+msgid "This room has no public addresses"
+msgstr "このルームには公開アドレスがありません"
+
+#: src/session_view/room_details/general_page.blp:186
+msgid "Copy Room Link"
+msgstr "ルームのリンクをコピー"
+
+#: src/session_view/room_details/general_page.blp:193
+msgid "Access and Visibility"
+msgstr "アクセス許可と公開設定"
+
+#: src/session_view/room_details/general_page.blp:197
+#: src/session_view/room_details/join_rule_subpage.blp:5
+msgid "Who Can Join"
+msgstr "参加できる人"
+
+#: src/session_view/room_details/general_page.blp:208
+msgid "Allow Guests"
+msgstr "ゲストを許可"
+
+#: src/session_view/room_details/general_page.blp:209
+msgid "Guests are Matrix users without a registered account"
+msgstr "ゲストとは、登録済みのアカウントを持たない Matrix ユーザーのことです"
+
+#: src/session_view/room_details/general_page.blp:218
+#: src/session_view/room_details/history_visibility_subpage.blp:5
+msgid "Who Can Read History"
+msgstr "チャット履歴を表示できる人"
+
+#: src/session_view/room_details/general_page.blp:232
+msgid "Matrix Room ID"
+msgstr "Matrix ルーム ID"
+
+#: src/session_view/room_details/general_page.blp:235
+msgid "Copy Matrix Room ID"
+msgstr "Matrix ルーム ID をコピー"
+
+#: src/session_view/room_details/general_page.blp:236
+msgid "Matrix room ID copied to clipboard"
+msgstr "Matrix ルーム ID をクリップボードにコピーしました"
+
+#: src/session_view/room_details/general_page.blp:240
+#: src/session_view/room_details/permissions/permissions_subpage.blp:159
+msgid "Enable Encryption"
+msgstr "暗号化を有効にする"
+
+#: src/session_view/room_details/general_page.blp:246
+#: src/session_view/room_details/permissions/permissions_subpage.blp:5
+#: src/session_view/room_details/permissions/permissions_subpage.blp:9
+msgid "Permissions"
+msgstr "権限"
+
+#: src/session_view/room_details/general_page.blp:254
+msgid "Room Version"
+msgstr "ルームのバージョン"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/general_page.blp:263
+msgid "Upgrade…"
+msgstr "アップグレード…"
+
+#: src/session_view/room_details/general_page.blp:275
+msgid "Federation"
+msgstr "連合"
+
+#: src/session_view/room_details/general_page.rs:466
+#: src/session_view/room_details/general_page.rs:517
+#: src/session_view/room_details/invite_subpage/list.rs:260
+msgid "Member"
+msgstr "メンバー"
+
+#: src/session_view/room_details/general_page.rs:468
+#: src/session_view/room_details/general_page.rs:519
+msgid "Members"
+msgstr "メンバー"
+
+#: src/session_view/room_details/general_page.rs:644
+msgid "Could not change notifications setting"
+msgstr "通知設定を変更できませんでした"
+
+#: src/session_view/room_details/general_page.rs:684
+#: src/session_view/room_details/general_page.rs:723
+msgid "Copy address"
+msgstr "アドレスをコピー"
+
+#: src/session_view/room_details/general_page.rs:685
+#: src/session_view/room_details/general_page.rs:724
+msgid "Address copied to clipboard"
+msgstr "アドレスをクリップボードにコピーしました"
+
+#: src/session_view/room_details/general_page.rs:766
+msgid "Room link copied to clipboard"
+msgstr "ルームのリンクをクリップボードにコピーしました"
+
+#: src/session_view/room_details/general_page.rs:825
+msgid "Could not change guest access"
+msgstr "ゲストのアクセス設定を変更できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/general_page.rs:842
+#, rust-format
+msgid "Publish in the {homeserver} directory"
+msgstr "{homeserver} ディレクトリに公開"
+
+#: src/session_view/room_details/general_page.rs:917
+msgid "Could not publish room in directory"
+msgstr "ルームをディレクトリで公開できませんでした"
+
+#: src/session_view/room_details/general_page.rs:919
+msgid "Could not unpublish room from directory"
+msgstr "ルームをディレクトリから公開停止できませんでした"
+
+#: src/session_view/room_details/general_page.rs:937
+#: src/session_view/room_details/history_visibility_subpage.blp:53
+msgid "Anyone, even if they are not in the room"
+msgstr "誰でも (ルームに未参加の場合も含む)"
+
+#: src/session_view/room_details/general_page.rs:940
+#: src/session_view/room_details/history_visibility_subpage.blp:59
+msgid "Members only, since this option was selected"
+msgstr "メンバーのみ (このオプションの選択以降)"
+
+#: src/session_view/room_details/general_page.rs:942
+#: src/session_view/room_details/history_visibility_subpage.blp:65
+msgid "Members only, since they were invited"
+msgstr "メンバーのみ (招待以降)"
+
+#: src/session_view/room_details/general_page.rs:944
+#: src/session_view/room_details/history_visibility_subpage.blp:71
+msgid "Members only, since they joined the room"
+msgstr "メンバーのみ (参加以降)"
+
+#: src/session_view/room_details/general_page.rs:996
+msgid "Enable Encryption?"
+msgstr "暗号化を有効にしますか?"
+
+#: src/session_view/room_details/general_page.rs:997
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"暗号化を有効にすると、新しいメンバーは参加前のチャット履歴を表示できなくなり"
+"ます。これは後から無効にできません。"
+
+#: src/session_view/room_details/general_page.rs:1002
+#: src/session_view/sidebar/mod.rs:353 src/session_view/sidebar/mod.rs:359
+msgid "Enable"
+msgstr "有効にする"
+
+#: src/session_view/room_details/general_page.rs:1013
+msgid "Could not enable encryption"
+msgstr "暗号化を有効にできませんでした"
+
+#. Translators: As in, 'Room federated'.
+#: src/session_view/room_details/general_page.rs:1073
+msgid "Federated"
+msgstr "連合あり"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session_view/room_details/general_page.rs:1076
+msgid "Not federated"
+msgstr "連合なし"
+
+#: src/session_view/room_details/general_page.rs:1110
+msgid "Room upgraded successfully"
+msgstr "ルームをアップグレードしました"
+
+#: src/session_view/room_details/general_page.rs:1114
+msgid "Could not upgrade room"
+msgstr "ルームをアップグレードできませんでした"
+
+#: src/session_view/room_details/history_viewer/audio.blp:24
+#: src/session_view/room_details/history_viewer/audio.blp:31
+msgid "No Audio"
+msgstr "音声なし"
+
+#: src/session_view/room_details/history_viewer/audio.blp:32
+msgid "This room does not contain any audio"
+msgstr "このルームには音声がありません"
+
+#: src/session_view/room_details/history_viewer/audio.blp:38
+#: src/session_view/room_details/history_viewer/audio.blp:45
+msgid "Could Not Load Audio"
+msgstr "音声を読み込めませんでした"
+
+#: src/session_view/room_details/history_viewer/audio.blp:46
+#: src/session_view/room_details/history_viewer/file.blp:45
+#: src/session_view/room_details/history_viewer/visual_media.blp:51
+#: src/session_view/room_history/mod.blp:107
+msgid "Check your network connection"
+msgstr "ネットワーク接続を確認してください"
+
+#: src/session_view/room_details/history_viewer/audio.blp:63
+msgid "Audio History"
+msgstr "音声の履歴"
+
+#: src/session_view/room_details/history_viewer/file.blp:23
+#: src/session_view/room_details/history_viewer/file.blp:30
+msgid "No Files"
+msgstr "ファイルなし"
+
+#: src/session_view/room_details/history_viewer/file.blp:31
+msgid "This room does not contain any files"
+msgstr "このルームにはファイルがありません"
+
+#: src/session_view/room_details/history_viewer/file.blp:37
+#: src/session_view/room_details/history_viewer/file.blp:44
+msgid "Could Not Load Files"
+msgstr "ファイルを読み込めませんでした"
+
+#: src/session_view/room_details/history_viewer/file.blp:62
+msgid "File History"
+msgstr "ファイルの履歴"
+
+#: src/session_view/room_details/history_viewer/file_row.blp:12
+#: src/session_view/room_details/history_viewer/file_row.rs:101
+#: src/session_view/room_details/history_viewer/file_row.rs:143
+#: src/session_view/room_history/message_row/file.blp:24
+#: src/session_view/room_history/message_row/file.blp:28
+#: src/utils/matrix/media_message.rs:231
+msgid "Save File"
+msgstr "ファイルを保存"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/history_viewer/file_row.rs:74
+#, rust-format
+msgid "Save {filename}"
+msgstr "{filename} を保存"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:82
+msgid "Unknown size"
+msgstr "不明なサイズ"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:98
+msgid "Open File"
+msgstr "ファイルを開く"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:157
+#: src/utils/matrix/media_message.rs:250
+msgid "Could not save file"
+msgstr "ファイルを保存できませんでした"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:29
+#: src/session_view/room_details/history_viewer/visual_media.blp:36
+msgid "No Media"
+msgstr "メディアなし"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:37
+msgid "This room does not contain any media"
+msgstr "このルームにはメディアがありません"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:43
+#: src/session_view/room_details/history_viewer/visual_media.blp:50
+msgid "Could Not Load Media"
+msgstr "メディアを読み込めませんでした"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:68
+msgid "Media History"
+msgstr "メディアの履歴"
+
+#: src/session_view/room_details/history_visibility_subpage.blp:30
+#: src/session_view/room_details/join_rule_subpage.blp:30
+#: src/session_view/room_details/permissions/permissions_subpage.blp:32
+msgid "_Save"
+msgstr "保存(_S)"
+
+#: src/session_view/room_details/history_visibility_subpage.rs:189
+msgid "Could not change who can read history"
+msgstr "履歴を表示できる人を変更できませんでした"
+
+#: src/session_view/room_details/invite_subpage/list.rs:261
+msgid "Banned"
+msgstr "BAN 中"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:5
+msgid "Invite New Members"
+msgstr "新しいメンバーを招待"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:22
+msgid "I_nvite"
+msgstr "招待(_N)"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:60
+msgid "Search for users to invite them to this room"
+msgstr "このルームに招待するユーザーを検索します"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:66
+msgid "Matching Users"
+msgstr "一致するユーザー"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:103
+msgid "No users matching the search were found"
+msgstr "キーワードに一致するユーザーが見つかりません"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:120
+msgid "Searching for Users"
+msgstr "ユーザーを検索中"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/room_details/invite_subpage/mod.rs:235
+#, rust-format
+msgid "Could not invite {user} to {room}"
+msgstr "{user} を {room} に招待できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names. The count is always greater than 1.
+#: src/session_view/room_details/invite_subpage/mod.rs:247
+#, rust-format
+msgid "Could not invite 1 user to {room}"
+msgid_plural "Could not invite {n} users to {room}"
+msgstr[0] "{n} 人のユーザーを {room} に招待できませんでした"
+
+#: src/session_view/room_details/join_rule_subpage.blp:80
+msgid "Only Invited Users"
+msgstr "招待されたユーザーのみ"
+
+#: src/session_view/room_details/join_rule_subpage.blp:86
+msgid "Any Registered User"
+msgstr "すべての登録済みユーザー"
+
+#: src/session_view/room_details/join_rule_subpage.blp:99
+msgid "Allow Invite Requests"
+msgstr "招待要求を許可"
+
+#: src/session_view/room_details/join_rule_subpage.rs:112
+msgid ""
+"The version of this room does not support all possibilities. Upgrade this "
+"room to the latest version to see more options."
+msgstr ""
+"このルームのバージョンはすべての機能には対応していません。さらにオプションを"
+"表示するには、このルームを最新バージョンにアップグレードしてください。"
+
+#: src/session_view/room_details/join_rule_subpage.rs:230
+msgid "Could not change who can join"
+msgstr "参加可能なユーザーを変更できませんでした"
+
+#: src/session_view/room_details/member_row.blp:38
+msgid "Identity Verified"
+msgstr "本人確認済み"
+
+#. Translators: This is plural, as in 'Invited Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:124
+msgctxt "members"
+msgid "Invited"
+msgstr "招待中"
+
+#. Translators: This is plural, as in 'Banned Room Members'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:133
+msgctxt "members"
+msgid "Banned"
+msgstr "BAN 中"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:11
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:17
+msgid "Toggle Room Members Search"
+msgstr "ルームメンバー検索を切り替え"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:29
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:33
+#: src/session_view/room_details/permissions/members_subpage.blp:32
+#: src/session_view/room_details/permissions/members_subpage.blp:36
+msgid "Search for room members"
+msgstr "ルームメンバーを検索"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:73
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:339
+msgid "Could not load the full list of room members"
+msgstr "ルームメンバーの完全な一覧を読み込めませんでした"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:362
+msgid "Room Member"
+msgstr "ルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:364
+msgid "Room Members"
+msgstr "ルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:369
+msgid "Invited Room Member"
+msgstr "招待中のルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:371
+msgid "Invited Room Members"
+msgstr "招待中のルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:376
+msgid "Banned Room Member"
+msgstr "BAN 中のルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:378
+msgid "Banned Room Members"
+msgstr "BAN 中のルームメンバー"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:424
+#: src/session_view/room_details/permissions/members_subpage.blp:51
+msgid "No Room Members"
+msgstr "ルームメンバーなし"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:429
+msgid "No Invited Room Members"
+msgstr "招待中のルームメンバーなし"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:430
+msgid "There are no invited members in this room"
+msgstr "このルームに招待中のルームメンバーはいません"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:434
+msgid "No Banned Room Members"
+msgstr "BAN 中のルームメンバーなし"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:435
+msgid "There are no banned members in this room"
+msgstr "このルームに BAN 中のルームメンバーはいません"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:439
+msgid "No Invite Requests"
+msgstr "招待要求なし"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:440
+msgid "There are no invite requests in this room"
+msgstr "このルームへの招待要求はありません"
+
+#: src/session_view/room_details/mod.rs:154
+msgid "The user is not in the room members list anymore"
+msgstr "ユーザーをルームメンバーの一覧から削除しました"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:5
+msgid "Add Custom Permissions"
+msgstr "カスタム権限を追加"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:12
+msgid "_Add"
+msgstr "追加(_A)"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/add_members_subpage.blp:46
+msgid "Assign Power Level"
+msgstr "権限を割り当て"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:64
+msgid "Search Results"
+msgstr "検索結果"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:84
+#: src/session_view/room_details/permissions/add_members_subpage.blp:88
+msgid "No Matching Members Found"
+msgstr "一致するメンバーが見つかりません"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:89
+msgid "No room members matching the search were found"
+msgstr "キーワードに一致するルームメンバーが見つかりません"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/members_subpage.blp:6
+#: src/session_view/room_details/permissions/permissions_subpage.blp:282
+msgid "Members With Assigned Power Levels"
+msgstr "権限が割り当てられたメンバー"
+
+#: src/session_view/room_details/permissions/members_subpage.blp:103
+msgid "Add"
+msgstr "追加"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:195
+msgid "There are no room members with assigned power levels in this room"
+msgstr "このルームには権限が割り当てられたルームメンバーはいません"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:197
+msgid ""
+"There are no room members with assigned power levels matching the search"
+msgstr "キーワードに一致する権限が割り当てられたルームメンバーはいません"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:44
+msgid "Room Actions"
+msgstr "ルームに関する操作"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:46
+msgid "Power level required to perform different actions in the room"
+msgstr "ルームにおいて様々な操作を行うために必要な権限"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:49
+msgid "Send Messages"
+msgstr "メッセージを送信"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:60
+msgid "Remove Own Messages"
+msgstr "自分のメッセージを削除"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:71
+msgid "Remove Messages of Other Members"
+msgstr "他のメンバーのメッセージを削除"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:82
+msgid "Notify Entire Room"
+msgstr "ルーム全体に通知"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:93
+msgid "Change Room Settings"
+msgstr "ルームの設定を変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:104
+msgid "Change Room Name"
+msgstr "ルーム名を変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:115
+msgid "Change Room Description"
+msgstr "ルームの説明を変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:126
+msgid "Change Room Avatar"
+msgstr "ルームのアバターを変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:137
+msgid "Change Addresses"
+msgstr "アドレスを変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:148
+msgid "Change Who Can Read History"
+msgstr "履歴を表示できる人を変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:170
+msgid "Change Permissions"
+msgstr "権限を変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:181
+msgid "Change Server Access Control List"
+msgstr "サーバーのアクセス制御リストを変更"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:192
+msgid "Upgrade Room"
+msgstr "ルームをアップグレード"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:204
+msgid "Member Actions"
+msgstr "メンバーに関する操作"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:206
+msgid "Power level required to perform different actions on room members"
+msgstr "ルームメンバーに対して様々な操作を行うために必要な権限"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:247
+msgid "Members Power Levels"
+msgstr "メンバーの権限"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:249
+msgid "Power levels defined for all members of the room"
+msgstr "ルームのすべてのメンバーに対して定義された権限"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:253
+#: src/session_view/room_details/permissions/permissions_subpage.blp:267
+msgid "Default Power Level"
+msgstr "デフォルトの権限"
+
+#: src/session_view/room_details/permissions/permissions_subpage.rs:584
+msgid "Could not save permissions"
+msgstr "権限を保存できませんでした"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:5
+#: src/session_view/room_details/upgrade_dialog/mod.blp:49
+msgctxt "dialog title"
+msgid "Upgrade Room"
+msgstr "ルームをアップグレード"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:65
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+msgstr ""
+"ルームをより最近のバージョンにアップグレードすることで、Matrix の仕様書に追加"
+"された新機能の恩恵を受けられます。また、ルームの状態がリセットされるため、"
+"ルームへの参加が早くなることも期待できます。しかし、ルームメンバーが新しい"
+"ルームに手動で参加する必要があるなど破壊的でもあるため、アップグレードの頻度"
+"は控えめにするべきです。"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:85
+msgid "Version"
+msgstr "バージョン"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:97
+msgid ""
+"After the upgrade, you will be the only member of the room and other members "
+"will need to be re-invited manually. This could be avoided by using third-"
+"party upgrade tooling that handles this for you."
+msgstr ""
+"アップグレードの後、あなたはルームの唯一のメンバーになり、他のメンバーは手動"
+"で再招待を受ける必要があります。再招待を代わりに実行してくれるサードパーティ"
+"製のアップグレードツールを使うことで、再招待の手間を回避できる可能性がありま"
+"す。"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/upgrade_dialog/mod.blp:141
+msgid "Upgrade"
+msgstr "アップグレード"
+
+#. Translators: As in 'Stable version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:116
+msgid "Stable"
+msgstr "安定版"
+
+#. Translators: As in 'Experimental version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:119
+msgid "Experimental"
+msgstr "開発版"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:204
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other "
+"creator will be demoted to the default power level."
+msgstr ""
+"アップグレードの後、あなたはルームの唯一の作成者になります。他の作成者はデ"
+"フォルトの権限に降格となります。"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:208
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other "
+"creators will be demoted to the default power level."
+msgstr ""
+"アップグレードの後、あなたはルームの唯一の作成者になります。他の作成者はデ"
+"フォルトの権限に降格となります。"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:213
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creator will be demoted to the default power level."
+msgstr ""
+"アップグレードの後、あなたはルームの唯一の作成者になります。現在の作成者はデ"
+"フォルトの権限に降格となります。"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:217
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creators will be demoted to the default power level."
+msgstr ""
+"アップグレードの後、あなたはルームの唯一の作成者になります。現在の作成者はデ"
+"フォルトの権限に降格となります。"
+
+#: src/session_view/room_history/call_row.rs:122
+msgid "Outgoing video call."
+msgstr "ビデオ通話を発信しています。"
+
+#: src/session_view/room_history/call_row.rs:136
+msgid "Outgoing call."
+msgstr "発信しています。"
+
+#: src/session_view/room_history/divider_row.rs:90
+msgid "This is the start of the visible history"
+msgstr "ここが表示可能な履歴の開始地点です"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:102
+msgid "%A, %B %-e"
+msgstr "%B%-e日 (%a)"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:108
+msgid "%A, %B %-e, %Y"
+msgstr "%Y年%B%-e日 (%a)"
+
+#: src/session_view/room_history/divider_row.rs:115
+msgid "New Messages"
+msgstr "新しいメッセージ"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session_view/room_history/event_actions/context_menu.blp:7
+msgid "_Reply"
+msgstr "返信(_R)"
+
+#. Translators: In this string, 'Forward' is a verb, this is to re-send
+#. the same message in another room, like forwarding an e-mail.
+#: src/session_view/room_history/event_actions/context_menu.blp:22
+msgid "_Forward"
+msgstr "転送(_F)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:30
+msgid "_Select"
+msgstr "選択(_S)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:38
+msgid "Revoke _Invite"
+msgstr "招待を取り消す(_I)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:46
+msgid "_Copy Text"
+msgstr "テキストをコピー(_C)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:52
+msgid "Copy T_humbnail"
+msgstr "サムネイルをコピー(_H)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:70
+msgid "S_ave Audio"
+msgstr "音声を保存(_A)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:82
+msgid "_Properties"
+msgstr "プロパティ(_P)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:90
+msgid "_Discard"
+msgstr "破棄(_D)"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:98
+msgid "Rep_ort…"
+msgstr "報告(_O)…"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:104
+msgid "Re_move"
+msgstr "削除(_M)"
+
+#: src/session_view/room_history/event_actions/context_menu.rs:83
+#: src/session_view/sidebar/mod.rs:405
+msgid "Context Menu"
+msgstr "コンテキストメニュー"
+
+#: src/session_view/room_history/event_actions/group.rs:337
+msgid "Thumbnail copied to clipboard"
+msgstr "サムネイルをクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/group.rs:511
+msgid "Text copied to clipboard"
+msgstr "テキストをクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/group.rs:578
+msgid "Remove Message?"
+msgstr "メッセージを削除しますか?"
+
+#: src/session_view/room_history/event_actions/group.rs:580
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr ""
+"本当にこのメッセージを削除してもよろしいですか? この操作は元に戻せません。"
+
+#: src/session_view/room_history/event_actions/group.rs:594
+msgid "Could not remove message"
+msgstr "メッセージを削除できませんでした"
+
+#: src/session_view/room_history/event_actions/group.rs:609
+msgid "Could not toggle reaction"
+msgstr "リアクションを追加/削除できませんでした"
+
+#: src/session_view/room_history/event_actions/group.rs:641
+msgid "Report Event?"
+msgstr "イベントを報告しますか?"
+
+#: src/session_view/room_history/event_actions/group.rs:643
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+msgstr ""
+"イベントを報告すると、ホームサーバーの管理者にイベントのユニーク ID を送信し"
+"ます。イベントの内容が暗号化されているか開示されていない場合、管理者は内容を"
+"確認できません。"
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session_view/room_history/event_actions/group.rs:650
+msgid "Report"
+msgstr "報告"
+
+#: src/session_view/room_history/event_actions/group.rs:668
+msgid "Could not report event"
+msgstr "イベントを報告できませんでした"
+
+#: src/session_view/room_history/event_actions/group.rs:688
+msgid "Could not discard message"
+msgstr "メッセージを破棄できませんでした"
+
+#: src/session_view/room_history/event_actions/group.rs:717
+msgid "Revoking invite…"
+msgstr "招待を取り消し中…"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:6
+#: src/session_view/room_history/event_actions/properties_dialog.blp:12
+msgid "Event Properties"
+msgstr "イベントのプロパティ"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:40
+msgid "Original Event"
+msgstr "元のイベント"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:56
+#: src/session_view/room_history/event_actions/properties_dialog.blp:134
+msgid "Event ID"
+msgstr "イベント ID"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:58
+#: src/session_view/room_history/event_actions/properties_dialog.blp:136
+msgid "Copy Event ID"
+msgstr "イベント ID をコピー"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:59
+#: src/session_view/room_history/event_actions/properties_dialog.blp:137
+msgid "Event ID copied to clipboard"
+msgstr "イベント ID をクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:64
+msgid "Room ID"
+msgstr "ルーム ID"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:70
+msgid "Copy Room ID"
+msgstr "ルーム ID をコピー"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:71
+msgid "Room ID copied to clipboard"
+msgstr "ルーム ID をクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:75
+msgid "Sender ID"
+msgstr "送信者 ID"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:85
+msgid "Show Profile"
+msgstr "プロフィールを表示"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:96
+#: src/session_view/room_history/event_actions/properties_dialog.blp:142
+msgid "Timestamp"
+msgstr "タイムスタンプ"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:98
+#: src/session_view/room_history/event_actions/properties_dialog.blp:144
+msgid "Copy Timestamp"
+msgstr "タイムスタンプをコピー"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:99
+#: src/session_view/room_history/event_actions/properties_dialog.blp:145
+msgid "Timestamp copied to clipboard"
+msgstr "タイムスタンプをクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:105
+#: src/session_view/room_history/event_actions/properties_dialog.blp:150
+msgid "View Source"
+msgstr "ソースを表示"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:118
+msgid "Latest Edit"
+msgstr "最新の編集"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:172
+msgid "Copy Source"
+msgstr "ソースをコピー"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:108
+msgid "Original Event Source"
+msgstr "元のイベントのソース"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:110
+msgid "Event Source"
+msgstr "イベントのソース"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:124
+msgid "Latest Edit Source"
+msgstr "最新の編集ソース"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:138
+msgid "Source copied to clipboard"
+msgstr "ソースをクリップボードにコピーしました"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:15
+msgid "Send a Reaction"
+msgstr "リアクションを送信"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:19
+msgid "More Reactions"
+msgstr "他のリアクション"
+
+#: src/session_view/room_history/event_timestamp.rs:96
+#, rust-format
+msgid "Sent at {time}"
+msgstr "{time} に送信"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:109
+msgid "%B %-e at %I:%M %p"
+msgstr "%B%-e日 %p %I:%M"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:115
+msgid "%B %-e at %H:%M"
+msgstr "%B%-e日 %H:%M"
+
+#: src/session_view/room_history/message_row/audio.rs:65
+#, rust-format
+msgid "Audio: {filename}"
+msgstr "音声: {filename}"
+
+#: src/session_view/room_history/message_row/content.rs:317
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"このメッセージを復号できませんでした。鍵が利用可能になり次第、復号処理を再試"
+"行します。"
+
+#: src/session_view/room_history/message_row/content.rs:322
+msgid "This message was removed."
+msgstr "このメッセージは削除されました。"
+
+#: src/session_view/room_history/message_row/content.rs:327
+#: src/session_view/room_history/message_row/content.rs:333
+#: src/session_view/room_history/message_row/content.rs:403
+msgid "Unsupported event"
+msgstr "非対応のイベント"
+
+#: src/session_view/room_history/message_row/file.rs:61
+#, rust-format
+msgid "File: {filename}"
+msgstr "ファイル: {filename}"
+
+#: src/session_view/room_history/message_row/location.blp:12
+msgid "User Location"
+msgstr "ユーザーの位置情報"
+
+#: src/session_view/room_history/message_row/location.rs:91
+msgid "Location is invalid and cannot be displayed"
+msgstr "位置情報が無効なため表示できません"
+
+#. Translators: As in 'Sending message…'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:21
+msgid "Sending…"
+msgstr "送信中…"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:31
+msgid "Temporary Error Sending Message"
+msgstr "メッセージの送信中に一時的なエラーが発生しました"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:45
+msgid "Message Cannot Be Sent"
+msgstr "メッセージを送信できません"
+
+#. Translators: As in 'Sent message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:60
+msgid "Sent"
+msgstr "送信済み"
+
+#. Translators: As in 'Edited message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:75
+msgid "Edited"
+msgstr "編集済み"
+
+#: src/session_view/room_history/message_row/mod.blp:13
+msgid "Show Sender Profile"
+msgstr "送信者のプロフィールを表示"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_row/reaction/mod.rs:200
+#, rust-format
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "{n} 人のメンバーが {reaction_key} でリアクションしました"
+
+#: src/session_view/room_history/message_row/reaction/mod.rs:220
+#, rust-format
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} が {reaction_key} でリアクションしました"
+
+#: src/session_view/room_history/message_row/reaction_list.blp:6
+msgid "Reactions"
+msgstr "リアクション"
+
+#: src/session_view/room_history/message_row/reply.blp:16
+msgid "In Reply To"
+msgstr "返信"
+
+#. Translators: This is a verb, as in 'Mention user'.
+#: src/session_view/room_history/message_row/sender_name.rs:186
+msgid "Mention"
+msgstr "メンションする"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session_view/room_history/message_row/text/widgets.rs:465
+msgid "Details"
+msgstr "詳細"
+
+#: src/session_view/room_history/message_row/visual_media.blp:49
+msgid "Click to show preview"
+msgstr "クリックしてプレビューを表示"
+
+#: src/session_view/room_history/message_row/visual_media.blp:77
+msgid "Hide media preview"
+msgstr "メディアプレビューを非表示"
+
+#: src/session_view/room_history/message_row/visual_media.rs:553
+msgid "Image"
+msgstr "画像"
+
+#: src/session_view/room_history/message_row/visual_media.rs:554
+msgid "Sticker"
+msgstr "ステッカー"
+
+#: src/session_view/room_history/message_row/visual_media.rs:555
+msgid "Video"
+msgstr "ビデオ"
+
+#: src/session_view/room_history/message_row/visual_media.rs:560
+#, rust-format
+msgid "Image: {filename}"
+msgstr "画像: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:563
+#, rust-format
+msgid "Sticker: {filename}"
+msgstr "ステッカー: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:566
+#, rust-format
+msgid "Video: {filename}"
+msgstr "ビデオ: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:740
+#: src/utils/media/image/mod.rs:932
+msgid "Could not retrieve media"
+msgstr "メディアを取得できませんでした"
+
+#: src/session_view/room_history/message_row/visual_media.rs:789
+#: src/utils/media/image/mod.rs:934
+msgid "An unexpected error occurred"
+msgstr "予期しないエラーが発生しました"
+
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:22
+msgid "_Send"
+msgstr "送信(_S)"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:685
+msgid "Public Room Mention Auto-completion"
+msgstr "公開ルームでのメンションの自動補完"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:687
+msgid "Room Member Mention Auto-completion"
+msgstr "ルームメンバーへのメンションの自動補完"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:8
+msgid "_Location"
+msgstr "位置情報(_L)"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:15
+msgid "_Markdown"
+msgstr "Markdown(_M)"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:89
+msgid "Send a File"
+msgstr "ファイルを送信"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:96
+msgid "Insert an Emoji"
+msgstr "絵文字を挿入"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session_view/room_history/message_toolbar/mod.blp:121
+msgid "Message Composer"
+msgstr "メッセージの下書き"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:136
+#: src/session_view/room_history/message_toolbar/mod.blp:139
+msgid "More Options"
+msgstr "他のオプション"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:147
+msgid "Send Message"
+msgstr "メッセージを送信"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:171
+msgid "You don’t have permission to send messages to this room"
+msgstr "このルームにメッセージを送信する権限がありません"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:372
+msgid "The conversation continues in a new room"
+msgstr "この会話は新しいルームに続きます"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:374
+msgid "The conversation has ended"
+msgstr "この会話は終了しました"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:540
+#, rust-format
+msgid "Reply to {user}"
+msgstr "{user} に返信"
+
+#. / Update the displayed related event for the given edit.
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:558
+msgctxt "room-history"
+msgid "Edit"
+msgstr "編集"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:735
+msgid "Could not send reply"
+msgstr "返信内容を送信できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:751
+msgid "Could not send edit"
+msgstr "編集内容を送信できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:762
+msgid "Could not send message"
+msgstr "メッセージを送信できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:808
+msgid "Your Location"
+msgstr "あなたの位置情報"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_toolbar/mod.rs:868
+#, rust-format
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "{iso8601_datetime} 時点のユーザーの位置情報 {geo_uri}"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:890
+msgid "Could not send location"
+msgstr "位置情報を送信できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:897
+msgid "The location request has been cancelled"
+msgstr "位置情報要求がキャンセルされました"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:898
+msgid "The location services are disabled"
+msgstr "位置情報サービスが無効です"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:899
+msgid "Could not retrieve current location"
+msgstr "現在地の位置情報を取得できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:934
+msgid "Could not send file"
+msgstr "ファイルを送信できませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:988
+msgid "Select File"
+msgstr "ファイルを選択"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:990
+msgid "Select"
+msgstr "選択"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1005
+msgid "Could not open file"
+msgstr "ファイルを開けませんでした"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1031
+#: src/session_view/room_history/message_toolbar/mod.rs:1039
+msgid "Error reading file"
+msgstr "ファイルを読み込む際にエラーが発生しました"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1100
+msgid "Error getting image from clipboard"
+msgstr "クリップボートから画像を取得する際にエラーが発生しました"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1117
+msgid "Error getting file from clipboard"
+msgstr "クリップボートからファイルを取得する際にエラーが発生しました"
+
+#: src/session_view/room_history/mod.blp:7
+msgid "Room _Details"
+msgstr "ルームの詳細(_D)"
+
+#: src/session_view/room_history/mod.blp:13
+msgid "_Invite New Members…"
+msgstr "新しいメンバーを招待(_I)…"
+
+#: src/session_view/room_history/mod.blp:21
+#: src/session_view/sidebar/mod.blp:104
+msgid "_Leave Room"
+msgstr "ルームから退出(_L)"
+
+#: src/session_view/room_history/mod.blp:27
+#: src/session_view/sidebar/mod.blp:110
+msgid "Re_join Room"
+msgstr "ルームに再参加(_J)"
+
+#: src/session_view/room_history/mod.blp:33
+#: src/session_view/sidebar/mod.blp:116
+msgid "_Forget Room"
+msgstr "ルームを削除(_F)"
+
+#: src/session_view/room_history/mod.blp:64
+msgid "Room Menu"
+msgstr "ルームメニュー"
+
+#: src/session_view/room_history/mod.blp:72
+msgid "Call room - other clients may not show messages you send in this room."
+msgstr ""
+"通話ルーム - このルームで送信したメッセージは他のクライアントでは表示できない"
+"可能性があります。"
+
+#: src/session_view/room_history/mod.blp:99
+#: src/session_view/room_history/mod.blp:106
+msgid "Could Not Load Room"
+msgstr "ルームを読み込めませんでした"
+
+#: src/session_view/room_history/mod.blp:138
+msgid "Scroll to Bottom"
+msgstr "下までスクロール"
+
+#: src/session_view/room_history/mod.blp:150
+msgid "Drop Here to Send"
+msgstr "ここにドロップして送信"
+
+#: src/session_view/room_history/mod.rs:422
+msgid "Error getting file from drop"
+msgstr "ドロップされたコンテンツからファイルを取得する際にエラーが発生しました"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1027
+#: src/session_view/sidebar/row.rs:747
+#, rust-format
+msgid "Could not leave {room}"
+msgstr "{room} を退出できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1050
+#: src/session_view/sidebar/row.rs:736
+#, rust-format
+msgid "Could not join {room}"
+msgstr "{room} に参加できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/room_history/mod.rs:1067
+#: src/session_view/sidebar/row.rs:780
+#, rust-format
+msgid "Could not forget {room}"
+msgstr "{room} を削除できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/mod.rs:1111
+#, rust-format
+msgid "There is a pending invite request"
+msgid_plural "There are {n} pending invite requests"
+msgstr[0] "{n} 件の保留中の招待要求があります"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:257
+#, rust-format
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "{n} 人のメンバーが既読"
+
+#. / Update the tooltip of this list for a single member.
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:271
+#, rust-format
+msgid "Seen by {name}"
+msgstr "{name} が既読"
+
+#: src/session_view/room_history/state/content.rs:100
+msgid "This room is encrypted from this point on."
+msgstr "このルームはこの時点から暗号化されています。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/state/content.rs:115
+#: src/session_view/room_history/state/content.rs:203
+#, rust-format
+msgid "{sender} invited {user}."
+msgstr "{sender} が {user} を招待しました。"
+
+#: src/session_view/room_history/state/content.rs:127
+msgid "An unsupported state event was received."
+msgstr "非対応の状態イベントを受信しました。"
+
+#: src/session_view/room_history/state/content.rs:164
+#: src/session_view/room_history/state/content.rs:389
+#, rust-format
+msgid "{user} joined this room."
+msgstr "{user} がこのルームに参加しました。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/state/content.rs:171
+#, rust-format
+msgid "{user} left the room."
+msgstr "{user} がこのルームから退出しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:176
+#, rust-format
+msgid "{sender} banned {user}."
+msgstr "{sender} が {user} を BAN しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:185
+#, rust-format
+msgid "{sender} unbanned {user}."
+msgstr "{sender} が {user} を BAN 解除しました。"
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:194
+#, rust-format
+msgid "{sender} kicked {user} out."
+msgstr "{sender} が {user} をキックしました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:212
+#, rust-format
+msgid "{user} accepted the invite."
+msgstr "{user} が招待を承諾しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:218
+#, rust-format
+msgid "{user} declined the invite."
+msgstr "{user} が招待を辞退しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:227
+#, rust-format
+msgid "{sender} revoked the invitation for {user}."
+msgstr "{sender} が {user} の招待を取り消しました。"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/content.rs:239
+#, rust-format
+msgid "{user} requested to be invited to this room."
+msgstr "{user} がこのルームへの招待を要求しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:246
+#, rust-format
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} がこのルームへの招待要求を撤回しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:252
+#, rust-format
+msgid "{sender} denied {user}’s request to be invited to this room."
+msgstr "{sender} が {user} からのこのルームへの招待要求を拒否しました。"
+
+#: src/session_view/room_history/state/content.rs:263
+msgid "An unsupported room member event was received."
+msgstr "非対応のルームメンバーイベントを受信しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:330
+#, rust-format
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr "{previous_user_name} が表示名を {new_user_name} に変更しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:340
+#, rust-format
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} が表示名を削除しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:352
+#, rust-format
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} が表示名を {new_user_name} に設定しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:366
+#, rust-format
+msgid "{user} set their avatar."
+msgstr "{user} がアバターを設定しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:373
+#, rust-format
+msgid "{user} removed their avatar."
+msgstr "{user} がアバターを削除しました。"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:380
+#, rust-format
+msgid "{user} changed their avatar."
+msgstr "{user} がアバターを変更しました。"
+
+#: src/session_view/room_history/state/creation.rs:55
+msgid "This conversation started in another room."
+msgstr "この会話は別のルームで開始しました。"
+
+#: src/session_view/room_history/state/creation.rs:60
+msgid "The conversation starts here."
+msgstr "ここが会話の開始地点です。"
+
+#. Translators: This is a change in the room, not a change between
+#. rooms. Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/group_row.rs:224
+#, rust-format
+msgid "1 room change"
+msgid_plural "{n} room changes"
+msgstr[0] "{n} 件のルームの変更"
+
+#: src/session_view/room_history/title.blp:7
+msgid "Open Room Details"
+msgstr "ルームの詳細を開く"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:135
+#, rust-format
+msgid "{user} is typing…"
+msgstr "{user} が入力中…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:142
+#, rust-format
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} 人のメンバーが入力中…"
+
+#: src/session_view/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "認証を承諾できませんでした"
+
+#: src/session_view/room_history/verification_info_bar.rs:88
+msgid "Could not decline verification"
+msgstr "認証を辞退できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/verification_info_bar.rs:166
+#, rust-format
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} が確認を求めています"
+
+#: src/session_view/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "認証中"
+
+#: src/session_view/sidebar/mod.blp:7
+msgid "New _Direct Chat…"
+msgstr "新しいダイレクトチャット(_D)…"
+
+#: src/session_view/sidebar/mod.blp:12
+msgid "_New Room…"
+msgstr "新しいルーム(_N)…"
+
+#: src/session_view/sidebar/mod.blp:17
+msgid "_Join Room…"
+msgstr "ルームに参加(_J)…"
+
+#: src/session_view/sidebar/mod.blp:24
+msgid "_Keyboard Shortcuts"
+msgstr "キーボードショートカット(_K)"
+
+#: src/session_view/sidebar/mod.blp:29
+msgid "_About Fractal"
+msgstr "Fractal について(_A)"
+
+#: src/session_view/sidebar/mod.blp:44
+msgid "Dec_line"
+msgstr "辞退(_L)"
+
+#: src/session_view/sidebar/mod.blp:58
+msgid "_Mark as Read"
+msgstr "既読にする(_M)"
+
+#: src/session_view/sidebar/mod.blp:64
+msgid "_Mark as Unread"
+msgstr "未読にする(_M)"
+
+#: src/session_view/sidebar/mod.blp:72
+msgid "Move to _Favorites"
+msgstr "お気に入りに移動(_F)"
+
+#: src/session_view/sidebar/mod.blp:78
+msgid "Move to _Rooms"
+msgstr "ルームに移動(_R)"
+
+#: src/session_view/sidebar/mod.blp:84
+msgid "Move to Low _Priority"
+msgstr "優先度低に移動(_P)"
+
+#: src/session_view/sidebar/mod.blp:90
+msgid "Mark as _Direct Chat"
+msgstr "ダイレクトチャットとしてマーク(_D)"
+
+#: src/session_view/sidebar/mod.blp:96
+msgid "Unmark as _Direct Chat"
+msgstr "ダイレクトチャットとしてのマークを解除(_D)"
+
+#: src/session_view/sidebar/mod.blp:124
+msgid "Sidebar"
+msgstr "サイドバー"
+
+#: src/session_view/sidebar/mod.blp:142
+msgid "Main Menu"
+msgstr "メインメニュー"
+
+#: src/session_view/sidebar/mod.blp:151
+msgid "Toggle Room Search"
+msgstr "ルーム検索を切り替え"
+
+#: src/session_view/sidebar/mod.blp:163
+msgid "Room Search"
+msgstr "ルーム検索"
+
+#: src/session_view/sidebar/mod.blp:164
+msgid "Search for a room"
+msgstr "ルームを検索"
+
+#: src/session_view/sidebar/mod.blp:214
+msgid "Room List"
+msgstr "ルーム一覧"
+
+#: src/session_view/sidebar/mod.blp:215
+msgid "Allows to navigate between rooms"
+msgstr "他のルームに移動できます"
+
+#: src/session_view/sidebar/mod.rs:353
+msgid "No crypto identity"
+msgstr "暗号化のための身分情報がありません"
+
+#: src/session_view/sidebar/mod.rs:355
+msgid "Crypto identity incomplete"
+msgstr "暗号化のための身分情報が不完全です"
+
+#: src/session_view/sidebar/mod.rs:359
+msgid "Account recovery disabled"
+msgstr "アカウントの回復機能が無効です"
+
+#: src/session_view/sidebar/mod.rs:362
+msgid "Account recovery incomplete"
+msgstr "アカウントの回復機能が不完全です"
+
+#. Translators: A "call room" is a room where an audio or video call
+#. is always active, that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:257
+msgid "Call room"
+msgstr "通話ルーム"
+
+#: src/session_view/sidebar/room_row.rs:262
+msgid "Direct chat"
+msgstr "ダイレクトチャット"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers for "call rooms".
+#. A "call room" is a room where an audio or video call is always active,
+#. that users can join and leave at any time.
+#: src/session_view/sidebar/room_row.rs:289
+#, rust-format
+msgid "{name} (call room)"
+msgstr "{name} (通話ルーム)"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room is a direct chat with
+#. another user.
+#: src/session_view/sidebar/room_row.rs:297
+#, rust-format
+msgid "Direct chat with {name}"
+msgstr "{name} とのダイレクトチャット"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session_view/sidebar/room_row.rs:309
+#, rust-format
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "{count} 件の通知"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session_view/sidebar/row.rs:756
+#, rust-format
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr ""
+"{room} を {previous_category} から {new_category} に移動できませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:798
+#, rust-format
+msgid "Could not mark {room} as direct chat"
+msgstr "{room} をダイレクトチャットとしてマークできませんでした"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:803
+#, rust-format
+msgid "Could not unmark {room} as direct chat"
+msgstr "{room} のダイレクトチャットとしてのマークを解除できませんでした"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:124
+msgid "Join Room as Favorite"
+msgstr "お気に入りとしてルームに参加"
+
+#: src/session_view/sidebar/section_row.rs:125
+msgid "Join Room"
+msgstr "ルームに参加"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:128
+msgid "Join Room as Low Priority"
+msgstr "優先度低としてルームに参加"
+
+#: src/session_view/sidebar/section_row.rs:129
+msgid "Reject Invite"
+msgstr "招待を拒否"
+
+#: src/session_view/sidebar/section_row.rs:133
+#: src/session_view/sidebar/section_row.rs:146
+msgid "Move to Rooms"
+msgstr "ルームに移動"
+
+#: src/session_view/sidebar/section_row.rs:134
+#: src/session_view/sidebar/section_row.rs:140
+msgid "Move to Low Priority"
+msgstr "優先度低に移動"
+
+#: src/session_view/sidebar/section_row.rs:135
+#: src/session_view/sidebar/section_row.rs:141
+#: src/session_view/sidebar/section_row.rs:147
+msgid "Leave Room"
+msgstr "ルームから退出"
+
+#: src/session_view/sidebar/section_row.rs:139
+#: src/session_view/sidebar/section_row.rs:145
+msgid "Move to Favorites"
+msgstr "お気に入りに移動"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:153
+msgid "Rejoin Room as Favorite"
+msgstr "お気に入りとしてルームに再参加"
+
+#: src/session_view/sidebar/section_row.rs:154
+msgid "Rejoin Room"
+msgstr "ルームに再参加"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:157
+msgid "Rejoin Room as Low Priority"
+msgstr "優先度低としてルームに再参加"
+
+#: src/shortcuts-dialog.blp:6
+msgctxt "shortcut window"
+msgid "General"
+msgstr "全般"
+
+#: src/shortcuts-dialog.blp:9
+msgctxt "shortcut window"
+msgid "Search Room by Address or Link"
+msgstr "アドレスまたはリンクからルームを検索する"
+
+#: src/shortcuts-dialog.blp:14
+msgctxt "shortcut window"
+msgid "Account Settings"
+msgstr "アカウント設定"
+
+#: src/shortcuts-dialog.blp:19
+msgctxt "shortcut window"
+msgid "Open Menu"
+msgstr "メニューを開く"
+
+#: src/shortcuts-dialog.blp:24
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "キーボードショートカット"
+
+#: src/shortcuts-dialog.blp:29
+msgctxt "shortcut window"
+msgid "Close Window"
+msgstr "ウィンドウを閉じる"
+
+#: src/shortcuts-dialog.blp:34
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "終了する"
+
+#: src/shortcuts-dialog.blp:40
+msgctxt "shortcut window"
+msgid "Room List"
+msgstr "ルーム一覧"
+
+#: src/shortcuts-dialog.blp:43
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "ルーム一覧を検索"
+
+#: src/shortcuts-dialog.blp:48
+msgctxt "shortcut window"
+msgid "Next Room"
+msgstr "次のルーム"
+
+#: src/shortcuts-dialog.blp:53
+msgctxt "shortcut window"
+msgid "Previous Room"
+msgstr "前のルーム"
+
+#: src/shortcuts-dialog.blp:60
+msgctxt "shortcut window"
+msgid "First Room With Unread Messages"
+msgstr "未読メッセージがある最初のルーム"
+
+#: src/shortcuts-dialog.blp:65
+msgctxt "shortcut window"
+msgid "Next Room With Unread Messages"
+msgstr "未読メッセージがある次のルーム"
+
+#: src/shortcuts-dialog.blp:70
+msgctxt "shortcut window"
+msgid "Previous Room With Unread Messages"
+msgstr "未読メッセージがある前のルーム"
+
+#: src/shortcuts-dialog.blp:76
+msgctxt "shortcut window"
+msgid "Room History"
+msgstr "ルームの履歴"
+
+#: src/shortcuts-dialog.blp:79
+msgctxt "shortcut window"
+msgid "Event Properties"
+msgstr "イベントのプロパティ"
+
+#: src/shortcuts-dialog.blp:84
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "ルームを閉じる"
+
+#: src/user_facing_error.rs:18
+msgid "Connection timed out."
+msgstr "接続がタイムアウトしました。"
+
+#: src/user_facing_error.rs:20
+msgid "Could not connect to the homeserver."
+msgstr "ホームサーバーに接続できませんでした。"
+
+#: src/user_facing_error.rs:26
+msgid "Invalid credentials."
+msgstr "無効な認証情報です。"
+
+#: src/user_facing_error.rs:27
+msgid "Account deactivated."
+msgstr "アカウントが無効になっています。"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:43
+#, rust-format
+msgid "Rate limit exceeded, retry in 1 second."
+msgid_plural "Rate limit exceeded, retry in {n} seconds."
+msgstr[0] "レート制限を超過しました。{n} 秒後に再度お試しください。"
+
+#: src/user_facing_error.rs:49
+msgid "Rate limit exceeded, try again later."
+msgstr "レート制限を超過しました。後ほどお試しください。"
+
+#: src/user_facing_error.rs:59
+msgid "Unexpected connection error."
+msgstr "予期しない接続エラーが発生しました。"
+
+#: src/user_facing_error.rs:67
+msgid "Could not decrypt the event."
+msgstr "イベントを復号できませんでした。"
+
+#: src/user_facing_error.rs:69 src/user_facing_error.rs:81
+msgid "Unexpected error."
+msgstr "予期しないエラーが発生しました。"
+
+#: src/user_facing_error.rs:77
+msgid "Invalid URL."
+msgstr "無効な URL です。"
+
+#: src/user_facing_error.rs:78
+msgid "Could not discover homeserver."
+msgstr "ホームサーバーを探索できませんでした。"
+
+#: src/user_facing_error.rs:80
+msgid "Could not open the store."
+msgstr "ストアを開けませんでした。"
+
+#: src/utils/matrix/media_message.rs:90
+msgid "Voice Message"
+msgstr "ボイスメッセージ"
+
+#: src/utils/matrix/media_message.rs:125
+#, rust-format
+msgid "Voice Message From {datetime}"
+msgstr "{datetime} に保存されたボイスメッセージ"
+
+#: src/utils/matrix/mod.rs:175
+msgid "Could not generate unique session ID"
+msgstr "ユニークセッション ID を生成できませんでした"
+
+#: src/utils/matrix/mod.rs:176
+msgid "Could not access the session tokens"
+msgstr "セッショントークンにアクセスできませんでした"
+
+#: src/utils/media/image/mod.rs:933
+msgid "Image format not supported"
+msgstr "画像フォーマットに対応していません"
+
+#. Translators: Default name for image files.
+#: src/utils/media/mod.rs:36
+msgid "image"
+msgstr "画像"
+
+#. Translators: Default name for video files.
+#: src/utils/media/mod.rs:38
+msgid "video"
+msgstr "ビデオ"
+
+#. Translators: Default name for audio files.
+#: src/utils/media/mod.rs:40
+msgid "audio"
+msgstr "音声"
+
+#. Translators: Default name for files.
+#: src/utils/media/mod.rs:42
+msgid "file"
+msgstr "ファイル"
+
+#: src/window.blp:80
+msgid "Session"
+msgstr "セッション"

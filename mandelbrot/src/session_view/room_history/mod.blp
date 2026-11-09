@@ -1,0 +1,230 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu room-menu-model {
+  section {
+    item {
+      label: _("Room _Details");
+      action: "room-history.details";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("_Invite New Members…");
+      action: "room-history.invite-members";
+      hidden-when: "action-disabled";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Leave Room");
+      action: "room-history.leave";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("Re_join Room");
+      action: "room-history.join";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("_Forget Room");
+      action: "room-history.forget";
+      hidden-when: "action-disabled";
+    }
+  }
+}
+
+template $ContentRoomHistory: Adw.Bin {
+  vexpand: true;
+  hexpand: true;
+
+  styles [
+    "view",
+  ]
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      centering-policy: strict;
+
+      [title]
+      $RoomHistoryTitle room_title {
+        room: bind template.timeline as <$Timeline>.room;
+      }
+
+      [end]
+      Gtk.MenuButton room_menu {
+        valign: center;
+        icon-name: "menu-secondary-symbolic";
+        menu-model: room-menu-model;
+        primary: bind template.is-only-view;
+        tooltip-text: _("Room Menu");
+      }
+
+      [end]
+      Gtk.Button call_button {
+        valign: center;
+        visible: false;
+        icon-name: "camera-web-symbolic";
+        action-name: "room-history.call";
+        tooltip-text: _("Join Call");
+      }
+    }
+
+    content: Adw.BreakpointBin {
+      width-request: 300;
+      height-request: 300;
+
+      Adw.Breakpoint {
+        condition ("max-width: 720sp")
+
+        setters {
+          thread_split_view.collapsed: true;
+        }
+      }
+
+      child: Adw.OverlaySplitView thread_split_view {
+        sidebar-position: end;
+        show-sidebar: false;
+        min-sidebar-width: 300;
+        max-sidebar-width: 440;
+        sidebar-width-fraction: 0.35;
+
+        sidebar: $RoomHistoryThreadPanel thread_panel {};
+
+        content: Gtk.Box {
+          orientation: vertical;
+
+          Adw.Banner {
+        title: _("Call room - other clients may not show messages you send in this room.");
+        revealed: bind template.timeline as <$Timeline>.room as <$Room>.is-call;
+      }
+
+      $ContentVerificationInfoBar verification_info_bar {
+        verification: bind template.timeline as <$Timeline>.room as <$Room>.verification;
+      }
+
+      $CallBar call_bar {
+        visible: false;
+      }
+
+      Adw.Banner pending_knocks_banner {
+        // Translators: This is a verb, as in 'View Room'.
+        button-label: _("View");
+        button-style: suggested;
+        button-clicked => $view_pending_knocks() swapped;
+      }
+
+      Gtk.Stack stack {
+        transition-type: crossfade;
+
+        Gtk.StackPage {
+          name: "loading";
+          title: _("Loading");
+
+          child: Adw.Spinner loading {};
+        }
+
+        Gtk.StackPage {
+          name: "error";
+          title: _("Could Not Load Room");
+
+          child: Adw.StatusPage error {
+            visible: true;
+            hexpand: true;
+            vexpand: true;
+            icon-name: "error-symbolic";
+            title: _("Could Not Load Room");
+            description: _("Check your network connection");
+
+            child: Gtk.Button {
+              can-shrink: true;
+              label: _("Try Again");
+              halign: center;
+              clicked => $load_more_events() swapped;
+
+              styles [
+                "pill",
+              ]
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "content";
+          title: _("Room History");
+
+          child: Gtk.Overlay content {
+            [overlay]
+            Gtk.Revealer scroll_btn_revealer {
+              visible: false;
+              transition-type: crossfade;
+              valign: end;
+              halign: end;
+              margin-end: 24;
+              margin-bottom: 24;
+
+              Gtk.Button scroll_btn {
+                icon-name: "go-bottom-symbolic";
+                tooltip-text: _("Scroll to Bottom");
+                clicked => $scroll_down() swapped;
+
+                styles [
+                  "osd",
+                  "circular",
+                  "overlaid",
+                ]
+              }
+            }
+
+            $DragOverlay drag_overlay {
+              title: _("Drop Here to Send");
+
+              child: Gtk.ScrolledWindow scrolled_window {
+                vexpand: true;
+                hscrollbar-policy: never;
+
+                styles [
+                  "room-history",
+                  "undershoot-bottom",
+                ]
+
+                child: Adw.ClampScrollable {
+                  vexpand: true;
+                  hexpand: true;
+                  maximum-size: 750;
+                  tightening-threshold: 550;
+
+                  child: Gtk.ListView listview {
+                    styles [
+                      "navigation-sidebar",
+                      "room-history-list",
+                    ]
+
+                    tab-behavior: item;
+                    accessible-role: log;
+                  };
+                };
+              };
+            }
+          };
+        }
+      }
+
+      Adw.Clamp {
+        vexpand: false;
+        maximum-size: 750;
+        tightening-threshold: 550;
+
+        $MessageToolbar message_toolbar {
+          timeline: bind template.timeline;
+        }
+      }
+        };
+      };
+    };
+  }
+}

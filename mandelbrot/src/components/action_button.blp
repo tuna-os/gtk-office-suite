@@ -1,0 +1,134 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ActionButton: Adw.Bin {
+  Gtk.Stack stack {
+    transition-type: crossfade;
+
+    Gtk.StackPage {
+      name: "default";
+
+      child: Gtk.Button button_default {
+        valign: center;
+        icon-name: bind template.icon-name;
+        action-name: bind template.action-name;
+        action-target: bind template.action-target;
+        clicked => $button_clicked() swapped;
+
+        styles [
+          "circular",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "confirm";
+
+      child: Gtk.Button {
+        tooltip-text: _("Confirm Change");
+        valign: center;
+        icon-name: "checkmark-symbolic";
+        action-name: bind template.action-name;
+        action-target: bind template.action-target;
+        clicked => $button_clicked() swapped;
+
+        styles [
+          "circular",
+          "suggested-action",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "retry";
+
+      child: Gtk.Button {
+        tooltip-text: _("Try Again");
+        valign: center;
+        icon-name: "refresh-symbolic";
+        action-name: bind template.action-name;
+        action-target: bind template.action-target;
+        clicked => $button_clicked() swapped;
+
+        styles [
+          "circular",
+          "suggested-action",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "loading";
+      title: _("Loading");
+
+      child: Gtk.Button {
+        focusable: false;
+        can-target: false;
+        valign: center;
+
+        styles [
+          "circular",
+        ]
+
+        Adw.Spinner {
+          valign: center;
+          halign: center;
+          height-request: 20;
+          width-request: 20;
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "success";
+      title: _("Success");
+
+      child: Gtk.Button {
+        focusable: false;
+        can-target: false;
+        valign: center;
+        icon-name: "checkmark-symbolic";
+
+        styles [
+          "suggested-action",
+          "circular",
+          "success",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "warning";
+      title: _("Warning");
+
+      child: Gtk.Button button_warning {
+        focusable: false;
+        can-target: false;
+        valign: center;
+        icon-name: "warning-symbolic";
+
+        styles [
+          "circular",
+          "warning",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "error";
+      title: _("Error");
+
+      child: Gtk.Button {
+        focusable: false;
+        can-target: false;
+        valign: center;
+        icon-name: "error-symbolic";
+
+        styles [
+          "circular",
+          "error",
+        ]
+      };
+    }
+  }
+}

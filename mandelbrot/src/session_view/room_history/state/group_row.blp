@@ -1,0 +1,76 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentStateGroupRow: Adw.Bin {
+  focusable: true;
+
+  styles [
+    "room-history-row",
+  ]
+
+  accessibility {
+    labelled-by: [
+      label,
+    ];
+  }
+
+  child: Gtk.Box {
+    spacing: 2;
+    orientation: vertical;
+
+    styles [
+      "event-content",
+    ]
+
+    Gtk.Box {
+      spacing: 6;
+
+      styles [
+        "expander-title",
+      ]
+
+      Gtk.Label label {
+        styles [
+          "dimmed",
+        ]
+
+        wrap: true;
+        wrap-mode: word_char;
+        xalign: 0.0;
+        hexpand: true;
+      }
+
+      Gtk.Image arrow {
+        icon-name: "expander-arrow-symbolic";
+        accessible-role: presentation;
+
+        styles [
+          "arrow",
+          "dimmed",
+        ]
+      }
+
+      Gtk.GestureClick {
+        released => $toggle_expanded() swapped;
+      }
+    }
+
+    Gtk.Revealer {
+      reveal-child: bind template.is-expanded;
+
+      child: Gtk.ListBox list_box {
+        selection-mode: none;
+
+        styles [
+          "expander-content",
+        ]
+      };
+    }
+
+    $ContentReadReceiptsList read_receipts {
+      visible: bind template.has-read-receipts;
+      members: bind template.room as <$Room>.members;
+      source: bind template.read-receipts-list-model;
+    }
+  };
+}

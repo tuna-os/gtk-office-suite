@@ -1,0 +1,101 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Window: Adw.ApplicationWindow {
+  default-width: 900;
+  default-height: 850;
+  width-request: 360;
+  height-request: 294;
+  title: _("Mandelbrot");
+
+  content: Adw.ToastOverlay toast_overlay {
+    Gtk.Stack main_stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Loading");
+
+        child: Gtk.WindowHandle loading {
+          child: Adw.ToolbarView {
+            [top]
+            Adw.HeaderBar {
+              [start]
+              $AccountSwitcherButton {}
+
+              [end]
+              Gtk.Button {
+                action-name: "app.about";
+                tooltip-text: _("About Mandelbrot");
+                icon-name: "about-symbolic";
+
+                accessibility {
+                  label: _("About Mandelbrot");
+                }
+              }
+            }
+
+            content: Gtk.Box {
+              orientation: vertical;
+
+              $OfflineBanner {}
+
+              Gtk.Box {
+                orientation: vertical;
+                valign: center;
+                vexpand: true;
+                spacing: 24;
+
+                Adw.Spinner {
+                  height-request: 64;
+                  width-request: 64;
+                }
+
+                Gtk.Label {
+                  halign: center;
+                  justify: center;
+                  wrap: true;
+                  wrap-mode: word_char;
+                  label: _("Fetching Account Data…");
+
+                  styles [
+                    "title-2",
+                  ]
+                }
+              }
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "login";
+        title: _("Log In");
+
+        child: $Login login {};
+      }
+
+      Gtk.StackPage {
+        name: "session";
+        title: _("Session");
+
+        child: $SessionView session_view {};
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Error");
+
+        child: $ErrorPage error_page {};
+      }
+    }
+  };
+
+  Adw.Breakpoint {
+    condition ("max-width: 600sp")
+
+    setters {
+      template.compact: true;
+    }
+  }
+}

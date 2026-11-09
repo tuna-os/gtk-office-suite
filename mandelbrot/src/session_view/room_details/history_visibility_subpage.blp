@@ -1,0 +1,79 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsHistoryVisibilitySubpage: Adw.NavigationPage {
+  title: _("Who Can Read History");
+
+  styles [
+    "form-page",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-back-button: false;
+
+      [start]
+      Gtk.Button {
+        icon-name: "go-previous-symbolic";
+        tooltip-text: _("Back");
+        clicked => $go_back() swapped;
+
+        styles [
+          "back",
+        ]
+      }
+
+      [end]
+      $LoadingButton save_button {
+        sensitive: bind template.changed;
+        content-label: _("_Save");
+        use-underline: true;
+        clicked => $save() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        child: Gtk.ListBox {
+          valign: start;
+
+          styles [
+            "boxed-list",
+          ]
+
+          $CheckLoadingRow {
+            title: _("Anyone, even if they are not in the room");
+            action-name: "history-visibility.set-value";
+            action-target: "'world-readable'";
+          }
+
+          $CheckLoadingRow {
+            title: _("Members only, since this option was selected");
+            action-name: "history-visibility.set-value";
+            action-target: "'shared'";
+          }
+
+          $CheckLoadingRow {
+            title: _("Members only, since they were invited");
+            action-name: "history-visibility.set-value";
+            action-target: "'invited'";
+          }
+
+          $CheckLoadingRow {
+            title: _("Members only, since they joined the room");
+            action-name: "history-visibility.set-value";
+            action-target: "'joined'";
+          }
+        };
+      };
+    };
+  };
+}

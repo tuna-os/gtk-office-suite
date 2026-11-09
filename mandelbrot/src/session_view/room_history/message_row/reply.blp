@@ -1,0 +1,56 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessageReply: Gtk.Grid {
+  row-spacing: 3;
+
+  Gtk.Grid {
+    accessible-role: group;
+    row-spacing: 3;
+
+    styles [
+      "quote",
+    ]
+
+    accessibility {
+      label: _("In Reply To");
+    }
+
+    layout {
+      column: 0;
+      row: 0;
+    }
+
+    Gtk.Label related_content_sender {
+      visible: bind template.show-related-content-header;
+      hexpand: true;
+      halign: start;
+      ellipsize: end;
+      selectable: true;
+
+      styles [
+        "heading",
+        "accent",
+      ]
+
+      layout {
+        column: 0;
+        row: 0;
+      }
+    }
+
+    Adw.Bin related_content {
+      layout {
+        column: 0;
+        row: 1;
+      }
+    }
+  }
+
+  Adw.Bin content {
+    layout {
+      column: 0;
+      row: 1;
+    }
+  }
+}

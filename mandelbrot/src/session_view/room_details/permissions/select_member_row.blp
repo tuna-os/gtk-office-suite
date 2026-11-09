@@ -1,0 +1,59 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsPermissionsSelectMemberRow: Adw.Bin {
+  margin-top: 12;
+  margin-bottom: 12;
+  margin-start: 12;
+  margin-end: 12;
+  accessible-role: checkbox;
+  focusable: true;
+
+  child: Gtk.Box header {
+    spacing: 12;
+
+    styles [
+      "header",
+    ]
+
+    $Avatar {
+      size: 32;
+      data: bind template.member as <$Member>.avatar-data;
+      accessible-role: presentation;
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+
+      styles [
+        "title",
+      ]
+
+      Gtk.Label {
+        halign: start;
+        ellipsize: end;
+        label: bind template.member as <$Member>.display-name;
+
+        styles [
+          "title",
+        ]
+      }
+
+      Gtk.Label {
+        hexpand: true;
+        halign: start;
+        ellipsize: end;
+        label: bind template.member as <$Member>.user-id-string;
+
+        styles [
+          "subtitle",
+        ]
+      }
+    }
+
+    Gtk.CheckButton {
+      focusable: false;
+      active: bind template.selected bidirectional;
+    }
+  };
+}

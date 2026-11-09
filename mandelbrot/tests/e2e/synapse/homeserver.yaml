@@ -1,0 +1,61 @@
+# Synapse configuration for the MatrixRTC interop e2e stack.
+# Adapted from element-call's backend/dev_homeserver.yaml (single site).
+# FOR TESTING ONLY.
+
+server_name: "synapse.m.localhost"
+public_baseurl: https://synapse.m.localhost/
+
+pid_file: /data/homeserver.pid
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    resources:
+      - names: [client, federation, openid]
+        compress: false
+
+database:
+  name: sqlite3
+  args:
+    database: /data/homeserver.db
+
+media_store_path: /data/media_store
+signing_key_path: "/data/SERVERNAME.signing.key"
+
+# Single homeserver: no outbound federation, no key servers needed.
+trusted_key_servers: []
+suppress_key_server_warning: true
+ip_range_blacklist: []
+
+experimental_features:
+  # MSC3266: Room summary API.
+  msc3266_enabled: true
+  # MSC4222: sync v2 state_after, needed to correctly track room call state.
+  msc4222_enabled: true
+  # MSC4354: sticky events for MatrixRTC user state.
+  msc4354_enabled: true
+
+# The maximum allowed duration by which sent events can be delayed, as per
+# MSC4140. Must be a positive value if set. Defaults to no duration (null),
+# which disallows sending delayed events. Required for MatrixRTC
+# delayed-leave events.
+max_event_delay_duration: 24h
+
+# The test harness registers throw-away users via the plain registration
+# API.
+enable_registration: true
+enable_registration_without_verification: true
+
+# Shared secret for admin user registration via API (for testing only!)
+registration_shared_secret: "test_shared_secret_for_local_dev_only"
+
+report_stats: false
+serve_server_wellknown: true
+
+# Generous rate limits: the MatrixRTC membership keep-alive restarts the
+# delayed leave event every 5 seconds per client.
+rc_message:
+  per_second: 0.5
+  burst_count: 30

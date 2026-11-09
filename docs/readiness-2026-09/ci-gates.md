@@ -492,6 +492,8 @@ by hand:
 | `vlm-audit (decks)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (letters)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (tables)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
+| `Mandelbrot Flatpak build` | `mandelbrot.yml` → `flatpak` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Builds the Matrix client with its own Flatpak manifest against the GNOME 51 runtime. |
+| `Mandelbrot MatrixRTC engine (clippy, tests)` | `mandelbrot.yml` → `matrixrtc` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Lints and tests the MatrixRTC engine crate, which has no GTK dependency. |
 | `Fuzz importer smoke tests` | `nightly.yml` → `fuzz-smoke` | optional | Skipped on pull requests by design (nightly cost). |
 | `coverage` | `nightly.yml` → `coverage` | optional | Skipped on pull requests by design (nightly cost). |
 | `oracle` | `nightly.yml` → `oracle` | optional | Path-filtered to format/model code (runs_on_every_revision: false). release-revision.yml refuses a release whose oracle evidence was recorded at another revision instead. |

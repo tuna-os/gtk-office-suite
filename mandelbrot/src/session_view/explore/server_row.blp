@@ -1,0 +1,26 @@
+using Gtk 4.0;
+
+template $ExploreServerRow: Gtk.ListBoxRow {
+  child: Gtk.Box {
+    spacing: 10;
+
+    Gtk.Label {
+      xalign: 0.0;
+      hexpand: true;
+      label: bind template.server as <$ExploreServer>.name;
+    }
+
+    Gtk.Button remove_button {
+      visible: bind $string_not_empty(template.server as <$ExploreServer>.server-string) as <bool>;
+      icon-name: "close-symbolic";
+      valign: center;
+      halign: center;
+      tooltip-text: _("Remove Server");
+
+      styles [
+        "circular",
+        "flat",
+      ]
+    }
+  };
+}

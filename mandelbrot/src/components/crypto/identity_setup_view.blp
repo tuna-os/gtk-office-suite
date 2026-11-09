@@ -1,0 +1,283 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CryptoIdentitySetupView: Adw.Bin {
+  child: Adw.NavigationView navigation {
+    Adw.NavigationPage {
+      tag: "choose-method";
+      title: _("Verify Your New Session");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Verify Your New Session");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Verifying your session allows you and the people you chat with to be sure that no one is trying to impersonate you or intercept your conversations."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              $LoadingButton send_request_btn {
+                can-shrink: true;
+                content-label: _("Verify With Another Session");
+                halign: center;
+                clicked => $send_request() swapped;
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("No other devices logged into this account?");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Button use_recovery_btn {
+                can-shrink: true;
+                label: _("Recover Account");
+                halign: center;
+                clicked => $recover() swapped;
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              Gtk.Button {
+                can-shrink: true;
+                label: _("Reset");
+                halign: center;
+                clicked => $reset() swapped;
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "verify";
+      title: _("Identity Verification");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: $IdentityVerificationView verification_page {};
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "bootstrap";
+      title: _("Set Up Crypto Identity");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Set Up Crypto Identity");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Your crypto identity allows you to verify other Matrix accounts and automatically trust their verified sessions."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("You need to set up a crypto identity, since it has never been created.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              $LoadingButton bootstrap_btn {
+                content-label: _("Set Up");
+                halign: center;
+                clicked => $bootstrap_cross_signing() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "reset";
+      title: _("Reset Crypto Identity");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Reset Crypto Identity");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Your crypto identity allows you to verify other Matrix accounts and automatically trust their verified sessions."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "You should reset your crypto identity if a device that does not belong to you managed to be verified."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("To proceed, you will also need to reset your account recovery key.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Button reset_btn {
+                can-shrink: true;
+                label: _("Reset");
+                halign: center;
+                clicked => $reset() swapped;
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+  };
+}

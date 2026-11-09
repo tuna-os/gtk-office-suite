@@ -1,0 +1,176 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LogOutSubpage: Adw.NavigationPage {
+  title: _("Log Out");
+
+  styles [
+    "form-page",
+  ]
+
+  child: Gtk.Stack stack {
+    transition-type: slide_left;
+
+    Gtk.StackPage {
+      name: "logout";
+      title: _("Log Out of This Session");
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 444;
+
+            child: Gtk.Box {
+              orientation: vertical;
+
+              Gtk.Image {
+                icon-name: "warning-symbolic";
+
+                styles [
+                  "extra-large-icon",
+                  "error",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("Are you sure you want to log out of this session?");
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0.0;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Box warning_box {
+                orientation: vertical;
+                spacing: 24;
+
+                Gtk.Label warning_description {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  xalign: 0.0;
+                }
+
+                Gtk.ListBox {
+                  accessible-role: group;
+
+                  styles [
+                    "boxed-list",
+                  ]
+
+                  Adw.ButtonRow warning_button {
+                    selectable: false;
+                    title: _("Review Account Security");
+                    activated => $view_security() swapped;
+                  }
+                }
+              }
+
+              Gtk.ListBox {
+                accessible-role: group;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                $LoadingButtonRow logout_button {
+                  title: _("Continue");
+                  activated => $log_out() swapped;
+
+                  styles [
+                    "destructive-action",
+                  ]
+                }
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "failed";
+      title: _("Logout Failed");
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 444;
+
+            child: Gtk.Box {
+              orientation: vertical;
+
+              Gtk.Label {
+                label: _(
+                  "Logging out of this session failed. You can try again, or, if this is a permanent error, you can remove the session."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0.0;
+              }
+
+              Gtk.ListBox {
+                accessible-role: group;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                $LoadingButtonRow try_again_button {
+                  title: _("Try Again");
+                  activated => $log_out() swapped;
+
+                  styles [
+                    "destructive-action",
+                  ]
+                }
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Removing the session deletes the associated data from the system, but your homeserver and other sessions will not be aware that this session was logged out."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0.0;
+              }
+
+              Gtk.ListBox {
+                accessible-role: group;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                $LoadingButtonRow remove_button {
+                  title: _("Remove Session");
+                  activated => $remove() swapped;
+
+                  styles [
+                    "destructive-action",
+                  ]
+                }
+              }
+            };
+          };
+        };
+      };
+    }
+  };
+}

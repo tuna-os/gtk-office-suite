@@ -1,0 +1,114 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsEditDetailsSubpage: Adw.NavigationPage {
+  title: _("Edit Room Details");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-back-button: false;
+
+      [start]
+      Gtk.Button back_button {
+        icon-name: "go-previous-symbolic";
+        tooltip-text: _("Back");
+        clicked => $go_back() swapped;
+
+        styles [
+          "back",
+        ]
+      }
+    }
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        $EditableAvatar avatar {
+          editable: bind template.room as <$Room>.permissions as <$RoomPermissions>.can-change-avatar;
+          data: bind template.room as <$Room>.avatar-data;
+          inhibit-remove: bind $invert_boolean(template.room as <$Room>.has-avatar) as <bool>;
+          edit-avatar => $change_avatar() swapped;
+          remove-avatar => $remove_avatar() swapped;
+
+          accessibility {
+            label: _("Room Avatar");
+          }
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Name");
+
+        Adw.EntryRow name_entry_row {
+          sensitive: bind template.room as <$Room>.permissions as <$RoomPermissions>.can-change-name;
+          title: _("Name");
+          selectable: false;
+          text: bind $unwrap_string_or_empty(template.room as <$Room>.name) as <string>;
+          changed => $name_edited() swapped;
+          entry-activated => $change_name() swapped;
+
+          [suffix]
+          $ActionButton name_button {
+            visible: false;
+            state: confirm;
+            clicked => $change_name() swapped;
+          }
+        }
+      }
+
+      Adw.PreferencesGroup topic_group {
+        title: _("Description");
+
+        Gtk.Box {
+          orientation: vertical;
+          spacing: 6;
+
+          Gtk.ScrolledWindow {
+            height-request: 180;
+
+            styles [
+              "card",
+            ]
+
+            Gtk.TextView topic_text_view {
+              sensitive: bind template.room as <$Room>.permissions as <$RoomPermissions>.can-change-topic;
+              hexpand: true;
+              wrap-mode: word_char;
+
+              styles [
+                "inline",
+              ]
+
+              accessibility {
+                labelled-by: [
+                  topic_group,
+                ];
+              }
+
+              buffer: Gtk.TextBuffer topic_buffer {
+                text: bind $unwrap_string_or_empty(template.room as <$Room>.topic) as <string>;
+                changed => $topic_edited() swapped;
+              };
+            }
+          }
+
+          $LoadingButton save_topic_button {
+            sensitive: false;
+            halign: end;
+            content-label: _("Save");
+            clicked => $change_topic() swapped;
+
+            styles [
+              "pill",
+              "suggested-action",
+            ]
+
+            accessibility {
+              label: _("Save Description");
+            }
+          }
+        }
+      }
+    };
+  };
+}

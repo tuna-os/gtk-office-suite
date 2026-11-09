@@ -1,0 +1,31 @@
+# Common build directory names
+_build/
+build/
+builddir/
+
+# Cargo
+target/
+
+# Supported build systems
+.flatpak-builder
+.flatpak
+.fenv
+.foundry
+
+# Temporary files
+*.ui.in~
+*.ui~
+
+# Dynamically-generated files
+src/config.rs
+hooks/checks-bin
+
+# stray access token written by the e2e harness
+.token
+
+# evidence bundles written by the MatrixRTC e2e harness
+tests/e2e/logs/
+
+# The e2e dev TLS key is a public test fixture (copied from element-call);
+# it must be tracked even though *.key is commonly ignored globally.
+!tests/e2e/tls/*.key

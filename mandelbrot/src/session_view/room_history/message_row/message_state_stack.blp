@@ -1,0 +1,83 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $MessageStateStack: Adw.Bin {
+  Gtk.Stack stack {
+    transition-type: crossfade;
+
+    Gtk.StackPage {
+      name: "none";
+
+      child: Adw.Bin {};
+    }
+
+    Gtk.StackPage {
+      name: "sending";
+
+      child: Adw.Spinner {
+        height-request: 20;
+        width-request: 20;
+        // Translators: As in 'Sending message…'.
+        tooltip-text: _("Sending…");
+      };
+    }
+
+    Gtk.StackPage {
+      name: "warning";
+
+      child: Gtk.Image {
+        valign: center;
+        icon-name: "warning-symbolic";
+        tooltip-text: _("Temporary Error Sending Message");
+
+        styles [
+          "warning",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "error";
+
+      child: Gtk.Image {
+        valign: center;
+        icon-name: "error-symbolic";
+        tooltip-text: _("Message Cannot Be Sent");
+
+        styles [
+          "error",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "sent";
+
+      child: Gtk.Image {
+        valign: center;
+        icon-name: "checkmark-symbolic";
+        // Translators: As in 'Sent message'.
+        tooltip-text: _("Sent");
+
+        styles [
+          "success",
+          "accent-circle",
+        ]
+      };
+    }
+
+    Gtk.StackPage {
+      name: "edited";
+
+      child: Gtk.Image {
+        icon-name: "edit-symbolic";
+        // Translators: As in 'Edited message'.
+        tooltip-text: _("Edited");
+
+        styles [
+          "dimmed",
+        ]
+      };
+    }
+  }
+}

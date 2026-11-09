@@ -1,0 +1,38 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $QrCodeScanner: Adw.Bin {
+  accessibility {
+    label: _("QR Code Scanner");
+  }
+
+  Gtk.Stack stack {
+    transition-type: crossfade;
+
+    Gtk.StackPage {
+      name: "loading";
+      title: _("Loading");
+
+      child: Adw.Spinner {};
+    }
+
+    Gtk.StackPage {
+      name: "no-camera";
+      title: _("Could Not Connect to Camera");
+
+      child: Gtk.Box {
+        orientation: vertical;
+
+        Gtk.Image {
+          icon-name: "no-camera-symbolic";
+          pixel-size: 148;
+          accessible-role: presentation;
+        }
+
+        Gtk.Label no_camera_label {
+          label: _("Could Not Connect to Camera");
+        }
+      };
+    }
+  }
+}

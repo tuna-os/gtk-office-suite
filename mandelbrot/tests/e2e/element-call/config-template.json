@@ -1,0 +1,20 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "http://127.0.0.1:8008",
+      "server_name": "synapse.m.localhost"
+    }
+  },
+  "livekit": {
+    "livekit_service_url": "http://127.0.0.1:6080"
+  },
+  "features": {
+    "feature_use_device_session_member_events": true
+  },
+  "matrix_rtc_mode": "@MODE@",
+  "matrix_rtc_session": {
+    "membership_event_expiry_ms": 180000000,
+    "delayed_leave_event_delay_ms": 8000,
+    "delayed_leave_event_restart_ms": 4000
+  }
+}

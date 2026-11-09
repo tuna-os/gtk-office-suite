@@ -1,0 +1,133 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SpaceOverviewSubpage: Adw.NavigationPage {
+  title: _("Space");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      [end]
+      Gtk.Button {
+        icon-name: "refresh-symbolic";
+        clicked => $refresh() swapped;
+        tooltip-text: _("Reload Space");
+      }
+    }
+
+    content: Gtk.Stack stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Loading");
+
+        child: Adw.Spinner {};
+      }
+
+      Gtk.StackPage {
+        name: "content";
+        title: _("Rooms in This Space");
+
+        child: Gtk.Box {
+          orientation: vertical;
+
+          Adw.Clamp {
+            maximum-size: 750;
+            tightening-threshold: 550;
+
+            child: Gtk.Box space_info {
+              spacing: 12;
+              margin-top: 18;
+              margin-bottom: 12;
+              margin-start: 24;
+              margin-end: 24;
+
+              $Avatar space_avatar {
+                size: 64;
+                valign: start;
+                accessible-role: presentation;
+              }
+
+              Gtk.Box {
+                spacing: 6;
+                orientation: vertical;
+                hexpand: true;
+                valign: center;
+
+                Gtk.Label space_name {
+                  halign: start;
+                  ellipsize: end;
+                  xalign: 0;
+
+                  styles [
+                    "title-2",
+                  ]
+                }
+
+                Gtk.Label space_topic {
+                  visible: false;
+                  ellipsize: end;
+                  lines: 3;
+                  wrap: true;
+                  wrap-mode: word_char;
+                  xalign: 0;
+                  use-markup: true;
+                  selectable: true;
+
+                  styles [
+                    "body",
+                  ]
+                }
+              }
+            };
+          }
+
+          Gtk.ScrolledWindow scrolled_window {
+            vexpand: true;
+            hscrollbar-policy: never;
+
+            child: Adw.ClampScrollable {
+              vexpand: true;
+              hexpand: true;
+              maximum-size: 750;
+              tightening-threshold: 550;
+
+              child: Gtk.ListView listview {
+                margin-end: 24;
+                margin-start: 24;
+                tab-behavior: item;
+
+                styles [
+                  "public-rooms",
+                ]
+              };
+            };
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "empty";
+        title: _("Empty Space");
+
+        child: Adw.StatusPage {
+          icon-name: "explore-symbolic";
+          title: _("This Space Is Empty");
+          description: _("No rooms or spaces were found in this space");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Error");
+
+        child: Adw.StatusPage {
+          icon-name: "error-symbolic";
+          title: _("Error");
+          description: _("An error occurred while loading the rooms of this space");
+        };
+      }
+    };
+  };
+}
