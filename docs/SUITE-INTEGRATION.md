@@ -6,6 +6,9 @@ chat and calls (Mandelbrot), that look, behave and talk to one another as one
 product. This page is the map; [LIFAFA-INTEGRATION.md](LIFAFA-INTEGRATION.md)
 has the mail details.
 
+The feature list and the order to build it in is
+[INTEGRATION-PLAN.md](INTEGRATION-PLAN.md).
+
 ## What each part is
 
 | Part | Source | Licence | Toolkit | State |

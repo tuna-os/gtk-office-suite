@@ -32,13 +32,14 @@ the attachment into `<dir>` instead of sending. The GUI journeys
 (`LettersSendByEmailSmoke`, `TablesSendByEmailSmoke`, `DecksSendByEmailSmoke`)
 use it.
 
-## What belongs in the Lifafa repository
+## What Lifafa already does, and what is left
 
-Making Lifafa the *default* handler needs changes there, which this
-repository cannot make: a `mailto:` handler (`x-scheme-handler/mailto` in its
-desktop file) and an Email portal backend or `xdg-email` compose path that
-accepts attachments. Those must respect the fork boundary in
-`fork/MAINTAINING.md` in Lifafa's repository.
+Lifafa's desktop file already registers it for `x-scheme-handler/mailto`,
+`mid:`, `.eml` and `.msg`, so on a suite install it is the default mail client
+the Email portal reaches. What is still open is whether a compose request from
+the portal carries its attachments through to the composer; that is checked in
+the first GUI journey that drives a real Lifafa from an office app
+(INTEGRATION-PLAN.md, A1 and A2).
 
 ## Source in this repository (`lifafa/`)
 
