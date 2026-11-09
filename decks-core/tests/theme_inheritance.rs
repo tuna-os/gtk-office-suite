@@ -100,7 +100,7 @@ fn two_theme_deck() -> decks_core::engine::Deck {
         slide_on(1, "", vec![inheritor(ShapeKind::Rect, Color(0xFF, 0, 0)), local(ShapeKind::Ellipse)]),
         slide_on(2, "", vec![inheritor(ShapeKind::Rect, Color(0, 0, 0xFF))]),
     ];
-    decks_core::engine::Deck { slides, masters, page_size: None, themes }
+    decks_core::engine::Deck { slides, masters, page_size: None, themes, skipped_slides: Vec::new() }
 }
 
 fn part(path: &std::path::Path, name: &str) -> String {
@@ -232,6 +232,7 @@ fn placeholder_indices_survive_a_pptx_round_trip() {
         masters,
         page_size: None,
         themes: vec![theme(7, "FF0000", "ppt/theme/theme1.xml")],
+        skipped_slides: Vec::new(),
     };
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
     let dir = tempfile::tempdir().unwrap();

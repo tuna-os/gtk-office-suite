@@ -8,7 +8,7 @@
 //
 // Extracted from tables/src/window.rs so it is unit-testable without GTK.
 
-use crate::engine::TablesEngine;
+use crate::engine::{TablesEngine, TypedValue};
 use crate::sheet::SheetModel;
 
 /// Save sheet data to an XLSX file. Numbers are written as numbers,
@@ -161,26 +161,71 @@ pub fn save_sheets_to_xlsx_bytes(
                     continue;
                 }
                 let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh, &wb_font), &sh.borders[r][c], &sh.cell_protections[r][c]);
-                // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
-                // (any case, optionally signed) as valid floats — but a
-                // user typing that text almost certainly means literal
-                // text, not IEEE-754 infinity/NaN, and no spreadsheet
-                // app treats it as numeric by default. Writing it as a
-                // number here round-trips as "INF" (calamine's own
-                // float formatting) on reopen, silently corrupting the
-                // cell — caught by tables-core/tests/property.rs.
-                if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
-                    match &format {
-                        Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
-                        None => sheet.write_number(r as u32, c as u16, n),
+                // Write the value with the type the engine holds, not a
+                // type re-guessed from its text (#1980): a text cell
+                // holding "00123" used to come back as the number 123,
+                // "2024-01-15" as a date serial, and a boolean was never
+                // written as one. The engine-less path has no types to
+                // consult — the projection is all it has — so it keeps
+                // the text inference below.
+                match engine.map(|eng| eng.typed_value_at(si, r, c)) {
+                    Some(TypedValue::Number(n)) => {
+                        match &format {
+                            Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
+                            None => sheet.write_number(r as u32, c as u16, n),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
                     }
-                    .map_err(|e| format!("Write error: {}", e))?;
-                } else {
-                    match &format {
-                        Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
-                        None => sheet.write_string(r as u32, c as u16, val),
+                    Some(TypedValue::Boolean(b)) => {
+                        match &format {
+                            Some(f) => sheet.write_boolean_with_format(r as u32, c as u16, b, f),
+                            None => sheet.write_boolean(r as u32, c as u16, b),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
                     }
-                    .map_err(|e| format!("Write error: {}", e))?;
+                    Some(TypedValue::Text(text)) => {
+                        // The typed string itself, not the editable
+                        // input: for text that looks like a number the
+                        // input carries Excel's "'" text marker
+                        // ("'00123"), which is an editing convention,
+                        // not part of the value — writing it would put
+                        // the apostrophe in the saved cell.
+                        match &format {
+                            Some(f) => sheet.write_string_with_format(r as u32, c as u16, &text, f),
+                            None => sheet.write_string(r as u32, c as u16, &text),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
+                    }
+                    Some(TypedValue::Empty) => {
+                        match &format {
+                            Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
+                            None => sheet.write_string(r as u32, c as u16, val),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
+                    }
+                    None => {
+                        // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
+                        // (any case, optionally signed) as valid floats — but a
+                        // user typing that text almost certainly means literal
+                        // text, not IEEE-754 infinity/NaN, and no spreadsheet
+                        // app treats it as numeric by default. Writing it as a
+                        // number here round-trips as "INF" (calamine's own
+                        // float formatting) on reopen, silently corrupting the
+                        // cell — caught by tables-core/tests/property.rs.
+                        if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
+                            match &format {
+                                Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
+                                None => sheet.write_number(r as u32, c as u16, n),
+                            }
+                            .map_err(|e| format!("Write error: {}", e))?;
+                        } else {
+                            match &format {
+                                Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
+                                None => sheet.write_string(r as u32, c as u16, val),
+                            }
+                            .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                    }
                 }
             }
         }
@@ -209,6 +254,23 @@ pub fn save_sheets_to_xlsx_bytes(
                         Formula::new(&formula).set_result(eng.cell_at(si, *mr, *mc)),
                         &format,
                     ).map_err(|e| format!("Write error: {}", e))?;
+                } else {
+                    // merge_range writes its value as a string, always:
+                    // an anchor whose engine value is a number or a
+                    // boolean needs the typed write over it, or the
+                    // merged total reopens as text (#1980). A text
+                    // anchor is already what merge_range wrote.
+                    match eng.typed_value_at(si, *mr, *mc) {
+                        TypedValue::Number(n) => {
+                            sheet.write_number_with_format(*mr as u32, *mc as u16, n, &format)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                        TypedValue::Boolean(b) => {
+                            sheet.write_boolean_with_format(*mr as u32, *mc as u16, b, &format)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                        _ => {}
+                    }
                 }
             }
             // merge_range applies the anchor's format to every covered blank.
@@ -704,6 +766,20 @@ mod tests {
         let (_, cols) = load_file_into_engine(&path, &mut e).unwrap();
         assert_eq!(cols, 2);
         assert_eq!(e.cell(0, 1), "y");
+    }
+
+    #[test]
+    fn csv_import_quoted_fields_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_temp(&dir, "t.csv", "\"Smith, John\",42,\"line1\nline2\"\n\"say \"\"hi\"\"\",7,x\n");
+        let mut e = engine();
+        let (rows, cols) = load_file_into_engine(&path, &mut e).unwrap();
+        assert_eq!((rows, cols), (2, 3), "the quoted newline must not split the record");
+        assert_eq!(e.cell(0, 0), "Smith, John");
+        assert_eq!(e.cell(0, 1), "42");
+        assert_eq!(e.cell(0, 2), "line1\nline2");
+        assert_eq!(e.cell(1, 0), "say \"hi\"");
+        assert_eq!(e.cell(1, 1), "7");
     }
 
     #[test]

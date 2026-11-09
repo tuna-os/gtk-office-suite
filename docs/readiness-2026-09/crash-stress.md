@@ -155,10 +155,23 @@ Controller state machines generate valid commands and assert invariants after ev
       "the application no longer exists" to go on.
 - [~] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
       `summarize()` reports `first_attempt_failure_rate` over every attempt that ran, and
-      `by_classification` counts product-crash, assertion-mismatch, timeout, infrastructure and
-      unclassified separately. Both are held by tests rather than inspected by eye:
-      `test_failure_rate_counts_every_attempt_once`, `test_classifications_are_reported_separately`
-      and `test_nonzero_exit_with_no_evidence_is_not_silently_a_pass`.
+      `by_classification` counts product-crash, assertion-mismatch, timeout, infrastructure,
+      input-not-delivered and unclassified separately. Both are held by tests rather than
+      inspected by eye: `test_failure_rate_counts_every_attempt_once`,
+      `test_classifications_are_reported_separately` and
+      `test_nonzero_exit_with_no_evidence_is_not_silently_a_pass`.
+      `input-not-delivered` separates one conflation the nightly kept tripping over (#1951):
+      keystrokes the harness never got into the app (measured: xdotool's 12ms default spacing
+      drops and doubles characters in CI-like containers, fixed at 40ms by #1920; the older
+      conftest.py measurement tuned dogtail's path, which the xdotool replacement bypasses).
+      The framework samples the focused text after each typed string when GUI_TEST_VERIFY_TYPING
+      is set (on for the nightly campaign) and the runner files a failure whose trace never saw
+      the text land as input-not-delivered — a re-label, never a cleared failure. The same knob
+      the measurement calibrated, GUI_TEST_TYPING_DELAY (seconds), now paces the live xdotool
+      path too; unset keeps main's 40ms. Held by
+      `test_undelivered_input_is_not_an_assertion_mismatch`,
+      `test_delivery_evidence_does_not_clear_a_failure`,
+      `test_delivery_evidence_does_not_hide_a_crash` and the DeliveryTraceTests class.
       Not done: **nondeterministic rendering is not a class of its own.** A frame that differed
       between two otherwise identical attempts currently lands in `assertion-mismatch` beside a
       genuine wrong answer, which is the conflation this row asks to avoid — the two have different

@@ -34,7 +34,7 @@ fn round_trip(d: &Deck, ext: &str) -> Deck {
 fn every_theme_keeps_its_master_through_pptx_and_odp() {
     for (i, t) in templates().iter().enumerate() {
         let (slides, masters) = deck(i).unwrap();
-        let d = Deck { slides, masters, page_size: None, themes: Vec::new() };
+        let d = Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
         for ext in ["pptx", "odp"] {
             let back = round_trip(&d, ext);
             let (m, want) = (&back.masters[0], &d.masters[0]);

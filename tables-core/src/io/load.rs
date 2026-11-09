@@ -185,23 +185,119 @@ pub fn load_file_into_engine(
             let content =
                 std::fs::read_to_string(path).map_err(|e| format!("Cannot read file: {}", e))?;
             let delim = if ext == "tsv" { '\t' } else { ',' };
-            let mut max_rows = 0usize;
+            let records = parse_delimited(&content, delim);
             let mut max_cols = 0usize;
-            for (r, line) in content.lines().enumerate() {
-                let cols: Vec<&str> = line.split(delim).collect();
+            for (r, cols) in records.iter().enumerate() {
                 max_cols = max_cols.max(cols.len());
                 for (c, val) in cols.iter().enumerate() {
-                    let trimmed = val.trim().trim_matches('"');
-                    engine.put_cell_text(r, c, trimmed)
+                    engine.put_cell_text(r, c, val)
                         .map_err(|e| format!("import {e}"))?;
                 }
-                max_rows = r + 1;
             }
             engine.evaluate();
-            Ok((max_rows.max(1), max_cols.max(1)))
+            Ok((records.len().max(1), max_cols.max(1)))
         }
         _ => Err(format!("Unsupported format: .{}", ext)),
     }
+}
+
+/// Parse CSV/TSV text into records of fields, following RFC 4180 (#1979):
+/// a field wrapped in double quotes may contain the delimiter, newlines,
+/// and `""` for a literal quote. The previous import split each physical
+/// line on the delimiter and stripped quote characters, which shredded
+/// exactly those fields — `"Smith, John"` became two cells and a quoted
+/// multi-line note became several rows.
+///
+/// Deliberate leniencies, kept from the old importer and from what real
+/// files do: a UTF-8 BOM is skipped; whitespace around an *unquoted*
+/// field is trimmed (quoted content is kept exactly); padding between a
+/// closing quote and the delimiter is ignored. A quote only opens a
+/// field when it is the field's first character; anywhere else it is
+/// literal text. LF and CRLF both end a record, and a trailing record
+/// separator does not invent a final empty record.
+fn parse_delimited(content: &str, delim: char) -> Vec<Vec<String>> {
+    let content = content.strip_prefix('\u{feff}').unwrap_or(content);
+    let mut records: Vec<Vec<String>> = Vec::new();
+    let mut record: Vec<String> = Vec::new();
+    let mut field = String::new();
+    let mut quoted = false;
+    let mut in_quotes = false;
+    let mut closed_quote = false;
+    let mut touched = false;
+    let mut chars = content.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if in_quotes {
+            if ch == '"' {
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                    field.push('"');
+                } else {
+                    in_quotes = false;
+                    closed_quote = true;
+                }
+            } else {
+                field.push(ch);
+            }
+            continue;
+        }
+        if closed_quote {
+            if ch == delim {
+                record.push(std::mem::take(&mut field));
+                quoted = false;
+                closed_quote = false;
+            } else if ch == '\n' || ch == '\r' {
+                if ch == '\r' && chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                record.push(std::mem::take(&mut field));
+                records.push(std::mem::take(&mut record));
+                quoted = false;
+                closed_quote = false;
+                touched = false;
+            }
+            // Anything else after a closing quote is padding; ignored.
+            continue;
+        }
+        match ch {
+            '"' if field.is_empty() && !quoted => {
+                in_quotes = true;
+                quoted = true;
+                touched = true;
+            }
+            c if c == delim => {
+                record.push(finish_field(&mut field, quoted));
+                quoted = false;
+                touched = true;
+            }
+            '\n' | '\r' => {
+                if ch == '\r' && chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                record.push(finish_field(&mut field, quoted));
+                records.push(std::mem::take(&mut record));
+                quoted = false;
+                touched = false;
+            }
+            _ => {
+                field.push(ch);
+                touched = true;
+            }
+        }
+    }
+    // A final record with no trailing separator still counts; a trailing
+    // separator (or empty input) does not invent one.
+    if touched || !record.is_empty() || !field.is_empty() {
+        record.push(finish_field(&mut field, quoted));
+        records.push(record);
+    }
+    records
+}
+
+/// The field is finished: quoted content is kept exactly as it appeared
+/// between the quotes; unquoted content keeps the old importer's trim.
+fn finish_field(field: &mut String, quoted: bool) -> String {
+    let value = std::mem::take(field);
+    if quoted { value } else { value.trim().to_string() }
 }
 
 /// Load every XLSX worksheet into one calculation engine, preserving sheet
@@ -1376,5 +1472,32 @@ mod tests {
         let (engine, sheets) = build_named_workbook(vec![("Tall".into(), range)]).unwrap();
         assert!(sheets[0].rows >= tall, "clamped to {} rows, need {tall}", sheets[0].rows);
         assert_eq!(engine.cell(tall - 1, 0), "bottom");
+    }
+    // ── parse_delimited (#1979) ──────────────────────────────────────
+
+    #[test]
+    fn delimited_quoted_fields_hold_delimiters_newlines_and_quotes() {
+        let rows = parse_delimited("\"Smith, John\",42\n\"line1\nline2\",x\n\"say \"\"hi\"\"\",y", ',');
+        assert_eq!(rows.len(), 3, "a quoted newline is not a record break: {rows:?}");
+        assert_eq!(rows[0], vec!["Smith, John".to_string(), "42".to_string()]);
+        assert_eq!(rows[1], vec!["line1\nline2".to_string(), "x".to_string()]);
+        assert_eq!(rows[2], vec!["say \"hi\"".to_string(), "y".to_string()]);
+    }
+
+    #[test]
+    fn delimited_keeps_the_old_importers_leniencies() {
+        // BOM skipped, unquoted fields trimmed, quoted content exact,
+        // padding after a closing quote ignored, CRLF a record break,
+        // tab delimiter for TSV.
+        assert_eq!(parse_delimited("\u{feff}a,b", ',')[0], vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(parse_delimited("\"hello\" , world\n", ',')[0], vec!["hello".to_string(), "world".to_string()]);
+        assert_eq!(parse_delimited("\" pad \",x", ',')[0][0], " pad ");
+        assert_eq!(parse_delimited("a,b\r\nc,d\r\n", ',').len(), 2);
+        assert_eq!(parse_delimited("a\tb\n", '\t')[0], vec!["a".to_string(), "b".to_string()]);
+        // No trailing separator: the last record still counts. Trailing
+        // separator: no phantom record. Empty input: no records.
+        assert_eq!(parse_delimited("a,b", ',').len(), 1);
+        assert_eq!(parse_delimited("a,b\n", ',').len(), 1);
+        assert!(parse_delimited("", ',').is_empty());
     }
 }

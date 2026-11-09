@@ -11026,6 +11026,113 @@ class LettersSourceReplacedSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed saving over a replaced source")
 
 
+class LettersTwoWindowsSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
+    """Two live Letters processes on one file, saving over each other (#442).
+
+    The multi-window close/save race no journey covered: window A saves,
+    then window B — whose imported revision that save replaced — saves too.
+    The save-time revision check (a hash of the source read at save time,
+    not shared memory) is what keeps B from silently carrying the
+    pre-replace parts, so it holds across processes. This locks that:
+    Cancel keeps A's bytes and B's edit; Save Anyway writes B's model
+    without resurrecting the replaced revision's parts; both processes stay
+    alive throughout. Like the clipboard-survival journey, this asserts the
+    honest outcome and not a wish: for the text itself, the last writer
+    wins.
+    """
+
+    app_name = "letters"
+    corpus = staticmethod(lambda: minimal_docx_bytes("plain words"))
+    file_name = "shared.docx"
+
+    def test_a_second_window_saving_over_a_replaced_source_warns_first(self):
+        import zipfile
+        from dogtail import rawinput
+        from framework import instances
+
+        # A second process of the same app: NON_UNIQUE keeps it from
+        # forwarding to the first window and exiting, and its own state
+        # root keeps the two autosave slots apart. Everything else matches
+        # the primary launch environment, so both windows behave alike.
+        second_state = self.temp_dir(prefix="letters-two-windows-state-")
+        second_env = dict(self.launch_env)
+        second_env.update({"GTK_OFFICE_NON_UNIQUE": "1",
+                           "XDG_STATE_HOME": second_state})
+        second = self.launch_second_app(
+            "letters", launch_args=[self._doc], same_name=True, env=second_env)
+        self.focus_app(second)
+        self.wait_until(lambda: second.app.child(roleName="text").text, bool,
+                        description="the shared document to open in the second window")
+
+        def file_text():
+            # The document body only: the font and theme tables contain
+            # short substrings that collide with tiny match words, so a
+            # whole-package match would prove nothing either way.
+            try:
+                with zipfile.ZipFile(self._doc) as z:
+                    return z.read("word/document.xml").decode("utf-8", "replace")
+            except (OSError, zipfile.BadZipFile, KeyError):
+                return ""
+
+        # Window A saves first: its revision becomes the file. The wait for
+        # its bytes also orders the race: B's save below must see a source
+        # its import no longer matches, deterministically.
+        self.focus_app()
+        self.wait_until(lambda: self.app.child(roleName="text").text, bool,
+                        description="the shared document to open in the first window")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" one")
+        rawinput.keyCombo("<Control>s")
+        self.wait_until(lambda: "plain words one" in file_text(), bool,
+                        description="the first window's save to land")
+        self.assert_still_running(second)
+
+        # Window B's revision is now replaced, and it has its own edit at
+        # stake, so its save must ask first — the cross-process version of
+        # the replaced-source warning.
+        self.focus_app(second)
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" two")
+        rawinput.keyCombo("<Control>s")
+        # The question lives in the second window, so its buttons are
+        # waited on in the second app's tree: the dialog heading is not
+        # exposed there (its body is asserted through the file bytes
+        # below, which is what the heading promises).
+        cancel = self.wait_for_condition(
+            lambda: second.app.child(name="Cancel", roleName="push button"),
+            description="the save question in the second window")
+        cancel.do_action(0)
+        self.wait_until(lambda: second.app.findChild(lambda n: n.name == "Save Anyway" and n.showing, retry=False, requireResult=False),
+                        lambda n: n is None, description="the question to close")
+        with zipfile.ZipFile(self._doc) as z:
+            content = z.read("word/document.xml")
+        self.assertIn(b"plain words one", content, "Cancel wrote the second window's edit anyway")
+        self.assertNotIn(b"two", content, "Cancel wrote the second window's edit anyway")
+        self.wait_until(lambda: second.app.child(roleName="text").text, lambda t: "two" in (t or ""),
+                        description="the second window to keep its unsaved edit")
+        self.assert_still_running(second)
+
+        # Save Anyway writes B's model without resurrecting the parts of
+        # the revision A's save replaced: last writer wins for the text.
+        self.focus_app(second)
+        rawinput.keyCombo("<Control>s")
+        save_anyway = self.wait_for_condition(
+            lambda: second.app.child(name="Save Anyway", roleName="push button"),
+            description="the save question in the second window")
+        save_anyway.do_action(0)
+        self.wait_until(lambda: "plain words two" in file_text(), bool,
+                        description="the second window's save to land")
+        with zipfile.ZipFile(self._doc) as z:
+            content = z.read("word/document.xml")
+            self.assertIn(b"plain words two", content)
+            self.assertNotIn(b"plain words one", content,
+                             "the second save carried the replaced revision's text")
+            self.assertNotIn("customXml/item1.xml", z.namelist(),
+                             "the second save carried parts from the replaced revision")
+        self.assert_still_running(second)
+        self.assertIsNone(self.process.poll(), "letters crashed in a two-window save race")
+
+
 class OpenPathsMixin:
     """The two open paths no journey covered (#1316): the Open… dialog,
     driven through the file chooser's location entry, and drag and drop,

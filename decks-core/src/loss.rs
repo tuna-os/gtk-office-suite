@@ -39,6 +39,8 @@
 //! | 8 | A source that cannot be inspected (missing, corrupt, over budget) | blocked (`source-inspection-failed`): no save, not even a confirmed one | blocked (`source-inspection-failed`) | loss unit tests, `hostile_packages.rs`, `malformed_inputs.rs` | `inspect_source`, `scan_part` below |
 //! | 9 | Anything in a package Decks itself wrote | clean: no warning in either format | clean | `package_consistency.rs`, `a_deck_decks_wrote_loses_nothing` below | — |
 //! | 10 | Slides on differently-sized pages (DCK-006) | not applicable: one `p:sldSz` per deck | explicit-loss (`mixed-page-sizes`): the first slide page's size is kept | loss unit test below | `mixed_page_sizes` in `odp_drops` |
+//! | 11 | Slides the presentation names but the package does not contain (#1977) | explicit-loss (`unreadable-slides`): the reader skipped the slide, a save drops it | not applicable: slides live in `content.xml`, which either reads or fails the open | loss unit tests (a missing slide part cannot ship in `interop/corpus.json` for the same reason as row 7) | `pptx_drops` below; the reader-side record is `Deck.skipped_slides` |
+//! | 12 | Text hyperlinks (stopgap warning until full support, #1998) | explicit-loss (`text-hyperlinks`): `hlinkClick` elements in slides, layouts and masters | explicit-loss (`text-hyperlinks`): `a` elements in `content.xml`/`styles.xml` | loss unit tests below | `pptx_drops`, `odp_drops` below |
 //!
 //! Detection is namespace/relationship-aware bounded parsing, not
 //! prefix-sensitive substring search: element and attribute names compare by
@@ -65,11 +67,20 @@ const SMARTART: (&str, &str) = ("smartart", "SmartArt graphics");
 const ANIMATION: (&str, &str) = ("animations", "Emphasis and motion-path animations");
 const CHARTS: (&str, &str) = ("multi-series-charts", "Charts with more than one series");
 const MISSING: (&str, &str) = ("missing-pictures", "Pictures missing from the file");
+/// Slides the presentation names but the package does not contain (#1977):
+/// the reader skips them, so they are not in the deck and a save drops
+/// them for good. Same id as the open report's finding, so the two agree.
+const UNREADABLE: (&str, &str) = ("unreadable-slides", "Slides that could not be read");
 /// Slides on differently-sized pages (DCK-006): ODP lets each `draw:page`
 /// use a page layout of its own, while the deck model (and pptx) keeps one
 /// size — the reader normalises to the first slide page's. A save must warn
 /// rather than silently keep that choice.
 const MIXED_SIZES: (&str, &str) = ("mixed-page-sizes", "Slides on differently-sized pages");
+/// Text hyperlinks (#1982): neither reader models them yet — the PPTX
+/// reader ignores `hlinkClick`, the ODP reader `text:a` — so the link
+/// never enters the deck and a save silently unlinks the text. Warn until
+/// full support (#1998) makes this row editable and the warning retires.
+const HYPERLINKS: (&str, &str) = ("text-hyperlinks", "Text hyperlinks");
 
 fn record(report: &mut CompatibilityReport, (id, label): (&str, &str), location: &str, detail: &str) {
     // Deduplicate on the full triple, not just id and location: one slide
@@ -159,6 +170,23 @@ fn scan_part<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, name: &str, 
 }
 
 fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTreeSet<String>, budget: &mut ZipBudget, report: &mut CompatibilityReport) -> Result<(), String> {
+    // Slides the presentation names but the package does not contain
+    // (#1977): the reader skips a missing slide part, so the slide is not
+    // in the deck and this save would drop it permanently. Resolved from
+    // the presentation's relationships, like `chart_parts` below; a slide
+    // part that exists but cannot be decoded already fails inspection
+    // (row 8) when the slide loop scans it. A missing rels part means the
+    // reader could not have opened the file either, so there is no deck
+    // whose save this check is guarding — skip rather than hard-error.
+    if names.contains("ppt/_rels/presentation.xml.rels") {
+        let pres_rels = scan_part(zip, "ppt/_rels/presentation.xml.rels", budget)?;
+        for target in internal_targets(&pres_rels, "/slide") {
+            let part = resolve("ppt", &target);
+            if !names.contains(&part) {
+                record(report, UNREADABLE, &part, "the slide is named by the presentation but is not in the file; it was not read and a save will drop it");
+            }
+        }
+    }
     // Comment parts themselves: PowerPoint writes an authors list
     // (ppt/authors.xml, ppt/commentAuthors.xml) into decks with no comments.
     if names.iter().any(|n| n.starts_with("ppt/comments/") && n.ends_with(".xml")) {
@@ -176,6 +204,9 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
         if tags.iter().any(|t| t.local == "oleObj" || t.local.eq_ignore_ascii_case("oleobject")) {
             record(report, OLE, slide, "embedded objects are not kept");
         }
+        if tags.iter().any(|t| t.local == "hlinkClick") {
+            record(report, HYPERLINKS, slide, "text hyperlinks are not kept");
+        }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "presetClass"), Some("emph" | "path"))) {
             record(report, ANIMATION, slide, "only entrance and exit builds are kept");
         }
@@ -190,6 +221,15 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
             if !names.contains(&resolve("ppt/slides", &target)) {
                 record(report, MISSING, slide, &format!("{target} is not in the file"));
             }
+        }
+    }
+    // Hyperlinks live on layouts and masters too (a linked title
+    // placeholder, a "home" button in the master): a deck whose slides
+    // are clean can still lose links from its masters on save.
+    for part in names.iter().filter(|n| (n.starts_with("ppt/slideLayouts/") || n.starts_with("ppt/slideMasters/")) && n.ends_with(".xml")) {
+        let xml = scan_part(zip, part, budget)?;
+        if start_tags(&xml).iter().any(|t| t.local == "hlinkClick") {
+            record(report, HYPERLINKS, part, "text hyperlinks are not kept");
         }
     }
     for chart in chart_parts(zip, names, budget, report)? {
@@ -263,6 +303,9 @@ fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTre
         }
         if tags.iter().any(|t| t.local == "object-ole") {
             record(report, OLE, part, "embedded objects are not kept");
+        }
+        if tags.iter().any(|t| t.local == "a") {
+            record(report, HYPERLINKS, part, "text hyperlinks are not kept");
         }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "preset-class"), Some("emphasis" | "motion-path"))) {
             record(report, ANIMATION, part, "only entrance and exit builds are kept");
@@ -676,6 +719,39 @@ mod tests {
         let path = dir.path().join("no-relationships.pptx");
         package(&path, &[("ppt/slides/slide1.xml", "<p:sld/>")]);
         assert!(content_a_save_drops(path.to_str().unwrap()).validate_save(false).is_ok());
+    }
+
+    #[test]
+    fn text_hyperlinks_warn_before_save_in_both_formats() {
+        let dir = tempfile::tempdir().unwrap();
+        // PPTX: a hyperlink on a run in a slide...
+        let slide = dir.path().join("linked.pptx");
+        package(&slide, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr><a:hlinkClick r:id=\"rId2\"/></a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>")]);
+        let report = content_a_save_drops(slide.to_str().unwrap());
+        assert!(ids(&report).contains(&"text-hyperlinks"), "{:?}", ids(&report));
+        assert!(report.validate_save(false).is_err(), "an unconfirmed save must not proceed");
+        // ...and one that lives only in the slide master.
+        let master = dir.path().join("linked-master.pptx");
+        package(&master, &[
+            ("ppt/slides/slide1.xml", "<p:sld/>"),
+            ("ppt/slideMasters/slideMaster1.xml",
+             "<p:sldMaster><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr><a:hlinkClick r:id=\"rId9\"/></a:rPr><a:t>home</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sldMaster>"),
+        ]);
+        assert!(ids(&content_a_save_drops(master.to_str().unwrap())).contains(&"text-hyperlinks"));
+        // ODP: a text:a span in content...
+        let odp = dir.path().join("linked.odp");
+        package(&odp, &[
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("content.xml",
+             "<office:document-content><office:body><office:presentation><draw:page><draw:frame><draw:text-box><text:p>see <text:a xlink:href=\"https://example.org\">the site</text:a></text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>"),
+        ]);
+        assert!(ids(&content_a_save_drops(odp.to_str().unwrap())).contains(&"text-hyperlinks"));
+        // ...and no false positive on plain text in either format.
+        let plain = dir.path().join("plain.pptx");
+        package(&plain, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>no links here</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>")]);
+        assert!(!ids(&content_a_save_drops(plain.to_str().unwrap())).contains(&"text-hyperlinks"));
     }
 
     #[test]
