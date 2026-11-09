@@ -148,7 +148,7 @@ jobs:
 
       # Tells `publish` the ratchet passed, so it may sync issues.
       - name: Mark a passing run
-        if: steps.run.outcome == 'success'
+        if: steps.scope.outputs.run == 'true' && steps.run.outcome == 'success'
         run: touch render-lab-out/run-ok 2>/dev/null || sudo touch render-lab-out/run-ok
 
       - name: Upload report
