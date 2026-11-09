@@ -209,7 +209,7 @@ tests/gui/run-flatpak-smoke.sh Mandelbrot-Linux-CI.flatpak
 
 # The e2e harness (needs docker or podman compose; see tests/e2e/README.md)
 cargo build --manifest-path matrixrtc/Cargo.toml --features livekit --example join_call
-cd tests/e2e && JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-interop.sh
+cd tests/e2e && JOIN_CALL_BIN=../../target/debug/examples/join_call ./run-interop.sh
 ```
 
 The smoke test isolates HOME, the XDG directories, the Flatpak installation and the D-Bus session

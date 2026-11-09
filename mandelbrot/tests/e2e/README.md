@@ -60,7 +60,7 @@ use a distrobox).
 # Optionally prebuild the client:
 (cd ../../matrixrtc && cargo build --features livekit --example join_call)
 
-JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-interop.sh
+JOIN_CALL_BIN=../../target/debug/examples/join_call ./run-interop.sh
 ```
 
 `KEEP_STACK=1` keeps the containers running afterwards for debugging.
@@ -132,7 +132,7 @@ value is a conformance report rather than a gate.
 ### Running one script
 
 ```sh
-JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-resilience.sh
+JOIN_CALL_BIN=../../target/debug/examples/join_call ./run-resilience.sh
 JOIN_CALL_BIN=... ./run-restricted-sfu.sh
 JOIN_CALL_BIN=... ./run-huddle.sh 5
 JOIN_CALL_BIN=... ./run-federation.sh remote-first   # needs compose-federated.yml
