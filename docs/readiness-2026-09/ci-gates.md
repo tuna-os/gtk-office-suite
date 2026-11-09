@@ -492,6 +492,7 @@ by hand:
 | `vlm-audit (decks)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (letters)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (tables)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
+| `Lifafa compiles (GNOME 50 SDK)` | `lifafa.yml` → `check` | optional | Path-filtered to lifafa/ (docs/LIFAFA-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Compiles the email client in the GNOME 50 SDK, since its libadwaita 1.7 floor is above what the Ubuntu runner's packages provide. |
 | `Fuzz importer smoke tests` | `nightly.yml` → `fuzz-smoke` | optional | Skipped on pull requests by design (nightly cost). |
 | `coverage` | `nightly.yml` → `coverage` | optional | Skipped on pull requests by design (nightly cost). |
 | `oracle` | `nightly.yml` → `oracle` | optional | Path-filtered to format/model code (runs_on_every_revision: false). release-revision.yml refuses a release whose oracle evidence was recorded at another revision instead. |

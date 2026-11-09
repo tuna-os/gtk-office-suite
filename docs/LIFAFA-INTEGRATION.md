@@ -50,15 +50,19 @@ are declared in the root `.gitmodules` at the commits Lifafa pinned.
 
 Where it stands:
 
-- **Not yet a workspace member.** Lifafa builds against gtk4 0.9, libadwaita
-  0.7 and relm4 0.9; the suite uses gtk4 0.11 and libadwaita 0.9, and
-  `gtk4-sys` declares `links = "gtk-4"`, so two versions cannot share a
-  lockfile. Until it is bumped, `lifafa/` is listed in the root `exclude`
-  like `collab/`, with its own `Cargo.lock`.
+- **Toolkit.** Lifafa is on the suite's toolkit versions: gtk4 0.11, libadwaita
+  0.9, webkit6 0.6, poppler-rs 0.26, cairo-rs 0.22 and relm4 0.11 (the last
+  until the port below replaces it). It stays its own Cargo workspace with its
+  own lockfile: it needs libadwaita 1.7 or later and WebKitGTK 6, which the
+  Ubuntu runner behind the root `test` job does not have, so joining the root
+  workspace would break that job.
+- **CI.** `.github/workflows/lifafa.yml` compiles it (`cargo check`, every
+  target) inside the GNOME 50 SDK with poppler, using `lifafa/ci/check.yml`.
+  It runs only for changes under `lifafa/`.
 - **Upstream sync has ended.** `fork/MAINTAINING.md`'s daily merge from
   hyprlab/hylki does not apply to a vendored copy; the fork workflows were not
   imported. Changes to Lifafa are made here.
-- **Next:** bump the toolkit stack to the suite's, make `lifafa` a workspace
-  member, then replace relm4 (236 files, about 96,000 lines, 41 components)
-  with plain gtk4/libadwaita as the other apps use, moving logic that needs no
-  widget into a GTK-free `lifafa-core` crate (AGENTS.md's architecture rule).
+- **Next:** bump its other dependencies to their latest majors, then replace
+  relm4 (236 files, about 96,000 lines, 41 components) with plain
+  gtk4/libadwaita as the other apps use, moving logic that needs no widget into
+  a GTK-free `lifafa-core` crate (AGENTS.md's architecture rule).

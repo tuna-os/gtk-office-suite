@@ -1,0 +1,41 @@
+name: Lifafa
+
+# Lifafa (lifafa/) is the suite's email client. It is its own Cargo workspace
+# (docs/LIFAFA-INTEGRATION.md) and needs libadwaita 1.7 or later, so it is
+# compiled inside the GNOME 50 SDK rather than on the Ubuntu runner.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lifafa/**'
+      - '.github/workflows/lifafa.yml'
+  pull_request:
+    paths:
+      - 'lifafa/**'
+      - '.github/workflows/lifafa.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: lifafa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lifafa compiles (GNOME 50 SDK)
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
+      options: --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: cargo check, in the SDK
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+        with:
+          manifest-path: lifafa/ci/check.yml
+          build-bundle: false
+          cache: false

@@ -23,26 +23,26 @@ beta = []
 # v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
 # blocking one spins a nested main loop and glib's future executor aborts when
 # re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.
-gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 # v1_7 for AdwWrapBox: the composer's format bar wraps onto a second row
 # when the composer is narrow (#358). It also carries v1_6's
 # AdwStyleManager:accent-color, which the System theme swatch reads.
 # libadwaita 1.7 is a 2025 release; the GNOME 50 runtime has 1.9.
-adw = { package = "libadwaita", version = "0.7", features = ["v1_7"] }
-relm4 = { version = "0.9", features = ["macros", "libadwaita"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
+relm4 = { version = "0.11", features = ["macros", "libadwaita"] }
 # v2_44 for WebKitEditorState::changed: the composer's undo (#200) has to know
 # when the body's own text history gains or loses a step, and that signal is
 # the only thing that says so. WebKitGTK 6.0 starts at 2.40, so the floor this
 # sets is a 2024 release; the GNOME 50 runtime has 2.50.
-webkit6 = { version = "0.4", features = ["v2_44"] }
+webkit6 = { version = "0.6", features = ["v2_44"] }
 # PDF thumbnails in the attachment gallery (first-page render via poppler-glib).
-poppler-rs = { version = "0.24", features = ["v20_9"] }
+poppler-rs = { version = "0.26", features = ["v20_9"] }
 # "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
 # rendered PDF page to gdk::Texture the same way every other thumbnail loads.
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
-cairo-rs = { version = "0.20", features = ["png", "pdf"] }
+cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 # The printed page footer's text, laid out by Pango so any script prints (#359).
-pangocairo = "0.20"
+pangocairo = "0.22"
 # The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
 # gives every D-Bus call a fixed two-second timeout, and a provider that asks
 # for something first (pass-secret-service decrypting with a security key that
@@ -128,7 +128,7 @@ schemars = "1"
 [build-dependencies]
 # Compiles resources/veem.gresource.xml (the bundled symbolic icons) into a
 # .gresource blob embedded in the binary. See build.rs.
-glib-build-tools = "0.20"
+glib-build-tools = "0.22"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
