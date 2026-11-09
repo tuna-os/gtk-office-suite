@@ -994,6 +994,17 @@ impl ChartSpec {
         })
     }
 
+    /// Whether this chart covers the centre of cell (`row`, `col`) on `sheet`.
+    /// The chart is a rectangle of `width_px` by `height_px` hung from its
+    /// anchor cell's top-left corner, so it covers whichever cells lie under
+    /// it, as it does on screen.
+    pub fn covers_cell(&self, sheet: &SheetModel, row: usize, col: usize) -> bool {
+        let (x0, y0) = (col_x(self.anchor.1, 0.0, sheet), row_y(self.anchor.0, 0.0, sheet));
+        let cx = col_x(col, 0.0, sheet) + sheet.col_width(col) / 2.0;
+        let cy = row_y(row, 0.0, sheet) + sheet.row_height(row) / 2.0;
+        cx >= x0 && cx < x0 + self.width_px && cy >= y0 && cy < y0 + self.height_px
+    }
+
     /// Every admitted series, in file order. The legacy `cat`/`val` are a
     /// mirror of the first series, not a second copy: a chart built before
     /// the series vector existed (empty `series`) reads through it.
@@ -1717,6 +1728,12 @@ impl SheetModel {
 
     pub fn is_formula(&self, r: usize, c: usize) -> bool {
         r < self.rows && c < self.cols && self.formulas[r][c]
+    }
+
+    /// The chart on this sheet that covers cell (`row`, `col`): the topmost,
+    /// that is the last drawn, when several overlap it.
+    pub fn chart_at_cell(&self, row: usize, col: usize) -> Option<usize> {
+        self.charts.iter().rposition(|c| c.covers_cell(self, row, col))
     }
 
     pub fn col_width(&self, c: usize) -> f64 {

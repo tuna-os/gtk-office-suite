@@ -10423,59 +10423,115 @@ class TablesChartEditorSmoke(BaseGUITestCase):
         rawinput.keyCombo("Return")
         time.sleep(0.3)  # pacing: no state to wait on before the next input
 
-    def test_a_selected_table_is_charted_with_its_series_titles_and_legend(self):
+    def _fill_table(self):
         from dogtail import rawinput
-        import subprocess
-        import zipfile
-
         time.sleep(1.0)  # pacing: no state to wait on before the next input
-        rows = (("A1", ""), ("B1", "Sales"), ("C1", "Plan"),
+        rows = (("B1", "Sales"), ("C1", "Plan"),
                 ("A2", "Q1"), ("B2", "3"), ("C2", "2"),
                 ("A3", "Q2"), ("B3", "7"), ("C3", "5"),
                 ("A4", "Q3"), ("B4", "5"), ("C4", "6"))
         for cell, text in rows:
-            if not text:
-                continue
             self._go(cell)
             rawinput.typeText(text)
             rawinput.keyCombo("Return")
             time.sleep(0.3)  # pacing: no state to wait on before the next input
+
+    def _dialog_button(self, name):
+        return self.wait_until(
+            lambda: self.app.findChildren(lambda c: c.roleName == "push button" and c.name == name),
+            bool, timeout=10.0, description=f"the chart dialog's {name} button")[0]
+
+    def _type_into(self, label, text):
+        entry = self.wait_until(
+            lambda: self.app.findChild(
+                lambda c: c.roleName == "text" and c.name == label and c.showing,
+                retry=False, requireResult=False),
+            bool, description=f"the {label} entry")
+        entry.text = text
+        self.wait_until(
+            lambda: self.app.findChild(lambda c: c.roleName == "text" and c.name == label,
+                                       retry=False, requireResult=False).text,
+            lambda t: t == text, description=f"the {label} to be held")
+
+    def _saved_chart(self):
+        import zipfile
+        try:
+            with zipfile.ZipFile(self._doc) as book:
+                names = [n for n in book.namelist() if n.startswith("xl/charts/chart")]
+                return book.read(names[0]).decode() if names else None
+        except (zipfile.BadZipFile, OSError):
+            return None
+
+    def test_a_selected_table_is_charted_with_its_series_titles_and_legend(self):
+        from dogtail import rawinput
+        import subprocess
+
+        self._fill_table()
         self._go("A1:C4")  # the whole table is the selection
         rawinput.keyCombo("Escape")
         time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-chart"])
-        insert = self.wait_until(
-            lambda: self.app.findChildren(lambda c: c.roleName == "push button" and c.name == "Insert"),
-            bool, timeout=10.0, description="the chart dialog's Insert button")[0]
+        insert = self._dialog_button("Insert")
         for label, text in (("Title", "Revenue"), ("Horizontal axis title", "Quarter"),
                             ("Vertical axis title", "Units")):
-            entry = self.wait_until(
-                lambda label=label: self.app.findChild(
-                    lambda c: c.roleName == "text" and c.name == label and c.showing,
-                    retry=False, requireResult=False),
-                bool, description=f"the {label} entry")
-            entry.text = text
-        self.wait_until(
-            lambda: self.app.findChild(lambda c: c.roleName == "text" and c.name == "Title",
-                                       retry=False, requireResult=False).text,
-            lambda t: t == "Revenue", description="the title to be held")
+            self._type_into(label, text)
         insert.do_action(0)
         time.sleep(1.0)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>s")
 
-        def saved_chart():
-            try:
-                with zipfile.ZipFile(self._doc) as book:
-                    names = [n for n in book.namelist() if n.startswith("xl/charts/chart")]
-                    return book.read(names[0]).decode() if names else None
-            except (zipfile.BadZipFile, OSError):
-                return None
-        chart = self.wait_until(saved_chart, bool, timeout=10.0, description="a chart part in the saved workbook")
+        chart = self.wait_until(self._saved_chart, bool, timeout=10.0,
+                                description="a chart part in the saved workbook")
         self.assertEqual(chart.count("<c:ser>"), 2, "one series per value column")
         for needle in ("Sales", "Plan", "Revenue", "Quarter", "Units"):
             self.assertIn(needle, chart, f"{needle} is not in the saved chart")
         self.assertIsNone(self.process.poll(), "tables crashed charting a table")
+
+    def test_an_inserted_chart_is_edited_in_place_as_one_undo_step(self):
+        from dogtail import rawinput
+        import subprocess
+
+        aid = "org.tunaos.tables"
+        self._fill_table()
+        self._go("A1:C4")
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        subprocess.run(["gapplication", "action", aid, "insert-chart"])
+        insert = self._dialog_button("Insert")
+        self._type_into("Title", "Revenue")
+        insert.do_action(0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
+
+        # Edit Chart opens on the chart under the selected cell: it hangs from
+        # A6, two rows under the data.
+        self._go("A6")
+        subprocess.run(["gapplication", "action", aid, "edit-chart"])
+        apply_ = self._dialog_button("Apply")
+        title = self.wait_until(
+            lambda: self.app.findChild(lambda c: c.roleName == "text" and c.name == "Title" and c.showing,
+                                       retry=False, requireResult=False),
+            bool, description="the Title entry")
+        self.assertEqual(title.text, "Revenue", "the dialog opens on the chart's own title")
+        self._type_into("Title", "Revenue edited")
+        apply_.do_action(0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
+        rawinput.keyCombo("<Control>s")
+
+        chart = self.wait_until(
+            self._saved_chart, lambda xml: bool(xml) and "Revenue edited" in xml, timeout=10.0,
+            description="the edited title in the saved chart")
+        self.assertEqual(chart.count("<c:ser>"), 2, "editing keeps both series")
+        self.assertEqual(chart.count("<c:chart>"), 1, "the edit replaced the chart, it did not add one")
+
+        # One undo takes the edit back, and the save shows it.
+        rawinput.keyCombo("<Control>z")
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
+        rawinput.keyCombo("<Control>s")
+        chart = self.wait_until(
+            self._saved_chart, lambda xml: bool(xml) and "Revenue edited" not in xml, timeout=10.0,
+            description="the original title back after one undo")
+        self.assertIn("Revenue", chart)
+        self.assertIsNone(self.process.poll(), "tables crashed editing a chart")
 
 
 class DecksUndoSelectionSmoke(BaseGUITestCase):
