@@ -78,7 +78,7 @@ pub(crate) fn detect(raw: &[u8]) -> Option<Shape> {
             let first = parsed.part(*first)?;
             let sig = parsed.part(*second)?;
             let boundary = boundary?;
-            let data = signed_bytes(raw, first.offset_header, &boundary)?;
+            let data = signed_bytes(raw, first.offset_header as usize, &boundary)?;
             let signature = part_text(sig).into_bytes();
             if !signature.contains_str("-----BEGIN PGP SIGNATURE-----") {
                 return None;

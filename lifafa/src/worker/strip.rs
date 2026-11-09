@@ -76,10 +76,10 @@ pub(super) fn without_attachment(
         return Err(StripError::WholeMessage);
     }
     let part = &parsed.parts[id];
-    let (start, end) = (part.offset_header, part.offset_end);
+    let (start, end) = (part.offset_header as usize, part.offset_end as usize);
     let protected = parsed.parts.iter().any(|p| {
-        p.offset_header <= start
-            && end <= p.offset_end
+        p.offset_header as usize <= start
+            && end <= p.offset_end as usize
             && p.content_type().is_some_and(|c| {
                 let sub = c.subtype().unwrap_or_default();
                 (c.ctype().eq_ignore_ascii_case("multipart")
@@ -93,7 +93,7 @@ pub(super) fn without_attachment(
         return Err(StripError::Protected);
     }
     let headers = raw
-        .get(start..part.offset_body)
+        .get(start..part.offset_body as usize)
         .ok_or(StripError::NotFound)?;
     let eol = if raw.windows(2).any(|w| w == b"\r\n") {
         "\r\n"

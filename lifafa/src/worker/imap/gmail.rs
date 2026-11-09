@@ -185,10 +185,10 @@ where
             Response::Done {
                 tag,
                 status,
-                information,
+                outcome,
                 ..
             } if *tag == id => {
-                let why = information.as_deref().unwrap_or("");
+                let why = outcome.information.as_deref().unwrap_or("");
                 return match status {
                     Status::Ok => {
                         tracing::debug!(target: "hylki::imap", "< OK ({})", cmd_head(&cmd));
@@ -328,10 +328,10 @@ where
             Response::Done {
                 tag,
                 status,
-                information,
+                outcome,
                 ..
             } if *tag == id => {
-                let why = information.as_deref().unwrap_or("");
+                let why = outcome.information.as_deref().unwrap_or("");
                 return Ok(match status {
                     Status::Ok => {
                         tracing::debug!(target: "hylki::imap", "< OK ({})", cmd_head(&cmd));
@@ -668,7 +668,7 @@ mod gmail_label_tests {
     }
 
     fn fetch_attrs(raw: &[u8]) -> Vec<async_imap::imap_proto::AttributeValue<'_>> {
-        match async_imap::imap_proto::parser::parse_response(raw) {
+        match async_imap::imap_proto::Response::parse(raw) {
             Ok((_, async_imap::imap_proto::Response::Fetch(_, attrs))) => attrs,
             other => panic!("not a FETCH reply: {other:?}"),
         }

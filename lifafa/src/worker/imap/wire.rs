@@ -390,13 +390,12 @@ mod uid_set_tests {
         let line = b"* LIST (\\HasNoChildren) \"\\\\\" \"\\\\All\"\r\n";
         let Ok((
             _,
-            Response::MailboxData(MailboxDatum::List {
-                delimiter, name, ..
-            }),
-        )) = async_imap::imap_proto::parser::parse_response(line)
+            Response::MailboxData(MailboxDatum::List(listed)),
+        )) = async_imap::imap_proto::Response::parse(line)
         else {
             panic!("LIST did not parse");
         };
+        let (delimiter, name) = (listed.delimiter, listed.name);
         assert_eq!(imap_unquote(&name), "\\All");
         assert_eq!(
             delimiter.as_deref().map(imap_unquote).as_deref(),
