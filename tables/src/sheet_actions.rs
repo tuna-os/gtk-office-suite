@@ -51,6 +51,7 @@ pub(crate) fn context_menu() -> gio::Menu {
         (&i18n("Edit Note…"), "app.edit-note"),
         (&i18n("Define Name…"), "app.define-name"),
         (&i18n("Conditional Formatting…"), "app.conditional-format"),
+        (&i18n("Insert Pivot Table…"), "app.insert-pivot-table"),
         (&i18n("Format Cells…"), "app.format-cells"),
     ]));
     menu

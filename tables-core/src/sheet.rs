@@ -1119,6 +1119,74 @@ pub struct PivotTableSpec {
     pub data_fields: Vec<PivotDataField>,
 }
 
+impl PivotAggFunc {
+    /// Every summary, in the order Calc's and Excel's pivot dialogs list them.
+    pub const ALL: [PivotAggFunc; 5] =
+        [PivotAggFunc::Sum, PivotAggFunc::Count, PivotAggFunc::Average, PivotAggFunc::Min, PivotAggFunc::Max];
+
+    /// The name a dialog shows for it.
+    pub fn label(self) -> &'static str {
+        match self {
+            PivotAggFunc::Sum => "Sum",
+            PivotAggFunc::Count => "Count",
+            PivotAggFunc::Average => "Average",
+            PivotAggFunc::Min => "Min",
+            PivotAggFunc::Max => "Max",
+        }
+    }
+}
+
+impl PivotTableSpec {
+    /// The fields a pivot over `range` can group or summarize by: one per
+    /// column of the range, named by its first (header) row, or by its
+    /// column letter where that cell is empty. Empty when the range has no
+    /// row under the header, since a pivot needs data to summarize.
+    pub fn source_fields(sheet: &SheetModel, range: (usize, usize, usize, usize)) -> Vec<String> {
+        let (r0, c0, r1, c1) = range;
+        if r1 <= r0 || c1 < c0 {
+            return Vec::new();
+        }
+        (c0..=c1)
+            .map(|c| {
+                let text = sheet.data.get(r0).and_then(|row| row.get(c)).map(|s| s.trim()).unwrap_or("");
+                if text.is_empty() { format!("Column {}", col_label(c)) } else { text.to_string() }
+            })
+            .collect()
+    }
+
+    /// A pivot over `range` with rows grouped by field `row`, optionally
+    /// split into columns by field `column`, summarizing field `value` with
+    /// `func`. Fields are offsets into the range's columns, as
+    /// [`Self::source_fields`] lists them. It is placed two columns right
+    /// of the range, level with its header, so it overwrites none of it.
+    /// `None` when a field is out of range or the range has no data rows.
+    pub fn from_choice(
+        sheet: &SheetModel,
+        range: (usize, usize, usize, usize),
+        row: usize,
+        column: Option<usize>,
+        value: usize,
+        func: PivotAggFunc,
+    ) -> Option<Self> {
+        let fields = Self::source_fields(sheet, range);
+        let field = |i: usize| fields.get(i).map(|name| PivotField { col_index: range.1 + i, name: name.clone() });
+        let row_field = field(row)?;
+        let col_fields = match column {
+            Some(i) => vec![field(i)?],
+            None => Vec::new(),
+        };
+        let value_field = field(value)?;
+        Some(PivotTableSpec {
+            name: format!("Pivot{}", sheet.pivot_tables.len() + 1),
+            source_range: range,
+            target_cell: (range.0, range.3 + 2),
+            row_fields: vec![row_field],
+            col_fields,
+            data_fields: vec![PivotDataField { col_index: value_field.col_index, name: value_field.name, func }],
+        })
+    }
+}
+
 /// Cell protection settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
