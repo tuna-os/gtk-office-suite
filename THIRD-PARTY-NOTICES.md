@@ -1,6 +1,6 @@
 # Third-party notices
 
-The suite is GPL-3.0-or-later. Most dependencies come from crates.io under
+The suite is GPL-3.0-or-later (`lifafa/` is AGPL-3.0-or-later, below). Most dependencies come from crates.io under
 their own licences, recorded in `Cargo.lock`. This file carries the notices
 that a dependency's licence asks us to reproduce when we ship it.
 
@@ -20,3 +20,29 @@ Copyright 2026 Elia Hilse, The OpenOOXML Project
 ```
 
 Source: <https://github.com/xhayankhan/betteroffice> (`crates/ooxml-drawingml`).
+
+## Lifafa (`lifafa/`)
+
+The email client. A fork of Hylki by hyprlab (<https://github.com/hyprlab/hylki>),
+with native Tuta and Proton Mail accounts added, imported from
+<https://github.com/tuna-os/lifafa> at commit
+`a7352f0c4e4fb7b90621c8459b78a4505884d2ee` (Hylki 1.47.1).
+
+Licence: AGPL-3.0-or-later; the full text is `lifafa/LICENSE`. Hylki's
+copyright holders are hyprlab and its contributors, so the licence of the
+Hylki-derived code is not ours to change. AGPLv3 section 13 and GPLv3 section 13
+permit combining it with the GPL-3.0-or-later parts of the suite in one work;
+the AGPL's network-use clause (section 13 of the AGPL) applies to the AGPL part.
+The native SDKs it builds against, `tuna-os/tuta-unofficial-sdk` and
+`tuna-os/proton-unofficial-sdk`, are git submodules at the commits `lifafa/`
+pinned (see `.gitmodules`); their licences are in those repositories.
+
+## Mandelbrot (`mandelbrot/`)
+
+The Matrix chat and calls client. A fork of Fractal, the GNOME Matrix client
+(<https://gitlab.gnome.org/World/fractal/>, Julian Sparber and the Fractal
+contributors), imported from <https://github.com/tuna-os/mandelbrot> at commit
+`d6f94b35c895398bbb763c38ebfd48c15de68b6b`.
+
+Licence: GPL-3.0-or-later, the same as the rest of the suite; the full text is
+`mandelbrot/LICENSE`. Its `matrixrtc/` crate is GPL-3.0-or-later as well.

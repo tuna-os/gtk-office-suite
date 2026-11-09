@@ -335,6 +335,17 @@ from the deprecated Python applications, see the
 
 ## License
 
-GPL-3.0-or-later. All source files carry SPDX headers. The GTK-free core
-crates published on crates.io (`suite-common-core`, `suite-export`,
-`tables-core`) are under the same license.
+GPL-3.0-or-later, with one directory under another licence:
+
+- `lifafa/` (the email client, from [Hylki](https://github.com/hyprlab/hylki))
+  is AGPL-3.0-or-later; its own `lifafa/LICENSE` applies there.
+- `mandelbrot/` (the Matrix client, from [Fractal](https://gitlab.gnome.org/World/fractal/))
+  is GPL-3.0-or-later, the same as the rest.
+
+AGPLv3 and GPLv3 each allow the two to be combined in one work (section 13 of
+each), so a distribution of the whole suite is covered by both: the AGPL's
+network-use clause applies to the AGPL part. Details and origins are in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). All source files carry SPDX
+headers. The GTK-free core crates published on crates.io (`suite-common-core`,
+`suite-export`, `tables-core`) are under the same license as the rest of the
+office apps.
