@@ -82,7 +82,12 @@ Work in this order; unchecked gates remain requirements, not claims:
 4. **Analysis features after persistence is trustworthy.**
    - [ ] Provide chart series/range/title/axis/legend editing with matching
      on-screen, saved and exported results. Add render-lab fixtures before
-     claiming visible parity.
+     claiming visible parity. In progress (#1658): the dialog builds a
+     multi-series chart from a selected table with a title, axis titles and a
+     legend position, Edit Chart changes them in place as one undo step, and
+     XLSX keeps them (ledger claim `tables.chart.multi-series-edit`). Still
+     open: choosing series and ranges by hand, placement, and a Calc rewrite
+     of a generated multi-series chart.
    - [ ] Expose pivots only with clear refresh/source/output semantics and
      undo. Until pivot definitions persist, label output as a static summary
      and warn about definition loss; do not market it as Excel pivot fidelity.
