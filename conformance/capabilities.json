@@ -565,14 +565,18 @@
       "app": "tables",
       "issue": 1659,
       "title": "Dynamic-array functions spill as the inventory says and survive XLSX save and reopen",
-      "scope": "The functions and shapes in docs/TABLES-DYNAMIC-ARRAYS.md, on the pinned IronCalc 0.9.1: values and shape of each spill, #SPILL! in every direction and its clearing, #CALC! for an empty result, recalculation with source edits and resizes, a source on another sheet, and one undo step per spill. XLSX writes each as an array formula marked dynamic (with the _xlfn. and _xlws. prefixes the newer functions need), stores only the anchor, and the spill is recomputed in full on reopening. Pinned limits: a spill past the grid is clipped with no #SPILL!, and the spill reference operator (E1#) yields the anchor alone. Does not certify Excel itself, a Calc that evaluates these functions (24.8 and later), or a GUI journey for the visible projection; what a Calc 24.2 rewrite does is pinned in tables-core/tests/soffice_oracle.rs and described in the inventory, not cited here.",
+      "scope": "The functions and shapes in docs/TABLES-DYNAMIC-ARRAYS.md, on the pinned IronCalc 0.9.1: values and shape of each spill, #SPILL! in every direction and its clearing, #CALC! for an empty result, recalculation with source edits and resizes, a source on another sheet, and one undo step per spill. XLSX writes each as an array formula marked dynamic (with the _xlfn. and _xlws. prefixes the newer functions need), stores only the anchor, and the spill is recomputed in full on reopening. Pinned limits: a spill past the grid is clipped with no #SPILL!, and the spill reference operator (E1#) yields the anchor alone. One GUI journey drives the visible grid through a spill, its blocking, clearing, undo and redo; the #CALC! presentation has none. Does not certify Excel itself or a Calc that evaluates these functions (24.8 and later); what a Calc 24.2 rewrite does is pinned in tables-core/tests/soffice_oracle.rs and described in the inventory, not cited here.",
       "status": "verified",
-      "revision": "1fdb4e2f90feb1b8b3041a40e29465c0d8ed03ee",
+      "revision": "a539fb7d0aa137fe9f7b3fbad08c62a1906065b9",
       "requires": [
         "model",
+        "gui",
         "format"
       ],
       "evidence": {
+        "gui": [
+          "tests/gui/test_smoke.py::TablesDynamicArraySmoke::test_a_spill_blocks_clears_and_follows_undo_redo"
+        ],
         "model": [
           "tables-core::dynamic_arrays::each_admitted_function_spills_the_shape_and_values_its_row_says",
           "tables-core::dynamic_arrays::a_blocked_spill_shows_spill_in_every_direction_and_clears_with_the_blocker",
