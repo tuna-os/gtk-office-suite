@@ -10534,6 +10534,84 @@ class TablesChartEditorSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed editing a chart")
 
 
+class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A dynamic-array formula spills into the grid, a blocked spill shows
+    #SPILL! in its anchor, and the grid recovers when the blocker goes and
+    follows undo and redo (#1659). The spill, its blocking and its clearing
+    are the engine's (tables-core/tests/dynamic_arrays.rs pins them); this
+    proves they reach the visible grid, with no spill logic in the widget
+    code."""
+
+    app_name = "tables"
+    aid = "org.tunaos.tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-dynamic-array-")
+        super().setUp()
+
+    def _enter(self, ref, text):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description=f"the jump to {ref} to hand focus back to fx")
+        rawinput.typeText(text)
+        rawinput.keyCombo("Return")
+
+    def _values(self):
+        snap = self.trigger_snapshot(self.aid)
+        return {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+
+    def _column_a(self, n=4):
+        values = self._values()
+        return [values.get((r, 0), "") for r in range(n)]
+
+    def test_a_spill_blocks_clears_and_follows_undo_redo(self):
+        from dogtail import rawinput
+
+        self.gapplication_action(self.aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
+        self._wait_for_a_new_document()
+
+        self._enter("A1", "=SEQUENCE(3)")
+        self.wait_until(self._column_a, lambda col: col == ["1", "2", "3", ""],
+                        description="=SEQUENCE(3) to fill A1:A3")
+
+        # Something in the way: the anchor reports #SPILL! and the cells
+        # below it hold only what was typed.
+        self._enter("A3", "blocker")
+        self.wait_until(self._column_a, lambda col: col[0] == "#SPILL!" and col[2] == "blocker",
+                        description="a blocked spill to show #SPILL! in A1")
+        self.assertEqual(self._column_a()[1], "", "nothing spills past a blocked anchor")
+
+        # Clear the blocker with Delete on the selected cell: the spill comes
+        # back.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("A3")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description="the jump to A3 to hand focus back to fx")
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("Delete")
+        self.wait_until(self._column_a, lambda col: col == ["1", "2", "3", ""],
+                        description="the spill to return when the blocker is cleared")
+
+        # Undo takes the clear back (blocked again); redo clears it once more.
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._column_a, lambda col: col[0] == "#SPILL!",
+                        description="undo to bring the blocker and #SPILL! back")
+        rawinput.keyCombo("<Control><Shift>z")
+        self.wait_until(self._column_a, lambda col: col == ["1", "2", "3", ""],
+                        description="redo to clear the blocker and spill again")
+        self.assertIsNone(self.process.poll(), "tables crashed spilling an array")
+
+
 class DecksUndoSelectionSmoke(BaseGUITestCase):
     """decks-readiness row 10, the window half: undo repairs the selection
     (DecksController::repair_selection). A shape is added to a duplicated
