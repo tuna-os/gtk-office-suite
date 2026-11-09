@@ -1,0 +1,287 @@
+user_version 22
+
+table account_owner
+CREATE TABLE account_owner (
+    account_id INTEGER PRIMARY KEY,
+    email      TEXT    NOT NULL
+)
+
+table addresses
+CREATE TABLE addresses (
+    email TEXT PRIMARY KEY,
+    name  TEXT NOT NULL DEFAULT '',
+    count INTEGER NOT NULL DEFAULT 0
+)
+
+table attachment_meta
+CREATE TABLE attachment_meta (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    idx         INTEGER NOT NULL,
+    name        TEXT    NOT NULL,
+    mime        TEXT    NOT NULL DEFAULT '',
+    size        INTEGER NOT NULL DEFAULT 0,
+    section     TEXT    NOT NULL DEFAULT '',
+    ext         TEXT    NOT NULL DEFAULT '',
+    bucket      INTEGER NOT NULL DEFAULT 6,
+    keywords    TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (account_id, folder_path, uid, idx)
+)
+
+index attachment_meta_by_folder
+CREATE INDEX attachment_meta_by_folder
+    ON attachment_meta (account_id, folder_path)
+
+table attachment_scan
+CREATE TABLE attachment_scan (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+table attachments
+CREATE TABLE attachments (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    idx         INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    data        BLOB NOT NULL,
+    PRIMARY KEY (account_id, folder_path, uid, idx)
+)
+
+table attachments_checked
+CREATE TABLE attachments_checked (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+table bodies
+CREATE TABLE bodies (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    body        TEXT NOT NULL,
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+table body_text
+CREATE VIRTUAL TABLE body_text USING fts5(
+    text, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2'
+)
+
+table body_text_config
+CREATE TABLE 'body_text_config'(k PRIMARY KEY, v) WITHOUT ROWID
+
+table body_text_data
+CREATE TABLE 'body_text_data'(id INTEGER PRIMARY KEY, block BLOB)
+
+table body_text_docsize
+CREATE TABLE 'body_text_docsize'(id INTEGER PRIMARY KEY, sz BLOB, origin INTEGER)
+
+trigger body_text_gone
+CREATE TRIGGER body_text_gone AFTER DELETE ON bodies BEGIN
+    DELETE FROM body_text WHERE rowid = old.rowid;
+END
+
+table body_text_idx
+CREATE TABLE 'body_text_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID
+
+table draft_copies
+CREATE TABLE draft_copies (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT    NOT NULL,
+    uid         INTEGER NOT NULL,
+    message_id  TEXT    NOT NULL,
+    ts          INTEGER NOT NULL,
+    raw         BLOB    NOT NULL,
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+table folders
+CREATE TABLE folders (
+    account_id INTEGER NOT NULL,
+    path       TEXT    NOT NULL,
+    name       TEXT    NOT NULL,
+    kind       INTEGER NOT NULL,
+    unread     INTEGER NOT NULL,
+    ord        INTEGER NOT NULL,
+    childless  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, path)
+)
+
+table imap_hierarchy
+CREATE TABLE imap_hierarchy (
+    account_id INTEGER NOT NULL PRIMARY KEY,
+    delimiter  TEXT,
+    prefix     TEXT,
+    said       INTEGER NOT NULL DEFAULT 1
+)
+
+table label_fill
+CREATE TABLE label_fill (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT    NOT NULL,
+    next_uid    INTEGER NOT NULL,
+    done        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, folder_path)
+)
+
+table local_copies
+CREATE TABLE local_copies (
+    account_id  INTEGER NOT NULL,
+    message_id  TEXT    NOT NULL,
+    folder_path TEXT    NOT NULL,
+    uid         INTEGER NOT NULL,
+    PRIMARY KEY (account_id, message_id, folder_path, uid)
+)
+
+table local_tags
+CREATE TABLE local_tags (
+    account_id  INTEGER NOT NULL,
+    message_id  TEXT    NOT NULL,
+    keyword     TEXT    NOT NULL,
+    PRIMARY KEY (account_id, message_id, keyword)
+)
+
+table messages
+CREATE TABLE messages (
+    account_id     INTEGER NOT NULL,
+    folder_path    TEXT    NOT NULL,
+    uid            INTEGER NOT NULL,
+    from_name      TEXT    NOT NULL,
+    from_addr      TEXT    NOT NULL,
+    recipients     TEXT    NOT NULL DEFAULT '',
+    cc             TEXT    NOT NULL DEFAULT '',
+    subject        TEXT    NOT NULL,
+    date           TEXT    NOT NULL,
+    ts             INTEGER NOT NULL,
+    unread         INTEGER NOT NULL,
+    starred        INTEGER NOT NULL,
+    has_attachment INTEGER NOT NULL,
+    message_id     TEXT    NOT NULL DEFAULT '',
+    references_    TEXT    NOT NULL DEFAULT '',
+    preview        TEXT    NOT NULL DEFAULT '',
+    reply_to       TEXT    NOT NULL DEFAULT '',
+    keywords       TEXT    NOT NULL DEFAULT '',
+    importance     INTEGER NOT NULL DEFAULT 0,
+    due            INTEGER NOT NULL DEFAULT 0,
+    gmail_labels   TEXT    NOT NULL DEFAULT '',
+    answered       INTEGER NOT NULL DEFAULT 0,
+    forwarded      INTEGER NOT NULL DEFAULT 0,
+    bcc            TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+index messages_by_folder_ts
+CREATE INDEX messages_by_folder_ts ON messages (account_id, folder_path, ts)
+
+index messages_by_message_id
+CREATE INDEX messages_by_message_id ON messages (message_id)
+
+index messages_starred
+CREATE INDEX messages_starred ON messages (account_id, ts) WHERE starred = 1
+
+table msgid_case
+CREATE TABLE msgid_case (
+    lower TEXT NOT NULL PRIMARY KEY,
+    exact TEXT NOT NULL
+)
+
+table outbox
+CREATE TABLE outbox (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id  INTEGER NOT NULL,
+    from_addr   TEXT    NOT NULL,
+    rcpts       TEXT    NOT NULL,
+    recipients  TEXT    NOT NULL,
+    subject     TEXT    NOT NULL,
+    preview     TEXT    NOT NULL DEFAULT '',
+    raw         BLOB    NOT NULL,
+    sent_path   TEXT,
+    queued_at   INTEGER NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    last_error  TEXT    NOT NULL DEFAULT '',
+    send_at     INTEGER,
+    forwards    TEXT    NOT NULL DEFAULT '',
+    delivery    TEXT    NOT NULL DEFAULT ''
+)
+
+table refs_repair
+CREATE TABLE refs_repair (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT    NOT NULL,
+    next_uid    INTEGER NOT NULL,
+    done        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, folder_path)
+)
+
+table sender_checks
+CREATE TABLE sender_checks (
+    account_id  INTEGER NOT NULL,
+    folder_path TEXT NOT NULL,
+    uid         INTEGER NOT NULL,
+    trust       TEXT NOT NULL,
+    summary     TEXT NOT NULL,
+    findings    TEXT NOT NULL,
+    pgp         TEXT NOT NULL DEFAULT '',
+    unsubscribe TEXT NOT NULL DEFAULT '',
+    invite      TEXT NOT NULL DEFAULT '',
+    label       TEXT NOT NULL DEFAULT '',
+    receipt     TEXT NOT NULL DEFAULT '',
+    authority   TEXT,
+    from_domain TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (account_id, folder_path, uid)
+)
+
+index sqlite_autoindex_addresses_1
+
+
+index sqlite_autoindex_attachment_meta_1
+
+
+index sqlite_autoindex_attachment_scan_1
+
+
+index sqlite_autoindex_attachments_1
+
+
+index sqlite_autoindex_attachments_checked_1
+
+
+index sqlite_autoindex_bodies_1
+
+
+index sqlite_autoindex_draft_copies_1
+
+
+index sqlite_autoindex_folders_1
+
+
+index sqlite_autoindex_label_fill_1
+
+
+index sqlite_autoindex_local_copies_1
+
+
+index sqlite_autoindex_local_tags_1
+
+
+index sqlite_autoindex_messages_1
+
+
+index sqlite_autoindex_msgid_case_1
+
+
+index sqlite_autoindex_refs_repair_1
+
+
+index sqlite_autoindex_sender_checks_1
+
+
+table sqlite_sequence
+CREATE TABLE sqlite_sequence(name,seq)

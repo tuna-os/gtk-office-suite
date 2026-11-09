@@ -1,0 +1,16 @@
+suspicious
+---
+Looks off
+---
+one
+two
+---
+{"encrypted":true,"decrypted":true,"signature":{"Good":{"signer":"Ada <ada@x>","key_id":"ABCD","trust":"Marginal"}},"notes":[],"sender_addr":"","autocrypt":null}
+---
+{"one_click":"https://list.example/u","mailto":"mailto:leave@list.example","reply":{"to":"owner@list.example","subject":"UNSUBSCRIBE"},"web":"https://list.example/page","list_id":"news.list.example","in_headers":true}
+---
+{"method":"REQUEST","uid":"uid-1","sequence":2,"summary":"Standup","location":"Room 1","start":1700000000,"end":1700003600,"all_day":false,"recurrence_id":"20240101T090000Z","repeats":"FREQ=DAILY","organizer":{"name":"Ada","email":"ada@x","status":"ACCEPTED","rsvp":false,"resource":false},"attendees":[{"name":"","email":"room@x","status":"NEEDS-ACTION","rsvp":true,"resource":true}],"cancelled":false,"ics":"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"}
+---
+{"name":"Confidential","id":"id-1"}
+---
+{"to":"ada@x","matches_return_path":true}

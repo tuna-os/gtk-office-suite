@@ -1,0 +1,29 @@
+order = [
+    "b@x",
+    "a@x",
+]
+collapsed = ["a@x"]
+folders_expanded = ["b@x"]
+icon_only = true
+tree_collapsed = ["a@x\tINBOX/Sub"]
+folder_order = [
+    "a@x\tWork",
+    "a@x\tHome",
+]
+unified_expanded = false
+filtered_expanded = false
+tags_expanded = false
+starred_expanded = true
+sent_expanded = true
+drafts_expanded = true
+archive_expanded = true
+junk_expanded = true
+trash_expanded = true
+snoozed_expanded = true
+favorites = ["a@x\tINBOX"]
+favorites_expanded = false
+smart_expanded = false
+contacts_expanded = true
+contacts_folded = ["book:1"]
+filtered_expanded_accounts = ["a@x"]
+tags_expanded_accounts = ["b@x"]

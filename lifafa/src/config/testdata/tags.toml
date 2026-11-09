@@ -1,0 +1,9 @@
+[[tags]]
+name = "Important"
+keyword = "$label1"
+color = "#c01c28"
+
+[[tags]]
+name = "Later"
+keyword = "later"
+color = "#1c71d8"

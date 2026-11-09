@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The built-in new-mail sounds (data/sounds/), under
+     /co/hyprlab/Hylki/sounds/<name>.ogg. Ogg is compressed already. -->
+<gresources>
+  <gresource prefix="/co/hyprlab/Hylki/sounds">
+    <file alias="click.ogg">../data/sounds/click.ogg</file>
+    <file alias="hum.ogg">../data/sounds/hum.ogg</file>
+    <file alias="string.ogg">../data/sounds/string.ogg</file>
+    <file alias="swing.ogg">../data/sounds/swing.ogg</file>
+  </gresource>
+</gresources>

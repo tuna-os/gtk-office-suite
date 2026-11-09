@@ -1,0 +1,28 @@
+[[folders]]
+id = "a1"
+name = "Starred unread"
+
+[[folders.conditions]]
+field = "starred"
+matcher = "contains"
+
+[[folders.conditions]]
+field = "unread"
+matcher = "contains"
+
+[[folders]]
+id = "b2"
+name = "Work"
+account_email = "ada@example.org"
+folder = "inbox"
+any = true
+
+[[folders.conditions]]
+field = "tagged"
+matcher = "contains"
+value = "$label1"
+
+[[folders.conditions]]
+field = "subject"
+matcher = "ends_with"
+value = "report"

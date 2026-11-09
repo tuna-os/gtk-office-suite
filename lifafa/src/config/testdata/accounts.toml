@@ -1,0 +1,106 @@
+[[accounts]]
+name = "Ada"
+email = "ada@example.org"
+protocol = "imap"
+imap_host = "imap.example.org"
+imap_port = 143
+smtp_host = "smtp.example.org"
+smtp_port = 25
+username = "ada"
+smtp_separate = true
+jmap_token = true
+jmap_generic = true
+tls_accept_hostname_mismatch = true
+smtp_username = "ada-smtp"
+color = "#1c71d8"
+emoji = "🦊"
+avatar = "ada.png"
+gravatar = true
+signature = "<p>Ada</p>"
+signature_html = true
+default_signature = 1
+label = "Work"
+enabled = false
+goa_id = "account_1"
+goa_mail_disabled = true
+goa_enabled_before_mail_disabled = false
+oauth = true
+push = false
+hidden_folders = [
+    "Calendar",
+    "Notes",
+]
+folders_seeded = true
+sent_copy_path = "INBOX"
+server_saves_sent = true
+reply_copies = "original_not_inbox"
+empty_junk_days = 30
+empty_trash_days = 14
+clean_lists_days = 7
+pgp_key = "ABCDEF"
+in_unified = false
+folder_sort = "name_desc"
+sign_by_default = true
+plain_subject = true
+graph_directory = true
+graph_directory_only = true
+graph_label_names = true
+
+[accounts.security]
+imap_starttls = true
+smtp_starttls = true
+imap_accept_invalid_certs = true
+smtp_accept_invalid_certs = true
+smtp_no_auth = true
+
+[[accounts.signatures]]
+name = "Short"
+html = "<p>A</p>"
+
+[[accounts.signatures]]
+name = "Long"
+html = "<p>Ada Lovelace</p>"
+
+[[accounts.aliases]]
+identity = "Ada Alias <alias@example.org>"
+
+[[accounts.aliases]]
+identity = "Own <own@example.org>"
+smtp_host = "smtp.own.org"
+smtp_port = 465
+smtp_username = "own"
+
+[[accounts.aliases]]
+identity = "Same <same@example.org>"
+
+[accounts.oauth_settings]
+auth_url = "https://auth.example.org"
+token_url = "https://token.example.org"
+client_id = "client"
+client_secret = "client-secret"
+scopes = "mail"
+redirect_uri = "https://example.org/native"
+
+[accounts.folder_roles]
+archive = "Archive"
+sent = "Sent Items"
+
+[[accounts]]
+name = ""
+email = "bare@example.org"
+protocol = "imap"
+imap_host = ""
+imap_port = 993
+smtp_host = ""
+smtp_port = 587
+username = ""
+smtp_separate = false
+tls_accept_hostname_mismatch = false
+smtp_username = ""
+gravatar = false
+signature_html = false
+aliases = []
+enabled = true
+goa_mail_disabled = false
+goa_enabled_before_mail_disabled = true
+oauth = false

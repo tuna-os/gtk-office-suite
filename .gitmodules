@@ -1,0 +1,6 @@
+[submodule "lifafa/native/tuta-unofficial-sdk"]
+	path = lifafa/native/tuta-unofficial-sdk
+	url = https://github.com/tuna-os/tuta-unofficial-sdk.git
+[submodule "lifafa/native/proton-unofficial-sdk"]
+	path = lifafa/native/proton-unofficial-sdk
+	url = https://github.com/tuna-os/proton-unofficial-sdk.git

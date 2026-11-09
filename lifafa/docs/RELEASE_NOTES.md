@@ -1,0 +1,1775 @@
+# Hylki
+
+Hylki (formerly Vireo) is a clean, fast, GNOME-native email client built with Rust and libadwaita for Wayland desktops. Privacy-first: no telemetry, remote content blocked by default, and credentials kept in the system keyring.
+
+## What's new in 1.47.1
+
+### Fixes:
+
+- a PDF with a password freezing the app - (#582)
+
+## What's new in 1.47.0
+
+### New features:
+
+- Folders kept on this computer with Copy To and import - (#552)
+- Grammar and style checking in the composer with Harper or LanguageTool - (#452)
+- Mail merge from a CSV file or a contact group at a set rate - (#447)
+- Events with alarms and tasks made from a message - (#564)
+- The reading pane below the list or off - (#475)
+- A message's importance set in the Send menu and shown on mail - (#563)
+- The sender's contact photo in the reader's header - (#560)
+- New Folder in a folder's right-click menu - (#554)
+- A missing attachment reminder on Send by @fsoft72 - (#575)
+- The list's sort is kept across launches - (#574)
+- Remote pictures in a message can be saved and copied - (#569)
+- Contacts show only the groups by a filter or a search for "group"
+
+### Fixes:
+
+- No blank window on a locked keyring by @fsoft72 - (#573)
+- An IMAP folder starts from its last known count by @valentin-morice - (#571)
+- Opening a message changes the reading pane in one step by @valentin-morice - (#570)
+- Grammar checks with a LanguageTool server work with several languages on - (#566)
+- The snooze presets test passes on Sunday evenings - (#567)
+- A new or moved folder lands in the right place - (#554)
+- A sender's own Authentication-Results header no longer earns the Verified sender badge
+- Accounts with the same sender name can be told apart in errors and dialogs
+- Drafts open at once from a copy fetched in the background
+- A draft's row is let go when its editor closes
+- The menu beside Send keeps its corners clean under libadwaita 1.9
+- The swipe strip behind a selected row keeps to its pill
+
+### Translations:
+
+- German by @samuel-edlmeier
+- French by @frenchy82
+- Spanish by @danielmigueltejedor
+- Greek by @yioannides
+
+## What's new in 1.46.1
+
+### Fixes:
+
+- Lines typed with Return in plain text show as they are sent - (#557)
+- "To:", "Cc:" and "Bcc:" are translated in the reader and the Sent list - (#562)
+- A web address pasted into the composer is kept whole in the link made of it
+
+## What's new in 1.46.0
+
+### New features:
+
+- An AppImage for x86_64 and ARM64, updating from hylki.hyprlab.co - (#235)
+- The RPM and Debian package for ARM64
+- Snooze, with Snoozed in the unified section - (#527, #542)
+- Read receipts: answered, requested, and shown on sent mail - (#520)
+- Search finds the words in a message's text, and on the server - (#509)
+- Mail kept offline for a chosen period - (#536)
+- Remote content cached, and loaded ahead if asked - (#474)
+- Names from Contacts on mail - (#541)
+- Fullscreen on F11, in the main menu, and at start - (#511)
+- The quote in a reply or forward folded behind ••• - (#549)
+- A setting to hide the account in the message header, by @valentin-morice - (#546)
+- A lone message card folds and selects, with star, attachment and Sent marks
+- A search for other people's OpenPGP keys - (#432)
+- Filters forward, mark as read and delete, by @fsoft72 - (#521)
+- The arrow keys open and fold conversations in the list - (#540)
+- A date range in the sort and filter popover
+- The month named while the list's scrollbar is dragged
+- A message in a conversation can be dragged to a folder
+- Zoom in the rich text composer, and a default zoom for new messages - (#535)
+- A line of your own above a quoted reply - (#528)
+- A countdown line in the Undo Send toast, by @fsoft72 - (#534)
+- Sign and Encrypt shown in the accent color while they are on
+- Keys beside the entries of a message's menus
+- Spam in the reader toolbar's left group, and the right group folded into ⋯
+- Single-key shortcuts on for a new install
+- The find bar can open under the message - (#392)
+
+### Fixes:
+
+- a black window on an X server without shared memory - (#547)
+- the signature in a slightly different font from the message - (#548)
+- the count in the sidebar's unread chip sitting high, by @valentin-morice - (#545)
+- stars and read state changed on another device stuck on older mail - (#532)
+- right-to-left mail and composer text - (#524)
+- the line above a quoted reply always in English - (#528)
+- the address menu in the reader always in English - (#529)
+- the account chip hard to read in a pale account color - (#530)
+- Ctrl or Shift and a click on a card selecting only that card
+- deleting several selected cards deleting the whole conversation
+- a click on a message's text not selecting its card
+- the keyboard left in the message list after closing the find bar - (#392)
+- a picked LDAP directory showing nobody - (#307)
+- the window buttons pushed off a narrow reader
+- a sent reply's card listing its attachments only once back from Sent
+- Tab stuck in the composer after the body
+
+### Translations:
+
+- German, complete, by @samuel-edlmeier
+- French by @frenchy82
+- Portuguese and Brazilian Portuguese by @somepaulo
+
+## What's new in 1.45.3
+
+### Fixes:
+
+- an account's chevron in the sidebar did not open or fold the account - (#525)
+
+## What's new in 1.45.2
+
+### Fixes:
+
+- constant CPU use when the server will not open a folder - (#512)
+
+## What's new in 1.45.1
+
+### Fixes:
+
+- a folder with a backslash in its name not opening - (#514)
+- typing in the search field holding up the window - (#515)
+- Ctrl+, not opening Settings - (#513)
+- Ctrl+W not closing the Settings, message and composer windows - (#513)
+- a composer in a window of its own having no close button
+
+### Translations:
+
+- German, complete, by @samuel-edlmeier
+- Catalan, complete, by @jolupa
+
+## What's new in 1.45.0
+
+### New features:
+
+- A Debian package and signed apt repository, built on work by @ChrisLauinger77 - (#503)
+- CardDAV accounts in Settings - (#408)
+- One Contacts page in Settings for every address book
+- Contact groups, in CardDAV and iCloud books too
+- Contacts without an email address are listed, saved and edited
+- Several contacts selected at once, to group, move or delete
+- Moving contacts to another address book
+- Search and filters in Contacts
+- Contacts in the sidebar's footer, or as a row with its address books and groups
+- Favorites, Filters, Tags and Contacts placed above or below the accounts, or off
+- Favorites shows the mail of every favorite folder
+- Undo Send - (#434)
+- Recipient pills move between To, Cc and Bcc by drag, menu or keyboard - (#492)
+- Thunderbird's composer keys for attaching and the To, Cc and Bcc fields - (#490, #491)
+- Encrypted mail hides its subject - (#493)
+- Replied and forwarded arrows in the message list - (#454)
+- Replies filed beside the message they answer - (#468)
+- Hylki waits for the network and saves data on a metered connection - (#442)
+- Shift+Delete deletes permanently - (#471)
+- A search outside the Inbox starts in that folder - (#472)
+- The search field and the selection bar can open at the bottom of the list - (#496)
+- Zoom in the Markdown, HTML and plain text composer
+- Ctrl and the scroll wheel zoom messages and the composer
+- A dragged message shows as a card
+- Ctrl+C shows beside Copy in the message menu - (#497)
+- A double click opens or closes a unified row
+- Accounts open and close with their chevron or a double click
+- Shorter text in Settings
+
+### Fixes:
+
+- a message sent while the server was out of reach being lost - (#442)
+- the Outbox of a JMAP, Microsoft 365 or POP3 account waiting for Retry - (#442)
+- sent mail not showing its Bcc recipients - (#476)
+- Bcc recipients of a Microsoft 365 account not being sent the message - (#476)
+- mail zoomed out below 100% drifting right - (#473)
+- a search of all folders missing mail in folders not yet opened - (#472)
+- a conversation opening at its top instead of its new mail, by @Dandiccf - (#463)
+- a verified sender marked suspicious over its reply address, by @Dandiccf - (#464)
+- a message from another folder staying on "Loading…", by @Dandiccf - (#461)
+- a keyring that asks first taken for no keyring, by @llComodino - (#466)
+- Reply and New Message freezing when the contact service hangs, by @aheinze - (#484)
+- closing a message window just after it opened crashing Hylki - (#488)
+- a no-break space crashing the Markdown composer - (#479)
+- a message body staying blank until the window was resized, by @XRayAdams - (#487)
+- the unified Starred view being empty - (#482)
+- a star or tag key missing selected messages in Filters - (#481)
+- single-key shortcuts doing nothing in a message window or with Caps Lock on - (#392)
+- Delete doing nothing in the reader - (#486)
+- the unified views being slow to open
+- the first-run wizard saying Microsoft accounts need Online Accounts - (#506)
+- the filter editor's Save refusing an incomplete rule without a word
+- deleting one message of the open conversation closing it
+- a deleted reply filed in another folder staying counted
+- an Evolution contact list offered as a broken recipient
+- a photo in a message running off the side of its card
+- a zoomed attachment staying inside the lightbox's frame
+
+### Translations:
+
+- Greek, complete, by @yioannides
+- Spanish, complete, by @danielmigueltejedor
+- French by @frenchy82
+- German by @samuel-edlmeier
+- Catalan by @jolupa
+
+## What's new in 1.44.0
+
+### New features:
+
+- Gmail keyboard shortcuts, switched on in Settings → System - (#392)
+- A command palette on Ctrl+K - (#399)
+- Smart folders - (#417)
+- Several signatures per account - (#445)
+- A Hylki address book, with vCard import and export - (#379)
+- LDAP directories in the Contacts address book list - (#307)
+- Colleagues from the Microsoft 365 organization directory as recipients - (#410)
+- Gmail labels as colored pills, and tags set as Gmail labels - (#374)
+- Search results say which folder they are in - (#374)
+- A search scope that leaves out Trash and Junk, and one that takes them in - (#374)
+- One sort and filter button, with more quick filters - (#441)
+- The message list grouped by date - (#435)
+- Customize Columns… on the column headings' right-click menu - (#443)
+- Font sizes, more fonts and any color in the composer - (#358)
+- A font and size for new messages, set in Settings → Composing - (#358)
+- Addresses in To, Cc and Bcc as pills
+- A reply sent from the reading pane becomes its card in the conversation
+- Sensitivity labels shown in the reader, by name - (#411)
+- Unsubscribe can delete what the list sent - (#407)
+- .eml and Outlook .msg files open in Hylki - (#398)
+- Settings → System → Storage shows and limits downloaded mail - (#394)
+- Settings → System → Renderer chooses how GTK draws - (#403)
+- Insert Signature in the composer - (#385)
+- Create Filter from Message…, by @fsoft72 - (#428)
+- Filters on whether the sender is in Contacts - (#384)
+- Tagged messages tint their row - (#383)
+- Clicking the unread dot marks a message read - (#380)
+- A switch to draw one message light or dark - (#386)
+- Empty Trash or Junk in every account at once - (#413)
+- Replies in plain text to mail sent in plain text - (#436)
+- An app icon count of the new mail only - (#431)
+- The status bar at the foot of the window - (#433)
+- A setting to keep the search field open - (#446)
+- A new-mail sound while Hylki is in front - (#337)
+- Hylki's own icons on every desktop, with a switch back to the desktop's
+- Animations follow GNOME's Reduce Animation switch
+
+### Fixes:
+
+- a crash at startup on some folder names, by @Elliot-32 - (#409)
+- Hylki closing at launch when the session's locale is missing from the runtime - (#437)
+- switching folders pausing the window - (#401)
+- Microsoft 365 and JMAP folders showing only their newest 300 messages - (#429)
+- LDAP directories set up in Evolution never searched - (#307)
+- LDAP directories connecting without the encryption chosen for them - (#307)
+- Reply All putting your own address back in Cc, by @Dandiccf - (#448)
+- right-click menus doing nothing on X11, by @fsoft72 - (#427)
+- the composer keeping the formatting on screen in plain text - (#424)
+- the settings search listing every OpenPGP key - (#432)
+- the number keys tagging the wrong message while arrowing down the list - (#416)
+- the search field and about 40 other strings not translatable - (#419)
+- new mail landing just above the top of the list - (#400)
+- Edit as New adding a second signature - (#385)
+- your own replies showing in an opened conversation - (#388)
+- saving a signature emptying the list and the reader - (#382)
+- a removed account's mail showing under the next account
+- an account added to GNOME Online Accounts being slow to appear
+- confirming a contact's deletion deleting another contact
+
+### Translations:
+
+- Italian, new, by @amivaleo
+- French, complete, by @frenchy82
+- Spanish, complete, by @danielmigueltejedor
+- Catalan by @jolupa
+- Greek by @yioannides
+- Portuguese and Brazilian Portuguese by @somepaulo
+
+## What's new in 1.43.2
+
+### Fixes:
+
+- Hylki crashing when an MP3 is chosen as the new-mail sound - (#397)
+- Hylki showing twice in docks on X11 - (#402)
+- accents in plain-text mail arriving garbled in some apps - (#412)
+- signed mail refused by some JMAP servers for bare newlines - (#414)
+
+## What's new in 1.43.1
+
+### Fixes:
+
+- the new-mail sound not playing when GNOME's alert sound is None - (#337)
+
+## What's new in 1.43.0
+
+- **Microsoft accounts without GNOME Online Accounts** (#329):
+  *Microsoft 365 / Outlook* signs in with Hylki's own Microsoft app in the
+  browser, or with another app registration, and a managed device signs in
+  through Microsoft's identity broker.
+- **Templates** (#360), **Favorites** (#367), **Junk and Trash in the
+  unified section** (#369), and drafts that save themselves while you
+  write (#340).
+- **A single-line message list** (#334) with the columns you choose,
+  **folding messages in a conversation** (#326), and **translating
+  messages** (#327) with your own DeepL, Google, Microsoft or
+  LibreTranslate key.
+- **More formatting tools in the composer** (#358), spell checking in
+  several languages at once (#365), a From address typed for one message
+  (#347), and Ctrl+N, Ctrl+R, Ctrl+Shift+R and Ctrl+U (#328).
+- **Fastmail and any JMAP server** (#356), with the server's identities
+  offered as From addresses (#346).
+- **Printing with page numbers and the print date** (#359), also from a
+  message's own window, and **right-to-left layout** for Persian, Arabic,
+  Hebrew and other right-to-left languages (#366).
+- **RPM updates through dnf:** the RPM adds Hylki's signed dnf repository,
+  so it updates with the rest of the system.
+- **Fixed:** accounts failing to sign in until a restart when the keyring
+  was not ready (#375), a message lost to an address that cannot be sent to
+  (#368) or to an attachment that had moved (#340), a freeze after start
+  (#316) and in All Archive, new mail not appearing until the folder was
+  opened again (#336), and opening a message waiting behind syncing (#370)
+  or IMAP syncing waiting on a silent connection (#324), both by
+  [@salemsayed](https://github.com/salemsayed).
+- **Translations:** Russian is complete, by
+  [@iliasen](https://github.com/iliasen); Hungarian, French, Greek and
+  Portuguese are brought up to date.
+
+## What's new in 1.42.0
+
+- **Recipients from LDAP directories** (#307): Settings > LDAP Directories
+  adds a company directory, and the composer suggests the people in it as
+  you type. Based on work by [@isaksamsten](https://github.com/isaksamsten).
+  Saving a contact and the directories work in the Flatpak, and Add to
+  Contacts names each address book (#314, #315, by
+  [@fegue](https://github.com/fegue)).
+- **Replies and forwards quote the message as it looks** (#295), and can
+  open in a window of their own. **Drag files onto the window** (#293) to
+  attach them, insert pictures or upload them to cloud storage; attachment
+  chips show each file's size and a thumbnail (#299).
+- **A faster message list** (#323): it builds only the rows on screen, so
+  clicking through and scrolling a large folder stay quick. New mail
+  arrives promptly after the computer wakes (#322).
+- **A sound for new mail** (#292), **delete an attachment from the
+  server** (#289), **how much storage an account uses** (#298), and
+  **folders in your own order**, dragged in the sidebar or picked in
+  Settings > Sidebar.
+- **Shortcuts act on the whole selection** (#313), conversations open out
+  across folders (#309), and "Flag" is called "Star" everywhere.
+- **Fixed:** messages stuck on "Loading…" (#296), plain-text messages
+  arriving empty (#297), a search of all folders mixing conversations
+  (#317), sender names with backslashes and quotes (#312), Escape closing a
+  written message without asking (#290), Unsubscribe reporting success
+  after a redirect (#284), and broken theme icons outside GNOME (#278).
+- **Five app icons** (#277): a squircle you had chosen becomes the square
+  of the same color. JMAP accounts are added through the Stalwart provider.
+- **Translations:** Polish is new, by
+  [@TomaszBojanowski](https://github.com/TomaszBojanowski); Spanish,
+  French, German, Greek and Portuguese are updated.
+
+## What's new in 1.41.1
+
+- **Text size** (#267): Settings > Appearance makes Hylki's text 90% to
+  150% of the desktop's size. Asked for by [@rsx-xp](https://github.com/rsx-xp).
+- **Keep an account out of All Inboxes, or sign its mail by default**
+  (#267): two new switches in each account's settings. Also asked for by
+  [@rsx-xp](https://github.com/rsx-xp).
+- **The unread count on the dock icon** (#271), on KDE Plasma and on GNOME
+  with Dash to Dock or Dash to Panel.
+- **The message list keeps the keyboard** (#274): refreshes no longer
+  leave Delete and Enter dead, and the selected message turns grey when
+  the list does not have the keyboard. Reported by
+  [@EmmanuelP](https://github.com/EmmanuelP).
+- **Fixed:** an idle window using CPU and an empty Symbolic tray icon on
+  Cinnamon (#275), reported by [@mfreeman72](https://github.com/mfreeman72).
+  Installing with Bazaar is explained in the install guide (#276).
+
+## What's new in 1.41.0
+
+- **Move mail to another account** (#265): Move To lists every account's
+  folders, and a drag onto another account's folder works too. The
+  original goes to its own account's Trash once the copy is stored, and
+  Undo brings it back. Suggested by [@EmmanuelP](https://github.com/EmmanuelP).
+- **Search Settings** (#260): the search button in the sidebar, or Ctrl+F,
+  finds any setting and takes you to it. Suggested by
+  [@yioannides](https://github.com/yioannides).
+- **Choose what opens at startup** (#256): All Inboxes, the last account's
+  inbox, or the last folder, in Settings > Sidebar. Suggested by
+  [@somepaulo](https://github.com/somepaulo).
+- **A symbolic tray icon** (#258) that the panel colors itself, with a red
+  unread dot, and **icons that follow your icon theme** (#260).
+- **New Message in the launcher's menu** (#269) and **German** (#272), by
+  [@ChrisLauinger77](https://github.com/ChrisLauinger77); French updated by
+  [@frenchy82](https://github.com/frenchy82) (#273); translated settings
+  choices by [@danielmigueltejedor](https://github.com/danielmigueltejedor)
+  (#262).
+- **New app icons**: blue, navy and yellow squares and squircles, and a
+  bolder letter on the default envelope by
+  [@yioannides](https://github.com/yioannides) (#263).
+- **Fixed:** deleted mail coming back while deleting quickly (#255), empty
+  messages in a deleted conversation on Gmail (#257), slow opening on large
+  accounts (#259), cut-off addresses in the default sender choice (#261).
+  A new message starts in To and a reply in its body (#266).
+
+## What's new in 1.40.1
+
+- **GNOME Online Accounts IMAP accounts connect** (#254): Hylki uses the
+  TLS settings and the certificate choice made in GNOME Settings, takes the
+  password from GNOME each time, and follows server changes made there.
+- **Your own launcher icon stays** (#252): an icon set with a menu editor
+  or an icon pack is no longer replaced when Hylki starts, only when you
+  pick one in Settings.
+- **Spanish**, by [@danielmigueltejedor](https://github.com/danielmigueltejedor)
+  (#251), and an updated French translation by
+  [@frenchy82](https://github.com/frenchy82) (#250).
+- **The first-run wizard** is on the brand blue with the new wordmark.
+
+## What's new in 1.40.0
+
+- **A new app icon** (#249): an opened airmail envelope with a letter
+  showing, drawn by [@yioannides](https://github.com/yioannides), with a
+  matching symbolic icon for the tray's white and black options. Every
+  install shows it once; the earlier envelope stays in Settings →
+  Appearance → App icon as "Wave". The About window carries the new
+  wordmark.
+
+## What's new in 1.39.3
+
+- **New: your own replies can show in the message list** (#236, Settings →
+  Conversations, off by default). A conversation's row then says who spoke
+  in it last, the reply you sent included, instead of the last message that
+  arrived. Suggested by [@aia832003](https://github.com/aia832003).
+
+## What's new in 1.39.2
+
+- **Fixed: replying flattened the message you were answering** (#248). A
+  reply now quotes it as it was written, with every level of quoting kept,
+  the way a forward already did. Reported by
+  [@EmmanuelP](https://github.com/EmmanuelP).
+- **Fixed: a quoted plain-text message ran its lines together,** in a reply,
+  a forward and Edit as New Message.
+- **Fixed: a quote no longer opens on a blank line.**
+
+## What's new in 1.39.1
+
+- **Fixed: opening Hylki from the tray icon left the window in the
+  background** (#247). It now comes to the front, on Cinnamon, KDE, MATE,
+  XFCE and anywhere else with a tray. Reported by
+  [@mfreeman72](https://github.com/mfreeman72).
+
+## What's new in 1.39.0
+
+- **JMAP accounts** (#245): Stalwart, Fastmail or any JMAP server, with
+  **Stalwart (JMAP)** in the provider list. One address, no SMTP settings,
+  push included.
+- **Message zoom:** Ctrl++ and Ctrl+- scale the message in the reading pane,
+  Reader View or not; Ctrl+0 returns to the default set in Settings →
+  Reading. A chip beside the Reader View switch shows the percentage.
+- **Accept a certificate for another name** (#246): a per-account switch
+  for servers on shared hosting whose certificate is in the host's name.
+  Connection-test and notification text can now be copied.
+- **Mailfence** (#226): the working way of asking for mail is remembered
+  between launches, and a message the server hands over under another item
+  is fetched rather than shown blank.
+- **Notification buttons** (#244): choose any three of Mark as Read,
+  Archive, Delete, Reply, Forward and Mark as Spam in Settings → General.
+- **Fixed: choosing an app icon lost the mailto: registration** (#242).
+- **French translation** up to date ([@frenchy82](https://github.com/frenchy82)).
+
+## What's new in 1.38.0
+
+- **Ctrl+Enter sends** the message you are writing (#238).
+- **The signature goes above the quoted message** in replies and forwards
+  (#237); Settings → Composing puts it below again if you prefer.
+- **Forwarding keeps the attachments** (#240). A reply still does not repeat
+  them.
+- **Hide folders you never open** from a folder's right-click menu (#239);
+  the account editor brings them back. An Exchange server's calendar,
+  contacts and task folders are hidden from the start.
+- **Fixed: a conversation opened from Inboxes shows every reply** (#236),
+  not only the newest message. The list now renders 500 rows at a time.
+- **Fixed: a message that is only a file** shows no garbage preview (#241).
+- **Fixed: messages are marked read as they scroll into view** again.
+- **Accounts go by their nickname** in the Mail Accounts list, and the
+  French translation is up to date ([@frenchy82](https://github.com/frenchy82)).
+
+## What's new in 1.37.0
+
+- **Choose the browser links open in** (#232). Settings → System → Links: the
+  desktop's default, any browser you have installed, or ask each time.
+- **Edit as New Message** (#232). Open a copy of any message in the composer —
+  same recipients, subject, body and attachments, no tie to the original.
+- **Focus Mode goes further.** Four new switches in Settings → Appearance: hide
+  the preview text, hide the subject, fold the sidebar to its icon rail, and
+  start every launch in the mode.
+- **Fixed: the reading pane's actions fold into the ⋯ menu again** on a narrow
+  window. They had stopped folding at any width.
+- **Fixed: the hovering sidebar dims the window behind it** instead of covering
+  it in flat color when a theme is on.
+- **About names the translators**, in their own list beside the contributors.
+- **The repository is readable** (#230, [@yioannides](https://github.com/yioannides)).
+  The README is a page rather than a manual, and the documentation lives in
+  [docs/](https://github.com/hyprlab/hylki/tree/main/docs).
+
+## What's new in 1.36.0
+
+**Meeting invitations** (#223). A message that carries a meeting now shows it at the top of the card, instead of only the note the sender's calendar wrote for clients that cannot read the invitation: what the meeting is, when it runs in your own clock and time zone, where it is, who organised it and how many are invited — with **Accept**, **Maybe**, **Decline** and **Add to Calendar** underneath. Your answer goes to the organiser as a proper reply their calendar understands, sent from the address that was invited, so their guest list updates. Answer a meeting that has been moved, or one date out of a repeating series, and the answer lands on the right one. Reopen the message later and it says what you answered and when; a meeting you answered in another program shows that too. A cancelled meeting says so, and a reply from somebody else says who answered and how. **Add to Calendar** opens the invitation in your calendar application. The calendar file is also listed as an attachment now, so you can save it like any other. Reported by [@EmmanuelP](https://github.com/EmmanuelP).
+
+**Leave a mailing list with one button.** A message from a list now carries an Unsubscribe banner above it. Hylki leaves the list for you: for lists that support it, one request and it is done, with no browser and no web form; for others, a short email sent in your name from the address the list writes to. Only a list that offers nothing but a web page sends you to the browser, and the button says so first. Plenty of bulk mail carries no unsubscribe header at all, so the footer of the message is read too — the link, the address to write to, or the "reply with UNSUBSCRIBE" instruction. Lists you have left are remembered, so the next message from one says when you left instead of pretending nothing happened.
+
+**Focus Mode.** Press Ctrl+Shift+F (or pick it from the main menu) and the window gets out of the way: toolbars fold into their ⋯ menus, the sidebar's accounts and unified rows fold up, the list drops to one preview line without avatars, and every message opens in Reader View. Everything slides away and comes back the same way. Settings → Appearance lets you choose which parts it does, and Focus Mode never changes your ordinary settings.
+
+**Smaller fixes.** Changing how message rows look — avatars, logos, preview lines, the date style, the recipient column, coloring — now redraws the rows already on screen instead of waiting for the next folder.
+
+## What's new in 1.35.4
+
+**Reader View.** A switch on the account chip's line of the reader header shows every message of the open conversation as its content alone: headings, paragraphs, lists, quotes, links, pictures and real tables, set in one clean sheet that follows your theme. The sender's layout, colors, fonts, hidden preview text and tracking pixels are gone. The choice follows into popped-out windows and into printing. Settings → Reading lets you hide the switch, or choose whether a message opens the way it was sent, in Reader View, or however you last left the switch.
+
+**Memory no longer grows with every message you write** (#221). Each composer, pop-out window and print preview runs in a WebKit process of its own, and those processes were left running after their window closed, a few hundred MB each. They now end with what used them. The exported log's Memory section also lists how many of these views are alive, since inside Flatpak they run outside the log's own process tree.
+
+**Greek translation** updated (PR #231 by [@yioannides](https://github.com/yioannides)).
+
+## What's new in 1.35.3
+
+**Mailfence accounts show their mail** (#226). Mailfence answers the message-list fetch in a way the app could not read once the list-preview items were part of the request, so the folders counted their messages but listed none. The app now retries without those items and, for the session, skips the preview reads that would trip the same reply. Message previews stay blank for Mailfence until the server's reply is understood; if you use Mailfence, an exported log after updating would help.
+
+**A readable error instead of a wall of numbers.** When a server's reply cannot be read, the status bar now says so and quotes the first line of the reply. The exported log keeps the whole thing.
+
+**Replies through Proton Bridge join their conversation.** A reply sent through Bridge went out and landed in Sent, but never threaded with the message it answered: the app wrote the parent's Message-ID in lowercase, and Bridge matches ids exactly. Ids are now sent spelt the way they arrived.
+
+**The theme chooser shows each theme as a window.** Settings → Appearance draws every theme as a small window, light on the left and dark on the right, so every surface a theme colors is on show. The System card follows the desktop's accent color.
+
+**New icon and wordmark art,** and the wizard and About window draw the wordmark with its soft shadow.
+
+**Smaller fixes.** The Contacts page says "No Contacts" when there is no address book instead of loading forever; Settings → Mail Accounts shows your Gravatar; themed dividers no longer read as bright stripes.
+
+**Greek translation** (PR #227 by [@yioannides](https://github.com/yioannides), with the bulk of the strings generated by [@somepaulo](https://github.com/somepaulo)).
+
+## What's new in 1.35.2
+
+**A conversation's message count now counts all of it** (#222). The number on a thread counted only the messages in the folder you were looking at, so any conversation you had replied to was short by the replies you sent. It now counts across your folders, so it matches the messages the reader actually shows: your sent replies included, deleted and spam copies left out, and a Gmail message filed under several labels counted once. A conversation whose other messages are all in another folder now shows a count where it previously showed none. Reported by @p-mitana.
+
+## What's new in 1.35.1
+
+**The welcome wizard follows your theme.** The yellow ground is gone: the wizard, the About window and the carry-over notice use the theme's light or dark colors, with the wordmark switching to its light-lettered version in dark mode.
+
+**The final icon set.** Every app icon comes from the latest artwork, and the gallery gains two entries at the end: the default drawn at full size, and the classic yellow icon.
+
+**About shows this release's notes**, with a button to the full history on GitHub.
+
+## What's new in 1.35.0
+
+**Vireo is now Hylki.** Same app, new name and icon. Hylki installs alongside Vireo, and its first start carries your accounts, settings and cached mail across: nothing in Vireo is changed or removed, and there is nothing to set up again. A notice says what came over and how to remove Vireo once you are happy everything is here. If Vireo was your default email app, choose Hylki under Default Apps in Settings.
+
+**A new app icon and gallery.** The Hylki envelope is the default, and the gallery offers eight envelope variants.
+
+**Memory that was freed is now given back to the system** (#221). A user's log showed the app at over 2 GB with only 270 MB actually in use. The allocator is tuned at startup, held memory is returned every 30 seconds when there is enough of it, the attachment gallery's thumbnail and PDF caches are bounded, and a preview retry no longer re-fetches the same rows on every sync.
+
+## What's new in 1.33.4
+
+**A background loop that could hold Vireo at several gigabytes is fixed.** When the newest messages in a folder included one the background attachment prefetch could not finish, an OpenPGP message in particular, Vireo downloaded that message again and again, several times a second, re-listing the folder each time. Memory climbed for as long as the message stayed near the top of the folder. Each message is now tried once per session. If Vireo has been large on your machine, this is the likely reason, and an exported log after updating will say so either way.
+
+**The conversation row stays selected when you click one of your own replies** (#220, reported by [@p-mitana](https://github.com/p-mitana)). Replies pulled in from Sent used to deselect the thread in the list.
+
+**More air above the message header when the split reply is open.**
+
+## What's new in 1.33.3
+
+**The exported log now reports memory use.** Export log, in Settings → System or from the notification centre, opens with a Memory section: how much each of Vireo's processes is using, how much of the main process is Vireo's own data as opposed to GTK, WebKit and the graphics driver, whether the graphics driver is rendering in software, and how large the mail index and each cache are. If Vireo looks large on your machine, that section says why, so please attach an exported log to any report about memory.
+
+**Tag icon.** The tag glyph in the reader toolbar, menus, list, sidebar and Settings is now an outline.
+
+## What's new in 1.33.2
+
+**All Inboxes no longer loads forever** (#218, reported by [@7system7](https://github.com/7system7)). With more than one account set up, the "Loading more…" spinner under the message list waited for every account to finish indexing its inbox, and several things could stop an account from ever reporting in: a sign-in that failed, a server that could not be reached, or simply a small inbox whose turn in the background queue never came. One account in that state left the spinner turning over everyone's mail, and an empty list showed it instead of "No Messages". An account that cannot be reached now says so and stops the spinner, with the usual banner reporting the problem, and a folder whose mail has all arrived no longer waits on anything.
+
+**French updated** (PR #217 by [@frenchy82](https://github.com/frenchy82)), covering the attachment drawer and the new Conversations settings.
+
+## What's new in 1.33.1
+
+**An account no longer stops syncing over one odd message** (#215, reported and fixed by [@typedev](https://github.com/typedev), PR #216). A message whose part headers carried an accented character at one particular position made the app's mail thread for that account crash while building list previews, and because the same message was offered again on every sync, that account's wheel turned forever while the others carried on. Restarting did not help. The header is now read safely, and the two tests that come with the fix reproduce the crash without it.
+
+## What's new in 1.33.0
+
+**Replies go to the newest message** (#210, reported by [@p-mitana](https://github.com/p-mitana), with [@yioannides](https://github.com/yioannides)). Answering a conversation from the toolbar, Ctrl+R, or a row's hover palette or right-click menu used to address whichever message was drawn at the top, which with the conversation read oldest first was the message that started it. Every reply now answers the conversation's newest message from someone else, whatever the reading order. Your own earlier replies, and mail sent from a send-as alias, are never the target.
+
+**A conversation stays selected while you read it** (#211, reported by [@p-mitana](https://github.com/p-mitana)). Clicking a reply's card in the reading pane, with expandable conversations off, made the list drop its selection. The conversation's row now stays lit for every message in it, including your own replies pulled in from Sent.
+
+**The reply editor can open beneath the reader** (#212, reported by [@p-mitana](https://github.com/p-mitana)). Settings → Conversations has a new **Reply editor** choice: above the messages, as before and still the default; below them; or following the reading order, which puts it above with "Newest message first" and below otherwise. Beneath the reader the panel slides up from the bottom edge and remembers its own height there.
+
+**Each message lists its own attachments** (#213, reported by [@p-mitana](https://github.com/p-mitana), with [@yioannides](https://github.com/yioannides)). Every card in a conversation now shows its files beneath its text: icon, name, size and a save button, with a click opening the file. The attachment drawer stays, and its right-click menu gains **Show in Message**, which jumps to the card a file came with. Both can be turned off in Settings → Conversations.
+
+**Conversations has its own Settings page**, between Message List and Reading, with everything that shapes how a thread reads in one place.
+
+**The attachment count opens and closes the drawer.** The "3 attachments" label in the drawer's header is now a button, with a chevron beside it, so the drawer no longer relies on the handle along its top edge alone.
+
+**French updated** (PR #214 by [@frenchy82](https://github.com/frenchy82)), covering the About page and the undo strings.
+
+## What's new in 1.32.3
+
+**Portuguese covers the new About strings.** The one-line description under the version chip was reworded in 1.32.2 and the issue tracker's row became translatable; European and Brazilian Portuguese both cover them, so each is complete again. By [@somepaulo](https://github.com/somepaulo) (PR #207).
+
+## What's new in 1.32.2
+
+**Russian shows its translation.** Around sixty-six Russian strings had a translation in the file but were marked as needing review, and a string marked that way is skipped when the translation is built, so they appeared in English. They are settled and now show in Russian, along with the 1.32.0 strings. By [@iliasen](https://github.com/iliasen) (PR #205).
+
+**Portuguese complete, both variants.** European and Brazilian Portuguese both cover the composing formats, the sent-copy rows, undo and redo, the sidebar folder menus and the filter Apply Now strings, with a pass of corrections through each. By [@somepaulo](https://github.com/somepaulo) (PR #206).
+
+**Tidier About page.** A shorter description, Discord listed by name, and the issue tracker's row now says what it is for and can be translated.
+
+## What's new in 1.32.1
+
+**Undo and redo reach the composer** (extends #200). Ctrl+Z did nothing while a message was being written — the key never reached the body's own history at all. It does now, over both the things that change a message: the typing, formatting, pastes and dropped pictures in the body, and the attachments beside it, in one order. Ctrl+Shift+Z and Ctrl+Y put things back. The address and subject rows keep their own undo, which is the right one for a single line. It works in the inline reply and in a compose window, in all four composing formats, and the body's right-click menu leads with Undo and Redo.
+
+**Typing is undone a step at a time.** A run of typing used to come back all at once however long it was, and Backspace was not something Ctrl+Z could take back on its own — rubbing out two letters after a word undid the word with them. Deleting is now its own step, and a pause of more than five seconds starts a new one, so a paragraph written, thought about and carried on comes back in the pieces it was written in.
+
+**The main menu says what it will undo.** Undo and Redo name what they would take back — "Undo Typing" while a reply is being written, "Undo Archive" while reading — and grey out when there is nothing.
+
+**The inline reply no longer closes the app as it opens.** A panic while the reply panel slid into place could take the whole window with it.
+
+**French translation complete** (PR #204 by [@frenchy82](https://github.com/frenchy82)), covering the composing formats, undo and redo, per-message remote content, the sent-copy rows and the portal link errors.
+
+## What's new in 1.32.0
+
+**Write messages in Markdown or HTML.** A message can now be written as rich text, Markdown, HTML source or plain text. The composer's plain-text button became a format button at the right-hand end of the formatting row: it shows the current format, with the other three behind it, and the two source formats have a preview. Settings → Composing → **Write messages in** picks the default. Nothing goes out as source: Markdown is rendered on the way out with the source as the plain-text alternative, hand-written HTML gets a text part made from it, and both are cleaned of scripts and style sheets before sending. The README lists exactly which Markdown is understood.
+
+**Undo and redo** (#200, requested by [@EmmanuelP](https://github.com/EmmanuelP)). Ctrl+Z and Ctrl+Shift+Z now cover moves, read and unread, starring, tags, and making, renaming or dragging a folder, and both are listed beside Undo and Redo in the main menu. Undoing a move puts the rows back on the spot rather than after a round trip to the server.
+
+**Save a copy of sent mail in any folder** (#199, requested by [@EmmanuelP](https://github.com/EmmanuelP)). The account editor's Special Folders group has **Save a copy of sent mail in**, which lists every folder of the account, the Inbox included, and a switch for servers such as Gmail that keep their own copy, so nothing lands twice. A message waiting in the Outbox uses the setting current when it goes out. And a reply you send now joins the conversation on screen as soon as it is sent, instead of after the next visit to the Sent folder.
+
+**Links open again inside the Flatpak** (#202, reported by [@7system7](https://github.com/7system7)). On a desktop whose portal cannot launch the default browser directly, a link click did nothing and logged nothing. Links now go through the portal with its answer watched, fall back to the portal's app chooser, and say so if that fails too. The same fix repairs the attachment opener's chooser fallback in French, Russian, Hungarian and Portuguese.
+
+**Filter rules on recipients match each recipient** (#201, reported by [@yioannides](https://github.com/yioannides)). "Is", "starts with" and "ends with" are now held against each address and name in To and Cc on its own, so "is x@y" matches mail sent to x@y and someone else. An Apply Now run also reports matches that needed nothing, instead of calling mail already tagged on an earlier sync "none of them matched".
+
+**Remote content per message.** A card's actions and its menu can load or block a message's remote content either way, and the choice sticks for the session. The reading pane also starts on the same line as the message list.
+
+**List previews** no longer come through as noise for quoted-printable newsletters, and a preview padded with an invisible preheader is read deeper to find what the message actually says.
+
+**French translation** updated for the filter run (PR #203 by [@frenchy82](https://github.com/frenchy82)).
+
+## What's new in 1.31.1
+
+**Filter rules can be given a name** (#197, requested by [@yioannides](https://github.com/yioannides)). The filters list used to spell every rule out by its conditions, which can now run to several clauses on one line. The rule editor's first row is **Name (optional)**, and a named rule is listed by its name with the conditions moved underneath. Unnamed rules read exactly as they did.
+
+**Filters can be run over mail that is already there** (#198, reported by [@yioannides](https://github.com/yioannides)). Until now rules only ever met mail as it landed in the Inbox, so a rule you wrote today never touched anything already sitting in a folder. Settings → Filters has an **Apply Now** button beside Add Filter that runs every rule over the mail already in your inboxes, and a folder's right-click menu in the sidebar has **Apply Filters** for that one folder, which is how rules reach mail outside the Inbox. It is left off Drafts, Junk and Trash, where filing mail back out is not what a rule about arriving mail meant.
+
+**A run tells you what it did.** Apply Now spins while the run lasts, and the run puts up a dialog with a live count: how many messages the rules have been held up against, how many were tagged or filed, and which folder of how many it is on. Wait on it and the report appears there; press **Run in Background** and the run carries on without you, reporting in the status bar when it finishes. The report always names the number of messages looked at, so a rule that matches nothing now says so instead of looking like a rule that never ran.
+
+**French is complete again** (PR #195 by [@frenchy82](https://github.com/frenchy82)), and **Russian** has every 1.31.0 string (PR #196 by [@iliasen](https://github.com/iliasen)).
+
+## What's new in 1.31.0
+
+**Appearance themes.** Settings → Appearance gained a **Theme** gallery: **System**, the stock GNOME look and still the default, plus **Midnight**, **Tidal**, **Rose**, **Earth** and **Forest**. Every theme has a light and a dark palette, so the Style setting keeps doing what it did and picks which of the two you see; each card shows both halves, with a ring round the one currently on screen. A theme colors the whole window, the reader and the composer included, and switches at once without a restart. The palettes come from the theme library of [T3 Code](https://github.com/pingdotgg/t3code) (MIT).
+
+**Fixed: a Drafts folder chosen under Special Folders showed no count.** When the Drafts folder was assigned by hand rather than detected from the server, its sidebar chip counted unread mail, which drafts never are, so it stayed hidden however many drafts were waiting. It now counts every draft, like a detected Drafts folder does. Reported from a laposte.net account.
+
+**Settings reads more plainly.** Rows across General, Sidebar, Message List, Date and Time and System were reworded, the subheadings under Theme and App icon are gone, and the switch that turns the ⋯ button into a menu moved from Message List to Reading, under **Message card actions palette**, where the ⋯ it describes lives; the cards also keep their own palette timeout. In Mail Accounts, the provider marks and the GOA / Vireo badges line up in columns, and the OpenPGP Import, Generate and Fetch buttons are a stacked column like the ones in Tags and Filters.
+
+**Portuguese translations updated** for pt_PT and pt_BR (PR #194 by [@somepaulo](https://github.com/somepaulo)).
+
+## What's new in 1.30.1
+
+**Swipe actions can be tuned to your trackpad.** Settings → Message List gained **Trackpad swipe sensitivity**, a dial from 1 to 10 in half steps. Until now a two-finger swipe had to travel a fixed distance that few trackpads manage in one go, so on some laptops a message never slid far enough to archive or delete. Raise the number if a swipe never gets far enough, lower it if messages slide when you did not mean them to. The default is 3.5, which puts the row roughly under your fingers. Mouse and touchscreen drags follow the pointer exactly as before and are not affected by the setting.
+
+**A swiped message leaves the list properly.** Once a swipe goes far enough to archive or delete, the message carries on off the side you sent it, with the action's color filling behind it, while the row closes up and the messages below slide into its place. Before, it simply vanished the moment you let go.
+
+## What's new in 1.30.0
+
+**Filters can match the message body** (#191, requested by [@yioannides](https://github.com/yioannides)). *Where* now offers **Message body**, so a rule that files anything with "unsubscribe" in it into Newsletters is one condition. The text is searched on the server as the Inbox syncs, one search per alternative over the mail just listed, so nothing is downloaded for it; the list preview is checked too. A body condition always means "contains", the only search a server offers, and the editor says so.
+
+**Filters can match the Reply-To address** (#191). *Where* also offers **Reply-To address**: the Reply-To header, or the From address when the sender set none.
+
+**A filter can hold several conditions** (#192, requested by [@yioannides](https://github.com/yioannides)). The filter editor is now a page of groups: the account, one titled group per condition with its own Where, Match and Text rows and a remove button in its header, an **Add Condition** row, and *Then* for what a match does. A **Condition matching** chooser, shown once there are two, says whether all must match (the default) or any one may. The Filters list prints every condition of a rule.
+
+**A condition can name several alternatives** (#192). Commas separate them in the text to match: `invoice, receipt` matches either, with the whole matcher applied to each. A value that held a comma on purpose now reads as two alternatives.
+
+**Fixed: the filter editor's "Move to" list was empty after Settings reopened.** Since 1.27.0, reopening Settings after an account, filter, tag or sender changed left the list with only *Leave in Inbox*. It lists the folders again.
+
+## What's new in 1.29.3
+
+**Files from GNOME Files go where you say.** *Send with Vireo*, *Open With Vireo* and Files' own *Email…* entry used to open a new message with the files attached, and nothing else was on offer. Now a dialog asks what the files are for: a new message, a draft you pick from every account's drafts, or a reply to a message you pick from a list, with the message you are reading first and a search box for sender, subject or account. A reply to the message on screen splits the reading pane the way Reply does; any other opens in a window. Each dialog has an "Always do this" box.
+
+**Big files can go to cloud storage instead.** When the files together exceed the size limit (20 MB by default) and a cloud storage account is set up, a second dialog offers to attach them anyway or upload them and put download links in the message. Without a cloud account they are attached as before.
+
+**Settings → System → GNOME Files** holds the defaults for both: what the files go into, what happens over the limit, and the limit in MB.
+
+**Cloud storage behind Cloudflare.** A self-hosted Nextcloud, ownCloud, OpenCloud or Seafile reached through a Cloudflare domain or tunnel cannot take an upload over 100 MB. The account editor has a "Server is behind Cloudflare" switch: with it on, files over 90 MB go up in 90 MB pieces the server puts back together. With it off, a failed upload of that size now says that Cloudflare's limit is the likely cause and names the switch, instead of a bare HTTP error.
+
+**French** updated by [@frenchy82](https://github.com/frenchy82) (PR #193).
+
+## What's new in 1.29.2
+
+**Your own messages show your mailbox's face** (#189, reported by [@yioannides](https://github.com/yioannides)). The picture you choose for a mailbox in Accounts now appears on the messages you sent too, in the conversation and in the message list, not only in the sidebar. An account with an emoji instead shows the emoji on its color, as the sidebar does.
+
+**Or keep it the old way.** Settings → Message List → "Your own mail shows your account circle" is on by default; off, your own messages get the same circle as anyone else's mail: their contact photo, their Gravatar when that is on, else initials.
+
+**Use your Gravatar.** Each account's editor has a "Use my Gravatar" switch under Appearance. On, the picture registered for that address at gravatar.com is shown everywhere the account's face appears, ahead of its picture or emoji, and an address with no Gravatar simply falls back to them. It is off by default because the lookup sends gravatar.com a hash of the address.
+
+**Leaving a settings editor goes where you asked.** With an account editor open, choosing another settings category and answering Save or Discard highlighted the category but left the window in Mail Accounts. It now shows the page you chose. And an editor you opened without changing anything no longer asks whether to save.
+
+## What's new in 1.29.1
+
+**Send with Vireo attaches every selected file.** Selecting several files in GNOME Files and choosing "Send with Vireo" (or "Open With Vireo") opened one message per file. They now all land in the same message.
+
+## What's new in 1.29.0
+
+**The attachments gallery reaches your whole archive.** Until now the gallery could only show files that had already been downloaded, which on a large mailbox was a few dozen out of thousands. Vireo now asks the server to describe the attachments in every message it knows of, without downloading them, and lists them all: name, type, size and a thumbnail once opened. Files are still only downloaded when you open them. The gallery loads a page at a time as you scroll, so twenty years of mail is as quick as one. Microsoft 365 accounts still show only what has been downloaded.
+
+**Choose where the gallery looks.** Its footer has an account dropdown and a folders button with switches for the Archive and for other folders, above a checklist of every folder per account. Sent is listed but off by default, since what you sent is rarely what you are hunting for. Typing in the gallery's search box no longer loses the focus after the first letter.
+
+**Send with Vireo from GNOME Files** (#188, requested by [@7system7](https://github.com/7system7)). Settings → System → GNOME Files installs a Files extension that adds "Send with Vireo" to the right-click menu on selected files: they open in a new message, attached. The page says whether Files has loaded it and, if the `nautilus-python` package is missing, shows the install command for your distribution with a copy button.
+
+**"Send by email" from a file manager works in the Flatpak.** The chosen files are attached and the window comes to the front. If it cannot, a notification says the message is ready and clicking it raises the composer. The Flatpak now has read-only access to the home directory and removable drives for this.
+
+**No more busy pointer after opening the app** (#187, reported by [@yioannides](https://github.com/yioannides)). With "Run in Background" on, clicking the icon left the mouse pointer spinning for about fifteen seconds, during which clicking the icon again did nothing. The window now completes the launch the moment it appears.
+
+**People on Gmail no longer wear the Gmail logo.** Sender logos are for brands; an address at Gmail, Outlook, iCloud, Proton and the other mailbox hosts keeps its colored initials.
+
+## What's new in 1.28.2
+
+**Sender logos.** With "Show sender logos" on (Settings, Privacy), Vireo now shows a sender's real mark where it can: the logo a sender publishes for mail clients (BIMI), or one from a bundled set of about 220 common senders that needs no network request at all, falling back to the site's own icon. Chase, Bank of America, Spotify, Amazon and many others show their brand.
+
+**Wide mail scrolls again.** A message wider than a narrow reading pane could catch the mouse wheel so the page wouldn't scroll up or down. Wide layouts are now fit to the pane and can no longer capture the wheel.
+
+**Drafts aren't read or unread.** A draft is a message you're still writing, so the "Mark as Read" and "Mark as Unread" actions no longer appear on drafts.
+
+**Translations.** French is complete again by [@frenchy82](https://github.com/frenchy82) (#186).
+
+## What's new in 1.28.1
+
+**No more white flash between messages.** In dark mode, switching from one message to the next briefly showed a white bar with rounded corners under the card header. The reading pane now hides each message frame until its content is ready.
+
+**Account circles in Settings.** The Mail Accounts list shows each account's circle, with its picture, emoji or initials, where the provider icon was. The provider icon sits on the other side of the name and address and names the provider when hovered. The "GNOME Online Account" badge is now "GOA", with the full wording in its tooltip.
+
+**A roomier toolbar editor.** The Appearance page is a little wider so all six buttons of a group fit on one row, and each side of the reader toolbar holds at most six buttons.
+
+**The tray counts inboxes.** The tray icon's dot, tooltip and menu now count and list unread mail in your inboxes only, and the menu says "unread in Inboxes" so the number is clear. Folders that filters file into still count in the sidebar.
+
+**The language you choose now applies in the Flatpak.** Picking a language in Settings saved the choice but the Flatpak only carried the translation for the system's own language, so anything else fell back to English. Every translation now ships inside the app, and the RPM includes them too. Reported by [@somepaulo](https://github.com/somepaulo) (#183).
+
+**Translations.** Russian is updated for 1.28.0 by [@iliasen](https://github.com/iliasen) (#185), who also made the About entry translatable. French is complete again by [@frenchy82](https://github.com/frenchy82) (#184). Portuguese (Portugal) is updated and Brazilian Portuguese is new, both by [@somepaulo](https://github.com/somepaulo) (#182). Thank you all.
+
+## What's new in 1.28.0
+
+**Arrange the reader toolbar.** Settings, Appearance, Toolbar lets you drag the reading pane's buttons between a left group, a right group and "Not shown", in the order you want. On a narrow pane only the right group folds into the ⋯ menu; the left group is always there. Right-click the empty part of the toolbar for "Customize Toolbar…".
+
+**The slide-over sidebar stays open.** In a narrow window the sidebar panel no longer folds away when the pointer leaves it, so its menu can be used. Click outside the panel to close it.
+
+**Notifications open the right place, fast.** Clicking a new-mail notification now opens the message in Inboxes when the sidebar has that row, or in the account's own Inbox with the account unfolded so the highlight shows. The message itself appears at once instead of waiting behind the folder's sync, and Inboxes picks up new mail on polled accounts without waiting for the next poll. The unread count no longer flickers back after the message is read. Reported by [@yioannides](https://github.com/yioannides) (#170).
+
+**Move a whole conversation.** With a conversation open, Move To… offers a "Whole conversation" switch, on by default, so one pick files every message in it. Dragging a conversation row to a folder takes the whole conversation too, as deleting it does. Move To… is also in the message list's right-click menu, on the row's action palette and on each reader card's action row. Requested by [@peterweissdk](https://github.com/peterweissdk) (#171).
+
+**Right-click a message card.** Anywhere on a card in the reading pane, its header or its text, opens the same menu a message has in the list: reply, star, read, tags, spam, move, archive, delete, add the sender, view source. Replies from it open in the pane.
+
+**New replies join the open conversation.** When a reply arrives for the conversation you are reading, it appears in the reading pane without moving what you are looking at; scroll to it and it is marked read, like any other. You no longer have to click away and back.
+
+**Plain text, both ways.** The composer has a Plain text toggle, and Settings, Composing a switch to start every message that way: no formatting toolbar, and the message goes out as plain text only. In the reader, Settings, Reading can show plain-text messages in a monospace font, the system's or one you pick. Both requested by [@somepaulo](https://github.com/somepaulo) (#180, #181).
+
+**The clock follows the desktop.** With the clock set to follow the system, Vireo now honours GNOME's own 12-hour or 24-hour setting rather than the locale's habit, in the message list and in Send Later's presets. Reported by [@taprobane99](https://github.com/taprobane99) (#173).
+
+**Choose the language.** Settings, System has a Language row, and so does the welcome wizard's first page: System, English, or any of the shipped translations. A pick in the wizard restarts Vireo into that language. Requested by [@somepaulo](https://github.com/somepaulo) (#179).
+
+**Three more languages.** Hungarian by [@7system7](https://github.com/7system7) (#169), Russian by [@iliasen](https://github.com/iliasen) (#176, who also made two reader tooltips translatable) and Portuguese by [@somepaulo](https://github.com/somepaulo) (#178). French is complete again, by [@frenchy82](https://github.com/frenchy82) (#172, #175). Thank you all.
+
+## What's new in 1.27.3
+
+**A steadier sidebar in narrow windows.** When the window is too narrow for the full sidebar, opening it now slides a panel in over the icon rail without the rail changing underneath: its menu, refresh and folder icons stay exactly where they are while the panel opens and closes. This also removes a rare case where the rail vanished after the sidebar slid closed and the button stopped working until pressed again.
+
+## What's new in 1.27.2
+
+**GNOME's Inbox and Archive icons.** The Inbox tray and the Archive shoe-box are now the icons from GNOME's own icon set, in the sidebar, the toolbars and the menus, in place of Vireo's earlier drawings.
+
+## What's new in 1.27.1
+
+**French translation updated.** The strings 1.26.0 added are now in French: the tag number keys, the Tags and Cloud Storage page descriptions, the nickname field, the default sender setting and the Backup page. French is at 971 of 1054 strings; the rest are 1.27.0's new strings. Translation by [@frenchy82](https://github.com/frenchy82) (#160).
+
+## What's new in 1.27.0
+
+**Move To.** The reader toolbar has a folder button. It opens a list of the account's folders, indented as in the sidebar, with a search box; type a few letters and press Enter to file the message, or click a folder. With several messages selected it moves them all. Requested by [@peterweissdk](https://github.com/peterweissdk) (#164).
+
+**Reply answers the latest message.** Replying to a conversation from the toolbar used to answer its oldest message. With "Newest first" on it now answers the newest message from someone else, so you never answer your own last reply by accident; with oldest first it answers the first message, as the pane shows it. Clicking a message's card still answers that message. Reported by [@yioannides](https://github.com/yioannides) (#165).
+
+**Tags set elsewhere show up.** A tag put on a message from another computer did not appear in the tag's list here until the folder holding the message was opened. Opening a tag's list, or refreshing while it is open, now asks the server for every tagged message. Reported by [@7system7](https://github.com/7system7) (#166).
+
+**A picture for your account.** The account editor can take a photo or logo from your computer for the sidebar circle, in place of the emoji or initials. The editor shows the circle as it will look, above the settings that shape it, with a toggle between "Initials or emoji" and "Picture" and an "Account accent color" of its own. Requested by [@yioannides](https://github.com/yioannides) (#162).
+
+**The Actions Palette as a menu.** Settings, Reading has "Actions Palette as a menu": the ⋯ on a message row then opens the same menu a right-click shows, instead of sliding the palette out.
+
+**Smaller things.** The Send Later menu's rows are no longer bold (reported by [@yioannides](https://github.com/yioannides), #167). Find in message sits beside Print and greys out when nothing is open rather than disappearing, so the toolbar keeps its layout. Add Alias… looks like the other panels' add buttons.
+
+**Find your tags.** Settings, Tags has "Find Tags…". It reads every mailbox on every account for the tags other clients have already set, Thunderbird's built-ins included, and lists the ones not set up here with a proposed name and color. Import them all, or tick the ones you want. Microsoft 365 accounts offer their categories, colors and all.
+
+**Not Spam.** In Junk, everywhere that offered "Mark as Spam" now offers "Not Spam": the right-click menu, the bulk bar, the row's action palette, the reader toolbar and the spam shortcut. The server is told the message is wanted and it goes back to the Inbox. Reported by [@frenchy82](https://github.com/frenchy82) (#168).
+
+**Sender logos at full size.** Vireo only ever asked a site for its root favicon, so many senders showed a tiny icon scaled up. It now reads the icons the site's home page and web manifest declare and takes the largest. Logos already on disk refresh within a week; delete `~/.local/share/vireo/logos` to see the difference at once.
+
+**Initials, centred.** The letters in the message list's circles, the sidebar's account circles and the reader cards' circles are centred by the ink they draw, so a lone letter no longer drifts and pairs no longer lean. Colors are unchanged.
+
+**Composing in a narrow pane.** When the reader pane is too narrow for the full compose toolbar, the actions fold into a ⋯ menu so Cancel, Send and the window's close button always fit. The Send button's label, Delete Draft and the cloud button also now update as they should while composing.
+
+**Tags in the menu.** The right-click menu keeps its tags behind a "Tags ›" row that opens its own page, so a long list of tags never makes the menu taller than the screen.
+
+**Sidebar.** Collapsing to the icon rail, or expanding back, no longer flashes stretched icons. The unified Inboxes chip counts the inboxes only; folders a filter files into keep their own chips under Filters. Right-clicking a conversation's top row reliably opens its menu.
+
+**Settings.** Add Account…, Add Filter…, Add Tag… and Find Tags… are the same kind of button in the same place on every panel.
+
+**Filters.** The unified row is called Filters. Every folder a rule files into is listed there; the section switches on and off as a whole, and the per-rule "Show under All Inboxes" switch is gone. Under each account, a folder that a filter files into is marked in place: a custom folder shows the filter-folder glyph in the account's color, and a main folder such as Archive keeps its own icon with a small filter mark on the corner in the account's color. Right-click any of them, under the account or in the Filters row, for "Edit Filter…", which opens that rule. The folder menu is the same wherever the folder appears.
+
+**Tags.** Each account's Tags section sits above its folder list. Right-click a tag anywhere it appears for "Edit Tag…".
+
+**Filters and tags edit in a page.** Adding or editing a filter or a tag slides a page in over the list, like the account and cloud storage editors, with Save in its header. The list cards show a chevron, and the per-card "Count unread" switch moved into the filter's editor.
+
+**Unread counts per row.** Settings, Sidebar, Unified has an "Unread counts" expander with a switch for Inboxes, Starred, Drafts, Archive and Filters. Switch one off and that row shows no unread chip. Chips are also capped: a very large count ends in an ellipsis rather than pushing the row wider than the sidebar.
+
+**Renamed folders.** Renaming the open folder used to leave Vireo asking the server for the old name on every fetch, with a "Could not load" error each minute. The selection now follows the rename.
+
+**Also.** "All Inboxes" is "Inboxes". Archive joins the unified section. Opening a tag shows its cached list at once. The icons under Filters and Tags line up with the header's.
+
+**Previews in the right charset.** The preview line under a subject read every message as UTF-8, so mail sent in a Central European charset showed a row of replacement characters even though the message itself was fine. The preview now reads the charset the message declares, and rows already showing replacement characters clean themselves up. Reported by [@7system7](https://github.com/7system7) (#159).
+
+**The unified section.** All Inboxes has company: Starred, Sent and Drafts rows, each combining that folder across every account. Click a row for the combined list, or open its caret for each account's own folder. Filtered Folders and Tags placed in the unified section are the same kind of row now, and their headers open every filtered folder combined, and every tagged message. Placed above or below the accounts, they keep the heading style they had. Settings, Sidebar, Unified has a switch for each row.
+
+**Every account has its own Filtered Folders and Tags.** Under each account's Folders heading: every folder its rules file into, and every tag scoped to that account. They are there whatever the unified section shows.
+
+**Only the unified section, if you like.** "Accounts in the sidebar" (Settings, Sidebar; also "Show Accounts" in the main menu, or Ctrl+Shift+A) hides the account sections altogether.
+
+**The sidebar remembers itself.** Which accounts, folders and sections are open comes back after a restart. "Remember the sidebar layout" turns that off, in which case every launch starts with everything folded up; "Remember icon rail state" decides separately whether the sidebar reopens as the icon rail.
+
+**The icon rail.** Unread counts can be a dot in the accent color instead of a number. "Fold up expanded items" makes the items you tick start folded whenever the sidebar collapses to the rail; a long-press in the rail still expands or collapses any of them, and the full sidebar comes back exactly as you left it. The rail has no chevron buttons any more: long-press an icon instead (the full sidebar keeps its chevrons and takes the long-press too). Two headings that sat slightly off-centre in the rail are centred.
+
+**Faster.** Switching folders, including into the combined views, now paints in tens of milliseconds rather than several hundred, whatever the size of the mailbox, and Settings opens in tens of milliseconds rather than a second or more (with many accounts, several seconds). Sent folders no longer show an unread chip, tag rows line up with the filtered folder rows, and the Settings window switches sections without a fade.
+
+## What's new in 1.26.0
+
+**Choose the sender for new messages.** Settings, Composing has "Send new messages from": the account of the current folder, as before, or any of your accounts or aliases. New messages, messages to a contact, mailto links and files sent from the file manager all start from that address. Replies still answer from the address the original was sent to. Requested by [@7system7](https://github.com/7system7) (#157).
+
+**Tags by number.** With single-key shortcuts on, the keys 1 to 9 add or remove your first nine tags on the message you are reading, and 0 removes every tag. Drag the tags in Settings to set their order; each of the first nine shows its key, and the shortcuts reference lists which number is which tag. Suggested by [@7system7](https://github.com/7system7) in #157.
+
+**The services' own marks.** Nextcloud, ownCloud, OpenCloud, OneDrive, Dropbox and Seafile show their logos in the Cloud Storage panel, its Service picker and the account editor. Gmail, Outlook, iCloud, Yahoo, Proton, Fastmail, AOL, Zoho, GMX, Yandex and mail.com show theirs in the Provider picker, in Settings and the setup wizard, in the Mail Accounts list, in the account editor and in the GNOME Online Accounts import lists. Plain IMAP/POP3 accounts get a blue envelope, custom OAuth accounts a yellow one. The marks are their owners' trademarks, used only to identify the services; see the README.
+
+**Cloud Storage, like Mail Accounts.** The Service picker lists Nextcloud, ownCloud and OpenCloud separately. Each account is a card with its mark, a switch to take it out of the composer without removing it, and a chevron; clicking the card opens the editor. Remove sits in the editor's header beside Save and asks before deleting. The name field is "Nickname (optional)".
+
+**Remove in the header.** The mail account editor's Remove button moves to the header beside Save as well. The Provider picker's plain entry is now "IMAP/POP3 Account" and comes first.
+
+**Settings reopens where you were.** The Settings window returns to the category you last had open, for as long as Vireo runs.
+
+**A fuller backup.** Export Settings now includes the cloud storage accounts and the words you have taught the spell checker. Importing an older backup leaves those alone.
+
+**Smaller things.** The reader's find button has a new icon. French gains the cloud storage strings and fourteen corrections by [@frenchy82](https://github.com/frenchy82) (#158); the strings added in this release await translation. [@yioannides](https://github.com/yioannides) (#75) and [@p-mitana](https://github.com/p-mitana) join the Thanks list in the About window.
+
+## What's new in 1.25.2
+
+**OneDrive, Dropbox and Seafile for cloud attachments.** Settings, Cloud Storage now offers a choice of service. OneDrive signs in through the Microsoft 365 account in GNOME Online Accounts, with nothing to type. Dropbox signs in through your browser with an app key of your own, and the editor walks through making one. Seafile takes your password, plus the current code if your account uses two-step verification. Link expiry and download passwords depend on the plan: a free personal OneDrive and a Dropbox Basic plan allow neither, and the app says so where the options are. Requested in #144 by [@7system7](https://github.com/7system7).
+
+**Link terms per upload.** The upload dialog in the composer shows the account's expiry and password settings for each upload and lets you change them for that email alone, including a download password of your own. The account's settings stay the defaults.
+
+**Cloud account editor as a page.** Adding or editing a cloud account slides in as a page of the Settings window, like the mail Accounts editor.
+
+**Suggestions remember everyone you write to.** An address you send to is offered in the next message's recipient dropdown at once, whichever way the message went out, and your own account addresses are offered too, after everyone else.
+
+**Smaller things.** The Settings window is a little taller, so its sidebar no longer scrolls. The app icon gallery gains "Vireo envelope, blue subtle". The page the browser shows after a sign-in displays the app icon on its own.
+
+## What's new in 1.25.1
+
+**French translation updated.** Every string added in 1.25.0 is now translated: Send Later, cloud attachments, Empty Trash and Empty Junk, drafts and the reply panel fields. French is complete at 949 of 949 strings. Translation by [@frenchy82](https://github.com/frenchy82) (#156).
+
+**Thread dots drawn whole.** The small node dots on a conversation's messages in the list, and the rail stub under the last reply, were being cut in half since swipe actions arrived. They are whole again.
+
+## What's new in 1.25.0
+
+**Send later.** The Send button has a dropdown: tomorrow morning, tomorrow afternoon, Monday morning, or a date and time of your own. A scheduled message waits in the Outbox, where it says when it will go and can be edited, sent now or deleted. Vireo sends it at the time, also while running in the background; if Vireo was closed then, it goes at the next launch. Requested by [@7system7](https://github.com/7system7) (#145).
+
+**Cloud attachments.** Set up a Nextcloud, ownCloud or OpenCloud account under Settings, Cloud Storage, and the composer gains an upload button beside Attach. The file goes to your server and a share link, with the size and any expiry, is placed in the message above your signature. Links can expire after a number of days and be protected with a download password, which is shown to you to pass on separately. Requested by [@7system7](https://github.com/7system7) (#144).
+
+**Empty Trash, Empty Junk.** Right-click Trash or Junk in the sidebar to erase everything in it, after a confirmation. Requested by [@yioannides](https://github.com/yioannides) (#152).
+
+**From, To and Subject in the reply panel.** A chevron in the inline reply's header unfolds its address and subject rows in place, and a Composing preference opens every reply with them showing. Requested by [@yioannides](https://github.com/yioannides) (#154).
+
+**Single messages as cards, for everyone.** A lone message now shows as an inset card like a conversation's messages on installs from before that became the default; the Reading preference still switches it off. Raised by [@yioannides](https://github.com/yioannides) (#153).
+
+**Quoted text folds less eagerly.** A reply written below or between quoted passages no longer disappears behind the ••• along with the quote: the fold only hides a quote that ends the message, allowing for a signature. Reported by [@EmmanuelP](https://github.com/EmmanuelP) (#150).
+
+**Quote and list buttons toggle.** In the composer, the Quote button leaves a quote when you are in one, and the Quote, bulleted and numbered list buttons show when the cursor is in their block. Suggested by [@EmmanuelP](https://github.com/EmmanuelP) (#137).
+
+**Drafts.** Selecting a draft opens it in the reading pane's composer, which has a Delete Draft button. A draft with no recipient yet saves properly. The Drafts folder shows how many drafts it holds.
+
+**French** updated by [@frenchy82](https://github.com/frenchy82) (#151).
+
+## What's new in 1.24.3
+
+**French translation updated.** Almost every string added in 1.23 and 1.24 is now translated, including the OpenPGP pages, tags, automatic Junk and Trash emptying, the reader font and color settings and the new settings window. Translation by [@frenchy82](https://github.com/frenchy82) (#149).
+
+## What's new in 1.24.2
+
+**Any color for a tag.** The tag dialog has a ninth color disc after the eight palette colors. It opens the GTK color chooser, and the picked color shows on the disc and everywhere the tag appears. Requested by [@yioannides](https://github.com/yioannides) (#147).
+
+**The composer matches your theme.** The composer's background and the editor's writing area were fixed GNOME shades, so under a custom GTK theme they stood out from the rest of the window. They now take their colors from the theme like the reader does, and follow a switch between light and dark while the composer is open. Reported by [@yioannides](https://github.com/yioannides) (#148).
+
+## What's new in 1.24.1
+
+**Message previews show every line again.** With the list set to two or three preview lines, the second line was cut through and the third missing, since 1.23.0. Every line shows now.
+
+**Swiping a message looks cleaner.** While you drag a row to archive or delete it, the row's rounded highlight goes away and the colored strip under it fills the full width of the list, so the two meet without a seam. The list no longer moves while you drag.
+
+## What's new in 1.24.0
+
+**Your own font and colors for every message.** Two switches in Settings under Reading. "Use my own font" shows every message in one font and size instead of whatever the sender chose: the interface font, or any font you pick under the switch. Headings stay larger than body text and code stays monospaced. "Use my own colors" ignores the sender's text and background colors, so each message reads as plain text on the reader's ground, with links in the accent color; pictures are kept. Each message card has a toggle on its action line that shows that one message as its sender formatted it, and back. Both settings apply to printing as well. Requested by [@yioannides](https://github.com/yioannides) (#56).
+
+**Junk and Trash empty themselves.** In each account's settings, under Syncing, choose to delete junk mail or trashed mail for good after 7, 14 or 30 days. Vireo checks at each sync and removes what has passed the age, counted from the day the message arrived. Off unless you turn it on. Requested by [@typedev](https://github.com/typedev) (#140).
+
+**Settings with a sidebar.** The settings window now has categories down the left and the chosen category's options on the right, instead of two long scrolling tabs. Accounts, tags, filters and the sender lists each have a page of their own, and the Filters and Senders pages have a search box for long lists. Requested by [@typedev](https://github.com/typedev) (#141).
+
+**OpenPGP, end to end, without a terminal.** Vireo now reads encrypted and signed mail and sends it too, through the GnuPG on your computer. Settings has an OpenPGP page where you generate a key for your address, import and export keys, fetch someone's key by their address, and mark a key as trusted once you have checked its fingerprint. When a signed message arrives from someone whose key you don't have, the lock-and-shield popover offers to fetch it; when the key is not trusted yet, it offers to trust it. A key attached to a message imports with one click. In the composer, Sign and Encrypt buttons sign your mail with your key and encrypt it to each recipient's, and tell you beforehand if a key is missing. Decrypted text is never stored on disk. Requested by [@greedykangaroo01](https://github.com/greedykangaroo01) (#133).
+
+## What's new in 1.23.1
+
+**iCloud deletes and moves work again.** Since 1.22.0, deleting, archiving or moving a message on an iCloud account failed with "Parse Error": iCloud does not announce the MOVE command, the fallback path sent the Trash folder's name "Deleted Messages" without quotes, and the server refused it. The name is quoted now. If you use iCloud, this is the update to take.
+
+**The server conversation in the log.** The log now records every command Vireo sends to a mail server and the server's answer, for IMAP, Microsoft 365, POP3 and outgoing mail, without message contents or passwords. When something fails, "Export log" in Settings shows exactly what was asked and what came back.
+
+**An uninstall script.** For source installs, `./uninstall.sh` removes what `install.sh` put in place; `--purge` also clears settings and the mail cache. Contributed by [Isaac](https://github.com/thecalamityjoe87) (#142).
+
+## What's new in 1.23.0
+
+**Tags.** Label messages with one or more colored tags, alongside their folder. Define them in Settings under Accounts, then put them on a message from its right-click menu, the Actions Palette or the reader toolbar. Each tag has its own row in the sidebar that lists everything carrying it, across all your accounts, and rules can tag incoming mail (with or without moving it). Tags are stored on the server as IMAP keywords, the same mechanism Thunderbird and Apple Mail use, so a tag set here is the tag you see there and back. Microsoft 365 stores them as categories; POP3 accounts keep them in Vireo. Requested by [@yioannides](https://github.com/yioannides) (#71), with the design shaped by the discussion there.
+
+**Swipe a message to archive or delete it.** Drag a row sideways with the mouse, or swipe it with two fingers on a trackpad: left deletes, right archives, and a colored strip under the row names the action as you go. Swap the two in Settings if you prefer, or turn swiping off there. Dragging a message to a folder now shows a small envelope under the pointer, and the account rows under All Inboxes and the Filtered Folders rows accept drops as well. Contributed by [Isaac](https://github.com/thecalamityjoe87) (#135), answering [@taprobane99](https://github.com/taprobane99)'s request (#92).
+
+**A new icon, and a redrawn gallery.** Vireo's icon is now a blue envelope with the bird on it. The gallery in Settings is redrawn to GNOME's icon guidelines: more Vireo envelopes in yellow, white, beige and faded blue, plain envelopes from blue to starfield, the Vireo bird, and the squircle that was the default since 1.21 staying on as "Logotype". The beta channel wears the development-build version of the icon, with GNOME's hazard stripe. This release puts the new icon on every install once, whatever was chosen before; pick another in Settings any time and that choice stands.
+
+**Fixes.** An account whose Sent folder was pointed at its Inbox disappeared from All Inboxes ([@EmmanuelP](https://github.com/EmmanuelP), #136); the Inbox can no longer be given another role. Forwarding from the main window showed no To field ([@7system7](https://github.com/7system7), #139). Pressing Enter twice inside a quoted block now steps out of the quote, so you can reply below an excerpt (EmmanuelP, #137). Trash and Junk rows offer "Move to Inbox" in their menus, for a message deleted by mistake ([Isaac](https://github.com/thecalamityjoe87), #138).
+
+**Export the log.** For a bug report, Settings has "Export log", and the console in the status bar has an export button. The file names the build and desktop and holds everything the console recorded since the app started, with email addresses shortened to their domain so it can be attached to an issue as it is.
+
+**French, completed.** [@frenchy82](https://github.com/frenchy82) translated the composer's picture-resizing menu and the last loose strings (#134).
+
+## What's new in 1.22.0
+
+**Vireo speaks French, and can learn other languages.** The whole interface, the launcher and the app description now follow your desktop's language once a translation exists. French is the first, contributed by [@frenchy82](https://github.com/frenchy82) (#122, #131), who also caught the places where the app kept showing English despite having the translation. If you would like to translate Vireo into your language, `po/README.md` in the repository explains how; it takes no programming.
+
+**Pictures from the file manager, and picture resizing.** Drag a picture in from Files, or copy one there and paste, and it lands in the message instead of arriving as a path, keeping its filename. Any other file becomes an attachment. Click a picture for corner handles, or right-click it for Small, Medium, Large and Original Size. Resizing only changes how big the picture is shown; "Recompress to This Size on Send" in the same menu shrinks the bytes as the message goes out. Contributed by [@typedev](https://github.com/typedev) (#127, for #126), who also fixed the test build (#125).
+
+**HTML signatures.** If your signature exists as an HTML file, the account editor's Signature section can take it: "Import File…" loads the file, pictures included, and "Edit HTML…" lets you paste or edit the signature's source. Requested by [@7system7](https://github.com/7system7) (#120).
+
+**Open a message by its Message-ID.** Vireo handles `mid:` links: `xdg-open 'mid:<Message-ID>'` opens that message in the running app, searching your local index first and then every account's server. Launchers and extensions that link to mail this way, such as Vicinae, can now open messages in Vireo. Requested by [@7system7](https://github.com/7system7) (#130).
+
+**Deleting works on every server.** Some mail servers, Zimbra among them, lack the IMAP MOVE command Vireo used for every move, so deleting, archiving and filing failed there. Vireo now checks what the server supports and falls back to the older way. Reported by [@EmmanuelP](https://github.com/EmmanuelP) (#128), who also spotted a stray line under the empty blacklist field (#129).
+
+**Ctrl+C in the reader.** Text selected in a message body can be copied with Ctrl+C, with a "Copied" pill to confirm it; before, only the right-click menu worked.
+
+**A redrawn envelope, in four colors.** The envelope icon is new, and cream, blue and white versions join it in the gallery.
+
+Thanks to everyone above for the patches, the translations and the reports.
+
+## What's new in 1.21.1
+
+**Refreshed icons.** Every icon in the set has been redrawn, the default included, and a second bird variant with an @ joins the gallery in Settings → System & Appearance → App icon. A choice you already made keeps its place; the artwork updates the next time you pick or the app starts.
+
+## What's new in 1.21.0
+
+**Pick your app icon.** Settings → System & Appearance has a new "App icon" row: scroll through the set — the yellow default, color and pattern variants, the bird, and the classic envelope — and click one. The dock, app grid, app switcher and the tray icon follow. New installs choose on the "Make it yours" page of the welcome wizard.
+
+![The app icon row in Settings](https://raw.githubusercontent.com/hyprlab/vireo/v1.21.0/docs/screenshots/1.21.0/settings-app-icon.png)
+
+**A new default icon.** Vireo's icon is now the yellow squircle with the V. If you already had Vireo installed, nothing changes on its own: your dock keeps the classic envelope until you pick something else. Fresh installs get the new icon. The beta channel wears the same icon with a "beta" ribbon.
+
+**Restart to finish.** After a change, the app grid shows the new icon right away. The dock's entry for the running app, and Vireo's own windows, switch after a restart, which Vireo offers on the spot: Restart Now waits a few seconds for the desktop to take the change in, then closes and reopens Vireo by itself.
+
+**Also.** The redrawn wordmark in the wizard and About window. Finishing the welcome wizard without adding an account no longer brings it back on the next start.
+
+## What's new in 1.20.2
+
+**Edit a filter.** Click a rule in Settings → Accounts → Filters (each row now carries a pencil beside its trash button) to open it in the filter dialog with everything filled in: account, field, match, text, destination folder, and both switches. Save replaces the rule in place. Adding a filter works as before.
+
+**More room in the rule rows.** The rows have padding around the title and the stacked switches, and the pencil and switch labels match the color of the rest of the row.
+
+## What's new in 1.20.1
+
+**Filtered folders under All Inboxes.** Each filter rule now has a "Show under All Inboxes" switch, next to "Count unread mail" in Settings → Accounts → Filters and in the Add Filter dialog. It is off by default. Folders of rules you switch on appear in a collapsible "Filtered Folders" section inside All Inboxes, below the per-account inbox rows, each marked with a folder-and-funnel icon in its account's color and carrying its own unread count. Click one to open the folder; right-click for Mark as Read and Refresh. Folded up, the heading shows the section's combined unread count. The section folds away with All Inboxes and has its own toggle in the icon-only sidebar.
+
+**A switch for the whole section.** Settings → Sidebar gains "Filtered folders under All Inboxes", on by default. Turn it off to hide the section regardless of what each rule says.
+
+## What's new in 1.20.0
+
+The 1.20 feature release, previewed through nine betas. Spell checking and inline images were proposed by @typedev (discussions #114 and #113), who also fixed three attachment bugs in PRs #110, #112 and #118; the tray icon and the unread-count work answer #116 from @mfreeman72, who tested every beta on Linux Mint, with advice from @p-mitana and @yioannides.
+
+**Spell checking.** The composer underlines misspelled words in red, in the message body and the subject line alike, and checks the word you are typing before you finish it. Settings gains a Spelling section: turn checking off, pick a language from the dictionaries actually installed (each named in its own language), and manage the words you have taught the checker. The Flatpak carries dictionaries for eleven languages beyond English.
+
+**Pictures in the message.** Paste or drop an image into the composer and it lands in the text where you put it, not as a file hanging off the bottom. Images are scaled to a sensible size, can be selected with a click, deleted, cut, copied, and demoted to an ordinary attachment from the right-click menu. Recipients see them in place.
+
+**A tray icon (#116).** For desktops with a system tray (Cinnamon, KDE, MATE, XFCE, or GNOME with the AppIndicator extension), an optional tray icon: the Vireo icon or a white or black envelope, a red dot while there is unread mail, and a menu listing your newest five unread messages with the sender's picture, subject and a preview line. Click one to open it; past five, "View all unread" takes you to All Inboxes. Off by default under Settings → Keep running in the background.
+
+**Filtered mail counts as unread (#116).** Mail your filter rules file into folders now counts toward the unread total. Each rule has a "Count unread mail" switch, on by default, in Settings → Accounts → Filters and in the Add Filter dialog. The All Inboxes badge, the tray icon and the Background Apps status all use the same number: the inbox plus the folders of counting rules. Trash and Junk never count. Those folders also stay current while you are reading elsewhere, so the tray list and new-mail notifications no longer lag behind the count.
+
+**Cached mail opens instantly.** Messages already on disk open the moment they are clicked, even while the startup sync is still running.
+
+**Replies go where the sender asked.** A message carrying a Reply-To address is answered there, not at its From line.
+
+**Grab handles for the split reply and the attachment drawer.** Both panels are resized by a slim floating bar, iOS style: drag to size, click the drawer's to collapse or expand it. The split reply holds the height you set, slides in and out smoothly with the reader's header sliding back in behind it, and remembers its height. The drawer's whole edge answers clicks and drags, with no dead zones.
+
+**Paste as plain text.** Ctrl+V pastes plain text by default; right-click always offers both plain and formatted paste, and a Settings switch flips the default.
+
+**Attachment fixes (#109, #111, #117).** Small files sent from web Gmail are no longer missing from the attachment list, a labelled Gmail message's attachments download once instead of once per label, and filenames split across two encoded words keep their extension. Mail already synced by affected versions repairs itself on upgrade.
+
+**Smaller things.** Account Settings… in the sidebar's right-click menu opens that account's editor; the attachments gallery's table keeps its columns lined up; Add Sender to Contacts in the message list's right-click menu; scrolling always works over extra-wide messages; Discord joined the About window's links.
+
+## What's new in 1.19.2
+
+A fix for messages with their own dark mode. Some emails, like Google Calendar invitations, carry their own dark-mode styling that the reader was applying based on your desktop's light/dark setting rather than the theme the message is shown in. With the desktop in dark mode but a message displayed on a light background, that left light-grey text on white, hard to read. Emails now follow the background they are actually shown on, in both light and dark.
+
+## What's new in 1.19.1
+
+A memory-use release (#106, reported by @mfreeman72). Vireo could grow past 2 GB of RAM over a long session and only a restart brought it back down; a day of reading now stays in the hundreds of MB.
+
+**The web renderer keeps itself trim.** Message rendering runs under a document-viewer configuration with a hard memory ceiling, so the WebKit process releases what it no longer needs instead of holding every message it ever displayed.
+
+**Bounded caches.** The in-memory stores for message bodies, opened attachments and sender logos now have fixed budgets and let go of the oldest entries; anything dropped reloads instantly from the on-disk cache. The attachments gallery also releases its loaded previews when you leave it.
+
+## What's new in 1.19.0
+
+The 1.19 feature release, built with the community: mail filters (#47, requested by @mfreeman72), settings backup (#50, @doodoobug-dot), notification actions (#38, @isorropisths), split replies (#86, @yioannides), quick filters (#97, @Toxblh), the read-marking and search work (#100 through #103, @p-mitana), and the Nautilus From-field fix (#105, @frenchy82). Everything below was previewed and refined through the 1.19.0 betas.
+
+**A welcome on first run.** A brand-new install opens with a five-step guided setup: add an account with one-click GNOME Online Accounts imports or a manual IMAP form with provider presets and a live connection test, then pick privacy choices and popular defaults.
+
+**Mail filters (#47).** File inbox arrivals into folders by sender, subject or recipient, per account, on the Accounts tab. Mail that arrived while Vireo was closed is filed on the next sync, and filed mail still raises the new-mail notification, which opens the folder the message went to.
+
+**Settings backup (#50).** Export every configuration file as one TOML bundle (passwords stay in the keyring, never exported); import replaces the config in place and offers a self-restart.
+
+**Notification actions (#38).** Single-message new-mail notifications carry Mark as Read and Archive buttons that act without raising the window.
+
+**Split replies (#86).** Reply, Reply All and Forward slide a compact composer down from the reader's top with the conversation still visible and interactive below it, scrolled to the card being answered.
+
+**Search, twice over (#102, #103).** The message list's search bar hides behind a header button (or Ctrl+F, or /), and the reader gains find-in-message with pill highlights, a live match counter and arrows.
+
+**Quick filters (#97).** Unread-only and starred-only toggles sit beside the sort menu and compose with each other.
+
+**Reading, rebuilt (#100, #101).** Messages mark themselves read as they come into view, governed by a new Reading policy setting (when displayed, after two seconds, or manually), and threads open on the first unread message. Conversation rows surface their newest message in the list, a thread's star now stars the whole conversation, and a row's context menu can mark the entire thread read or unread.
+
+**Console mode.** A live verbose log opens from the status bar for troubleshooting, with WebKit's JS console piped into the same view.
+
+Also: settings reorganized (Filters, Allowed Senders and the Blacklist on the Accounts tab), the About window rebuilt around the wordmark, single messages render as cards by default on new installs, cold-start composers from Nautilus's "Send by email" keep their From field (#105), and avatarless rows align cleanly again (#99).
+
+## What's new in 1.18.4
+
+Composer attachment fixes from Isaac's PR #96 (@thecalamityjoe87). Attachment pills in the composer now shrink to their content instead of stretching the full row, and files opened with Vireo from a file manager or the command line attach to a fresh composer.
+
+## What's new in 1.18.3
+
+Fix release for #90 and #91, both reported by @frenchy82, plus sender-seal corrections under GNOME text scaling.
+
+A folder click can no longer be swallowed by a stalled IMAP IDLE: the IDLE handshakes now time out and the click completes over a fresh connection. Push becomes a per-account setting (each account's editor gains Syncing → Instant new mail), so one server that mishandles IDLE no longer costs the others their instant delivery. GNOME Files' "Send by email" now attaches the selected files. The sender seal and its popover render correctly at any GNOME text scaling factor.
+
+## What's new in 1.18.2
+
+Sidebar work in this release was done with Isaac (@thecalamityjoe87, PRs #89 and #95); the header seal was requested by @taprobane99 (#88).
+
+**Sender authentication in the header.** The DKIM/SPF/DMARC verdict now appears as a seal beside the sender's name: blue when the checks pass, amber when something is off, red when authentication fails. Clicking the seal shows each check's result.
+
+**Chevron placement.** A new setting places the sidebar's disclosure chevrons on the left or the right (the previous layout, still the default). In the left layout, chevrons overlay the row edge so icons, labels and unread counts align in consistent columns. Account avatars are slightly smaller, icon alignment is corrected, and double-clicking All Inboxes expands or collapses its account list.
+
+**Threads show the newest message.** A collapsed conversation row now shows the newest reply's sender and preview instead of the message that started the thread. The row's context menu can also mark the whole conversation as read or unread.
+
+## What's new in 1.18.1
+
+The polish release 1.18.0's feedback asked for — thank you @thecalamityjoe87, @yioannides, @frenchy82, @p-mitana, @taprobane99 and @tbaumann.
+
+**Vireo is your email client now.** GNOME Settings lists Vireo under Default Applications → Mail, and clicking a mailto: link anywhere opens a composer prefilled with the address, subject and body. Opening the app a second time presents the existing window instantly.
+
+**Special folders, your way.** When a provider's Sent, Trash, Junk, Drafts or Archive isn't detected (or lands wrong), each account's editor now has a Special Folders section to pin any role to any real folder — deletes, archives and sent mail follow your mapping.
+
+**The list holds its ground.** Deleting mail or closing a compose while scrolled elsewhere no longer yanks the list back to the selection (thanks Isaac for PR #85). Deletion advances in the direction you're triaging, like Apple Mail. Undo puts you on the restored message — reliably, even on iCloud — and spins the refresh indicator while it works.
+
+**A calmer, denser message list.** Row text sits centred in its pill, rows tighten up, and the ⋯ Actions Palette slides out over the row on one seamless card — with Add to Contacts and View Source aboard, one palette open at a time, and the thread rail ending neatly at the last reply's dot. Right-clicking any email address now offers Add to Contacts, and the menu closes like it should.
+
+**Small things that add up.** The reader toolbar folds exactly when your window-button layout needs it to; All Inboxes only shows its total count when folded (and both are now optional); sender logos survive restarts; Settings dropdowns never truncate; previews refill the moment you turn them back on.
+
+## What's new in 1.18.0
+
+The 1.18 feature release, beta-tested by the community (thank you @p-mitana, @thecalamityjoe87, @frenchy82 and @yioannides for the feedback that shaped it).
+
+**Contacts, without leaving your mail.** The sidebar's Contacts row now opens a full view right in the app: search, sort and browse everyone from GNOME Contacts, with a full card for each person — their photo (click to expand; iCloud photos finally render), every email with compose and copy at hand, phone numbers, addresses, websites, birthday, notes, and which account the entry belongs to. Edit contacts, add new ones, and delete them without opening GNOME Contacts — changes sync back through Evolution Data Server, so CardDAV accounts pick them up. Composing from a contact slides the composer down right over the card.
+
+**One Settings window.** Accounts and Settings live together behind a standard GNOME view switcher, with every option regrouped into focused sections and a preference for which view opens first.
+
+**Mail that doesn't make you wait.** Bulk actions apply instantly and finish quietly in the background; the refresh spinner shows something's working and the status bar (burger menu, long-press Refresh, or Ctrl+Shift+S) tells you exactly what. All Inboxes paints from the local cache the instant the app opens. Emptied folders show a proper "No Messages" page.
+
+**Conversations, polished.** Threads slide open and shut in the message list with an animated caret (thanks to Isaac's PR #79); conversations open on their first unread; thread-wide delete, Ctrl+A, and threaded popout windows; optional newest-message-first reading order; and an optional card style for single messages.
+
+**Composer & reader.** A Reply-To field joins Cc/Bcc behind "More"; forwards finally keep their formatting, safely — bodies pass through a proper HTML sanitizer so a forwarded invoice still looks like the invoice, with nothing dangerous along for the ride. An "Always show recipients" option keeps the To line visible under every sender. Desktop notifications clear when you read the mail in the app.
+
+**Sidebar.** Contacts and Attachments pin to the sidebar's bottom edge as one clean section (from Isaac's PR #80), chevrons align, account labels are honoured, and the menu gains sections.
+
+## What's new in 1.17.1
+
+**Microsoft 365 accounts from GNOME Online Accounts work now (issue
+#36).** GNOME's Microsoft 365 sign-in only carries permission for
+Microsoft's Graph API — it cannot log in to IMAP at all, which is why
+imports produced an account that failed with "No address associated
+with hostname". Vireo now speaks the Graph API directly for these
+accounts, using GNOME's own sign-in: folders, reading, attachments,
+moves, undo, drafts, search, and sending all work, and new mail is
+polled every couple of minutes (or at your auto-fetch interval).
+Existing broken imports repair themselves on upgrade.
+
+Along with that, Google and Microsoft sign-in now belong to GNOME
+Online Accounts outright — the old built-in Microsoft sign-in is
+retired — and GOA accounts became first-class citizens in the Accounts
+window: switching one off returns it to the import list (it stays in
+GNOME), the Remove button works on them (removing from Vireo only), the
+irrelevant greyed-out server fields are gone from their editor, and
+editing the things Vireo does own — label, signature, color, aliases —
+saves properly.
+
+The chrome got calmer too:
+
+- **The sidebar carries the actions now.** Refresh sits beside a new
+  **+ New Message** pill; **Contacts** gets its own row below
+  Attachments (with a Preferences toggle); the status-bar button is
+  retired — errors reveal the bar themselves, and "Reveal Status Bar"
+  in the menu covers the rest.
+- **The message list gained a row of space**: the folder-name line is
+  gone, and the message count and sort menu moved up into the pane's
+  header bar.
+
+## What's new in 1.17.0
+
+A big release: composing without leaving the window, undo for every move,
+and send-as aliases with their own SMTP servers.
+
+- **Compose right where you read.** New message now slides down over the
+  reading pane — toolbar and all — as a full-height editor, with a
+  pop-out button when you'd rather have the old separate window (and a
+  preference to keep composing in a window permanently). The sidebar
+  gains a proper accent-colored **New message** row to start from.
+- **Ctrl+Z undoes it.** Deleted a message by accident? Moved a thread to
+  the wrong folder? Marked something spam too fast? Every move — single,
+  bulk, drag-and-drop, or spam — can be undone, without limit, straight
+  from the keyboard. Messages return to the folder they came from even
+  though the server renumbers them in transit. **Ctrl+W** now closes the
+  window (mail keeps syncing in the background) and both shortcuts are in
+  the keyboard shortcuts window. (Issue #64.)
+- **Aliases with their own SMTP server (issue #34).** A send-as alias can
+  now carry its own outgoing server — host, port, username, and a
+  password in the system keyring — with a Test button in the alias
+  editor. Mail sent (or retried from the Outbox) as that alias goes
+  through its server; everything else uses the account's, as before.
+- **Reading feels like one conversation.** Every message — threaded or
+  not — uses the conversation layout: single messages fill the pane
+  edge-to-edge as one continuous surface (plain-text mail included),
+  threads keep their inset cards. Opening a thread with unread mail
+  scrolls straight to the last unread message — riding out image loads
+  and quote collapses on the way — and messages are only marked read when
+  you click them, not just for scrolling past.
+- **Message actions live on the message.** Each card has its own action
+  row — reply, forward, move, spam, read/unread, view source and more —
+  tucked behind a ⋯ that appears on hover, always shown, or shown
+  automatically while hovering: your choice in Preferences, sharing one
+  auto-collapse timeout with the message list's palette (which can now
+  also open on hover). Mark as Read/Unread joins the reader toolbar too.
+- **A bolder, calmer message list.** Selection is now a full accent-color
+  pill with white text in both schemes, the unread dot alone marks unread
+  mail (white on a selected row), thread count and caret merge into one
+  quiet grey chip that inverts when selected, threads date themselves by
+  their newest message, and the separators are gone. The list can also
+  shrink further for narrow screens.
+- **Details throughout.** The remote-content banner follows light/dark
+  properly, reads better, and sits at a steadier 48px; the attachment
+  drawer loses its ugly grab handle — resize it after expanding, and the
+  height sticks across restarts — with Save All always visible;
+  Preferences, Accounts and About remember their window heights; startup
+  highlights All Inboxes in the sidebar; and opening several PDF
+  attachments at once can no longer crash the app.
+
+## What's new in 1.16.2
+
+- Cancelling the "Open With" dialog for an attachment no longer makes it
+  instantly reappear. (Reported by p-mitana, issue #65.)
+- The message list's highlights are now rounded inset pills — matching the
+  conversation cards — and the row separators float inset from the edges
+  instead of running wall to wall.
+
+## What's new in 1.16.1
+
+Folder management, rounded out:
+
+- **Rename folders** from the right-click menu — sub-folders keep their
+  place under the new name.
+- **Click a folder to expand it**: single-clicking any folder with
+  sub-folders toggles them open or closed, no need to aim for the caret.
+- **New folders appear instantly**, and moving folders no longer clears
+  the unread count chips (seen on Gmail).
+
+## What's new in 1.16.0
+
+A big one: the folder tree, dark mode that always reads, and a sidebar
+that floats.
+
+- **Your folders are a real tree now.** Nested IMAP folders show as a
+  collapsible hierarchy with smoothly spinning carets and sliding rows,
+  full-path tooltips to tell nine "Archive"s apart — and you can **move
+  folders by drag-and-drop**: drop one on another to nest it, or on the
+  "Folders" header to bring it to the top level. Moves apply instantly and
+  sync in the background. (Requested by JeremiahCornelius, issue #51.)
+- **Dark mode emails are always readable.** Vireo now adapts every color a
+  message declares — dark text lightens, light backgrounds deepen, mail
+  designed dark passes through untouched — so black-on-black text can't
+  happen. The reader's own backgrounds follow your GTK theme instead of
+  fixed colors, and the verified-sender check uses the theme's proper
+  green in both schemes. (Reported by isorropisths, issue #35.)
+- **Pick your look.** New Appearance preference: follow the system, or
+  force the app light or dark — independent of the message-content theme.
+- **The sidebar floats.** In a narrow window (or whenever you keep it
+  collapsed), the icon rail can expand over your mail as a floating panel —
+  on click, or just by hovering with the new "Expand the sidebar on hover"
+  preference — and folds back a moment after the pointer leaves. At full
+  width, the arrow pins it open like before.
+- **Conversations look like conversations.** Expanded thread messages are
+  now inset cards on a dotted rail, the selected message keeps a (dimmed)
+  highlight while you read, and right-click menus across the app share one
+  GNOME-styled design with icons matching the toolbar.
+- **Quieter warnings, tidier chrome.** The blocked-remote-content banner is
+  now always the compact grey style with small pill buttons; the reader
+  toolbar collapses into a ⋯ menu when space runs short instead of pushing
+  the close button off screen; attachments live in the drawer (with Save
+  All) instead of a toolbar menu.
+- Plus hardening: a flaky server response can no longer blank an account's
+  folder list, and a malformed message can no longer take the message list
+  down with it.
+
+With thanks to **yioannides** and **p-mitana**, whose detailed GNOME design
+feedback in issue #62 shaped the thread cards, the banner, the menus, and
+the theme-color work — and to **Isaac** (thecalamityjoe87) for the shared
+context-menu builder (PR #63), **JeremiahCornelius** for the folder-tree
+request, and **isorropisths** for the dark-mode report.
+
+## What's new in 1.15.7
+
+- Panning a zoomed attachment preview is smooth now — no more jitter while
+  dragging.
+- The toolbar attachment menu's Open button opens files properly, matching
+  the drawer and the gallery.
+
+## In 1.15.6
+
+- **Opening attachments from the Flatpak truly works now.** Three deep
+  sandbox bugs — where the file was staged, how the system portal was
+  spoken to, and how the request was encoded — each silently broke the
+  chain. All three are fixed and verified live: your PDF viewer opens
+  directly, or via one "Open With" confirmation that's remembered.
+- **The attachment preview is part of the window now.** No more separate
+  preview window with double chrome: the lightbox fills Vireo itself,
+  just like the attachments gallery's.
+- **Click a previewed document to zoom 3× right where you clicked**, drag
+  to look around, click or press Escape to fit again. Arrow keys still
+  step between attachments.
+
+## In 1.15.5
+
+- **Opening attachments now works even where the desktop's portal is
+  misbehaving.** If the system fails to launch your default app directly,
+  Vireo brings up GNOME's "Open With" chooser instead — pick your viewer,
+  tick "always", and future opens go straight through. Only when nothing at
+  all can launch does Vireo show a dialog, and it now tells you exactly what
+  the system reported and what to do about it.
+- **Double-click a lightbox preview** to open the document in its app —
+  from the attachments gallery and the message drawer alike.
+
+## In 1.15.4
+
+- **Opening attachments works in the Flatpak.** The sandboxed build was
+  handing the system's app portal a file path only Vireo itself could see, so
+  "open in the default app" launched a viewer pointed at nothing. The file
+  now travels to the portal as a proper document handle, and your PDF viewer,
+  image viewer or editor receives something it can actually read.
+- If your desktop's portal genuinely can't launch applications, Vireo now
+  says so in a dialog — and Download always works — instead of a click that
+  does nothing.
+
+## In 1.15.3
+
+- **Send-as aliases.** If other mailboxes forward into this one, you can now
+  answer as them: give an account extra From addresses in the account editor,
+  pick them from the composer's From menu — and replies to mail sent to an
+  alias choose that alias by themselves. Mail still travels through the
+  account's own server. (Suggested by
+  [somepaulo](https://github.com/somepaulo) — thank you!)
+- **Attachments open the way you'd expect.** In the message drawer, a double
+  click is now the gesture: photos and PDFs preview in the lightbox (with an
+  Open button for the full app), everything else opens in its app directly.
+  Single clicks no longer steal the double click, which could leave opening
+  seemingly broken. The toolbar's attachment menu works the same way.
+- The conversation chevron pill loses the two faint dots at its rounded ends.
+
+## In 1.15.2
+
+A community-feedback release — most of it answers a thorough issue series from
+[p-mitana](https://github.com/p-mitana) (thank you!):
+
+- **Conversations read at a glance.** Every card in a thread now leads with a
+  tinted initials avatar, so senders — and your own replies — stand apart.
+  Card headers stay pinned while you scroll a long message, hovering a card
+  highlights its header, and text keeps to a comfortable reading width.
+- **Inline forwarding actually works.** The inline composer now shows its
+  address fields — To is right there, with Cc, Bcc and Subject a click away —
+  no more popping out to a window just to type a recipient.
+- **Sent folders say who you wrote to**, not your own name on every row, and
+  the little circle shows the recipient too.
+- **The message list remembers its width** across restarts.
+- **Attachments polish:** PDFs and photos preview in the message drawer's
+  lightbox on a single click, a double click opens anything in its app (and
+  that works now on systems where the desktop portal quietly did nothing),
+  and "Go to Message" lands you properly in the message's folder.
+- Clearer icons: View Source shows code brackets, sender verification a
+  checkmark seal, and the status bar its bell. The conversation chevron is a
+  neat accent pill, and expanded conversations no longer clip their replies.
+
+## In 1.15.1
+
+Attachment polish, following 1.15.0 on the same day:
+
+- **No more clicking to load attachments.** Opening a message or a
+  conversation fetches its attachments by itself — the toolbar shows a brief
+  spinner, then the paperclip. The separate "load attachments" button is
+  gone.
+- **PDFs open right in the gallery's lightbox**, as a sharp full-size render
+  of their first page — no external app needed for a quick look, and
+  arrowing through images and PDFs alike stays in-app.
+- **The gallery's table view straightened up**: column headers now line up
+  with their columns, and every row carries Download, Open and Go-to-Message
+  buttons on the right, just like the thumbnails.
+
+## In 1.15.0
+
+An attachments release, with three contributions by
+[Isaac](https://github.com/thecalamityjoe87) (thank you!) adapted from his pull
+requests:
+
+- **Opening attachments works again.** A single wrong flag constant meant no
+  attachment could even be staged for opening — and quietly disabled a
+  symlink protection at the same time. Both fixed; opening now also goes
+  through GNOME's portal, so a file type with no default app gets the app
+  chooser instead of a click that does nothing.
+- **PDFs show their first page.** In the attachments gallery and the drawer
+  beneath a message, a PDF now appears as its actual first page instead of a
+  generic icon. Every thumbnail renders in the background behind a brief
+  spinner — the window never freezes, however many attachments you have —
+  and finished renders are reused for the rest of the session.
+- **The attachments gallery grew a control footer.** Switch between the
+  thumbnail grid and a sortable table (click a column header to sort, again
+  to flip), filter by type, resize thumbnails with a slider, and see how many
+  attachments match. Your view, size and sort choices are remembered.
+- **Conversations show their attachments immediately.** Opening a thread now
+  fills the attachment drawer with everything attached anywhere in the
+  conversation; before, it stayed empty until you clicked around.
+- **The reader says who a message went to.** A "To:" line joins the Cc line
+  for single messages — handy for Sent mail and auto-forwarded addresses.
+- For release-page readers: each GitHub release now carries only its own
+  notes (thanks @yioannides for the nudge, #46).
+
+## In 1.14.4
+
+**Your contacts' photos, beside their mail.** When a sender has a photo in
+GNOME Contacts, that photo now fills the circle next to their messages — in the
+list and in the reader. Contributed by
+[Anton Palgunov](https://github.com/Toxblh) (thank you!) and adapted from his
+pull request:
+
+- **Personal first.** The circle shows the contact's own photo when there is
+  one; only then Gravatar (if you've turned it on), then the sender's site
+  icon (likewise), then the familiar colored initials.
+- **Private by design.** Photos are read from your address book's local cache —
+  no network request, and nothing a vCard says can make Vireo read files
+  outside it or fetch a remote picture. When Gravatar is consulted at all, it
+  now receives a stronger SHA-256 hash, and never before your local contacts
+  have had the chance to answer first.
+- **Always current.** Add or change a photo in GNOME Contacts and your mail
+  picks it up within moments, without the list jumping.
+- Turning Gravatar or sender logos off now hides their images immediately —
+  including ones already on screen.
+
+## In 1.14.3
+
+Better GNOME Online Accounts integration, contributed by
+[Anton Palgunov](https://github.com/Toxblh) (thank you!) and adapted from his
+pull request:
+
+- **Custom server ports work.** An Online Account whose mail server lives on a
+  non-standard port (IPv6 addresses included) now connects to that port instead
+  of the default one.
+- **The Mail switch in GNOME Settings pauses instead of forgetting.** Turn an
+  account's Mail service off and Vireo sets the account aside — turn it back on
+  and it returns exactly as you left it: label, color, signature and sidebar
+  place intact.
+- **Vireo reacts to Online Accounts changes instantly and smoothly**, without
+  the brief stutters a Settings edit could cause before.
+- **Connection tests are honest for Gmail and Microsoft accounts.** The SMTP
+  check now authenticates the way sending actually does, so it no longer
+  reports a failure for accounts that send fine.
+- **No more endless "connecting…".** A mail server that accepts the connection
+  and then stalls is given 30 seconds before Vireo reports the problem.
+
+## In 1.14.2
+
+- **The window tiles to half a screen.** Snapping to the left or right edge
+  (or Super+←/→) works now: the window's minimum width no longer exceeds half
+  a 1920px display. When the window narrows, the sidebar collapses to its icon
+  rail on its own so the message list keeps its full Actions Palette — and
+  expanding from the rail floats the sidebar over the panes instead of pushing
+  them. Your own sidebar preference returns when there's room.
+- **Unread counts on every folder**, and sub-folders sorted and indented the
+  way the server structures them.
+- **Delete acts on your whole selection.** Multi-select messages and the
+  toolbar's trash button (or `d`) removes them all.
+- **Conversation cards name their recipients.** A compact chip on each card
+  expands to the full To/Cc list and folds away again.
+- **Attachments as a list.** The attachment drawer can switch from thumbnails
+  to an alphabetical list with a sort-direction switch, and hovering any
+  thumbnail shows the full filename.
+- The notification dropdown is now the **status bar**.
+
+## In 1.14.1
+
+- **Conversations now include the mail you already had.** Threading applied only
+  to mail that arrived after you upgraded, so an account you had just added —
+  or the same account set up again on another machine — showed no conversations
+  at all, even though every reply in it says what it answers. Vireo reads those
+  headers now whatever the date, so your existing mail threads on sight. The
+  "Thread older messages too" setting is gone with it: there is nothing left for
+  it to switch on. Nothing is re-downloaded, and opening a long conversation is
+  still bounded.
+
+## In 1.14.0
+
+- **Conversations, properly.** A thread reads oldest first, each message its own
+  card you can reply to, forward, select or act on individually. Quoted replies
+  fold away behind a ••• so you see what was actually written. Unread messages
+  in a thread are marked and clear as you read down. The version that first
+  attempted this could exhaust your machine's memory; that is fixed, and covered
+  by tests.
+- **Threading starts from this release**, with a setting to reach back through
+  your whole mailbox if you want it. Nothing is re-downloaded either way.
+- **Replies you send stay in their conversation.** Vireo grouped incoming mail
+  by headers it never wrote on its own, so replies sent from it arrived as new
+  conversations for everyone who received them.
+- **Gmail accounts show a message once.** Gmail keeps one message under several
+  labels; a six-message thread could appear as eighteen, with attachments that
+  looked missing. Thanks to [Alexander Lubovenko](https://github.com/typedev).
+- **Opening a thread no longer flashes**, and returning to one is instant.
+- **Dragging several messages moves all of them**, and "All Inboxes" no longer
+  leaves out an account that is still syncing.
+- **A quieter blocked-content warning**, or none at all — your choice; remote
+  content stays blocked either way.
+
+## In 1.13.5
+
+- **Replies you send now stay in their conversation.** Vireo grouped incoming
+  mail correctly, but the replies it sent carried none of the headers that mark
+  them as replies — so they arrived as new conversations for whoever received
+  them, and for Vireo itself. Replies sent from here on thread properly, in
+  Vireo and in every other mail client. Messages already sent can't be
+  retrofitted: the information never left your machine.
+
+## In 1.13.4
+
+- **Conversations are back, and safe.** Vireo groups a message with its replies
+  again, and shows the rest of a conversation from your other folders — the
+  reply you sent appears inside the thread you're reading. The version that
+  first added this could exhaust your machine's memory when you opened a
+  message; that is fixed, and covered by tests.
+- **Threading starts from this release.** Mail that arrives from now on threads
+  normally. Your archive is left alone: grouping years of old mail meant reading
+  hundreds of messages to show one conversation, and it is not what threading is
+  for. Nothing is re-downloaded and no background repair runs over your mailbox.
+- **Dragging several messages now moves all of them** — previously only one
+  moved, and dragging from All Inboxes often did nothing at all.
+- **All Inboxes no longer drops an account.** An account that was still syncing
+  or offline could be missing from the merged view even though its own Inbox
+  showed its mail. It now appears immediately from the cache.
+- **Preferences: adding senders makes more sense.** The "always allow" field now
+  sits at the top of the Allowed Senders list it feeds, and both it and the
+  Blacklist add with a + button.
+- **The blocked-content warning can be quieter, or silent.** Choose a grey
+  banner with outlined buttons instead of the amber bar, or hide it entirely.
+  Hiding it changes only the notice — remote content stays blocked.
+
+## In 1.13.2
+
+- **You can now delete messages from Trash.** Deleting anything already in Trash
+  used to do nothing at all — the message stayed put, on every kind of account.
+  It now erases the message from the server for good. Because there is no undo,
+  Vireo asks first; and if you have selected a mix, whatever isn't in Trash yet
+  simply moves there as before, so only the messages that would be erased get
+  the question. Deleting from anywhere else still means "move to Trash", exactly
+  as it did.
+
+Reported in [#20](https://github.com/hyprlab/vireo/issues/20). Thank you.
+
+## In 1.13.1
+
+- **You can now choose to always load remote content.** Vireo still blocks
+  images and other remote content by default, and you can still load a single
+  message or trust a sender to always load it. But if you would rather not be
+  asked at all, there is now a switch for that: Preferences → Privacy →
+  *Always load remote content*. It is off unless you turn it on, because remote
+  content can be used to tell when and where you read a message.
+
+Contributed by [Isaac](https://github.com/thecalamityjoe87)
+([#31](https://github.com/hyprlab/vireo/pull/31)). Thank you.
+
+## In 1.13.0 — security release
+
+**Please update.** This release fixes a flaw that let someone who could send you
+mail run their own code inside Vireo's reader, simply by your opening the
+conversation — no click, nothing visible. From there they could read every
+message in that thread and send it elsewhere. Nothing suggests this was ever
+used, and it was reported privately rather than found in the wild.
+
+- **Fixed: a sender could run code in the reader.** A sender's *display name* was
+  put into the page around the message without being fully neutralised first.
+  Message bodies were never the problem — those have always been sealed off and
+  unable to run anything — but the name above them was not. It is now, and the
+  page itself has been given a second, independent lock so that even if the
+  first check were ever wrong again, nothing can run.
+- **Fixed: tracking pixels could load while Vireo said nothing was blocked.**
+  Whether a message pulled in remote content was worked out by looking for a few
+  exact spellings, and several ordinary ways of writing an image address slipped
+  past — which switched off the blocking *and* hid the banner at the same time.
+  Blocking now follows your setting rather than that guess, so the worst a miss
+  can cost you is a missing notice, never a silent request.
+- **Links only open if they're ordinary web or mail links.** A message could
+  previously hand any address to whichever application had claimed it.
+- **Tightened the Flatpak sandbox.** A permission that allowed running commands
+  outside it has been dropped.
+- **Your mail cache is no longer readable by other accounts on the machine**,
+  and files you open from an attachment are now private and cleared away when
+  Vireo starts, instead of piling up.
+- **Sign-in is more secure**, and Vireo now refuses to sign in at all rather than
+  proceeding if it cannot generate a proper secret.
+- **New: notifications can leave out the sender and subject**, since GNOME shows
+  them on the lock screen. Preferences → Mail → *Show sender and subject*.
+
+Found and reported privately by [Alexander Lubovenko](https://github.com/typedev),
+who reviewed the whole codebase and wrote it up carefully. Thank you.
+
+## In 1.12.0
+
+- **You can print a message.** Press **Ctrl+P**, use the printer button in the toolbar, or Main Menu → Print Message… What comes out is the message as you see it, with a header carrying the subject, who it is from and to, and the date — and it always prints on white, even if you read in dark mode.
+- **Print preview, inside Vireo.** The toolbar's printer button opens a preview on a page-shaped sheet, so you can see what will come out before spending paper. **Print…** sends it to the printer, and **Save as PDF…** writes it straight to a file without going through the print dialog at all.
+
+## In 1.11.0
+
+- **Vireo can keep running after you close its window**, so new mail still arrives and notifies. GNOME doesn't have a system tray — instead Vireo appears under **Background Apps** in the system menu, with your unread count beside it, and can be quit from there. It's off by default: turn on *Keep running in the background* in Preferences → Mail.
+- **Start at login** (a second switch, once the above is on). Vireo starts without a window and waits in the system menu, watching for mail from the moment you sign in.
+- **Quit** is now in the main menu and on Ctrl+Q.
+
+## In 1.10.3
+
+- **Fixed: some accounts imported from GNOME Online Accounts couldn't sign in.** Accounts that use a password (rather than a Google-style sign-in) could end up without one, with no way to correct it. Vireo now asks GNOME Online Accounts for the password each time it connects, so those accounts start working without being re-added — and if the system genuinely has no password stored, Vireo says so and points you to Settings → Online Accounts.
+
+## In 1.10.2
+
+- **Accounts from GNOME Online Accounts are now read-only in Vireo.** Their address, servers and password belong to the system, so Vireo greys those fields out and points you to Settings → Online Accounts, where changing them actually works. Your display name, signature, color and label are still yours to edit here, and the switch at the top of the account still hides an account in Vireo without removing it from your system.
+
+## In 1.10.1
+
+- **Fixed: attachments that didn't show up.** Some messages — Apple Mail ones in particular, where a PDF or photo is attached "inline" — showed no paperclip in the list and no attachment when opened, even though the file was there. Vireo now checks the message itself rather than trusting what the server's summary implies, so those files appear. Recent mail is corrected in the background before you open it.
+
+## In 1.10.0
+
+- **Nothing is lost when a send fails.** Messages that can't go out — usually because you're offline — now wait in an **Outbox** and are sent as soon as the connection is back. You can open one to edit it, send it by hand, or throw it away, and Vireo tells you when a waiting message has gone. The Outbox behaves like any other folder in the sidebar and only appears while something is in it.
+- **Message previews.** The list can show the first lines of each message under its subject. Choose **Off, 1, 2 or 3 lines** in Preferences → Message List; Off also stops previews being downloaded at all.
+- **Keyboard shortcuts, no modifier needed.** Press `j`/`k` to move through the list, `r` to reply, `a` to archive, `d` to delete, `w`/`b` to step through a conversation — Gmail's keys, where they and this scheme agree. They're **off by default**; switch them on in Preferences → Message List, and press **Ctrl+?** any time for the full list. `Esc` backs out of a reply and returns to the list even with shortcuts switched off.
+- **Folders with non-Latin names read properly.** Gmail labels in Chinese (and any other non-ASCII mailbox name) were showing as `&XfJSoGYfaAc-` instead of 已加星标. They now display correctly, and you can create folders with non-ASCII names too.
+- The message list's action buttons moved to their own line under the preview, so they no longer cover the text or shift it sideways, and opening them no longer widens the pane.
+
+## In 1.9.2
+
+- **Vireo now runs on ARM.** If you're on a Raspberry Pi, a Snapdragon X Elite laptop, an ARM virtual machine or anything else `aarch64`, Vireo installs and runs the same way it does everywhere else — the install command works out which build you need, so there is nothing to pick. Previously ARM machines were handed the Intel build and it refused to start.
+- Direct downloads now come in both flavours: the site's download button follows your machine, and every release carries `Vireo-x86_64.flatpak` and `Vireo-aarch64.flatpak`. The Fedora RPM remains Intel/AMD only.
+- **The About window's Changelog and Release Notes read properly.** They were showing raw Markdown — stray asterisks, backticks and bracketed links — with long entries wrapping awkwardly under their own bullets. Now they're formatted, with working links.
+
+## In 1.9.1
+
+- A correction to how 1.9.0 credited its contributors: Chris Pouliot's work on Proton Bridge support was attributed with an email address GitHub couldn't match to his account, so his name never appeared on the project's contributor list. This release records it properly. Contributors are also now shown with their GitHub handle in the About window's "Thanks" list.
+
+## In 1.9.0
+
+This is the first Vireo release built partly from other people's code. Thanks to [Alfonso Lizárraga](https://github.com/alfonsolzrg) and [Chris Pouliot](https://github.com/chrispouliot), who found these problems, fixed them, and sent the fixes upstream.
+
+- **Sending to a named recipient works.** Picking a contact whose name carries an accent, a comma or a full stop — "Alfonso Lizárraga", "Martin, Jason", "Dr. Chen" — used to fail outright with "Invalid param". Every address field is now assembled properly, so any name goes through.
+- **Proton Mail works, through Proton Bridge.** Vireo can now talk to Bridge running on your machine (and to other local bridges like hydroxide or DavMail). Point an account at 127.0.0.1 with Bridge's ports and password; the certificate Bridge signs for itself is accepted for this machine only, and everything on the network is still fully verified.
+- **Your mail is there the moment the window opens.** A synced account used to show an empty list while it waited for the connection, even though the messages were already cached. Long folders also scroll and search noticeably faster.
+- **The message list stops shifting.** The unread dot keeps its space when a message is read, so subjects no longer jump sideways as you work through the list.
+- **Compose has moved** to the top of the message list, next to the notification bell — above the list it adds to, rather than above your folders.
+- **New setting:** hide the sidebar's Attachments row if you don't use it (Preferences → Mail).
+
+  Contributions are credited in the About window under "Thanks", with links to the people behind them.
+
+## In 1.8.1
+
+- The sender lightbulb now stays put. It used to appear only once Vireo had a verdict for the message you were reading, which nudged the other toolbar buttons sideways as you moved between messages. It's now always there, greyed out like the other buttons until there's something to report.
+
+## In 1.8.0
+
+- **Know who really sent a message.** Anyone can put anything in an email's "From" line — that's how phishing works. Vireo now shows a lightbulb in the toolbar telling you whether your mail provider could actually confirm the sender: green for verified, amber if something's off, red if the address looks forged. Click it for the reasoning, including things like "replies would go to a different company than the one that sent this".
+- **See where a link goes before you click it.** Hover any link in a message and its real destination appears at the bottom of the message. If the link text claims one website while pointing at another — the oldest trick in phishing — Vireo says so directly.
+
+  A verified sender means the address wasn't forged. It doesn't mean the message is safe: a scammer who registers their own convincing-looking domain can pass the check. Use it to catch impersonation, not as a licence to trust.
+
+## In 1.7.2
+
+- Photos sent inside a message can now be saved. Right-click one and choose "Save Image As…" — previously that did nothing at all.
+- Those photos also show up as attachments now, with their original filename, so they get a paperclip in the message list and appear in the attachment strip and the gallery like any other attachment. Small embedded images — newsletter logos, spacers, social icons — are still treated as decoration and won't clutter your list with false paperclips.
+
+## In 1.7.1
+
+- Fixed photos sent from Gmail (and images in many newsletters) showing as a filename instead of the picture. These messages point at their images from inside the email itself, and Vireo wasn't following the reference — the images now appear in place, with no network access needed since they arrived with the message.
+- **The Arch, Debian/Ubuntu and Snap packages have been discontinued.** Vireo is now published as a Flatpak (for every distribution) and a Fedora RPM. If you installed one of the discontinued packages, remove it and install the Flatpak instead — it works everywhere and updates automatically:
+
+  ```sh
+  flatpak install --from https://vireo.hyprlab.co/flatpak/co.hyprlab.Vireo.flatpakref
+  ```
+
+## In 1.7.0
+
+- Two new install options, published with every release alongside the Flatpak, RPM and Arch packages:
+  - **Debian / Ubuntu** — a native `.deb` for Ubuntu 24.04+ and Debian 13+: download and `sudo apt install ./vireo_*_amd64.deb`.
+  - **Snap** — `snap install --dangerous ./vireo_*_amd64.snap` (the flag just means "installed from a file rather than the store").
+
+## In 1.6.1
+
+- Switching from Veem to Vireo on Flatpak is now fully automatic: install Vireo, launch it, and your accounts, settings and cached mail from the old Veem app are picked up on first run — nothing to re-add. (You can remove the old Veem app afterwards; its data is left untouched.)
+
+## In 1.6.0
+
+**Veem is now Vireo.** We've renamed the app — the old name was too easily confused with other products. It's the same app underneath, with a new name and a fresh icon.
+
+- **If you installed the Flatpak:** install Vireo fresh from [vireo.hyprlab.co](https://vireo.hyprlab.co), then remove the old Veem app. Because a Flatpak's identity is its ID, the old install can't be updated in place and your accounts need to be added again there — passwords stay safe in your system keyring, and your mail is on the server.
+- **If you installed the RPM, Arch package, or built from source:** just install the new `vireo` package — your accounts, settings and cached mail move over automatically the first time Vireo starts.
+- Fedora and Arch Linux packages are now published with every release, alongside the Flatpak.
+- The website has moved to [vireo.hyprlab.co](https://vireo.hyprlab.co); getveem.com now redirects there.
+
+## In 1.5.1
+- Conversations with unread replies no longer look "read" when collapsed. The thread's top row now keeps its unread dot — with an extra-strong highlight — until you've read every message in the conversation, so unread replies tucked under a collapsed thread can't slip past you. Read them by expanding the thread, or mark them read from the row's actions; the highlight clears the instant the last one is read.
+- New setting under Settings → Message List: "Expand conversations by default". Choose whether conversations start collapsed to their newest message (as before) or fully expanded in the list. The per-conversation arrow still works either way.
+
+## In 1.5.0
+- Reply, Reply All and Forward now open right in the reader: a compose panel drops down over the message showing just your reply — no separate window to manage. Type and send without leaving the message.
+- Want the full editor with recipient and subject fields? Click the expand button to pop the reply out into a compose window — and collapse it back inline when you're done. Your draft carries across intact, cursor position and all.
+- Switch to another message mid-reply and Veem saves your unsent draft to Drafts automatically (a reply you never touched is simply discarded). "New message" still opens its own window.
+
+## In 1.4.3
+- Fixed contact names showing in all lowercase in the contacts browser — they now display with their proper capitalisation.
+
+## In 1.4.2
+- Fixed GNOME Contacts on the Flatpak build: the contacts browser was showing an empty list and the "Open GNOME Contacts" button wasn't launching the app. Your contacts now appear, and the button opens GNOME Contacts. (After updating, this needs the new permissions that ship with this version — a normal `flatpak update` applies them.)
+
+## In 1.4.1
+- Fixed the paperclip showing on some iCloud messages that don't actually have attachments (typically newsletters and other HTML mail). Veem now clears the false indicator as soon as it has looked at the message, and remembers the correction.
+
+## In 1.4.0
+- New in-message attachment drawer. Open a message with attachments and a footer appears beneath it, showing every attachment as a thumbnail — images as picture previews, other files as color-coded type icons — with the filename under each. Drag the divider to resize it, or collapse it to a slim header with the chevron; a slider adjusts how big the thumbnails are.
+- Click an image thumbnail for a full lightbox (step through images with the arrow keys, Esc to close), or use the hover/right-click actions to Download or Open any attachment.
+- The attachments dropdown in the reader header now shows image thumbnails too, with Preview, Open, and Download for each file — so you can see what a picture is before opening it.
+
+## In 1.3.9
+- Fixed Veem not fetching new mail after your computer wakes from sleep. Putting the machine to sleep silently drops the connection to your mail servers, and previously nothing noticed on wake — so no new mail arrived (and even the Refresh button couldn't recover) until you restarted the app. Veem now detects resume from sleep and reconnects immediately, so new mail shows up right away.
+
+## In 1.3.8
+- On Linux Mint, the About window now has a "Keyring Setup Help" entry, so you can reopen the keyring setup guide any time — handy if you closed it the first time it appeared.
+
+## In 1.3.7
+- Veem now tells you when your account password can't be saved to the system keyring, instead of silently failing and forgetting it after a restart. On Linux Mint (Cinnamon), it also shows a one-time setup tip explaining how to get the keyring working — and how to stop it asking for an unlock password every time you log in.
+
+## In 1.3.6
+- Veem's icons now look the same on every Linux distribution. They're built into the app itself, so they no longer change appearance or go missing depending on your system's icon theme (something that happened on distributions like Zorin).
+
+## In 1.3.5
+- Sidebar folder lists stay tidy: your essential folders (Inbox, Sent, Archive, Trash, and the like) are always shown, while custom folders collapse under a "Folders" section that you can reveal when you want it. Each account remembers whether it's expanded, between restarts.
+- Attachment thumbnails now offer Download and Go to Message on hover, next to Open.
+
+## In 1.3.4
+- The attachments gallery can now be searched and sorted. Search by sender, subject, filename, folder, or file type (like "pdf" or "image"), and sort by date, name, sender, size, or type — each ascending or descending. Every attachment also shows its message's date alongside the folder and size.
+
+## In 1.3.3
+- Attachment icons in the gallery are now color-coded by type — PDFs red, Word docs blue, spreadsheets green, presentations orange, archives amber, and more — so you can spot the file you want at a glance.
+
+## In 1.3.2
+- Fixed newsletter subjects (like The Marginalian's) that showed up as a string of `=?utf-8?Q?…?=` code and stretched the window so wide the close button disappeared. Those subjects now decode correctly, and no subject — however long — can push the window controls off-screen. Already-affected messages fix themselves on upgrade.
+
+## In 1.3.1
+- The Attachments gallery now covers every folder — archived and filed mail too, not just inboxes (everything except Trash, Spam and Drafts) — with those attachments fetched in the background so they just show up.
+- Right-click an attachment for Download, Open or Go to Message (the menu opens right at your pointer), double-click a thumbnail to open it, or use the hover "Open" button in the corner.
+- A responsive grid that starts at 3 across and adds columns as you widen the window, with every thumbnail kept at a tidy 4:3.
+
+## In 1.3.0
+- New Attachments gallery: a sidebar entry that shows every attachment across your inboxes in a grid — image thumbnails and file icons. Click one for a full preview with prev/next, Open, and a jump to the source message. Instant and offline (built from the local cache).
+
+## In 1.2.3
+- Adding an account is now a one-step choice: pick your provider from a dropdown and Veem fills in the sign-in method and all the server settings. Includes iCloud, Yahoo, Proton (Bridge), Fastmail, AOL, Zoho, GMX, Yandex, Mail.com, plus Google and Microsoft sign-in — and "Other" for anything else.
+
+## In 1.2.2
+- Desktop notifications for new mail and error alerts, shown when Veem isn't focused. Click a new-mail notification to jump straight to the message; it clears once you've read it. Toggle it in Preferences → Mail.
+
+## In 1.2.1
+- Links in plain-text emails are now clickable and open in your browser.
+- Press Delete or Backspace in the message list to delete the selected message(s).
+- Right-click an account under "All Inboxes" to jump to its account settings.
+
+## In 1.2.0
+- Search now covers every folder of every account, not just the folder you're in. A selector beside the search box switches between "All folders" (default) and "This folder", results are tinted by account, and opening a hit works from whichever folder it lives in.
+
+## In 1.1.5
+- Reordered the message-action buttons in the reader header to Archive, Delete, Spam, View Source.
+- The message list opens at its snug minimum width instead of a touch wider than needed.
+
+## In 1.1.4
+- Fixes 1.1.3 for mail you'd already opened: messages keep a cached copy of how they were rendered, so previously-read mail — including the iPhone photos 1.1.3 was meant to fix — still displayed blank. Those cached renderings are now refreshed on upgrade.
+
+## In 1.1.3
+- Fixed photos emailed from an iPhone showing up as a blank message with no attachment. The text now appears, the photos are shown inline in the message, and they're listed as attachments you can save.
+- Plain-text messages now follow the light/dark theme instead of always rendering on white.
+
+## In 1.1.2
+- Mass delete and archive of large selections is now fast and reliable, with a progress spinner — and on Gmail it correctly moves mail to Trash instead of leaving it in All Mail.
+- Accounts removed in GNOME Online Accounts are now dropped from Veem automatically, on startup and while running.
+
+## In 1.1.1
+- Fixed the sidebar's unread count badges: they no longer show a stale number after collapsing and expanding the sidebar, and empty inboxes now report the correct count as soon as an account connects.
+
+## In 1.1.0
+- The collapsed, icon-only sidebar shows unread count chips directly on the inbox icons.
+- The per-account inboxes under "All Inboxes" stay available when the sidebar is collapsed, with a button to expand or collapse them.
+- The collapsed sidebar rail is narrower, reclaiming horizontal space.
+
+## Accounts & sign-in
+- Multiple IMAP and POP3 accounts, each running on its own background worker.
+- Google and Microsoft OAuth 2.0 sign-in (XOAUTH2) via the system browser (authorization-code + PKCE) — one-click in official builds, or through GNOME Online Accounts and your own OAuth client.
+- Custom OAuth for any other provider; supply or override client credentials via ~/.config/veem/oauth.toml or the VEEM_* environment variables.
+- Import accounts from GNOME Online Accounts.
+- Enable or disable each account without deleting it.
+- Passwords and OAuth refresh tokens are stored in the system keyring (secret-service), never written to disk.
+
+## Mail
+- Unified "All Inboxes" view that merges every account by recency.
+- Whole-mailbox sync and search with no message-count cap: a fast first page loads instantly, then a background backfill indexes the rest. Search spans every folder of every account (with a scope selector to narrow to the current folder).
+- Infinite scroll through the entire folder, with a loading spinner at the bottom while more messages stream in.
+- Deletions and moves made on your phone or another client sync back automatically (server reconciliation plus IMAP IDLE).
+- Conversation threading, grouped by Message-ID and References (toggleable).
+- Compose, reply, reply-all and forward over SMTP, with HTML signatures and editable drafts.
+- Create and delete folders, drag messages onto a folder to move them, and archive, mark spam or trash — target folders are created on the server when missing.
+- New-mail push over IMAP IDLE, plus a configurable automatic check interval.
+- Sort by date, sender, subject, unread or flagged.
+
+## Reading & privacy
+- Remote content (images, trackers) is blocked by default; allow it per message or trust a sender to always load it.
+- Per-message content theme: follow the system, or force light or dark for email content only — independent of the app's own theme.
+- Attachments are pre-fetched for instant opening, with a download-on-demand fallback and save-to-disk.
+- Pop any message out into its own window.
+- Per-sender allow and block lists, with automatic deletion of blocklisted senders.
+- The Actions Palette: a per-row ⋯ button slides in quick actions (reply, star, mark read, archive, spam, delete) so you can act on a message without opening it.
+- No telemetry and no analytics, ever.
+
+## Desktop integration
+- Native GNOME / libadwaita interface with an adaptive three-pane layout, designed for Wayland.
+- Per-account colors and emoji avatars, with optional Gravatar (off by default).
+- Light and dark themes that follow the system.
+- Remembers its window size between launches and supports GNOME edge-tiling.
+- Optional GNOME Contacts integration via Evolution Data Server.
+
+## Compatibility
+- Handles servers that emit non-standard IMAP responses (such as iCloud) by falling back to raw-header parsing.

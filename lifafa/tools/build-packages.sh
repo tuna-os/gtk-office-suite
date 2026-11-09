@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+#
+# Build the native (non-Flatpak) packages for Fedora and Debian/Ubuntu.
+#
+#   tools/build-packages.sh            # builds both
+#   tools/build-packages.sh rpm        # builds the RPM
+#   tools/build-packages.sh deb        # builds the Debian package
+#
+# Output lands in packaging/out/:
+#   hylki-<ver>-1.fc44.<arch>.rpm       - packaged from the host (Fedora) cargo build
+#   hylki_<ver>-1_<arch>.deb            - packaged from a Debian 13 cargo build
+#                                         (a beta's <ver> is 1.43.0~beta.8 in both)
+#
+# Each package wraps a release binary built against its own distribution's
+# libraries. The RPM's comes from the host. The Debian package's comes from a
+# Debian 13 container (podman), because a binary built on Fedora links against
+# a newer C library than Debian has; Debian 13 is the oldest release with the
+# libadwaita 1.7 the app needs, and what builds there runs on the Ubuntu
+# releases that have it too. Run on a Debian host with the build dependencies
+# from docs/BUILDING.md and dpkg-dev, the deb is built in place.
+set -euo pipefail
+
+APP_ID="co.hyprlab.Hylki"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/packaging/out"
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+# RPM and Debian versions can't hold a dash in that place: a beta's
+# 1.43.0-beta.8 becomes 1.43.0~beta.8, which both sort before 1.43.0, so the
+# stable release replaces the beta.
+PKG_VERSION="${VERSION//-/\~}"
+WHAT="${1:-all}"
+DEB_IMAGE="${HYLKI_DEB_IMAGE:-docker.io/library/rust:1-trixie}"
+
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+# /out is the host's packaging/out when the deb build re-ran this script in
+# its container.
+[ -n "${HYLKI_DEB_CONTAINER:-}" ] && OUT=/out
+mkdir -p "$OUT"
+
+# The Tuta helper is tuta-helper from tuta-unofficial-sdk (the
+# native/tuta-unofficial-sdk submodule), packaged as hylki-tuta, the name the
+# app looks for and the one that gives it its Hylki identity. It builds
+# against the Tuta SDK that the SDK's prepare.sh writes to its prepared/ from
+# the nested submodules (through their sdk-prepare.py) and the SDK's patches.
+# The script checks the submodules' git metadata, so it runs where the
+# checkout is; the Debian container gets a copy without .git, prepared on the
+# host before it was copied in. Older trees (CI builds older tags with this
+# script) built hylki-tuta from native/tuta, with prepare.sh or, before it,
+# sdk-prepare.py alone; one from before the helper packages hylki alone.
+TUTA_DIR=""
+TUTA_BIN=""
+if [ -f "$ROOT/native/tuta-unofficial-sdk/Cargo.toml" ]; then
+    TUTA_DIR=native/tuta-unofficial-sdk
+    TUTA_BIN=tuta-helper
+elif [ -f "$ROOT/native/tuta/Cargo.toml" ]; then
+    TUTA_DIR=native/tuta
+    TUTA_BIN=hylki-tuta
+fi
+HAS_TUTA="${TUTA_DIR:+1}"
+
+prepare_tuta_sdk() {
+    [ -n "$HAS_TUTA" ] || return 0
+    local prepared=$TUTA_DIR/prepared
+    [ -f "$ROOT/$TUTA_DIR/prepare.sh" ] || prepared=$TUTA_DIR/upstream/sdk/generated
+    if git -C "$ROOT/$TUTA_DIR/upstream" rev-parse --git-dir >/dev/null 2>&1; then
+        if [ -f "$ROOT/$TUTA_DIR/prepare.sh" ]; then
+            sh "$ROOT/$TUTA_DIR/prepare.sh"
+        else
+            python3 "$ROOT/$TUTA_DIR/upstream/scripts/sdk-prepare.py"
+        fi
+    elif [ ! -d "$ROOT/$prepared" ]; then
+        echo "$prepared is missing: run" \
+             "git submodule update --init --recursive and" \
+             "$TUTA_DIR/prepare.sh" >&2
+        exit 1
+    fi
+}
+
+build_tuta_helper() {
+    [ -n "$HAS_TUTA" ] || return 0
+    echo "==> Building the Tuta helper"
+    prepare_tuta_sdk
+    ( cd "$ROOT/$TUTA_DIR" && cargo build --release --locked --bin "$TUTA_BIN" )
+}
+
+# The Proton helper is Go, built from the modules committed in vendor/: it is
+# proton-helper from proton-unofficial-sdk (the native/proton-unofficial-sdk
+# submodule), packaged as hylki-proton, the name the app looks for; older
+# trees built it from native/proton. Its go.mod names the oldest Go it builds
+# with; GOTOOLCHAIN=auto lets an older system Go (Debian's) fetch that one. A
+# tree from before the helper has neither.
+HAS_PROTON=""
+PROTON_DIR=""
+if [ -f "$ROOT/native/proton-unofficial-sdk/go.mod" ]; then
+    PROTON_DIR=native/proton-unofficial-sdk
+    PROTON_PKG=./cmd/proton-helper
+elif [ -f "$ROOT/native/proton/go.mod" ]; then
+    PROTON_DIR=native/proton
+    PROTON_PKG=.
+fi
+[ -n "$PROTON_DIR" ] && HAS_PROTON=1
+
+build_proton_helper() {
+    [ -n "$HAS_PROTON" ] || return 0
+    echo "==> Building the Proton helper"
+    ( cd "$ROOT/$PROTON_DIR" \
+        && GOFLAGS=-mod=vendor GOTOOLCHAIN="${GOTOOLCHAIN:-auto}" \
+            go build -trimpath -buildvcs=false -o hylki-proton "$PROTON_PKG" )
+}
+
+# The payload both packages carry, staged into $1: the release binary, the
+# launcher and metainfo with their translated fields merged in, a message
+# catalogue per po/<lang>.po (see po/README.md), and the icons.
+stage_payload() {
+    local stage="$1" po lang size
+    mkdir -p "$stage/icons/256x256" "$stage/icons/512x512" "$stage/icons/scalable" "$stage/icons/symbolic"
+    cp "$ROOT/target/release/hylki"              "$stage/hylki"
+    if [ -n "$HAS_TUTA" ]; then
+        cp "$ROOT/$TUTA_DIR/target/release/$TUTA_BIN" "$stage/hylki-tuta"
+    fi
+    if [ -n "$HAS_PROTON" ]; then
+        cp "$ROOT/$PROTON_DIR/hylki-proton" "$stage/hylki-proton"
+    fi
+    cp "$ROOT/LICENSE"                          "$stage/LICENSE"
+    msgfmt --desktop --template="$ROOT/data/$APP_ID.desktop" -d "$ROOT/po" -o "$stage/$APP_ID.desktop"
+    msgfmt --xml --template="$ROOT/data/$APP_ID.metainfo.xml" -d "$ROOT/po" -o "$stage/$APP_ID.metainfo.xml"
+    for po in "$ROOT"/po/*.po; do
+        [ -e "$po" ] || continue
+        lang=$(basename "$po" .po)
+        mkdir -p "$stage/locale/$lang/LC_MESSAGES"
+        msgfmt -o "$stage/locale/$lang/LC_MESSAGES/hylki.mo" "$po"
+    done
+    for size in 256x256 512x512; do
+        cp "$ROOT/data/icons/hicolor/$size/apps/$APP_ID.png" "$stage/icons/$size/$APP_ID.png"
+    done
+    cp "$ROOT/data/icons/hicolor/scalable/apps/$APP_ID.svg" "$stage/icons/scalable/$APP_ID.svg"
+    cp "$ROOT/data/icons/hicolor/symbolic/apps/co.hyprlab.Hylki-symbolic.svg" "$stage/icons/symbolic/$APP_ID-symbolic.svg"
+}
+
+build_rpm() {
+    # Keep the version in the spec file in lockstep with Cargo.toml
+    sed -i "s/^Version:.*/Version:        $PKG_VERSION/" "$ROOT/packaging/fedora/hylki.spec"
+
+    echo "==> Building release binary (host)"
+    ( cd "$ROOT" && cargo build --release )
+    build_tuta_helper
+    build_proton_helper
+
+    echo "==> Staging RPM payload"
+    local work stage
+    work="$(mktemp -d)"
+    stage="$work/hylki-$PKG_VERSION-bin"
+    stage_payload "$stage"
+    # The dnf repository on hylki.hyprlab.co, so an RPM installed from a
+    # download keeps updating with the rest of the system.
+    cp "$ROOT/packaging/fedora/hylki.repo"      "$stage/hylki.repo"
+    cp "$ROOT/packaging/fedora/hylki-beta.repo" "$stage/hylki-beta.repo"
+    mkdir -p "$work/rpmbuild/SOURCES"
+    tar -C "$work" -cf "$work/rpmbuild/SOURCES/hylki-$PKG_VERSION-bin.tar" "hylki-$PKG_VERSION-bin"
+
+    echo "==> rpmbuild"
+    rpmbuild -bb --define "_topdir $work/rpmbuild" "$ROOT/packaging/fedora/hylki.spec"
+    # x86_64 here; aarch64 when the arm64 CI job runs this on Fedora.
+    cp "$work/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/"hylki-*.rpm "$OUT/"
+    rm -rf "$work"
+    echo "==> RPM done"
+}
+
+build_deb() {
+    if [ ! -f /etc/debian_version ]; then
+        echo "==> Building the Debian package in $DEB_IMAGE (podman)"
+        # As for the AppImage (tools/build-appimage.sh): the tree is copied in
+        # so target/ is never shared with the host's builds, named volumes keep
+        # the container's target/ and crate downloads between runs, and
+        # `label=disable` spares relabelling the working tree for SELinux.
+        # The SDK the Tuta helper needs is prepared here, where .git is.
+        prepare_tuta_sdk
+        podman run --rm \
+            --security-opt label=disable \
+            -e HYLKI_DEB_CONTAINER=1 \
+            -v "$ROOT":/src:ro \
+            -v "$OUT":/out \
+            -v hylki-deb-target:/build/target \
+            -v hylki-deb-cargo:/usr/local/cargo/registry \
+            "$DEB_IMAGE" \
+            sh -euc '
+                mkdir -p /build
+                tar -C /src --exclude=./target --exclude=./temp --exclude=./.git \
+                            --exclude=./dist --exclude=./packaging/out \
+                            --exclude=./.flatpak-builder \
+                            --exclude=./native/tuta/target \
+                            --exclude=./native/tuta/upstream/target \
+                            --exclude=./native/tuta/upstream/tuta-repo \
+                            --exclude=./native/tuta-unofficial-sdk/target \
+                            --exclude=./native/tuta-unofficial-sdk/upstream/target \
+                            --exclude=./native/tuta-unofficial-sdk/upstream/tuta-repo \
+                            --exclude=./native/proton/hylki-proton \
+                            --exclude=./native/proton-unofficial-sdk/hylki-proton -cf - . \
+                    | tar -C /build -xf -
+                exec /build/tools/build-packages.sh deb
+            '
+        return
+    fi
+
+    if [ -n "${HYLKI_DEB_CONTAINER:-}" ]; then
+        echo "==> Installing build dependencies"
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            build-essential pkg-config dpkg-dev gettext git python3 golang-go \
+            libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev libpoppler-glib-dev \
+            libssl-dev libwayland-dev >/dev/null
+    fi
+
+    echo "==> Building release binary ($(. /etc/os-release && echo "$PRETTY_NAME"))"
+    ( cd "$ROOT" && cargo build --release )
+    build_tuta_helper
+    build_proton_helper
+
+    echo "==> Staging Debian package"
+    local work stage pkg arch deps mo
+    work="$(mktemp -d)"
+    stage="$work/payload"
+    pkg="$work/hylki"
+    arch="$(dpkg --print-architecture)"
+    stage_payload "$stage"
+    install -Dm755 "$stage/hylki" "$pkg/usr/bin/hylki"
+    # The helpers, beside hylki, where the app looks for them first.
+    local -a binaries=("$pkg/usr/bin/hylki")
+    if [ -n "$HAS_TUTA" ]; then
+        install -Dm755 "$stage/hylki-tuta" "$pkg/usr/bin/hylki-tuta"
+        binaries+=("$pkg/usr/bin/hylki-tuta")
+    fi
+    if [ -n "$HAS_PROTON" ]; then
+        install -Dm755 "$stage/hylki-proton" "$pkg/usr/bin/hylki-proton"
+        binaries+=("$pkg/usr/bin/hylki-proton")
+    fi
+    install -Dm644 "$stage/$APP_ID.desktop" "$pkg/usr/share/applications/$APP_ID.desktop"
+    install -Dm644 "$stage/$APP_ID.metainfo.xml" "$pkg/usr/share/metainfo/$APP_ID.metainfo.xml"
+    for size in 256x256 512x512 scalable symbolic; do
+        for f in "$stage/icons/$size"/*; do
+            install -Dm644 "$f" "$pkg/usr/share/icons/hicolor/$size/apps/$(basename "$f")"
+        done
+    done
+    # The binary looks for its catalogues under share/locale beside itself
+    # (src/i18n.rs).
+    for mo in "$stage"/locale/*/LC_MESSAGES/hylki.mo; do
+        [ -e "$mo" ] || continue
+        install -Dm644 "$mo" "$pkg/usr/share/${mo#"$stage"/}"
+    done
+    # The apt repository on hylki.hyprlab.co, the same files the site serves
+    # at /deb/hylki.sources and /deb/hylki-beta.sources (key included), so a
+    # package installed from a download keeps updating with the rest of the
+    # system. The beta's is switched off, as in the RPM: a tester turns it on
+    # once, and every package, stable or beta, carries it, so the first stable
+    # to overtake a beta does not remove it. Both are conffiles: a user's
+    # edits are kept on upgrade.
+    install -Dm644 "$ROOT/packaging/debian/hylki.sources" "$pkg/etc/apt/sources.list.d/hylki.sources"
+    install -Dm644 "$ROOT/packaging/debian/hylki-beta.sources" "$pkg/etc/apt/sources.list.d/hylki-beta.sources"
+    mkdir -p "$pkg/DEBIAN" "$pkg/usr/share/doc/hylki"
+    printf '/etc/apt/sources.list.d/hylki.sources\n/etc/apt/sources.list.d/hylki-beta.sources\n' > "$pkg/DEBIAN/conffiles"
+    {
+        printf 'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n'
+        printf 'Upstream-Name: Hylki\nSource: https://github.com/hyprlab/hylki\n\n'
+        printf 'Files: *\nCopyright: Hyprlab <hyprlab@proton.me>\nLicense: AGPL-3.0-or-later\n'
+        sed 's/^[[:space:]]*$/./; s/^/ /' "$stage/LICENSE"
+        if [ -n "$HAS_TUTA" ]; then
+            printf '\nFiles: usr/bin/hylki-tuta\nCopyright: The tuta-unofficial-sdk, Postcard and tutabridge authors\n'
+            printf 'License: GPL-3.0-or-later\n See /usr/share/common-licenses/GPL-3.\n'
+        fi
+        if [ -n "$HAS_PROTON" ]; then
+            printf '\nFiles: usr/bin/hylki-proton\nCopyright: The proton-unofficial-sdk and Postcard authors; Proton AG and others for the Go modules it links\n'
+            printf 'License: GPL-3.0-or-later AND MIT AND BSD-2-Clause AND BSD-3-Clause\n See /usr/share/common-licenses/GPL-3; the Go modules'"'"' own licences are in %s/vendor of the source.\n' "$PROTON_DIR"
+        fi
+    } > "$pkg/usr/share/doc/hylki/copyright"
+
+    # dpkg-shlibdeps turns the libraries the binaries link into package names
+    # and minimum versions; it wants a source control file to exist.
+    mkdir -p "$work/debian"
+    printf 'Source: hylki\n\nPackage: hylki\nArchitecture: any\n' > "$work/debian/control"
+    deps="$(cd "$work" && dpkg-shlibdeps -O "${binaries[@]/#/-e}" 2>/dev/null)"
+    deps="${deps#shlibs:Depends=}"
+    [ -n "$deps" ] || { echo "dpkg-shlibdeps found no dependencies" >&2; exit 1; }
+    # The app's icons are SVG, which GTK reads through a gdk-pixbuf loader
+    # that no linked library names: Debian's GTK only recommends it, so an
+    # install without recommends drew warnings and blank icons (#547). Newer
+    # releases load images through glycin instead.
+    deps="$deps, librsvg2-common | glycin-loaders"
+    # Renamed from "veem" in 1.6.0 and from "vireo" in 1.35.0; the Debian
+    # packages of either (up to 1.7.0) are replaced, and user data carries
+    # over on first start.
+    cat > "$pkg/DEBIAN/control" <<EOF
+Package: hylki
+Version: $PKG_VERSION-1
+Section: mail
+Priority: optional
+Architecture: $arch
+Maintainer: Hyprlab <hyprlab@proton.me>
+Installed-Size: $(du -sk --exclude=DEBIAN "$pkg" | cut -f1)
+Depends: $deps
+Recommends: gnome-keyring, gnupg, python3-nautilus
+Conflicts: veem, vireo
+Replaces: veem, vireo
+Homepage: https://hylki.hyprlab.co
+Description: Clean, fast GNOME-native email client
+ Hylki is a desktop email client for Wayland that feels at home in GNOME. It
+ talks IMAP/SMTP directly, keeps your mail and credentials on your machine,
+ and blocks trackers by default - no telemetry, no analytics.
+EOF
+
+    echo "==> dpkg-deb"
+    dpkg-deb --build --root-owner-group "$pkg" "$OUT/hylki_${PKG_VERSION}-1_${arch}.deb"
+    rm -rf "$work"
+    echo "==> DEB done"
+}
+
+case "$WHAT" in
+    rpm) build_rpm ;;
+    deb) build_deb ;;
+    all) build_rpm; build_deb ;;
+    *)   echo "usage: $0 [rpm|deb|all]" >&2; exit 1 ;;
+esac
+
+[ -n "${HYLKI_DEB_CONTAINER:-}" ] && exit 0
+echo "==> Packages in $OUT:"
+ls -1 "$OUT"

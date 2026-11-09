@@ -1,0 +1,2583 @@
+/* Hylki — clean, calm styling layered on top of libadwaita defaults. */
+
+.app-title {
+  font-weight: 700;
+}
+
+/* ---- Switches ---- */
+
+/* A smaller switch than libadwaita's 20px knob, everywhere. GTK sizes the
+   track from the knob (twice its width), so the knob is all that changes.
+   The hidden on/off status icons count towards that size as well, so they
+   shrink with the knob or their 16px would hold the switch at its old size. */
+switch > slider {
+  min-width: 14px;
+  min-height: 14px;
+}
+
+switch > image {
+  -gtk-icon-size: 14px;
+}
+
+/* ---- Sidebar / account header ---- */
+
+/* The sidebar's "New message" action: a standing accent button shaped like a
+   row — full width, rounded like the row highlights, icon column aligned with
+   the rows below. Text and icon in the accent's own foreground: white on
+   GNOME's accents, dark on a pale one a desktop or theme defines (#593). */
+/* Row geometry plus extra vertical presence: 5px above and below the
+   shared .folder-row padding, so the accent button stands taller than a
+   plain row without changing its width alignment. */
+row.compose-row {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+/* The icon-only rail centres a lone icon — no text to pad around, and the
+   expanded button's extra vertical presence goes back to the default. */
+.rail-collapsed row.compose-row {
+  padding: 0;
+}
+
+row.compose-row:hover {
+  background-color: shade(@accent_bg_color, 1.1);
+}
+
+row.compose-row:active {
+  background-color: shade(@accent_bg_color, 0.9);
+}
+
+row.compose-row .folder-icon,
+row.compose-row .account-name {
+  color: @accent_fg_color;
+  opacity: 1;
+}
+
+/* Expanded, it is split like the composer's Send (#360): the caret at the
+   end opens the template menu, past a short inset divider. The caret keeps
+   to the row's height and reaches into its end padding, far enough to sit
+   in line with the chevrons of the unified rows beneath. */
+row.compose-row .compose-split {
+  padding-right: 0;
+}
+row.compose-row .compose-split:dir(rtl) {
+  padding-left: 0;
+  padding-right: 8px;
+}
+row.compose-row .compose-split > separator {
+  background-color: alpha(@accent_fg_color, 0.55);
+  min-width: 1px;
+  margin: 3px 4px 3px 8px;
+}
+row.compose-row .compose-split > separator:dir(rtl) {
+  margin: 3px 8px 3px 4px;
+}
+row.compose-row .compose-caret {
+  color: @accent_fg_color;
+  min-height: 0;
+  min-width: 0;
+  padding: 2px 6px;
+  margin-top: -4px;
+  margin-right: -3px;
+  margin-bottom: -4px;
+}
+row.compose-row .compose-caret:dir(rtl) {
+  margin-right: 0;
+  margin-left: -3px;
+}
+row.compose-row .compose-caret:hover {
+  background-color: alpha(@accent_fg_color, 0.15);
+}
+row.compose-row .compose-caret:active {
+  background-color: alpha(@accent_fg_color, 0.28);
+}
+
+.account-header {
+  padding: 10px 12px 14px 12px;
+  /* Match the side margin + rounded highlight of the navigation-sidebar rows
+     (libadwaita uses margin: 0 6px; border-radius: 9px) so the hover background
+     sits inset from the edges instead of flush against them. */
+  margin: 0 6px;
+  border-radius: 9px;
+}
+
+/* Icon-only rail: tighten horizontal padding/margin so pills/icons fit a narrow column. */
+.rail-collapsed .account-header {
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-left: 2px;
+  margin-right: 2px;
+}
+
+/* A rail avatar whose account holds the open folder, folded out of sight. */
+.rail-collapsed .account-header.rail-current {
+  background-color: alpha(currentColor, 0.1);
+}
+
+.rail-collapsed .folder-row {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+/* Icon-only rail: tighten the sidebar header's padding so it stops forcing the
+   rail wider than SIDEBAR_RAIL_WIDTH. The menu button keeps its normal size —
+   Compose used to share this header and the two together needed shrinking to
+   fit; alone, the button has room to spare in the 80px rail. */
+headerbar.rail-header {
+  padding-left: 2px;
+  padding-right: 2px;
+  min-height: 0;
+}
+
+.account-avatar {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
+  color: #fff;
+}
+
+/* Version pill on the About window. */
+.about-version-chip {
+  background-color: alpha(@accent_color, 0.15);
+  color: @accent_color;
+  border-radius: 999px;
+  padding: 1px 12px;
+  font-weight: 600;
+}
+
+.about-section {
+  padding: 12px 14px;
+}
+
+.about-coffee {
+  font-size: 1.2em;
+}
+
+.account-avatar label {
+  font-weight: 700;
+  color: #fff;
+}
+
+.account-name {
+  font-weight: 600;
+}
+
+/* Per-account avatar circle in the sidebar (background color set at runtime). */
+.account-circle {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 15px;
+}
+
+/* The circle's glyph (initials or emoji) is drawn ink-centred by
+   ui::initials, so no label rules or optical nudges are needed here. */
+
+/* Small pill for the "All Inboxes" per-account sub-list. */
+.account-circle-sm {
+  min-width: 21px;
+  min-height: 21px;
+  border-radius: 10.5px;
+}
+/* The account editor's preview circle: a 72px disc whose color comes
+   from a stylesheet the editor rewrites as the color button changes. */
+.account-preview-disc {
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 36px;
+}
+
+/* Inbox rows nested under "All Inboxes": no indent so their account pills
+   line up with the folder icons in the rest of the sidebar. */
+.unified-subrow {
+  margin-left: -2px;
+}
+.unified-subrow:dir(rtl) {
+  margin-left: 0;
+  margin-right: -2px;
+}
+
+/* The unified rows (All Inboxes, Starred, Sent, Drafts) and their account
+   lists are each a list of their own; without their vertical padding the
+   pills stack with no gap, as rows inside one list do. The first keeps
+   its top padding as the gap under the compose bar. */
+.unified-item {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.unified-item.unified-first {
+  padding-top: 6px;
+}
+
+/* Compact disclosure button in the "All Inboxes" row. */
+.chevron-btn {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+
+/* Chevron placement: Left (PR #95 mechanism). Header disclosure chevrons
+   ("All Inboxes", each account) are overlaid on the row's left edge (see
+   sidebar.rs) rather than packed into the row's own layout — they reserve
+   no space of their own, so the icon/avatar and label keep their normal
+   position and any pill keeps the flush-right column every other row's
+   pill has. "All Inboxes" applies this to `.chevron-btn` itself (a 24px
+   box, icon centred inside) rather than a bare icon like the account
+   headers below, so it needs a bigger pull-in to land the icon — not just
+   the button's own edge — on the same column. */
+.row-disclosure-chevron {
+  margin-left: -5px;
+  opacity: 0.6;
+}
+.row-disclosure-chevron:dir(rtl) {
+  margin-left: 0;
+  margin-right: -5px;
+}
+
+/* The account header applies its own left padding (12px, `.account-header`)
+   around the chevron's overlay, on top of the margin above — "All Inboxes"
+   has no such wrapper padding, so left as-is the two chevrons land 12px
+   apart. This pulls the header's back in to match. */
+.account-header .row-disclosure-chevron {
+  margin-left: -4px;
+}
+.account-header .row-disclosure-chevron:dir(rtl) {
+  margin-left: 0;
+  margin-right: -4px;
+}
+
+/* An account's chevron at the row's end: the unified rows' 32px target,
+   its end margin sliding into the header's padding, so the two columns of
+   chevrons line up. */
+.account-header .chevron-btn.account-chevron-end {
+  min-width: 32px;
+  min-height: 32px;
+  margin-right: -8px;
+}
+.account-header .chevron-btn.account-chevron-end:dir(rtl) {
+  margin-right: 0;
+  margin-left: -8px;
+}
+
+/* The tree style's caret (Settings → Sidebar → Sections) stands in the
+   icon column: its 24px button overhangs the 16px glyph 4px a side, so the
+   glyph and the label land where an icon and its label would. */
+.tree-caret {
+  margin-left: -4px;
+  margin-right: -4px;
+  opacity: 0.6;
+}
+
+/* Left placement: match the account headers' height below it (avatar + two-
+   line name/email push those taller than this row's single line of text
+   would be on its own) — content stays vertically centred. */
+.unified-row.chev-left {
+  min-height: 53px;
+}
+
+/* Chevron placement: Right — the classic layout: trailing 32px target whose
+   negative end margin slides into the row padding. */
+.unified-row.chev-right:dir(ltr) {
+  padding-right: 0;
+}
+.unified-row.chev-right:dir(rtl) {
+  padding-left: 0;
+}
+.unified-row.chev-right .folder-row:dir(ltr) {
+  padding-right: 12px;
+}
+.unified-row.chev-right .folder-row:dir(rtl) {
+  padding-left: 12px;
+}
+.unified-row.chev-right .chevron-btn {
+  min-width: 32px;
+  min-height: 32px;
+  margin-right: -8px;
+}
+.unified-row.chev-right .chevron-btn:dir(rtl) {
+  margin-right: 0;
+  margin-left: -8px;
+}
+
+/* Filter rule rows in the Accounts window: extra breathing room around the
+   two-line title. */
+.filter-rule-row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+/* Draggable account rows in the Accounts window. */
+.account-list-row {
+  padding: 14px 12px;
+}
+
+/* Badge marking where an account comes from (GNOME Online Accounts vs Hylki). */
+.account-source-badge {
+  font-size: 0.72em;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: alpha(currentColor, 0.1);
+  opacity: 0.6;
+}
+
+/* The tile that marks an account by protocol when it has no provider's
+   logo (brand::mark). Fixed colors, as a provider's logo has: the IMAP blue,
+   the POP3 red and the deeper JMAP red take white text, the OAuth yellow
+   dark text, which white would not read on. */
+.protocol-pill {
+  font-size: 0.72em;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.protocol-pill.large {
+  font-size: 1.4em;
+  padding: 10px 16px;
+  border-radius: 14px;
+}
+
+.protocol-pill.imap {
+  background-color: #005bff;
+  color: #ffffff;
+}
+
+.protocol-pill.pop3 {
+  background-color: #e7414a;
+  color: #ffffff;
+}
+
+.protocol-pill.jmap {
+  background-color: #c01c28;
+  color: #ffffff;
+}
+
+.protocol-pill.oauth {
+  background-color: #fec11e;
+  color: #241f31;
+}
+
+.account-source-badge.goa {
+  background-color: alpha(@accent_bg_color, 0.18);
+  color: @accent_color;
+  opacity: 1;
+}
+
+/* Recipient autocomplete: highlight the keyboard-selected suggestion. */
+.autocomplete {
+  background: transparent;
+}
+
+.autocomplete row {
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.autocomplete row:selected {
+  background-color: @accent_bg_color;
+}
+
+.autocomplete row:selected label {
+  color: @accent_fg_color;
+}
+
+/* The group form's people to add: the one the arrow keys are on, as in
+   the composer's suggestions. */
+.member-matches row:selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+.member-matches row:selected label,
+.member-matches row:selected image {
+  color: @accent_fg_color;
+}
+
+/* The inline composer's ground: opaque, so sliding down over the reader
+   actually hides it rather than blending with it. */
+.inline-compose-surface {
+  background-color: @window_bg_color;
+}
+
+/* A set star (reader toolbar, list palette, popout): the flagged state is
+   color alone — the glyph stays the same as every other icon. */
+button.star-active {
+  color: #e5a50a;
+}
+
+/* The account page's storage bar (#298): the accent until the mailbox is
+   nearly full, then the warning and error colors. */
+levelbar block.quota-ok {
+  background-color: @accent_bg_color;
+}
+levelbar block.quota-warn {
+  background-color: @warning_bg_color;
+}
+levelbar block.quota-full {
+  background-color: @error_bg_color;
+}
+
+/* Compose attachment chips. */
+.attach-chip {
+  padding: 3px 4px 3px 6px;
+  border-radius: 14px;
+  background: alpha(currentColor, 0.08);
+}
+.attach-chip:dir(rtl) {
+  padding: 3px 6px 3px 4px;
+}
+.attach-chip:hover {
+  background: alpha(currentColor, 0.12);
+}
+/* A file moved or deleted since it was attached (#340). */
+.attach-chip.missing {
+  background: alpha(@error_color, 0.14);
+  color: @error_color;
+}
+/* The chips' grid cells stay out of sight: the chip is the target, and a
+   cell's own hover square would show around its rounded ends. */
+flowbox.attach-flow > flowboxchild {
+  padding: 0;
+  background: none;
+}
+/* A picture's or a PDF's thumbnail at the head of its chip (#299). */
+.attach-chip-thumb {
+  border-radius: 6px;
+}
+
+/* The composer's drop surfaces (ui/drop_zones.rs): a veil over the composer
+   while files are dragged across it, holding one card per place the files
+   can go. The card under the pointer is the one GTK marks :drop(active); it
+   fills with the accent and lifts, so the choice reads before the drop. */
+.drop-layer {
+  background-color: alpha(@window_bg_color, 0.95);
+  padding: 18px;
+}
+/* The composer takes every file drop itself and lights the card under the
+   pointer by hand; the outline GTK gives a widget taking a drop would ring
+   the whole composer. */
+.drop-host:drop(active) {
+  box-shadow: none;
+  outline: none;
+}
+.drop-summary {
+  font-weight: 700;
+  opacity: 0.65;
+}
+.drop-zone {
+  padding: 20px 16px;
+  border-radius: 20px;
+  border: 2px dashed alpha(@accent_color, 0.35);
+  /* Opaque, unlike the veil around it: the message beneath shows through
+     only at the margins, never behind a card's words. */
+  background-color: mix(@window_bg_color, @accent_bg_color, 0.05);
+  transition: background-color 180ms ease-out, border-color 180ms ease-out,
+              box-shadow 180ms ease-out;
+}
+.drop-zone .drop-badge {
+  min-width: 68px;
+  min-height: 68px;
+  border-radius: 34px;
+  color: @accent_color;
+  background-color: alpha(@accent_bg_color, 0.12);
+  transition: background-color 180ms ease-out, color 180ms ease-out,
+              -gtk-icon-transform 180ms ease-out;
+}
+.drop-zone .drop-title {
+  font-size: 1.2em;
+  font-weight: 800;
+}
+.drop-zone .drop-subtitle {
+  opacity: 0.65;
+  min-height: 4.2em;
+}
+.drop-layer.rows .drop-subtitle {
+  min-height: 0;
+}
+.drop-zone:drop(active) {
+  border-style: solid;
+  border-color: alpha(@accent_bg_color, 0.9);
+  background-color: mix(@window_bg_color, @accent_bg_color, 0.14);
+  box-shadow: 0 10px 28px -8px alpha(@accent_bg_color, 0.45);
+}
+.drop-zone:drop(active) .drop-badge {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  -gtk-icon-transform: scale(1.12);
+}
+
+/* Right-click context menus (see ui/context_menu.rs): a flat icon + label
+   button per row, padded and rounded like GNOME's native popover menu items.
+   Real menu rows (GtkModelButton/PopoverMenu items) are regular weight and a
+   comfortable minimum width regardless of label length — plain GtkButton
+   defaults to bold text and hugs its content, so both are overridden here. */
+.context-menu-list {
+  padding: 6px;
+  min-width: 190px;
+}
+.context-menu-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.context-menu-item,
+.context-menu-item label {
+  font-weight: normal;
+}
+/* The entry a menu is currently set to. `color` is inherited, so one class
+   on the row carries both the label and the symbolic icon beside it, and
+   `@accent_color` is libadwaita's legible-on-a-normal-background accent —
+   the desktop's under the stock look, the palette's under a Hylki theme. */
+.context-menu-selected,
+.context-menu-selected label {
+  color: @accent_color;
+}
+
+/* A switch the menu shows as on (Sign, Encrypt): the grey of a toggled flat
+   header button, stated here because libadwaita's own rule may not reach a
+   button inside a menu popover. */
+.context-menu-item:checked {
+  background-color: alpha(currentColor, 0.1);
+}
+.context-menu-item:checked:hover {
+  background-color: alpha(currentColor, 0.13);
+}
+/* On, the shield and the lock take the accent color (the desktop's under
+   the stock look, the palette's under a Hylki theme), in the menu and in
+   the header, so a message about to go out signed or encrypted is plain to
+   see. */
+.context-menu-item:checked image,
+.pgp-toggle:checked image {
+  color: @accent_color;
+}
+
+/* Popout-window attachment popover rows. */
+.attach-row {
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.attach-row:hover {
+  background: alpha(currentColor, 0.06);
+}
+
+/* Tint the attachments button with the GNOME accent when present. */
+.attach-present {
+  color: @accent_color;
+}
+
+/* Account chip in the reader header (colors set at runtime). */
+.account-chip {
+  border-radius: 8px;
+  padding: 1px 9px;
+  font-size: 0.78em;
+  font-weight: 700;
+}
+
+.account-email {
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+.folder-row {
+  padding: 7px 8px;
+}
+
+.folder-icon {
+  opacity: 0.75;
+}
+
+/* Subtle "+ Add Folder" button under each account's folder list, aligned with
+   the navigation-sidebar rows above it. */
+.add-folder-btn {
+  margin: 0 6px 2px;
+  border-radius: 9px;
+}
+
+.add-folder-btn label,
+.add-folder-btn image {
+  opacity: 0.6;
+}
+
+/* Pane header titles (Attachments, Contacts): bold, matching GNOME's
+   header-bar title convention. */
+.pane-title {
+  font-weight: 700;
+}
+
+/* ---- Contacts view ---- */
+
+/* Selected contact: the full accent treatment the message list's selection
+   gets — accent ground, everything on it the accent's foreground at full
+   strength. */
+.contacts-listbox > row:selected,
+.contacts-listbox > row:selected:hover,
+.contacts-listbox > row:selected:active {
+  background-color: @accent_bg_color;
+}
+
+/* A dragged message: its circle, subject and sender on a card. The margin
+   leaves the drag surface room for the shadow. */
+.message-drag-card {
+  margin: 6px 12px 12px 6px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 12px;
+  background-color: @view_bg_color;
+  color: @view_fg_color;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.message-drag-count {
+  min-width: 14px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+
+/* A contact's face in the list: the disc clips a photo round. */
+.contact-face {
+  border-radius: 9999px;
+}
+
+/* Scoped to the row's own header box: a context-menu popover anchored to the
+   row is also its descendant, and a bare `label` selector painted the menu's
+   text white-on-white. */
+.contacts-listbox > row:selected box.header label {
+  color: @accent_fg_color;
+  opacity: 1;
+}
+
+/* Faint rule above the pinned Contacts/Attachments footer, just enough to
+   set the utility rows apart from the account list scrolling above. */
+/* The rule over the sidebar's foot. Nothing below it: the list's own 6px
+   is the gap to the Attachments pill, as it is at the pill's sides and
+   under it. */
+.footer-separator {
+  min-height: 1px;
+  margin: 4px 12px 0 12px;
+  opacity: 0.5;
+}
+/* The Attachments pill as tall as the unified rows' above (46px, their
+   chevron's 32 and the row's padding); in the icon rail, as the rail's. */
+.sidebar-footer > row {
+  min-height: 46px;
+}
+.rail-collapsed .sidebar-footer > row {
+  min-height: 0;
+}
+
+/* Collapsible "Folders" (custom folders) section header. */
+.folders-toggle {
+  margin: 0 6px;
+  border-radius: 9px;
+}
+/* In the full sidebar a plain click on a heading does nothing, as on an
+   account's header, so the heading is a plain box (ui/sidebar/widgets.rs
+   `section_heading`) laid out like the button it is in the rail: Adwaita's
+   button padding, height floor and weight. It lights up as that button
+   does, for the double click it takes. */
+.folders-toggle.heading-box {
+  min-height: 24px;
+  padding: 5px 10px;
+  font-weight: bold;
+}
+.folders-toggle.heading-box:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+.folders-toggle label {
+  font-weight: 600;
+  opacity: 0.65;
+}
+.folders-toggle image {
+  opacity: 0.6;
+}
+/* The Filtered Folders header's folded-up unread chip: a real chip, not a
+   dimmed heading label. */
+.folders-toggle label.unread-badge {
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* Icon rail, "Unread dots instead of counts": every mini chip becomes a dot
+   in the accent color. The number is still the label's text (the in-place
+   count updates keep working) — just unreadably small and transparent; the
+   count itself lives in the row's tooltip. */
+.rail-dots .unread-badge-mini {
+  min-width: 8px;
+  min-height: 8px;
+  padding: 0;
+  font-size: 1px;
+  color: transparent;
+  margin-top: -2px;
+  margin-right: -4px;
+}
+.rail-dots .unread-badge-mini:dir(rtl) {
+  margin-right: 0;
+  margin-left: -4px;
+}
+
+/* Unread count: a perfect circle for a single digit that grows horizontally
+   into a pill for larger numbers, but never taller. */
+/* The small filter glyph on a main folder's icon corner (a filter files
+   into it): a sidebar-colored halo keeps it legible over the icon. */
+.filter-mark {
+  margin-top: -4px;
+  margin-right: -6px;
+  background: @sidebar_bg_color;
+  border-radius: 9999px;
+  padding: 1px;
+}
+.filter-mark:dir(rtl) {
+  margin-right: 0;
+  margin-left: -6px;
+}
+
+.unread-badge {
+  background: @accent_bg_color;
+  color: @accent_fg_color;
+  border-radius: 9999px;
+  min-width: 18px;
+  /* At the default font size the count's 15px line sits high in the 18px
+     chip, its digits 1.5px above the center. A pixel of top padding, taken
+     from min-height so the chip stays 18px, brings them down to within half
+     a pixel, the closest a 9px digit gets in an 18px chip. */
+  min-height: 17px;
+  padding: 1px 5px 0;
+  font-size: 0.8em;
+  font-weight: 700;
+}
+
+/* "Highlight only new unread mail" (#343): a count already looked at. */
+.unread-badge.seen {
+  background: alpha(currentColor, 0.14);
+  color: inherit;
+}
+
+/* Compact-rail variant: a smaller chip pinned to an icon/pill corner via an
+   overlay, so unread counts stay visible when the sidebar is icon-only. The
+   ring in the sidebar's background color separates it from the icon beneath. */
+.unread-badge-mini {
+  min-width: 14px;
+  min-height: 14px;
+  padding: 0 3px;
+  font-size: 0.6em;
+  margin-top: -4px;
+  margin-right: -14px;
+  box-shadow: 0 0 0 2px @sidebar_bg_color;
+}
+.unread-badge-mini:dir(rtl) {
+  margin-right: 0;
+  margin-left: -14px;
+}
+
+/* ---- Message list ---- */
+
+/* The boxes above and below the rows that hold search and the bulk bar,
+   wherever each is set to open (#496). No padding of their own: both bars
+   hide by default (#102), and dead padding here floated the first row
+   ~32px low. Each revealed bar carries its own inset instead; the negative
+   margin buys the rows two more pixels. */
+.list-toolbar {
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.list-footer {
+  padding: 0;
+}
+
+.list-footer .list-search-row {
+  padding: 8px 12px 8px 12px;
+  border-top: 1px solid alpha(currentColor, 0.08);
+}
+
+.list-search-row {
+  padding: 8px 12px 10px 12px;
+}
+
+.list-title {
+  font-size: 1.25em;
+  font-weight: 800;
+}
+
+.list-count {
+  opacity: 0.5;
+  font-weight: 600;
+}
+
+/* Bulk-action bar shown while several messages are selected. */
+.bulk-bar {
+  padding: 4px 8px 6px 12px;
+  border-bottom: 1px solid alpha(currentColor, 0.08);
+}
+.bulk-bar:dir(rtl) {
+  padding: 4px 12px 6px 8px;
+}
+.list-footer .bulk-bar {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-bottom: none;
+  border-top: 1px solid alpha(currentColor, 0.08);
+}
+
+/* In a pane narrower than the bar's full size (see BULK_BAR_ROOM). */
+.compact .bulk-bar button {
+  min-width: 24px;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.bulk-count {
+  font-weight: 700;
+}
+
+.message-list {
+  background: transparent;
+}
+
+.message-list > row {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  /* No separator hairlines between rows — the inset highlight pills carry the
+     visual rhythm on their own. No side margin either: the pills carry their
+     own 6px inset, so the row (and the swipe strip that fills it) runs the
+     full width of the list. */
+  margin: 0;
+  /* No focus ring either: keyboard navigation moves the selection itself, so
+     the accent pill is the position indicator — the ring only ever showed up
+     as an artifact on rows that inherit focus programmatically (e.g. the
+     neighbour of a deleted row). */
+  outline: none;
+}
+
+/* The date headings of a list grouped by date (#435): no ground of their
+   own, the text lined up with the rows' (the pill's 6px inset plus its
+   padding), air above to part one day from the last. */
+.message-list > header {
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+}
+
+.list-day-heading {
+  margin: 14px 16px 4px 16px;
+}
+
+.message-list > header:first-child .list-day-heading {
+  margin-top: 8px;
+}
+
+.message-list.single-line .list-day-heading {
+  margin: 10px 14px 2px 14px;
+}
+
+.message-list.single-line > header:first-child .list-day-heading {
+  margin-top: 6px;
+}
+
+/* Every state tint lives on the inner .message-row as an inset rounded pill
+   — matching the thread member cards — never on the full-width row, so
+   highlights stop touching the list edges and crossing the separators. */
+.message-list > row:hover,
+.message-list > row:selected,
+.message-list > row:selected:hover,
+.message-list > row:selected:active {
+  background: none;
+}
+
+/* Reactive hover highlight (kept below the selection color). Every state
+   tint is suspended on a row mid-swipe (.swiping): the pill vanishes and the
+   content slides bare over the strip, with no card outline to clash with the
+   strip's edge. */
+.message-list > row:hover:not(:selected) > .message-item:not(.swiping) .message-row {
+  background-color: alpha(currentColor, 0.05);
+}
+
+/* Unread state carries no background of its own: the blue dot (lit for an
+   unread message, and on a thread head for any unread reply inside) is the
+   one unread signal. The accent pill is reserved for the selection. */
+
+/* Selected (currently-viewed) message: stronger accent tint than libadwaita's
+   default 25% while the list holds focus, dimming — never vanishing — when
+   focus moves to the reader. The hover/active variants are overridden too so
+   the highlight stays uniform when the cursor passes over the selected row. */
+.message-list > row:selected > .message-item:not(.swiping) .message-row {
+  background-color: alpha(@accent_bg_color, 0.3);
+}
+
+.message-list:focus-within > row:selected > .message-item:not(.swiping) .message-row,
+.message-list > row:selected:hover > .message-item:not(.swiping) .message-row,
+.message-list > row:selected:active > .message-item:not(.swiping) .message-row {
+  background-color: alpha(@accent_bg_color, 0.5);
+}
+
+/* Gmail's j/k cursor (#392): an accent outline inside the pill, while the
+   list has the keyboard. It is a class the list sets for j and k and takes
+   off at a click, not a focus ring, so a click never draws it. On the
+   selected row, whose pill is already the accent, it is the accent's
+   foreground. */
+.message-list:focus-within > row > .message-item.kbd-cursor:not(.swiping) .message-row {
+  box-shadow: inset 0 0 0 2px alpha(@accent_color, 0.85);
+}
+
+.message-list:focus-within > row:not(:selected) > .message-item.kbd-cursor:not(.swiping) .message-row {
+  background-color: alpha(@accent_bg_color, 0.1);
+}
+
+.message-list:focus-within > row:selected > .message-item.kbd-cursor:not(.swiping) .message-row {
+  box-shadow: inset 0 0 0 2px alpha(@accent_fg_color, 0.8);
+}
+
+.message-row {
+  /* The pill: inset from the list edges, rounded like the thread cards.
+     Vertical padding is symmetric, so the text block sits centred in it. */
+  margin: 2px 6px;
+  border-radius: 12px;
+  padding: 13px 8px 13px 10px;
+}
+.message-row:dir(rtl) {
+  padding: 13px 10px 13px 8px;
+}
+
+/* Selected rows: every text element in the accent's foreground at full
+   strength, in both schemes — the accent ground (see install_scheme_css)
+   carries the contrast, so nothing on it is dimmed. */
+.message-list > row:selected .message-row label {
+  color: @accent_fg_color;
+  opacity: 1;
+}
+
+/* The unread dot inverts on the accent ground too — accent-on-accent would
+   vanish, and a selected thread head must still show its unread mark. */
+.message-list > row:selected .message-row .unread-dot {
+  background: @accent_fg_color;
+}
+
+/* The thread chip inverts on the accent ground: a pill in the accent's
+   foreground, accent text and caret — a grey chip would sink into the
+   highlight. */
+.message-list > row:selected .message-row .thread-chip {
+  background: @accent_fg_color;
+  opacity: 1;
+}
+
+.message-list > row:selected .message-row .thread-chip label,
+.message-list > row:selected .message-row .thread-chip image {
+  color: @accent_bg_color;
+}
+
+/* Avatars off (#29): read rows collapse the dot's slot entirely (see the row
+   template), so the text block starts here — 8px, matching the pill's right
+   padding for equal margins. Unread rows lead with the dot. With no circle to
+   hold the height, the padding above and below the text is what centres it. */
+.message-row.no-avatar {
+  padding: 10px 8px;
+}
+.message-row.no-avatar:dir(rtl) {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.message-row.no-avatar .unread-dot {
+  margin-left: 1px;
+  margin-right: -2px;
+  /* Valign Start plus this nudge centres the 10px dot on the sender name's
+     ~20px first line (with avatars on, the dot centres in the row instead). */
+  margin-top: 5px;
+}
+.message-row.no-avatar .unread-dot:dir(rtl) {
+  margin-left: -2px;
+  margin-right: 1px;
+}
+
+/* One line per message (#334): a short pill, everything centred on the
+   line, the columns kept by the row's fixed widths. After the no-avatar
+   rules, which it overrides. */
+.message-row.single-line {
+  margin: 1px 6px;
+  padding: 5px 10px 5px 8px;
+}
+.message-row.single-line:dir(rtl) {
+  padding: 5px 8px 5px 10px;
+}
+
+.message-row.single-line .unread-dot,
+.message-row.single-line .unread-dot:dir(rtl) {
+  margin: 0;
+}
+
+/* On one line the sender reads in the subject's weight, so bold says one
+   thing only: unread. */
+.message-row.single-line .message-sender {
+  font-weight: 400;
+}
+
+.message-row.single-line .message-sender.unread {
+  font-weight: 700;
+}
+
+/* The single line's own columns (#334): the account in the date's grey, a
+   due date red once it has passed, and the importance mark red when high
+   and grey when low. */
+.message-row.single-line .message-account {
+  font-size: 0.82em;
+  opacity: 0.5;
+}
+
+.message-row.single-line .message-date.overdue {
+  color: @error_color;
+  opacity: 1;
+}
+
+.message-row .importance-high {
+  color: @error_color;
+}
+
+.message-row .importance-low {
+  opacity: 0.5;
+}
+
+/* The column headings over a single-line list (#334): laid out as a row
+   is, in the date's size and grey, the sorted column in the accent color,
+   over a hairline that parts them from the rows. */
+.list-headings-bar {
+  border-bottom: 1px solid alpha(currentColor, 0.08);
+}
+
+.message-row.single-line.list-headings {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.list-headings .list-heading {
+  font-size: 0.82em;
+  opacity: 0.6;
+}
+
+/* A heading's resize handle: an accent line on the edge it drags, shown
+   only under the pointer. A divider at rest on every column's edge read as
+   marks on the headings' names (#443). */
+.column-resize-handle:hover {
+  background: linear-gradient(to right, transparent 2px, @accent_color 2px,
+                              @accent_color 5px, transparent 5px);
+}
+
+.list-headings .sorted .list-heading,
+.list-headings .list-heading.sorted {
+  color: @accent_color;
+  opacity: 1;
+}
+
+/* On the accent ground of a selected row they take the accent's
+   foreground, as the rest of the row does. */
+.message-list > row:selected .message-row.single-line .message-date.overdue,
+.message-list > row:selected .message-row .importance-high {
+  color: @accent_fg_color;
+}
+
+/* Conversation threading: count chip + compact expand/collapse chevron on the
+   thread head, and an indented, accent-edged look for nested replies. */
+/* Thread heads: the conversation's message count and its expand/collapse
+   caret, one grey borderless pill (the old count chip's styling, now
+   clickable). */
+/* Tag chips (#71): a solid pill in the tag's color, the color class
+   (.tag-<keyword>) coming from the app's tag stylesheet. Same geometry as
+   the conversation chip so the two sit level on a row. */
+.tag-chip {
+  border-radius: 9999px;
+  min-height: 0;
+  padding: 1px 7px;
+  font-size: 0.72em;
+  font-weight: 700;
+}
+
+.message-list > row:selected .message-row .tag-chip {
+  /* Keep the tag's own color on a selected row; the selection paints
+     everything else in the accent's foreground. */
+  opacity: 0.95;
+}
+
+/* A Gmail label no tag stands for (#374): the tag pill's shape in a tint of
+   the text's own color until the tag stylesheet gives it its palette color
+   (.label-hue-N). */
+.tag-chip.label-chip {
+  background-color: alpha(currentColor, 0.14);
+}
+
+/* Where a result of a search across folders is (#374): an outline, so it
+   reads as a place rather than as one more label. */
+.tag-chip.folder-chip {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.4);
+}
+
+/* A tag row's glyph in the sidebar, in the tag's color (.tag-tint keeps
+   the background off). */
+.tag-tint {
+  background-color: transparent;
+}
+
+.thread-chip {
+  background: alpha(currentColor, 0.1);
+  border: none;
+  border-radius: 9999px;
+  min-width: 16px;
+  min-height: 0;
+  padding: 2px 7px;
+  font-size: 0.72em;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.thread-chip:hover {
+  background: alpha(currentColor, 0.18);
+  opacity: 1;
+}
+
+.thread-chip image {
+  -gtk-icon-size: 11px;
+}
+
+/* Expanded conversation members: inset rounded cards hung off a dotted rail,
+   instead of full-width rectangles crossing the list separators (issue #62).
+   The rail is the row's left border (pushed inward by the margin); all the
+   state colors — hover, unread, selected — move off the row and onto the
+   inner .message-row box, so the highlight is a padded pill that never
+   touches the list edges. */
+.message-item.thread-child {
+  margin-left: 10px;
+  /* @window_fg_color, not currentColor: a selected row's currentColor is the
+     selection foreground, which made the rail vanish under selection. */
+  border-left: 2px dotted alpha(@window_fg_color, 0.3);
+}
+.message-item.thread-child:dir(rtl) {
+  margin-left: 0;
+  margin-right: 10px;
+  border-left: none;
+  border-right: 2px dotted alpha(@window_fg_color, 0.3);
+}
+
+/* The LAST reply: its rail stops at the node dot (row centre) instead of
+   running on below it. The row's own border goes transparent (keeping its
+   2px of geometry) and a half-height in-row widget draws the same dotted
+   border for the top half only (see the rail-stub overlay in the row view). */
+.message-item.thread-child.thread-last {
+  border-left-color: transparent;
+}
+.message-item.thread-child.thread-last:dir(rtl) {
+  border-right-color: transparent;
+}
+
+/* Identical stroke to the sibling rows' rails; the negative margin moves it
+   from the row's content box back onto the border's own axis. */
+.thread-rail-stub {
+  border-left: 2px dotted alpha(@window_fg_color, 0.3);
+  margin-left: -2px;
+}
+.thread-rail-stub:dir(rtl) {
+  border-left: none;
+  margin-left: 0;
+  border-right: 2px dotted alpha(@window_fg_color, 0.3);
+  margin-right: -2px;
+}
+
+
+/* The same 6px right inset as every pill in the list, so an expanded thread
+   never opens a gap along the pane's right side. */
+.message-item.thread-child .message-row {
+  /* Identical geometry to the top-level pills — same padding, same vertical
+     rhythm — the only difference is the 10px indent onto the thread rail. */
+  margin: 2px 6px 2px 10px;
+  border-radius: 12px;
+  padding: 13px 8px 13px 10px;
+}
+.message-item.thread-child .message-row:dir(rtl) {
+  margin: 2px 10px 2px 6px;
+  padding: 13px 10px 13px 8px;
+}
+
+/* A reply with no avatar keeps the same height as any row with none. */
+.message-item.thread-child .message-row.no-avatar:not(.single-line) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* A reply on one line (#334) keeps the single-line pill's height, indented
+   onto the rail like any reply. */
+.message-item.thread-child .message-row.single-line {
+  margin: 1px 6px 1px 10px;
+  padding: 5px 10px 5px 8px;
+}
+.message-item.thread-child .message-row.single-line:dir(rtl) {
+  margin: 1px 10px 1px 6px;
+  padding: 5px 8px 5px 10px;
+}
+
+/* Node dot where each member meets the rail: an 8px circle whose negative
+   margin pulls it out of the row's content box to sit centred on the
+   border-drawn rail line. The window-colored ring masks the rail where it
+   passes behind the dot, so the dot reads as a node punched into the line. */
+.thread-node {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+  margin-left: -5px;
+  /* Opaque: the same 50% grey, but mixed over the window ground instead of
+     alpha — a translucent dot let the rail line strike through it. */
+  background-color: mix(@window_bg_color, currentColor, 0.5);
+  box-shadow: 0 0 0 2px @window_bg_color;
+}
+.thread-node:dir(rtl) {
+  margin-left: 0;
+  margin-right: -5px;
+}
+
+.message-list > row:hover:not(:selected) > .message-item.thread-child:not(.swiping) .message-row {
+  background-color: alpha(currentColor, 0.05);
+}
+
+.message-list > row:selected > .message-item.thread-child:not(.swiping) .message-row {
+  background-color: alpha(@accent_bg_color, 0.3);
+}
+
+.message-list:focus-within > row:selected > .message-item.thread-child:not(.swiping) .message-row {
+  background-color: alpha(@accent_bg_color, 0.5);
+}
+
+/* Mid-swipe (.swiping, held from the first drag until the snap-back lands):
+   the pill disappears — its hover/selection tint is suspended above and its
+   rounding dropped here — so the bare content slides over the strip, which
+   fills the row edge to edge. Nothing about the geometry changes, so the
+   list never shifts as a drag starts or settles; the tint just fades out. */
+.message-item.swiping .message-row {
+  border-radius: 0;
+  transition: background-color 150ms ease-out;
+}
+
+/* Swipe-to-act strip (#swipe): sits fixed under the row, revealed as the
+   message content slides off it — dimmed until the drag passes the commit
+   threshold, then full color ("armed") to say a release will fire it. */
+.swipe-indicator {
+  opacity: 0.55;
+  /* The pill's own box: a selected row keeps its accent fill while it
+     slides, so the strip has to meet it edge to edge and stand as tall. */
+  margin: 2px 6px;
+}
+
+.message-list.single-line .swipe-indicator {
+  margin: 1px 6px;
+}
+
+.message-item.thread-child .swipe-indicator {
+  margin-left: 10px;
+}
+
+.message-item.thread-child .swipe-indicator:dir(rtl) {
+  margin-left: 6px;
+  margin-right: 10px;
+}
+
+.swipe-indicator.armed {
+  opacity: 1;
+}
+
+.swipe-indicator.swipe-delete {
+  background: @destructive_bg_color;
+  color: @destructive_fg_color;
+}
+
+.swipe-indicator.swipe-archive {
+  /* The traditional archive green — libadwaita's "success" tokens, not
+     accent, so it stays green regardless of the user's accent color. */
+  background: @success_bg_color;
+  color: @success_fg_color;
+}
+
+.swipe-indicator image {
+  -gtk-icon-size: 18px;
+}
+
+.swipe-indicator label {
+  font-weight: bold;
+}
+
+.unread-dot {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 5px;
+  background: @accent_bg_color;
+}
+
+.message-sender {
+  font-weight: 600;
+}
+
+.message-sender.unread {
+  font-weight: 800;
+}
+
+.message-subject {
+  opacity: 0.85;
+  font-size: 0.95em;
+}
+
+.message-subject.unread {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* Key names in the shortcuts window, drawn like keycaps. */
+.shortcut-key {
+  font-family: monospace;
+  font-size: 0.9em;
+  background: alpha(currentColor, 0.08);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.message-preview {
+  opacity: 0.5;
+  font-size: 0.9em;
+}
+
+.message-date {
+  font-size: 0.82em;
+  opacity: 0.5;
+}
+
+/* Snoozed mail (#527): when it comes back, in the accent, where the date
+   would be. */
+.message-date.snoozed {
+  color: @accent_color;
+  opacity: 1;
+}
+
+.message-list > row:selected .message-date.snoozed {
+  color: @accent_fg_color;
+}
+
+.dim-icon,
+.star-icon {
+  opacity: 0.6;
+  -gtk-icon-size: 12px;
+}
+
+.star-icon {
+  color: #e5a50a;
+  opacity: 0.9;
+}
+
+/* Sent mail's read receipt (#520): grey checkmarks while it waits, green
+   once one came back. A double check needs the extra width to read. */
+.read-receipt {
+  -gtk-icon-size: 14px;
+}
+
+.read-receipt.read {
+  color: @success_color;
+  opacity: 1;
+}
+
+.message-list > row:selected .read-receipt.read {
+  color: @accent_fg_color;
+}
+
+/* ---- Reader ---- */
+
+/* The reader pane's toolbar: tighter than stock between the action icons —
+   narrower buttons and less gap in the packed start/end groups — so the full
+   row fits down to READER_ACTIONS_BREAKPOINT before folding into the ⋯ menu. */
+headerbar.reader-toolbar box.start,
+headerbar.reader-toolbar box.end,
+headerbar.compose-toolbar box.start,
+headerbar.compose-toolbar box.end {
+  border-spacing: 1px;
+}
+headerbar.reader-toolbar button.image-button,
+headerbar.compose-toolbar button.image-button {
+  min-width: 28px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
+/* The narrowest reader pane: the left group never folds, so its buttons
+   and the ⋯ draw narrower instead of pushing the window controls past the
+   pane's edge. The window controls keep their size. */
+headerbar.reader-toolbar.compact box.start,
+headerbar.reader-toolbar.compact box.end {
+  border-spacing: 0;
+}
+headerbar.reader-toolbar.compact box.start button,
+headerbar.reader-toolbar.compact box.end > button {
+  min-width: 24px;
+  padding-left: 1px;
+  padding-right: 1px;
+}
+
+/* The same toolbar in the list header, with the reader below the list or
+   off: spaced as in the reader's header (the box's own spacing is 6px,
+   as a headerbar's). */
+headerbar box.list-tools {
+  border-spacing: 1px;
+}
+headerbar box.list-tools button.image-button {
+  min-width: 28px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+headerbar box.list-tools.compact {
+  border-spacing: 0;
+}
+headerbar box.list-tools.compact button {
+  min-width: 24px;
+  padding-left: 1px;
+  padding-right: 1px;
+}
+
+.reader-header {
+  /* The account chip's top sits level with the top of the message list's
+     first highlight pill, so the two panes start on one line instead of the
+     reader beginning 16px lower for no reason. The list's rows are inset 2px
+     from the top of their scroller, which starts 2px below this header's
+     own top: 4px here puts the chip on exactly that line. */
+  padding: 4px 24px 16px 24px;
+}
+
+/* …or the split reply is open above it: the reader's header bar is gone and
+   the subject block starts right under the composer's grab strip, which the
+   4px reads as touching. 14px more air there. A bar (below) still wins. */
+.reader-header.under-split {
+  padding-top: 18px;
+}
+
+/* …unless a bar (spoofing warning, blocked remote content, find) sits
+   between it and the toolbar. There is nothing to line up with there, and
+   4px against a filled band reads as cramped rather than aligned, so the
+   header keeps the 20px it always had. */
+.reader-header.under-bar {
+  padding-top: 20px;
+}
+
+/* The reading pane's still while a message opens (ReaderSwap): opaque, on
+   the ground the pane sits on. */
+.reader-swap-still {
+  background-color: @window_bg_color;
+}
+
+.reader-subject {
+  font-size: 1.5em;
+  font-weight: 800;
+}
+
+.reader-avatar {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.75));
+}
+
+.reader-avatar label {
+  font-weight: 700;
+  color: #fff;
+}
+
+.reader-from-name {
+  font-weight: 700;
+}
+
+.reader-from-addr {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+
+.reader-date {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+
+.reader-to {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+
+.reader-cc {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+
+.reader-body {
+  padding: 22px 24px;
+  font-size: 1.02em;
+  line-height: 1.55;
+}
+
+/* ---- Notifications ---- */
+
+/* The bar uses the desktop accent color (libadwaita maps the GNOME accent to
+   @accent_bg_color, defaulting to #3584e4); errors turn amber. */
+.notify-area {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+.notify-area.error {
+  background-color: #ffca28;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.notify-bar {
+  padding: 8px 10px 8px 14px;
+}
+.notify-bar:dir(rtl) {
+  padding: 8px 14px 8px 10px;
+}
+
+.notify-bar button.flat {
+  color: inherit;
+}
+
+.notify-cards {
+  padding: 14px 12px 4px 12px;
+}
+
+/* Toast-like cards floating on the colored bar. Fixed amber with dark text
+   (no light/dark switch); slightly deeper than the bar behind for separation. */
+.toast-card {
+  background-color: #ffca28;
+  color: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 10px 8px 10px 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.toast-card:dir(rtl) {
+  padding: 10px 14px 10px 8px;
+}
+
+.toast-card label {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.toast-card-icon {
+  color: rgba(0, 0, 0, 0.75);
+  margin-top: 2px;
+}
+
+/* Header notification icon turns yellow while there are errors to see. */
+.attention-icon {
+  color: #ffca28;
+}
+
+/* Count pill in the header button. */
+.needs-attention {
+  font-weight: 700;
+}
+
+/* ---- Remote-content (privacy) alert in the reader ---- */
+
+/* Blocked-remote-content bar: a quiet tint over the theme's own ground, so
+   it follows light/dark switching; amber is kept only where it carries
+   meaning — the shield icon, via the theme's warning color. The action
+   buttons stay libadwaita's standard grey. It's a standing notice, not an
+   alarm, and must not eat into the reader. */
+.remote-alert {
+  background-color: alpha(currentColor, 0.08);
+  padding: 3px 10px 3px 14px;
+  /* 42px content + 3px padding top and bottom = a 48px bar. */
+  min-height: 42px;
+  font-size: 0.9em;
+}
+.remote-alert:dir(rtl) {
+  padding: 3px 14px 3px 10px;
+}
+
+.remote-alert image {
+  /* Amber, deepened to orange on light mode by the scheme-dependent provider
+     (`install_scheme_css`) — amber alone washes out on a light ground. */
+  color: #ffca28;
+  /* A step up from the 16px default, matching the taller bar. */
+  -gtk-icon-size: 18px;
+}
+
+/* The allowed-sender and blacklist lists sit under the row that adds to them;
+   this separates the two so the entry doesn't read as part of the list. */
+.sender-list {
+  margin-top: 1rem;
+}
+
+/* ---- Sender authentication ---- */
+
+/* A failed or suspicious sender gets the loudest treatment in the reader — red,
+   full width, above everything else. It has to survive being glanced past. */
+.spoof-alert {
+  background-color: #c01c28;
+  color: #ffffff;
+  padding: 8px 10px 8px 14px;
+}
+.spoof-alert:dir(rtl) {
+  padding: 8px 14px 8px 10px;
+}
+
+.spoof-alert image {
+  color: #ffffff;
+}
+
+/* Sender-check badge in the reader toolbar: an icon button like its neighbours,
+   tinted by verdict. No padding or radius of its own — it has to line up with
+   Reply/Archive/View Source, so it takes the toolbar's own button metrics.
+   libadwaita's named colors, not fixed hex: they shift per color scheme, so
+   the green (and the others) read correctly in dark mode too (issue #62). */
+.trust-pass {
+  color: @success_color;
+}
+
+.trust-unverified {
+  opacity: 0.55;
+}
+
+.trust-suspicious {
+  color: @warning_color;
+}
+
+.trust-fail {
+  color: @error_color;
+}
+
+.sender-detail {
+  padding: 12px;
+  /* Sized to read like the message header text it pops out of, not like
+     app chrome. */
+  font-size: 0.95em;
+}
+
+/* Link destination plaque, bottom-left of the message body — the same idea as a
+   browser's status bubble, so a link's real target is visible before clicking. */
+.link-preview {
+  background-color: rgba(0, 0, 0, 0.82);
+  color: #ffffff;
+  padding: 3px 10px;
+  border-radius: 6px 6px 0 0;
+  font-size: 0.85em;
+  margin: 0 0 0 4px;
+}
+.link-preview:dir(rtl) {
+  margin: 0 4px 0 0;
+}
+
+/* ---- Compose ---- */
+
+.compose-pane {
+  padding: 16px;
+}
+
+/* The body editor is a card like the address fields' boxed-list (the frame
+   carries libadwaita's `card` class); GTK's default frame border would double
+   its edge. */
+.compose-pane frame {
+  border: none;
+}
+
+/* Recipient fields (From/To/Cc/Bcc/Subject): trimmed from libadwaita's 50px
+   default so the body editor keeps generous room, but no further — 34px read
+   as cramped (yioannides, #81). */
+.compose-fields > row > box.header {
+  min-height: 42px;
+}
+
+/* To, Cc and Bcc hold each address as a pill. */
+.recipient-pill {
+  border-radius: 999px;
+  background-color: alpha(currentColor, 0.1);
+  padding: 0 1px 0 9px;
+  min-height: 20px;
+}
+
+.recipient-pill > button {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  margin-left: 3px;
+}
+
+.recipient-pill > button image {
+  -gtk-icon-size: 12px;
+}
+
+.recipient-pill.invalid {
+  background-color: alpha(@error_color, 0.14);
+  color: @error_color;
+}
+
+/* Selected pills (#492), and the one with the keyboard focus. */
+.recipient-pill.selected {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+.recipient-pill.invalid.selected {
+  background-color: @error_bg_color;
+  color: @error_fg_color;
+}
+
+.recipient-pill:focus-visible {
+  outline: 2px solid alpha(@accent_color, 0.5);
+  outline-offset: 1px;
+}
+
+/* Pills being dragged stay in place, faded, until they are let go. */
+.recipient-pill.dragged {
+  opacity: 0.35;
+}
+
+/* Where a dragged pill would go. */
+.pill-drop-marker {
+  min-width: 2px;
+  border-radius: 1px;
+  background-color: @accent_color;
+}
+
+.compose-body {
+  font-size: 1.02em;
+  line-height: 1.5;
+  background: transparent;
+}
+
+/* ---- Sidebar reorder ---- */
+
+.reorder-row {
+  padding: 10px 8px;
+}
+
+.reorder-row image {
+  opacity: 0.6;
+}
+
+/* Bottom "loading more" indicator for infinite scroll. */
+.list-loading label {
+  font-size: 0.9em;
+}
+
+/* ---- Attachments gallery ------------------------------------------------- */
+.gallery-toolbar {
+  padding: 10px 18px;
+}
+.gallery-footer {
+  padding: 4px 10px;
+}
+.gallery-footer scale:dir(ltr) {
+  margin-left: 8px;
+}
+.gallery-footer scale:dir(rtl) {
+  margin-right: 8px;
+}
+/* The folder list's per-account headings. They sit in the same boxed list as
+   the folder rows so the whole thing scrolls as one, so they need the padding
+   a row would otherwise give them. */
+.gallery-folder-heading {
+  padding: 8px 12px 4px 12px;
+}
+.gallery-folder-heading label {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+.gallery-folders-popover label.heading:dir(ltr) {
+  margin-left: 2px;
+}
+.gallery-folders-popover label.heading:dir(rtl) {
+  margin-right: 2px;
+}
+.gallery-table-header {
+  padding: 2px 18px;
+  border-bottom: 1px solid alpha(currentColor, 0.12);
+}
+/* Header buttons must not pad horizontally: their labels have to start at the
+   exact x their column's row cells do, or nothing lines up. */
+.gallery-table-header button {
+  font-weight: 600;
+  font-size: 0.9em;
+  padding: 2px 0;
+  min-width: 0;
+}
+.gallery-table {
+  background: transparent;
+  padding: 4px 12px;
+}
+.gallery-table row {
+  border-radius: 8px;
+  padding: 0;
+}
+.gallery-table-row {
+  padding: 6px;
+}
+.gallery-table-thumb {
+  border-radius: 6px;
+}
+.gallery-flow {
+  padding: 18px;
+  padding-top: 4px;
+}
+.gallery-cell {
+  padding: 8px;
+  border-radius: 12px;
+  transition: background 120ms ease;
+}
+.gallery-flow > flowboxchild {
+  border-radius: 12px;
+  padding: 0;
+}
+.gallery-flow > flowboxchild:hover .gallery-cell {
+  background: alpha(currentColor, 0.06);
+}
+.gallery-flow > flowboxchild:focus:focus-visible {
+  outline: 2px solid @accent_color;
+  outline-offset: -2px;
+}
+.gallery-thumb {
+  border-radius: 10px;
+  background: alpha(currentColor, 0.05);
+}
+.gallery-thumb-image {
+  border-radius: 10px;
+}
+.gallery-name {
+  font-weight: 600;
+  font-size: 0.92em;
+}
+.gallery-from {
+  font-size: 0.85em;
+}
+.gallery-subject {
+  font-size: 0.82em;
+}
+.gallery-size {
+  font-size: 0.82em;
+}
+.gallery-file-icon {
+  opacity: 0.85;
+}
+
+/* Type-tinted attachment icons (symbolic icons follow `color`). Colors read
+   on both light and dark backgrounds. */
+.ftype-pdf      { color: #e01b24; } /* red    — PDF */
+.ftype-doc      { color: #3584e4; } /* blue   — Word / documents */
+.ftype-sheet    { color: #2ec27e; } /* green  — Excel / spreadsheets */
+.ftype-slides   { color: #ff7800; } /* orange — PowerPoint / presentations */
+.ftype-archive  { color: #e5a50a; } /* amber  — zip / archives */
+.ftype-audio    { color: #9141ac; } /* purple — audio */
+.ftype-video    { color: #e6689e; } /* pink   — video */
+.ftype-calendar { color: #009e8f; } /* teal   — calendar */
+.ftype-image    { color: #1c9bd8; } /* cyan   — images */
+.ftype-generic  { color: #8c8c8c; } /* grey   — everything else */
+
+/* Quick-open button on the thumbnail, revealed on hover. */
+.gallery-open {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  min-width: 0;
+  min-height: 0;
+  padding: 5px;
+}
+.gallery-cell:hover .gallery-open,
+.gallery-open:hover {
+  opacity: 1;
+}
+
+/* Lightbox preview overlay. */
+.gallery-lightbox {
+  background: alpha(black, 0.82);
+  padding: 10px 16px 16px 16px;
+}
+.gallery-lightbox.zoomed {
+  padding: 0;
+}
+.gallery-lightbox-bar {
+  padding: 6px 2px;
+  color: white;
+}
+.gallery-lightbox-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  color: white;
+}
+.gallery-lightbox-bar .dim-label {
+  color: alpha(white, 0.7);
+}
+/* The page for an item with no picture sits on the dark ground in any theme. */
+.gallery-lightbox-file {
+  color: white;
+}
+
+/* In-message attachment drawer (footer beneath the reader body). */
+.attachment-drawer {
+  background: alpha(currentColor, 0.03);
+  /* Matches the 6px grab strip above, so the drawer reads evenly spaced. */
+  padding-bottom: 6px;
+}
+/* The drawer's divider draws no line or grip of its own: it wears the
+   drawer's exact tint, so the grabbable strip reads as the drawer's own top
+   edge rather than a band of window ground showing through. Dragging resizes
+   the drawer while it is expanded; while collapsed the separator is
+   untargetable (set_divider_draggable). */
+.drawer-split > separator {
+  border: none;
+  /* The theme's hairline on paned separators survives the background and
+     border resets — it is drawn as a shadow. */
+  box-shadow: none;
+  outline: none;
+  background: alpha(currentColor, 0.03);
+  /* A hairline only: the separator's own drag gesture claims every press
+     (clicks die on it) and it wears its own row-resize cursor — the seam's
+     real handle is the pill zone above plus the drawer's edge strip. */
+  min-height: 1px;
+}
+.attachment-drawer-header {
+  /* 2px tighter to the drawer's top edge than the sides and the bottom
+     (Jason, 2026-09-17): the seam's own 8px strip sits above this, so the
+     stock 4px left the header's row, "Save All…" included, sitting low. */
+  padding: 2px 8px 4px;
+}
+/* Split-reply divider: the separator is a flush strip of the composer's own
+   ground (its background-color comes from the runtime theme CSS), so the
+   panel reads as running to its edge with no line across. The visible
+   affordance is the floating .split-grab-pill overlaid on the composer. */
+.reader-split > separator {
+  border: none;
+  box-shadow: none;
+  outline: none;
+  min-height: 8px;
+}
+/* The grab handle: a thin rounded bar floated above the panel's bottom edge,
+   like the bar at the bottom of the iOS home screen. Sized in code (100×5). */
+.split-grab-pill {
+  background-color: alpha(currentColor, 0.5);
+  border-radius: 4px;
+  /* A dark drop keeps the light bar legible on light grounds; over dark
+     grounds the half-opaque foreground carries it. Without this the bar
+     vanished against dark-mode message content. */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+/* The bar sits centred in a larger invisible hit zone that carries the
+   gestures; hovering anywhere in the zone lights the bar. The drawer's edge
+   strip is a separate widget hovering the same logical handle — it sets the
+   `hot` class instead. */
+.split-grab-hit:hover .split-grab-pill,
+.split-grab-hit.hot .split-grab-pill {
+  background-color: alpha(currentColor, 0.75);
+}
+.attachment-drawer-flow {
+  background: transparent;
+}
+.drawer-cell {
+  padding: 6px;
+  border-radius: 12px;
+  transition: background 120ms ease;
+}
+.attachment-drawer-flow > flowboxchild {
+  border-radius: 12px;
+  padding: 0;
+}
+.attachment-drawer-flow > flowboxchild:hover .drawer-cell {
+  background: alpha(currentColor, 0.06);
+}
+.attachment-drawer-flow > flowboxchild:focus:focus-visible {
+  outline: 2px solid @accent_color;
+  outline-offset: -2px;
+}
+.drawer-thumb {
+  border-radius: 10px;
+  background: alpha(currentColor, 0.05);
+}
+.drawer-filename {
+  font-size: 0.82em;
+}
+/* Reveal the hover quick-actions on drawer cells too. */
+.drawer-cell:hover .gallery-open {
+  opacity: 1;
+}
+/* Drawer hover quick-actions are ~25% smaller than the gallery's. */
+.drawer-action {
+  padding: 3px;
+  min-width: 0;
+  min-height: 0;
+}
+.drawer-action image {
+  -gtk-icon-size: 12px;
+}
+
+/* The attachment drawer's list view: one full-width row per file. */
+.drawer-list-row {
+  padding: 2px 6px;
+}
+
+/* A file being deleted from the server (#289): pale red, "Deleting…" in
+   place of its actions, until it fades out. */
+.attachment-drawer-flow > flowboxchild .drawer-cell.attachment-deleting,
+.gallery-flow > flowboxchild .gallery-cell.attachment-deleting,
+.attachment-drawer-flow > flowboxchild.attachment-deleting,
+.gallery-table row.attachment-deleting {
+  background: alpha(@error_color, 0.12);
+}
+.attachment-deleting-label {
+  color: @error_color;
+  font-weight: 600;
+}
+.attachment-deleting-veil {
+  background: alpha(@error_color, 0.22);
+}
+.attachment-deleting-veil .attachment-deleting-label {
+  background: alpha(@window_bg_color, 0.9);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+/* Dragging a folder among its siblings: an accent line in the gap it will
+   land in (ui/sidebar.rs draws it over the list). The list takes the drop
+   as a whole, so it drops the outline GTK draws around a drop target; a
+   folder being moved into, or taking mail, is outlined on its own. */
+.folder-drop-line {
+  background-color: @accent_color;
+  border-radius: 1px;
+  min-height: 2px;
+}
+.navigation-sidebar.folder-drop-list:drop(active) {
+  box-shadow: none;
+}
+.navigation-sidebar > row.drop-into {
+  box-shadow: inset 0 0 0 1px @accent_bg_color;
+}
+
+/* Folder-tree expander (#51): a chevron sized to exactly the leaf spacer's
+   width, so names at one depth align whether or not a folder has children. */
+.tree-expander {
+  padding: 0;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+/* The folder-tree caret spins between closed (pointing end) and open
+   (pointing down) instead of swapping glyphs. */
+.tree-expander-icon {
+  transition: -gtk-icon-transform 200ms ease;
+}
+.tree-expander-icon.open {
+  -gtk-icon-transform: rotate(90deg);
+}
+
+/* A highlighted attachment in the drawer (single click; Space previews it,
+   issue #37): a soft accent wash that keeps the thumbnail legible, rounded to
+   match the cells. */
+.attachment-drawer-flow flowboxchild:selected {
+  background-color: alpha(@accent_bg_color, 0.18);
+  border-radius: 10px;
+}
+
+/* The thread chip's caret spins between closed (pointing end) and open
+   (pointing down), same as the folder-tree expander. (PR #79) */
+.thread-toggle-icon {
+  transition: -gtk-icon-transform 200ms ease;
+}
+.thread-toggle-icon.open {
+  -gtk-icon-transform: rotate(90deg);
+}
+
+/* ---- First-run welcome wizard (welcome.rs) ---- */
+
+/* The window is the brand blue, the website hero's own #005bff; every page
+   floats on it and the text on the ground is white. The wizard is always
+   light (app.rs holds the scheme while it is open). */
+window.welcome-window,
+.welcome-window > * {
+  background-color: #005bff;
+}
+.welcome-window headerbar {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  color: #ffffff;
+}
+
+.welcome-title {
+  font-size: 1.7em;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.welcome-tagline {
+  font-size: 1.02em;
+  color: alpha(#ffffff, 0.85);
+}
+.welcome-tagline link {
+  color: #ffffff;
+}
+
+.welcome-section {
+  font-weight: 700;
+  font-size: 0.9em;
+  color: alpha(#ffffff, 0.8);
+}
+.welcome-section:dir(ltr) {
+  margin-left: 6px;
+}
+.welcome-section:dir(rtl) {
+  margin-right: 6px;
+}
+
+/* Content cards: the theme's card surface, lifted off the blue. */
+.welcome-card {
+  border-radius: 14px;
+  background-color: @card_bg_color;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.welcome-pill {
+  padding: 12px 28px;
+  min-height: 0;
+  font-weight: 700;
+}
+
+/* Wizard action buttons are the icon's amber with dark brown lettering,
+   like the website's primary buttons on the same blue. */
+.welcome-window button.suggested-action {
+  background-color: #fec11e;
+  color: #3a2b00;
+}
+.welcome-window button.suggested-action:hover {
+  background-color: shade(#fec11e, 1.06);
+}
+.welcome-window button.suggested-action:active {
+  background-color: shade(#fec11e, 0.92);
+}
+
+/* The language picker sits on the ground: a white wash, white text. Only
+   the button, so the popover list keeps the theme's colors. */
+.welcome-window dropdown > button {
+  background-color: alpha(#ffffff, 0.16);
+  color: #ffffff;
+}
+.welcome-window dropdown > button:hover {
+  background-color: alpha(#ffffff, 0.24);
+}
+
+.welcome-hint {
+  font-size: 0.9em;
+  color: alpha(#ffffff, 0.8);
+}
+/* The theme's red and green are lost on the blue: lighter tints of them. */
+.welcome-hint.error {
+  color: #ffc4c4;
+  font-weight: 600;
+}
+.welcome-hint.success {
+  color: #bdf5d2;
+  font-weight: 600;
+}
+.welcome-window spinner {
+  color: #ffffff;
+}
+
+.welcome-added {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.welcome-check {
+  color: #ffffff;
+}
+
+/* Secondary wizard buttons: the language picker's white wash, so they read
+   as buttons on the blue without competing with the amber ones. */
+.welcome-window button.welcome-secondary {
+  padding: 8px 20px;
+  min-height: 0;
+  font-weight: 600;
+  background-color: alpha(#ffffff, 0.16);
+  color: #ffffff;
+}
+.welcome-window button.welcome-secondary:hover {
+  background-color: alpha(#ffffff, 0.24);
+}
+.welcome-window button.welcome-secondary:active {
+  background-color: alpha(#ffffff, 0.32);
+}
+
+.welcome-window carouselindicatordots {
+  color: #ffffff;
+}
+
+/* ---- App icon gallery (icon_picker.rs): Settings + wizard ---- */
+
+.icon-gallery {
+  background: transparent;
+}
+.icon-gallery flowboxchild {
+  border-radius: 14px;
+  padding: 8px 6px 6px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.icon-gallery flowboxchild:hover {
+  background-color: alpha(currentColor, 0.06);
+}
+.icon-gallery flowboxchild:selected {
+  background-color: alpha(@accent_bg_color, 0.14);
+  box-shadow: inset 0 0 0 2px @accent_bg_color;
+}
+.icon-gallery flowboxchild:focus-visible {
+  outline: none;
+}
+.icon-gallery-label {
+  font-size: 0.78em;
+  opacity: 0.7;
+}
+.icon-gallery flowboxchild:selected .icon-gallery-label {
+  opacity: 1;
+  font-weight: 700;
+}
+/* The strip's edges melt into the card where more icons lie beyond. Two
+   layers, because the dark card color is a translucent white over the
+   window ground: a gradient of it alone reads as a pale haze there. The
+   card gradient over a window-ground gradient composites to the row's own
+   color at the edge, in both schemes. */
+.icon-strip-fade.left {
+  background:
+    linear-gradient(to right, @card_bg_color, alpha(@card_bg_color, 0)),
+    linear-gradient(to right, @window_bg_color, alpha(@window_bg_color, 0));
+}
+.icon-strip-fade.right {
+  background:
+    linear-gradient(to left, @card_bg_color, alpha(@card_bg_color, 0)),
+    linear-gradient(to left, @window_bg_color, alpha(@window_bg_color, 0));
+}
+/* In the wizard the selection ring wears the wordmark blue. */
+.welcome-window .icon-gallery flowboxchild:hover {
+  background-color: alpha(@window_fg_color, 0.06);
+}
+.welcome-window .icon-gallery flowboxchild:selected {
+  background-color: alpha(@window_fg_color, 0.08);
+  box-shadow: inset 0 0 0 2px #006dff;
+}
+.welcome-window .icon-gallery-label {
+  color: alpha(@window_fg_color, 0.75);
+}
+
+/* ---- Console mode (notifications.rs): dracula on an old tube ---- */
+
+/* The bar fades between its normal colors and the terminal's. */
+.notify-area {
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+.notify-area.console-on {
+  background-color: #282a36;
+  color: #f8f8f2;
+}
+.notify-area.console-on .notify-bar {
+  color: #f8f8f2;
+}
+
+textview.console-view,
+textview.console-view text {
+  background-color: #282a36;
+  color: #f8f8f2;
+  font-family: "Source Code Pro", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 0.82em;
+}
+textview.console-view text selection {
+  background-color: #44475a;
+  color: #f8f8f2;
+}
+
+/* Scanlines: thin dark lines every few pixels, CSS-only. */
+.console-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.14) 0px,
+    rgba(0, 0, 0, 0.14) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* Console resize grip: a slim rail with a pill handle. */
+.console-grip {
+  background-color: #21222c;
+  min-height: 10px;
+}
+.console-grip-bar {
+  background-color: #44475a;
+  min-width: 36px;
+  min-height: 4px;
+  border-radius: 2px;
+}
+
+/* In-message find bar (#103). */
+.reader-find {
+  padding: 6px 10px;
+  border-bottom: 1px solid alpha(currentColor, 0.1);
+}
+.reader-find.bottom {
+  border-bottom: none;
+  border-top: 1px solid alpha(currentColor, 0.1);
+}
+/* The attachment drawer's grab pill floats over the reader's last 24px
+   (.split-grab-hit); a find bar there sits above it. */
+.drawer-seam .reader-find.bottom {
+  padding-bottom: 24px;
+}
+
+
+/* A row being dragged to a folder (`.dragging`, set for the drag's
+   duration) fades to half strength while the envelope travels. */
+.message-item.dragging .message-row {
+  opacity: 0.5;
+}
+
+/* Settings window sidebar (#141): section headings between the category
+   rows, set off like the sidebar's own section labels. */
+.settings-side-heading {
+  padding: 14px 12px 4px 12px;
+}
+.settings-side-heading:first-child {
+  padding-top: 6px;
+}
+.settings-side > row {
+  min-height: 36px;
+}
+/* A row or group a settings search jumped to (#260), marked for a moment. */
+.settings-search-hit {
+  background-color: alpha(@accent_bg_color, 0.18);
+  border-radius: 12px;
+  transition: background-color 400ms ease-out;
+}
+
+/* The composer's Send split (#145): Send and the Send Later dropdown as
+   one accent-colored control, joined flush, with a short inset divider
+   line between them rather than a full-height seam. The box paints
+   nothing itself: the buttons' outer corners follow the theme's radius,
+   which is 9px in libadwaita 1.9 and 6px before, and a box rounded to
+   either one shows a crescent past the other's corners. */
+.send-split > button:dir(ltr):first-child,
+.send-split > menubutton:dir(ltr):first-child > button,
+.send-split > button:dir(rtl):last-child,
+.send-split > menubutton:dir(rtl):last-child > button {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.send-split > button:dir(ltr):last-child,
+.send-split > menubutton:dir(ltr):last-child > button,
+.send-split > button:dir(rtl):first-child,
+.send-split > menubutton:dir(rtl):first-child > button {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.send-split > button:last-child,
+.send-split > menubutton:last-child > button {
+  padding-left: 6px;
+  padding-right: 6px;
+  min-width: 0;
+}
+/* The dropdown's inner button paints the same accent as Send: a
+   menubutton's child button otherwise takes its own, lighter, fill. */
+.send-split > menubutton > button {
+  background-color: @accent_bg_color;
+  background-image: none;
+  color: @accent_fg_color;
+  box-shadow: none;
+}
+.send-split > menubutton > button:hover {
+  background-image: image(alpha(currentColor, 0.1));
+}
+.send-split > menubutton > button:active,
+.send-split > menubutton > button:checked {
+  background-image: image(alpha(currentColor, 0.2));
+}
+/* The separator fills the gap between the buttons with the accent, and
+   draws the short line over its middle half. */
+.send-split > separator {
+  background-color: @accent_bg_color;
+  background-image: image(alpha(@accent_fg_color, 0.55));
+  background-size: 100% 50%;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* Two wide: the dropdown's linked edge overlaps the first pixel, so one
+     shows, which is the line wanted. */
+  min-width: 2px;
+}
+/* Linked siblings overlap by a pixel, which is exactly the divider's width:
+   the dropdown keeps to its own side of it. */
+.send-split > menubutton {
+  margin-left: 0;
+}
+
+/* The reply panel's fields disclosure (#154): a chevron that turns over as
+   the From/To/Subject rows unfold, like any expander. */
+.fields-chevron image {
+  transition: -gtk-icon-transform 200ms ease;
+}
+.fields-chevron:checked image {
+  -gtk-icon-transform: rotate(180deg);
+}
+
+/* Settings → Appearance → Toolbar: the drag-and-drop editor. */
+.toolbar-zone {
+  border: 1px dashed alpha(currentColor, 0.25);
+  border-radius: 10px;
+  padding: 6px;
+}
+.toolbar-zone.drop-active {
+  border-color: @accent_color;
+  background: alpha(@accent_bg_color, 0.08);
+}
+.toolbar-chip {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: alpha(currentColor, 0.06);
+  min-width: 48px;
+}
+.toolbar-chip:hover {
+  background: alpha(currentColor, 0.12);
+}
+
+/* ---- Focus Mode ---- */
+
+/* The parts Focus Mode strips sit in revealers that slide away; the `away`
+   class fades them over the same stretch so they dissolve rather than get
+   clipped, and lifts them back in when the mode ends. */
+.focus-fade {
+  transition: opacity 260ms ease-out;
+}
+.focus-fade.away {
+  opacity: 0;
+}
+
+/* Message zoom chip on the reader header's account line: shown only away
+   from the default, and a click goes back there, so it answers the pointer
+   like a button. */
+.hylki-zoom-chip {
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: alpha(currentColor, 0.1);
+  font-weight: 600;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.hylki-zoom-chip:hover {
+  background: alpha(@accent_bg_color, 0.2);
+  color: @accent_color;
+}
+.hylki-zoom-chip:active {
+  background: alpha(@accent_bg_color, 0.35);
+}
+
+/* The highlight button's "A" on the color last chosen (#358): dark,
+   whatever the theme, since the highlight colors are all light. */
+.format-bar .on-highlight {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+/* The print preview (#359): each page as paper on a desk a shade darker
+   than the window, in either theme. */
+.print-desk {
+  background-color: shade(@window_bg_color, 0.85);
+}
+.print-page {
+  background-color: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* The list header's sort and filter button while any quick filter is on,
+   and its popover's two columns (#441). */
+.list-filter-active {
+  color: @accent_color;
+}
+.sort-filter-column {
+  padding: 6px 4px;
+  min-width: 170px;
+}
+.sort-filter-column > label {
+  margin: 4px 8px 4px 8px;
+}
+.sort-filter-column > checkbutton {
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.sort-filter-column > checkbutton:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+/* The search scope's popover (#374): each scope's name, with an info
+   button whose own popover says what it searches. */
+.search-scope-popover {
+  padding: 4px;
+}
+.search-scope-popover > box > checkbutton {
+  padding: 8px;
+  border-radius: 6px;
+}
+.search-scope-popover > box > checkbutton:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+.search-scope-about {
+  margin: 6px 8px;
+}
+.sort-filter-column > button {
+  margin-top: 6px;
+  font-weight: normal;
+}
+/* Its date range: From and To, and the calendar that sets them. */
+.sort-filter-dates {
+  margin: 4px 8px;
+}
+
+/* The month and year beside the list's scrollbar thumb while it is
+   dragged. */
+.list-scrub-date {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background-color: alpha(@window_bg_color, 0.92);
+  color: @window_fg_color;
+  box-shadow: 0 1px 4px alpha(black, 0.25);
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.list-scrub-date.shown {
+  opacity: 1;
+}
+
+/* Undo Send countdown (#534): the line along the toast's bottom edge. */
+toast-countdown {
+  color: @accent_bg_color;
+}
+
+/* The Mail Merge dialog's scrolled content (#447) keeps 8px of margin for
+   the lists' outlines and shadows, which this takes back, so they line up
+   with the dialog's buttons. */
+scrolledwindow.merge-dialog-scroll {
+  margin: -8px;
+}
+
+/* A message an AI assistant prepared: the banner over it, which names every
+   recipient. */
+.assistant-banner {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background-color: alpha(@accent_bg_color, 0.12);
+}
+
+/* An assistant's edit waiting for the user: one slim row with Reject and
+   Accept, and under it what it does to the header fields. Its text shows
+   in the editor, as a diff. */
+.assistant-edit-bar {
+  padding: 4px 6px 4px 10px;
+}
+.assistant-edit-bar .assistant-added {
+  color: @success_color;
+}
+.assistant-edit-bar .assistant-removed {
+  color: @error_color;
+}

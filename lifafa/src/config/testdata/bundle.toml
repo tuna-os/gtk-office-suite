@@ -1,0 +1,337 @@
+version = 1
+filters = []
+
+[privacy]
+allowed_senders = []
+auto_remote_content = false
+remote_ahead = false
+gravatar = false
+avatars = true
+sender_logos = false
+own_mailbox_face = true
+tag_row_tint = true
+contact_book = ""
+date_style = "system"
+clock_style = "system"
+fetch_interval_secs = 300
+push = true
+metered_save_data = true
+blacklist = []
+threading = true
+threads_expanded = false
+thread_expansion = false
+thread_row_newest = false
+thread_newest_first = false
+fold_messages = "never"
+always_show_recipients = false
+pgp_labels = false
+reader_find_bottom = false
+single_message_card = true
+reader_mode = false
+reader_switch = true
+theme_switch_shown = true
+account_chip = true
+desktop_icons = false
+reader_default = "remember"
+reader_zoom = 100
+card_attachments = true
+attachment_drawer = true
+confirm_thread_delete = true
+message_theme = "system"
+override_fonts = false
+reader_font = ""
+override_colors = false
+plain_monospace = false
+plain_font = ""
+notifications = true
+notification_content = true
+notification_buttons = [
+    "mark_read",
+    "archive",
+    "delete",
+]
+show_attachments = true
+settings_open_accounts = false
+swipe_enabled = true
+swipe_reversed = false
+swipe_sensitivity = 3.5
+compose_inline = true
+reply_inline = true
+reply_fields = false
+compose_default_from = ""
+single_card_default_applied = false
+paste_plain = true
+return_paragraph = false
+toolbar_expanded = false
+compose_plain = false
+follow_plain = false
+reply_position = "top"
+signature_position = "above_quote"
+signature_dashes = false
+fold_quote = true
+reply_header = ""
+undo_send_secs = 5
+spellcheck = true
+spellcheck_langs = ""
+sidebar_hover_expand = false
+remember_sidebar = true
+remember_rail = true
+rail_dots = true
+seen_counts = false
+app_theme = "system"
+text_scale = 100
+theme = ""
+preview_lines = 1
+list_layout = "cards"
+list_columns = [
+    "star",
+    "replied",
+    "sender",
+    "subject",
+    "tags",
+    "attachment",
+    "date",
+]
+list_headings = false
+list_column_scroll = false
+list_group_by_date = true
+list_pills_below = false
+list_sort = ""
+list_sort_reversed = false
+date_groups_default_applied = true
+list_search_open = false
+contacts_search_open = false
+contact_names = false
+list_search_bottom = false
+list_bulk_bar_bottom = false
+toolbar_fold_right = true
+single_key_shortcuts = true
+gmail_keys = false
+keep_downloads_days = 0
+run_in_background = false
+autostart = false
+start_fullscreen = false
+reading_pane = "right"
+tray = false
+tray_icon = "symbolic"
+tray_mail = true
+launcher_count = true
+show_remote_banner = true
+show_spoof_banner = true
+show_unified = true
+unified_chip = true
+show_accounts = true
+section_style = "unified"
+filtered_placement = "above_accounts"
+tags_placement = "above_accounts"
+favorites_placement = "above_accounts"
+contacts_placement = "footer"
+contacts_footer_default_applied = true
+chevrons_left = false
+account_click_folds = false
+console_mode = false
+status_bar_top = false
+read_mark = "shown"
+receipts = "ask"
+request_receipts = false
+returned_receipts = "trash"
+notify_receipts = true
+files_action = "ask"
+files_large = "ask"
+files_limit_mb = 20
+link_browser = ""
+start_view = "all_inboxes"
+folder_sort = "custom"
+
+[privacy.rail_fold]
+enabled = true
+accounts = true
+all_inboxes = true
+starred = true
+sent = true
+drafts = true
+archive = true
+junk = true
+trash = true
+snoozed = true
+filtered = true
+tags = true
+
+[privacy.list_sorts]
+
+[privacy.list_column_widths]
+
+[privacy.unified_chips]
+all_inboxes = true
+starred = true
+drafts = true
+archive = true
+junk = true
+trash = true
+snoozed = true
+
+[privacy.unified_kinds]
+starred = true
+sent = true
+drafts = true
+archive = true
+junk = false
+trash = false
+snoozed = true
+
+[privacy.assistant]
+enabled = false
+address_books = false
+mail_people = false
+
+[privacy.assistant.accounts]
+
+[privacy.print]
+page_numbers = true
+date = false
+punch_margin = false
+
+[[accounts]]
+name = "Ada"
+email = "ada@example.org"
+protocol = "imap"
+imap_host = "imap.example.org"
+imap_port = 143
+smtp_host = "smtp.example.org"
+smtp_port = 25
+username = "ada"
+smtp_separate = true
+jmap_token = true
+jmap_generic = true
+tls_accept_hostname_mismatch = true
+smtp_username = "ada-smtp"
+color = "#1c71d8"
+emoji = "🦊"
+avatar = "ada.png"
+gravatar = true
+signature = "<p>Ada</p>"
+signature_html = true
+default_signature = 1
+label = "Work"
+enabled = false
+goa_id = "account_1"
+goa_mail_disabled = true
+goa_enabled_before_mail_disabled = false
+oauth = true
+push = false
+hidden_folders = [
+    "Calendar",
+    "Notes",
+]
+folders_seeded = true
+sent_copy_path = "INBOX"
+server_saves_sent = true
+reply_copies = "original_not_inbox"
+empty_junk_days = 30
+empty_trash_days = 14
+clean_lists_days = 7
+pgp_key = "ABCDEF"
+in_unified = false
+folder_sort = "name_desc"
+sign_by_default = true
+plain_subject = true
+graph_directory = true
+graph_directory_only = true
+graph_label_names = true
+
+[accounts.security]
+imap_starttls = true
+smtp_starttls = true
+imap_accept_invalid_certs = true
+smtp_accept_invalid_certs = true
+smtp_no_auth = true
+
+[[accounts.signatures]]
+name = "Short"
+html = "<p>A</p>"
+
+[[accounts.signatures]]
+name = "Long"
+html = "<p>Ada Lovelace</p>"
+
+[[accounts.aliases]]
+identity = "Ada Alias <alias@example.org>"
+
+[[accounts.aliases]]
+identity = "Own <own@example.org>"
+smtp_host = "smtp.own.org"
+smtp_port = 465
+smtp_username = "own"
+
+[[accounts.aliases]]
+identity = "Same <same@example.org>"
+
+[accounts.oauth_settings]
+auth_url = "https://auth.example.org"
+token_url = "https://token.example.org"
+client_id = "client"
+client_secret = "client-secret"
+scopes = "mail"
+redirect_uri = "https://example.org/native"
+
+[accounts.folder_roles]
+archive = "Archive"
+sent = "Sent Items"
+
+[[accounts]]
+name = ""
+email = "bare@example.org"
+protocol = "imap"
+imap_host = ""
+imap_port = 993
+smtp_host = ""
+smtp_port = 587
+username = ""
+smtp_separate = false
+tls_accept_hostname_mismatch = false
+smtp_username = ""
+gravatar = false
+signature_html = false
+aliases = []
+enabled = true
+goa_mail_disabled = false
+goa_enabled_before_mail_disabled = true
+oauth = false
+
+[[tags]]
+name = "Later"
+keyword = "later"
+color = "#1c71d8"
+
+[sidebar]
+order = []
+collapsed = []
+folders_expanded = []
+icon_only = false
+tree_collapsed = []
+folder_order = []
+unified_expanded = false
+filtered_expanded = false
+tags_expanded = false
+starred_expanded = false
+sent_expanded = false
+drafts_expanded = false
+archive_expanded = false
+junk_expanded = false
+trash_expanded = false
+snoozed_expanded = false
+favorites = []
+favorites_expanded = false
+smart_expanded = false
+contacts_expanded = false
+contacts_folded = []
+filtered_expanded_accounts = []
+tags_expanded_accounts = []
+
+[window]
+width = 1280
+height = 840
+maximized = false
+
+[spell_words]
+en_US = ["Hylki"]

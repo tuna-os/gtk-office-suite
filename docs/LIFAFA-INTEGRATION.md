@@ -39,3 +39,26 @@ repository cannot make: a `mailto:` handler (`x-scheme-handler/mailto` in its
 desktop file) and an Email portal backend or `xdg-email` compose path that
 accepts attachments. Those must respect the fork boundary in
 `fork/MAINTAINING.md` in Lifafa's repository.
+
+## Source in this repository (`lifafa/`)
+
+Lifafa's source was imported from `tuna-os/lifafa` at
+`a7352f0c4e4fb7b90621c8459b78a4505884d2ee` (Hylki 1.47.1). It keeps its own
+licence (AGPL-3.0-or-later, `lifafa/LICENSE`); the rest of the suite stays
+GPL-3.0-or-later. The two native SDK submodules (`lifafa/native/*-unofficial-sdk`)
+are declared in the root `.gitmodules` at the commits Lifafa pinned.
+
+Where it stands:
+
+- **Not yet a workspace member.** Lifafa builds against gtk4 0.9, libadwaita
+  0.7 and relm4 0.9; the suite uses gtk4 0.11 and libadwaita 0.9, and
+  `gtk4-sys` declares `links = "gtk-4"`, so two versions cannot share a
+  lockfile. Until it is bumped, `lifafa/` is listed in the root `exclude`
+  like `collab/`, with its own `Cargo.lock`.
+- **Upstream sync has ended.** `fork/MAINTAINING.md`'s daily merge from
+  hyprlab/hylki does not apply to a vendored copy; the fork workflows were not
+  imported. Changes to Lifafa are made here.
+- **Next:** bump the toolkit stack to the suite's, make `lifafa` a workspace
+  member, then replace relm4 (236 files, about 96,000 lines, 41 components)
+  with plain gtk4/libadwaita as the other apps use, moving logic that needs no
+  widget into a GTK-free `lifafa-core` crate (AGENTS.md's architecture rule).

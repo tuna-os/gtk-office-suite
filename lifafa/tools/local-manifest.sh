@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+#
+# Emit a copy of the Flatpak manifest that builds the *working tree* instead of
+# the tagged commit pinned in co.hyprlab.Hylki.yml.
+#
+#   tools/local-manifest.sh /tmp/hylki-local.yml
+#   tools/local-manifest.sh /tmp/hylki-beta.yml path/to/co.hyprlab.Hylki.Beta.yml
+#
+# The second argument picks another manifest; the tree it builds is the one
+# that manifest sits in. The beta's lives on the beta branch only, and the
+# aarch64 CI build runs this script from the workflow's own commit against an
+# older checkout, so the tree is never taken from where the script is.
+#
+# Two callers need this:
+#
+#   - the aarch64 CI build, which runs on the release tag. The manifest's pin is
+#     written in a commit *after* the tag (a commit can't contain its own hash),
+#     so the manifest as it exists at vX.Y.Z still points at the previous
+#     release — building it verbatim would ship the wrong version.
+#   - local test builds, to see uncommitted work without pushing anything.
+#
+# Everything else — runtime, finish-args, build commands, vendored crates — is
+# left exactly as the release manifest has it, so the two builds stay honest
+# about being the same recipe.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${2:-$HERE/co.hyprlab.Hylki.yml}"
+ROOT="$(cd "$(dirname "$SRC")" && pwd)"
+SRC="$ROOT/$(basename "$SRC")"
+OUT="${1:-$ROOT/co.hyprlab.Hylki.local.yml}"
+
+python3 - "$SRC" "$OUT" "$ROOT" <<'PY'
+import re, sys
+
+src, out, root = sys.argv[1], sys.argv[2], sys.argv[3]
+manifest = open(src).read()
+
+# The pinned GitHub source becomes the checkout itself. `skip` keeps build
+# output, the signed repo and the Tuta helper's host-only weight (its build
+# output and the tutanota checkout only sdk-prepare.py reads, under
+# native/tuta in older trees and native/tuta-unofficial-sdk since) out of the
+# copy flatpak-builder makes, and a Proton helper built on the host with it
+# (in native/proton in older trees, native/proton-unofficial-sdk since).
+pinned = re.compile(
+    r"      - type: git\n"
+    r"        url: https://github\.com/hyprlab/hylki\.git\n"
+    r"        tag: v[0-9][0-9A-Za-z.-]*\n"
+    r"        commit: [0-9a-f]+\n"
+    r"(?:        disable-submodules: true\n)?"
+)
+local = (
+    "      - type: dir\n"
+    f"        path: {root}\n"
+    "        skip:\n"
+    "          - .git\n"
+    "          - .flatpak-builder\n"
+    "          - dist\n"
+    "          - target\n"
+    "          - packaging/out\n"
+    "          - native/tuta/target\n"
+    "          - native/tuta/upstream/target\n"
+    "          - native/tuta/upstream/tuta-repo\n"
+    "          - native/tuta-unofficial-sdk/target\n"
+    "          - native/tuta-unofficial-sdk/upstream\n"
+    "          - native/proton/hylki-proton\n"
+    "          - native/proton-unofficial-sdk/proton-helper\n"
+    "          - native/proton-unofficial-sdk/hylki-proton\n"
+)
+# Up to three modules build from this repository: the app, its Tuta helper
+# (native/tuta-unofficial-sdk, native/tuta before it) and its Proton helper
+# (native/proton-unofficial-sdk, native/proton before it). A manifest from
+# before a helper has no module for it.
+has_helper = "  - name: hylki-tuta\n" in manifest
+has_proton = "  - name: hylki-proton\n" in manifest
+expected = 1 + has_helper + has_proton
+manifest, count = pinned.subn(local, manifest)
+if count != expected:
+    raise SystemExit(f"expected {expected} pinned git source(s), replaced {count}")
+
+if has_helper:
+    # The checkout already holds what the helper builds from -- the SDK that
+    # native/tuta-unofficial-sdk/prepare.sh (native/tuta/prepare.sh before
+    # it) prepared, or in a manifest from before that script, tutabridge and
+    # the SDK it generated -- so the separate sources would only overwrite
+    # the working tree's copies.
+    prepared = (
+        r"      - type: dir\n"
+        r"        path: native/tuta(?:-unofficial-sdk)?/prepared\n"
+        r"(?:        .*\n)+"
+    )
+    blocks = (prepared,) if re.search(prepared, manifest) else (
+        r"      - type: git\n"
+        r"        url: https://github\.com/spartanz51/tutabridge\.git\n"
+        r"(?:        .*\n)+",
+        r"      - type: dir\n"
+        r"        path: native/tuta/upstream/sdk/generated\n"
+        r"(?:        .*\n)+",
+    )
+    for block in blocks:
+        manifest, count = re.subn(block, "", manifest)
+        if count != 1:
+            raise SystemExit(f"expected one helper source matching {block!r}, removed {count}")
+
+if has_proton:
+    # Likewise the Proton helper's submodule (and the comment above its
+    # source), which the pinned source leaves out; a manifest from before
+    # the submodule has no such source.
+    manifest = re.sub(
+        r"(?:      #.*\n)*"
+        r"      - type: dir\n"
+        r"        path: native/proton-unofficial-sdk\n"
+        r"(?:        .*\n)+",
+        "", manifest)
+
+# The cargo-sources.json files are referenced relative to the manifest, which
+# is about to move elsewhere.
+manifest = manifest.replace("      - cargo-sources.json\n", f"      - {root}/cargo-sources.json\n")
+for helper in ("native/tuta", "native/tuta-unofficial-sdk"):
+    manifest = manifest.replace(
+        f"      - {helper}/cargo-sources.json\n", f"      - {root}/{helper}/cargo-sources.json\n"
+    )
+
+open(out, "w").write(manifest)
+print(out)
+PY
