@@ -1,0 +1,100 @@
+== patched person
+BEGIN:VCARD
+VERSION:3.0
+UID:p1
+X-CUSTOM:kept
+FN:Pat Q. Doe
+N:Doe;Pat Q.;;;
+ADR;TYPE=HOME:;;1 Main St\, Rear;Shelbyville;;;
+BDAY:1985-04-12
+PHOTO;ENCODING=b;TYPE=PNG:iVBORw==
+NICKNAME:P\, the\; one
+ORG:Acme;
+TITLE:Chief\\Boss
+NOTE:Two\nlines
+EMAIL;TYPE=WORK:pat@work.example
+EMAIL:pat@other.example
+TEL;TYPE=CELL:+1 555 0100
+URL:https://pat.example
+END:VCARD
+== new person
+BEGIN:VCARD
+VERSION:3.0
+FN:Pat Q. Doe
+N:Doe;Pat Q.;;;
+ADR;TYPE=HOME:;;1 Main St\, Rear;Shelbyville;;;
+BDAY:1985-04-12
+PHOTO;ENCODING=b;TYPE=PNG:iVBORw==
+NICKNAME:P\, the\; one
+ORG:Acme;
+TITLE:Chief\\Boss
+NOTE:Two\nlines
+EMAIL;TYPE=WORK:pat@work.example
+EMAIL:pat@other.example
+TEL;TYPE=CELL:+1 555 0100
+URL:https://pat.example
+END:VCARD
+== new group
+BEGIN:VCARD
+VERSION:3.0
+FN:Team\, renamed
+N:;;;;
+X-EVOLUTION-FILE-AS:Team\, renamed
+X-EVOLUTION-LIST:TRUE
+X-EVOLUTION-LIST-SHOW-ADDRESSES:FALSE
+EMAIL;X-EVOLUTION-DEST-NAME="Pat Doe";X-EVOLUTION-DEST-EMAIL="pat@work.example":Pat Doe <pat@work.example>
+EMAIL;X-EVOLUTION-DEST-EMAIL="new@x.example":new@x.example
+END:VCARD
+== patched evolution list
+BEGIN:VCARD
+VERSION:3.0
+UID:l1
+FN:Team\, renamed
+N:;;;;
+X-EVOLUTION-FILE-AS:Team\, renamed
+X-EVOLUTION-LIST:TRUE
+X-EVOLUTION-LIST-SHOW-ADDRESSES:FALSE
+EMAIL;X-EVOLUTION-DEST-NAME="Pat Doe";X-EVOLUTION-DEST-EMAIL="pat@work.example":Pat Doe <pat@work.example>
+EMAIL;X-EVOLUTION-DEST-EMAIL="new@x.example":new@x.example
+END:VCARD
+== patched apple group
+BEGIN:VCARD
+VERSION:3.0
+UID:g1
+FN:Friends
+N:Friends;;;;
+X-ADDRESSBOOKSERVER-KIND:group
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:p1
+END:VCARD
+== person for an address
+BEGIN:VCARD
+VERSION:3.0
+FN:who@x.example
+N:;who@x.example;;;
+EMAIL;TYPE=INTERNET:who@x.example
+END:VCARD
+== person with a name
+BEGIN:VCARD
+VERSION:3.0
+FN:Ann
+N:;Ann;;;
+EMAIL;TYPE=INTERNET:ann@x.example
+END:VCARD
+== address added
+BEGIN:VCARD
+VERSION:3.0
+TEL:+1 555 0199
+EMAIL;TYPE=INTERNET:added@x.example
+END:VCARD
+== line after the version
+BEGIN:VCARD
+VERSION:3.0
+UID:new
+TEL:+1 555 0199
+END:VCARD
+== moved card
+END:VCARD
+== empty card
+BEGIN:VCARD
+VERSION:3.0
+END:VCARD

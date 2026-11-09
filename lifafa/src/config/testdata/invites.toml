@@ -1,0 +1,11 @@
+[[answers]]
+key = "uid-1"
+status = "ACCEPTED"
+at = 1700000000
+summary = "Standup"
+
+[[answers]]
+key = "uid-2/20240101T090000Z"
+status = "DECLINED"
+at = 0
+summary = ""

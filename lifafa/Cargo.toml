@@ -1,0 +1,137 @@
+[package]
+name = "hylki"
+version = "1.47.1"
+edition = "2021"
+description = "A clean, fast GNOME-native email client"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/hyprlab/hylki"
+homepage = "https://hylki.hyprlab.co"
+
+[features]
+# The community beta channel: "Hylki (beta)" branding, app ID
+# co.hyprlab.Hylki.Beta, a "b"-suffixed version, and — inside Flatpak — the
+# stable app's data dirs, so beta testers share their accounts and mail cache
+# with the stable install instead of setting everything up twice.
+beta = []
+
+[dependencies]
+# v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
+# blocking one spins a nested main loop and glib's future executor aborts when
+# re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.
+gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+# v1_7 for AdwWrapBox: the composer's format bar wraps onto a second row
+# when the composer is narrow (#358). It also carries v1_6's
+# AdwStyleManager:accent-color, which the System theme swatch reads.
+# libadwaita 1.7 is a 2025 release; the GNOME 50 runtime has 1.9.
+adw = { package = "libadwaita", version = "0.7", features = ["v1_7"] }
+relm4 = { version = "0.9", features = ["macros", "libadwaita"] }
+# v2_44 for WebKitEditorState::changed: the composer's undo (#200) has to know
+# when the body's own text history gains or loses a step, and that signal is
+# the only thing that says so. WebKitGTK 6.0 starts at 2.40, so the floor this
+# sets is a 2024 release; the GNOME 50 runtime has 2.50.
+webkit6 = { version = "0.4", features = ["v2_44"] }
+# PDF thumbnails in the attachment gallery (first-page render via poppler-glib).
+poppler-rs = { version = "0.24", features = ["v20_9"] }
+# "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
+# rendered PDF page to gdk::Texture the same way every other thumbnail loads.
+# "pdf": printing writes the page footer onto WebKit's PDF (#359).
+cairo-rs = { version = "0.20", features = ["png", "pdf"] }
+# The printed page footer's text, laid out by Pango so any script prints (#359).
+pangocairo = "0.20"
+# The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
+# gives every D-Bus call a fixed two-second timeout, and a provider that asks
+# for something first (pass-secret-service decrypting with a security key that
+# wants a tap) answers later than that, so the read failed as "keyring
+# unavailable". zbus waits for the answer. "async-io", not "tokio": keyring's
+# blocking calls are made from inside the worker's tokio runtime, where zbus's
+# tokio block_on would panic; async-io's blocks the thread like dbus did.
+keyring = { version = "3", default-features = false, features = ["async-secret-service", "async-io", "crypto-rust"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Wipes the passwords typed for Tuta recipients outside Tuta from memory
+# once a message no longer holds them. Already in the graph.
+zeroize = "1"
+
+# Async mail stack (runs on a dedicated worker thread + tokio runtime)
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "io-std"] }
+futures = "0.3"
+async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
+async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
+mail-parser = "0.9"
+lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
+rfc2047-decoder = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+# SipHash-1-3 with zero keys: what std's DefaultHasher computed when the
+# POP3, JMAP and Microsoft 365 message ids were first derived from it. Those
+# ids are stored in the cache, and std may change its algorithm in any
+# release; this crate won't. Already in the graph via phf.
+siphasher = "1"
+
+# Configuration
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+dirs = "5"
+
+# OAuth: PKCE S256 (RFC 7636) needs SHA-256 + base64url, and every token and
+# CSP nonce comes from the OS CSPRNG. All three are already in the dependency
+# graph (keyring, the mail stack, ring), so naming them here adds no new downloads.
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
+
+# Gravatar (opt-in): MD5 of the email + a simple blocking HTTPS fetch
+ureq = { version = "2", features = ["json"] }
+serde_json = "1"
+
+# GNOME Contacts integration via Evolution Data Server (D-Bus)
+zbus = "4"
+ammonia = "4.1.4"
+# Tray icon (StatusNotifierItem / AppIndicator) for desktops that have a tray
+ksni = { version = "0.3.6", default-features = false, features = ["tokio", "blocking"] }
+gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+markup5ever_rcdom = "0.39.0"
+html5ever = "0.39"
+css-inline = { version = "0.21.2", default-features = false }
+# A notification button that shows no window has to tell GNOME Shell its
+# launch is over (see src/desktop/startup.rs). On Wayland that takes
+# gtk_shell1, which GTK binds but keeps private, so a second binding is made on
+# GTK's own connection. client_system: share libwayland's display rather than
+# open one.
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-scanner = "0.31"
+# Message translation (#327): which language a message is in is found here,
+# offline, so a Translate offer sends nothing until it is clicked.
+whatlang = "0.18"
+cfb = "0.15.0"
+# Whether an X server can attach this process's shared memory, before GTK
+# picks a renderer (#547): libxcb is opened at run time, and the segment made
+# with shmget. Both crates are already in the graph.
+libloading = "0.8"
+libc = "0.2"
+# Grammar checking (#452): unpacking Harper, LanguageTool and the Java
+# runtime LanguageTool runs on, which a user can download from Settings.
+# None of them ships with the app. flate2 is already in the graph.
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+tar = { version = "0.4", default-features = false }
+flate2 = "1"
+rmcp = { version = "3.8", features = ["server", "client", "transport-io", "macros"] }
+schemars = "1"
+
+[build-dependencies]
+# Compiles resources/veem.gresource.xml (the bundled symbolic icons) into a
+# .gresource blob embedded in the binary. See build.rs.
+glib-build-tools = "0.20"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

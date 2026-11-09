@@ -1,0 +1,43 @@
+mint_keyring_help_dismissed = true
+drawer_collapsed = true
+drawer_height = 300
+drawer_list_view = true
+drawer_sort_desc = true
+gallery_table_view = true
+gallery_thumb_width = 200
+gallery_sort = 3
+gallery_archive = false
+gallery_other = false
+gallery_folders = [
+    "1\tINBOX/Sub\t1",
+    "2\tWork\t0",
+]
+list_pane_width = 420
+list_pane_height = 320
+contacts_pane_width = 380
+about_height = 500
+split_reply_height = 240
+wizard_completed = true
+web_font_fallback = "org.gnome.Platform//49"
+last_account = "a@x"
+app_icon_generation = 4
+app_icon = "blue"
+
+[fetch_modes]
+"a@x" = "headers"
+"b@x" = "no-previews"
+
+[last_view]
+email = "a@x"
+path = "INBOX"
+
+[unread_seen]
+"a@x" = 12
+
+[[recent_fonts]]
+name = "Cantarell"
+mono = false
+
+[[recent_fonts]]
+name = "Source Code Pro"
+mono = true

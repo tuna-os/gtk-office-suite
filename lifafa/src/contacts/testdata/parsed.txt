@@ -1,0 +1,359 @@
+== person
+display name: Some("Pat Doe")
+group: false
+Some(
+    ContactDetails {
+        name: "Pat Doe",
+        nickname: "Patty",
+        org: "Acme, Inc.",
+        title: "Boss",
+        birthday: <pretty_birthday("1985-04-12")>,
+        note: "Line one\nline two",
+        emails: [
+            Labeled {
+                label: "Work",
+                value: "pat@work.example",
+            },
+            Labeled {
+                label: "Home",
+                value: "pat@home.example",
+            },
+        ],
+        phones: [
+            Labeled {
+                label: "Mobile",
+                value: "+1 555 0100",
+            },
+            Labeled {
+                label: "Fax",
+                value: "+1 555 0101",
+            },
+        ],
+        addresses: [
+            Labeled {
+                label: "Home",
+                value: "PO 7, Flat 2, 1 Main St, Rear, Springfield, IL, 62701, USA",
+            },
+        ],
+        postal: [
+            Postal {
+                label: "Home",
+                pobox: "PO 7",
+                extended: "Flat 2",
+                street: "1 Main St, Rear",
+                locality: "Springfield",
+                region: "IL",
+                code: "62701",
+                country: "USA",
+            },
+        ],
+        birthday_raw: "1985-04-12",
+        urls: [
+            "https://pat.example",
+        ],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "p1",
+        raw_vcard: "",
+        group: None,
+        members: [],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== grouped-properties
+display name: Some("Grouped")
+group: false
+Some(
+    ContactDetails {
+        name: "Grouped",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [
+            Labeled {
+                label: "",
+                value: "g@x.example",
+            },
+        ],
+        phones: [
+            Labeled {
+                label: "",
+                value: "+44 20 7946 0000",
+            },
+        ],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "",
+        raw_vcard: "",
+        group: None,
+        members: [],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== quoted-parameters
+display name: Some("b\":Quoted: Name")
+group: false
+Some(
+    ContactDetails {
+        name: "Quoted: Name",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [
+            Labeled {
+                label: "Work",
+                value: "q@x.example",
+            },
+        ],
+        phones: [],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "",
+        raw_vcard: "",
+        group: None,
+        members: [],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== folded
+display name: Some("Folded Name")
+group: false
+Some(
+    ContactDetails {
+        name: "Folded Name",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: <pretty_birthday("--04-12")>,
+        note: "",
+        emails: [
+            Labeled {
+                label: "",
+                value: "fold@x.example",
+            },
+        ],
+        phones: [],
+        addresses: [],
+        postal: [],
+        birthday_raw: "--04-12",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "",
+        raw_vcard: "",
+        group: None,
+        members: [],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== evolution-list
+display name: Some("Team")
+group: true
+Some(
+    ContactDetails {
+        name: "Team",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [],
+        phones: [],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "l1",
+        raw_vcard: "",
+        group: Some(
+            Evolution,
+        ),
+        members: [
+            Member {
+                name: "Pat Doe",
+                email: "pat@work.example",
+                line: "EMAIL;X-EVOLUTION-DEST-CONTACT-UID=p1;X-EVOLUTION-DEST-NAME=Pat Doe:Pat Doe <pat@work.example>",
+                uid: "",
+                card: "",
+                source: None,
+            },
+            Member {
+                name: "Ann",
+                email: "ann@x.example",
+                line: "EMAIL;X-EVOLUTION-DEST-EMAIL=ann@x.example;X-EVOLUTION-DEST-NAME=Ann:not an address",
+                uid: "",
+                card: "",
+                source: None,
+            },
+            Member {
+                name: "",
+                email: "bare@x.example",
+                line: "EMAIL:bare@x.example",
+                uid: "",
+                card: "",
+                source: None,
+            },
+        ],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: true,
+    },
+)
+== apple-group
+display name: Some("Friends")
+group: true
+Some(
+    ContactDetails {
+        name: "Friends",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [],
+        phones: [],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "g1",
+        raw_vcard: "",
+        group: Some(
+            Apple,
+        ),
+        members: [],
+        member_refs: [
+            (
+                "p1",
+                "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:p1",
+            ),
+            (
+                "missing",
+                "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:missing",
+            ),
+        ],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== kind-group
+display name: Some("Club")
+group: true
+Some(
+    ContactDetails {
+        name: "Club",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [],
+        phones: [],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "k1",
+        raw_vcard: "",
+        group: Some(
+            Kind,
+        ),
+        members: [
+            Member {
+                name: "",
+                email: "club@x.example",
+                line: "MEMBER:mailto:club@x.example",
+                uid: "",
+                card: "",
+                source: None,
+            },
+        ],
+        member_refs: [
+            (
+                "p1",
+                "MEMBER:urn:uuid:p1",
+            ),
+        ],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== nearly-empty
+display name: None
+group: false
+Some(
+    ContactDetails {
+        name: "+1 555 0199",
+        nickname: "",
+        org: "",
+        title: "",
+        birthday: "",
+        note: "",
+        emails: [],
+        phones: [
+            Labeled {
+                label: "",
+                value: "+1 555 0199",
+            },
+        ],
+        addresses: [],
+        postal: [],
+        birthday_raw: "",
+        urls: [],
+        photo: None,
+        photo_key: 0,
+        book_uid: "",
+        book_name: "",
+        eds_uid: "",
+        raw_vcard: "",
+        group: None,
+        members: [],
+        member_refs: [],
+        hidden_members: [],
+        hide_addresses: false,
+    },
+)
+== not-a-card
+display name: None
+group: false
+None

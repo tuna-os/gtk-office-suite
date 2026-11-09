@@ -1,0 +1,275 @@
+== from version 0
+folders: 0
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 0
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 0
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("\"Ann \\\"A\\\"\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 5
+folders: 0
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 0
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 0
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("\"Ann \\\"A\\\"\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 6
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 0
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 12
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 0
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 13
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 4
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(1), Integer(0), Text("a.pdf"), Integer(1), Integer(2)]
+  [Integer(2), Integer(0), Text("b.pdf"), Integer(1), Integer(2)]
+  [Integer(3), Integer(0), Text("c.pdf"), Integer(1), Integer(2)]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 14
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 15
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 18
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 0
+attachment_meta: 1
+attachment_scan: 0
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 19
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 4
+attachment_meta: 1
+attachment_scan: 2
+account_owner: 1
+  [Integer(1), Text("Ann \"A\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \"hi\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(1)]
+  [Integer(2)]
+  [Integer(3)]
+  [Integer(4)]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Integer(4)]
+  [Integer(5)]
+  [Text("ann@x"), Text("Ann \"A\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 20
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 4
+attachment_meta: 1
+attachment_scan: 2
+account_owner: 1
+  [Integer(1), Text("\"Ann \\\"A\\\"\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \\\"hi\\\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(1)]
+  [Integer(2)]
+  [Integer(3)]
+  [Integer(4)]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Integer(4)]
+  [Integer(5)]
+  [Text("ann@x"), Text("\"Ann \\\"A\\\"\"")]
+  [Text("bob@x"), Text("Bob")]
+== from version 21
+folders: 1
+msgid_case: 1
+refs_repair: 1
+label_fill: 1
+messages: 5
+local_tags: 1
+bodies: 0
+sender_checks: 0
+attachments: 3
+addresses: 2
+outbox: 1
+attachments_checked: 4
+attachment_meta: 1
+attachment_scan: 2
+account_owner: 1
+  [Integer(1), Text("\"Ann \\\"A\\\"\""), Text("Café"), Text("")]
+  [Integer(2), Text("Bob"), Text("say \\\"hi\\\""), Text("🔒")]
+  [Integer(3), Text("Cy"), Text("Plain"), Text("")]
+  [Integer(4), Text("Di"), Text("Plain"), Text("🔒")]
+  [Integer(5), Text("Ed"), Text("Plain"), Text("Hello there")]
+  [Integer(1)]
+  [Integer(2)]
+  [Integer(3)]
+  [Integer(4)]
+  [Integer(5), Integer(0), Text("e.png"), Integer(0), Integer(6)]
+  [Integer(4)]
+  [Integer(5)]
+  [Text("ann@x"), Text("\"Ann \\\"A\\\"\"")]
+  [Text("bob@x"), Text("Bob")]

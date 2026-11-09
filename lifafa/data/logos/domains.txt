@@ -1,0 +1,296 @@
+# Sender domains that get a bundled brand logo (see README.md and
+# tools/fetch-logos.py). One per line: the registrable domain, optionally
+# followed by an explicit pick, "gilbarbara:<file>.svg", "simple:<slug>" or
+# "brand:<id>" (one of the marks in data/brands/),
+# when the automatic match is wrong or missing. Lines starting with # are
+# comments.
+#
+# Mailbox hosts (gmail.com, outlook.com, icloud.com, yahoo.com, proton.me and
+# the rest) are listed below for the provider marks, but src/services/logo.rs
+# refuses a sender logo for them: an address there belongs to a person, not the
+# provider.
+#
+# Tech and platforms
+apple.com
+google.com
+gmail.com brand:gmail
+googlemail.com brand:gmail
+youtube.com
+microsoft.com
+outlook.com brand:outlook
+live.com brand:outlook
+hotmail.com brand:outlook
+github.com
+gitlab.com
+bitbucket.org
+atlassian.com
+jira.com simple:jira
+trello.com
+slack.com
+discord.com
+zoom.us
+dropbox.com brand:dropbox
+box.com
+notion.so
+figma.com
+canva.com
+adobe.com
+mozilla.org
+firefox.com simple:firefoxbrowser
+duckduckgo.com
+protonmail.com brand:proton
+proton.me brand:proton
+tutanota.com simple:tuta
+fastmail.com brand:fastmail
+fastmail.fm brand:fastmail
+icloud.com brand:icloud
+me.com brand:icloud
+mac.com brand:icloud
+yahoo.com brand:yahoo
+aol.com brand:aol
+zoho.com brand:zoho
+gmx.com brand:gmx
+gmx.net brand:gmx
+gmx.de brand:gmx
+yandex.com brand:yandex
+yandex.ru brand:yandex
+mail.com brand:mailcom
+1password.com
+bitwarden.com
+lastpass.com
+nordvpn.com
+expressvpn.com
+cloudflare.com
+digitalocean.com
+linode.com
+vultr.com
+hetzner.com
+ovh.com simple:ovh
+aws.amazon.com gilbarbara:aws.svg
+heroku.com
+netlify.com
+vercel.com
+wordpress.com
+squarespace.com
+wix.com
+shopify.com
+mailchimp.com
+sendgrid.com
+twilio.com
+stripe.com
+zapier.com
+hubspot.com
+salesforce.com
+zendesk.com
+intercom.com
+asana.com
+monday.com
+airtable.com
+evernote.com
+todoist.com
+docker.com
+kubernetes.io
+redhat.com
+fedoraproject.org simple:fedora
+ubuntu.com
+debian.org
+archlinux.org
+gnome.org
+kde.org
+opensuse.org
+canonical.com
+raspberrypi.com simple:raspberrypi
+arduino.cc
+nvidia.com
+amd.com
+intel.com
+dell.com
+hp.com
+lenovo.com
+samsung.com
+lg.com
+sony.com
+playstation.com
+xbox.com
+nintendo.com
+steampowered.com simple:steam
+epicgames.com
+gog.com simple:gogdotcom
+humblebundle.com
+itch.io simple:itchdotio
+patreon.com
+kickstarter.com
+indiegogo.com
+kofi.com simple:kofi
+ko-fi.com simple:kofi
+buymeacoffee.com
+opencollective.com
+# Social
+facebook.com
+instagram.com
+threads.net
+x.com simple:x
+twitter.com simple:x
+linkedin.com
+reddit.com
+pinterest.com
+tumblr.com
+tiktok.com
+snapchat.com
+mastodon.social simple:mastodon
+bsky.app simple:bluesky
+medium.com
+substack.com
+quora.com
+meetup.com
+nextdoor.com
+# Shopping and delivery
+amazon.com
+ebay.com
+etsy.com
+walmart.com
+target.com
+bestbuy.com
+costco.com
+homedepot.com
+lowes.com
+ikea.com
+wayfair.com
+newegg.com
+aliexpress.com
+alibaba.com
+temu.com
+shein.com
+zalando.com
+asos.com
+nike.com
+adidas.com
+ups.com
+fedex.com
+dhl.com
+usps.com
+# Money
+paypal.com
+venmo.com
+cashapp.com simple:cashapp
+zelle.com
+stripe.com
+square.com simple:square
+wise.com
+revolut.com
+chase.com
+bankofamerica.com
+wellsfargo.com
+citi.com
+capitalone.com
+americanexpress.com
+discover.com
+usbank.com
+pnc.com
+truist.com
+schwab.com
+fidelity.com
+vanguard.com
+robinhood.com
+coinbase.com
+binance.com
+kraken.com
+sofi.com
+mint.com
+intuit.com
+klarna.com
+affirm.com
+afterpay.com
+# Travel
+airbnb.com
+booking.com
+expedia.com
+hotels.com
+tripadvisor.com
+kayak.com
+united.com
+delta.com
+aa.com simple:americanairlines
+southwest.com
+jetblue.com
+alaskaair.com
+lufthansa.com
+britishairways.com
+airfrance.com
+klm.com
+ryanair.com
+easyjet.com
+emirates.com
+qatarairways.com
+uber.com
+lyft.com
+doordash.com
+grubhub.com
+instacart.com
+marriott.com
+hilton.com
+hyatt.com
+ihg.com
+# Media and entertainment
+netflix.com
+hulu.com
+disneyplus.com
+disney.com
+hbomax.com simple:hbomax
+max.com simple:hbomax
+paramountplus.com
+peacocktv.com
+spotify.com
+apple.com
+pandora.com
+soundcloud.com
+tidal.com
+audible.com
+goodreads.com
+nytimes.com
+washingtonpost.com
+theguardian.com
+bbc.co.uk
+bbc.com
+cnn.com
+bloomberg.com
+wsj.com
+economist.com
+wired.com
+theverge.com
+arstechnica.com
+techcrunch.com
+# Health, home and utilities
+fitbit.com
+strava.com
+garmin.com
+peloton.com
+myfitnesspal.com
+headspace.com
+calm.com
+ring.com
+philips.com
+sonos.com
+tesla.com
+ford.com
+toyota.com
+bmw.com
+mercedes-benz.com
+honda.com
+# Education and reference
+coursera.org
+udemy.com
+edx.org
+khanacademy.org
+duolingo.com
+wikipedia.org
+wikimedia.org
+stackoverflow.com
+# Communication
+whatsapp.com
+telegram.org
+signal.org
+skype.com
+viber.com
+zoom.us
+webex.com

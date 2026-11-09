@@ -1,0 +1,30 @@
+/target
+**/*.rs.bk
+*.log
+
+# Local, untracked OAuth client credentials (never commit real secrets)
+oauth.toml
+
+# Developer scratch / asset drop-off
+/temp
+
+# Generated for the offline Flatpak build (regenerate from Cargo.lock)
+cargo-sources.json
+
+# Self-hosted Flatpak distribution (signed repo, private GPG key)
+/dist/
+
+# Native package build output (tools/build-packages.sh)
+/packaging/out/
+
+# The AppImage's staging tree, when the build runs in the checkout itself
+# (CI, or an Arch host) rather than in its container
+/AppDir/
+
+# Local Claude Code settings
+.claude/
+
+# Local-build manifest (tools/local-manifest.sh output)
+co.hyprlab.Hylki.local.yml
+po/.build/
+__pycache__/

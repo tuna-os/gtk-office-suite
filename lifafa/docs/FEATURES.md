@@ -1,0 +1,223 @@
+# Features
+
+The full list. The [README](../README.md) carries a shorter one.
+
+## Accounts
+
+- **Multiple accounts:** IMAP, POP3 and JMAP, each on its own background
+  worker, with a unified *Inboxes* view across all of them.
+- **JMAP:** a Stalwart or Fastmail mailbox over the JSON mail protocol,
+  including push. See [Configuration](DOCUMENTATION.md#jmap-stalwart-fastmail).
+- **OAuth 2.0 sign-in:** Microsoft with Hylki's own app (no GNOME Online
+  Accounts needed), Google through GNOME Online Accounts, and custom
+  providers over XOAUTH2. See [Configuration](DOCUMENTATION.md#oauth-google--microsoft).
+- **GNOME Online Accounts:** import an account already set up in GNOME
+  Settings, IMAP and SMTP accounts and Microsoft 365 over Graph included.
+  See [Configuration](DOCUMENTATION.md#gnome-online-accounts). Pausing an account's Mail
+  service in GNOME Settings pauses it here.
+- **On This Computer:** folders kept on this computer, not on a server, for
+  an archive of mail moved or copied in from any account, copied
+  automatically from an account that asks for it, or imported from
+  Evolution's local folders, Dovecot or mbox files. Stored as Maildir, the
+  layout Dovecot uses. See [Configuration](DOCUMENTATION.md#on-this-computer).
+- **Per-alias SMTP:** each address on an account can send through its own
+  server and credentials.
+- **Any From address:** type a name and address for one message, such as a
+  `+tag` address, and replies to a `+tag` address answer from it. A JMAP
+  server's own identities are offered too.
+- **Proton Bridge, Zimbra, iCloud, Mailfence and other awkward servers:**
+  STARTTLS with locally signed certificates, a certificate in the hosting
+  company's name rather than yours, servers without MOVE, and non-compliant
+  fetch replies are all handled.
+
+## Mail
+
+- **Whole-mailbox sync and search:** no message-count cap. A fast first page
+  loads instantly; the rest indexes in the background with infinite scroll.
+  Search finds each word in the message's text too, on disk and on the
+  server, with `from:`, `to:`, `in:` and `has:attachment` to narrow it.
+- **Two-way sync:** deletions, moves and flag changes from your phone or
+  another client sync back automatically (IMAP IDLE plus reconciliation).
+- **Conversation threading** across folders: the count covers the whole
+  conversation, and an expanded conversation shows your replies from Sent
+  and its archived messages alongside the folder's own.
+- **Moving mail between accounts:** Move To lists every account's folders,
+  and mail dragged onto another account's folder goes there too. Copy To
+  stores a copy anywhere and leaves the original.
+- **Full folder management:** create, rename, move, reorder and delete
+  folders, assign the special roles (Drafts, Sent, Junk, Trash, Archive),
+  and hide the ones you never open. An Exchange server's calendar, contacts
+  and task folders are hidden from the start.
+- **Filters:** multi-condition rules on sender, recipient, subject, body and
+  Reply-To, with comma-separated alternatives, or on whether the sender is in
+  your Contacts (the system address books and the Hylki book, not addresses
+  collected from mail); they tag mail, file it away, or both, and can be run
+  over mail that is already in a folder.
+- **Tags:** IMAP keywords, Graph categories, or a local fallback where the
+  server has neither; custom colours, drag to reorder, and number-key
+  shortcuts. Gmail's labels show beside them.
+- **Quick filters:** unread, starred, attachments, addressed to you, from
+  your contacts, high importance, tagged, today and a range of dates,
+  combined, in one popover above the list with the sort orders. See [Message list layout](DOCUMENTATION.md#message-list-layout).
+- **Browse by the year:** the list's scrollbar spans the whole folder, and
+  dragging it names the month and year it is passing.
+- **Smart folders:** saved searches across accounts and folders, on
+  starred, unread, attachments, tags and the filter conditions, with unread
+  counts. See [Smart folders](DOCUMENTATION.md#smart-folders).
+- **Unified and filtered folders:** Inboxes, Starred, Sent, Drafts, Archive,
+  Junk, Trash and Snoozed across accounts, plus a folder per filter and any folders
+  you keep in Favorites.
+- **Empty Trash and Junk**, by hand or automatically after a number of days,
+  and move old newsletter and mailing-list mail out of the Inbox the same way.
+- **Attachment gallery:** every attachment in an account or folder in one
+  place, with PDF first-page thumbnails, scoped by account and folder, and a
+  deep archive scan that finds old attachments without downloading them.
+- **Delete an attachment from the server:** take a large file out of a
+  message and keep the rest of it, on IMAP, JMAP and Microsoft 365.
+- **Printing:** a message with its sender, recipients and date, page
+  numbers and an optional wider margin for hole punching, with an in-app
+  preview that also saves straight to PDF.
+- **Undo Send:** a sent message waits three to thirty seconds, five by
+  default, with Undo on offer.
+- **Outbox:** a send that fails is kept and retried when the connection
+  returns, not lost. Queued messages can be edited, sent by hand or discarded.
+  A message being sent is listed there too until it has gone.
+- **Send later:** schedule a message for tomorrow morning, Monday, or any
+  date and time; it waits in the Outbox, editable, until then.
+- **Snooze:** put a message away until this evening, tomorrow, the weekend
+  or any date and time. It waits in a Snoozed folder on the server and comes
+  back unread, or sooner when a reply arrives. See [Snoozing mail](DOCUMENTATION.md#snoozing-mail).
+
+## Writing
+
+- **Four formats:** rich text, Markdown, hand-written HTML, or plain text,
+  switched per message from the composer's format button. See
+  [Writing in Markdown or HTML](DOCUMENTATION.md#writing-in-markdown-or-html).
+  Rich text has fonts, sizes, any color, headings, lists and pictures, and
+  is sent as HTML.
+- **HTML signatures**, several per account, picked by name in the composer,
+  with a default sender for new mail. In a reply or forward the signature
+  sits above the quoted message, or below it if you prefer.
+- **Drafts** that can be saved without a recipient, reopened inline, and
+  deleted from the composer.
+- **Templates:** save a message as a template and start new ones from it,
+  from the Templates folder or with Ctrl+Shift+N. Thunderbird's Templates
+  folder is picked up as it is.
+- **Mail merge:** one message per row of a CSV file or member of a contact
+  group, with `{{Field}}` filled in from the row and a preview of each. See
+  [Mail merge](DOCUMENTATION.md#mail-merge).
+- **Forwarding keeps the attachments:** the original's files are attached to
+  the forward, ready to send on. A reply does not repeat them.
+- **Inline images:** dropped, pasted or picked from a file manager, resized
+  by handle or menu, with an optional recompress on send.
+- **Spell check** in one language or several at once, through the system
+  dictionaries.
+- **Grammar and style checking** with Harper or LanguageTool, downloaded
+  from Settings in one click and run on this computer, or a LanguageTool
+  server or account, each paragraph in its own language.
+- **Undo and redo** across the whole message.
+- **Quote folding:** a long quoted original folds away, interleaved replies
+  intact.
+- **Split reply:** answer one message of a conversation with the rest still
+  on screen.
+- **Cloud attachments:** upload a large file to your own Nextcloud,
+  ownCloud, OpenCloud or Seafile server, or to OneDrive or Dropbox, and put a
+  share link in the message, with an optional expiry and download password.
+  See [Cloud attachments](DOCUMENTATION.md#cloud-attachments-nextcloud-onedrive-dropbox-seafile).
+- **Drag files in:** dragged over the composer, files can be attached, put
+  in the text or uploaded to cloud storage; dragged over the window, they
+  start a new message in any of those three ways.
+- **Send from Files:** a *Send with Hylki* entry in the GNOME Files
+  right-click menu sends the selected files into a new message, a draft or a
+  reply of your choosing, with an offer to upload big ones to cloud storage
+  instead. See [Send with Hylki from GNOME Files](DOCUMENTATION.md#send-with-hylki-from-gnome-files).
+
+## Reading
+
+- **Privacy-first reading:** remote content blocked by default, per-sender
+  allow and block lists, and a per-message light/dark content theme.
+- **Reader View:** one toggle shows every message in the conversation as its
+  content alone: the sender's layout tables, colours, fonts, hidden preview
+  text and tracking pixels are stripped, and what is left is set in one
+  uniform sheet that follows the app's theme.
+- **Your own font and colours** for message bodies, overriding the sender's.
+- **Message zoom:** Ctrl++ and Ctrl+- scale the message alone, in Reader
+  View or out of it, with the percentage shown beside the Reader View switch
+  while it is away from the default. Settings → Reading sets the zoom every
+  launch starts at; Ctrl+0, or a click on the chip, returns to it.
+- **Meeting invitations:** what the meeting is, when it runs in your own
+  clock and time zone, where it is and who organised it, with Accept, Maybe,
+  Decline and Add to Calendar.
+- **Events and tasks from mail:** Create Event and Create Task in a
+  message's menu fill in a title, a time and notes from the message, and
+  write it to a calendar or task list of GNOME Online Accounts or
+  Evolution.
+- **Folding conversations:** a click on a message's header folds it to its
+  sender and first lines, and earlier messages can start folded, so
+  a long conversation opens on what is new.
+- **Translation:** with a DeepL, Google, Microsoft or LibreTranslate key of
+  your own, a message is translated in place, and switched back to the
+  original with a click. A message in another language can offer it; the
+  language is recognised offline. In the composer, what you write goes into
+  the language of the message you are answering. See
+  [Translating messages](DOCUMENTATION.md#translating-messages).
+- **One-click unsubscribe:** a banner on list mail that leaves the list for
+  you, by request or by email, without a browser where the list allows it,
+  and can delete the mail already received from the same address.
+- **Read receipts:** a banner on a message that asks for one sends it or
+  ignores the request, or a setting answers every time; a message you write
+  can ask for one too, and its checkmarks turn green when a receipt comes
+  back, with the receipt itself filed away. See
+  [Read receipts](DOCUMENTATION.md#read-receipts).
+- **OpenPGP:** read encrypted and signed mail, sign and encrypt what you
+  send, and manage keys from Settings, through the GnuPG already on your
+  computer. See [OpenPGP](DOCUMENTATION.md#openpgp-encrypted-and-signed-mail).
+- **Sender identity:** DKIM, SPF and DMARC checked on arrival, with BIMI
+  logos where a domain publishes one.
+- **Message previews:** the first one to three lines of each message under
+  its subject in the list, or off.
+- **mid: links:** a link to another message opens it (RFC 2392).
+
+## The app
+
+- **AI agents:** an agent reads and organizes mail and prepares messages
+  through the Model Context Protocol, as far as you allow it per account, per
+  action and per folder. It cannot send, erase mail for good or read encrypted
+  mail. See [Configuration](DOCUMENTATION.md#ai-agents).
+- **GNOME-native:** adaptive three-pane layout, per-account colours and
+  emoji, picture or Gravatar avatars, light and dark following the system.
+- **Appearance themes:** five palettes (Rose, Forest, Tidal, Earth and
+  Midnight), each with its own light and dark version, or the stock GNOME
+  colours.
+- **Focus Mode:** Ctrl+Shift+F folds the toolbars, sidebar and list down to
+  what you are reading, and puts it back afterwards.
+- **A customizable reader toolbar:** reorder its buttons, or drag them in and
+  out, in Settings → Appearance.
+- **A single-line message list:** sender, subject and the start of the
+  text on one line per message, always, or whenever the list pane is
+  dragged wide.
+- **Swipe actions** on message rows, with an adjustable sensitivity.
+- **Single-key shortcuts:** Gmail-style `j`/`k`, `r`, `a`, `d` and friends,
+  without a modifier. See [Keyboard shortcuts](KEYBOARD_SHORTCUTS.md).
+- **Runs in the background** (optional): closing the window keeps mail
+  arriving; Hylki appears under *Background Apps* in the GNOME system menu,
+  and can start at login without opening a window.
+- **Tray icon** (optional): a StatusNotifierItem with a count of the folders
+  you choose.
+- **Notifications** that open the message they are about, with up to three
+  buttons of your choice: Mark as Read, Archive, Delete, Reply, Forward or
+  Mark as Spam, and a sound if you want one: built in, or a file of your own.
+- **GNOME Contacts:** names and photos from your address book, optional.
+- **Hylki address book:** a book of your own, beside the ones Evolution Data
+  Server keeps, with vCard (`.vcf`) import. It works without GNOME.
+- **CardDAV accounts:** the address books of Nextcloud, iCloud, Fastmail or
+  any CardDAV server, set up in Hylki, through Evolution Data Server. See
+  [CardDAV accounts](DOCUMENTATION.md#carddav-accounts).
+- **Contact groups:** a name for several people that the composer offers
+  like a contact, optionally sent as Bcc; Evolution's contact lists work the
+  same way. See [Contact groups](DOCUMENTATION.md#contact-groups).
+- **LDAP directories:** recipients looked up in a company directory as you
+  type, through Evolution Data Server, and in a Microsoft 365
+  organization's directory.
+- **Your language:** the desktop's, or one you pick; a 12- or 24-hour clock
+  following the desktop setting.

@@ -1,0 +1,9 @@
+[[lists]]
+key = "<list.example.org>"
+name = "News"
+at = 1700000000
+
+[[lists]]
+key = "bare@example.org"
+name = ""
+at = 0

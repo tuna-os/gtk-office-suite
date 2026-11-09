@@ -1,0 +1,36 @@
+[[rules]]
+account_email = "ada@example.org"
+field = "from_address"
+matcher = "contains"
+value = "news"
+dest_path = "Lists"
+tag = ""
+count_unread = true
+
+[[rules]]
+name = "Known people"
+account_email = "ada@example.org"
+field = "from_address"
+matcher = "equals"
+value = ""
+contacts = "in_contacts"
+any = true
+dest_path = ""
+tag = "$label1"
+count_unread = false
+
+[[rules.more]]
+field = "subject"
+matcher = "starts_with"
+value = "invoice, receipt"
+
+[[rules.more]]
+field = "from_address"
+matcher = "ends_with"
+value = ""
+contacts = "not_in_contacts"
+
+[[rules.more]]
+field = "body"
+matcher = "contains"
+value = "unsubscribe"

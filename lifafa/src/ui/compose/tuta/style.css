@@ -1,0 +1,28 @@
+/* A Tuta recipient outside Tuta: the mark says whether a confidential
+   message has its password, a weak one or none, or that it gets ordinary
+   email. Color alone never carries it: the icon differs too. */
+.recipient-pill.pill-mark-ok > image {
+  color: @success_color;
+}
+.recipient-pill.pill-mark-weak > image {
+  color: @warning_color;
+}
+.recipient-pill.pill-mark-missing > image,
+.recipient-pill.pill-mark-ordinary > image {
+  color: @error_color;
+}
+.recipient-pill.selected > image {
+  color: inherit;
+}
+
+/* The strength of a Tuta recipient's password, as Tuta colors it. */
+levelbar block.password-weak {
+  background-color: @error_bg_color;
+}
+levelbar block.password-fair {
+  background-color: @warning_bg_color;
+}
+levelbar block.password-strong {
+  background-color: @success_bg_color;
+}
+
