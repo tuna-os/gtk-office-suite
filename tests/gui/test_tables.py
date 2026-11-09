@@ -574,6 +574,47 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self.take_screenshot("define_name_done")
         self.assertIsNone(self.process.poll(), "tables crashed during named-range visual check")
 
+    # ── pivot table (#1657) ──────────────────────────────────────
+    def test_insert_pivot_table_dialog(self):
+        """Insert Pivot Table over a selected table: the dialog's defaults
+        (rows by the first field, sum of the last) write the pivot two
+        columns to the right, and one undo takes it all back."""
+        import subprocess
+        from dogtail import rawinput, tree
+
+        self._new_document()
+        for ref, value in [("A1", "Region"), ("B1", "Sales"),
+                           ("A2", "North"), ("B2", "100"),
+                           ("A3", "North"), ("B3", "50"),
+                           ("A4", "South"), ("B4", "200")]:
+            self._put(ref, value)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
+        rawinput.typeText("A1:B4")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-pivot-table"])
+        insert = self.wait_until(
+            lambda: tree.root.findChild(lambda n: n.name == "Insert" and n.roleName == "push button",
+                                        retry=False, requireResult=False),
+            lambda node: node is not None, description="the Insert Pivot Table dialog")
+        self.take_screenshot("pivot_dialog")
+        insert.do_action(0)
+
+        def cells():
+            snap = self._snapshot()
+            return {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+
+        got = self.wait_until(cells, lambda c: c.get((2, 3)) == "South", description="the pivot's cells")
+        self.assertEqual([got.get((r, 3)) for r in range(3)], ["Region", "North", "South"], f"{got}")
+        self.assertEqual([got.get((r, 4)) for r in range(3)], ["Sum of Sales", "150", "200"], f"{got}")
+        self.take_screenshot("pivot_inserted")
+
+        rawinput.keyCombo("<Control>z")
+        got = self.wait_until(cells, lambda c: not c.get((0, 3)), description="the pivot undone")
+        self.assertEqual(got.get((0, 0)), "Region", "undo took the source too")
+        self.assertIsNone(self.process.poll(), "tables crashed inserting a pivot table")
+
     # ── print area ───────────────────────────────────────────────
     def test_print_area(self):
         import subprocess

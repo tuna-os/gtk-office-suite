@@ -414,3 +414,72 @@ fn tbl005_every_permission_round_trips_on_protected_and_unprotected_sheets() {
         }
     }
 }
+
+/// The Insert Pivot Table dialog's path (#1657): fields named from the
+/// selection's header row, a spec built from the picks, inserted and undone
+/// as one step through the controller.
+#[test]
+fn a_pivot_built_from_dialog_choices_inserts_and_undoes_as_one_step() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    for (row, values) in [
+        ["Region", "", "Sales"],
+        ["North", "Q1", "100"],
+        ["North", "Q2", "50"],
+        ["South", "Q1", "200"],
+        ["South", "Q2", "150"],
+    ]
+    .iter()
+    .enumerate()
+    {
+        for (col, value) in values.iter().enumerate() {
+            controller.edit_cell(row, col, *value);
+        }
+    }
+    let range = (0, 0, 4, 2);
+    let (fields, spec) = {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        (
+            PivotTableSpec::source_fields(&sheet, range),
+            PivotTableSpec::from_choice(&sheet, range, 0, Some(1), 2, PivotAggFunc::Sum).unwrap(),
+        )
+    };
+    assert_eq!(fields, ["Region", "Column B", "Sales"]);
+    assert_eq!(spec.target_cell, (0, 4), "placed two columns right of the source");
+    assert_eq!(spec.col_fields[0].col_index, 1);
+
+    controller.add_pivot_table(spec);
+    {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert_eq!(sheet.pivot_tables.len(), 1);
+        assert_eq!(sheet.data[0][4], "Region");
+        assert_eq!(sheet.data[0][5], "Q1 - Sum of Sales");
+        assert_eq!(sheet.data[1][4..7], ["North", "100", "50"]);
+        assert_eq!(sheet.data[2][4..7], ["South", "200", "150"]);
+        // The source is untouched.
+        assert_eq!(sheet.data[0][..3], ["Region", "", "Sales"]);
+    }
+
+    controller.undo();
+    let state = controller.state.borrow();
+    let sheet = state.sheet();
+    assert!(sheet.pivot_tables.is_empty());
+    assert_eq!(sheet.data[0][4], "");
+    assert_eq!(sheet.data[2][6], "");
+}
+
+#[test]
+fn a_pivot_needs_a_data_row_and_fields_inside_the_selection() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    controller.edit_cell(0, 0, "Region");
+    controller.edit_cell(0, 1, "Sales");
+    controller.edit_cell(1, 0, "North");
+    controller.edit_cell(1, 1, "1");
+    let state = controller.state.borrow();
+    let sheet = state.sheet();
+    assert!(PivotTableSpec::source_fields(&sheet, (0, 0, 0, 1)).is_empty(), "a header with no rows under it");
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 2, PivotAggFunc::Sum).is_none());
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, Some(5), 1, PivotAggFunc::Sum).is_none());
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 1, PivotAggFunc::Count).is_some());
+}

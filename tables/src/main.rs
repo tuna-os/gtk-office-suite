@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 mod charts;
 mod chart_dialog;
+mod pivot_dialog;
 mod window;
 mod test_instrumentation;
 mod format_inspector;
