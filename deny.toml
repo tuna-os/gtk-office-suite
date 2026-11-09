@@ -65,4 +65,13 @@ ignore = [
     # gate on it. These are matched only when that lock is read; the product's `advisories`
     # job does not see the crates and does not need them.
     { id = "RUSTSEC-2026-0319", reason = "anymap2 unmaintained, no patched release; via matrix-sdk 0.19.1 (collab/Cargo.lock only; the Matrix binding is wired in a later pull request) — resolve with the Matrix binding (#1043); review by 2027-01-01" },
+    # libsqlite3-sys via rusqlite via matrix-sdk 0.19.1 (collab/Cargo.lock
+    # only): C SQLite CVE-2026-119375, published 2026-11-09. The patched
+    # 0.39 line is unreachable — rusqlite 0.40 requires ^0.38, so migration
+    # is upstream's call (matrix-sdk). The `sqlite` feature
+    # (matrix-sdk/sqlite with bundled-sqlite) is off in every build, test
+    # and shipped artifact, so the vulnerable C never compiles; this gate
+    # runs --all-features, which is the only reason it sees it. Re-check
+    # on matrix-sdk movement (#1043).
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys C SQLite CVE via rusqlite/matrix-sdk 0.19.1 (collab/Cargo.lock only); 0.39 unreachable behind the pin, migration is upstream's call (#1043); sqlite feature off in all builds so the C never compiles; review by 2027-01-01" },
 ]
