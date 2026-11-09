@@ -9,7 +9,7 @@
 #
 # Host requirements: flatpak, mutter, dbus-daemon (dbus-run-session),
 # xdg-dbus-proxy (a flatpak dependency), gnome-keyring, libsecret-tools,
-# xdg-desktop-portal and xdg-desktop-portal-gtk.
+# xdg-desktop-portal, xdg-desktop-portal-gnome and xdg-desktop-portal-gtk.
 #
 # Everything the app writes goes under $WORK: HOME, the XDG base dirs and
 # XDG_RUNTIME_DIR are all private, so a run never sees or touches the user's
