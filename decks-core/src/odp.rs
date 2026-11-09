@@ -2224,7 +2224,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         });
     }
 
-    let mut deck = Deck { slides: Vec::new(), masters, page_size, themes: Vec::new() };
+    let mut deck = Deck { slides: Vec::new(), masters, page_size, themes: Vec::new(), skipped_slides: Vec::new() };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
         parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts, &mut fresh)?
@@ -2561,6 +2561,7 @@ mod tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(styles.contains("draw:fill-color=\"#204060\""), "{styles}");
@@ -2620,6 +2621,7 @@ mod tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         }
     }
 
@@ -3089,6 +3091,7 @@ mod default_font_tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(
@@ -3122,6 +3125,7 @@ mod default_font_tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(!xml.contains("style:font-name=\"\""), "no empty font name: {xml}");

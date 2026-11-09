@@ -38,7 +38,7 @@ fn through_a_snapshot(deck: &Deck, kind: &str, tag: &str) -> Deck {
 
 /// A deck of exactly these slides, with no masters.
 fn deck_of(slides: Vec<Slide>) -> Deck {
-    let mut deck = Deck { slides, masters: vec![], page_size: None, themes: Vec::new() };
+    let mut deck = Deck { slides, masters: vec![], page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
     // Writers map builds to file ids through stable object ids, so the
     // deck needs them before the snapshot (DCK-005).
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
@@ -383,6 +383,7 @@ fn masters_survive_a_snapshot() {
             ],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         // Stable master and slide ids, minted once here (DCK-005): the
         // first slide stays on the first master, the second on the second.
@@ -588,6 +589,7 @@ fn the_masters_font_survives_a_snapshot() {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let back = through_a_snapshot(&deck, kind, "master-font");
         match back.masters.first() {
@@ -667,6 +669,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
         ],
         page_size: None,
         themes: Vec::new(),
+        skipped_slides: Vec::new(),
     };
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
     deck.slides[0].master_id = Some(deck.masters[0].id);
@@ -729,6 +732,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
         }],
         page_size: None,
         themes: Vec::new(),
+        skipped_slides: Vec::new(),
     };
     let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");
     let mut zip =
@@ -873,6 +877,7 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let back = through_a_snapshot(&deck, kind, "masterruns");
         let master = back
@@ -958,6 +963,7 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
         }],
         page_size: None,
         themes: Vec::new(),
+        skipped_slides: Vec::new(),
     };
     let back = through_a_snapshot(&deck, "odp", "stylecollide");
 
@@ -1969,6 +1975,7 @@ fn recovery_rich_state_round_trip() {
         }],
         page_size: None,
         themes: Vec::new(),
+        skipped_slides: Vec::new(),
     };
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
     deck.slides[0].master_id = Some(deck.masters[0].id);
