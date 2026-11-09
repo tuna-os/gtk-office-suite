@@ -5629,11 +5629,11 @@ class TablesSheetStructureSmoke(TablesCellEntryMixin, BaseGUITestCase):
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("<Shift>F10")
         # GTK 4.14 gives a popover menu's items no accessible names, so the
-        # menu is checked by its twelve items and used as the keyboard does:
+        # menu is checked by its thirteen items and used as the keyboard does:
         # it opens on its first item, Insert Rows Above, and Return runs it.
         self.wait_until(
             lambda: len(self.app.findChildren(lambda n: n.roleName == "menu item" and n.showing)),
-            lambda n: n == 12, description="the cells' context menu and its twelve commands")
+            lambda n: n == 13, description="the cells' context menu and its thirteen commands")
         rawinput.keyCombo("Return")
         self._wait_cells(lambda c: c.get((1, 0), ("",))[0] == "head", "Insert Rows Above to move A1 down a row")
 
