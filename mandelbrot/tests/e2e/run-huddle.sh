@@ -172,9 +172,16 @@ else
 fi
 
 NOTICED=0
-for i in $(seq 0 $((N - 2))); do
-    LAST=$(grep "memberships changed" "$LOG_DIR/${NAMES[$i]}.log" | tail -1)
-    grep -q "${IDS[$LEAVER]}" <<<"$LAST" || NOTICED=$((NOTICED + 1))
+for _ in $(seq 1 30); do
+    NOTICED=0
+    for i in $(seq 0 $((N - 2))); do
+        LAST=$(grep "memberships changed" "$LOG_DIR/${NAMES[$i]}.log" | tail -1)
+        if [ -n "$LAST" ] && ! grep -q "${IDS[$LEAVER]}" <<<"$LAST"; then
+            NOTICED=$((NOTICED + 1))
+        fi
+    done
+    [ "$NOTICED" = "$((N - 1))" ] && break
+    sleep 1
 done
 if [ "$NOTICED" = "$((N - 1))" ]; then
     result PASS everyone-notices-the-leave "all $((N - 1)) remaining clients dropped the leaver"
