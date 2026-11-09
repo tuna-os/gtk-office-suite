@@ -48,6 +48,9 @@ Building the trace found one path writing around the boundary: **the Decks close
 | decks | Export as PDF | `decks/src/export_ui.rs` | `export_pdf` | 1 | export | `tests/gui/test_smoke.py::DecksExportSmoke` |
 | decks | Export Handouts | `decks/src/export_ui.rs` | `export_pdf` | 2 | export | `tests/gui/test_smoke.py::DecksExportSmoke` |
 | decks | Export Slide as PNG | `decks/src/export_ui.rs` | `export_png` | 1 | export | `tests/gui/test_smoke.py::DecksExportSmoke` |
+| decks | Send by Email: the deck, as a temporary attachment | `decks/src/export_ui.rs` | `write_deck` | 1 | export | `tests/gui/test_smoke.py::DecksSendByEmailSmoke` |
+| letters | Send by Email: the tab as a temporary .docx attachment | `letters/src/mail_ui.rs` | `save_buffer_to_file` | 1 | export | `tests/gui/test_smoke.py::LettersSendByEmailSmoke` |
+| tables | Send by Email: the workbook as a temporary .xlsx attachment | `tables/src/mail_ui.rs` | `save_engine_to_xlsx` | 1 | export | `tests/gui/test_smoke.py::TablesSendByEmailSmoke` |
 | decks | Headless `--export-pdf` | `decks/src/main.rs` | `export_pdf` | 1 | export | `tools/render-lab/export_render.py::export_one` |
 | decks | Close guard's Save, file already has a path | `decks/src/window.rs` | `save_deck` | 1 | asks | `tests/gui/test_smoke.py::test_the_close_guards_save_asks_too` |
 | decks | Close guard's Save, never saved (asks for a name) | `decks/src/window.rs` | `save_deck` | 2 | asks | `tests/gui/test_smoke.py::DecksCloseGuardSmoke` |

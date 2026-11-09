@@ -1378,6 +1378,7 @@ impl TablesWindow {
             menu.insert_section(1, None, &crate::sheet_actions::main_menu_section());
         }
         crate::sheet_actions::install(app, &controller, &drawing_area, &toast_overlay, refresh_sel.clone());
+        crate::mail_ui::install(app, &controller, &suite_win.window);
         suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 

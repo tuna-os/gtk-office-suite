@@ -472,6 +472,9 @@ impl LettersWindow {
             crate::collab_actions::install(app, &win, &tab_view, &toast_overlay, &suite_win.header_bar, |banner| suite_win.add_top_bar(banner), Box::new(open));
         }
 
+        // ── Send by Email (mail_ui.rs) ─────────────────────────────
+        crate::mail_ui::register(app, &win, &tab_view, &suite_win.header_bar);
+
         // ── Drag and Drop file opening ────────────────────────────
         // A dropped file opens the way one from the file manager does,
         // through GApplication::open: in a new tab (#1316). It used to load

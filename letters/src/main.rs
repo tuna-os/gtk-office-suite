@@ -2,6 +2,7 @@ use libadwaita as adw;
 use adw::prelude::AdwDialogExt;
 use gtk4::{gio, prelude::*};
 mod bridge;
+mod mail_ui;
 mod window;
 mod doc_tab;
 mod dialogs;

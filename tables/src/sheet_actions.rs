@@ -62,6 +62,7 @@ pub(crate) fn main_menu_section() -> gio::Menu {
     use suite_common::{i18n, menus::section};
     section(&[
         (&i18n("Export as _PDF…"), "app.export-pdf"),
+        (&i18n("Send by _Email…"), "app.send-by-email"),
         (&i18n("Set Print _Area"), "app.set-print-area"),
         (&i18n("_Freeze Rows"), "app.toggle-freeze-rows"),
         (&i18n("Pro_tect Sheet"), "app.toggle-sheet-protection"),

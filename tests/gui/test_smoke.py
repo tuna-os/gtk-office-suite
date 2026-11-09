@@ -11326,3 +11326,77 @@ class TablesAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITe
 
 class DecksAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITestCase):
     app_name, app_id, app_title = "decks", "org.tunaos.decks", "Decks"
+
+
+class SendByEmailMixin:
+    """Send by Email (the Lifafa integration): the app writes its document in
+    its own format to a temporary file and hands the mail client a draft with
+    it attached. SUITE_MAIL_SPOOL points the hand-over at a directory, so the
+    test reads exactly what a mail client would have been given."""
+
+    aid = ""
+    extension = ""
+    magic = b"PK"
+
+    def _prepare_mail(self):
+        self._spool = os.path.join(self.temp_dir(prefix=f"{self.app_name}-mail-"), "spool")
+        self.launch_env = {**getattr(self, "launch_env", {}), "SUITE_MAIL_SPOOL": self._spool}
+
+    def _send_and_read(self):
+        self.gapplication_action(self.aid, "send-by-email")
+        draft = os.path.join(self._spool, "draft.txt")
+        self.wait_until(lambda: os.path.exists(draft), bool, description="the mail draft to be handed over")
+        with open(draft, encoding="utf-8") as f:
+            text = f.read()
+        attachments = [n for n in os.listdir(self._spool) if n.endswith("." + self.extension)]
+        self.assertEqual(len(attachments), 1, f"one {self.extension} attachment, got {os.listdir(self._spool)}")
+        with open(os.path.join(self._spool, attachments[0]), "rb") as f:
+            self.assertTrue(f.read().startswith(self.magic), "the attachment is a real document, not an empty file")
+        return text, attachments[0]
+
+    def test_send_by_email_attaches_the_document(self):
+        text, name = self._send_and_read()
+        self.assertIn(f"attachments: {name}", text)
+        self.assertIn(f"subject: {name}", text)
+        self.assertIn("sent from", text)
+        self.assertIsNone(self.process.poll(), f"{self.app_name} crashed sending by email")
+
+
+class LettersSendByEmailSmoke(SendByEmailMixin, BaseGUITestCase):
+    app_name = "letters"
+    aid = "org.tunaos.letters"
+    extension = "docx"
+
+    def setUp(self):
+        self._prepare_mail()
+        d = self.temp_dir(prefix="letters-mail-doc-")
+        path = os.path.join(d, "Quarterly note.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("Quarterly numbers are attached.\n")
+        self.launch_args = [path]
+        self.isolate_snapshot(prefix="letters-mail-snap-")
+        super().setUp()
+
+    def test_send_by_email_attaches_the_document(self):
+        self.wait_until(lambda: self.trigger_snapshot(self.aid)["paragraphs"], bool, description="the note to open")
+        super().test_send_by_email_attaches_the_document()
+
+
+class TablesSendByEmailSmoke(SendByEmailMixin, BaseGUITestCase):
+    app_name = "tables"
+    aid = "org.tunaos.tables"
+    extension = "xlsx"
+
+    def setUp(self):
+        self._prepare_mail()
+        super().setUp()
+
+
+class DecksSendByEmailSmoke(SendByEmailMixin, BaseGUITestCase):
+    app_name = "decks"
+    aid = "org.tunaos.decks"
+    extension = "pptx"
+
+    def setUp(self):
+        self._prepare_mail()
+        super().setUp()
