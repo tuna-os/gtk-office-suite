@@ -108,6 +108,7 @@ CLASS_CRASH = "product-crash"
 CLASS_ASSERTION = "assertion-mismatch"
 CLASS_TIMEOUT = "timeout"
 CLASS_INFRASTRUCTURE = "infrastructure"
+CLASS_INPUT = "input-not-delivered"
 CLASS_UNKNOWN = "unclassified"
 
 # Markers of the application dying, as opposed to a test disagreeing
@@ -164,7 +165,47 @@ def _without_journey_names(text: str) -> str:
     return _JOURNEY_NAMES.sub("", text)
 
 
-def classify(text: str, junit_failures: list, exit_code: int, timed_out: bool) -> str:
+def trace_shows_undelivered_input(artifacts_dir: str) -> list:
+    """Journey ids whose retained trace records typed input that never landed.
+
+    The framework samples the focused text after each typeText
+    (GUI_TEST_VERIFY_TYPING=1) and marks entries it never observes there.
+    A journey that then fails on the missing text is undelivered stimulus,
+    not a product assertion mismatch — but the journey still failed, so
+    this only ever re-labels, never clears, a failure (#442, #1951).
+    Artifact directories are named "{Class}.{test}", matching the JUnit
+    journey id "{file}.{Class}::{test}".
+    """
+    lost = []
+    if not os.path.isdir(artifacts_dir):
+        return lost
+    for name in sorted(os.listdir(artifacts_dir)):
+        trace_path = os.path.join(artifacts_dir, name, "input_trace.json")
+        try:
+            with open(trace_path, errors="replace") as handle:
+                entries = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(entries, list):
+            continue
+        if any(isinstance(entry, dict) and entry.get("type") == "type_text"
+               and entry.get("delivered") is False for entry in entries):
+            lost.append(name)
+    return lost
+
+
+def _artifact_name(journey: str) -> str:
+    """The failure-artifact directory for a JUnit journey id.
+
+    JUnit records "test_smoke.LettersClipboardSmoke::test_copy_paste_round_trip";
+    the harness keeps "LettersClipboardSmoke.test_copy_paste_round_trip".
+    """
+    cls, _, name = journey.partition("::")
+    return f"{cls.rsplit('.', 1)[-1]}.{name}"
+
+
+def classify(text: str, junit_failures: list, exit_code: int, timed_out: bool,
+             delivery_lost: bool = False) -> str:
     """Classify one attempt from what it printed and what JUnit recorded."""
     if timed_out:
         return CLASS_TIMEOUT
@@ -177,6 +218,8 @@ def classify(text: str, junit_failures: list, exit_code: int, timed_out: bool) -
     if any(marker.lower() in lowered for marker in INFRASTRUCTURE_MARKERS):
         return CLASS_INFRASTRUCTURE
     if junit_failures:
+        if delivery_lost:
+            return CLASS_INPUT
         return CLASS_ASSERTION
     if exit_code == 0:
         return CLASS_PASS
@@ -313,6 +356,7 @@ class Attempt:
     failures: list = field(default_factory=list)
     log: str = ""
     artifacts: str = ""
+    delivery_lost: list = field(default_factory=list)
 
     def record(self) -> dict:
         data = asdict(self)
@@ -367,9 +411,6 @@ def run_attempt(attempt: Attempt, output: str, timeout: int,
                         f"JUnit recorded {attempt.cases}"),
             "text": "",
         })
-    attempt.classification = classify(text, attempt.failures,
-                                     attempt.exit_code or 0, timed_out)
-
     # Move, never copy: the harness writes failure artifacts to one fixed
     # directory, so leaving them there would let the next attempt
     # overwrite the evidence of this one.
@@ -380,6 +421,17 @@ def run_attempt(attempt: Attempt, output: str, timeout: int,
             shutil.rmtree(kept)
         shutil.move(produced, kept)
         attempt.artifacts = os.path.relpath(kept, output)
+    # Typed input the framework never observed landing is undelivered
+    # stimulus, not a product assertion mismatch — but the journeys still
+    # failed, so this re-labels, never clears, the attempt.
+    lost_names = trace_shows_undelivered_input(
+        os.path.join(attempt_dir, "failure_artifacts"))
+    attempt.delivery_lost = [
+        f.get("journey", "?") for f in attempt.failures
+        if _artifact_name(f.get("journey", "")) in lost_names]
+    attempt.classification = classify(text, attempt.failures,
+                                     attempt.exit_code or 0, timed_out,
+                                     bool(attempt.delivery_lost))
     return attempt
 
 
@@ -406,6 +458,8 @@ def summarize(attempts: list) -> dict:
         "by_classification": counts,
         "failing_journeys": sorted({f.get("journey", "?") for a in failed
                                     for f in a.failures}),
+        "delivery_lost_journeys": sorted({j for a in failed
+                                         for j in a.delivery_lost}),
     }
 
 

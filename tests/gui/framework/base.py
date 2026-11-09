@@ -1182,21 +1182,64 @@ class BaseGUITestCase(unittest.TestCase):
             )
 
         def type_text(text):
-            trace("type_text", text=text)
+            # Keystroke spacing is load-bearing: a doubled letter ("apple")
+            # lost one of the pair at xdotool's default 12ms gap, in CI and
+            # locally (#1209), and conftest.py measured sub-0.1s typing as
+            # lossy in CI-like containers. Honor the same knob here, in the
+            # same seconds unit; unset keeps main's 40ms so ordinary runs
+            # neither slow down nor speed back up.
+            try:
+                delay_s = float(os.environ.get("GUI_TEST_TYPING_DELAY", "0.04"))
+            except ValueError:
+                delay_s = 0.04
+            delay_ms = max(1, int(delay_s * 1000))
+            trace("type_text", text=text, delay_ms=delay_ms)
             reactivate()
             subprocess.run(
-                # A doubled letter ("apple") lost one of the pair at xdotool's
-                # default 12ms gap, in CI and locally (#1209): the same key
-                # released and pressed again too fast for the client to see
-                # two presses. A longer gap keeps both.
-                ["xdotool", "type", "--delay", "40", "--window", self._win_id, "--", text],
+                ["xdotool", "type", "--delay", str(delay_ms),
+                 "--window", self._win_id, "--", text],
                 capture_output=True, timeout=30,
             )
+            if os.environ.get("GUI_TEST_VERIFY_TYPING", "").strip().lower() in (
+                    "1", "true", "yes", "on"):
+                entries = getattr(self, "_input_trace", None)
+                if entries:
+                    delivered, observed = self._typing_delivered(text)
+                    entries[-1]["delivered"] = delivered
+                    entries[-1]["observed"] = observed
 
         rawinput.click = click
         rawinput.doubleClick = double_click
         rawinput.keyCombo = key_combo
         rawinput.typeText = type_text
+
+    def _typing_delivered(self, text, deadline_s=1.0):
+        """Whether the focused text widget now holds `text`.
+
+        Read-only evidence for the campaign, sampled only when
+        GUI_TEST_VERIFY_TYPING is set: when a journey later fails on text
+        that never arrived, its input trace shows whether the keystrokes
+        landed, so the stress classifier can separate undelivered input
+        from a product assertion mismatch (#442, #1951). Returns
+        (delivered, observed_excerpt). Never raises and never decides a
+        verdict; journeys assert through their own waits.
+        """
+        import time as _time
+        deadline = _time.monotonic() + deadline_s
+        observed = None
+        while True:
+            try:
+                node = self.app.findChild(
+                    lambda n: n.focused and n.roleName in ("text", "entry"),
+                    retry=False, requireResult=False)
+                observed = node.text if node is not None else None
+            except Exception:
+                observed = None
+            if observed is not None and text in observed:
+                return True, observed[:200]
+            if _time.monotonic() >= deadline:
+                return False, observed[:200] if observed is not None else None
+            _time.sleep(0.05)
 
     # ── A second application (#442 cross-app clipboard) ────────────────
     # The X11 clipboard is a negotiation between two live processes: one
