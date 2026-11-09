@@ -135,6 +135,8 @@ pub fn parse_cell_or_range(s: &str) -> Option<(usize, usize, usize, usize)> {
 }
 
 /// Parse a cell reference like "A1", "b3", "AA10" → (row, col), 0-based.
+/// `None` past the sheet's last column (`XFD`) or last row, so text from
+/// the name box or a file can't overflow or point outside the grid.
 pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     let s = s.trim();
     let letters: String = s.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
@@ -144,10 +146,17 @@ pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     }
     let mut col: usize = 0;
     for ch in letters.chars() {
-        col = col * 26 + (ch.to_ascii_uppercase() as usize - 'A' as usize) + 1;
+        col = col
+            .checked_mul(26)?
+            .checked_add(ch.to_ascii_uppercase() as usize - 'A' as usize + 1)?;
+        if col > SHEET_MAX_COLS {
+            return None;
+        }
     }
     let row: usize = digits.parse().ok()?;
-    if row == 0 { return None; }
+    if row == 0 || row > SHEET_MAX_ROWS {
+        return None;
+    }
     Some((row - 1, col - 1))
 }
 
@@ -2417,6 +2426,14 @@ mod selection_tests {
         assert_eq!(parse_cell_ref("A1"), Some((0, 0)));
         assert_eq!(parse_cell_ref("b3"), Some((2, 1)));
         assert_eq!(parse_cell_ref("AA10"), Some((9, 26)));
+        // The grid's last cell parses; one past it in either direction,
+        // or enough letters to overflow usize, does not (#1988).
+        assert_eq!(parse_cell_ref("XFD1048576"), Some((SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1)));
+        assert_eq!(parse_cell_ref("XFE1"), None);
+        assert_eq!(parse_cell_ref("A1048577"), None);
+        assert_eq!(parse_cell_ref("ZZZZZZZZZZZZZZ1"), None);
+        assert_eq!(parse_cell_ref(&format!("{}1", "Z".repeat(64))), None);
+        assert_eq!(parse_cell_or_range("A1:ZZZZZZZZZZZZZZ1"), None);
         assert_eq!(parse_cell_ref(" C7 "), Some((6, 2)));
         assert_eq!(parse_cell_ref("A0"), None);
         assert_eq!(parse_cell_ref("1A"), None);
