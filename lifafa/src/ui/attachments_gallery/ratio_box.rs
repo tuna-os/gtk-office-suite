@@ -9,7 +9,8 @@ glib::wrapper! {
     /// ratio via true height-for-width sizing, so the thumbnail fills the
     /// (responsive) column width and its height follows — no centred gaps and
     /// no continuous frame-clock ticking.
-    pub(crate) struct RatioBox(ObjectSubclass<imp::RatioBox>) @extends gtk::Widget;
+    pub(crate) struct RatioBox(ObjectSubclass<imp::RatioBox>) @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl RatioBox {

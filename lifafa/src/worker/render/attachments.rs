@@ -197,7 +197,7 @@ fn splice_encoded_words(value: &[u8]) -> Vec<u8> {
 /// suffix for `application/x-zerosize` (it reads the missing data as empty),
 /// so that becomes the generic type.
 pub(crate) fn guess_mime(name: &str) -> String {
-    let (content_type, _uncertain) = gtk::gio::content_type_guess(Some(name), &[]);
+    let (content_type, _uncertain) = gtk::gio::content_type_guess(Some(name), None);
     gtk::gio::content_type_get_mime_type(&content_type)
         .map(|m| m.to_string())
         .filter(|m| m != "application/x-zerosize")
