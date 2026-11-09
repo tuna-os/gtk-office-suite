@@ -312,13 +312,13 @@
     "C": "green"
   },
   "letters/underline-position": {
-    "A": "red",
-    "B": "red",
+    "A": "green",
+    "B": "green",
     "C": "red"
   },
   "letters/url-path-wrapping": {
-    "A": "amber",
-    "B": "amber",
+    "A": "green",
+    "B": "green",
     "C": "amber"
   },
   "tables/alignment": {

@@ -1131,7 +1131,7 @@ impl TablesWindow {
                                 // formula into its current result.
                                 let sheet_model = st.sheets[st.active_sheet].borrow().clone();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_for_sheet(&st.engine, &sheet_model, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
