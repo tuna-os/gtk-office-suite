@@ -804,6 +804,38 @@
           "letters-core::odt::tests::the_body_font_and_size_survive_a_save"
         ]
       }
+    },
+    {
+      "id": "tables.chart.multi-series-edit",
+      "app": "tables",
+      "issue": 1658,
+      "title": "A chart is built from a selected table with titles and a legend, edited in place, and survives XLSX save and reopen",
+      "scope": "Insert Chart reads the selection: one column over the first column's labels, or a table of a category column and a series per value column named by the header row (columns with no number are skipped). The dialog sets the chart's kind, title, axis titles and legend position, previewed through the renderer the sheet uses. Edit Chart opens the chart under the selected cell with those fields filled in and replaces it as one undo step, keeping its series. XLSX create, edit, save and reopen keep every admitted field including on a later sheet, and a foreign chart field Tables cannot hold is reported as a scoped loss. Does not certify choosing series or placement by hand in the dialog, a Calc rewrite of a generated multi-series chart (the render lab compares how tables/chart-multi is drawn), or Excel itself.",
+      "status": "verified",
+      "revision": "4fc11b0d9aebb502c081f49daf1304d6bfedba6f",
+      "requires": ["model", "format", "gui"],
+      "evidence": {
+        "model": [
+          "tables-core::chart_plot::every_series_is_plotted_under_its_name_over_the_first_series_categories",
+          "tables-core::chart_plot::a_selected_table_is_one_series_per_value_column_named_by_its_header",
+          "tables-core::chart_plot::without_a_header_row_every_row_is_data_and_the_series_are_unnamed",
+          "tables-core::chart_plot::a_column_with_no_number_is_not_a_series",
+          "tables-core::chart_plot::one_selected_column_plots_over_the_first_columns_labels_as_before",
+          "tables-core::chart_plot::a_selection_with_nothing_to_plot_makes_no_chart",
+          "tables-core::chart_plot::a_chart_covers_the_cells_under_it_and_only_those",
+          "tables-core::chart_plot::when_two_charts_overlap_the_one_drawn_last_wins"
+        ],
+        "format": [
+          "tables-core::io::charts::tests::chart_round_trips_through_xlsx",
+          "tables-core::io::charts::tests::every_kind_round_trips_with_its_ranges",
+          "tables-core::io::charts::tests::tbl002_all_chart_fields_later_sheet",
+          "tables-core::io::charts::tests::tbl002_chart_unsupported_report"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::TablesChartEditorSmoke::test_a_selected_table_is_charted_with_its_series_titles_and_legend",
+          "tests/gui/test_smoke.py::TablesChartEditorSmoke::test_an_inserted_chart_is_edited_in_place_as_one_undo_step"
+        ]
+      }
     }
   ],
   "waivers": [
