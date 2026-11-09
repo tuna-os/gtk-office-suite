@@ -101,7 +101,7 @@ pub(in crate::worker) fn attachment_parts(
             format!("attachment-{}{ext}", i + 1)
         });
         out.push((
-            id,
+            id as usize,
             crate::models::Attachment {
                 name,
                 data: part.contents().to_vec(),
