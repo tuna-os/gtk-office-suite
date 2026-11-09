@@ -14,6 +14,7 @@ mod column_menu;
 mod notes;
 mod validation_list;
 mod sheet_bar;
+mod mail_ui;
 mod persistence;
 mod window_dialogs;
 mod sheet_actions;

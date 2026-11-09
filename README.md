@@ -33,6 +33,8 @@ signed Flatpak repository on its GitHub Pages, and as bundles on its
 [releases page](https://github.com/tuna-os/lifafa/releases) (see
 [Install](#install)). Report problems with it in
 [tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
+The three apps can send the open document by email from the main menu (see
+[docs/LIFAFA-INTEGRATION.md](docs/LIFAFA-INTEGRATION.md)).
 Everything below this section is about Letters, Tables and Decks.
 
 They are not a LibreOffice port. Each app has its own document model in a
