@@ -234,8 +234,10 @@ impl PangoShaper {
             if !st.kerned {
                 add(pango::AttrFontFeatures::new("kern 0").into());
             }
+            // Marked, not drawn by Pango: `show_line` draws it where
+            // Writer does (see `writer_underline`).
             if st.underline || st.link.is_some() {
-                add(pango::AttrInt::new_underline(pango::Underline::Single).into());
+                add(underline_marker());
             }
             if st.strikethrough {
                 add(pango::AttrInt::new_strikethrough(true).into());
@@ -285,7 +287,7 @@ impl PangoShaper {
                 let (r, g, b) = crate::track::author_color(&rev.author);
                 add(pango::AttrColor::new_foreground(r, g, b).into());
                 match rev.kind {
-                    crate::model::RevisionKind::Insert => add(pango::AttrInt::new_underline(pango::Underline::Single).into()),
+                    crate::model::RevisionKind::Insert => add(underline_marker()),
                     crate::model::RevisionKind::Delete => add(pango::AttrInt::new_strikethrough(true).into()),
                 }
             }
@@ -623,6 +625,92 @@ fn fill_leader(cr: &cairo::Context, glyph: &pango::LayoutLine, from: f64, to: f6
     }
 }
 
+/// Marks a run underlined. Pango's own underline sits where the font's
+/// underline position says, which is closer to the letters and thinner
+/// than Writer's; `show_line` and `show_layout` draw it Writer's way
+/// instead, from this marker in the run's attributes.
+fn underline_marker() -> pango::Attribute {
+    pango::AttrColor::new_underline_color(0, 0, 0).into()
+}
+
+/// Where Writer draws a single underline, from the run font's ascent and
+/// descent in points: (centre below the baseline, thickness), in points.
+/// VCL works in tenths of a point here (`ImplFontMetricData::
+/// ImplInitTextLineSize`), so this does too, with its integer division.
+fn writer_underline(ascent_pt: f64, descent_pt: f64) -> (f64, f64) {
+    let a = (ascent_pt * 10.0).round() as i64;
+    let mut d = (descent_pt * 10.0).round() as i64;
+    if d <= 0 {
+        d = (a / 10).max(1);
+    }
+    let dl = if 3 * d > a { a / 3 } else { d };
+    let t = ((dl * 25 + 50) / 100).max(1);
+    let c = d / 2 + 1;
+    (c as f64 / 10.0, t as f64 / 10.0)
+}
+
+/// Draw `line` at the current point (its baseline origin), as
+/// `pangocairo::functions::show_layout_line` does, then its underlines.
+fn show_line(cr: &cairo::Context, line: &pango::LayoutLine) {
+    let origin = cr.current_point().unwrap_or((0.0, 0.0));
+    pangocairo::functions::show_layout_line(cr, line);
+    draw_underlines(cr, line, origin.0, origin.1);
+}
+
+/// Draw `layout` at the current point (its top left), as
+/// `pangocairo::functions::show_layout` does, then its underlines.
+fn show_layout(cr: &cairo::Context, layout: &pango::Layout) {
+    let (x0, y0) = cr.current_point().unwrap_or((0.0, 0.0));
+    pangocairo::functions::show_layout(cr, layout);
+    let mut it = layout.iter();
+    loop {
+        if let Some(line) = it.line_readonly() {
+            let x = to_pt(it.line_extents().1.x());
+            let baseline = to_pt(it.baseline());
+            draw_underlines(cr, &line, x0 + x, y0 + baseline);
+        }
+        if !it.next_line() {
+            break;
+        }
+    }
+}
+
+/// Fill each marked run's underline under `line`, whose baseline starts
+/// at (`x`, `baseline`): centred `writer_underline` below the run's
+/// (risen) baseline, in the run's colour, else the current source.
+fn draw_underlines(cr: &cairo::Context, line: &pango::LayoutLine, x: f64, baseline: f64) {
+    let mut run_x = x;
+    for run in line.runs() {
+        let width = to_pt(run.glyph_string().width());
+        let item = run.item();
+        let attrs = item.analysis().extra_attrs();
+        if attrs.iter().any(|a| a.type_() == pango::AttrType::UnderlineColor) {
+            let metrics = item.analysis().font().metrics(None);
+            let (centre, thickness) = writer_underline(to_pt(metrics.ascent()), to_pt(metrics.descent()));
+            let rise = attrs
+                .iter()
+                .filter_map(|a| a.downcast_ref::<pango::AttrInt>().filter(|i| i.type_() == pango::AttrType::Rise))
+                .map(|i| to_pt(i.value()))
+                .sum::<f64>();
+            // The last foreground wins, as Pango applies them.
+            let colour = attrs
+                .iter()
+                .rev()
+                .find_map(|a| a.downcast_ref::<pango::AttrColor>().filter(|c| c.type_() == pango::AttrType::Foreground))
+                .map(|c| c.color());
+            let _ = cr.save();
+            if let Some(c) = colour {
+                cr.set_source_rgb(f64::from(c.red()) / 65535.0, f64::from(c.green()) / 65535.0, f64::from(c.blue()) / 65535.0);
+            }
+            cr.new_path();
+            cr.rectangle(run_x, baseline - rise + centre - thickness / 2.0, width, thickness);
+            let _ = cr.fill();
+            let _ = cr.restore();
+        }
+        run_x += width;
+    }
+}
+
 /// The built-in image loader: PNG through Cairo.
 fn load_png(path: &str) -> Option<cairo::ImageSurface> {
     let mut f = std::fs::File::open(path).ok()?;
@@ -790,7 +878,7 @@ impl Typeset {
         let _ = cr.fill();
         cr.set_source_rgb(ink.0, ink.1, ink.2);
         cr.move_to(left + super::CHIP_PAD_PT, top);
-        pangocairo::functions::show_layout(cr, &label);
+        show_layout(cr, &label);
         let _ = cr.restore();
     }
 
@@ -807,7 +895,7 @@ impl Typeset {
         let label = self.shaper.label(&(n + 1).to_string(), &font, size * super::NOTE_REF_SCALE);
         let _ = cr.save();
         cr.move_to(x, baseline - size * super::NOTE_REF_RISE - to_pt(label.baseline()));
-        pangocairo::functions::show_layout(cr, &label);
+        show_layout(cr, &label);
         let _ = cr.restore();
     }
 
@@ -1191,7 +1279,7 @@ impl Typeset {
                     let Some(layout) = self.paragraph_layout(*p, *box_width_pt) else { continue };
                     if let Some(l) = layout.line_readonly(*line as i32) {
                         cr.move_to(*x_pt, *baseline_pt);
-                        pangocairo::functions::show_layout_line(cr, &l);
+                        show_line(cr, &l);
                         if self.doc.paragraphs.get(*p).is_some_and(|p| p.style.toc.is_some()) {
                             self.draw_leader(cr, *p, &layout, &l, *x_pt, *baseline_pt);
                         } else {
@@ -1219,7 +1307,7 @@ impl Typeset {
                     };
                     let layout = self.shaper.layout(&req);
                     cr.move_to(*x_pt, *top_pt);
-                    pangocairo::functions::show_layout(cr, &layout);
+                    show_layout(cr, &layout);
                 }
                 Item::Marker { para, text, x_pt, baseline_pt } => {
                     // The marker takes the item's first-run font and size.
@@ -1256,7 +1344,7 @@ impl Typeset {
                     req.alignment = Alignment::Left;
                     let layout = self.shaper.layout(&req);
                     cr.move_to(*x_pt, *baseline_pt - to_pt(layout.baseline()));
-                    pangocairo::functions::show_layout(cr, &layout);
+                    show_layout(cr, &layout);
                 }
                 Item::Image { src, x_pt, y_pt, width_pt, height_pt, .. } => {
                     self.draw_image(cr, src, *x_pt, *y_pt, *width_pt, *height_pt);
@@ -1272,7 +1360,7 @@ impl Typeset {
                     let layout = self.shaper.layout(&paragraph_request(&p, *box_width_pt, &self.opts));
                     if let Some(l) = layout.line_readonly(*line as i32) {
                         cr.move_to(*x_pt, *baseline_pt);
-                        pangocairo::functions::show_layout_line(cr, &l);
+                        show_line(cr, &l);
                     }
                 }
                 Item::TextBox { x_pt, y_pt, width_pt, height_pt, text_box, .. } => {
@@ -1315,7 +1403,7 @@ impl Typeset {
                         let p = Paragraph { style: Default::default(), runs: vec![crate::model::Run::plain(line)] };
                         let layout = self.shaper.layout(&super::paragraph_request(&p, inner_w, &self.opts));
                         cr.move_to(x_pt + left, y);
-                        pangocairo::functions::show_layout(cr, &layout);
+                        show_layout(cr, &layout);
                         y += f64::from(layout.extents().1.height()) / f64::from(pango::SCALE);
                         if y > y_pt + height_pt - bottom {
                             break;
@@ -2078,6 +2166,94 @@ mod tests {
         cr.set_source_rgb(1.0, 1.0, 1.0);
         cr.paint().unwrap();
         t.draw_page(&cr, 0);
+    }
+
+    /// An underlined word ("mmmm", no descenders) drawn at 8 px per point:
+    /// the dark pixel rows below its baseline, inside the word's columns,
+    /// with the run's (centre, thickness) from `writer_underline` and the
+    /// baseline, all in points.
+    fn underline_rows(bold: bool) -> (Vec<usize>, f64, (f64, f64), f64) {
+        let mut d = doc(1, "mmmm");
+        d.paragraphs[0].runs[0].style.underline = true;
+        d.paragraphs[0].runs[0].style.bold = bold;
+        let t = Typeset::new(d, LayoutOptions::default());
+        let page = &t.tree().pages[0];
+        let (baseline, box_width) = page
+            .items
+            .iter()
+            .find_map(|i| match i {
+                Item::Line { source: Source::Paragraph(0), baseline_pt, box_width_pt, .. } => Some((*baseline_pt, *box_width_pt)),
+                _ => None,
+            })
+            .unwrap();
+        let layout = t.paragraph_layout(0, box_width).unwrap();
+        let line = layout.line_readonly(0).unwrap();
+        let run = &line.runs()[0];
+        let attrs = run.item().analysis().extra_attrs();
+        assert!(!attrs.iter().any(|a| a.type_() == pango::AttrType::Underline), "Pango must not draw its own underline too");
+        let metrics = run.item().analysis().font().metrics(None);
+        let expected = writer_underline(to_pt(metrics.ascent()), to_pt(metrics.descent()));
+
+        let start = t.caret(TextPos { para: 0, offset: 0 }).unwrap();
+        let end = t.caret(TextPos { para: 0, offset: 4 }).unwrap();
+        let scale = 8.0;
+        let (w, h) = ((page.width_pt * scale) as i32, ((baseline + 6.0) * scale) as i32);
+        let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, w, h).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.paint().unwrap();
+            cr.scale(scale, scale);
+            t.draw_page(&cr, 0);
+        }
+        let stride = surface.stride() as usize;
+        let data = surface.take_data().unwrap();
+        let cols = (start.x_pt * scale) as usize + 2..(end.x_pt * scale) as usize - 2;
+        let dark: Vec<usize> = ((baseline * scale) as usize - 4..h as usize)
+            .filter(|&y| cols.clone().any(|x| data[y * stride + x * 4] < 128))
+            .collect();
+        (dark, baseline, expected, scale)
+    }
+
+    /// A single underline sits where Writer draws it
+    /// (`ImplFontMetricData::ImplInitTextLineSize`): centred half the
+    /// descent plus 0.1pt below the baseline, a quarter of the descent
+    /// thick. Pango's own sits where the font says, nearer the letters.
+    #[test]
+    fn the_underline_sits_where_writer_draws_it() {
+        let (dark, baseline, (centre, thickness), scale) = underline_rows(false);
+        // The rows below the baseline that are ink: the underline alone.
+        let below: Vec<usize> = dark.into_iter().filter(|&y| y as f64 >= (baseline + 0.3) * scale).collect();
+        assert!(!below.is_empty(), "no underline drawn");
+        let (top, bottom) = (below[0] as f64 / scale, (below[below.len() - 1] + 1) as f64 / scale);
+        let want = (baseline + centre - thickness / 2.0, baseline + centre + thickness / 2.0);
+        assert!((top - want.0).abs() <= 1.0 / scale + 1e-9 && (bottom - want.1).abs() <= 1.0 / scale + 1e-9,
+            "underline at {top}..{bottom}pt, Writer draws it at {}..{}pt", want.0, want.1);
+        assert_eq!(below.len(), below[below.len() - 1] - below[0] + 1, "one solid rule: {below:?}");
+    }
+
+    /// A bold underline does not crowd its letters: paper between the
+    /// letters' feet and the rule, as much as Writer leaves (the rule's
+    /// centre less half its thickness), whatever the bold face's own
+    /// underline position says.
+    #[test]
+    fn a_bold_underline_leaves_a_gap_under_the_letters() {
+        let (dark, baseline, (centre, thickness), scale) = underline_rows(true);
+        let base = (baseline * scale) as usize;
+        let rule = dark.iter().copied().find(|&y| y > base + 1).expect("an underline below the letters");
+        let clear = (base..rule).filter(|y| !dark.contains(y)).count();
+        assert!(clear > 0, "no gap between letters and underline: {dark:?}");
+        let gap = rule as f64 / scale - baseline;
+        assert!(gap >= centre - thickness / 2.0 - 1.0 / scale, "rule {gap}pt under the baseline, Writer leaves {}pt", centre - thickness / 2.0);
+    }
+
+    /// Writer's underline numbers, in its tenths of a point: Liberation
+    /// Serif 12pt (ascent 10.9, descent 2.6) and a font with no descent.
+    #[test]
+    fn writer_underline_follows_vcl_arithmetic() {
+        assert_eq!(writer_underline(10.9, 2.6), (1.4, 0.7));
+        // No descent: a tenth of the ascent stands in for it.
+        assert_eq!(writer_underline(10.0, 0.0), (0.6, 0.3));
     }
 
     /// A dot leader as Writer fills it: whole dots packed at their own
