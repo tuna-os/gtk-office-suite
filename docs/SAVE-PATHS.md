@@ -37,7 +37,7 @@ Building the trace found one path writing around the boundary: **the Decks close
 | letters | The same, after Save Anyway | `letters/src/window/saving.rs` | `save_page_to_path` | 2 | asks | `tests/gui/test_smoke.py::LettersLossWarningCancelSmoke` |
 | letters | The writer, inside the save transaction | `letters/src/window/saving.rs` | `save_buffer_to_file` | 1 | helper | `tests/gui/test_smoke.py::LettersSaveFormatSmoke` |
 | tables | The writer, behind every save | `tables/src/persistence.rs` | `save_sheets_to_xlsx_with_engine` | 1 | helper | `tests/gui/test_smoke.py::TablesLossQuestionSmoke` |
-| tables | Export as PDF | `tables/src/window.rs` | `to_pdf_with_setup` | 1 | export | `tables-core/src/export.rs::to_pdf_with_setup` |
+| tables | Export as PDF | `tables/src/window.rs` | `to_pdf_for_sheet` | 1 | export | `tables-core/src/export.rs::to_pdf_for_sheet` |
 | tables | Save (Ctrl+S) through the shared save contract (`request_save`: one loss question, one writer call) | `tables/src/persistence.rs` | `save_engine_to_xlsx` | 1 | asks | `tests/gui/test_smoke.py::TablesLossQuestionSmoke` |
 | tables | Save As through the shared save contract | `tables/src/persistence.rs` | `save_engine_to_xlsx` | 1 | asks | `tests/gui/test_smoke.py::TablesXlsSaveSmoke` |
 | tables | Close guard's Save through the shared save contract | `tables/src/persistence.rs` | `save_engine_to_xlsx` | 1 | asks | `tests/gui/test_smoke.py::TablesCloseGuardSmoke` |

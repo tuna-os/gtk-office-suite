@@ -661,6 +661,9 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     let props = read_sheet_props_from_ods(path);
     for sheet in &mut sheets {
         let Some(p) = props.get(&sheet.name) else { continue };
+        if let Some(setup) = &p.page_setup {
+            sheet.page_setup = setup.clone();
+        }
         if let Some((family, size)) = &p.default_font {
             (sheet.default_font_family, sheet.default_font_size) = (family.clone(), *size);
         }

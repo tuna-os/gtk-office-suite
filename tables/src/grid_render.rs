@@ -723,7 +723,7 @@ pub fn draw_grid(
 }
 
 /// Render the used range to a PDF at `path`: one page sized to the export
-/// rect in points — the headless `--export-pdf` hook
+/// rect in points at the sheet's print scale — the headless `--export-pdf` hook
 /// (docs/TABLES-EXPORT-PARITY.md). The rect is the render-dump one (the used
 /// range's far edge clipped to the viewport `width`/`height`), drawn through
 /// `draw_grid` with the restored scroll offsets and `show_gridlines = false`,
@@ -736,7 +736,7 @@ pub fn render_sheet_pdf(
     scroll_x: f64, scroll_y: f64, width: f64, height: f64,
     accent: (f64, f64, f64), path: &std::path::Path,
 ) -> Result<(), String> {
-    let (w, h) = {
+    let (w, h, scale) = {
         let st = state.borrow();
         let sheet = st.sheet();
         let Some((r, c)) = sheet.used_extent() else {
@@ -744,13 +744,16 @@ pub fn render_sheet_pdf(
         };
         let far_w = tables_core::sheet::col_x(c, scroll_x, &sheet) + sheet.col_width(c);
         let far_h = tables_core::sheet::row_y(r, scroll_y, &sheet) + sheet.row_height(r);
-        (far_w.min(width), far_h.min(height))
+        (far_w.min(width), far_h.min(height), tables_core::export::print_scale(&sheet))
     };
     if w <= 0.0 || h <= 0.0 {
         return Err("no cells to export".to_string());
     }
-    // PDF points are 1/72in; the grid draws in 1/96in pixels.
-    let (page_w, page_h) = (w * 72.0 / 96.0, h * 72.0 / 96.0);
+    // PDF points are 1/72in; the grid draws in 1/96in pixels. The sheet
+    // prints at its page setup's scale, or the one its fit-to-page needs,
+    // as Calc prints it (`tables/print-scale`: 46%).
+    let pt = 72.0 / 96.0 * scale;
+    let (page_w, page_h) = (w * pt, h * pt);
     let surface = cairo::PdfSurface::new(page_w, page_h, path)
         .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
     // PDF 1.4 like Decks' export: no compressed object streams, so the
@@ -758,7 +761,7 @@ pub fn render_sheet_pdf(
     surface.restrict(cairo::PdfVersion::_1_4).map_err(|e| e.to_string())?;
     let cr = Context::new(&surface).map_err(|e| e.to_string())?;
     cr.save().map_err(|e| e.to_string())?;
-    cr.scale(72.0 / 96.0, 72.0 / 96.0);
+    cr.scale(pt, pt);
     draw_grid(&cr, state, w, h, scroll_x, scroll_y, false, &[], accent);
     cr.restore().map_err(|e| e.to_string())?;
     cr.show_page().map_err(|e| e.to_string())?;
@@ -895,6 +898,46 @@ mod tests {
             assert!((mh - h * 72.0 / 96.0).abs() < 0.01, "page height {mh} for rect {h}");
             // That the sheet's text lands on the page is checked by rasterising
             // the PDF (pdftoppm) and looking, not here: Cairo may subset fonts.
+        });
+    }
+
+    /// The page's `/MediaBox` width and height in points.
+    fn media_box(bytes: &[u8]) -> (f64, f64) {
+        let text = String::from_utf8_lossy(bytes);
+        let mb = text.find("/MediaBox").expect("a sized page");
+        let nums: Vec<f64> = text[mb..]
+            .split(']')
+            .next()
+            .expect("a closed MediaBox")
+            .split(|ch: char| !(ch.is_ascii_digit() || ch == '.'))
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        (nums[nums.len() - 2], nums[nums.len() - 1])
+    }
+
+    /// A sheet set to print at 46% (`tables/print-scale`, #1336) exports at
+    /// 46%: the same cells on a page 0.46 times the size, drawn smaller.
+    #[test]
+    fn the_pdf_export_is_drawn_at_the_sheets_print_scale() {
+        suite_common::gtk_test::run(|| {
+            let state = export_state();
+            {
+                let st = state.borrow();
+                let mut sheet = st.sheet_mut();
+                *sheet.cell_mut(0, 0) = "Scaled".into();
+                *sheet.cell_mut(2, 3) = "34".into();
+            }
+            let dir = std::env::temp_dir().join(format!("tables-export-pdf-scale-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let full = dir.join("full.pdf");
+            render_sheet_pdf(&state, 0.0, 0.0, 5000.0, 5000.0, (0.2, 0.4, 0.8), &full).expect("export at 100%");
+            state.borrow().sheet_mut().page_setup.scale = 0.46;
+            let scaled = dir.join("scaled.pdf");
+            render_sheet_pdf(&state, 0.0, 0.0, 5000.0, 5000.0, (0.2, 0.4, 0.8), &scaled).expect("export at 46%");
+            let (fw, fh) = media_box(&std::fs::read(&full).unwrap());
+            let (sw, sh) = media_box(&std::fs::read(&scaled).unwrap());
+            assert!((sw - fw * 0.46).abs() < 0.01, "width {sw} at 46% of {fw}");
+            assert!((sh - fh * 0.46).abs() < 0.01, "height {sh} at 46% of {fh}");
         });
     }
 
