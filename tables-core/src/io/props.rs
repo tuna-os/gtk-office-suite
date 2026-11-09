@@ -1073,6 +1073,139 @@ const ODF_MAX_REPEAT: usize = 4096;
 /// `settings.xml`, not `content.xml`, and Calc's own headless
 /// xlsx -> ods conversion does not write them at all, so there is no
 /// fixture this could be checked against. Left absent rather than guessed.
+/// An ODF length in millimetres.
+fn odf_length_to_mm(v: &str) -> Option<f64> {
+    odf_length_to_pixels(v).map(|px| px * 25.4 / 96.0)
+}
+
+/// A `style:page-layout-properties` tag as a page setup: paper size and
+/// orientation, margins, and how the sheet is scaled — `style:scale-to`
+/// (a percentage) or `style:scale-to-X` / `style:scale-to-Y` (fit to that
+/// many pages wide and tall, an absent one meaning no limit, as Calc
+/// writes fit-to-width). Calc's older files spell the fit `loext:`.
+///
+/// `style:scale-to-pages` (fit to N pages in all, Calc's third mode) has
+/// no exact form in [`PageSetup`]; one page is fit to 1 × 1, more keep the
+/// stored scale.
+///
+/// [`PageSetup`]: suite_common_core::print::PageSetup
+fn odf_page_setup(tag: &str) -> suite_common_core::print::PageSetup {
+    use suite_common_core::print::{Orientation, PageSetup, PageSize};
+    let mut setup = PageSetup::default();
+    let width = xml_attr(tag, "fo:page-width").and_then(odf_length_to_mm);
+    let height = xml_attr(tag, "fo:page-height").and_then(odf_length_to_mm);
+    if let (Some(w), Some(h)) = (width, height) {
+        // ODF gives the page as it lies; PageSetup keeps it upright and
+        // turns it with the orientation.
+        let (short, long) = (w.min(h), w.max(h));
+        let near = |a: f64, b: f64| (a - b).abs() < 1.0;
+        setup.size = [PageSize::A4, PageSize::A3, PageSize::Letter, PageSize::Legal]
+            .into_iter()
+            .find(|size| {
+                let (sw, sh) = size.dimensions_mm();
+                near(sw, short) && near(sh, long)
+            })
+            .unwrap_or(PageSize::Custom { width_mm: short, height_mm: long });
+        setup.orientation = match xml_attr(tag, "style:print-orientation") {
+            Some("landscape") => Orientation::Landscape,
+            Some("portrait") => Orientation::Portrait,
+            _ if w > h => Orientation::Landscape,
+            _ => Orientation::Portrait,
+        };
+    }
+    let margin = |side: &str| {
+        xml_attr(tag, &format!("fo:margin-{side}"))
+            .or_else(|| xml_attr(tag, "fo:margin"))
+            .and_then(odf_length_to_mm)
+    };
+    for (side, field) in [
+        ("top", &mut setup.margin_top_mm),
+        ("bottom", &mut setup.margin_bottom_mm),
+        ("left", &mut setup.margin_left_mm),
+        ("right", &mut setup.margin_right_mm),
+    ] {
+        if let Some(mm) = margin(side) {
+            *field = mm;
+        }
+    }
+    // Calc's range is 10–400%, as Excel's; anything else prints at 100%.
+    if let Some(pct) = xml_attr(tag, "style:scale-to")
+        .and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok())
+        .filter(|pct| (10.0..=400.0).contains(pct))
+    {
+        setup.scale = pct / 100.0;
+    }
+    let pages = |axis: &str| {
+        xml_attr(tag, &format!("style:scale-to-{axis}"))
+            .or_else(|| xml_attr(tag, &format!("loext:scale-to-{axis}")))
+            .and_then(|v| v.trim().parse::<u32>().ok())
+    };
+    let (x, y) = (pages("X"), pages("Y"));
+    if x.is_some() || y.is_some() {
+        setup.fit_to_pages = Some((x.unwrap_or(0), y.unwrap_or(0)));
+    } else if xml_attr(tag, "style:scale-to-pages").and_then(|v| v.trim().parse::<u32>().ok()) == Some(1) {
+        setup.fit_to_pages = Some((1, 1));
+    }
+    setup
+}
+
+/// Page setups by `style:style` name of each table style, through the
+/// chain ODF prints a table with: the table's style names a master page
+/// (Calc's "Default" when it names none), the master page names a page
+/// layout in styles.xml, and the layout's properties are the setup.
+/// Table styles whose page layout can't be found are absent.
+struct OdfPageSetups {
+    by_table_style: std::collections::HashMap<String, suite_common_core::print::PageSetup>,
+    default: Option<suite_common_core::print::PageSetup>,
+}
+
+impl OdfPageSetups {
+    fn parse(content: &str, styles: &str) -> Self {
+        let mut layouts = std::collections::HashMap::new();
+        for xml in [styles, content] {
+            for block in split_elements(xml, "style:page-layout") {
+                let head = block.split('>').next().unwrap_or("");
+                let Some(name) = xml_attr(head, "style:name") else { continue };
+                let body = block.split("</style:page-layout>").next().unwrap_or("");
+                if let Some(props) = split_elements(body, "style:page-layout-properties").first() {
+                    layouts.insert(name.to_string(), odf_page_setup(props.split('>').next().unwrap_or("")));
+                }
+            }
+        }
+        let mut masters = std::collections::HashMap::new();
+        for block in split_elements(styles, "style:master-page") {
+            let head = block.split('>').next().unwrap_or("");
+            if let (Some(name), Some(layout)) = (xml_attr(head, "style:name"), xml_attr(head, "style:page-layout-name")) {
+                if let Some(setup) = layouts.get(layout) {
+                    masters.insert(name.to_string(), setup.clone());
+                }
+            }
+        }
+        let mut by_table_style = std::collections::HashMap::new();
+        for block in split_elements(content, "style:style") {
+            let head = block.split('>').next().unwrap_or("");
+            if xml_attr(head, "style:family") != Some("table") {
+                continue;
+            }
+            let Some(name) = xml_attr(head, "style:name") else { continue };
+            let master = xml_attr(head, "style:master-page-name").unwrap_or("Default");
+            if let Some(setup) = masters.get(master) {
+                by_table_style.insert(name.to_string(), setup.clone());
+            }
+        }
+        let default = masters.get("Default").cloned();
+        OdfPageSetups { by_table_style, default }
+    }
+
+    /// The setup a table prints with, from its `<table:table>` start tag.
+    fn for_table(&self, head: &str) -> Option<suite_common_core::print::PageSetup> {
+        match xml_attr(head, "table:style-name") {
+            Some(style) => self.by_table_style.get(style).cloned().or_else(|| self.default.clone()),
+            None => self.default.clone(),
+        }
+    }
+}
+
 pub fn read_sheet_props_from_ods(
     path: &str,
 ) -> std::collections::HashMap<String, SheetXlsxProps> {
@@ -1100,6 +1233,7 @@ pub fn read_sheet_props_from_ods(
     let mut data_styles = super::ods_numfmt::parse_data_styles(&styles_xml);
     data_styles.extend(super::ods_numfmt::parse_data_styles(&xml));
     let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml, &data_styles);
+    let page_setups = OdfPageSetups::parse(&xml, &styles_xml);
 
     // Validations are declared once and named by the cells they apply to.
     let mut validations: std::collections::HashMap<String, ValidationSource> = std::collections::HashMap::new();
@@ -1118,6 +1252,7 @@ pub fn read_sheet_props_from_ods(
         let body = table.split("</table:table>").next().unwrap_or("");
         let mut props = SheetXlsxProps { default_font: default_font.clone(), ..SheetXlsxProps::default() };
         props.protection = odf_sheet_protection(head, body);
+        props.page_setup = page_setups.for_table(head);
         let mut col_cell_style: std::collections::HashMap<usize, &str> = std::collections::HashMap::new();
 
         // Columns: each element covers `number-columns-repeated` of them.
@@ -1438,6 +1573,103 @@ Due &lt;Friday&gt;</t></r></text></comment>
             ODF_MAX_REPEAT
         );
         assert_eq!(odf_repeat("<x/>", "table:number-columns-repeated"), 1);
+    }
+
+    /// A content.xml body and a styles.xml body, as Calc splits them.
+    fn write_ods_with_styles(path: &std::path::Path, body: &str, styles: &str) {
+        use std::io::Write;
+        let ns = "xmlns:office=\"o\" xmlns:table=\"t\" xmlns:style=\"s\" xmlns:text=\"x\" xmlns:fo=\"f\" xmlns:loext=\"l\"";
+        let content = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><office:document-content {ns}>{body}</office:document-content>");
+        let styles = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><office:document-styles {ns}>{styles}</office:document-styles>");
+        let mut w = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+        for (name, xml) in [("content.xml", content), ("styles.xml", styles)] {
+            w.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(xml.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+    }
+
+    /// Calc's styles.xml for two master pages: "Default" (A4 portrait,
+    /// 2 cm margins, 100%) and "PM2" with the page layout properties given.
+    fn styles_with_pm2(pm2_props: &str) -> String {
+        format!(
+            "<office:automatic-styles>\
+             <style:page-layout style:name=\"Mpm1\"><style:page-layout-properties fo:page-width=\"21.001cm\" \
+             fo:page-height=\"29.7cm\" style:print-orientation=\"portrait\" fo:margin-top=\"2cm\" \
+             fo:margin-bottom=\"2cm\" fo:margin-left=\"2cm\" fo:margin-right=\"2cm\" style:scale-to=\"100%\"/>\
+             <style:header-style/></style:page-layout>\
+             <style:page-layout style:name=\"Mpm2\"><style:page-layout-properties {pm2_props}/></style:page-layout>\
+             </office:automatic-styles><office:master-styles>\
+             <style:master-page style:name=\"Default\" style:page-layout-name=\"Mpm1\"/>\
+             <style:master-page style:name=\"PM2\" style:page-layout-name=\"Mpm2\"/>\
+             </office:master-styles>"
+        )
+    }
+
+    /// Two tables, "Scaled" printed through master page PM2 and "Plain"
+    /// with no table style (Calc's Default page).
+    const TWO_TABLES: &str = "<office:automatic-styles>\
+        <style:style style:name=\"ta2\" style:family=\"table\" style:master-page-name=\"PM2\">\
+        <style:table-properties table:display=\"true\"/></style:style></office:automatic-styles>\
+        <office:body><office:spreadsheet>\
+        <table:table table:name=\"Scaled\" table:style-name=\"ta2\"><table:table-row><table:table-cell/></table:table-row></table:table>\
+        <table:table table:name=\"Plain\"><table:table-row><table:table-cell/></table:table-row></table:table>\
+        </office:spreadsheet></office:body>";
+
+    fn ods_setups(pm2_props: &str) -> (PageSetup, PageSetup) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("print.ods");
+        write_ods_with_styles(&path, TWO_TABLES, &styles_with_pm2(pm2_props));
+        let mut props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let mut take = |name: &str| props.remove(name).and_then(|p| p.page_setup).expect(name);
+        (take("Scaled"), take("Plain"))
+    }
+
+    use suite_common_core::print::{Orientation, PageSetup, PageSize};
+
+    /// A sheet Calc prints at 46% on landscape A4 reads that way, through
+    /// its table style's master page; the sheet beside it on the Default
+    /// page keeps 100%.
+    #[test]
+    fn an_ods_sheets_print_scale_and_page_are_read_from_its_master_page() {
+        let (scaled, plain) = ods_setups(
+            "fo:page-width=\"29.7cm\" fo:page-height=\"21.001cm\" style:print-orientation=\"landscape\" \
+             fo:margin-top=\"1cm\" fo:margin-bottom=\"1.5cm\" fo:margin-left=\"10mm\" fo:margin-right=\"0.5in\" \
+             style:scale-to=\"46%\"",
+        );
+        assert_eq!(scaled.size, PageSize::A4);
+        assert_eq!(scaled.orientation, Orientation::Landscape);
+        assert!((scaled.scale - 0.46).abs() < 1e-9, "{}", scaled.scale);
+        assert_eq!(scaled.fit_to_pages, None);
+        assert!((scaled.margin_top_mm - 10.0).abs() < 0.01);
+        assert!((scaled.margin_bottom_mm - 15.0).abs() < 0.01);
+        assert!((scaled.margin_left_mm - 10.0).abs() < 0.01);
+        assert!((scaled.margin_right_mm - 12.7).abs() < 0.01);
+        assert_eq!(plain.orientation, Orientation::Portrait);
+        assert!((plain.scale - 1.0).abs() < 1e-9);
+        assert!((plain.margin_left_mm - 20.0).abs() < 0.01);
+    }
+
+    /// Calc's fit to width (#1349's contact list): one page wide, no limit
+    /// down, the Y count simply absent.
+    #[test]
+    fn an_ods_fit_to_width_reads_as_one_page_wide_unlimited_tall() {
+        let (scaled, _) = ods_setups("fo:page-width=\"29.7cm\" fo:page-height=\"21cm\" style:scale-to-X=\"1\"");
+        assert_eq!(scaled.fit_to_pages, Some((1, 0)));
+        assert_eq!(scaled.orientation, Orientation::Landscape, "wider than tall with no orientation");
+        let (both, _) = ods_setups("loext:scale-to-X=\"2\" loext:scale-to-Y=\"3\"");
+        assert_eq!(both.fit_to_pages, Some((2, 3)));
+        let (one, _) = ods_setups("style:scale-to-pages=\"1\"");
+        assert_eq!(one.fit_to_pages, Some((1, 1)));
+    }
+
+    #[test]
+    fn an_ods_scale_outside_ten_to_four_hundred_percent_prints_at_100() {
+        let (scaled, _) = ods_setups("style:scale-to=\"5%\"");
+        assert!((scaled.scale - 1.0).abs() < 1e-9);
+        let (custom, _) = ods_setups("fo:page-width=\"10cm\" fo:page-height=\"15cm\"");
+        let PageSize::Custom { width_mm, height_mm } = custom.size else { panic!("{:?}", custom.size) };
+        assert!((width_mm - 100.0).abs() < 0.01 && (height_mm - 150.0).abs() < 0.01, "{width_mm} × {height_mm}");
     }
 
     fn write_ods_fixture(path: &std::path::Path, body: &str) {

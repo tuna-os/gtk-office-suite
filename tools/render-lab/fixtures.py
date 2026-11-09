@@ -95,6 +95,13 @@ EXPORT = {
     "tables/chart-pie",
     "tables/chart-scatter",
     "tables/conditional",
+    # Print scale (#1336) and fit to page (#1330). print-scale's screenshot
+    # stays red by design: the editor shows the grid at 100%, Calc prints
+    # it at 46%. The export prints at the sheet's scale, so its own diff
+    # measures the scaling; the cells are the values fixture's, which is
+    # green on screen.
+    "tables/print-scale",
+    "tables/print-fit-page",
 }
 # NOTE (tables/chart-pie): both-green on screenshots; its export sat in the
 # amber band on Tesseract exact-match noise, not an exporter gap — the Q4
