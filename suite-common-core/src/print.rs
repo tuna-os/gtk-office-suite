@@ -41,6 +41,10 @@ pub struct PageSetup {
     pub margin_left_mm: f64,
     pub margin_right_mm: f64,
     pub scale: f64, // 1.0 = 100%
+    /// Fit the print to at most this many pages (wide, tall); 0 means no
+    /// limit in that direction. `None` prints at `scale`.
+    #[serde(default)]
+    pub fit_to_pages: Option<(u32, u32)>,
 }
 
 impl Default for PageSetup {
@@ -53,6 +57,7 @@ impl Default for PageSetup {
             margin_left_mm: 25.4,
             margin_right_mm: 25.4,
             scale: 1.0,
+            fit_to_pages: None,
         }
     }
 }

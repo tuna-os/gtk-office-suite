@@ -643,8 +643,18 @@ pub fn read_sheet_props_from_xlsx(
             }
         }
 
-        if let Some(tag) = xml.split("<pageSetup ").nth(1) {
-            let tag = tag.split('>').next().unwrap_or("");
+        // `<sheetPr><pageSetUpPr fitToPage="1"/>` switches the sheet from
+        // printing at `<pageSetup scale>` to fitting fitToWidth × fitToHeight
+        // pages. A sheet can set it with no `<pageSetup>` at all.
+        // `<pageSetUpPr>` is only legal inside `<sheetPr>`.
+        let fit_to_page = xml
+            .split("<pageSetUpPr")
+            .nth(1)
+            .map(|tag| xml_bool_attr(tag.split('>').next().unwrap_or(""), "fitToPage"))
+            .unwrap_or(false);
+        let page_setup_tag = xml.split("<pageSetup ").nth(1).map(|tag| tag.split('>').next().unwrap_or(""));
+        if page_setup_tag.is_some() || fit_to_page {
+            let tag = page_setup_tag.unwrap_or("");
             use suite_common_core::print::{Orientation, PageSetup, PageSize};
             let mut setup = PageSetup {
                 size: match xml_attr(tag, "paperSize") {
@@ -657,6 +667,15 @@ pub fn read_sheet_props_from_xlsx(
                     Some("landscape") => Orientation::Landscape,
                     _ => Orientation::Portrait,
                 },
+                // Excel's legal range is 10–400%; anything else prints at 100%.
+                scale: xml_attr(tag, "scale")
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .filter(|pct| (10..=400).contains(pct))
+                    .map_or(1.0, |pct| f64::from(pct) / 100.0),
+                fit_to_pages: fit_to_page.then(|| {
+                    let pages = |attr| xml_attr(tag, attr).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1);
+                    (pages("fitToWidth"), pages("fitToHeight"))
+                }),
                 ..PageSetup::default()
             };
             if let Some(m) = xml.split("<pageMargins ").nth(1) {

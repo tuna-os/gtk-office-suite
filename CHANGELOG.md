@@ -6,6 +6,9 @@
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 
+### Tables
+- Print scale and fit-to-page are read from XLSX and kept on save. They used to be dropped, so a sheet set to print at 46% or one page wide saved back at 100%.
+
 ## v1.0 (post-release) — 2026-06-24
 
 Features added after the v1.0 tag and GitHub release.
