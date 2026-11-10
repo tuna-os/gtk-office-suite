@@ -115,7 +115,7 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | B8 | partial | The office apps declare their file types, Lifafa `mailto:` and `message/rfc822`, Mandelbrot `x-scheme-handler/matrix`. Nothing offers the default through the standard prompts. |
 | B9 | partial | Lifafa has a Nautilus extension (`lifafa/src/desktop/nautilus_ext.rs`); it is not generalised to the suite. |
 | B11 | partial | `GtkPrintDialog` in Letters (`letters/src/printing.rs`) and Lifafa's print preview. Tables and Decks do not print through it. |
-| B1, B2, B7, B10, B12 | not started | No `SearchProvider2` or `.thumbnailer` in the tree; the Matrix account decision is made (ADR 0013), the shared account model is not; the office apps still request `--filesystem=xdg-documents`. |
+| B1, B2, B7, B10, B12 | not started | No `SearchProvider2` or `.thumbnailer` in the tree; the Matrix account decision is made (ADR 0013), the shared account model is not; the office apps still request `--filesystem=xdg-documents`. B10's audit is written up in [`SANDBOX-AUDIT.md`](SANDBOX-AUDIT.md) (no permission changed yet). |
 | A1, A2, A5, A6, A7, A9, A10 | not started | |
 | C1-C5 | not started | C1 waits on the shared chrome in `suite-common`. |
 | #1975 (licences) | done | Notices, SPDX rule, `deny.toml` for both nested workspaces, About dialogs (#2112). |
