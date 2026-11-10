@@ -512,19 +512,34 @@ impl LettersWindow {
             let a = gtk::gio::SimpleAction::new("export-pdf-typst", None);
             a.connect_activate(move |_, _| {
                 let Some(buf) = active_buffer(&tv) else { return };
-                let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+                // From the model (LET-003), not the buffer's text, which
+                // carries drawn list markers, table pipes and note marks.
+                let source = crate::engine::typst_source(&crate::bridge::document_of(&buf));
                 let dlg = gtk::FileDialog::new();
                 dlg.set_initial_name(Some("Untitled.pdf"));
                 let w2 = w.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
                     let Ok(file) = result else { return };
-                    let written = suite_common::locations::save_location(&file).and_then(|path| {
-                        crate::engine::export_pdf(&text, &path.to_string_lossy())
-                            .and_then(|()| suite_common::locations::commit_save(&path))
+                    let path = match suite_common::locations::save_location(&file) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could Not Export PDF"), &e);
+                            return;
+                        }
+                    };
+                    // Typesetting a long document takes a while: do it off
+                    // the main thread (#1985), and finish the save back on it,
+                    // where the staged remote locations live.
+                    let w3 = w2.clone();
+                    glib::spawn_future_local(async move {
+                        let target = path.clone();
+                        let compiled = gio::spawn_blocking(move || crate::engine::export_pdf(&source, &target.to_string_lossy()))
+                            .await
+                            .unwrap_or_else(|_| Err("PDF export stopped unexpectedly".to_string()));
+                        if let Err(e) = compiled.and_then(|()| suite_common::locations::commit_save(&path)) {
+                            suite_common::show_error_dialog(Some(&w3), &suite_common::i18n("Could Not Export PDF"), &e);
+                        }
                     });
-                    if let Err(e) = written {
-                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could Not Export PDF"), &e);
-                    }
                 });
             });
             app.add_action(&a);

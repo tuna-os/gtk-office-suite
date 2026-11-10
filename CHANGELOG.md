@@ -5,6 +5,7 @@
 ### Letters
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
+- Export as PDF With Typst (Approximate) works in the Flatpak: it typesets in process instead of running a `typst` program the app never shipped, does it without freezing the window, leaves no `.typ` file beside the PDF, and typesets the document itself on its own page size rather than the screen's list markers and table pipes. Text holding `#`, `$` or `//` no longer fails the export (#1985).
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
 
 ### Tables
