@@ -323,6 +323,18 @@ where
             Response::Fetch(_, attrs) => {
                 if let Some((uid, labels)) = gmail_labels_of(attrs, path) {
                     out.insert(uid, labels);
+                } else if attrs
+                    .iter()
+                    .any(|a| matches!(a, async_imap::imap_proto::AttributeValue::Unknown))
+                {
+                    // imap-proto 0.17 skips an item it cannot read (a label
+                    // sent as a literal) instead of failing the whole reply.
+                    // Without labels in it, that reply is as unreadable as
+                    // it used to be: do not ask again.
+                    refuse_gmail_labels(account_id);
+                    return Err(async_imap::error::Error::Io(std::io::Error::other(
+                        "unreadable X-GM-LABELS reply",
+                    )));
                 }
             }
             Response::Done {
