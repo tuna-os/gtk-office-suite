@@ -111,12 +111,13 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | B3 | partial | Lifafa has `Actions=new-message`. The office apps and Mandelbrot have no desktop actions, and there are no `xdg-templates`. |
 | B4 | partial | `GNotification` in `lifafa/src/desktop/notify.rs` and Mandelbrot's `session/notifications`. No shared notification module, no Do Not Disturb handling across the suite. |
 | B5 | partial | Lifafa has a "Run in background" setting (`lifafa/src/ui/preferences`). No Background portal request in any app. |
-| B6 | partial | `suite-common` follows the colour scheme through `adw::StyleManager`; text scale and reduced motion are followed by Lifafa only. |
+| B6 | mostly the toolkit | No app forces a scheme until the person toggles dark mode (`suite-common` only sets `ForceDark`/`ForceLight` then, and restores the saved choice at startup), so `adw::StyleManager` follows the desktop's colour scheme, accent and high contrast; GTK follows the desktop's text scale (`gtk-xft-dpi`) and animation setting itself. Lifafa adds its own size override (`lifafa/src/desktop/text_scale.rs`, off at 100%). Not covered by any journey: no test changes the desktop setting and watches an app follow. |
 | B8 | partial | The office apps declare their file types, Lifafa `mailto:` and `message/rfc822`, Mandelbrot `x-scheme-handler/matrix`. Nothing offers the default through the standard prompts. |
 | B9 | partial | Lifafa has a Nautilus extension (`lifafa/src/desktop/nautilus_ext.rs`); it is not generalised to the suite. |
 | B11 | partial | `GtkPrintDialog` in Letters (`letters/src/printing.rs`) and Lifafa's print preview. Tables and Decks do not print through it. |
 | B1, B2, B7, B10, B12 | not started | No `SearchProvider2` or `.thumbnailer` in the tree; the Matrix account decision is made (ADR 0013), the shared account model is not; the office apps still request `--filesystem=xdg-documents`. B10's audit is written up in [`SANDBOX-AUDIT.md`](SANDBOX-AUDIT.md) (no permission changed yet). |
-| A1, A2, A5, A6, A7, A9, A10 | not started | |
+| A10 | partial | A neutral fragment and a suite clipboard MIME exist and Letters, Tables and Decks copy and paste it (ADR 0012); outside HTML is not read. Audit in [`CLIPBOARD-AUDIT.md`](CLIPBOARD-AUDIT.md). |
+| A1, A2, A5, A6, A7, A9 | not started or model half only | A1 and A7 have their GTK-free halves (`MailDraft::for_documents`, `people::suggest`). |
 | C1-C5 | not started | C1 waits on the shared chrome in `suite-common`. |
 | #1975 (licences) | done | Notices, SPDX rule, `deny.toml` for both nested workspaces, About dialogs (#2112). |
 | #1973 (one Matrix account) | decided | ADR 0013 and `tests/test_matrix_sdk_pin.py` (#2114); the sign-in plumbing is not built. |
