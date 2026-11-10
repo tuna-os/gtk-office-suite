@@ -8,7 +8,7 @@
 
 use decks_core::engine::table::{TableCell, TableData};
 use decks_core::engine::{read_pptx, write_pptx, Deck, SlideObject};
-use letters_core::model::Run;
+use suite_common_core::document::Run;
 
 /// A 3x3 table: a title across the top row, and a label down two rows.
 fn table() -> TableData {

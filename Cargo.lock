@@ -925,7 +925,6 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "betteroffice-drawingml",
- "letters-core",
  "loro",
  "proptest",
  "quick-xml 0.42.0",
@@ -4987,7 +4986,6 @@ dependencies = [
  "calamine",
  "chrono",
  "ironcalc_base",
- "letters-core",
  "loro",
  "proptest",
  "regex",
