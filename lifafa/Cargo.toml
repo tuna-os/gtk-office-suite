@@ -36,7 +36,7 @@ relm4 = { version = "0.9", features = ["macros", "libadwaita"] }
 # sets is a 2024 release; the GNOME 50 runtime has 2.50.
 webkit6 = { version = "0.4", features = ["v2_44"] }
 # PDF thumbnails in the attachment gallery (first-page render via poppler-glib).
-poppler-rs = { version = "0.24", features = ["v20_9"] }
+poppler-rs = { version = "0.26", features = ["v20_9"] }
 # "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
 # rendered PDF page to gdk::Texture the same way every other thumbnail loads.
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
