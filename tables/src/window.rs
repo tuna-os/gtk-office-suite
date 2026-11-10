@@ -1217,6 +1217,7 @@ impl TablesWindow {
             mk("insert-chart", show_chart_dialog);
             mk("edit-chart", edit_chart_dialog);
             mk("insert-pivot-table", show_pivot_dialog);
+            mk("refresh-pivot-tables", crate::pivot_dialog::refresher(controller.clone(), drawing_area.clone()));
             {
                 let ctl = controller.clone();
                 let da = drawing_area.clone();
@@ -1337,6 +1338,7 @@ impl TablesWindow {
             ("app.insert-chart", &suite_common::i18n("Insert Chart…")),
             ("app.edit-chart", &suite_common::i18n("Edit Chart…")),
             ("app.insert-pivot-table", &suite_common::i18n("Insert Pivot Table…")),
+            ("app.refresh-pivot-tables", &suite_common::i18n("Refresh Pivot Tables")),
             ("app.conditional-format", &suite_common::i18n("Conditional Formatting…")),
             ("app.filter-by-column", &suite_common::i18n("Filter by Selected Column…")),
             ("app.clear-filter", &suite_common::i18n("Clear Filter")),
