@@ -32,7 +32,7 @@ use std::fs::File;
 use std::path::Path;
 use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 #[path = "parse/geometry.rs"]
 mod geometry;
@@ -86,6 +86,24 @@ fn close_paragraphs(runs: &mut [Run], count: usize) {
             last.text.push('\n');
         }
     }
+}
+
+/// The web or mail address an `a:hlinkClick` on a run's properties links
+/// to, through the part's external hyperlink relationships `links`
+/// (#1998). A click action (`ppaction://` jumps to a slide, a program, a
+/// macro) is not an address, and neither is a relationship that is not
+/// external: those are not kept, and the save warning says so.
+pub(crate) fn run_link(e: &BytesStart, links: &std::collections::HashMap<String, String>) -> Option<String> {
+    let mut id = None;
+    for a in e.attributes().flatten() {
+        let value = a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?.into_owned();
+        match a.key.as_ref() {
+            "r:id" => id = Some(value),
+            "action" if !value.is_empty() => return None,
+            _ => {}
+        }
+    }
+    links.get(&id?).filter(|t| !t.is_empty()).cloned()
 }
 
 /// The `(text, runs)` pair a `TextBox` is built from.
@@ -180,7 +198,9 @@ impl PendingShape {
             .iter()
             .zip(&self.run_refs)
             .map(|(r, i)| match i.and_then(|i| st.runs.get(i)) {
-                Some(p) => Run { text: r.text.clone(), style: p.style() },
+                // The resolved look, with the run's own link: a link is
+                // never inherited, so the resolver does not carry it.
+                Some(p) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..p.style() } },
                 None => r.clone(),
             })
             .collect();
@@ -374,6 +394,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let slide_rels_xml = archive.optional_part_to_string(&slide_rels_path, &mut budget);
 
         let mut slide_image_rels = std::collections::HashMap::new();
+        // The slide's external hyperlink targets by relationship id, for
+        // the `a:hlinkClick`s on its text runs (#1998).
+        let mut slide_link_rels: std::collections::HashMap<String, String> = std::collections::HashMap::new();
         if !slide_rels_xml.is_empty() {
             let mut reader = Reader::from_str(&slide_rels_xml);
             reader.config_mut().trim_text(true);
@@ -385,14 +408,22 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         if name.as_ref() == "Relationship" {
                             let mut id = None;
                             let mut target = None;
+                            let mut external = false;
+                            let mut hyperlink = false;
                             for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == "Id" {
-                                    id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
-                                } else if attr.key.as_ref() == "Target" {
-                                    target = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
+                                let value = || attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
+                                match attr.key.as_ref() {
+                                    "Id" => id = value(),
+                                    "Target" => target = value(),
+                                    "TargetMode" => external = value().as_deref() == Some("External"),
+                                    "Type" => hyperlink = value().is_some_and(|t| t.ends_with("/hyperlink")),
+                                    _ => {}
                                 }
                             }
                             if let (Some(id_val), Some(target_val)) = (id, target) {
+                                if hyperlink && external {
+                                    slide_link_rels.insert(id_val.clone(), target_val.clone());
+                                }
                                 slide_image_rels.insert(id_val, target_val);
                             }
                         }
@@ -423,7 +454,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let cxn_paint = cxn_styles(&slide_xml, &slide_theme, scale.x);
         let mut cxn_index = 0usize;
         // Tables live in p:graphicFrame, which the walker used to skip.
-        let mut tables = frame_tables(&slide_xml, &slide_theme);
+        let mut tables = frame_tables(&slide_xml, &slide_theme, &slide_link_rels);
         for t in &mut tables {
             t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
@@ -551,6 +582,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if rot.is_some() { shape.rotation = rot; }
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if rot.is_some() { pic.rotation = rot; }
+                                } else if in_grp_pr {
+                                    // The group's own rotation and flips (#1989).
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:off" => {
@@ -631,6 +667,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:r" | "a:fld" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.runs_seen += 1;
+                                    // A link is the run's own: a next run
+                                    // with no properties is not linked.
+                                    shape.cur_style.link = None;
                                 }
                             }
                             "a:rPr" => {
@@ -638,6 +677,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.cur_style = parse_run_style(e);
                                 }
                                 in_rpr = true;
+                            }
+                            "a:hlinkClick" if in_rpr => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.cur_style.link = run_link(e, &slide_link_rels);
+                                }
                             }
                             _ => {}
                         }
@@ -665,11 +709,17 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:r" | "a:fld" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.runs_seen += 1;
+                                    shape.cur_style.link = None;
                                 }
                             }
                             "a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.cur_style = parse_run_style(e);
+                                }
+                            }
+                            "a:hlinkClick" if in_rpr => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.cur_style.link = run_link(e, &slide_link_rels);
                                 }
                             }
                             "a:srgbClr" if in_rpr || (in_bg && !in_bg_blip) => {
@@ -807,10 +857,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let paint = cxn_paint.get(cxn_index).cloned().unwrap_or_default();
                             cxn_index += 1;
                             if let Some(shape) = current_shape.take() {
-                                let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
                                 let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
                                 let kind = ShapeKind::from_prst(shape.prst.as_deref().unwrap_or("line"));
-                                objects.push(SlideObject::Shape { kind, x, y, w, h, rotation: shape.rotation.unwrap_or(0.0), style: paint.style });
+                                objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                             }
                         } else if name.as_ref() == "p:sp" {
                             // This shape's fill and outline, resolved by the
@@ -866,10 +916,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         kind
                                     }
                                 };
-                                let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
                                 let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
-                                
-                                let rotation = shape.rotation.unwrap_or(0.0);
 
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) || role.is_some() {
                                     let (runs, mut body) = shape.resolve(text_style);
@@ -933,12 +981,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
-                                    let (x, y, w, h) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)));
+                                    let ((x, y, w, h), rotation) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)), pic.rotation.unwrap_or(0.0));
                                     let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
-                                    
+
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
-                                        PictureRect { x, y, w, h, rotation: pic.rotation.unwrap_or(0.0), crop: pic.crop },
+                                        PictureRect { x, y, w, h, rotation, crop: pic.crop },
                                         &slide_image_rels,
                                         &mut archive,
                                         &mut budget,
@@ -1379,7 +1427,7 @@ mod slide_size_tests {
 
     #[test]
     fn text_sizes_scale_with_the_slide_like_its_geometry() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         // Our own 10in slide: sizes are untouched, including "no size".
         let ours = SlideScale::default();
         let runs = vec![Run { text: "a".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
