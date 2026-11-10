@@ -352,6 +352,19 @@ mod imp {
             // This can't be added via the builder
             dialog.add_credit_section(Some(&gettext("Name by")), &["Regina Bíró"]);
 
+            // Mandelbrot is a fork: name the upstream and its licence, as the
+            // other suite apps do (the suite's `THIRD-PARTY-NOTICES.md`).
+            dialog.add_legal_section(
+                &gettext("Fractal"),
+                Some(&gettext("© The Fractal Team")),
+                gtk::License::Gpl30,
+                None,
+            );
+            dialog.add_link(
+                &gettext("Fractal, the project Mandelbrot is based on"),
+                "https://gitlab.gnome.org/World/fractal",
+            );
+
             // If the user wants our support room, try to open it ourselves.
             dialog.connect_activate_link(clone!(
                 #[weak(rename_to = imp)]
