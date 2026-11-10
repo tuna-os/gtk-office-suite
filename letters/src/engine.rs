@@ -2,7 +2,7 @@
 // page-faithful one (ADR 0010).
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// This re-typesets plain text through the Typst CLI: an explicitly
+// This re-typesets the document's Markdown through Typst: an explicitly
 // approximate alternative in the Export menu, never WYSIWYG evidence. What
 // Print Layout shows — and what Print, Print Preview and Export as PDF
 // write — is the tab's laid-out pages (printing.rs, `Typeset::draw_page`).
@@ -10,208 +10,247 @@
 // Document loading/saving uses letters-core through bridge.rs. Keeping a
 // second plain-text save pipeline here caused Save As to discard formatting.
 
-use std::fs;
+use letters_core::Document;
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 // ── Export helpers ───────────────────────────────────────────────────
 
-/// Export document to PDF via Typst CLI.
-/// Steps: Markdown → Typst source → `typst compile` → PDF.
-pub fn export_pdf(text: &str, output_path: &str) -> Result<(), String> {
-    let typst_src = markdown_to_typst(text);
-    let tmp_path = format!("{}.typ", output_path);
-    fs::write(&tmp_path, &typst_src).map_err(|e| format!("Write typst source: {}", e))?;
+/// The Typst source for `doc`: its Markdown (the live model, LET-003, not
+/// the buffer's presentation text with its list markers and table pipes),
+/// typeset on the document's own page size and margins.
+pub fn typst_source(doc: &Document) -> String {
+    let page = match &doc.page {
+        Some(g) => format!(
+            "#set page(width: {:.2}pt, height: {:.2}pt, margin: (top: {:.2}pt, bottom: {:.2}pt, left: {:.2}pt, right: {:.2}pt))\n",
+            g.width_pt, g.height_pt, g.margin_top_pt, g.margin_bottom_pt, g.margin_left_pt, g.margin_right_pt
+        ),
+        None => "#set page(margin: 2cm)\n".to_string(),
+    };
+    format!("{page}#set text(size: 11pt)\n\n{}", markdown_to_typst(&letters_core::markdown::serialize(doc)))
+}
 
-    let result = std::process::Command::new("typst")
-        .args(["compile", &tmp_path, output_path])
-        .output()
-        .map_err(|e| format!("typst not found: {}. Install typst CLI for PDF export.", e))?;
+/// Compile Typst source to a PDF at `output_path`, in process (#1985): the
+/// Flatpaks never shipped a `typst` binary, so the old `typst compile`
+/// subprocess failed for every installed user. This is slow on a long
+/// document; call it off the main thread.
+pub fn export_pdf(typst_src: &str, output_path: &str) -> Result<(), String> {
+    suite_export::compile_pdf_to_file(typst_src, output_path)
+}
 
-    if !result.status.success() {
-        let stderr = String::from_utf8_lossy(&result.stderr);
-        return Err(format!("typst compile failed: {}", stderr));
+/// Text as Typst markup: every ASCII punctuation mark is escaped, since
+/// most of them mean something there (`#` code, `$` math, `//` a comment,
+/// `=` or `-` at a line start a heading or list, `<` a label, `@` a
+/// reference) and a backslash before any of them is a literal.
+fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_ascii_punctuation() {
+            out.push('\\');
+        }
+        out.push(c);
     }
-
-    // Cleanup temp file
-    let _ = fs::remove_file(&tmp_path);
-    Ok(())
+    out
 }
 
-/// Convert Markdown text to Typst markup.
+/// A Typst string literal.
+fn string_literal(text: &str) -> String {
+    let mut out = String::from("\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => {}
+            _ => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Convert Markdown to Typst markup, from the parser's events rather than
+/// by rewriting HTML tags, so text that happens to hold `#`, `$` or `*` is
+/// typeset as text instead of failing the compile.
 fn markdown_to_typst(md: &str) -> String {
-    use pulldown_cmark::{Parser, html};
-    let parser = Parser::new(md);
-    let mut html_buf = String::new();
-    html::push_html(&mut html_buf, parser);
-
-    let src = format!(
-        "#set page(width: auto, height: auto, margin: 2cm)\n\
-         #set text(font: \"Sans\", size: 11pt)\n\n{}",
-        html_to_typst_simple(&html_buf)
-    );
-    src
-}
-
-/// Simple HTML-to-Typst conversion (inline only, sufficient for our needs).
-fn html_to_typst_simple(html: &str) -> String {
-    html.replace("<h1>", "= ").replace("</h1>", "\n")
-        .replace("<h2>", "== ").replace("</h2>", "\n")
-        .replace("<h3>", "=== ").replace("</h3>", "\n")
-        .replace("<p>", "").replace("</p>", "\n\n")
-        .replace("<strong>", "*").replace("</strong>", "*")
-        .replace("<em>", "_").replace("</em>", "_")
-        .replace("<ul>", "").replace("</ul>", "")
-        .replace("<li>", "- ").replace("</li>", "\n")
-        .replace("<ol>", "").replace("</ol>", "")
-        .replace("<code>", "`").replace("</code>", "`")
-        .replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    let mut out = String::new();
+    // Ordered (`+`) or bulleted (`-`) for each open list.
+    let mut lists: Vec<bool> = Vec::new();
+    let mut code: Option<String> = None;
+    let mut image_depth = 0usize;
+    let line_start = |out: &mut String| {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+    };
+    for event in Parser::new_ext(md, Options::ENABLE_STRIKETHROUGH) {
+        if let Some(buf) = code.as_mut() {
+            match event {
+                Event::Text(t) => buf.push_str(&t),
+                Event::End(TagEnd::CodeBlock) => {
+                    let text = code.take().unwrap_or_default();
+                    line_start(&mut out);
+                    out.push_str(&format!("#raw(block: true, {})\n\n", string_literal(text.trim_end_matches('\n'))));
+                }
+                _ => {}
+            }
+            continue;
+        }
+        if image_depth > 0 {
+            match event {
+                Event::Start(Tag::Image { .. }) => image_depth += 1,
+                Event::End(TagEnd::Image) => image_depth -= 1,
+                Event::Text(t) | Event::Code(t) => out.push_str(&escape(&t)),
+                _ => {}
+            }
+            continue;
+        }
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                line_start(&mut out);
+                let depth = match level {
+                    HeadingLevel::H1 => 1,
+                    HeadingLevel::H2 => 2,
+                    HeadingLevel::H3 => 3,
+                    HeadingLevel::H4 => 4,
+                    HeadingLevel::H5 => 5,
+                    HeadingLevel::H6 => 6,
+                };
+                out.push_str(&"=".repeat(depth));
+                out.push(' ');
+            }
+            Event::End(TagEnd::Heading(_)) => out.push_str("\n\n"),
+            Event::Start(Tag::Paragraph) => {}
+            Event::End(TagEnd::Paragraph) => out.push_str(if lists.is_empty() { "\n\n" } else { "\n" }),
+            Event::Start(Tag::Strong) => out.push_str("#strong["),
+            Event::Start(Tag::Emphasis) => out.push_str("#emph["),
+            Event::Start(Tag::Strikethrough) => out.push_str("#strike["),
+            Event::End(TagEnd::Strong | TagEnd::Emphasis | TagEnd::Strikethrough | TagEnd::Link) => out.push(']'),
+            Event::Start(Tag::Link { dest_url, .. }) => out.push_str(&format!("#link({})[", string_literal(&dest_url))),
+            Event::Start(Tag::Image { .. }) => image_depth = 1,
+            Event::Start(Tag::BlockQuote(_)) => {
+                line_start(&mut out);
+                out.push_str("#quote(block: true)[\n");
+            }
+            Event::End(TagEnd::BlockQuote(_)) => {
+                line_start(&mut out);
+                out.push_str("]\n\n");
+            }
+            Event::Start(Tag::CodeBlock(_)) => code = Some(String::new()),
+            Event::Start(Tag::List(first)) => {
+                line_start(&mut out);
+                lists.push(first.is_some());
+            }
+            Event::End(TagEnd::List(_)) => {
+                lists.pop();
+                if lists.is_empty() {
+                    out.push('\n');
+                }
+            }
+            Event::Start(Tag::Item) => {
+                line_start(&mut out);
+                out.push_str(&"  ".repeat(lists.len().saturating_sub(1)));
+                out.push_str(if lists.last() == Some(&true) { "+ " } else { "- " });
+            }
+            Event::End(TagEnd::Item) => line_start(&mut out),
+            Event::Text(t) => out.push_str(&escape(&t)),
+            Event::Code(t) => out.push_str(&format!("#raw({})", string_literal(&t))),
+            Event::SoftBreak => out.push(' '),
+            Event::HardBreak => out.push_str(" \\\n"),
+            Event::Rule => {
+                line_start(&mut out);
+                out.push_str("#line(length: 100%)\n\n");
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn compiles(src: &str) -> Vec<u8> {
+        suite_export::compile_pdf(src).unwrap_or_else(|e| panic!("{e}\n--- source ---\n{src}"))
+    }
 
     #[test]
-    fn test_markdown_to_typst_basic() {
-        let md = "# Title\n\nParagraph with **bold** and *italic*.";
+    fn headings_emphasis_and_lists_become_typst_markup() {
+        let typst = markdown_to_typst("# Title\n\n## Sub\n\nWith **bold** and *italic*.\n\n- a\n- b\n\n1. one\n2. two\n");
+        assert!(typst.contains("= Title\n"), "{typst}");
+        assert!(typst.contains("== Sub\n"), "{typst}");
+        assert!(typst.contains("#strong[bold]"), "{typst}");
+        assert!(typst.contains("#emph[italic]"), "{typst}");
+        assert!(typst.contains("- a\n- b\n"), "{typst}");
+        assert!(typst.contains("+ one\n+ two\n"), "{typst}");
+        compiles(&typst);
+    }
+
+    /// Text that is Typst syntax must come out as text: before, a `#` or a
+    /// `$` in a paragraph went through verbatim and failed the compile.
+    #[test]
+    fn typst_syntax_in_the_text_is_escaped_and_compiles() {
+        let punctuation: String = (0x21u8..0x7f).map(char::from).filter(char::is_ascii_punctuation).collect();
+        let md = format!("Price $5 #1 // not a comment, <label> @ref\n\n{}\n\n= not a heading", punctuation.chars().flat_map(|c| ['\\', c]).collect::<String>());
+        let typst = markdown_to_typst(&md);
+        assert!(typst.contains(r"\$5 \#1 \/\/ not a comment"), "{typst}");
+        compiles(&typst);
+    }
+
+    #[test]
+    fn code_links_quotes_and_rules_compile() {
+        let md = "Some `inline \"code\"` here.\n\n```\nfn main() { \"x\\y\" }\n```\n\n> quoted\n\n---\n\n[a link](https://example.org/a?b=c) and ![alt](pic.png)\n\n~~gone~~\n";
         let typst = markdown_to_typst(md);
-        assert!(typst.contains("= Title"));
-        assert!(typst.contains("*bold*"));
-        assert!(typst.contains("_italic_"));
-    }
-
-
-
-    #[test]
-    fn test_markdown_to_typst_heading_levels() {
-        let md = "# H1\n## H2\n### H3";
-        let typst = markdown_to_typst(md);
-        assert!(typst.contains("= H1"));
-        assert!(typst.contains("== H2"));
-        assert!(typst.contains("=== H3"));
+        assert!(typst.contains("#raw(block: true, \"fn main() { \\\"x\\\\y\\\" }\")"), "{typst}");
+        assert!(typst.contains("#link(\"https://example.org/a?b=c\")[a link]"), "{typst}");
+        assert!(typst.contains("alt"), "the image's alternative text stays: {typst}");
+        assert!(typst.contains("#strike[gone]"), "{typst}");
+        compiles(&typst);
     }
 
     #[test]
-    fn test_markdown_to_typst_code() {
-        let md = "Some \n\n```\ncode block\n```";
-        let typst = markdown_to_typst(md);
-        assert!(typst.contains("code block"));
+    fn nested_lists_indent_under_their_item() {
+        let typst = markdown_to_typst("- a\n  - b\n- c\n");
+        assert!(typst.contains("- a\n  - b\n- c\n"), "{typst}");
+        compiles(&typst);
     }
 
-    // ── html_to_typst_simple ───────────────────────────────────────────
-
+    /// The source comes from the model, so a table's cells are paragraphs
+    /// of text, not the buffer's pipe grid, and the page is the document's.
     #[test]
-    fn test_html_to_typst_simple_handles_ordered_lists() {
-        let html = "<ol>\n<li>one</li>\n<li>two</li>\n</ol>\n";
-        let out = html_to_typst_simple(html);
-        assert!(out.contains("- one"), "ordered item one missing: {out:?}");
-        assert!(out.contains("- two"), "ordered item two missing: {out:?}");
+    fn the_source_is_the_model_on_its_own_page() {
+        let mut doc = Document::from_plain_text("Intro");
+        doc.insert_table_at(1, 1, 2);
+        doc.page = Some(letters_core::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() });
+        let src = typst_source(&doc);
+        assert!(src.starts_with("#set page(width: 612.00pt, height: 792.00pt"), "{src}");
+        assert!(!src.contains('|'), "{src}");
+        compiles(&src);
     }
 
-    #[test]
-    fn test_html_to_typst_simple_handles_line_break_variants() {
-        for tag in ["<br>", "<br/>", "<br />"] {
-            let out = html_to_typst_simple(&format!("line1{tag}line2"));
-            assert!(
-                out.contains("line1\nline2"),
-                "tag {tag:?} not converted to newline: {out:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_html_to_typst_simple_strips_all_html_tags() {
-        let html =
-            "<h1>T</h1><p><strong>bold</strong> <em>em</em> <code>c</code></p><ul><li>a</li></ul>";
-        let out = html_to_typst_simple(html);
-        assert!(!out.contains('<'), "HTML leaked: {out:?}");
-        assert!(!out.contains('>'), "HTML leaked: {out:?}");
-    }
-
-    // ── export_pdf ─────────────────────────────────────────────────────
-
-    use std::sync::Mutex;
-
-    /// Serializes tests that mutate the process-wide PATH variable.
-    static PATH_LOCK: Mutex<()> = Mutex::new(());
-
-    /// Sets PATH for the lifetime of the guard, restoring it on drop.
-    struct WithPath {
-        saved: String,
-        _guard: std::sync::MutexGuard<'static, ()>,
-    }
-
-    impl WithPath {
-        fn set(path: &str) -> WithPath {
-            let _guard = PATH_LOCK.lock().unwrap();
-            let saved = std::env::var("PATH").unwrap_or_default();
-            std::env::set_var("PATH", path);
-            WithPath { saved, _guard }
-        }
-    }
-
-    impl Drop for WithPath {
-        fn drop(&mut self) {
-            std::env::set_var("PATH", &self.saved);
-        }
-    }
-
-    /// Installs a fake `typst` executable and points PATH at its directory.
-    fn install_fake_typst(script: &str) -> WithPath {
-        static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let dir =
-            std::env::temp_dir().join(format!("letters-fake-typst-{}-{n}", std::process::id()));
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("letters-typst-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("typst"), script).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(dir.join("typst"), std::fs::Permissions::from_mode(0o755))
-                .unwrap();
-        }
-        WithPath::set(dir.to_str().unwrap())
+        dir
     }
 
     #[test]
-    fn test_export_pdf_errors_when_typst_missing() {
-        // Point PATH at an empty directory so `typst` is not found.
-        let dir = std::env::temp_dir().join(format!("letters-empty-bin-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let _path = WithPath::set(dir.to_str().unwrap());
-
-        let out =
-            std::env::temp_dir().join(format!("letters-pdf-missing-{}.pdf", std::process::id()));
-        let err = export_pdf("# Title", out.to_str().unwrap()).unwrap_err();
-        assert!(err.contains("typst not found"), "got: {err}");
+    fn export_writes_a_pdf_with_no_typst_binary_and_leaves_no_source_behind() {
+        let dir = scratch("ok");
+        let out = dir.join("letter.pdf");
+        export_pdf(&typst_source(&Document::from_plain_text("Hello #1")), out.to_str().unwrap()).unwrap();
+        assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-"));
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left, [std::ffi::OsString::from("letter.pdf")]);
     }
 
     #[test]
-    fn test_export_pdf_reports_compile_failure() {
-        let _path = install_fake_typst("#!/bin/sh\nexit 1\n");
-        let out = std::env::temp_dir().join(format!("letters-pdf-fail-{}.pdf", std::process::id()));
-        let err = export_pdf("# Title", out.to_str().unwrap()).unwrap_err();
-        assert!(err.contains("typst compile failed"), "got: {err}");
-    }
-
-    #[test]
-    fn test_export_pdf_success_writes_pdf_and_cleans_temp_source() {
-        let _path = install_fake_typst("#!/bin/sh\nprintf '%%PDF-1.4 fake' > \"$3\"\n");
-        let out = std::env::temp_dir().join(format!("letters-pdf-ok-{}.pdf", std::process::id()));
-        export_pdf("# Title", out.to_str().unwrap()).expect("export succeeds with fake typst");
-
-        let pdf = std::fs::read_to_string(&out).expect("pdf written by fake typst");
-        assert!(
-            pdf.starts_with("%PDF-1.4"),
-            "unexpected pdf content: {pdf:?}"
-        );
-
-        let temp_source = std::fs::read_to_string(format!("{}.typ", out.display()));
-        assert!(
-            temp_source.is_err(),
-            "temp .typ should be cleaned up on success"
-        );
-
-        let _ = std::fs::remove_file(&out);
+    fn a_compile_error_is_reported_and_writes_nothing() {
+        let out = scratch("bad").join("bad.pdf");
+        let err = export_pdf("#nonexistent_function()", out.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("typst compile failed"), "{err}");
+        assert!(!out.exists());
     }
 }

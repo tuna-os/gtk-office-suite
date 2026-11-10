@@ -40,7 +40,9 @@ poppler-rs = { version = "0.24", features = ["v20_9"] }
 # "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
 # rendered PDF page to gdk::Texture the same way every other thumbnail loads.
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
-cairo-rs = { version = "0.22", features = ["png", "pdf"] }
+# Held at the cairo-rs that gtk4 0.9 and pangocairo 0.20 use: a newer one is
+# a second cairo whose surfaces the toolkit cannot draw (#1986).
+cairo-rs = { version = "0.20", features = ["png", "pdf"] }
 # The printed page footer's text, laid out by Pango so any script prints (#359).
 pangocairo = "0.20"
 # The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
@@ -60,7 +62,8 @@ zeroize = "1"
 # Async mail stack (runs on a dedicated worker thread + tokio runtime)
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "io-std"] }
 futures = "0.3"
-async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
+# Held at 0.10: 0.12 reshaped imap-proto's types the IMAP worker uses (#1986).
+async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
 async-native-tls = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
 mail-parser = "0.9"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
@@ -97,7 +100,7 @@ ksni = { version = "0.3.6", default-features = false, features = ["tokio", "bloc
 gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
 markup5ever_rcdom = "0.39.0"
-html5ever = "0.39"
+html5ever = "0.40"
 css-inline = { version = "0.23.0", default-features = false }
 # A notification button that shows no window has to tell GNOME Shell its
 # launch is over (see src/desktop/startup.rs). On Wayland that takes
@@ -114,7 +117,7 @@ cfb = "0.16.0"
 # Whether an X server can attach this process's shared memory, before GTK
 # picks a renderer (#547): libxcb is opened at run time, and the segment made
 # with shmget. Both crates are already in the graph.
-libloading = "0.8"
+libloading = "0.9"
 libc = "0.2"
 # Grammar checking (#452): unpacking Harper, LanguageTool and the Java
 # runtime LanguageTool runs on, which a user can download from Settings.

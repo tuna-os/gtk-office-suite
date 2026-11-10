@@ -231,6 +231,12 @@ mod imp {
                 }
                 typeset.draw_page(&cr, index);
                 draw_comment_marks(&cr, &marks, index);
+                // Misspelled words: the spell checker's tag on the buffer,
+                // drawn as a red wave under each (#1894). Not document
+                // content, so print, PDF and a capture leave it out.
+                if chrome {
+                    draw_error_underlines(&cr, &obj.error_underlines(typeset), index);
+                }
                 let visible = self.caret_on.get() || self.blink.borrow().is_none();
                 if let (true, Some(c)) = (chrome && visible && obj.has_focus() && selection.is_empty(), caret) {
                     if c.page == index {
@@ -244,6 +250,34 @@ mod imp {
                 snapshot.append_node(gsk::TransformNode::new(&node, Some(&to_page)));
             }
         }
+    }
+}
+
+/// Draw the misspelling waves on page `index`: `spans` are (page, x,
+/// baseline, width) in points, as `Typeset::error_underlines` gives them.
+fn draw_error_underlines(cr: &gtk::cairo::Context, spans: &[(usize, f64, f64, f64)], index: usize) {
+    // A wave of 0.75 pt amplitude and 3 pt period, 1.5 pt below the
+    // baseline: in the descent, clear of the letters, as GtkTextView's.
+    const AMP: f64 = 0.75;
+    const HALF: f64 = 1.5;
+    let mut any = false;
+    for (_, x, baseline, w) in spans.iter().filter(|s| s.0 == index) {
+        let y = baseline + 1.5 + AMP;
+        cr.move_to(*x, y);
+        let mut at = 0.0;
+        let mut up = true;
+        while at < *w {
+            let step = HALF.min(w - at);
+            at += step;
+            cr.line_to(x + at, if up { y - AMP } else { y + AMP });
+            up = !up;
+        }
+        any = true;
+    }
+    if any {
+        cr.set_source_rgb(0.88, 0.11, 0.14);
+        cr.set_line_width(0.6);
+        let _ = cr.stroke();
     }
 }
 
@@ -417,6 +451,19 @@ impl PageView {
                 v.update_contents(gtk::AccessibleTextContentChange::Remove, s.offset().max(0) as u32, e.offset().max(0) as u32);
             }
         });
+        // The spell checker re-tags after each edit, on idle: redraw then,
+        // or the waves lag a keystroke behind (#1894).
+        let redraw = |v: &glib::WeakRef<Self>, tag: &gtk::TextTag| {
+            if tag.name().as_deref() == Some("spelling-error") {
+                if let Some(v) = v.upgrade() {
+                    v.queue_draw();
+                }
+            }
+        };
+        let v = self.downgrade();
+        buf.connect_apply_tag(move |_, tag, _, _| redraw(&v, tag));
+        let v = self.downgrade();
+        buf.connect_remove_tag(move |_, tag, _, _| redraw(&v, tag));
         let v = self.downgrade();
         buf.connect_mark_set(move |_, _, mark| {
             let Some(v) = v.upgrade() else { return };
@@ -439,6 +486,42 @@ impl PageView {
         let para = typeset.document().paragraphs.get(pos.para)?;
         let start = *self.imp().starts.borrow().get(pos.para)?;
         Some(crate::bridge::buffer_offset(para, start, pos.offset))
+    }
+
+    /// The buffer's misspelled words, as the spell checker tagged them
+    /// (`spelling-error`): buffer offset ranges, in order.
+    fn spelling_ranges(&self) -> Vec<(usize, usize)> {
+        let Some(buf) = self.buffer() else { return Vec::new() };
+        let Some(tag) = buf.tag_table().lookup("spelling-error") else { return Vec::new() };
+        let mut out = Vec::new();
+        let mut it = buf.start_iter();
+        if !it.starts_tag(Some(&tag)) && !it.has_tag(&tag) && !it.forward_to_tag_toggle(Some(&tag)) {
+            return out;
+        }
+        loop {
+            let start = it.offset().max(0) as usize;
+            if !it.forward_to_tag_toggle(Some(&tag)) {
+                // A word tagged to the buffer's end.
+                let end = buf.end_iter().offset().max(0) as usize;
+                if end > start {
+                    out.push((start, end));
+                }
+                break;
+            }
+            out.push((start, it.offset().max(0) as usize));
+            if !it.forward_to_tag_toggle(Some(&tag)) {
+                break;
+            }
+        }
+        out
+    }
+
+    /// Where the misspelling waves go: (page, x, baseline, width) in points.
+    pub(crate) fn error_underlines(&self, typeset: &Typeset) -> Vec<(usize, f64, f64, f64)> {
+        self.spelling_ranges()
+            .into_iter()
+            .flat_map(|(s, e)| typeset.error_underlines(self.text_pos(typeset, s), self.text_pos(typeset, e)))
+            .collect()
     }
 
     /// Caret and selection rectangles for the buffer's current marks.
@@ -727,6 +810,49 @@ mod tests {
             assert_eq!(v.revision(), 7);
             v.update_document(doc, LayoutOptions::default(), vec![0, 4], 8);
             assert_eq!(v.revision(), 8, "an edited layout re-pins its snapshot's revision");
+        });
+    }
+
+    /// The spell checker's tagged words get a red wave in the page view
+    /// (#1894): the view reads the `spelling-error` ranges off the buffer,
+    /// places one span under each word, and draws it in red.
+    #[test]
+    fn misspelled_words_get_a_red_wave() {
+        gtk_test(|| {
+            let v = PageView::new();
+            let buf = gtk::TextBuffer::new(None);
+            buf.set_text("teh quik brown fox");
+            let tag = gtk::TextTag::builder().name("spelling-error").build();
+            buf.tag_table().add(&tag);
+            v.set_buffer(&buf);
+            let doc = Document::from_plain_text("teh quik brown fox");
+            v.set_typeset(Typeset::new(doc, LayoutOptions::default()), vec![0]);
+            let spans_now = || v.error_underlines(v.imp().typeset.borrow().as_ref().unwrap());
+            assert!(spans_now().is_empty(), "nothing tagged yet");
+            buf.apply_tag(&tag, &buf.iter_at_offset(0), &buf.iter_at_offset(3));
+            buf.apply_tag(&tag, &buf.iter_at_offset(4), &buf.iter_at_offset(8));
+            assert_eq!(v.spelling_ranges(), vec![(0, 3), (4, 8)]);
+            let spans = spans_now();
+            assert_eq!(spans.len(), 2, "one wave under each word: {spans:?}");
+            assert!(spans[0].1 < spans[1].1 && spans.iter().all(|s| s.0 == 0 && s.3 > 0.0));
+            // Drawn in red, under the words.
+            let surface = gtk::cairo::ImageSurface::create(gtk::cairo::Format::Rgb24, 700, 200).unwrap();
+            let cr = gtk::cairo::Context::new(&surface).unwrap();
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            let _ = cr.paint();
+            draw_error_underlines(&cr, &spans, 0);
+            draw_error_underlines(&cr, &spans, 1);
+            drop(cr);
+            let stride = surface.stride() as usize;
+            let data = surface.take_data().unwrap();
+            let red = (0..data.len() / 4).filter(|p| {
+                let (b, g, r) = (data[p * 4], data[p * 4 + 1], data[p * 4 + 2]);
+                r > 150 && g < 150 && b < 150
+            });
+            let rows: Vec<usize> = red.map(|p| p * 4 / stride).collect();
+            assert!(!rows.is_empty(), "the waves are red");
+            let baseline = spans[0].2;
+            assert!(rows.iter().all(|r| (*r as f64) > baseline && (*r as f64) < baseline + 5.0), "just below the baseline");
         });
     }
 }

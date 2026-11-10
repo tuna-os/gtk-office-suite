@@ -607,6 +607,7 @@ struct LineRef {
     box_w: f64,
     x: f64,
     top: f64,
+    baseline: f64,
     height: f64,
     start: usize,
     end: usize,
@@ -1023,7 +1024,7 @@ impl Typeset {
         page.items
             .iter()
             .filter_map(|i| match i {
-                Item::Line { source: Source::Paragraph(p), line, box_x_pt, box_width_pt, x_pt, top_pt, height_pt, start, end, .. } => {
+                Item::Line { source: Source::Paragraph(p), line, box_x_pt, box_width_pt, x_pt, top_pt, baseline_pt, height_pt, start, end, .. } => {
                     Some(LineRef {
                         para: *p,
                         line: *line,
@@ -1031,6 +1032,7 @@ impl Typeset {
                         box_w: *box_width_pt,
                         x: *x_pt,
                         top: *top_pt,
+                        baseline: *baseline_pt,
                         height: *height_pt,
                         start: *start,
                         end: *end,
@@ -1095,6 +1097,30 @@ impl Typeset {
     /// Rectangles covering the text from `from` to `to` (in document order),
     /// one per line piece: (page, x, top, width, height) in points.
     pub fn selection_rects(&self, from: TextPos, to: TextPos) -> Vec<SelectionRect> {
+        self.line_pieces(from, to, true)
+            .into_iter()
+            .map(|(page, l, x, w)| (page, x, l.top, w, l.height))
+            .collect()
+    }
+
+    /// Where a misspelling's wavy underline goes under the text from
+    /// `from` to `to`: (page, x, baseline, width) in points, one for each
+    /// line the text is on. The underline hangs below the baseline, as
+    /// GtkTextView's error underline does; it is not document content, so
+    /// the page view draws it and print and PDF do not.
+    pub fn error_underlines(&self, from: TextPos, to: TextPos) -> Vec<(usize, f64, f64, f64)> {
+        self.line_pieces(from, to, false)
+            .into_iter()
+            .filter(|(_, _, _, w)| *w > 0.0)
+            .map(|(page, l, x, w)| (page, x, l.baseline, w))
+            .collect()
+    }
+
+    /// Each laid-out line's piece of the text from `from` to `to`: its
+    /// page, its line, and the piece's x and width in points. With
+    /// `newlines`, a piece running past its paragraph's end includes the
+    /// newline, a space's width, as a selection shows it.
+    fn line_pieces(&self, from: TextPos, to: TextPos, newlines: bool) -> Vec<(usize, LineRef, f64, f64)> {
         let (a, b) = if (to.para, to.offset) < (from.para, from.offset) { (to, from) } else { (from, to) };
         let mut out = Vec::new();
         for index in 0..self.tree.pages.len() {
@@ -1104,7 +1130,7 @@ impl Typeset {
                 }
                 let s = if l.para == a.para { a.offset.max(l.start) } else { l.start };
                 let e = if l.para == b.para { b.offset.min(l.end) } else { l.end };
-                let whole_rest = l.para < b.para && l.end >= self.layout_len(l.para);
+                let whole_rest = newlines && l.para < b.para && l.end >= self.layout_len(l.para);
                 if s > e || (s == e && !whole_rest) {
                     continue;
                 }
@@ -1119,7 +1145,9 @@ impl Typeset {
                 if whole_rest {
                     x1 += 4.0;
                 }
-                out.push((index, l.x + x0.min(x1), l.top, (x1 - x0).abs(), l.height));
+                let x = l.x + x0.min(x1);
+                let w = (x1 - x0).abs();
+                out.push((index, l, x, w));
             }
         }
         out
@@ -2058,6 +2086,27 @@ mod tests {
         assert!(rects.iter().all(|r| r.3 > 0.0));
         // Reversed ends select the same text.
         assert_eq!(rects, t.selection_rects(TextPos { para: 1, offset: 9 }, TextPos { para: 0, offset: 4 }));
+    }
+
+    /// A misspelling's underline sits under its word, on its line's
+    /// baseline, as wide as the word: one span per line it is on (#1894).
+    #[test]
+    fn an_error_underline_spans_its_word_on_the_baseline() {
+        let t = Typeset::new(doc(1, "teh quik brown fox"), LayoutOptions::default());
+        let word = t.selection_rects(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 8 });
+        let spans = t.error_underlines(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 8 });
+        assert_eq!(spans.len(), 1, "one line: {spans:?}");
+        let (page, x, baseline, w) = spans[0];
+        let (rpage, rx, top, rw, h) = word[0];
+        assert_eq!((page, x, w), (rpage, rx, rw), "under exactly the word 'quik'");
+        assert!(baseline > top && baseline < top + h, "on the line's baseline: {top} {baseline} {h}");
+        assert!(t.error_underlines(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 4 }).is_empty(), "an empty range has no underline");
+        // A word broken across lines gets a span on each.
+        let long = "word ".repeat(40) + "misspeled";
+        let t = Typeset::new(doc(2, &long), LayoutOptions::default());
+        let spans = t.error_underlines(TextPos { para: 0, offset: 0 }, TextPos { para: 1, offset: 3 });
+        assert!(spans.len() >= 3, "every line of the first paragraph and one of the second: {}", spans.len());
+        assert!(spans.iter().all(|s| s.3 > 0.0));
     }
 
     #[test]
