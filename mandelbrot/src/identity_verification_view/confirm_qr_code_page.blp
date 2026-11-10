@@ -1,0 +1,91 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationConfirmQrCodePage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label title {
+          label: _("Confirm Scan");
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Picture {
+          file: "resource:///org/tunaos/mandelbrot/assets/setup-complete.svg";
+          accessible-role: presentation;
+        }
+
+        Gtk.Label question {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Adw.WrapBox {
+          child-spacing: 12;
+          line-spacing: 12;
+          align: 0.5;
+
+          $LoadingButton cancel_btn {
+            content-label: _("Cancel");
+            halign: center;
+            clicked => $cancel() swapped;
+
+            styles [
+              "destructive-action",
+              "pill",
+            ]
+
+            accessibility {
+              described-by: [
+                question,
+              ];
+            }
+          }
+
+          $LoadingButton confirm_btn {
+            content-label: _("Confirm");
+            halign: center;
+            clicked => $confirm_scanned() swapped;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+
+            accessibility {
+              described-by: [
+                question,
+              ];
+            }
+          }
+        }
+      };
+    };
+  }
+}

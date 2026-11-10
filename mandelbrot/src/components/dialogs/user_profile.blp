@@ -1,0 +1,21 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $UserProfileDialog: $ToastableDialog {
+  title: _("User Profile");
+  content-width: 500;
+
+  child-content: Gtk.Stack stack {
+    Gtk.StackPage {
+      name: "loading";
+
+      child: Adw.Spinner {};
+    }
+
+    Gtk.StackPage {
+      name: "details";
+
+      child: $UserPage user_page {};
+    }
+  };
+}

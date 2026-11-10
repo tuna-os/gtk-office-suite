@@ -1,0 +1,98 @@
+# MatrixRTC interop e2e stack for Mandelbrot (single homeserver).
+#
+# Adapted from element-call's docker-compose-dev.yml + backend/ (AGPL dev
+# fixtures), minimized to one site and plain-HTTP client access:
+#   - synapse       Matrix homeserver, MSC4140 delayed events enabled
+#   - nginx         TLS termination at synapse.m.localhost (ONLY needed
+#                   because lk-jwt-service validates OpenID tokens via the
+#                   federation API, which requires https). Also exposes
+#                   synapse over plain http on host port 8008.
+#   - livekit       LiveKit SFU. Runs on the HOST network so that its ICE
+#                   candidates are host-reachable from test clients running
+#                   on the same machine (rootless podman container IPs are
+#                   not routable from the host).
+#   - auth-service  MSC4195 lk-jwt-service; returns ws://127.0.0.1:7880 as
+#                   the SFU URL, i.e. test clients must run on this host.
+#
+# Works with podman-compose (rootless) and docker compose.
+
+networks:
+  mrtc:
+
+services:
+  synapse:
+    image: ghcr.io/element-hq/synapse:latest
+    hostname: homeserver
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/cfg/homeserver.yaml
+      # For rootless podman: run as root inside the userns so that the data
+      # volume is writable (root maps to the invoking user on the host).
+      - UID=0
+      - GID=0
+    volumes:
+      - ./synapse_tmp:/data:Z
+      - ./synapse/homeserver.yaml:/data/cfg/homeserver.yaml:Z
+    networks:
+      - mrtc
+
+  nginx:
+    image: docker.io/library/nginx:latest
+    security_opt:
+      # The image symlinks /var/log/nginx/error.log to /dev/stderr. With
+      # SELinux enforcing (Fedora/Bluefin) and podman's journald log driver,
+      # container_t may not open that stream: nginx exits 1 with
+      # "open() /var/log/nginx/error.log failed (13: Permission denied)".
+      # Docker without SELinux (CI) is unaffected; this is a no-op there.
+      - label=disable
+    extra_hosts:
+      # The MatrixRTC proxy blocks reach the host gateway under podman's name
+      # for it. Docker only provides `host.docker.internal`, so map the name
+      # explicitly; podman accepts the same mapping.
+      - "host.containers.internal:host-gateway"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:Z
+      - ./tls/dev_tls_m.localhost.key:/root/ssl/key.pem:Z
+      - ./tls/dev_tls_m.localhost.crt:/root/ssl/cert.pem:Z
+    ports:
+      # Plain-http client access to synapse from the host.
+      - "8008:80"
+      # Federation (https): used by the host-networked auth-service for the
+      # MSC4195 OpenID token validation.
+      - "8448:8448"
+    depends_on:
+      - synapse
+    networks:
+      mrtc:
+        aliases:
+          # lk-jwt-service resolves the Matrix server name
+          # (synapse.m.localhost) inside the compose network and talks
+          # https to nginx, which proxies to synapse.
+          - synapse.m.localhost
+          - matrix-rtc.m.localhost
+
+  livekit:
+    image: docker.io/livekit/livekit-server:v1.10.1
+    network_mode: host
+    command: --dev --config /etc/livekit.yaml
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:Z
+
+  auth-service:
+    image: ghcr.io/element-hq/lk-jwt-service:0.4.4
+    # Host networking: LIVEKIT_URL is both returned to clients AND used by
+    # the service itself to create rooms on the SFU, so it must be valid
+    # from inside the service and from the test clients on the host —
+    # 127.0.0.1:7880 satisfies both only on the host network.
+    network_mode: host
+    extra_hosts:
+      # Reach nginx (federation TLS for the OpenID token validation) via
+      # the published host port 8448.
+      - "synapse.m.localhost:127.0.0.1"
+    environment:
+      - LIVEKIT_JWT_PORT=6080
+      - LIVEKIT_URL=ws://127.0.0.1:7880
+      - LIVEKIT_KEY=devkey
+      - LIVEKIT_SECRET=secret
+      # nginx uses the self-signed *.m.localhost dev certificate.
+      - LIVEKIT_INSECURE_SKIP_VERIFY_TLS=YES_I_KNOW_WHAT_I_AM_DOING
+      - LIVEKIT_FULL_ACCESS_HOMESERVERS=*

@@ -1,0 +1,53 @@
+using Gtk 4.0;
+
+template $ExploreServersPopover: Gtk.Popover {
+  has-arrow: false;
+  position: bottom;
+  width-request: 260;
+
+  child: Gtk.ScrolledWindow scrolled_window {
+    propagate-natural-height: true;
+    hscrollbar-policy: never;
+    max-content-height: 280;
+
+    child: Gtk.Box {
+      orientation: vertical;
+      spacing: 8;
+
+      styles [
+        "explore-servers-popover",
+      ]
+
+      Gtk.ListBox listbox {
+        selection-mode: browse;
+        row-selected => $selected_server_changed() swapped;
+        row-activated => $server_activated() swapped;
+
+        accessibility {
+          label: _("Server List");
+        }
+      }
+
+      Gtk.Separator {}
+
+      Gtk.Box {
+        styles [
+          "linked",
+        ]
+
+        Gtk.Entry server_entry {
+          hexpand: true;
+          placeholder-text: _("Add Server");
+          changed => $update_add_server_state() swapped;
+          activate => $add_server() swapped;
+        }
+
+        Gtk.Button {
+          icon-name: "add-symbolic";
+          action-name: "explore-servers-popover.add-server";
+          tooltip-text: _("Add Server");
+        }
+      }
+    };
+  };
+}

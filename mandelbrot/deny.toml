@@ -1,0 +1,50 @@
+[graph]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+
+[advisories]
+yanked = "deny"
+ignore = [
+    # anymap2 0.13: unmaintained (informational, no vulnerability). Pulled in directly by
+    # matrix-sdk (0.18 and 0.19 alike); there is no fixed release, only the anymap3 replacement,
+    # which matrix-sdk has to adopt upstream.
+    { id = "RUSTSEC-2026-0319", reason = "anymap2 is unmaintained but is a direct dependency of matrix-sdk with no upgrade available" },
+]
+
+[bans]
+multiple-versions = "allow"
+
+# To check if a license if compatible with our GPL v3.0 license, see: https://www.gnu.org/licenses/license-list.html
+# Keep list sorted alphabetically.
+[licenses]
+unused-allowed-license = "deny"
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    # Reached only under `--all-features`, via webpki-roots (0.26.11 through
+    # tokio-tungstenite -> livekit-net, and 1.0.7 through reqwest). It is a data
+    # license covering the bundled CA certificate set rather than code, and is
+    # permissive with no copyleft reciprocity, so it is compatible with this
+    # project's GPL-3.0-or-later.
+    #
+    # This entry and the `--all-features` audit in hooks/checks must stay
+    # together: `unused-allowed-license = "deny"` above rejects this line on its
+    # own (license-not-encountered), and widening the audit without it fails the
+    # other way.
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-or-later",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[sources]
+unknown-git = "deny"
+required-git-spec = "rev"

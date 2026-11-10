@@ -1,0 +1,62 @@
+using Gtk 4.0;
+
+template $ContentMemberRow: Box {
+  spacing: 12;
+
+  styles [
+    "header",
+  ]
+
+  $Avatar {
+    size: 32;
+    data: bind template.member as <$Member>.avatar-data;
+    accessible-role: "presentation";
+  }
+
+  Gtk.Box {
+    orientation: vertical;
+
+    styles [
+      "title",
+    ]
+
+    Gtk.Box {
+      spacing: 6;
+
+      Gtk.Label {
+        halign: start;
+        ellipsize: end;
+        label: bind template.member as <$Member>.display-name;
+
+        styles [
+          "title",
+        ]
+      }
+
+      Gtk.Image {
+        icon-name: "verified-symbolic";
+        tooltip-text: _("Identity Verified");
+        visible: bind template.member as <$User>.is-verified;
+
+        styles [
+          "success",
+        ]
+      }
+
+      $RoleBadge role_badge {
+        role: bind template.member as <$Member>.role;
+      }
+    }
+
+    Gtk.Label {
+      hexpand: true;
+      halign: start;
+      ellipsize: end;
+      label: bind template.member as <$Member>.user-id-string;
+
+      styles [
+        "subtitle",
+      ]
+    }
+  }
+}

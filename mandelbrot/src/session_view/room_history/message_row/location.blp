@@ -1,0 +1,34 @@
+using Gtk 4.0;
+
+template $ContentMessageLocation: Widget {
+  overflow: hidden;
+
+  styles [
+    "visual-content",
+    "opaque-bg",
+  ]
+
+  accessibility {
+    label: _("User Location");
+  }
+
+  Gtk.Overlay overlay {
+    $LocationViewer location {}
+
+    [overlay]
+    Gtk.Image overlay_error {
+      halign: center;
+      valign: center;
+      icon-name: "error-symbolic";
+
+      styles [
+        "osd",
+        "circular",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+  }
+}

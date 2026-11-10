@@ -1,0 +1,72 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationCancelledPage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label title {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label message {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Adw.WrapBox {
+          child-spacing: 12;
+          line-spacing: 12;
+          align: 0.5;
+
+          $LoadingButton dismiss_btn {
+            halign: center;
+            content-label: _("_Done");
+            clicked => $dismiss() swapped;
+
+            styles [
+              "pill",
+            ]
+          }
+
+          $LoadingButton try_again_btn {
+            halign: center;
+            content-label: _("Send New Request");
+            clicked => $try_again() swapped;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+          }
+        }
+      };
+    };
+  }
+}

@@ -1,0 +1,22 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoginAdvancedDialog: Adw.PreferencesDialog {
+  title: _("Homeserver Discovery");
+  content-width: 500;
+  content-height: 300;
+
+  Adw.PreferencesPage {
+    Adw.PreferencesGroup {
+      description: _(
+        "Auto-discovery, also known as “well-known lookup”, allows to discover the URL of a Matrix homeserver from a domain name. This should only be disabled if your homeserver doesn’t support auto-discovery or if you want to provide the URL yourself."
+      );
+
+      Adw.SwitchRow {
+        title: _("_Auto-Discovery");
+        use-underline: true;
+        active: bind template.autodiscovery bidirectional;
+      }
+    }
+  }
+}

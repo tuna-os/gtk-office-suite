@@ -1,0 +1,28 @@
+using Gtk 4.0;
+
+template $RoomDetailsAddressesSubpageCompletionPopover: Gtk.Popover {
+  autohide: false;
+  has-arrow: false;
+  position: bottom;
+  halign: start;
+  valign: center;
+  width-request: 260;
+
+  styles [
+    "string-row-list",
+  ]
+
+  accessibility {
+    label: _("Address auto-completion");
+  }
+
+  child: Gtk.ScrolledWindow scrolled_window {
+    propagate-natural-height: true;
+    hscrollbar-policy: never;
+    max-content-height: 280;
+
+    child: Gtk.ListBox list {
+      row-activated => $row_activated() swapped;
+    };
+  };
+}

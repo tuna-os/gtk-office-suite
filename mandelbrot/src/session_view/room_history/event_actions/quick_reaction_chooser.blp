@@ -1,0 +1,33 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $QuickReactionChooser: Adw.Bin {
+  child: Gtk.Grid reaction_grid {
+    accessible-role: group;
+    row-spacing: 4;
+    column-spacing: 4;
+
+    styles [
+      "reaction-chooser",
+    ]
+
+    accessibility {
+      label: _("Send a Reaction");
+    }
+
+    Gtk.Button {
+      tooltip-text: _("More Reactions");
+      icon-name: "view-more-horizontal-symbolic";
+      action-name: "event.show-reactions-chooser";
+
+      styles [
+        "circular",
+      ]
+
+      layout {
+        column: 3;
+        row: 1;
+      }
+    }
+  };
+}

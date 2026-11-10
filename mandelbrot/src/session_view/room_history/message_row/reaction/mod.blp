@@ -1,0 +1,40 @@
+using Gtk 4.0;
+
+template $ContentMessageReaction: Gtk.FlowBoxChild {
+  focusable: false;
+
+  Gtk.ToggleButton button {
+    action-name: "event.toggle-reaction";
+
+    styles [
+      "pill",
+    ]
+
+    Gtk.Box {
+      Gtk.Label reaction_key {
+        max-width-chars: 23;
+        ellipsize: end;
+      }
+
+      Gtk.Label reaction_count {
+        margin-end: 6;
+
+        styles [
+          "reaction-count",
+        ]
+      }
+    }
+
+    Gtk.GestureClick click_gesture {
+      button: 3;
+      exclusive: true;
+      released => $show_popover() swapped;
+    }
+
+    Gtk.GestureLongPress long_press_gesture {
+      touch-only: true;
+      exclusive: true;
+      pressed => $show_popover() swapped;
+    }
+  }
+}

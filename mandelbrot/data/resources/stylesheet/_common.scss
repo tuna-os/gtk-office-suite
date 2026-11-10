@@ -1,0 +1,133 @@
+// Global selectors.
+
+@use 'vendor';
+
+:root {
+  --focus-outline-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
+}
+
+textview, text {
+  color: inherit;
+  background: none;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+button.pill.large {
+  padding: 12px 40px;
+}
+
+.emoji {
+  font-size: 2em;
+}
+
+headerbar .suggested-action, .standalone-button {
+  min-width: 70px;
+}
+
+.extra-large-icon {
+  -gtk-icon-size: 128px;
+}
+
+.form-page {
+  scrolledwindow > viewport > clamp {
+    > * {
+      margin: 42px 12px;
+    }
+
+    > box {
+      border-spacing: 24px;
+    }
+  }
+
+  levelbar.discrete block {
+    min-height: 5px;
+  }
+}
+
+box.paragraphs {
+  // Set the spacing between paragraphs.
+  border-spacing: 12px;
+}
+
+.content .label-button {
+  min-width: 86px;
+}
+
+button.overlaid {
+  // Make sure the outline is fully visible.
+  margin: 3px;
+}
+
+.avatar-row-list, .string-row-list {
+  contents {
+    padding: 0;
+  }
+
+  viewport, listview {
+    padding: 8px;
+  }
+
+  list, listview {
+    background-color: transparent;
+  }
+
+  row {
+    border-radius: vendor.$menu_radius;
+    margin: 3px 0px;
+    padding: 6px;
+  }
+}
+
+.avatar-row-list {
+  row {
+    &:first-child {
+      margin-top: 0px;
+    }
+
+    &:last-child {
+      margin-bottom: 0px;
+    }
+  }
+}
+
+.string-row-list row {
+  margin: 0px;
+}
+
+.entry-row-error-revealer {
+  margin-top: 6px;
+}
+
+.card-icon {
+  padding: 12px;
+  border-radius: 100%;
+  -gtk-icon-size: 20px;
+  background-color: color-mix(in srgb, var(--accent-bg-color) 30%, transparent);
+}
+
+.card.command {
+  border-radius: vendor.$menu_radius;
+  font-size: 90%;
+}
+
+scrolledwindow.card {
+  @include vendor.focus-ring($offset: -1px, $focus-state: ':focus-within');
+
+  > textview {
+    padding: 12px;
+  }
+}
+
+.padded-top-bar {
+  padding: 0 12px;
+}
+
+.accent-circle {
+  color: var(--accent-fg-color);
+  border-radius: 9999px;
+  border: solid var(--accent-bg-color) 2px;
+  background-color: var(--accent-bg-color);
+}

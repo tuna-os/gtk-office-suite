@@ -1,0 +1,66 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationNoSupportedMethodsPage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label title {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          label: _("No Supported Verification Methods");
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label message {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Gtk.Label instructions {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          label: _("You can accept this verification from another session or decline it for all your sessions");
+
+          styles [
+            "body",
+          ]
+        }
+
+        $LoadingButton cancel_btn {
+          halign: center;
+          clicked => $cancel() swapped;
+
+          styles [
+            "pill",
+          ]
+        }
+      };
+    };
+  }
+}

@@ -1,0 +1,56 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AccountChooserDialogRow: Gtk.ListBoxRow {
+  selectable: false;
+
+  Gtk.Box {
+    spacing: 10;
+
+    $Avatar avatar {
+      size: 40;
+    }
+
+    Gtk.Box {
+      spacing: 3;
+      orientation: vertical;
+
+      Gtk.Label display_name {
+        xalign: 0.0;
+        hexpand: true;
+      }
+
+      Gtk.Label user_id {
+        xalign: 0.0;
+        hexpand: true;
+
+        styles [
+          "dimmed",
+          "caption",
+        ]
+      }
+    }
+
+    Gtk.Stack state_stack {
+      Gtk.StackPage {
+        name: "loading";
+
+        child: Adw.Spinner {
+          width-request: 24;
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+
+        child: Gtk.Image error_image {
+          icon-name: "error-symbolic";
+
+          styles [
+            "error",
+          ]
+        };
+      }
+    }
+  }
+}

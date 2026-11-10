@@ -1,0 +1,102 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SubstringEntryRow: Adw.PreferencesRow {
+  activatable: false;
+  selectable: false;
+
+  styles [
+    "entry",
+    "substring-entry-row",
+  ]
+
+  Gtk.GestureClick {
+    pressed => $pressed() swapped;
+  }
+
+  child: Gtk.Box header {
+    valign: center;
+
+    styles [
+      "header",
+    ]
+
+    Gtk.Box main_content {
+      orientation: vertical;
+
+      Gtk.Label title {
+        ellipsize: end;
+        halign: start;
+        xalign: 0;
+        label: bind template.title;
+        can-target: false;
+
+        styles [
+          "subtitle",
+        ]
+      }
+
+      Gtk.Box entry_box {
+        spacing: 6;
+
+        Gtk.Label entry_prefix_label {
+          label: "#";
+
+          styles [
+            "dimmed",
+          ]
+        }
+
+        Gtk.Text text {
+          enable-undo: true;
+          hexpand: true;
+          vexpand: true;
+          max-length: 0;
+          valign: baseline_fill;
+          accessible-role: text_box;
+          activate => $add() swapped;
+          state-flags-changed => $text_state_flags_changed() swapped;
+          keynav-failed => $text_keynav_failed() swapped;
+          changed => $update_add_button() swapped;
+
+          accessibility {
+            labelled-by: [
+              title,
+            ];
+          }
+        }
+
+        Gtk.Image edit_icon {
+          valign: center;
+          can-target: false;
+          icon-name: "document-edit-symbolic";
+          accessible-role: presentation;
+
+          styles [
+            "edit-icon",
+          ]
+        }
+
+        Gtk.Label entry_suffix_label {
+          label: ":matrix.org";
+
+          styles [
+            "dimmed",
+          ]
+        }
+      }
+    }
+
+    $LoadingButton add_button {
+      sensitive: false;
+      content-icon-name: "add-symbolic";
+      valign: center;
+      halign: center;
+      clicked => $add() swapped;
+
+      styles [
+        "flat",
+      ]
+    }
+  };
+}

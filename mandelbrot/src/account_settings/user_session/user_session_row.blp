@@ -1,0 +1,79 @@
+using Gtk 4.0;
+
+template $UserSessionRow: Gtk.ListBoxRow {
+  selectable: false;
+
+  accessibility {
+    labelled-by: [
+      header,
+    ];
+  }
+
+  child: Gtk.Box {
+    spacing: 12;
+    margin-top: 12;
+    margin-bottom: 12;
+    margin-start: 12;
+    margin-end: 12;
+
+    Gtk.Box {
+      orientation: vertical;
+      hexpand: true;
+      spacing: 3;
+
+      Gtk.Box header {
+        spacing: 6;
+
+        Gtk.Label {
+          xalign: 0.0;
+          ellipsize: end;
+          label: bind template.user-session as <$UserSession>.display-name-or-device-id;
+
+          styles [
+            "title",
+          ]
+        }
+
+        Gtk.Image {
+          icon-name: "verified-symbolic";
+          // Translators: As in 'The session is verified'.
+          tooltip-text: _("Verified");
+          visible: bind template.user-session as <$UserSession>.verified;
+
+          styles [
+            "success",
+          ]
+        }
+
+        Gtk.Image {
+          icon-name: "verified-warning-symbolic";
+          // Translators: As in 'The session is not verified'.
+          tooltip-text: _("Not verified");
+          visible: bind $invert_boolean(template.user-session as <$UserSession>.verified) as <bool>;
+
+          styles [
+            "error",
+          ]
+        }
+      }
+
+      Gtk.Label {
+        xalign: 0.0;
+        ellipsize: end;
+        label: bind $unwrap_string_or_empty(
+          template.user-session as <$UserSession>.last-seen-datetime-string
+          ) as <string>;
+        visible: bind $string_not_empty(template.user-session as <$UserSession>.last-seen-datetime-string) as <bool>;
+
+        styles [
+          "subtitle",
+        ]
+      }
+    }
+
+    Gtk.Image {
+      icon-name: "go-next-symbolic";
+      accessible-role: presentation;
+    }
+  };
+}

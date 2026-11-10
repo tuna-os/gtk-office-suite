@@ -1,0 +1,66 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CallRow: Adw.Bin {
+  focusable: true;
+
+  Gtk.Grid {
+    column-spacing: 8;
+    margin-top: 6;
+    margin-bottom: 6;
+
+    styles [
+      "event-content",
+    ]
+
+    Gtk.Image icon {
+      styles [
+        "dimmed",
+        "icon",
+      ]
+
+      layout {
+        column: 0;
+        row: 0;
+      }
+    }
+
+    Gtk.Label inner_label {
+      hexpand: true;
+      halign: fill;
+      xalign: 0.0;
+      wrap: true;
+      wrap-mode: word_char;
+
+      styles [
+        "dimmed",
+      ]
+
+      layout {
+        column: 1;
+        row: 0;
+      }
+    }
+
+    $EventTimestamp timestamp {
+      datetime: bind template.event as <$RoomEvent>.timestamp;
+
+      layout {
+        column: 2;
+        row: 0;
+      }
+    }
+
+    $ContentReadReceiptsList read_receipts {
+      visible: bind template.event as <$RoomEvent>.has-read-receipts;
+      members: bind template.event as <$RoomEvent>.timeline as <$Timeline>.room as <$Room>.members;
+      source: bind template.event as <$RoomEvent>.read-receipts;
+
+      layout {
+        column: 1;
+        row: 1;
+        column-span: 2;
+      }
+    }
+  }
+}

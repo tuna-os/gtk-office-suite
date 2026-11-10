@@ -1,0 +1,27 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $MediaContentViewer: $ContextMenuBin {
+  child: Gtk.Stack stack {
+    Gtk.StackPage {
+      name: "loading";
+
+      child: Adw.Spinner {};
+    }
+
+    Gtk.StackPage {
+      name: "viewer";
+
+      child: Adw.Bin viewer {
+        map => $update_animated_paintable_state() swapped;
+        unmap => $update_animated_paintable_state() swapped;
+      };
+    }
+
+    Gtk.StackPage {
+      name: "fallback";
+
+      child: Adw.StatusPage fallback {};
+    }
+  };
+}

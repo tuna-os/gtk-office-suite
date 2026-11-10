@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<schemalist>
+  <schema path="/org/tunaos/mandelbrot/@profile@/" id="@app-id@" gettext-domain="@gettext-package@">
+    <key name="window-width" type="i">
+      <default>-1</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>-1</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="is-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized state</summary>
+    </key>
+    <key name="markdown-enabled" type="b">
+      <default>true</default>
+      <summary>Enable markdown formatting</summary>
+      <description>Whether messages should be processed as markdown when sending them</description>
+    </key>
+    <key name="sessions" type="s">
+      <default>'[]'</default>
+      <summary>Session settings</summary>
+      <description>Serialized list of settings per session</description>
+    </key>
+    <key name="current-session" type="s">
+      <default>""</default>
+      <summary>Current session</summary>
+    </key>
+  </schema>
+</schemalist>

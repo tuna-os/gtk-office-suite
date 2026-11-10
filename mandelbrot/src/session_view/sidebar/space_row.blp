@@ -1,0 +1,66 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SidebarSpaceRow: Adw.Bin {
+  tooltip-text: bind template.item as <$SidebarSpaceItem>.display-name;
+
+  child: Gtk.Overlay {
+    halign: center;
+    valign: center;
+
+    child: Gtk.Stack {
+      visible-child-name: bind $ternary_string(template.item as <$SidebarSpaceItem>.is-home, "home", "avatar") as <string>;
+
+      Gtk.StackPage {
+        name: "home";
+
+        child: Gtk.Image {
+          icon-name: "user-home-symbolic";
+          accessible-role: presentation;
+
+          styles [
+            "space-rail-home",
+          ]
+        };
+      }
+
+      Gtk.StackPage {
+        name: "avatar";
+
+        child: $Avatar {
+          size: 36;
+          data: bind template.item as <$SidebarSpaceItem>.space as <$Room>.avatar-data;
+          watched-room: bind template.item as <$SidebarSpaceItem>.space;
+          watched-safety-setting: invite-avatars;
+          accessible-role: presentation;
+        };
+      }
+    };
+
+    [overlay]
+    Gtk.Label notification_count {
+      halign: end;
+      valign: start;
+      visible: bind template.item as <$SidebarSpaceItem>.has-notifications;
+      label: bind template.item as <$SidebarSpaceItem>.notification-count;
+      accessible-role: presentation;
+
+      styles [
+        "notification-count",
+      ]
+    }
+
+    [overlay]
+    Gtk.Image {
+      halign: end;
+      valign: start;
+      icon-name: "dot-symbolic";
+      visible: bind $logical_and($invert_boolean(template.item as <$SidebarSpaceItem>.has-notifications) as <bool>, $invert_boolean(template.item as <$SidebarSpaceItem>.is-read) as <bool>) as <bool>;
+      accessible-role: presentation;
+
+      styles [
+        "unread-dot",
+      ]
+    }
+  };
+}

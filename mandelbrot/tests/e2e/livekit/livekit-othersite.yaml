@@ -1,0 +1,24 @@
+# LiveKit SFU configuration for the MatrixRTC interop e2e stack.
+# Site 2 of the federated stack (compose-federated.yml). Adapted from
+# element-call's backend/dev_livekit-othersite.yaml.
+# The server runs with host networking (see compose.yml), so these ports
+# bind directly on the host.
+port: 17880
+bind_addresses:
+  - "0.0.0.0"
+rtc:
+  tcp_port: 17881
+  port_range_start: 50300
+  port_range_end: 50400
+  use_external_ip: false
+turn:
+  enabled: false
+keys:
+  devkey: secret
+room:
+  auto_create: false
+webhook:
+  api_key: devkey
+  urls:
+    # lk-jwt-service for site 2, published on the host at 16080.
+    - http://127.0.0.1:16080/sfu_webhook

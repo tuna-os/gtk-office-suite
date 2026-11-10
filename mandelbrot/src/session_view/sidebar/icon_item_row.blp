@@ -1,0 +1,21 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SidebarIconItemRow: Adw.Bin {
+  Gtk.Box {
+    spacing: 12;
+
+    Gtk.Image {
+      icon-name: bind template.icon-item as <$SidebarIconItem>.icon-name;
+      accessible-role: presentation;
+      valign: center;
+    }
+
+    Gtk.Label {
+      halign: start;
+      hexpand: true;
+      ellipsize: end;
+      label: bind template.icon-item as <$SidebarIconItem>.display-name;
+    }
+  }
+}

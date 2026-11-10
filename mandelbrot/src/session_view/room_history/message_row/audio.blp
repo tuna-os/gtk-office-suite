@@ -1,0 +1,26 @@
+using Gtk 4.0;
+
+template $ContentMessageAudio: Gtk.Box {
+  orientation: vertical;
+
+  Gtk.Box {
+    visible: bind template.compact;
+    margin-top: 6;
+    spacing: 6;
+
+    Gtk.Image {
+      icon-name: "audio-symbolic";
+    }
+
+    Gtk.Label {
+      ellipsize: end;
+      xalign: 0.0;
+      hexpand: true;
+      label: bind template.name;
+    }
+  }
+
+  $AudioPlayer player {
+    visible: bind template.compact inverted;
+  }
+}

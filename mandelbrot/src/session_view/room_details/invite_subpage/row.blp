@@ -1,0 +1,68 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsInviteRow: Adw.Bin {
+  margin-top: 12;
+  margin-bottom: 12;
+  margin-start: 12;
+  margin-end: 12;
+
+  child: Gtk.Box header {
+    spacing: 12;
+
+    styles [
+      "header",
+    ]
+
+    $Avatar {
+      size: 32;
+      data: bind template.item as <$RoomDetailsInviteItem>.user as <$User>.avatar-data;
+      accessible-role: "presentation";
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+
+      styles [
+        "title",
+      ]
+
+      Gtk.Label display-name {
+        halign: start;
+        ellipsize: end;
+        label: bind template.item as <$RoomDetailsInviteItem>.user as <$User>.display-name;
+
+        styles [
+          "title",
+        ]
+      }
+
+      Gtk.Label subtitle {
+        hexpand: true;
+        halign: start;
+        ellipsize: end;
+        label: bind template.item as <$RoomDetailsInviteItem>.user as <$User>.user-id-string;
+
+        styles [
+          "subtitle",
+        ]
+      }
+    }
+
+    Gtk.CheckButton check_button {
+      visible: bind template.item as <$RoomDetailsInviteItem>.can-invite;
+    }
+
+    Gtk.Label {
+      visible: bind $invert_boolean(template.item as <$RoomDetailsInviteItem>.can-invite) as <bool>;
+      hexpand: true;
+      halign: end;
+      ellipsize: end;
+      label: bind template.item as <$RoomDetailsInviteItem>.invite-exception;
+
+      styles [
+        "subtitle",
+      ]
+    }
+  };
+}

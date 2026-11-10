@@ -1,0 +1,108 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessageVisualMedia: Gtk.Widget {
+  focusable: true;
+  halign: start;
+  overflow: hidden;
+
+  Gtk.Overlay overlay {
+    styles [
+      "visual-content",
+      "opaque-bg",
+    ]
+
+    Gtk.Stack stack {
+      transition-type: crossfade;
+      interpolate-size: true;
+
+      Gtk.StackPage {
+        name: "empty";
+
+        child: Adw.Bin {};
+      }
+    }
+
+    [overlay]
+    Gtk.Box preview_instructions {
+      orientation: vertical;
+      spacing: 6;
+      halign: center;
+      valign: center;
+
+      styles [
+        "instructions",
+        "overlaid",
+      ]
+
+      layout {
+        measure: true;
+      }
+
+      Gtk.Image preview_instructions_icon {
+        icon-size: large;
+        accessible-role: presentation;
+      }
+
+      Gtk.Label {
+        visible: bind $invert_boolean(template.compact) as <bool>;
+        label: _("Click to show preview");
+        wrap: true;
+        wrap-mode: word_char;
+        justify: center;
+      }
+    }
+
+    [overlay]
+    Adw.Spinner spinner {
+      visible: false;
+      halign: center;
+      valign: center;
+
+      styles [
+        "overlaid",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+
+    [overlay]
+    Gtk.Button hide_preview_button {
+      visible: false;
+      halign: end;
+      valign: start;
+      icon-name: "hide-symbolic";
+      tooltip-text: _("Hide media preview");
+      clicked => $hide_media() swapped;
+
+      styles [
+        "osd",
+        "overlaid",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+
+    [overlay]
+    Gtk.Image error {
+      visible: false;
+      halign: center;
+      valign: center;
+      icon-name: "error-symbolic";
+
+      styles [
+        "osd",
+        "circular",
+        "overlaid",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+  }
+}

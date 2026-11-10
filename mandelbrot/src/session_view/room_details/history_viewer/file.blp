@@ -1,0 +1,84 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentFileHistoryViewer: Adw.NavigationPage {
+  title: _("File");
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.Stack stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Loading");
+
+        child: Adw.Spinner {};
+      }
+
+      Gtk.StackPage {
+        name: "empty";
+        title: _("No Files");
+
+        child: Adw.StatusPage {
+          visible: true;
+          hexpand: true;
+          vexpand: true;
+          icon-name: "document-symbolic";
+          title: _("No Files");
+          description: _("This room does not contain any files");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Could Not Load Files");
+
+        child: Adw.StatusPage {
+          visible: true;
+          hexpand: true;
+          vexpand: true;
+          icon-name: "error-symbolic";
+          title: _("Could Not Load Files");
+          description: _("Check your network connection");
+
+          child: Gtk.Button {
+            can-shrink: true;
+            label: _("Try Again");
+            halign: center;
+            clicked => $load_more_items() swapped;
+
+            styles [
+              "pill",
+            ]
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "content";
+        title: _("File History");
+
+        child: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          vexpand: true;
+
+          Adw.ClampScrollable {
+            maximum-size: 400;
+            tightening-threshold: 400;
+
+            Gtk.ListView list_view {
+              show-separators: true;
+
+              styles [
+                "navigation-sidebar",
+              ]
+            }
+          }
+        };
+      }
+    };
+  }
+}

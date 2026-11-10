@@ -1,0 +1,32 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessageFile: Adw.Bin {
+  focusable: true;
+  valign: center;
+
+  Gtk.Box {
+    spacing: 6;
+
+    Gtk.Image {
+      visible: bind template.compact;
+      icon-name: "document-symbolic";
+    }
+
+    Gtk.Label {
+      ellipsize: end;
+      label: bind template.filename;
+    }
+
+    Gtk.Button save {
+      visible: bind template.compact inverted;
+      icon-name: "save-symbolic";
+      tooltip-text: _("Save File");
+      action-name: "event.file-save";
+
+      accessibility {
+        label: _("Save File");
+      }
+    }
+  }
+}

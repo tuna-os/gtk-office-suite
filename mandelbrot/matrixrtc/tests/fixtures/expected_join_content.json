@@ -1,0 +1,16 @@
+{
+    "application": "m.call",
+    "call_id": "",
+    "device_id": "AAAAAAA",
+    "expires": 14400000,
+    "foci_preferred": [
+        {
+            "type": "livekit",
+            "livekit_service_url": "https://active.url",
+            "livekit_alias": "!active:active.url"
+        }
+    ],
+    "membershipID": "@alice:example.org:AAAAAAA",
+    "focus_active": { "type": "livekit", "focus_selection": "oldest_membership" },
+    "scope": "m.room"
+}

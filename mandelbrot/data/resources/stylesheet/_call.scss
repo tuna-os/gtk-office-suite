@@ -1,0 +1,48 @@
+// Call view.
+
+@use 'vendor';
+
+.call-view {
+  background-color: color-mix(in srgb, var(--view-bg-color) 90%, black);
+}
+
+.call-participant-tile {
+  min-width: 200px;
+  min-height: 150px;
+  border-radius: vendor.$card_radius;
+
+  &.speaking {
+    outline: 2px solid var(--accent-bg-color);
+    outline-offset: -2px;
+  }
+
+  .call-participant-info {
+    border-radius: 6px;
+    padding: 2px 8px;
+  }
+}
+
+.call-video-placeholder {
+  background-color: color-mix(in srgb, var(--view-bg-color) 70%, black);
+}
+
+.call-self-view,
+.call-camera-preview {
+  border-radius: vendor.$card_radius;
+  background-color: color-mix(in srgb, var(--view-bg-color) 80%, black);
+}
+
+.call-top-bar,
+.call-control-bar {
+  border-radius: 9999px;
+  padding: 6px;
+}
+
+.call-top-bar {
+  margin: 12px 12px 0;
+}
+
+.call-bar {
+  background-color: var(--view-bg-color);
+  border-bottom: 1px solid var(--border-color);
+}

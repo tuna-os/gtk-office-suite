@@ -1,0 +1,45 @@
+using Gtk 4.0;
+
+template $AccountSwitcherPopover: Gtk.Popover {
+  styles [
+    "account-switcher",
+  ]
+
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 6;
+
+    Gtk.ListBox sessions {
+      activate-on-single-click: true;
+      row-activated => $select_row() swapped;
+    }
+
+    Gtk.Separator {}
+
+    Gtk.Button {
+      action-name: "win.new-session";
+
+      styles [
+        "account-switcher-row",
+        "flat",
+      ]
+
+      child: Gtk.Box {
+        spacing: 10;
+
+        Gtk.Image {
+          name: "new-login-icon";
+          icon-name: "add-symbolic";
+          pixel-size: 16;
+          accessible-role: presentation;
+        }
+
+        Gtk.Label {
+          use-underline: true;
+          ellipsize: end;
+          label: _("_Add Account");
+        }
+      };
+    }
+  }
+}

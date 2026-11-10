@@ -1,0 +1,5444 @@
+# Uzbek (Latin) translation for fractal.
+# Copyright (C) 2025 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Baxrom Raxmatov <magdiyevbahrom@gmail.com>,  2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal main\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2025-11-10 13:04+0000\n"
+"PO-Revision-Date: 2025-11-17 12:37+0500\n"
+"Last-Translator: Baxrom Raxmatov\n"
+"Language-Team: Uzbek (Latin) <Uzbek>\n"
+"Language: uz\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.6\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:2
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7
+#: src/login/session_setup_view.blp:22 src/window.blp:9
+msgid "Fractal"
+msgstr "Fractal"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr ""
+"Fractal hamkorlikda guruhli muloqot uchun markazlashtirilmagan, xavfsiz xabar "
+"almashish mijozidir."
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid "Fractal group messaging"
+msgstr "Fractal guruh xabarlari"
+
+#. Translators: Search terms to find this application. Do NOT translate or
+#. localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:13
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "Matrix;matrix.org;chat;irc;communications;talk;toʻpolon;element;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Asosiy oyna kengligi"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Asosiy oyna balandligi"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Oynaning maksimal holati"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Belgilash formatini yoqish"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Xabarlarni joʻnatishda ularni belgilash sifatida qayta ishlash kerakmi"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Seans sozlamalari"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Har bir seans sozlamalarining ketma-ket roʻyxati"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Joriy sessiya"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Matritsada suhbat"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface is "
+"optimized for collaboration in large groups, such as free software projects, "
+"and will fit all screens, big or small."
+msgstr ""
+"Fractal - Rust tilida yozilgan GNOME uchun Matrix xabar almashish ilovasi. "
+"Uning interfeysi bepul dasturiy taʻminot loyihalari kabi katta guruhlarda "
+"hamkorlik qilish uchun optimallashtirilgan va katta yoki kichik barcha "
+"ekranlarga mos keladi."
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "Ajratib koʻrsatishlar:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"Oxir-oqibat shifrlash orqali sevimli mavzularingizni muhokama qilish yoki "
+"odamlar bilan shaxsiy suhbatlashish uchun xonalarni toping"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "Boy formatlangan xabarlar, fayllar yoki joriy joylashuvingizni yuboring"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit or "
+"remove messages"
+msgstr ""
+"Muayyan xabarlarga javob bering, emoji bilan munosabatda boʻling, "
+"foydalanuvchilar yoki xonalarni eslang, xabarlarni tahrirlang yoki oʻchiring"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr ""
+"Tasvirlarni koʻring va toʻgʻridan-toʻgʻri suhbatda audio va videoni ijro eting"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "Kim xabarlarni oʻqiganini va kim yozayotganini koʻring"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr ""
+"Bir vaqtning oʻzida bir nechta hisoblarga kiring (Single-Sign On qoʻllab-"
+"quvvatlashi bilan)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Fractalning asosiy oynasi"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "Matrix xonasining media tarixini koʻring"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "Fractal interfeysi kichik ekranlarga moslashadi"
+
+#: src/account_chooser_dialog/mod.blp:5 src/account_chooser_dialog/mod.blp:35
+msgid "Select an Account"
+msgstr "Chat hisobini tanlang"
+
+#: src/account_chooser_dialog/mod.blp:62
+msgid "Select the account you want to open the URI with"
+msgstr "URI ni ochmoqchi boʻlgan hisobni tanlang"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:150
+#: src/account_settings/encryption_page/mod.blp:148
+msgid "Export Room Encryption Keys"
+msgstr "Xona shifrlash kalitlarini eksport qilish"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:153
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able to "
+"decrypt your messages in end-to-end encrypted rooms on another device or with "
+"another Matrix client."
+msgstr ""
+"Xonangizni shifrlash kalitlarini eksport qilish sizga boshqa qurilmada yoki "
+"boshqa Matrix mijozida uchdan-end shifrlangan xonalarda xabarlaringizni "
+"parolini ochish uchun zaxira nusxasini yaratish imkonini beradi."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:156
+msgid ""
+"The backup must be stored in a safe place and must be protected with a strong "
+"passphrase that will be used to encrypt the data."
+msgstr ""
+"Zaxira nusxasi xavfsiz joyda saqlanishi va maʻlumotlarni shifrlash uchun "
+"ishlatiladigan kuchli parol bilan himoyalangan boʻlishi kerak."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:159
+msgid "Export Keys"
+msgstr "Eksport kalitlari"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:162
+#: src/account_settings/encryption_page/mod.blp:157
+msgid "Import Room Encryption Keys"
+msgstr "Xona shifrlash kalitlarini import qilish"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:165
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in end-"
+"to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"Xonangizni shifrlash kalitlarini import qilish sizga Matrix mijozidan oldingi "
+"zaxira nusxasi bilan uchdan-uchgacha shifrlangan xonalarda xabarlaringizni "
+"parolini ochish imkonini beradi."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:168
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "Zaxira fayli yaratilganda berilgan parolni kiriting."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:171
+msgid "Import Keys"
+msgstr "Import kalitlari"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:184
+#: src/components/avatar/editable.rs:515
+msgid "Choose"
+msgstr "Tanlang"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:193
+msgid "fractal-encryption-keys"
+msgstr "fractal shifrlash kalitlari"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:199
+msgid "Save Encryption Keys To…"
+msgstr "Shifrlash kalitlarini saqlash…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:202
+msgid "Import Encryption Keys From…"
+msgstr "Shifrlash kalitlarini import qilish…"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:215
+#: src/utils/matrix/media_message.rs:258
+msgid "Could not access file"
+msgstr "Faylga kirish imkoni boʻlmadi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:244
+msgid "Passphrases do not match"
+msgstr "Parol iboralari mos kelmaydi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:321
+msgid "Room encryption keys exported successfully"
+msgstr "Xona shifrlash kalitlari muvaffaqiyatli eksport qilindi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:327
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "Import qilingan 1 xonali shifrlash kaliti"
+msgstr[1] "Import qilingan {n} xona shifrlash kalitlari"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:341
+msgid "Could not export the keys"
+msgstr "Kalitlarni eksport qilib boʻlmadi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:355
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr ""
+"Parol iborasi kalitlarni eksport qilishda ishlatiladigan iboraga mos kelmaydi."
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.rs:360
+msgid "Could not import the keys"
+msgstr "Kalitlarni import qilib boʻlmadi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:68
+msgid "Passphrase"
+msgstr "Parol iborasi"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:87
+msgid "Confirm Passphrase"
+msgstr "Parolni tasdiqlang"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:117
+#: src/session_view/room_details/history_viewer/file.blp:5
+#: src/session_view/room_history/message_row/file.rs:63
+msgid "File"
+msgstr "Fayl"
+
+#: src/account_settings/encryption_page/import_export_keys_subpage.blp:121
+msgid "Choose…"
+msgstr "Tanlang…"
+
+#: src/account_settings/encryption_page/mod.rs:151
+msgid "No Crypto Identity"
+msgstr "Kripto identifikatori yoʻq"
+
+#: src/account_settings/encryption_page/mod.rs:153
+msgid "Verifying your own devices or other users is not possible"
+msgstr ""
+"Oʻz qurilmalaringizni yoki boshqa foydalanuvchilarni tekshirish mumkin emas"
+
+#: src/account_settings/encryption_page/mod.rs:156
+#: src/account_settings/encryption_page/mod.rs:229
+msgid "Enable…"
+msgstr "Yoqish…"
+
+#: src/account_settings/encryption_page/mod.rs:159
+msgid "Enable Crypto Identity"
+msgstr "Kripto identifikatsiyani yoqing"
+
+#: src/account_settings/encryption_page/mod.rs:175
+msgid "Crypto Identity Enabled"
+msgstr "Kripto identifikatori yoqilgan"
+
+#: src/account_settings/encryption_page/mod.rs:177
+msgid "The crypto identity exists and this device is verified"
+msgstr "Kripto identifikatori mavjud va bu qurilma tasdiqlangan"
+
+#: src/account_settings/encryption_page/mod.rs:180
+#: src/account_settings/encryption_page/mod.rs:248
+msgid "Reset…"
+msgstr "Qayta tiklash…"
+
+#: src/account_settings/encryption_page/mod.rs:183
+#: src/components/crypto/identity_setup_view.blp:191
+#: src/components/crypto/identity_setup_view.blp:216
+#: src/components/crypto/recovery_setup_view.blp:163
+msgid "Reset Crypto Identity"
+msgstr "Kripto identifikatorini tiklash"
+
+#: src/account_settings/encryption_page/mod.rs:195
+msgid "Crypto Identity Incomplete"
+msgstr "Kripto identifikatori tugallanmagan"
+
+#: src/account_settings/encryption_page/mod.rs:197
+msgid "The crypto identity exists but this device is not verified"
+msgstr "Kripto identifikatori mavjud, lekin bu qurilma tasdiqlanmagan"
+
+#: src/account_settings/encryption_page/mod.rs:200
+msgid "Verify…"
+msgstr "Tasdiqlash…"
+
+#: src/account_settings/encryption_page/mod.rs:203
+msgid "Verify This Session"
+msgstr "Ushbu sessiyani tasdiqlang"
+
+#: src/account_settings/encryption_page/mod.rs:224
+msgid "Account Recovery Disabled"
+msgstr "Hisobni tiklash oʻchirilgan"
+
+#: src/account_settings/encryption_page/mod.rs:226
+msgid "Enable recovery to be able to restore your account without another device"
+msgstr "Hisobingizni boshqa qurilmasiz tiklash uchun tiklashni yoqing"
+
+#: src/account_settings/encryption_page/mod.rs:232
+msgid "Enable Account Recovery"
+msgstr "Hisobni tiklashni yoqing"
+
+#: src/account_settings/encryption_page/mod.rs:243
+msgid "Account Recovery Enabled"
+msgstr "Hisobni tiklash yoqilgan"
+
+#: src/account_settings/encryption_page/mod.rs:245
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "Imzolash kalitlari va shifrlash kalitlari sinxronlashtiriladi"
+
+#: src/account_settings/encryption_page/mod.rs:251
+msgid "Reset Account Recovery Key"
+msgstr "Hisobni tiklash kalitini tiklash"
+
+#: src/account_settings/encryption_page/mod.rs:263
+#: src/components/crypto/recovery_setup_view.blp:414
+#: src/components/crypto/recovery_setup_view.blp:440
+msgid "Account Recovery Incomplete"
+msgstr "Hisobni tiklash tugallanmagan"
+
+#: src/account_settings/encryption_page/mod.rs:265
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr ""
+"Imzolash kalitlari va shifrlash kalitlarini sinxronlashtirish uchun tiklang"
+
+#: src/account_settings/encryption_page/mod.rs:268
+msgid "Recover…"
+msgstr "Qayta tiklash…"
+
+#: src/account_settings/encryption_page/mod.rs:271
+msgid "Recover Account Data"
+msgstr "Hisob maʻlumotlarini tiklash"
+
+#: src/account_settings/encryption_page/mod.blp:6
+msgid "Encryption"
+msgstr "Shifrlash"
+
+#: src/account_settings/encryption_page/mod.blp:10
+msgid "Crypto Identity"
+msgstr "Kripto identifikatori"
+
+#: src/account_settings/encryption_page/mod.blp:11
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"Boshqa Matrix hisoblarini tekshirish va ularning tasdiqlangan seanslariga "
+"avtomatik ravishda ishonish imkonini beradi"
+
+#: src/account_settings/encryption_page/mod.blp:75
+msgid "Account Recovery"
+msgstr "Hisobni tiklash"
+
+#: src/account_settings/encryption_page/mod.blp:76
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if you "
+"ever lose access to all your sessions"
+msgstr ""
+"Agar barcha seanslaringizga kirish huquqini yoʻqotib qoʻysangiz, tiklash "
+"kaliti yoki parol iborasi yordamida hisobingizni toʻliq tiklash imkonini beradi"
+
+#: src/account_settings/general_page/change_password_subpage.rs:104
+msgid "Password must be at least 8 characters long"
+msgstr "Parol kamida 8 ta belgidan iborat boʻlishi kerak"
+
+#: src/account_settings/general_page/change_password_subpage.rs:107
+msgid "Password must have at least one lower-case letter"
+msgstr "Parolda kamida bitta kichik harf boʻlishi kerak"
+
+#: src/account_settings/general_page/change_password_subpage.rs:111
+msgid "Password must have at least one upper-case letter"
+msgstr "Parolda kamida bitta katta harf boʻlishi kerak"
+
+#: src/account_settings/general_page/change_password_subpage.rs:114
+msgid "Password must have at least one digit"
+msgstr "Parolda kamida bitta raqam boʻlishi kerak"
+
+#: src/account_settings/general_page/change_password_subpage.rs:116
+msgid "Password must have at least one symbol"
+msgstr "Parolda kamida bitta belgi boʻlishi kerak"
+
+#: src/account_settings/general_page/change_password_subpage.rs:146
+msgid "Passwords do not match"
+msgstr "Parollar mos kelmaydi"
+
+#: src/account_settings/general_page/change_password_subpage.rs:192
+msgid "Password changed successfully"
+msgstr "Parol muvaffaqiyatli almashtirildi"
+
+#: src/account_settings/general_page/change_password_subpage.rs:206
+msgid "Password rejected for being too weak"
+msgstr "Parol juda zaifligi uchun rad etildi"
+
+#: src/account_settings/general_page/change_password_subpage.rs:210
+msgid "Could not change password"
+msgstr "Parolni oʻzgartirib boʻlmadi"
+
+#: src/account_settings/general_page/change_password_subpage.ui:7
+#: src/account_settings/general_page/mod.blp:59
+msgid "Change Password"
+msgstr "Parolni oʻzgartirish"
+
+#: src/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr "Parolingizni oʻzgartirsangiz, boshqa seanslaringizdan chiqib ketasiz."
+
+#: src/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "Yangi Parol"
+
+#: src/account_settings/general_page/change_password_subpage.ui:125
+msgid "Confirm New Password"
+msgstr "Yangi parolni tasdiqlang"
+
+#: src/account_settings/general_page/change_password_subpage.ui:162
+#: src/account_settings/general_page/deactivate_account_subpage.blp:81
+#: src/account_settings/general_page/deactivate_account_subpage.blp:92
+#: src/account_settings/general_page/log_out_subpage.blp:86
+#: src/session_view/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "Davom etish"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:150
+msgid "Account successfully deactivated"
+msgstr "Hisob muvaffaqiyatli oʻchirildi"
+
+#: src/account_settings/general_page/deactivate_account_subpage.rs:158
+msgid "Could not deactivate account"
+msgstr "Hisobni oʻchirib boʻlmadi"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:6
+#: src/account_settings/general_page/mod.blp:88
+msgid "Deactivate Account"
+msgstr "Hisobni oʻchirish"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:45
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"Hisob qaydnomangizni oʻchirib qoʻysangiz, siz barcha xabarlar, kontaktlar, "
+"fayllar va boshqalarga abadiy kirish huquqidan mahrum boʻlasiz."
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/account_settings/general_page/deactivate_account_subpage.blp:57
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"Ushbu hisobni haqiqatan ham oʻchirib qoʻymoqchi ekanligingizni tasdiqlash "
+"uchun Matrix foydalanuvchi identifikatoringizni kiriting:"
+
+#: src/account_settings/general_page/log_out_subpage.rs:83
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"Kripto identifikatori va hisobni tiklash toʻgʻri sozlanmagan. Agar bu sizning "
+"oxirgi ulangan seansingiz boʻlsa va sizda shifrlash kalitlarining yaqinda "
+"mahalliy zaxira nusxasi boʻlmasa, hisobingizni tiklay olmaysiz."
+
+#: src/account_settings/general_page/log_out_subpage.rs:91
+msgid ""
+"This is your last connected session. Make sure that you can still access your "
+"recovery key or passphrase, or to backup your encryption keys before logging "
+"out."
+msgstr ""
+"Bu sizning oxirgi ulangan seansingiz. Tizimdan chiqishdan oldin qayta tiklash "
+"kaliti yoki parol iborasiga kirishingiz yoki shifrlash kalitlarini "
+"zaxiralashingiz mumkinligiga ishonch hosil qiling."
+
+#: src/account_settings/general_page/log_out_subpage.blp:5
+#: src/account_settings/general_page/mod.blp:75
+#: src/account_settings/user_session/user_session_subpage.blp:60
+msgid "Log Out"
+msgstr "Chiqish"
+
+#: src/account_settings/general_page/log_out_subpage.blp:16
+msgid "Log Out of This Session"
+msgstr "Ushbu sessiyadan chiqish"
+
+#: src/account_settings/general_page/log_out_subpage.blp:43
+msgid "Are you sure you want to log out of this session?"
+msgstr "Haqiqatan ham bu seansdan chiqmoqchimisiz?"
+
+#: src/account_settings/general_page/log_out_subpage.blp:72
+msgid "Review Account Security"
+msgstr "Hisob xavfsizligini tekshiring"
+
+#: src/account_settings/general_page/log_out_subpage.blp:102
+msgid "Logout Failed"
+msgstr "Chiqish amalga oshmadi"
+
+#: src/account_settings/general_page/log_out_subpage.blp:120
+msgid ""
+"Logging out of this session failed. You can try again, or, if this is a "
+"permanent error, you can remove the session."
+msgstr ""
+"Bu seansdan chiqish amalga oshmadi. Qayta urinib koʻrishingiz mumkin yoki agar "
+"bu doimiy xato boʻlsa, sessiyani olib tashlashingiz mumkin."
+
+#: src/account_settings/general_page/log_out_subpage.blp:134
+#: src/account_settings/user_session/user_session_list_subpage.blp:83
+#: src/components/action_button.blp:46 src/components/rows/loading_row.blp:26
+#: src/session_view/room_details/history_viewer/audio.blp:50
+#: src/session_view/room_details/history_viewer/file.blp:49
+#: src/session_view/room_details/history_viewer/visual_media.blp:55
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:77
+#: src/session_view/room_history/mod.blp:106
+msgid "Try Again"
+msgstr "Qayta urinib koʻring"
+
+#: src/account_settings/general_page/log_out_subpage.blp:144
+msgid ""
+"Removing the session deletes the associated data from the system, but your "
+"homeserver and other sessions will not be aware that this session was logged "
+"out."
+msgstr ""
+"Seansni olib tashlash tizimdan bogʻlangan ma'lumotlarni oʻchirib tashlaydi, "
+"lekin sizning homeserveringiz va boshqa seanslar ushbu seans tizimdan "
+"chiqqanligidan xabardor boʻlmaydi."
+
+#: src/account_settings/general_page/log_out_subpage.blp:158
+msgid "Remove Session"
+msgstr "Seansni olib tashlash"
+
+#: src/account_settings/general_page/mod.rs:315
+#: src/session_view/room_details/edit_details_subpage.rs:149
+msgid "Avatar removed successfully"
+msgstr "Avatar muvaffaqiyatli olib tashlandi"
+
+#: src/account_settings/general_page/mod.rs:317
+#: src/session_view/room_details/edit_details_subpage.rs:151
+msgid "Avatar changed successfully"
+msgstr "Avatar muvaffaqiyatli oʻzgartirildi"
+
+#: src/account_settings/general_page/mod.rs:335
+#: src/account_settings/general_page/mod.rs:345
+#: src/session_view/room_details/edit_details_subpage.rs:176
+#: src/session_view/room_details/edit_details_subpage.rs:186
+msgid "Could not load file"
+msgstr "Faylni yuklab boʻlmadi"
+
+#: src/account_settings/general_page/mod.rs:364
+#: src/session_view/room_details/edit_details_subpage.rs:213
+msgid "Could not upload avatar"
+msgstr "Avatar yuklanmadi"
+
+#: src/account_settings/general_page/mod.rs:395
+#: src/session_view/room_details/edit_details_subpage.rs:236
+msgid "Could not change avatar"
+msgstr "Avatarni oʻzgartirib boʻlmadi"
+
+#: src/account_settings/general_page/mod.rs:412
+#: src/session_view/room_details/edit_details_subpage.rs:261
+msgid "Remove Avatar?"
+msgstr "Avatar olib tashlansinmi?"
+
+#: src/account_settings/general_page/mod.rs:413
+msgid "Do you really want to remove your avatar?"
+msgstr "Haqiqatan ham avataringizni olib tashlamoqchimisiz?"
+
+#: src/account_settings/general_page/mod.rs:416
+#: src/components/dialogs/message_dialogs.rs:58
+#: src/components/dialogs/message_dialogs.rs:323
+#: src/components/dialogs/message_dialogs.rs:398
+#: src/components/dialogs/message_dialogs.rs:447
+#: src/components/dialogs/message_dialogs.rs:469
+#: src/components/dialogs/message_dialogs.rs:491
+#: src/identity_verification_view/confirm_qr_code_page.blp:55
+#: src/session_view/room_details/edit_details_subpage.rs:267
+#: src/session_view/room_details/general_page.rs:988
+#: src/session_view/room_details/upgrade_dialog/mod.blp:130
+#: src/session_view/room_history/event_actions/group.rs:584
+#: src/session_view/room_history/event_actions/group.rs:648
+#: src/session_view/room_history/message_toolbar/mod.blp:72
+#: src/session_view/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "Bekor qilish"
+
+#: src/account_settings/general_page/mod.rs:417
+#: src/components/dialogs/message_dialogs.rs:232
+#: src/session_view/room_details/edit_details_subpage.rs:268
+#: src/session_view/room_history/event_actions/group.rs:585
+msgid "Remove"
+msgstr "Oʻchirish"
+
+#: src/account_settings/general_page/mod.rs:451
+#: src/session_view/room_details/edit_details_subpage.rs:293
+msgid "Could not remove avatar"
+msgstr "Avatarni olib tashlab boʻlmadi"
+
+#: src/account_settings/general_page/mod.rs:500
+msgid "Name changed successfully"
+msgstr "Ism muvaffaqiyatli oʻzgartirildi"
+
+#: src/account_settings/general_page/mod.rs:550
+msgid "Could not change display name"
+msgstr "Koʻrsatilgan nomni oʻzgartirib boʻlmadi"
+
+#: src/account_settings/general_page/mod.blp:6
+msgid "General"
+msgstr "Umumiy"
+
+#: src/account_settings/general_page/mod.blp:16
+msgid "Account Avatar"
+msgstr "Hisob avatar"
+
+#: src/account_settings/general_page/mod.blp:23
+#: src/session_view/create_room_dialog.blp:48
+#: src/session_view/create_room_dialog.blp:51
+#: src/session_view/room_details/edit_details_subpage.blp:40
+#: src/session_view/room_details/edit_details_subpage.blp:44
+msgid "Name"
+msgstr "Ism"
+
+#: src/account_settings/general_page/mod.blp:40
+msgid "Matrix User ID"
+msgstr "Matritsa foydalanuvchi identifikatori"
+
+#: src/account_settings/general_page/mod.blp:42 src/components/user_page.blp:57
+msgid "Copy Matrix User ID"
+msgstr "Matritsa foydalanuvchi identifikatoridan nusxa oling"
+
+#: src/account_settings/general_page/mod.blp:43 src/components/user_page.rs:256
+msgid "Matrix user ID copied to clipboard"
+msgstr "Matritsa foydalanuvchi identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/account_settings/general_page/mod.blp:47
+#: src/account_settings/user_session/user_session_list_subpage.blp:5
+msgid "Sessions"
+msgstr "Mashgʻulotlar orasidagi tanaffusning davomiyligi"
+
+#: src/account_settings/general_page/mod.blp:68
+msgid "Manage Account"
+msgstr "Hisobni boshqarish"
+
+#: src/account_settings/general_page/mod.blp:101
+#: src/session_view/room_details/general_page.blp:229
+msgid "Advanced Information"
+msgstr "Murakkab ma'lumotlar"
+
+#: src/account_settings/general_page/mod.blp:104 src/login/homeserver_page.blp:6
+#: src/login/homeserver_page.blp:44
+msgid "Homeserver"
+msgstr "Uy serveri"
+
+#: src/account_settings/general_page/mod.blp:106
+msgid "Copy Homeserver Address"
+msgstr "Homeserver manzilini nusxalash"
+
+#: src/account_settings/general_page/mod.blp:107
+msgid "Homeserver address copied to clipboard"
+msgstr "Homeserver manzili vaqtinchalik xotiraga nusxalandi"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:112
+msgid "Local Session ID"
+msgstr "Mahalliy sessiya identifikatori"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:115
+msgid "Copy Local Session ID"
+msgstr "Mahalliy sessiya identifikatoridan nusxa oling"
+
+#. Translators: local refers to the ID, not the session.
+#: src/account_settings/general_page/mod.blp:117
+msgid "Local session ID copied to clipboard"
+msgstr "Mahalliy seans identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/account_settings/mod.blp:5 src/account_switcher/session_item.blp:58
+msgid "Account Settings"
+msgstr "Akkount sozlamalari"
+
+#: src/account_settings/notifications_page.rs:196
+msgid "Could not enable account notifications"
+msgstr "Hisob bildirishnomalarini yoqib boʻlmadi"
+
+#: src/account_settings/notifications_page.rs:198
+msgid "Could not disable account notifications"
+msgstr "Hisob bildirishnomalarini oʻchirib boʻlmadi"
+
+#: src/account_settings/notifications_page.rs:288
+msgid "Could not change global notifications setting"
+msgstr "Global bildirishnomalar sozlamalarini oʻzgartirib boʻlmadi"
+
+#: src/account_settings/notifications_page.rs:341
+msgid "Remove “{keyword}”"
+msgstr "“{keyword}”ni olib tashlash"
+
+#: src/account_settings/notifications_page.rs:372
+msgid "Could not remove notification keyword"
+msgstr "Bildirishnoma kalit soʻzini olib tashlab boʻlmadi"
+
+#: src/account_settings/notifications_page.rs:439
+msgid "Could not add notification keyword"
+msgstr "Bildirishnoma kalit soʻzini qoʻshib boʻlmadi"
+
+#: src/account_settings/notifications_page.blp:6
+#: src/session_view/room_details/general_page.blp:111
+msgid "Notifications"
+msgstr "Bildirishnomalar"
+
+#: src/account_settings/notifications_page.blp:11
+msgid "Enable for This Account"
+msgstr "Ushbu hisob uchun yoqish"
+
+#: src/account_settings/notifications_page.blp:18
+msgid "Enable for This Session"
+msgstr "Ushbu sessiya uchun yoqish"
+
+#: src/account_settings/notifications_page.blp:24
+msgid "Global"
+msgstr "Global"
+
+#: src/account_settings/notifications_page.blp:25
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr ""
+"Qaysi xabarlar aniqroq qoidalarga ega boʻlmagan xonalarda bildirishnomalarni "
+"keltirib chiqaradi"
+
+#: src/account_settings/notifications_page.blp:28
+msgid "All messages in all rooms"
+msgstr "Barcha xabarlar barcha xonalarda"
+
+#: src/account_settings/notifications_page.blp:34
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr ""
+"Toʻgʻridan-toʻgʻri chatlardagi barcha xabarlar, barcha xonalarda eslatmalar va "
+"kalit soʻzlar"
+
+#: src/account_settings/notifications_page.blp:40
+msgid "Only mentions and keywords in all rooms"
+msgstr "Barcha xonalarda faqat eslatmalar va kalit soʻzlar"
+
+#: src/account_settings/notifications_page.blp:47
+msgid "Keywords"
+msgstr "Kalit soʻzlar"
+
+#: src/account_settings/notifications_page.blp:48
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching on "
+"these keywords is case-insensitive."
+msgstr ""
+"Ushbu kalit soʻzlardan birini oʻz ichiga olgan xabarlar bildirishnomalarni "
+"ishga tushiradi. Ushbu kalit soʻzlarga mos kelish katta-kichik harflarni "
+"hisobga olmaydi."
+
+#: src/account_settings/notifications_page.blp:59
+#: src/account_settings/notifications_page.blp:60
+msgid "Add Keyword"
+msgstr "Kalit soʻz qoʻshing"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.rs:85
+#: src/components/user_page.rs:767
+msgid "Could not stop ignoring user"
+msgstr "Foydalanuvchini e'tiborsiz qoldirishni toʻxtatib boʻlmadi"
+
+#: src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.blp:30
+#: src/components/user_page.rs:746
+msgid "Stop Ignoring"
+msgstr "E'tiborsizlikni toʻxtating"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:5
+#: src/account_settings/safety_page/mod.blp:11
+msgid "Ignored Users"
+msgstr "E'tiborga olinmagan foydalanuvchilar"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:18
+msgid "Toggle Ignored Users Search"
+msgstr "E'tibor berilmagan foydalanuvchilarni qidirishni oʻzgartirish"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:32
+msgid "Search for ignored users"
+msgstr "E'tibor berilmagan foydalanuvchilarni qidiring"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:64
+msgid "No Ignored Users"
+msgstr "E'tiborsiz foydalanuvchilar yoʻq"
+
+#: src/account_settings/safety_page/ignored_users_subpage/mod.blp:65
+msgid "You can add users to this list from their room member profile"
+msgstr ""
+"Siz foydalanuvchilarni ushbu roʻyxatga xona aʼzolari profilidan qoʻshishingiz "
+"mumkin"
+
+#: src/account_settings/safety_page/mod.rs:232
+msgid "Could not change media previews setting"
+msgstr "Mediani oldindan koʻrish sozlamalarini oʻzgartirib boʻlmadi"
+
+#: src/account_settings/safety_page/mod.rs:289
+msgid "Could not enable avatars for invites"
+msgstr "Takliflar uchun avatarlarni yoqib boʻlmadi"
+
+#: src/account_settings/safety_page/mod.rs:291
+msgid "Could not disable avatars for invites"
+msgstr "Takliflar uchun avatarlarni oʻchirib boʻlmadi"
+
+#: src/account_settings/safety_page/mod.blp:6
+msgid "Safety"
+msgstr "Xavfsizlik"
+
+#: src/account_settings/safety_page/mod.blp:12
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"Ushbu foydalanuvchilar tomonidan yuborilgan barcha xabarlar yoki taklifnomalar "
+"e'tiborga olinmaydi. Ularning baʼzi faolliklari, masalan, xonaga qoʻshilish "
+"yoki chiqish vaqtida koʻrasiz."
+
+#: src/account_settings/safety_page/mod.blp:19
+msgid "Privacy"
+msgstr "Maxfiylik bayonnomasi"
+
+#: src/account_settings/safety_page/mod.blp:23
+msgid "Send Read Receipts"
+msgstr "Oʻqilganligi toʻgʻrisidagi xabarlarni yuboring"
+
+#: src/account_settings/safety_page/mod.blp:24
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"Siz ishtirok etayotgan xonalarning boshqa aʼzolariga qaysi xabarlarni "
+"koʻrganingizni kuzatishga ruxsat bering"
+
+#: src/account_settings/safety_page/mod.blp:29
+msgid "Send Typing Notifications"
+msgstr "Yozish bildirishnomalarini yuboring"
+
+#: src/account_settings/safety_page/mod.blp:30
+msgid ""
+"Allow other members of the rooms you participate in to see when you are typing "
+"a message"
+msgstr ""
+"Siz qatnashayotgan xonalarning boshqa aʼzolariga xabar yozayotganingizni "
+"koʻrishlariga ruxsat bering"
+
+#: src/account_settings/safety_page/mod.blp:35
+msgid "Media Previews"
+msgstr "Media oldindan koʻrish"
+
+#: src/account_settings/safety_page/mod.blp:36
+msgid ""
+"Which rooms automatically show previews for images and videos. Hidden previews "
+"can always be shown by clicking on the media."
+msgstr ""
+"Qaysi xonalar avtomatik ravishda rasm va videolarni oldindan koʻrishni "
+"koʻrsatadi. Yashirin oldindan koʻrishlar har doim ommaviy axborot vositalarini "
+"bosish orqali koʻrsatilishi mumkin."
+
+#: src/account_settings/safety_page/mod.blp:39
+msgid "Show in all rooms"
+msgstr "Barcha xonalarda koʻrsatish"
+
+#: src/account_settings/safety_page/mod.blp:45
+msgid "Show only in private rooms"
+msgstr "Faqat shaxsiy xonalarda koʻrsatish"
+
+#: src/account_settings/safety_page/mod.blp:51
+msgid "Hide in all rooms"
+msgstr "Barcha xonalarda yashiring"
+
+#: src/account_settings/safety_page/mod.blp:59
+msgid "Show Avatars for Invites"
+msgstr "Takliflar uchun avatarlarni koʻrsatish"
+
+#: src/account_settings/safety_page/mod.blp:60
+msgid "Display the avatars of the room and the inviter"
+msgstr "Xona va taklif qiluvchining avatarlarini koʻrsating"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:13
+#: src/account_settings/user_session/user_session_list_subpage.blp:23
+msgid "Current Session"
+msgstr "Joriy sessiya"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:29
+#: src/account_settings/user_session/user_session_list_subpage.blp:57
+msgid "Other Active Sessions"
+msgstr "Boshqa faol sessiyalar"
+
+#: src/account_settings/user_session/user_session_list_subpage.blp:74
+msgid "Could not load the list of connected devices"
+msgstr "Ulangan qurilmalar roʻyxatini yuklab boʻlmadi"
+
+#. Translators: As in 'The session is verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:40
+#: src/account_settings/user_session/user_session_subpage.rs:116
+msgid "Verified"
+msgstr "Tasdiqlangan"
+
+#. Translators: As in 'The session is not verified'.
+#. Translators: As in 'A verified session'.
+#: src/account_settings/user_session/user_session_row.blp:51
+#: src/account_settings/user_session/user_session_subpage.rs:120
+msgid "Not verified"
+msgstr "Imzolangan - tasdiqdan oʻtgan"
+
+#: src/account_settings/user_session/user_session_subpage.rs:211
+msgid "Session renamed"
+msgstr "Seans nomi oʻzgartirildi"
+
+#: src/account_settings/user_session/user_session_subpage.rs:215
+msgid "Could not rename session"
+msgstr "Seans nomini oʻzgartirib boʻlmadi"
+
+#: src/account_settings/user_session/user_session_subpage.rs:245
+msgid "Could not disconnect session “{device_name}”"
+msgstr "“{device_name}” sessiyasini uzib boʻlmadi"
+
+#: src/account_settings/user_session/user_session_subpage.blp:14
+msgid "Matrix Session ID"
+msgstr "Matritsa sessiyasi identifikatori"
+
+#: src/account_settings/user_session/user_session_subpage.blp:16
+msgid "Copy Matrix Session ID"
+msgstr "Matritsa sessiyasi identifikatoridan nusxa oling"
+
+#: src/account_settings/user_session/user_session_subpage.blp:17
+msgid "Matrix session ID copied to clipboard"
+msgstr "Matritsa seansi identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/account_settings/user_session/user_session_subpage.blp:22
+msgid "Public Name"
+msgstr "Umumiy nomi"
+
+#: src/account_settings/user_session/user_session_subpage.blp:38
+msgid "Last Seen"
+msgstr "Oxirgi koʻrilgan"
+
+#: src/account_settings/user_session/user_session_subpage.blp:48
+msgid "Last Location"
+msgstr "Oxirgi joylashuv"
+
+#: src/account_settings/user_session/user_session_subpage.blp:71
+#: src/account_settings/user_session/user_session_subpage.blp:81
+msgid "Disconnect"
+msgstr "Uzing"
+
+#: src/account_switcher/account_switcher_button.blp:14
+msgid "Switch Accounts"
+msgstr "Hisoblarni almashtirish"
+
+#: src/account_switcher/account_switcher_popover.blp:40
+msgid "_Add Account"
+msgstr "Hisob qoʻshish"
+
+#: src/application.rs:244
+msgid "The Fractal Team"
+msgstr "Fractal jamoasi"
+
+#: src/application.rs:250
+msgid "© The Fractal Team"
+msgstr "© Fractal jamoasi"
+
+#: src/application.rs:264
+msgid "translator-credits"
+msgstr "Baxrom Raxmatov https://github.com/bahrom04"
+
+#. This can't be added via the builder
+#: src/application.rs:268
+msgid "Name by"
+msgstr "Nomi"
+
+#: src/application.rs:382
+msgid "Session not found"
+msgstr "Seans topilmadi"
+
+#: src/components/action_button.blp:28
+msgid "Confirm Change"
+msgstr "Oʻzgartirishni tasdiqlang"
+
+#: src/components/action_button.blp:62
+#: src/components/camera/qrcode_scanner.blp:14
+#: src/login/session_setup_view.blp:16 src/session_view/explore/mod.blp:63
+#: src/session_view/room_details/history_viewer/audio.blp:17
+#: src/session_view/room_details/history_viewer/file.blp:16
+#: src/session_view/room_details/history_viewer/visual_media.blp:22
+#: src/session_view/room_history/mod.blp:87 src/window.blp:17
+msgid "Loading"
+msgstr "Yuklanmoqda"
+
+#: src/components/action_button.blp:84
+msgid "Success"
+msgstr "Muvaffaqiyat"
+
+#: src/components/action_button.blp:102
+msgid "Warning"
+msgstr "Ogohlantirish"
+
+#: src/components/action_button.blp:119 src/error_page.blp:9
+#: src/session_view/create_direct_chat_dialog/mod.blp:93
+#: src/session_view/explore/mod.blp:113 src/session_view/explore/mod.blp:117
+#: src/session_view/room_details/invite_subpage/mod.blp:109
+#: src/session_view/room_details/invite_subpage/mod.blp:113
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:68
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:72
+#: src/window.blp:87
+msgid "Error"
+msgstr "Xatolik"
+
+#: src/components/avatar/editable.rs:507
+msgid "Images"
+msgstr "Rasmlar"
+
+#: src/components/avatar/editable.rs:513
+msgid "Choose Avatar"
+msgstr "Avatar-ni tanlang"
+
+#: src/components/avatar/editable.rs:529
+msgid "Could not open avatar file"
+msgstr "Avatar faylini ochib boʻlmadi"
+
+#: src/components/avatar/editable.rs:550
+msgid "The chosen file is not an image"
+msgstr "Tanlangan fayl rasm emas"
+
+#: src/components/avatar/editable.rs:556
+msgid "Could not determine the type of the chosen file"
+msgstr "Tanlangan fayl turini aniqlab boʻlmadi"
+
+#: src/components/avatar/editable.blp:64
+msgid "Remove Avatar"
+msgstr "Avatarni olib tashlang"
+
+#: src/components/avatar/editable.blp:81
+msgid "Select New Avatar"
+msgstr "Yangi avatarni tanlash"
+
+#: src/components/camera/qrcode_scanner.rs:91
+msgid "Camera"
+msgstr "Kamera"
+
+#: src/components/camera/qrcode_scanner.blp:6
+msgid "QR Code Scanner"
+msgstr "QR kod skanerlovchi"
+
+#: src/components/camera/qrcode_scanner.blp:21
+#: src/components/camera/qrcode_scanner.blp:33
+msgid "Could Not Connect to Camera"
+msgstr "Kameraga ulanib boʻlmadi"
+
+#: src/components/camera/viewfinder.rs:74
+msgid "Viewfinder"
+msgstr ""
+
+#: src/components/crypto/identity_setup_view.rs:384
+#: src/identity_verification_view/cancelled_page.rs:196
+msgid "Could not send a new verification request"
+msgstr "Yangi tasdiqlash soʻrovini yuborib boʻlmadi"
+
+#: src/components/crypto/identity_setup_view.rs:436
+msgid "Could not create the crypto identity"
+msgstr "Kripto identifikatorini yaratib boʻlmadi"
+
+#: src/components/crypto/identity_setup_view.blp:8
+#: src/components/crypto/identity_setup_view.blp:33
+msgid "Verify Your New Session"
+msgstr "Yangi seansingizni tasdiqlang"
+
+#: src/components/crypto/identity_setup_view.blp:44
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure that "
+"no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"Seansingizni tekshirish sizga va siz suhbatlashayotgan odamlarga hech kim "
+"sizning nomingizdan oʻtmoqchi emasligiga yoki suhbatlaringizga xalaqit "
+"bermasligiga ishonch hosil qilish imkonini beradi."
+
+#: src/components/crypto/identity_setup_view.blp:56
+msgid "Verify With Another Session"
+msgstr "Boshqa seans bilan tasdiqlang"
+
+#: src/components/crypto/identity_setup_view.blp:66
+msgid "No other devices logged into this account?"
+msgstr "Bu hisobga boshqa qurilmalar kirmaganmi?"
+
+#: src/components/crypto/identity_setup_view.blp:74
+#: src/components/crypto/recovery_setup_view.blp:8
+#: src/components/crypto/recovery_setup_view.blp:33
+msgid "Recover Account"
+msgstr "Hisobni tiklash"
+
+#: src/components/crypto/identity_setup_view.blp:85
+#: src/components/crypto/identity_setup_view.blp:261
+#: src/components/crypto/recovery_setup_view.blp:95
+#: src/components/crypto/recovery_setup_view.blp:204
+#: src/components/crypto/recovery_setup_view.blp:493
+msgid "Reset"
+msgstr "Tashlamoq"
+
+#: src/components/crypto/identity_setup_view.blp:101
+#: src/identity_verification_view/mod.blp:6 src/session_view/content.blp:68
+msgid "Identity Verification"
+msgstr "Shaxsni tasdiqlash"
+
+#: src/components/crypto/identity_setup_view.blp:116
+#: src/components/crypto/identity_setup_view.blp:141
+msgid "Set Up Crypto Identity"
+msgstr "Kripto identifikatorini sozlang"
+
+#: src/components/crypto/identity_setup_view.blp:152
+#: src/components/crypto/identity_setup_view.blp:227
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"Sizning kripto identifikatoringiz boshqa Matrix hisoblarini tekshirish va "
+"ularning tasdiqlangan seanslariga avtomatik ravishda ishonish imkonini beradi."
+
+#: src/components/crypto/identity_setup_view.blp:163
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr ""
+"Siz kripto identifikatorini oʻrnatishingiz kerak, chunki u hech qachon "
+"yaratilmagan."
+
+#: src/components/crypto/identity_setup_view.blp:174
+#: src/components/crypto/recovery_setup_view.blp:301
+msgid "Set Up"
+msgstr "Sozlash"
+
+#: src/components/crypto/identity_setup_view.blp:238
+msgid ""
+"You should reset your crypto identity if a device that does not belong to you "
+"managed to be verified."
+msgstr ""
+"Agar sizga tegishli boʻlmagan qurilma tekshirilgan boʻlsa, kripto "
+"identifikatoringizni qayta tiklashingiz kerak."
+
+#: src/components/crypto/identity_setup_view.blp:249
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr ""
+"Davom etish uchun, shuningdek, hisobni tiklash kalitini tiklashingiz kerak "
+"boʻladi."
+
+#: src/components/crypto/recovery_setup_view.rs:182
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "Barcha foydalanuvchilar va seanslarning tekshiruvlarini bekor qiladi"
+
+#: src/components/crypto/recovery_setup_view.rs:188
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. "
+"Invalidates the verifications of all users and sessions."
+msgstr ""
+"Qayta tiklash maʼlumotlaridagi kripto identifikatori toʻliq boʻlmagani uchun "
+"talab qilinadi. Barcha foydalanuvchilar va seanslarning tekshiruvlarini bekor "
+"qiladi."
+
+#: src/components/crypto/recovery_setup_view.rs:199
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr "Oʻtgan shifrlangan xabarlaringizni endi oʻqiy olmasligingiz mumkin"
+
+#: src/components/crypto/recovery_setup_view.rs:205
+msgid ""
+"Required because the backup is not set up properly. You might not be able to "
+"read your past encrypted messages anymore."
+msgstr ""
+"Zaxira toʻgʻri sozlanmagani uchun zarur. Oʻtgan shifrlangan xabarlaringizni "
+"endi oʻqiy olmasligingiz mumkin."
+
+#: src/components/crypto/recovery_setup_view.rs:225
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"Ushbu tiklash kalitini xavfsiz joyda saqlang. Agar barcha seanslaringizga "
+"kirish huquqini yoʻqotib qoʻysangiz, u hisobingizni tiklash uchun kerak "
+"boʻladi."
+
+#: src/components/crypto/recovery_setup_view.rs:229
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You will "
+"need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"Parol iborangizni eslab qolishingiz yoki uni xavfsiz joyda saqlashingizga "
+"ishonch hosil qiling. Agar barcha seanslaringizga kirish huquqini yoʻqotib "
+"qoʻysangiz, u hisobingizni tiklash uchun kerak boʻladi."
+
+#: src/components/crypto/recovery_setup_view.rs:290
+msgid "The recovery passphrase or key is invalid"
+msgstr "Qayta tiklash paroli yoki kaliti yaroqsiz"
+
+#: src/components/crypto/recovery_setup_view.rs:293
+msgid "Could not access recovery data"
+msgstr "Qayta tiklash maʼlumotlariga kira olmadi"
+
+#: src/components/crypto/recovery_setup_view.rs:344
+msgid "Could not reset the crypto identity"
+msgstr "Kripto identifikatorini tiklab boʻlmadi"
+
+#: src/components/crypto/recovery_setup_view.rs:397
+#: src/components/crypto/recovery_setup_view.rs:406
+#: src/components/crypto/recovery_setup_view.rs:431
+msgid "Could not reset account recovery"
+msgstr "Hisobni tiklashni qayta oʻrnatib boʻlmadi"
+
+#: src/components/crypto/recovery_setup_view.rs:466
+msgid "Could not reset account recovery key"
+msgstr "Hisobni tiklash kalitini tiklab boʻlmadi"
+
+#: src/components/crypto/recovery_setup_view.rs:504
+msgid "Could not enable account recovery"
+msgstr "Hisobni tiklash yoqilmadi"
+
+#: src/components/crypto/recovery_setup_view.blp:44
+msgid "Restore full access to your account."
+msgstr "Hisobingizga toʻliq kirishni tiklang."
+
+#: src/components/crypto/recovery_setup_view.blp:51
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"Qayta tiklash maʼlumotlariga kirish uchun bizga tiklash paroli yoki odatda "
+"hisobni yaratishda sozlanadigan tiklash kaliti kerak boʻladi."
+
+#: src/components/crypto/recovery_setup_view.blp:67
+msgid "Recovery Passphrase or Key"
+msgstr "Parol yoki kalitni tiklash"
+
+#: src/components/crypto/recovery_setup_view.blp:75
+#: src/session_view/sidebar/mod.rs:329
+msgid "Recover"
+msgstr "Tiklash"
+
+#: src/components/crypto/recovery_setup_view.blp:86
+msgid "Lost your recovery passphrase or key?"
+msgstr "Qayta tiklash paroli yoki kalitingizni yoʻqotdingizmi?"
+
+#: src/components/crypto/recovery_setup_view.blp:111
+#: src/components/crypto/recovery_setup_view.blp:136
+msgid "Reset Account Recovery"
+msgstr "Hisobni tiklashni tiklash"
+
+#: src/components/crypto/recovery_setup_view.blp:147
+msgid ""
+"Resetting account recovery can allow you to fix or reset part or all of your "
+"recovery setup."
+msgstr ""
+"Hisobni tiklash sozlamalarini tiklash sizga tiklash sozlamalarining bir "
+"qismini yoki barchasini tuzatish yoki tiklash imkonini beradi."
+
+#: src/components/crypto/recovery_setup_view.blp:167
+msgid "Reset Room Encryption Keys Backup"
+msgstr "Xona shifrlash kalitlarining zaxira nusxasini tiklash"
+
+#: src/components/crypto/recovery_setup_view.blp:172
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr ""
+"Agar siz yangi tiklash parolini kiritmasangiz, tiklash kaliti yaratiladi."
+
+#: src/components/crypto/recovery_setup_view.blp:183
+#: src/components/crypto/recovery_setup_view.blp:279
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also be "
+"able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"Matrix hisobingiz parolini parol sifatida qayta ishlatmasligingiz kerak. Aks "
+"holda, agar kimdir sizning hisobingiz parolini olishga muvaffaq boʻlsa, ular "
+"sizning barcha shifrlangan suhbatlaringizga kirishlari va oʻzingizni "
+"nomingizdan oʻtkazishlari mumkin boʻladi."
+
+#: src/components/crypto/recovery_setup_view.blp:199
+#: src/components/crypto/recovery_setup_view.blp:295
+msgid "Recovery Passphrase (Optional)"
+msgstr "Qayta tiklash paroli (ixtiyoriy)"
+
+#: src/components/crypto/recovery_setup_view.blp:221
+#: src/components/crypto/recovery_setup_view.blp:246
+msgid "Set Up Account Recovery"
+msgstr "Hisobni tiklashni sozlash"
+
+#: src/components/crypto/recovery_setup_view.blp:257
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"Hisobni tiklash sizga kripto identifikatoringizni tiklash va barcha "
+"seanslaringizga kirish huquqini yoʻqotib qoʻysangiz ham shifrlangan "
+"xabarlaringizni oʻqish imkonini beradi."
+
+#: src/components/crypto/recovery_setup_view.blp:268
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr "Qayta tiklash parolini kiritmasangiz, tiklash kaliti yaratiladi."
+
+#: src/components/crypto/recovery_setup_view.blp:318
+#: src/components/crypto/recovery_setup_view.blp:344
+msgid "Account Recovery Set Up Successfully"
+msgstr "Hisobni tiklash muvaffaqiyatli sozlandi"
+
+#: src/components/crypto/recovery_setup_view.blp:379
+msgid "Copy Recovery Key"
+msgstr "Qayta tiklash kalitini nusxalash"
+
+#: src/components/crypto/recovery_setup_view.blp:396
+#: src/components/crypto/recovery_setup_view.blp:473
+#: src/identity_verification_view/cancelled_page.blp:50
+#: src/identity_verification_view/completed_page.blp:51
+#: src/identity_verification_view/room_left_page.blp:48
+msgid "_Done"
+msgstr "Bajarilgan"
+
+#: src/components/crypto/recovery_setup_view.blp:451
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr ""
+"Qayta tiklash muvaffaqiyatli boʻldi, lekin tiklash ma'lumotlari toʻliq emas "
+"edi."
+
+#: src/components/crypto/recovery_setup_view.blp:458
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"Buni tuzatish uchun barcha ma'lumotlarga ega boʻlgan seansdan tiklashni qayta "
+"oʻrnatishingiz va ushbu seansni qayta tiklashga harakat qilishingiz kerak."
+
+#: src/components/crypto/recovery_setup_view.blp:465
+msgid ""
+"Note that account recovery can have a different name in other Matrix clients, "
+"like “key backup” or “secure backup”."
+msgstr ""
+"Hisobni tiklash boshqa Matrix mijozlarida “kalit zaxirasi” yoki “xavfsiz "
+"zaxira” kabi boshqa nomga ega boʻlishi mumkinligini unutmang."
+
+#: src/components/crypto/recovery_setup_view.blp:485
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "Shu bilan bir qatorda, hisobni tiklashni tiklashingiz mumkin"
+
+#: src/components/dialogs/auth/in_browser_page.blp:36
+#: src/components/dialogs/auth/mod.blp:4
+#: src/components/dialogs/auth/password_page.blp:36
+#: src/login/in_browser_page.blp:6 src/login/in_browser_page.blp:39
+msgid "Authentication"
+msgstr "Tasdiqlash"
+
+#: src/components/dialogs/auth/in_browser_page.blp:50
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"Brauzer orqali operatsiyani autentifikatsiya qiling va tugallangach, "
+"tasdiqlash tugmasini bosing"
+
+#: src/components/dialogs/auth/in_browser_page.blp:74
+#: src/login/in_browser_page.blp:77
+msgid "Contin_ue"
+msgstr "Davom ettirish"
+
+#: src/components/dialogs/auth/in_browser_page.blp:103
+#: src/components/dialogs/auth/password_page.blp:81
+#: src/session_view/room_details/invite_subpage/mod.blp:15
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:15
+msgid "_Cancel"
+msgstr "Bekor qilish"
+
+#: src/components/dialogs/auth/in_browser_page.blp:110
+#: src/components/dialogs/auth/password_page.blp:88
+msgid "C_onfirm"
+msgstr "Tasdiqlash"
+
+#: src/components/dialogs/auth/mod.rs:311
+msgid "The password is invalid."
+msgstr "Parol yaroqsiz."
+
+#: src/components/dialogs/auth/mod.rs:313 src/login/in_browser_page.rs:127
+msgid "An unexpected error occurred."
+msgstr "Noma'lum xatolik yuz berdi."
+
+#: src/components/dialogs/auth/password_page.blp:50
+msgid "Please authenticate the operation with your password"
+msgstr "Iltimos, operatsiyani parolingiz bilan tasdiqlang"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "Taklif rad etilsinmi?"
+
+#: src/components/dialogs/message_dialogs.rs:27
+msgid ""
+"Do you really want to decline this invite? You can join this room on your own "
+"later."
+msgstr ""
+"Bu taklifni rad etishni xohlaysizmi? Bu xonaga keyinroq oʻzingiz qoʻshishingiz "
+"mumkin."
+
+#: src/components/dialogs/message_dialogs.rs:31
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr "Bu taklifni rad etishni xohlaysizmi? Busiz bu xonaga kira olmaysiz."
+
+#: src/components/dialogs/message_dialogs.rs:34
+#: src/identity_verification_view/accept_request_page.blp:55
+#: src/session_view/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "Rozi emasman"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Leave Room?"
+msgstr "Xonadan chiqasizmi?"
+
+#: src/components/dialogs/message_dialogs.rs:41
+msgid "Do you really want to leave this room? You can come back later."
+msgstr ""
+"Haqiqatan ham bu xonani tark etishni xohlaysizmi? Keyinroq qaytib kelishingiz "
+"mumkin."
+
+#: src/components/dialogs/message_dialogs.rs:44
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr ""
+"Haqiqatan ham bu xonani tark etishni xohlaysizmi? Siz taklifnomasiz qaytib "
+"kela olmaysiz."
+
+#: src/components/dialogs/message_dialogs.rs:47
+msgid "Leave"
+msgstr "Tashlab ket"
+
+#: src/components/dialogs/message_dialogs.rs:67
+msgid "Ignore {user}"
+msgstr "{user} e’tibor bermaslik"
+
+#: src/components/dialogs/message_dialogs.rs:71
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr ""
+"Ushbu foydalanuvchi tomonidan yuborilgan barcha xabarlar yoki taklifnomalar "
+"e'tiborga olinmaydi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:132
+msgid "Ban {user}?"
+msgstr "{user} taqiqlansinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:136
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the room "
+"again until someone unbans them."
+msgstr ""
+"Haqiqatan ham {user_id}ʼni taqiqlamoqchimisiz? Kimdir taqiqni olib "
+"tashlamaguncha, ular xonaga qayta qoʻshila olmaydi."
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:139 src/components/user_page.blp:142
+#: src/session_view/room_details/permissions/permissions_subpage.blp:234
+msgid "Ban"
+msgstr "Taqiqlash"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:150
+msgid "Revoke Invite for {user}?"
+msgstr "{user} uchun taklif bekor qilinsinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:157
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"Haqiqatan ham {user_id} uchun taklifni bekor qilmoqchimisiz? Ular hali ham "
+"xonaga mustaqil ravishda kirishlari mumkin."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:164
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"Haqiqatan ham {user_id} uchun taklifni bekor qilmoqchimisiz? Kimdir ularni "
+"qayta taklif qilmaguncha, ular xonaga qayta qoʻshila olmaydi."
+
+#: src/components/dialogs/message_dialogs.rs:168 src/components/user_page.rs:390
+msgid "Revoke Invite"
+msgstr "Taklifni bekor qilish"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:175
+msgid "Deny Access to {user}?"
+msgstr "{user} xizmatiga kirish taqiqlansinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:181
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "Haqiqatan ham {user_id} xizmatiga kirishni rad qilmoqchimisiz?"
+
+#: src/components/dialogs/message_dialogs.rs:184
+msgid "Deny Access"
+msgstr "Kirishni rad etish"
+
+#: src/components/dialogs/message_dialogs.rs:191
+msgid "Kick {user}?"
+msgstr "{user} tepsinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:196
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"Haqiqatan ham {user_id} tepmoqchimisiz? Ular xonaga yana mustaqil ravishda "
+"kirishlari mumkin."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:203
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"Haqiqatan ham {user_id} tepmoqchimisiz? Kimdir ularni taklif qilmaguncha, ular "
+"yana xonaga kira olmaydi."
+
+#. Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:207 src/components/user_page.rs:393
+#: src/session_view/room_details/permissions/permissions_subpage.blp:222
+msgid "Kick"
+msgstr "Haydash"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:218
+msgid "Remove Messages Sent by {user}?"
+msgstr "{user} tomonidan yuborilgan xabarlar olib tashlansinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:224
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"Bu homeserverdan olingan barcha xabarlarni olib tashlaydi. Haqiqatan ham "
+"{user_id} tomonidan yuborilgan 1 ta xabarni olib tashlamoqchimisiz? Buni ortga "
+"qaytarib bo‘lmaydi."
+msgstr[1] ""
+"Bu homeserverdan olingan barcha xabarlarni olib tashlaydi. Haqiqatan ham "
+"{user_id} tomonidan yuborilgan {n} ta xabarni olib tashlamoqchimisiz? Buni "
+"ortga qaytarib bo‘lmaydi."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:238
+msgid "No Messages Sent by {user}"
+msgstr "{user} tomonidan hech qanday xabar yuborilmagan"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:244
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You can "
+"try to load more by going further back in the room history."
+msgstr ""
+"{user_id} tomonidan yuborilgan uy serveridan hech qanday xabar olinmadi. Xona "
+"tarixiga orqaga qaytish orqali koʻproq yuklashga urinib koʻrishingiz mumkin."
+
+#: src/components/dialogs/message_dialogs.rs:272
+#: src/session_view/room_history/event_actions/group.rs:630
+msgid "Reason (optional)"
+msgstr "Sabab (ixtiyoriy)"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:296
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "Foydalanuvchi tomonidan yuborilgan oxirgi xabarni olib tashlang"
+msgstr[1] ""
+"Foydalanuvchi tomonidan yuborilgan {n} ta oxirgi xabarni olib tashlang"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:377
+#, fuzzy
+#| msgid "Mute {user}?"
+msgid "Mute {user}?"
+msgid_plural "Mute Members?"
+msgstr[0] "{user} ovozi oʻchirilsinmi?"
+msgstr[1] "{user} ovozi oʻchirilsinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:385
+#, fuzzy
+#| msgid ""
+#| "Are you sure you want to mute {user_id}? They will not be able to send new "
+#| "messages."
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages to this room."
+msgid_plural ""
+"Are you sure you want to mute these members? They will not be able to send new "
+"messages to this room."
+msgstr[0] ""
+"Haqiqatan ham {user_id} ovozini oʻchirmoqchimisiz? Ular yangi xabarlarni "
+"yubora olmaydi."
+msgstr[1] ""
+"Haqiqatan ham {user_id} ovozini oʻchirmoqchimisiz? Ular yangi xabarlarni "
+"yubora olmaydi."
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:400
+msgid "Mute"
+msgstr "Ovozsiz"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:426
+#, fuzzy
+#| msgid "Promote {user}?"
+msgid "Promote {user}?"
+msgid_plural "Promote Members?"
+msgstr[0] "{user} lavozimi koʻtarilsinmi?"
+msgstr[1] "{user} lavozimi koʻtarilsinmi?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. The count cannot be zero.
+#: src/components/dialogs/message_dialogs.rs:434
+#, fuzzy
+#| msgid ""
+#| "If you promote {user_id} to the same level as yours, you will not be able "
+#| "to demote them in the future."
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgid_plural ""
+"If you promote these members to the same level as yours, you will not be able "
+"to demote them in the future."
+msgstr[0] ""
+"Agar siz {user_id} ni oʻzingizniki bilan bir xil darajaga koʻtarsangiz, "
+"kelajakda ularni pastga tushira olmaysiz."
+msgstr[1] ""
+"Agar siz {user_id} ni oʻzingizniki bilan bir xil darajaga koʻtarsangiz, "
+"kelajakda ularni pastga tushira olmaysiz."
+
+#: src/components/dialogs/message_dialogs.rs:448
+msgid "Promote"
+msgstr "Ragʻbatlantirish"
+
+#: src/components/dialogs/message_dialogs.rs:457
+msgid "Demote Yourself?"
+msgstr ""
+
+#: src/components/dialogs/message_dialogs.rs:459
+msgid ""
+"Are you sure you want to lower your power level? You will need to ask another "
+"member with a higher power level to undo this."
+msgstr ""
+
+#: src/components/dialogs/message_dialogs.rs:470
+#, fuzzy
+#| msgid "Promote"
+msgid "Demote"
+msgstr "Ragʻbatlantirish"
+
+#: src/components/dialogs/message_dialogs.rs:481
+msgid "Save Changes?"
+msgstr "Oʻzgarishlar saqlansinmi?"
+
+#: src/components/dialogs/message_dialogs.rs:483
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr ""
+"Ushbu sahifada saqlanmagan oʻzgarishlar mavjud. Saqlanmagan oʻzgarishlar "
+"yoʻqoladi."
+
+#: src/components/dialogs/message_dialogs.rs:492
+msgid "Discard"
+msgstr "Bekor qilish"
+
+#: src/components/dialogs/message_dialogs.rs:493
+#: src/session_view/room_details/edit_details_subpage.blp:98
+#: src/session_view/room_details/history_viewer/file_row.rs:144
+#: src/utils/matrix/media_message.rs:233
+msgid "Save"
+msgstr "Saqlash"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/room_preview.rs:239
+#: src/components/dialogs/room_preview.rs:347
+#: src/session_view/explore/public_room_row.rs:182
+#: src/session_view/room_history/message_toolbar/mod.rs:358
+#: src/session_view/room_history/mod.blp:77
+#: src/session_view/room_history/state/creation.blp:20
+msgid "View"
+msgstr "Koʻrish"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/room_preview.rs:242
+#: src/components/dialogs/room_preview.blp:90
+msgid "Look Up"
+msgstr "Qidirmoq"
+
+#: src/components/dialogs/room_preview.rs:302
+msgid ""
+"The room details cannot be previewed. It can be because the room is not known "
+"by the homeserver or because its details are private. You can still try to "
+"join it."
+msgstr ""
+"Xona tafsilotlarini oldindan koʻrib boʻlmaydi. Buning sababi xonaning uy "
+"serveri tomonidan noma'lumligi yoki uning tafsilotlari shaxsiy boʻlishi "
+"mumkin. Siz hali ham unga qoʻshilishga harakat qilishingiz mumkin."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/room_preview.rs:325
+#: src/session_view/explore/public_room_row.rs:161
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "1 ta a'zo"
+msgstr[1] "{n} ta aʼzo"
+
+#: src/components/dialogs/room_preview.rs:349
+#: src/session_view/explore/public_room_row.rs:187
+#, fuzzy
+#| msgid "Reject Invite"
+msgid "Request an Invite"
+msgstr "Taklifni rad etish"
+
+#: src/components/dialogs/room_preview.rs:351
+#: src/session_view/explore/public_room_row.rs:195
+#: src/session_view/room_history/message_toolbar/mod.rs:360
+msgid "Join"
+msgstr "Qoʻshilish"
+
+#: src/components/dialogs/room_preview.blp:5
+#: src/components/dialogs/room_preview.blp:39
+msgid "Join a Room"
+msgstr "Xonaga qoʻshiling"
+
+#: src/components/dialogs/room_preview.blp:19 src/login/greeter.blp:17
+#: src/login/greeter.blp:20 src/session_view/media_viewer.blp:76
+#: src/session_view/media_viewer.blp:79
+#: src/session_view/room_details/edit_details_subpage.blp:15
+#: src/session_view/room_details/history_visibility_subpage.blp:19
+#: src/session_view/room_details/join_rule_subpage.blp:19
+#: src/session_view/room_details/permissions/permissions_subpage.blp:20
+msgid "Back"
+msgstr "Orqaga"
+
+#: src/components/dialogs/room_preview.blp:70
+#, fuzzy
+#| msgid "Enter a room ID, room alias, or link to look up a room"
+msgid "Enter an address or link to look up a room"
+msgstr ""
+"Xonani qidirish uchun xona identifikatorini, xona taxallusini yoki havolasini "
+"kiriting"
+
+#: src/components/dialogs/user_profile.blp:5
+msgid "User Profile"
+msgstr "Foydalanuvchi profili"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "Oflayn"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "Tarmoqqa ulanish yoʻq"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "Internet aloqasi yoʻq"
+
+#: src/components/media/audio_player/mod.rs:304
+msgid "Pause"
+msgstr ""
+
+#: src/components/media/audio_player/mod.rs:306
+msgid "Play"
+msgstr "Boshlang"
+
+#: src/components/media/audio_player/mod.rs:387
+msgid "Error reading audio file"
+msgstr "Audio faylni oʻqishda xatolik yuz berdi"
+
+#: src/components/media/audio_player/mod.rs:475
+msgid "Could not retrieve audio file"
+msgstr "Audio faylni olib boʻlmadi"
+
+#: src/components/media/content_viewer.rs:121
+msgid "Image not Viewable"
+msgstr "Rasmni koʻrib boʻlmaydi"
+
+#: src/components/media/content_viewer.rs:122
+msgid "Audio Clip not Playable"
+msgstr "Audio klip ijro etilmaydi"
+
+#: src/components/media/content_viewer.rs:123
+msgid "Video not Playable"
+msgstr "Video ijro etilmaydi"
+
+#: src/components/media/content_viewer.rs:124
+msgid "File not Viewable"
+msgstr "Faylni koʻrib boʻlmaydi"
+
+#: src/components/media/location_viewer.rs:146
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "{latitude} kenglik va {longitude} uzunlikdagi joylashuv"
+
+#: src/components/pill/at_room.rs:32
+msgid "Notify the whole room"
+msgstr "Butun xonani xabardor qiling"
+
+#. Translators: As in 'Custom role'.
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/components/power_level_selection/popover.blp:127
+#: src/session/room/permissions.rs:66
+msgid "Custom"
+msgstr "Xususiy"
+
+#: src/components/power_level_selection/popover.blp:141
+msgid "Confirm Custom Role"
+msgstr "Maxsus rolni tasdiqlang"
+
+#: src/components/power_level_selection/row.blp:99
+msgid "More Information"
+msgstr "Qoʻshimcha maʼlumot"
+
+#: src/components/power_level_selection/row.blp:117
+msgid ""
+"Creator is an immutable role that can be attributed to several users when "
+"creating a room. Creators always have a higher power level than any other room "
+"members, except other creators, and have the permission to do anything in the "
+"room. The only way to demote a creator is to replace the current room with "
+"another one with a different creator, by upgrading the room for example."
+msgstr ""
+
+#: src/components/user_page.rs:283
+msgid "Open Direct Chat"
+msgstr "Toʻgʻridan-toʻgʻri suhbatni oching"
+
+#: src/components/user_page.rs:285
+msgid "Create Direct Chat"
+msgstr "Toʻgʻridan-toʻgʻri chat yarating"
+
+#: src/components/user_page.rs:305
+#: src/session_view/create_direct_chat_dialog/mod.rs:190
+msgid "Could not create a new Direct Chat"
+msgstr "Yangi Direct Chat yaratib boʻlmadi"
+
+#: src/components/user_page.rs:336
+msgid "In {room_name}"
+msgstr "{room_name} ichida"
+
+#. Translators: As in, 'The room member was invited'.
+#: src/components/user_page.rs:347
+msgctxt "member"
+msgid "Invited"
+msgstr "Taklif qilingan"
+
+#. Translators: As in, 'The room member was banned'.
+#: src/components/user_page.rs:351
+msgctxt "member"
+msgid "Banned"
+msgstr "Taqiqlangan"
+
+#. Translators: As in, 'The room member requested an invite'.
+#: src/components/user_page.rs:355
+msgctxt "member"
+msgid "Requested an Invite"
+msgstr "Taklif soʻraldi"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:359
+msgctxt "member"
+msgid "Unknown"
+msgstr "Nomaʼlum"
+
+#: src/components/user_page.rs:391
+msgid "Deny Request"
+msgstr "Soʻrovni rad etish"
+
+#: src/components/user_page.rs:499
+msgid "Could not change the role"
+msgstr "Rolni oʻzgartirib boʻlmadi"
+
+#: src/components/user_page.rs:520
+msgid "Could not invite user"
+msgstr "Foydalanuvchini taklif qilib boʻlmadi"
+
+#: src/components/user_page.rs:554
+#: src/session_view/room_history/event_actions/group.rs:722
+msgid "Could not revoke invite of user"
+msgstr "Foydalanuvchi taklifini bekor qilib boʻlmadi"
+
+#: src/components/user_page.rs:555
+msgid "Could not deny access to user"
+msgstr "Foydalanuvchiga kirishni rad etib boʻlmadi"
+
+#: src/components/user_page.rs:556
+msgid "Could not kick user"
+msgstr "Foydalanuvchini tepib boʻlmadi"
+
+#: src/components/user_page.rs:602
+msgid "Could not ban user"
+msgstr "Foydalanuvchini bloklab boʻlmadi"
+
+#: src/components/user_page.rs:633
+msgid "Could not unban user"
+msgstr "Foydalanuvchini blokdan chiqarib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:681
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "Foydalanuvchi tomonidan yuborilgan 1 ta xabarni olib tashlab bo‘lmadi"
+msgstr[1] ""
+"Foydalanuvchi tomonidan yuborilgan {n} ta xabarni olib tashlab boʻlmadi"
+
+#: src/components/user_page.rs:697
+msgid "Identity verified"
+msgstr "Shaxs tasdiqlandi"
+
+#: src/components/user_page.rs:704
+msgid "Identity not verified"
+msgstr "Shaxs tasdiqlanmagan"
+
+#: src/components/user_page.rs:719
+msgid "Could not start user verification"
+msgstr "Foydalanuvchi tekshiruvi boshlanmadi"
+
+#: src/components/user_page.rs:744
+msgid "Ignored"
+msgstr "E'tiborga olinmaydi, moslik uchun saqlanadi"
+
+#: src/components/user_page.rs:749
+msgid "Not Ignored"
+msgstr "E'tiborga olinmagan xostlar"
+
+#: src/components/user_page.rs:750
+msgid "Ignore"
+msgstr "E’tibor bermaslik"
+
+#: src/components/user_page.rs:770 src/session_view/invite.rs:290
+#: src/session_view/sidebar/row.rs:770
+msgid "Could not ignore user"
+msgstr "Foydalanuvchini e'tiborsiz qoldirib boʻlmadi"
+
+#: src/components/user_page.blp:107
+msgid "Role"
+msgstr "Rol"
+
+#. Translators: value used to assign room member roles.
+#: src/components/user_page.blp:122
+msgid "Power Level"
+msgstr "Quvvat darajasi"
+
+#. Translators: In this string, 'Invite' is a verb.
+#. Translators: This is a verb.
+#: src/components/user_page.blp:128 src/session_view/invite.blp:14
+#: src/session_view/invite.blp:39
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:145
+#: src/session_view/room_details/permissions/permissions_subpage.blp:210
+msgid "Invite"
+msgstr "Taklif qiling"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.blp:152
+msgid "Unban"
+msgstr "Taqiqni bekor qilish"
+
+#: src/components/user_page.blp:157
+msgid "Remove Messages"
+msgstr "Xabarlarni oʻchirish"
+
+#: src/components/user_page.blp:172
+msgid "Security"
+msgstr "Xavfsizlik"
+
+#: src/components/user_page.blp:199
+#: src/identity_verification_view/accept_request_page.blp:66
+#: src/session_view/room_history/verification_info_bar.rs:172
+#: src/session_view/sidebar/mod.rs:322
+msgid "Verify"
+msgstr "Tasdiqlash"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "QR kodi"
+
+#: src/error_page.blp:19 src/error_page.blp:23 src/error_page.blp:31
+#: src/error_page.blp:35 src/login/greeter.blp:28 src/login/greeter.blp:32
+#: src/login/greeter.blp:40 src/login/greeter.blp:44 src/window.blp:29
+#: src/window.blp:33
+msgid "About Fractal"
+msgstr "Fractal haqida"
+
+#: src/error_page.blp:45
+msgid "Secret Portal Error"
+msgstr "Maxfiy portal xatosi"
+
+#: src/error_page.blp:58
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session information "
+"and an error occurred while we were trying to restore your sessions."
+msgstr ""
+"Fractal maxfiy seans maʼlumotlarini boshqarish uchun Maxfiy portalga tayanadi "
+"va seanslaringizni qayta tiklashga urinayotganimizda xatolik yuz berdi."
+
+#: src/error_page.blp:73
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr ""
+"Maxfiy portal bilan bogʻliq muammolarni hal qilishga yordam beradigan ba'zi "
+"narsalar:"
+
+#: src/error_page.blp:92
+msgid ""
+"Make sure you have a Secret Portal Backend Provider installed, like gnome-"
+"keyring."
+msgstr ""
+"Gnome-keyring kabi Secret Portal Backend Provayder oʻrnatilganligiga ishonch "
+"hosil qiling."
+
+#: src/error_page.blp:116
+msgid ""
+"If you prefer to use a Secret Service Provider instead, you need to allow "
+"Fractal to interact with it, like this:"
+msgstr ""
+"Agar siz Maxfiy xizmat koʻrsatuvchi provayderdan foydalanishni afzal "
+"koʻrsangiz, Fractal bilan u bilan oʻzaro aloqada boʻlishga ruxsat berishingiz "
+"kerak, masalan:"
+
+#: src/error_page.blp:148
+msgid "Copy Command"
+msgstr "Nusxa koʻchirish buyrugʻi"
+
+#: src/error_page.blp:174
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr ""
+"Sizda standart kalitlar mavjudligini va u qulfdan chiqarilganligini tekshiring."
+
+#: src/error_page.blp:187
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr ""
+"Qoʻshimcha ma'lumot olish uchun dastur jurnallari va tarqatish hujjatlarini "
+"tekshiring."
+
+#: src/error_page.blp:202
+msgid "Could Not Initialize Session"
+msgstr "Seansni ishga tushirib boʻlmadi"
+
+#: src/error_page.rs:93
+msgid "Command copied to clipboard"
+msgstr "Buyruq vaqtinchalik xotiraga nusxalandi"
+
+#: src/identity_verification_view/accept_request_page.rs:130
+#: src/session/notifications/mod.rs:387
+msgid "Login Request From Another Session"
+msgstr "Boshqa sessiyadan kirish soʻrovi"
+
+#: src/identity_verification_view/accept_request_page.rs:132
+msgid "Verify the new session from the current session."
+msgstr "Joriy sessiyadan yangi seansni tasdiqlang."
+
+#: src/identity_verification_view/accept_request_page.rs:135
+#: src/identity_verification_view/choose_method_page.rs:184
+#: src/identity_verification_view/sas_page.rs:160
+#: src/identity_verification_view/scan_qr_code_page.rs:159
+#: src/session/notifications/mod.rs:325
+msgid "Verification Request"
+msgstr "Kiruvchi tekshirish soʻrovi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:139
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} tasdiqlanishini soʻradi. Foydalanuvchini tekshirish suhbat "
+"xavfsizligini oshiradi."
+
+#: src/identity_verification_view/accept_request_page.rs:162
+msgid "Could not decline verification request"
+msgstr "Tasdiqlash soʻrovini rad etib boʻlmadi"
+
+#: src/identity_verification_view/accept_request_page.rs:178
+msgid "Could not accept verification request"
+msgstr "Tasdiqlash soʻrovini qabul qilib boʻlmadi"
+
+#: src/identity_verification_view/cancelled_page.rs:140
+msgid "The verification was cancelled from the other session."
+msgstr "Boshqa seansda tekshirish bekor qilindi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:146
+msgid "The verification was cancelled by {user}."
+msgstr "Tasdiqlash {user} tomonidan bekor qilindi."
+
+#: src/identity_verification_view/cancelled_page.rs:152
+msgid "The verification process failed because it reached a timeout."
+msgstr "Tasdiqlash jarayoni amalga oshmadi, chunki u vaqt tugaydi."
+
+#: src/identity_verification_view/cancelled_page.rs:154
+msgid "You accepted the request from another session."
+msgstr "Siz boshqa sessiyadagi soʻrovni qabul qildingiz."
+
+#: src/identity_verification_view/cancelled_page.rs:157
+msgid "The emoji did not match."
+msgstr "Emoji mos kelmadi."
+
+#: src/identity_verification_view/cancelled_page.rs:159
+msgid "The numbers did not match."
+msgstr "Raqamlar mos kelmadi."
+
+#: src/identity_verification_view/cancelled_page.rs:162
+msgid "An unexpected error happened during the verification process."
+msgstr "Tasdiqlash jarayonida kutilmagan xatolik yuz berdi."
+
+#: src/identity_verification_view/cancelled_page.rs:167
+#: src/identity_verification_view/mod.blp:88
+#: src/identity_verification_view/mod.blp:97
+#: src/identity_verification_view/room_left_page.blp:22
+msgid "Verification Cancelled"
+msgstr "Tasdiqlash bekor qilindi"
+
+#: src/identity_verification_view/cancelled_page.rs:169
+msgid "Verification Error"
+msgstr "Tekshirish xatosi"
+
+#: src/identity_verification_view/cancelled_page.blp:60
+msgid "Send New Request"
+msgstr "Yangi soʻrov yuborish"
+
+#: src/identity_verification_view/choose_method_page.rs:176
+#: src/identity_verification_view/sas_page.rs:148
+#: src/identity_verification_view/scan_qr_code_page.rs:154
+msgid "Verify Session"
+msgstr "Sessiyani tekshirish"
+
+#: src/identity_verification_view/choose_method_page.rs:180
+msgid "Scan this QR code from the other session."
+msgstr "Ushbu QR kodni boshqa seansdan skanerlang."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:190
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "{user} oʻz sessiyasida ushbu QR kodni skanerlashni soʻrang."
+
+#: src/identity_verification_view/choose_method_page.rs:199
+msgid "Select a verification method to proceed."
+msgstr "Davom etish uchun tekshirish usulini tanlang."
+
+#: src/identity_verification_view/choose_method_page.rs:202
+msgid "Click on the verification method to proceed."
+msgstr "Davom etish uchun tekshirish usulini bosing."
+
+#: src/identity_verification_view/choose_method_page.rs:234
+msgid "Could not access camera"
+msgstr "Kameraga kira olmadi"
+
+#: src/identity_verification_view/choose_method_page.rs:251
+#: src/identity_verification_view/scan_qr_code_page.rs:222
+msgid "Could not start emoji verification"
+msgstr "Emoji tasdiqlashni boshlab boʻlmadi"
+
+#: src/identity_verification_view/choose_method_page.rs:267
+#: src/identity_verification_view/confirm_qr_code_page.rs:177
+#: src/identity_verification_view/qr_code_scanned_page.rs:145
+#: src/identity_verification_view/scan_qr_code_page.rs:234
+#: src/identity_verification_view/wait_for_other_page.rs:164
+msgid "Could not cancel the verification"
+msgstr "Tasdiqlashni bekor qilib boʻlmadi"
+
+#: src/identity_verification_view/choose_method_page.blp:55
+#: src/identity_verification_view/scan_qr_code_page.blp:51
+msgid "Can’t scan QR code?"
+msgstr "QR kodni skanerlay olmaysizmi?"
+
+#: src/identity_verification_view/choose_method_page.blp:63
+msgid "Scan QR code with this session"
+msgstr "Ushbu seans bilan QR kodini skanerlang"
+
+#: src/identity_verification_view/choose_method_page.blp:72
+#: src/identity_verification_view/scan_qr_code_page.blp:73
+msgid "Compare Emoji"
+msgstr "Emoji bilan solishtiring"
+
+#: src/identity_verification_view/choose_method_page.blp:83
+#: src/identity_verification_view/no_supported_methods_page.rs:168
+#: src/identity_verification_view/qr_code_scanned_page.blp:51
+#: src/identity_verification_view/scan_qr_code_page.blp:84
+msgid "Cancel Verification"
+msgstr "Tasdiqlashni bekor qilish"
+
+#: src/identity_verification_view/completed_page.rs:122
+msgid "Request Complete"
+msgstr "Soʻrov tugallandi"
+
+#: src/identity_verification_view/completed_page.rs:124
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "Yangi seans endi xavfsiz xabarlarni yuborish va qabul qilishga tayyor."
+
+#: src/identity_verification_view/completed_page.rs:128
+msgid "Verification Complete"
+msgstr "Tasdiqlash tugallandi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:131
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr ""
+"{user} tasdiqlandi va endi muloqotingiz maxfiy boʻlishiga ishonch hosil "
+"qilishingiz mumkin."
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:129
+msgid "Does the other session show a confirmation?"
+msgstr "Boshqa seans tasdiqlashni koʻrsatadimi?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:135
+msgid "Does {user} see a confirmation on their session?"
+msgstr "{user} oʻz sessiyasida tasdiqlashni koʻradimi?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:161
+msgid "Could not confirm the scan of the QR Code"
+msgstr "QR kodni skanerlashni tasdiqlab boʻlmadi"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:19
+msgid "Confirm Scan"
+msgstr "Skanerlashni tasdiqlang"
+
+#: src/identity_verification_view/confirm_qr_code_page.blp:72
+msgid "Confirm"
+msgstr "Tasdiqlash"
+
+#: src/identity_verification_view/mod.rs:200
+msgid "Scan QR Code"
+msgstr "QR kodini skanerlang"
+
+#: src/identity_verification_view/mod.blp:16
+msgid "New Identity Verification Request"
+msgstr "Yangi shaxsni tasdiqlash soʻrovi"
+
+#: src/identity_verification_view/mod.blp:25
+msgid "Wait for Other Party"
+msgstr "Boshqa tomonni kuting"
+
+#: src/identity_verification_view/mod.blp:34
+#: src/identity_verification_view/no_supported_methods_page.blp:22
+msgid "No Supported Verification Methods"
+msgstr "Qoʻllab-quvvatlanadigan tekshirish usullari yoʻq"
+
+#: src/identity_verification_view/mod.blp:43
+msgid "Verification Request Methods"
+msgstr "Tasdiqlash soʻrovi usullari"
+
+#: src/identity_verification_view/mod.blp:52
+#: src/identity_verification_view/qr_code_scanned_page.blp:19
+msgid "Scan Complete"
+msgstr "Skanerlash tugallandi"
+
+#: src/identity_verification_view/mod.blp:61
+msgid "Confirm Scan Result"
+msgstr "Skanerlash natijasini tasdiqlang"
+
+#: src/identity_verification_view/mod.blp:70
+msgid "Short Authentication String Verification"
+msgstr "Qisqa autentifikatsiya satrini tekshirish"
+
+#: src/identity_verification_view/mod.blp:79
+msgid "Verification Successful"
+msgstr "Tasdiqlash muvaffaqiyatli"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:139
+msgid "None of the methods offered by the other client are supported by Fractal."
+msgstr ""
+"Boshqa mijoz tomonidan taklif qilingan usullarning hech biri Fractal tomonidan "
+"qoʻllab-quvvatlanmaydi."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:142
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"Kirish soʻrovi olindi, lekin boshqa mijoz tomonidan taklif qilingan "
+"usullarning hech biri Fractal tomonidan qoʻllab-quvvatlanmaydi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:151
+msgid "None of the methods offered by {user}’s client are supported by Fractal."
+msgstr ""
+"{user} mijozi tomonidan taklif qilingan usullarning hech biri Fractal "
+"tomonidan qoʻllab-quvvatlanmaydi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:158
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} tasdiqlash soʻrovini yubordi, lekin boshqa mijoz tomonidan taklif "
+"qilingan usullarning hech biri Fractal tomonidan qoʻllab-quvvatlanmaydi."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:170
+msgid "Decline Verification"
+msgstr "Tasdiqlashni rad etish"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:192
+msgid "Could not decline the verification"
+msgstr "Tasdiqlashni rad etib boʻlmadi"
+
+#: src/identity_verification_view/no_supported_methods_page.blp:48
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"Siz ushbu tasdiqlashni boshqa seansdan qabul qilishingiz yoki barcha "
+"seanslaringiz uchun rad qilishingiz mumkin"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:119
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the verification "
+"from the other session."
+msgstr ""
+"QR kodni muvaffaqiyatli skanerladingiz. Boshqa seansdan tasdiqlashni "
+"tasdiqlashingiz kerak boʻlishi mumkin."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:124
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"QR kodni muvaffaqiyatli skanerladingiz. {user} tasdiqlashni tasdiqlashi kerak "
+"boʻlishi mumkin."
+
+#: src/identity_verification_view/room_left_page.blp:38
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "Siz endi tekshirish oʻtkazilayotgan xonada emassiz"
+
+#: src/identity_verification_view/sas_page.rs:151
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr ""
+"Xuddi shu emoji boshqa mijozda bir xil tartibda paydo boʻlishini tekshiring."
+
+#: src/identity_verification_view/sas_page.rs:155
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr ""
+"Boshqa mijozda bir xil raqamlar bir xil tartibda paydo boʻlishini tekshiring."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:165
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"{user}dan quyidagi kulgichlar ekranida bir xil tartibda chiqayotganini "
+"koʻrishini soʻrang."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:172
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on their "
+"screen."
+msgstr ""
+"{user}dan quyidagi raqamlar oʻz ekranida bir xil tartibda chiqayotganligini "
+"soʻrang."
+
+#: src/identity_verification_view/sas_page.rs:253
+msgid "Could not send that the data does not match"
+msgstr "Maʼlumotlar mos kelmasligi uchun yuborib boʻlmadi"
+
+#: src/identity_verification_view/sas_page.rs:270
+msgid "Could not send confirmation that the data matches"
+msgstr "Maʼlumotlar mos kelishini tasdiqlab boʻlmadi"
+
+#. Translators: During emoji comparison, this is the label of the button to
+#. click
+#. when the emojis do not match.
+#: src/identity_verification_view/sas_page.blp:65
+msgid "Do Not Match"
+msgstr "Mos kelmaslik"
+
+#. Translators: During emoji comparison, this is the label of the button to
+#. click
+#. when the emojis match.
+#: src/identity_verification_view/sas_page.blp:78
+msgid "Match"
+msgstr "Mos keldi"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:156
+msgid "Scan the QR code displayed by the other session."
+msgstr "Boshqa seans tomonidan koʻrsatilgan QR kodini skanerlang."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:163
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "{user} qurilmasida koʻrsatilgan QR kodni skanerlang."
+
+#: src/identity_verification_view/scan_qr_code_page.rs:201
+msgid "Could not validate scanned QR Code"
+msgstr "Skanerlangan QR kodni tekshirib boʻlmadi"
+
+#: src/identity_verification_view/scan_qr_code_page.blp:64
+msgid "Show a QR code to scan with another device"
+msgstr "Boshqa qurilma bilan skanerlash uchun QR kodini koʻrsating"
+
+#: src/identity_verification_view/wait_for_other_page.rs:124
+msgid "Get Another Device"
+msgstr "Boshqa qurilmani oling"
+
+#: src/identity_verification_view/wait_for_other_page.rs:126
+msgid "Accept the verification request from another session or device."
+msgstr "Boshqa seans yoki qurilmadan tekshirish soʻrovini qabul qiling."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:134
+msgid "Waiting for {user}"
+msgstr "{user} kutilmoqda"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:140
+msgid "Ask {user} to accept the verification request."
+msgstr "{user} dan tasdiqlash soʻrovini qabul qilishni soʻrang."
+
+#: src/identity_verification_view/wait_for_other_page.blp:45
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way of "
+"communication."
+msgstr ""
+"Xavfsiz boʻlish uchun tekshirish shaxsan amalga oshirilishi yoki ishonchli "
+"aloqa usulidan foydalanishi kerak."
+
+#: src/identity_verification_view/wait_for_other_page.blp:61
+msgid "The request is not showing up on the other device?"
+msgstr "Soʻrov boshqa qurilmada koʻrinmayaptimi?"
+
+#: src/identity_verification_view/wait_for_other_page.blp:73
+msgid "Cancel Verification Request"
+msgstr "Tasdiqlash soʻrovini bekor qilish"
+
+#: src/login/advanced_dialog.blp:5
+msgid "Homeserver Discovery"
+msgstr "Homeserver kashfiyoti"
+
+#: src/login/advanced_dialog.blp:11
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the URL "
+"of a Matrix homeserver from a domain name. This should only be disabled if "
+"your homeserver doesn’t support auto-discovery or if you want to provide the "
+"URL yourself."
+msgstr ""
+"Avtomatik topish, shuningdek, \"taniqli qidiruv\" sifatida ham tanilgan, domen "
+"nomidan Matrix homeserver URL manzilini topishga imkon beradi. Buni faqat uy "
+"serveringiz avtomatik aniqlashni qoʻllab-quvvatlamasa yoki URL manzilini "
+"oʻzingiz taqdim qilmoqchi boʻlsangiz oʻchirib qoʻyish kerak."
+
+#: src/login/advanced_dialog.blp:14
+msgid "_Auto-Discovery"
+msgstr "Avtomatik topish"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.blp:7 src/login/greeter.blp:84
+msgid "Welcome to Fractal"
+msgstr "Fractalʼga xush kelibsiz"
+
+#: src/login/greeter.blp:104
+msgid "_Log In"
+msgstr "Kirish"
+
+#: src/login/greeter.blp:118
+msgid "_Create Account"
+msgstr "Hisob yaratish"
+
+#: src/login/homeserver_page.rs:102
+msgid "Domain Name"
+msgstr "Domen nomi"
+
+#: src/login/homeserver_page.rs:104
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "Matrix uy serveringiz domeni, masalan gnome.org"
+
+#: src/login/homeserver_page.rs:107 src/login/method_page.blp:69
+msgid "Homeserver URL"
+msgstr "Uy serverining URL manzili"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:111
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "Matrix bosh serveringizning URL manzili, masalan, {address}"
+
+#: src/login/homeserver_page.rs:254 src/login/mod.rs:297 src/login/mod.rs:321
+#: src/login/mod.rs:367 src/login/mod.rs:384
+msgid "Could not set up login"
+msgstr "Loginni sozlab boʻlmadi"
+
+#: src/login/homeserver_page.blp:103 src/login/method_page.blp:141
+msgid "Next"
+msgstr "Keyingi"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.blp:118
+msgid "Advanced…"
+msgstr "Kengaytirilgan…"
+
+#: src/login/in_browser_page.rs:100
+msgid "Could not open URL"
+msgstr "URL ochilmadi"
+
+#: src/login/in_browser_page.blp:55
+msgid "Click on the button below and follow the steps in the browser"
+msgstr "Quyidagi tugmani bosing va brauzerdagi amallarni bajaring"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:95
+msgid "Log in to {domain_name}"
+msgstr "{domain_name} hisobiga kiring"
+
+#: src/login/method_page.rs:102
+msgid "Log in"
+msgstr "Kirish"
+
+#: src/login/method_page.rs:144
+msgid "More SSO Providers"
+msgstr "Koʻproq SSO provayderlari"
+
+#: src/login/method_page.rs:147
+msgid "Login via SSO"
+msgstr "SSO orqali tizimga kiring"
+
+#: src/login/method_page.blp:6 src/window.blp:73
+msgid "Log In"
+msgstr "Kirish"
+
+#: src/login/method_page.blp:94
+msgid "Matrix Username"
+msgstr "Matrix foydalanuvchi nomi"
+
+#: src/login/method_page.blp:109
+msgid "Password"
+msgstr "Parol"
+
+#: src/login/method_page.blp:124
+msgid "Single Sign-On Providers"
+msgstr "Yagona tizimga kirish provayderlari"
+
+#: src/login/mod.rs:453
+msgid "Could not store session"
+msgstr "Seans saqlanmadi"
+
+#: src/login/mod.rs:583
+msgid "Authorization Completed"
+msgstr "Avtorizatsiya tugallandi"
+
+#: src/login/mod.rs:585
+msgid ""
+"The authorization step is complete. You can close this page and go back to "
+"Fractal."
+msgstr ""
+"Avtorizatsiya bosqichi tugallandi. Siz ushbu sahifani yopishingiz va Fractalga "
+"qaytishingiz mumkin."
+
+#: src/login/mod.blp:22 src/login/mod.blp:54
+msgid "Login Complete"
+msgstr "Kirish tugallandi"
+
+#: src/login/mod.blp:75
+msgid "This session is ready to send and receive secure messages"
+msgstr "Bu seans xavfsiz xabarlarni yuborish va qabul qilishga tayyor"
+
+#: src/login/mod.blp:84
+msgid "Start Chatting"
+msgstr "Suhbatni boshlash"
+
+#: src/login/session_setup_view.blp:6
+msgid "Session Setup"
+msgstr "Seansni sozlash"
+
+#: src/login/session_setup_view.blp:47 src/window.blp:59
+msgid "Fetching Account Data…"
+msgstr "Hisob maʼlumotlari olinmoqda…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. This is the tooltip text on buttons to log in via Single Sign-On.
+#. The brand is something like Facebook, Apple, GitHub…
+#: src/login/sso_idp_button.rs:74
+msgid "Log in with {brand}"
+msgstr "{brand} bilan tizimga kiring"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:175
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Fractal: {user_id} uchun matritsa hisob maʼlumotlari"
+
+#: src/secret/linux.rs:527
+msgid "The secret storage file is corrupted."
+msgstr "Maxfiy saqlash fayli buzilgan."
+
+#: src/secret/linux.rs:529
+msgid "Could not access the secret storage file location."
+msgstr "Maxfiy saqlash fayli manziliga kira olmadi."
+
+#: src/secret/linux.rs:532
+msgid "An unexpected error occurred when accessing the secret storage file."
+msgstr "Maxfiy saqlash fayliga kirishda kutilmagan xatolik yuz berdi."
+
+#: src/secret/linux.rs:535
+msgid "The secret storage file has been changed by another process."
+msgstr "Yashirin saqlash fayli boshqa jarayon bilan oʻzgartirildi."
+
+#: src/secret/linux.rs:538
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"Flatpak maxfiy portaliga soʻrov bekor qilindi. Unga kirish soʻrovini qabul "
+"qilganingizga ishonch hosil qiling."
+
+#: src/secret/linux.rs:541
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"Flatpak maxfiy portali mavjud emas. xdg-desktop-portal oʻrnatilganligiga "
+"ishonch hosil qiling va u kamida 1.5.0 versiyasida."
+
+#: src/secret/linux.rs:544
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr ""
+"D-Bus Secret Portal backend bilan ishlashda kutilmagan xatolik yuz berdi."
+
+#: src/secret/linux.rs:547
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr ""
+"Flatpak maxfiy portali xavfsiz boʻlish uchun juda zaif kalitni taqdim etdi."
+
+#: src/secret/linux.rs:560
+msgid "The item was deleted."
+msgstr "Element oʻchirildi."
+
+#: src/secret/linux.rs:563 src/secret/linux.rs:578
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Service."
+msgstr "D-Bus maxfiy xizmati bilan ishlashda kutilmagan xatolik yuz berdi."
+
+#: src/secret/linux.rs:565
+msgid "The collection or item is locked."
+msgstr "Toʻplam yoki buyum qulflangan."
+
+#: src/secret/linux.rs:567
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "D-Bus maxfiy xizmati sessiyasi mavjud emas."
+
+#: src/secret/linux.rs:569
+msgid "The collection or item does not exist."
+msgstr "Toʻplam yoki element mavjud emas."
+
+#: src/secret/linux.rs:572
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept any "
+"prompt asking to access it."
+msgstr ""
+"D-Bus Maxfiy Xizmatiga soʻrov bekor qilindi. Unga kirish soʻrovini qabul "
+"qilganingizga ishonch hosil qiling."
+
+#: src/secret/linux.rs:575
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"Standart toʻplamga kirish imkoni boʻmadi. Kalitlik yaratilgan va sukut "
+"boʻyicha oʻrnatilganligiga ishonch hosil qiling."
+
+#: src/session/mod.rs:837
+msgid "Could not log the session out"
+msgstr "Seansdan chiqib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:329
+msgid "{user} sent a verification request"
+msgstr "{user} tasdiqlash soʻrovini yubordi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:391
+msgid "Verify your new session “{name}”"
+msgstr "“{name}” yangi seansingizni tasdiqlang"
+
+#: src/session/notifications/mod.rs:483
+msgid "{user} sent an audio file."
+msgstr "{user} audio fayl yubordi."
+
+#: src/session/notifications/mod.rs:486
+msgid "{user} sent a file."
+msgstr "{user} fayl yubordi."
+
+#: src/session/notifications/mod.rs:488
+msgid "{user} sent an image."
+msgstr "{user} rasm yubordi."
+
+#: src/session/notifications/mod.rs:491
+msgid "{user} sent their location."
+msgstr "{user} joylashuvini yubordi."
+
+#: src/session/notifications/mod.rs:503
+msgid "{user} sent a video."
+msgstr "{user} video yubordi."
+
+#: src/session/notifications/mod.rs:510
+msgid "{user} sent a sticker."
+msgstr "{user} stiker yubordi."
+
+#: src/session/notifications/mod.rs:520
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/notifications/mod.rs:570
+msgid "{user} invited you"
+msgstr "{user} sizni taklif qildi"
+
+#: src/session/room/join_rule.rs:259
+#, fuzzy
+#| msgid "Only invited users, and users can knock"
+msgid "Only invited users, and users can request an invite"
+msgstr ""
+"Faqat taklif qilingan foydalanuvchilar va foydalanuvchilar taqillatishi mumkin"
+
+#: src/session/room/join_rule.rs:261
+msgid "Only invited users"
+msgstr "Faqat taklif qilingan foydalanuvchilar"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:275
+#, fuzzy
+#| msgid "Members of {room}, and users can knock"
+msgid "Members of {room}, and users can request an invite"
+msgstr "{room} aʼzolari va foydalanuvchilar taqillatishi mumkin"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/room/join_rule.rs:282
+msgid "Members of {room}"
+msgstr "{room} aʼzolari"
+
+#: src/session/room/join_rule.rs:287
+msgid "Any registered user"
+msgstr "Har qanday roʻyxatdan oʻtgan foydalanuvchi"
+
+#: src/session/room/join_rule.rs:288
+#: src/session_view/room_details/general_page.rs:933
+msgid "Unsupported rule"
+msgstr "Qoʻllab-quvvatlanmaydigan qoida"
+
+#. Translators: This is the name of a room that is empty but had another
+#. user before. Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/room/mod.rs:389
+msgid "Empty Room (was {user})"
+msgstr "Boʻsh xona (boʻlgan: {user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/room/mod.rs:392
+msgid "Empty Room"
+msgstr "Boʻsh xona"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/room/mod.rs:402
+msgid "Unknown"
+msgstr "Nomaʼlum"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/room/permissions.rs:64
+msgid "Default"
+msgstr "Odatiy"
+
+#: src/session/room/permissions.rs:67
+msgid "Moderator"
+msgstr "Moderator"
+
+#: src/session/room/permissions.rs:68
+msgid "Admin"
+msgstr "Admin"
+
+#: src/session/room/permissions.rs:69
+msgid "Creator"
+msgstr "Xona yaratish"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/room/permissions.rs:71
+msgid "Muted"
+msgstr "Tovushsiz"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:329
+msgid "Could not join room {room_name}"
+msgstr "{room_name}-xonaga qoʻshilib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/room_list/mod.rs:361
+msgid "Could not request an invite to room {room_name}"
+msgstr "{room_name} xonaga qoʻshilib boʻlmadi"
+
+#: src/session/sidebar_data/section/name.rs:82
+msgid "Verifications"
+msgstr "Tasdiqlash"
+
+#: src/session/sidebar_data/section/name.rs:83
+msgid "Invite Requests"
+msgstr "Yangi soʻrov yuborish"
+
+#: src/session/sidebar_data/section/name.rs:84
+#: src/session_view/room_details/invite_subpage/list.rs:262
+msgid "Invited"
+msgstr "Taklif qilingan"
+
+#: src/session/sidebar_data/section/name.rs:85
+msgid "Favorites"
+msgstr "Saralanganlar"
+
+#: src/session/sidebar_data/section/name.rs:86
+msgid "Rooms"
+msgstr "Xonalar"
+
+#: src/session/sidebar_data/section/name.rs:87
+msgid "Low Priority"
+msgstr "Kam ustuvorlik"
+
+#: src/session/sidebar_data/section/name.rs:88
+msgid "Historical"
+msgstr "Tarixiy"
+
+#: src/session/sidebar_data/icon_item.rs:31
+msgid "Explore"
+msgstr "Kezish"
+
+#: src/session/sidebar_data/icon_item.rs:32
+msgid "Forget Room"
+msgstr "Xonani unuting"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:324
+msgid "Last seen at %H:%M"
+msgstr "Oxirgi marta koʻrilgan: %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:329
+msgid "Last seen at %I:%M %p"
+msgstr "Oxirgi marta koʻrilgan: %I:%M %p"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at
+#. 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:339
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "Oxirgi marta kecha %H:%M da koʻrilgan"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at
+#. 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:346
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "Oxirgi marta kecha koʻrilgan: %I:%M %p"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:357
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "Oxirgi marta koʻrilgan: %A %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format,
+#. i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:364
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "Oxirgi marta koʻrilgan: %A, %I:%M %p"
+
+#. Translators: this is the month and day and the time in 24h format, i.e.
+#. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:373
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "Oxirgi marta koʻrilgan: %B %-e %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e.
+#. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:380
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "Oxirgi marta koʻrilgan: %B %-e da %I:%M %p"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:388
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "Oxirgi marta koʻrilgan: %B %-e %Y, %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/user_sessions_list/user_session.rs:395
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "Oxirgi marta koʻrilgan: %B %-e %Y, %I:%M %p"
+
+#: src/session_view/content.blp:5
+msgid "Main Content"
+msgstr "Asosiy kontent"
+
+#: src/session_view/content.blp:14 src/session_view/content.blp:28
+msgid "No Room Selected"
+msgstr "Hech qanday xona tanlanmagan"
+
+#: src/session_view/content.blp:29
+msgid "Join a room to start chatting"
+msgstr "Suhbatni boshlash uchun xonaga qoʻshiling"
+
+#: src/session_view/content.blp:36 src/session_view/room_history/mod.blp:119
+msgid "Room History"
+msgstr "Xona tarixi"
+
+#: src/session_view/content.blp:45 src/session_view/invite_request.blp:13
+#: src/session_view/invite_request.blp:37
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:365
+msgid "Invite Request"
+msgid_plural "Invite Requests"
+msgstr[0] "Yangi soʻrov yuborish"
+msgstr[1] "Yangi soʻrovlar yuborish"
+
+#: src/session_view/content.blp:52
+msgid "Room Invite"
+msgstr "Xonaga taklif"
+
+#: src/session_view/content.blp:59
+msgid "Explore Rooms"
+msgstr "Xonalar bilan tanishing"
+
+#: src/session_view/create_direct_chat_dialog/mod.rs:148
+msgid "An error occurred while searching for users"
+msgstr "Foydalanuvchilarni qidirishda xatolik yuz berdi"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:5
+msgid "Direct Chat"
+msgstr "Toʻgʻridan-toʻgʻri suhbat"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:31
+msgid "New Direct Chat"
+msgstr "Yangi Shaxsiy Chat"
+
+#. Translators: In this string, 'Search' is a verb.
+#. Translators: In this string, this is a verb.
+#: src/session_view/create_direct_chat_dialog/mod.blp:50
+#: src/session_view/room_details/invite_subpage/mod.blp:53
+#: src/session_view/room_details/invite_subpage/mod.blp:59
+msgid "Search"
+msgstr "Qidirish"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:51
+msgid "Search for people to start a new chat with"
+msgstr "Yangi suhbatni boshlash uchun odamlarni qidiring"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:83
+#: src/session_view/room_details/invite_subpage/mod.blp:98
+#: src/session_view/room_details/invite_subpage/mod.blp:102
+msgid "No Users Found"
+msgstr "Hech qanday foydalanuvchi topilmadi"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:84
+msgid "No users matching the search pattern were found"
+msgstr "Qidiruv namunasiga mos keladigan foydalanuvchilar topilmadi"
+
+#: src/session_view/create_direct_chat_dialog/mod.blp:94
+#: src/session_view/explore/mod.blp:118
+#: src/session_view/room_details/invite_subpage/mod.blp:114
+msgid "An error occurred while searching for matches"
+msgstr "Mosliklarni qidirishda xatolik yuz berdi"
+
+#: src/session_view/create_room_dialog.rs:120
+msgid "Cannot contain “:”"
+msgstr "Fayl nomi tarkibida «/» boʻlishi mumkin emas"
+
+#: src/session_view/create_room_dialog.rs:123
+msgid "Cannot contain “#”"
+msgstr "Fayl nomi tarkibida «/» boʻlishi mumkin emas"
+
+#: src/session_view/create_room_dialog.rs:126
+msgid "Too long. Use a shorter address."
+msgstr "Juda uzoq. Qisqaroq manzildan foydalaning."
+
+#: src/session_view/create_room_dialog.rs:241
+msgid "The address is already taken."
+msgstr "Manzil allaqachon olingan."
+
+#: src/session_view/create_room_dialog.blp:36
+msgid "New Room"
+msgstr "Yangi xona"
+
+#: src/session_view/create_room_dialog.blp:58
+msgid "Description (Optional)"
+msgstr "Tavsif (ixtiyoriy)"
+
+#: src/session_view/create_room_dialog.blp:85
+msgid "Room Visibility"
+msgstr "Xonaning koʻrinishi"
+
+#: src/session_view/create_room_dialog.blp:88
+msgid "Private"
+msgstr "Shaxsiy"
+
+#: src/session_view/create_room_dialog.blp:89
+msgid "Only invited people can join this room"
+msgstr "Bu xonaga faqat taklif qilinganlar kirishi mumkin"
+
+#: src/session_view/create_room_dialog.blp:101
+msgid "Public"
+msgstr "Ommaviy"
+
+#: src/session_view/create_room_dialog.blp:102
+msgid "Anyone can find and join this room"
+msgstr "Har kim bu xonani topishi va qoʻshilishi mumkin"
+
+#: src/session_view/create_room_dialog.blp:118
+msgid "End-to-End Encryption"
+msgstr "End-to-end shifrlash"
+
+#: src/session_view/create_room_dialog.blp:119
+msgid "Cannot be disabled later"
+msgstr "Keyinchalik oʻchirib boʻlmaydi"
+
+#: src/session_view/create_room_dialog.blp:128
+#: src/session_view/room_details/addresses_subpage/mod.rs:431
+#: src/session_view/room_details/general_page.rs:676
+msgid "Main Address"
+msgstr "Asosiy manzil"
+
+#. Translators: This is the placeholder for the first part of a room address,
+#. as in '@my-room:example.org'.
+#: src/session_view/create_room_dialog.blp:131
+#: src/session_view/room_details/addresses_subpage/mod.blp:83
+msgid "my-room"
+msgstr "mening xonam"
+
+#: src/session_view/create_room_dialog.blp:132
+#: src/session_view/room_details/addresses_subpage/mod.blp:84
+msgid "First part of the address, for example “my-room”"
+msgstr "Manzilning birinchi qismi, masalan, \"mening xonam\""
+
+#: src/session_view/create_room_dialog.blp:155
+msgid "_Create Room"
+msgstr "Xona yaratish"
+
+#: src/session_view/explore/mod.blp:26
+msgid "Public Rooms Search"
+msgstr "Umumiy xonalarni qidirish"
+
+#: src/session_view/explore/mod.blp:27
+msgid "Search for a room in the public directory of the selected server"
+msgstr "Tanlangan serverning umumiy katalogidan xonani qidiring"
+
+#: src/session_view/explore/mod.blp:38
+msgid "Switch servers"
+msgstr "Serverlarni almashtirish"
+
+#: src/session_view/explore/mod.blp:70
+msgid "No Rooms"
+msgstr "Xonalar yoʻq"
+
+#: src/session_view/explore/mod.blp:76
+msgid "No rooms matching the search were found"
+msgstr "Qidiruvga mos keladigan xonalar topilmadi"
+
+#: src/session_view/explore/mod.blp:86
+msgid "List of Public Rooms"
+msgstr "Jamoat xonalar roʻyxati"
+
+#: src/session_view/explore/public_room_row.rs:183
+msgid "View {room_name}"
+msgstr "Koʻrish: {room_name}"
+
+#: src/session_view/explore/public_room_row.rs:189
+msgid "Request an invite to {room_name}"
+msgstr "{room_name} xonaga qoʻshilib boʻlmadi"
+
+#: src/session_view/explore/public_room_row.rs:196
+msgid "Join {room_name}"
+msgstr "{room_name} ga qoʻshiling"
+
+#: src/session_view/explore/servers_popover.blp:27
+msgid "Server List"
+msgstr "Server roʻyxati"
+
+#: src/session_view/explore/servers_popover.blp:40
+#: src/session_view/explore/servers_popover.blp:48
+msgid "Add Server"
+msgstr "Server qoʻshish"
+
+#: src/session_view/explore/server_row.blp:18
+msgid "Remove Server"
+msgstr "Serverni olib tashlang"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/invite.rs:189
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) sizni taklif qildi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:239 src/session_view/sidebar/row.rs:724
+msgid "Could not accept invitation for {room}"
+msgstr "{room} uchun taklifni qabul qilib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/invite.rs:278 src/session_view/sidebar/row.rs:714
+msgid "Could not decline invitation for {room}"
+msgstr "{room} uchun taklifni rad etib boʻlmadi"
+
+#: src/session_view/invite.blp:102
+msgid "_Decline"
+msgstr "rad etish"
+
+#: src/session_view/invite.blp:112 src/session_view/sidebar/mod.blp:38
+msgid "_Accept"
+msgstr "Qabul qilmoq"
+
+#: src/session_view/invite_request.rs:168
+#, fuzzy
+#| msgid "Could not accept verification request"
+msgid "Could not retract invite request"
+msgstr "Tasdiqlash soʻrovini qabul qilib boʻlmadi"
+
+#: src/session_view/invite_request.blp:88
+msgid "You requested an invite to this room"
+msgstr "{user} ushbu xonaga taklif qilishni soʻradi"
+
+#: src/session_view/invite_request.blp:101 src/session_view/sidebar/mod.blp:50
+msgid "_Retract"
+msgstr ""
+
+#: src/session_view/media_viewer.rs:478
+msgid "Image copied to clipboard"
+msgstr "Rasm vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/media_viewer.rs:518
+#: src/session_view/room_history/event_actions/group.rs:63
+msgid "Message link copied to clipboard"
+msgstr "Xabar havolasi vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/media_viewer.blp:7 src/session_view/media_viewer.blp:35
+msgid "_Copy Image"
+msgstr "Rasmni nusxalash"
+
+#: src/session_view/media_viewer.blp:13 src/session_view/media_viewer.blp:41
+#: src/session_view/room_history/event_actions/context_menu.blp:58
+msgid "S_ave Image"
+msgstr "Rasmni saqlash"
+
+#: src/session_view/media_viewer.blp:19 src/session_view/media_viewer.blp:47
+#: src/session_view/room_history/event_actions/context_menu.blp:64
+msgid "S_ave Video"
+msgstr "Videoni saqlash"
+
+#: src/session_view/media_viewer.blp:25
+#: src/session_view/room_history/event_actions/context_menu.blp:76
+msgid "Copy Message _Link"
+msgstr "Xabar havolasini nusxalash"
+
+#: src/session_view/media_viewer.blp:87 src/session_view/media_viewer.blp:91
+msgid "Media Menu"
+msgstr "Media menyusi"
+
+#: src/session_view/media_viewer.blp:100 src/session_view/media_viewer.blp:103
+msgid "Fullscreen"
+msgstr "Toʻliq ekran"
+
+#: src/session_view/media_viewer.blp:112 src/session_view/media_viewer.blp:115
+msgid "Exit Fullscreen"
+msgstr "Toʻliq ekran rejimidan chiqish"
+
+#: src/session_view/room_details/addresses_subpage/completion_popover.blp:16
+msgid "Address auto-completion"
+msgstr "Manzilni avtomatik toʻldirish"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:328
+msgid "Local Addresses on {homeserver}"
+msgstr "Mahalliy manzillar: {homeserver}"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:390
+msgid "Remove address"
+msgstr "Manzilni olib tashlang"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:394
+msgid "Remove “{address}”"
+msgstr "“{address}”ni olib tashlash"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:455
+msgid "Set as main address"
+msgstr "Asosiy manzil sifatida belgilang"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:461
+msgid "Set “{address}” as main address"
+msgstr "“{address}”ni asosiy manzil sifatida belgilang"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:504
+msgid "Could not remove public address"
+msgstr "Umumiy manzilni olib tashlab boʻlmadi"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:529
+msgid "Could not set main public address"
+msgstr "Asosiy umumiy manzilni oʻrnatib boʻlmadi"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:577
+msgid "Could not add public address"
+msgstr "Umumiy manzil qoʻshib boʻlmadi"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:581
+msgid "This address is not registered as a local address"
+msgstr "Bu manzil mahalliy manzil sifatida roʻyxatdan oʻtmagan"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:584
+msgid "This address does not belong to this room"
+msgstr "Bu manzil bu xonaga tegishli emas"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:639
+msgid "Unregister local address"
+msgstr "Mahalliy manzilni roʻyxatdan oʻchirish"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:643
+msgid "Unregister “{address}”"
+msgstr "“{address}” roʻyxatidan chiqish"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:679
+msgid "Could not unregister local address"
+msgstr "Mahalliy manzilni roʻyxatdan oʻtkazib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/addresses_subpage/mod.rs:712
+msgid "Register “{address}”"
+msgstr "“{address}”ni roʻyxatdan oʻtkazish"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:749
+msgid "Could not register local address"
+msgstr "Mahalliy manzilni roʻyxatdan oʻtkazib boʻlmadi"
+
+#: src/session_view/room_details/addresses_subpage/mod.rs:753
+msgid "This address is already registered"
+msgstr "Bu manzil allaqachon roʻyxatdan oʻtgan"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:5
+msgid "Edit Room Addresses"
+msgstr "Xona manzillarini tahrirlash"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:13
+#: src/session_view/room_details/general_page.blp:140
+msgid "Public Addresses"
+msgstr "Ommaviy manzillar"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:14
+msgid ""
+"Public addresses are advertised for all users in the room and the main address "
+"is used to identify a room publicly. Before adding an address to this list, it "
+"must be registered as a local address."
+msgstr ""
+"Umumiy manzillar xonadagi barcha foydalanuvchilar uchun e'lon qilinadi va "
+"asosiy manzil xonani omma oldida aniqlash uchun ishlatiladi. Ushbu roʻyxatga "
+"manzil qoʻshishdan oldin uni mahalliy manzil sifatida roʻyxatdan oʻtkazish "
+"kerak."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:42
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"Mahalliy manzillarni faqat oʻz uy serverida roʻyxatdan oʻtkazish mumkin. Agar "
+"ular ommaga oshkor etilmasa, ularni faqat serveringizdagi odamlar topishi "
+"mumkin."
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:73
+#: src/session_view/room_details/addresses_subpage/mod.blp:74
+msgid "Add Public Address"
+msgstr "Umumiy manzilni qoʻshing"
+
+#: src/session_view/room_details/addresses_subpage/mod.blp:80
+#: src/session_view/room_details/addresses_subpage/mod.blp:86
+msgid "Register Local Address"
+msgstr "Mahalliy manzilni roʻyxatdan oʻtkazing"
+
+#: src/session_view/room_details/edit_details_subpage.rs:263
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "Haqiqatan ham bu xonaning avatarini olib tashlamoqchimisiz?"
+
+#: src/session_view/room_details/edit_details_subpage.rs:326
+msgid "Room name saved successfully"
+msgstr "Xona nomi muvaffaqiyatli saqlandi"
+
+#: src/session_view/room_details/edit_details_subpage.rs:397
+msgid "Could not change room name"
+msgstr "Xona nomini oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_details/edit_details_subpage.rs:435
+msgid "Room description saved successfully"
+msgstr "Xona tavsifi muvaffaqiyatli saqlandi"
+
+#: src/session_view/room_details/edit_details_subpage.rs:511
+msgid "Could not change room description"
+msgstr "Xona tavsifini oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_details/edit_details_subpage.blp:5
+msgid "Edit Room Details"
+msgstr "Xona tafsilotlarini tahrirlash"
+
+#: src/session_view/room_details/edit_details_subpage.blp:34
+msgid "Room Avatar"
+msgstr "Xona avatar"
+
+#: src/session_view/room_details/edit_details_subpage.blp:60
+msgid "Description"
+msgstr "Taʼrif"
+
+#: src/session_view/room_details/edit_details_subpage.blp:107
+msgid "Save Description"
+msgstr "Tavsifni saqlash"
+
+#: src/session_view/room_details/general_page.rs:461
+#: src/session_view/room_details/general_page.rs:507
+#: src/session_view/room_details/invite_subpage/list.rs:260
+msgid "Member"
+msgid_plural "Members"
+msgstr[0] "Aʼzo"
+msgstr[1] "Aʼzolar"
+
+#: src/session_view/room_details/general_page.rs:631
+msgid "Could not change notifications setting"
+msgstr "Bildirishnomalar sozlamalarini oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_details/general_page.rs:671
+#: src/session_view/room_details/general_page.rs:710
+msgid "Copy address"
+msgstr "Manzilni nusxalash"
+
+#: src/session_view/room_details/general_page.rs:672
+#: src/session_view/room_details/general_page.rs:711
+msgid "Address copied to clipboard"
+msgstr "Manzil vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_details/general_page.rs:753
+msgid "Room link copied to clipboard"
+msgstr "Xona havolasi vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_details/general_page.rs:812
+msgid "Could not change guest access"
+msgstr "Mehmon ruxsatini oʻzgartirib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/general_page.rs:829
+msgid "Publish in the {homeserver} directory"
+msgstr "{homeserver} katalogida nashr qiling"
+
+#: src/session_view/room_details/general_page.rs:904
+msgid "Could not publish room in directory"
+msgstr "Katalogdagi xonani nashr qilib boʻlmadi"
+
+#: src/session_view/room_details/general_page.rs:906
+msgid "Could not unpublish room from directory"
+msgstr "Xonani katalogdan olib tashlab boʻlmadi"
+
+#: src/session_view/room_details/general_page.rs:924
+#: src/session_view/room_details/history_visibility_subpage.blp:53
+msgid "Anyone, even if they are not in the room"
+msgstr "Har kim, hatto xonada boʻlmasa ham"
+
+#: src/session_view/room_details/general_page.rs:927
+#: src/session_view/room_details/history_visibility_subpage.blp:59
+msgid "Members only, since this option was selected"
+msgstr "Faqat a'zolar, chunki bu variant tanlangan"
+
+#: src/session_view/room_details/general_page.rs:929
+#: src/session_view/room_details/history_visibility_subpage.blp:65
+msgid "Members only, since they were invited"
+msgstr "Faqat a'zolar, chunki ular taklif qilingan"
+
+#: src/session_view/room_details/general_page.rs:931
+#: src/session_view/room_details/history_visibility_subpage.blp:71
+msgid "Members only, since they joined the room"
+msgstr "Faqat a'zolar, chunki ular xonaga qoʻshilgan"
+
+#: src/session_view/room_details/general_page.rs:983
+msgid "Enable Encryption?"
+msgstr "Shifrlash yoqilsinmi?"
+
+#: src/session_view/room_details/general_page.rs:984
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"Shifrlashni yoqish yangi a'zolar kelishidan oldin tarixni oʻqishlariga yoʻl "
+"qoʻymaydi. Buni keyinroq oʻchirib boʻlmaydi."
+
+#: src/session_view/room_details/general_page.rs:989
+#: src/session_view/sidebar/mod.rs:320 src/session_view/sidebar/mod.rs:326
+msgid "Enable"
+msgstr "Yoqish"
+
+#: src/session_view/room_details/general_page.rs:1000
+msgid "Could not enable encryption"
+msgstr "Shifrlashni yoqib boʻlmadi"
+
+#. Translators: As in, 'Room federated'.
+#: src/session_view/room_details/general_page.rs:1060
+msgid "Federated"
+msgstr "Federatsiyalangan"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session_view/room_details/general_page.rs:1063
+msgid "Not federated"
+msgstr "Federatsiyalanmagan"
+
+#: src/session_view/room_details/general_page.rs:1097
+msgid "Room upgraded successfully"
+msgstr "Xona muvaffaqiyatli yangilandi"
+
+#: src/session_view/room_details/general_page.rs:1101
+msgid "Could not upgrade room"
+msgstr "Xonani yangilab boʻlmadi"
+
+#: src/session_view/room_details/general_page.blp:5
+#: src/session_view/room_details/mod.blp:5
+msgid "Room Details"
+msgstr "Xona tafsilotlari"
+
+#: src/session_view/room_details/general_page.blp:48
+msgid "Edit Details"
+msgstr "Tafsilotlarni tahrirlash"
+
+#: src/session_view/room_details/general_page.blp:72
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:403
+msgid "There are no members in this room"
+msgstr "Bu xonada aʼzolar yoʻq"
+
+#: src/session_view/room_details/general_page.blp:91
+#: src/session_view/room_details/history_viewer/visual_media.blp:5
+msgid "Media"
+msgstr "Media fayllar"
+
+#: src/session_view/room_details/general_page.blp:97
+msgid "Files"
+msgstr "Fayllar"
+
+#. Translators: As in 'Audio file'.
+#: src/session_view/room_details/general_page.blp:104
+#: src/session_view/room_details/history_viewer/audio.blp:6
+#: src/session_view/room_history/message_row/audio.rs:63
+msgid "Audio"
+msgstr "Audio"
+
+#: src/session_view/room_details/general_page.blp:112
+msgid "Which messages trigger notifications in this room"
+msgstr "Qaysi xabarlar bu xonada bildirishnomalarni ishga tushiradi"
+
+#: src/session_view/room_details/general_page.blp:115
+msgid "Use Global Setting"
+msgstr "Global sozlamalardan foydalaning"
+
+#: src/session_view/room_details/general_page.blp:121
+msgid "All Messages"
+msgstr "Barcha xabarlar"
+
+#: src/session_view/room_details/general_page.blp:127
+msgid "Only Mentions and Keywords"
+msgstr "Faqat eslatmalar va kalit soʻzlar"
+
+#: src/session_view/room_details/general_page.blp:133
+msgid "Disable Notifications"
+msgstr "Bildirishnomalarni oʻchirib qoʻying"
+
+#: src/session_view/room_details/general_page.blp:153
+msgid "Edit Public Addresses"
+msgstr "Umumiy manzillarni tahrirlash"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session_view/room_details/general_page.blp:160
+#: src/session_view/room_history/event_actions/context_menu.blp:14
+msgid "_Edit"
+msgstr "Tahrirlash"
+
+#: src/session_view/room_details/general_page.blp:168
+msgid "This room has no public addresses"
+msgstr "Bu xonada umumiy manzillar yoʻq"
+
+#: src/session_view/room_details/general_page.blp:186
+msgid "Copy Room Link"
+msgstr "Xona havolasini nusxalash"
+
+#: src/session_view/room_details/general_page.blp:193
+msgid "Access and Visibility"
+msgstr "Kirish va Visibility"
+
+#: src/session_view/room_details/general_page.blp:197
+#: src/session_view/room_details/join_rule_subpage.blp:5
+msgid "Who Can Join"
+msgstr "Kim qoʻshilishi mumkin"
+
+#: src/session_view/room_details/general_page.blp:208
+msgid "Allow Guests"
+msgstr "Mehmonlarga ruxsat bering"
+
+#: src/session_view/room_details/general_page.blp:209
+msgid "Guests are Matrix users without a registered account"
+msgstr "Mehmonlar roʻyxatdan oʻtgan hisobi boʻlmagan Matrix foydalanuvchilari"
+
+#: src/session_view/room_details/general_page.blp:218
+#: src/session_view/room_details/history_visibility_subpage.blp:5
+msgid "Who Can Read History"
+msgstr "Kim tarixni oʻqiy oladi"
+
+#: src/session_view/room_details/general_page.blp:232
+msgid "Matrix Room ID"
+msgstr "Matritsa xonasi identifikatori"
+
+#: src/session_view/room_details/general_page.blp:235
+msgid "Copy Matrix Room ID"
+msgstr "Matritsa xonasi identifikatoridan nusxa oling"
+
+#: src/session_view/room_details/general_page.blp:236
+msgid "Matrix room ID copied to clipboard"
+msgstr "Matritsa xonasi identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_details/general_page.blp:240
+#: src/session_view/room_details/permissions/permissions_subpage.blp:159
+msgid "Enable Encryption"
+msgstr "Shifrlashni yoqing"
+
+#: src/session_view/room_details/general_page.blp:246
+#: src/session_view/room_details/permissions/permissions_subpage.blp:5
+#: src/session_view/room_details/permissions/permissions_subpage.blp:9
+msgid "Permissions"
+msgstr "Ruxsatlar"
+
+#: src/session_view/room_details/general_page.blp:254
+msgid "Room Version"
+msgstr "Xona versiyasi"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/general_page.blp:263
+msgid "Upgrade…"
+msgstr "Yuksaltirish…"
+
+#: src/session_view/room_details/general_page.blp:275
+msgid "Federation"
+msgstr "Federatsiya"
+
+#: src/session_view/room_details/history_viewer/audio.blp:24
+#: src/session_view/room_details/history_viewer/audio.blp:31
+msgid "No Audio"
+msgstr "CD Audio"
+
+#: src/session_view/room_details/history_viewer/audio.blp:32
+msgid "This room does not contain any audio"
+msgstr "Bu xonada hech qanday audio mavjud emas"
+
+#: src/session_view/room_details/history_viewer/audio.blp:38
+#: src/session_view/room_details/history_viewer/audio.blp:45
+msgid "Could Not Load Audio"
+msgstr "Audio yuklanmadi"
+
+#: src/session_view/room_details/history_viewer/audio.blp:46
+#: src/session_view/room_details/history_viewer/file.blp:45
+#: src/session_view/room_details/history_viewer/visual_media.blp:51
+#: src/session_view/room_history/mod.blp:102
+msgid "Check your network connection"
+msgstr "Tarmoq ulanishingizni tekshiring"
+
+#: src/session_view/room_details/history_viewer/audio.blp:63
+msgid "Audio History"
+msgstr "Audio tarixi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_details/history_viewer/file_row.rs:74
+msgid "Save {filename}"
+msgstr "Saqlash: {filename}"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:82
+msgid "Unknown size"
+msgstr "Noma'lum oʻlcham"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:98
+msgid "Open File"
+msgstr "Faylni ochish"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:101
+#: src/session_view/room_details/history_viewer/file_row.rs:143
+#: src/session_view/room_details/history_viewer/file_row.blp:12
+#: src/session_view/room_history/message_row/file.blp:24
+#: src/session_view/room_history/message_row/file.blp:28
+#: src/utils/matrix/media_message.rs:231
+msgid "Save File"
+msgstr "Faylni saqlash"
+
+#: src/session_view/room_details/history_viewer/file_row.rs:157
+#: src/utils/matrix/media_message.rs:250
+msgid "Could not save file"
+msgstr "Fayl saqlanmadi"
+
+#: src/session_view/room_details/history_viewer/file.blp:23
+#: src/session_view/room_details/history_viewer/file.blp:30
+msgid "No Files"
+msgstr "Fayllar yoʻq"
+
+#: src/session_view/room_details/history_viewer/file.blp:31
+msgid "This room does not contain any files"
+msgstr "Bu xonada hech qanday fayl mavjud emas"
+
+#: src/session_view/room_details/history_viewer/file.blp:37
+#: src/session_view/room_details/history_viewer/file.blp:44
+msgid "Could Not Load Files"
+msgstr "Fayllarni yuklab boʻlmadi"
+
+#: src/session_view/room_details/history_viewer/file.blp:62
+msgid "File History"
+msgstr "Fayllar jurnali"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:29
+#: src/session_view/room_details/history_viewer/visual_media.blp:36
+msgid "No Media"
+msgstr "Musiqa pleyeri"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:37
+msgid "This room does not contain any media"
+msgstr "Bu xonada hech qanday media mavjud emas"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:43
+#: src/session_view/room_details/history_viewer/visual_media.blp:50
+msgid "Could Not Load Media"
+msgstr "Media yuklanmadi"
+
+#: src/session_view/room_details/history_viewer/visual_media.blp:68
+msgid "Media History"
+msgstr "Media tarixi"
+
+#: src/session_view/room_details/history_visibility_subpage.blp:30
+#: src/session_view/room_details/join_rule_subpage.blp:30
+#: src/session_view/room_details/permissions/permissions_subpage.blp:32
+msgid "_Save"
+msgstr "Saqlash"
+
+#: src/session_view/room_details/history_visibility_subpage.rs:189
+msgid "Could not change who can read history"
+msgstr "Tarixni kim oʻqiy olishini oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_details/invite_subpage/list.rs:261
+msgid "Banned"
+msgstr "Taqiqlangan"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session_view/room_details/invite_subpage/mod.rs:233
+msgid "Could not invite {user} to {room}"
+msgid_plural "Could not invite {n} users to {room}"
+msgstr[0] "{user}ʼni {room}ʼga taklif qilib bo‘lmadi"
+msgstr[1] "{n} ta foydalanuvchini {room}ʼga taklif qilib boʻlmadi"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:5
+msgid "Invite New Members"
+msgstr "Yangi a'zolarni taklif qiling"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:22
+msgid "I_nvite"
+msgstr "Taklif qilish"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:60
+msgid "Search for users to invite them to this room"
+msgstr "Foydalanuvchilarni ushbu xonaga taklif qilish uchun qidiring"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:66
+msgid "Matching Users"
+msgstr "Mos keladigan foydalanuvchilar"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:103
+msgid "No users matching the search were found"
+msgstr "Qidiruvga mos keladigan foydalanuvchilar topilmadi"
+
+#: src/session_view/room_details/invite_subpage/mod.blp:120
+msgid "Searching for Users"
+msgstr "Foydalanuvchilarni qidirish"
+
+#: src/session_view/room_details/join_rule_subpage.rs:112
+msgid ""
+"The version of this room does not support all possibilities. Upgrade this room "
+"to the latest version to see more options."
+msgstr ""
+
+#: src/session_view/room_details/join_rule_subpage.rs:230
+msgid "Could not change who can join"
+msgstr "Kim qoʻshilishi mumkinligini oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_details/join_rule_subpage.blp:80
+msgid "Only Invited Users"
+msgstr "Faqat taklif qilingan foydalanuvchilar"
+
+#: src/session_view/room_details/join_rule_subpage.blp:86
+msgid "Any Registered User"
+msgstr "Har qanday roʻyxatdan oʻtgan foydalanuvchi"
+
+#: src/session_view/room_details/join_rule_subpage.blp:99
+msgid "Allow Invite Requests"
+msgstr "Taklif soʻrovlariga ruxsat berish"
+
+#: src/session_view/room_details/member_row.blp:38
+msgid "Identity Verified"
+msgstr "Shaxs tasdiqlangan"
+
+#. Translators: As in 'Invited Room Member(s)'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:116
+msgctxt "members"
+msgid "Invited"
+msgid_plural "Invited"
+msgstr[0] "Taklif qilingan"
+msgstr[1] "Taklif qilingan"
+
+#. Translators: As in 'Banned Room Member(s)'.
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:118
+msgctxt "members"
+msgid "Banned"
+msgid_plural "Banned"
+msgstr[0] "Taqiqlangan"
+msgstr[1] "Taqiqlangan"
+
+#: src/session_view/room_details/members_page/members_list_view/membership_subpage_row.rs:120
+msgctxt "members"
+msgid "Invite Request"
+msgid_plural "Invite Requests"
+msgstr[0] "Yangi soʻrov yuborish"
+msgstr[1] "Yangi soʻrovlar yuborish"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:339
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:73
+msgid "Could not load the full list of room members"
+msgstr "Xona aʼzolarining toʻliq roʻyxatini yuklab boʻlmadi"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:358
+msgid "Room Member"
+msgid_plural "Room Members"
+msgstr[0] "Xona a'zosi"
+msgstr[1] "Xona a'zolari"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:360
+msgid "Invited Room Member"
+msgid_plural "Invited Room Members"
+msgstr[0] "Taklif etilgan xona a'zosi"
+msgstr[1] "Taklif etilgan xona a'zolari"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:363
+msgid "Banned Room Member"
+msgid_plural "Banned Room Members"
+msgstr[0] "Taqiqlangan xona a'zosi"
+msgstr[1] "Taqiqlangan xona a'zolari"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:402
+#: src/session_view/room_details/permissions/members_subpage.blp:51
+msgid "No Room Members"
+msgstr "Xona aʼzolari yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:407
+msgid "No Invited Room Members"
+msgstr "Taklif etilgan xona aʼzolari yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:408
+msgid "There are no invited members in this room"
+msgstr "Bu xonada taklif qilingan aʼzolar yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:412
+msgid "No Banned Room Members"
+msgstr "Taqiqlangan xona a'zolari yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:413
+msgid "There are no banned members in this room"
+msgstr "Bu xonada taqiqlangan aʼzolar yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:417
+msgid "No Invite Requests"
+msgstr "Taklif etilgan xona aʼzolari yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.rs:418
+msgid "There are no invite requests in this room"
+msgstr "Bu xonada taklif qilingan aʼzolar yoʻq"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:11
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:14
+#: src/session_view/room_details/permissions/members_subpage.blp:17
+msgid "Toggle Room Members Search"
+msgstr "Xona aʼzolarini qidirish"
+
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:29
+#: src/session_view/room_details/members_page/members_list_view/mod.blp:33
+#: src/session_view/room_details/permissions/members_subpage.blp:32
+#: src/session_view/room_details/permissions/members_subpage.blp:36
+msgid "Search for room members"
+msgstr "Xona a'zolarini qidiring"
+
+#: src/session_view/room_details/mod.rs:154
+msgid "The user is not in the room members list anymore"
+msgstr "Foydalanuvchi endi xona aʼzolari roʻyxatida emas"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:5
+msgid "Add Custom Permissions"
+msgstr "Maxsus ruxsatlarni qoʻshing"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:12
+msgid "_Add"
+msgstr "Qoʻshish"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/add_members_subpage.blp:46
+msgid "Assign Power Level"
+msgstr "Quvvat darajasini belgilang"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:64
+msgid "Search Results"
+msgstr "Izlash Natijalari"
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:84
+#: src/session_view/room_details/permissions/add_members_subpage.blp:88
+msgid "No Matching Members Found"
+msgstr "Mos yordam sahifalari topilmadi."
+
+#: src/session_view/room_details/permissions/add_members_subpage.blp:89
+msgid "No room members matching the search were found"
+msgstr "Qidiruvga mos keladigan xona a'zolari topilmadi"
+
+#: src/session_view/room_details/permissions/members_subpage.rs:195
+msgid "There are no room members with assigned power levels in this room"
+msgstr ""
+
+#: src/session_view/room_details/permissions/members_subpage.rs:197
+msgid "There are no room members with assigned power levels matching the search"
+msgstr ""
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/members_subpage.blp:6
+#: src/session_view/room_details/permissions/permissions_subpage.blp:282
+msgid "Members With Assigned Power Levels"
+msgstr "Tayinlangan quvvat darajalariga ega aʼzolar"
+
+#: src/session_view/room_details/permissions/members_subpage.blp:103
+msgid "Add"
+msgstr "Qoʻshish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.rs:584
+msgid "Could not save permissions"
+msgstr "Ruxsatlar saqlanmadi"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:44
+msgid "Room Actions"
+msgstr "Xona harakatlari"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:46
+msgid "Power level required to perform different actions in the room"
+msgstr ""
+"Xonada turli xil harakatlarni bajarish uchun zarur boʻlgan quvvat darajasi"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:49
+msgid "Send Messages"
+msgstr "Xabarlarni yuborish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:60
+msgid "Remove Own Messages"
+msgstr "Oʻz xabarlarini oʻchirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:71
+msgid "Remove Messages of Other Members"
+msgstr "Boshqa aʼzolarning xabarlarini olib tashlang"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:82
+msgid "Notify Entire Room"
+msgstr "Butun xonaga xabar bering"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:93
+msgid "Change Room Settings"
+msgstr "Xona sozlamalarini oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:104
+msgid "Change Room Name"
+msgstr "Xona nomini oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:115
+msgid "Change Room Description"
+msgstr "Xona tavsifini oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:126
+msgid "Change Room Avatar"
+msgstr "Xona avatarini oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:137
+msgid "Change Addresses"
+msgstr "Manzillarni oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:148
+msgid "Change Who Can Read History"
+msgstr "Tarixni kim oʻqiy olishini oʻzgartiring"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:170
+msgid "Change Permissions"
+msgstr "Ruxsatlarni oʻzgartirish"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:181
+msgid "Change Server Access Control List"
+msgstr "Serverga kirishni boshqarish roʻyxatini oʻzgartiring"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:192
+#: src/session_view/room_details/upgrade_dialog/mod.blp:5
+#: src/session_view/room_details/upgrade_dialog/mod.blp:49
+msgid "Upgrade Room"
+msgstr "Xonani yangilash"
+
+#: src/session_view/room_details/permissions/permissions_subpage.blp:204
+msgid "Member Actions"
+msgstr "Aʼzo harakatlari"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:206
+msgid "Power level required to perform different actions on room members"
+msgstr ""
+"Xona aʼzolarida turli harakatlarni bajarish uchun zarur boʻlgan quvvat darajasi"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:247
+msgid "Members Power Levels"
+msgstr "Aʼzolarning quvvat darajalari"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:249
+msgid "Power levels defined for all members of the room"
+msgstr "Xonaning barcha aʻzolari uchun belgilangan quvvat darajalari"
+
+#. Translators: value used to assign room member roles.
+#: src/session_view/room_details/permissions/permissions_subpage.blp:253
+#: src/session_view/room_details/permissions/permissions_subpage.blp:267
+msgid "Default Power Level"
+msgstr "Standart quvvat darajasi"
+
+#. Translators: As in 'Stable version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:116
+msgid "Stable"
+msgstr "Barqaror"
+
+#. Translators: As in 'Experimental version'.
+#: src/session_view/room_details/upgrade_dialog/mod.rs:119
+msgid "Experimental"
+msgstr "Eksperimental"
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:203
+msgid ""
+"After the upgrade, you will be the only creator in the room. The other creator "
+"will be demoted to the default power level."
+msgid_plural ""
+"After the upgrade, you will be the only creator in the room. The other "
+"creators will be demoted to the default power level."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/session_view/room_details/upgrade_dialog/mod.rs:209
+msgid ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creator will be demoted to the default power level."
+msgid_plural ""
+"After the upgrade, you will be the only creator in the room. The current "
+"creators will be demoted to the default power level."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:64
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new features "
+"from the Matrix specification. It can also be used to reset the room state, "
+"which should make the room faster to join. However it should be used sparingly "
+"because it can be disruptive, as room members need to join the new room "
+"manually."
+msgstr ""
+"Xonani yangiroq versiyaga yangilash Matrix spetsifikatsiyasining yangi "
+"xususiyatlaridan foydalanish imkonini beradi. Bundan tashqari, xona holatini "
+"tiklash uchun ham foydalanish mumkin, bu esa xonani tezroq qoʻshilishi kerak. "
+"Biroq, uni tejamkorlik bilan ishlatish kerak, chunki u bezovta qilishi mumkin, "
+"chunki xona aʼzolari yangi xonaga qoʻlda qoʻshilishlari kerak."
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:83
+msgid "Version"
+msgstr "Versiya"
+
+#: src/session_view/room_details/upgrade_dialog/mod.blp:94
+msgid ""
+"After the upgrade, you will be the only member of the room and other members "
+"will need to be re-invited manually. This could be avoided by using third-"
+"party upgrade tooling that handles this for you."
+msgstr ""
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session_view/room_details/upgrade_dialog/mod.blp:137
+msgid "Upgrade"
+msgstr "Yangilash"
+
+#: src/session_view/room_history/divider_row.rs:90
+msgid "This is the start of the visible history"
+msgstr "Bu koʻrinadigan tarixning boshlanishi"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for
+#. the available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:102
+msgid "%A, %B %-e"
+msgstr "%b %e %H:%M"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for
+#. the available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/divider_row.rs:108
+msgid "%A, %B %-e, %Y"
+msgstr "%b %e %Y %H:%M"
+
+#: src/session_view/room_history/divider_row.rs:115
+msgid "New Messages"
+msgstr "Yangi xabarlar"
+
+#: src/session_view/room_history/event_actions/context_menu.rs:83
+#: src/session_view/sidebar/mod.rs:372
+msgid "Context Menu"
+msgstr "Kontekst menyusi"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session_view/room_history/event_actions/context_menu.blp:7
+msgid "_Reply"
+msgstr "Javob berish"
+
+#. Translators: In this string, 'Forward' is a verb, this is to re-send
+#. the same message in another room, like forwarding an e-mail.
+#: src/session_view/room_history/event_actions/context_menu.blp:22
+msgid "_Forward"
+msgstr "Yuborish"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:30
+msgid "_Select"
+msgstr "Tanlash"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:38
+msgid "Revoke _Invite"
+msgstr "Taklifni bekor qilish"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:46
+msgid "_Copy Text"
+msgstr "Nusxa olish"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:52
+msgid "Copy T_humbnail"
+msgstr "Nusxa olish miniaturasi"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:70
+msgid "S_ave Audio"
+msgstr "Audioni saqlash"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:82
+msgid "_Properties"
+msgstr "Afzalliklar"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:90
+msgid "_Discard"
+msgstr "Oʻchirish"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:98
+msgid "Rep_ort…"
+msgstr "Hisobot…"
+
+#: src/session_view/room_history/event_actions/context_menu.blp:104
+msgid "Re_move"
+msgstr "Oʻchirish"
+
+#: src/session_view/room_history/event_actions/group.rs:337
+msgid "Thumbnail copied to clipboard"
+msgstr "Eskiz vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/group.rs:511
+msgid "Text copied to clipboard"
+msgstr "Matn vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/group.rs:578
+msgid "Remove Message?"
+msgstr "Xabar olib tashlansinmi?"
+
+#: src/session_view/room_history/event_actions/group.rs:580
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr ""
+"Haqiqatan ham bu xabarni olib tashlamoqchimisiz? Buni ortga qaytarib boʻlmaydi."
+
+#: src/session_view/room_history/event_actions/group.rs:594
+msgid "Could not remove message"
+msgstr "Xabarni olib tashlab boʻlmadi"
+
+#: src/session_view/room_history/event_actions/group.rs:609
+msgid "Could not toggle reaction"
+msgstr "Reaksiyani oʻzgartirib boʻlmadi"
+
+#: src/session_view/room_history/event_actions/group.rs:641
+msgid "Report Event?"
+msgstr "Voqea haqida xabar berilsinmi?"
+
+#: src/session_view/room_history/event_actions/group.rs:643
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the event "
+"if it is encrypted or redacted."
+msgstr ""
+"Hodisa haqida xabar berish uning noyob identifikatorini uy serveringiz "
+"administratoriga yuboradi. Agar voqea shifrlangan yoki tahrirlangan boʻlsa, "
+"administrator uning mazmunini koʻra olmaydi."
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session_view/room_history/event_actions/group.rs:650
+msgid "Report"
+msgstr "Hisobot berish"
+
+#: src/session_view/room_history/event_actions/group.rs:668
+msgid "Could not report event"
+msgstr "Hodisa haqida xabar berib boʻlmadi"
+
+#: src/session_view/room_history/event_actions/group.rs:688
+msgid "Could not discard message"
+msgstr "Xabarni bekor qilib boʻlmadi"
+
+#: src/session_view/room_history/event_actions/group.rs:717
+msgid "Revoking invite…"
+msgstr "Taklif bekor qilinmoqda…"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:108
+msgid "Original Event Source"
+msgstr "Voqeaning asl manbasi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:110
+msgid "Event Source"
+msgstr "Voqea manbai"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:124
+msgid "Latest Edit Source"
+msgstr "Oxirgi tahrirlash manbasi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.rs:138
+msgid "Source copied to clipboard"
+msgstr "Manba vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:6
+#: src/session_view/room_history/event_actions/properties_dialog.blp:12
+msgid "Event Properties"
+msgstr "Tadbir tafsilotlari"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:40
+msgid "Original Event"
+msgstr "Original voqea"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:56
+#: src/session_view/room_history/event_actions/properties_dialog.blp:130
+msgid "Event ID"
+msgstr "Voqea identifikatori"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:58
+#: src/session_view/room_history/event_actions/properties_dialog.blp:132
+msgid "Copy Event ID"
+msgstr "Voqealar identifikatoridan nusxa oling"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:59
+#: src/session_view/room_history/event_actions/properties_dialog.blp:133
+msgid "Event ID copied to clipboard"
+msgstr "Voqea identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:64
+msgid "Room ID"
+msgstr "Xona identifikatori"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:66
+msgid "Copy Room ID"
+msgstr "Xona identifikatoridan nusxa oling"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:67
+msgid "Room ID copied to clipboard"
+msgstr "Xona identifikatori vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:71
+msgid "Sender ID"
+msgstr "Yuboruvchi identifikatori"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:81
+msgid "Show Profile"
+msgstr "Foydalanuvchi profili"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:92
+#: src/session_view/room_history/event_actions/properties_dialog.blp:138
+msgid "Timestamp"
+msgstr "Vaqtni belgilash"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:94
+#: src/session_view/room_history/event_actions/properties_dialog.blp:140
+msgid "Copy Timestamp"
+msgstr "Vaqt tamgʻasini nusxalash"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:95
+#: src/session_view/room_history/event_actions/properties_dialog.blp:141
+msgid "Timestamp copied to clipboard"
+msgstr "Vaqt tamgʻasi vaqtinchalik xotiraga nusxalandi"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:101
+#: src/session_view/room_history/event_actions/properties_dialog.blp:146
+msgid "View Source"
+msgstr "Manbani koʻrish"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:114
+msgid "Latest Edit"
+msgstr "Oxirgi tahrir"
+
+#: src/session_view/room_history/event_actions/properties_dialog.blp:168
+msgid "Copy Source"
+msgstr "Manbani nusxalash"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:15
+msgid "Send a Reaction"
+msgstr "Reaktsiya yuborish"
+
+#: src/session_view/room_history/event_actions/quick_reaction_chooser.blp:19
+msgid "More Reactions"
+msgstr "Koʻproq reaktsiyalar"
+
+#: src/session_view/room_history/message_row/audio.rs:65
+msgid "Audio: {filename}"
+msgstr "Audio: {filename}"
+
+#: src/session_view/room_history/message_row/content.rs:309
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"Bu xabarning shifrini yechib boʻlmadi, kalitlar mavjud boʻlganda shifrni "
+"ochish qayta urinib koʻriladi."
+
+#: src/session_view/room_history/message_row/content.rs:313
+msgid "This message was removed."
+msgstr "Bu xabar olib tashlandi."
+
+#: src/session_view/room_history/message_row/content.rs:330
+#: src/session_view/room_history/message_row/content.rs:398
+msgid "Unsupported event"
+msgstr "Qoʻllab-quvvatlanmaydigan hodisa"
+
+#: src/session_view/room_history/message_row/file.rs:61
+msgid "File: {filename}"
+msgstr "Fayl: {filename}"
+
+#: src/session_view/room_history/message_row/location.rs:91
+msgid "Location is invalid and cannot be displayed"
+msgstr "Joylashuv notoʻgʻri va uni koʻrsatib boʻlmaydi"
+
+#: src/session_view/room_history/message_row/location.blp:12
+msgid "User Location"
+msgstr "Foydalanuvchi joylashuvi"
+
+#. Translators: As in 'Sending message…'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:21
+msgid "Sending…"
+msgstr "Yuborilmoqda…"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:31
+msgid "Temporary Error Sending Message"
+msgstr "Xabar yuborishda vaqtinchalik xato"
+
+#: src/session_view/room_history/message_row/message_state_stack.blp:45
+msgid "Message Cannot Be Sent"
+msgstr "Xabarni yuborib boʻlmaydi"
+
+#. Translators: As in 'Sent message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:60
+msgid "Sent"
+msgstr "Joʻnatildi"
+
+#. Translators: As in 'Edited message'.
+#: src/session_view/room_history/message_row/message_state_stack.blp:74
+msgid "Edited"
+msgstr "Tahrirlangan"
+
+#: src/session_view/room_history/message_row/mod.rs:254
+msgid "Sent at {time}"
+msgstr "Yuborilgan: {time}"
+
+#: src/session_view/room_history/message_row/mod.blp:13
+msgid "Show Sender Profile"
+msgstr "Yuboruvchi profilini ko‘rsatish"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_row/reaction/mod.rs:200
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "1 ta ishtirokchi {reaction_key} bilan munosabat bildirdi"
+msgstr[1] "{n} ta aʼzo {reaction_key} bilan munosabat bildirdi"
+
+#: src/session_view/room_history/message_row/reaction/mod.rs:220
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} {reaction_key} bilan munosabat bildirdi"
+
+#: src/session_view/room_history/message_row/reaction_list.blp:6
+msgid "Reactions"
+msgstr "Reaksiyalar"
+
+#: src/session_view/room_history/message_row/reply.blp:16
+msgid "In Reply To"
+msgstr "Javobda"
+
+#. Translators: This is a verb, as in 'Mention user'.
+#: src/session_view/room_history/message_row/sender_name.rs:186
+msgid "Mention"
+msgstr "Nazarda tutish"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session_view/room_history/message_row/text/widgets.rs:465
+msgid "Details"
+msgstr "Tafsilotlar"
+
+#: src/session_view/room_history/message_row/visual_media.rs:553
+msgid "Image"
+msgstr "Rasm"
+
+#: src/session_view/room_history/message_row/visual_media.rs:554
+msgid "Sticker"
+msgstr "Stiker"
+
+#: src/session_view/room_history/message_row/visual_media.rs:555
+msgid "Video"
+msgstr "Video"
+
+#: src/session_view/room_history/message_row/visual_media.rs:560
+msgid "Image: {filename}"
+msgstr "Rasm: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:563
+msgid "Sticker: {filename}"
+msgstr "Stiker: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:566
+msgid "Video: {filename}"
+msgstr "Video: {filename}"
+
+#: src/session_view/room_history/message_row/visual_media.rs:740
+#: src/utils/media/image/mod.rs:935
+msgid "Could not retrieve media"
+msgstr "Mediani olib boʻlmadi"
+
+#: src/session_view/room_history/message_row/visual_media.rs:789
+#: src/utils/media/image/mod.rs:938
+msgid "An unexpected error occurred"
+msgstr "Kutilmagan xatolik yuz berdi"
+
+#: src/session_view/room_history/message_row/visual_media.blp:49
+msgid "Click to show preview"
+msgstr "Oldindan koʻrishni koʻrsatish uchun bosing"
+
+#: src/session_view/room_history/message_row/visual_media.blp:77
+msgid "Hide media preview"
+msgstr "Media oldindan koʻrishni yashirish"
+
+#: src/session_view/room_history/message_toolbar/attachment_dialog.blp:22
+msgid "_Send"
+msgstr "Yuborish"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:685
+msgid "Public Room Mention Auto-completion"
+msgstr "Ommaviy xonada eslatmani avtomatik toʻldirish"
+
+#: src/session_view/room_history/message_toolbar/completion/completion_popover.rs:687
+msgid "Room Member Mention Auto-completion"
+msgstr "Xona aʼzosi avtomatik toʻldirishni eslatadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:348
+msgid "The conversation continues in a new room"
+msgstr "Suhbat yangi xonada davom etadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:350
+msgid "The conversation has ended"
+msgstr "Suhbat tugadi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:512
+msgid "Reply to {user}"
+msgstr "{user}ga javob berish"
+
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session_view/room_history/message_toolbar/mod.rs:530
+msgctxt "room-history"
+msgid "Edit"
+msgstr "Tahrirlash"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:699
+msgid "Could not send reply"
+msgstr "Javob yuborilmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:715
+msgid "Could not send edit"
+msgstr "Tahrir yuborilmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:726
+msgid "Could not send message"
+msgstr "Xabar yuborilmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:772
+msgid "Your Location"
+msgstr "Ilovasi joylashuvingizga kirishni xohlaydi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/message_toolbar/mod.rs:832
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "Foydalanuvchi joylashuvi: {geo_uri}, {iso8601_datetime}"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:854
+msgid "Could not send location"
+msgstr "Joylashuvni yuborib boʻlmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:861
+msgid "The location request has been cancelled"
+msgstr "Joylashuv soʻrovi bekor qilindi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:862
+msgid "The location services are disabled"
+msgstr "Joylashuv xizmatlari oʻchirilgan"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:863
+msgid "Could not retrieve current location"
+msgstr "Joriy joylashuvni olinmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:898
+msgid "Could not send file"
+msgstr "Fayl yuborilmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:952
+msgid "Select File"
+msgstr "Faylni tanlang"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:954
+msgid "Select"
+msgstr "Tanlash"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:969
+msgid "Could not open file"
+msgstr "Faylni ochib boʻlmadi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:995
+#: src/session_view/room_history/message_toolbar/mod.rs:1003
+msgid "Error reading file"
+msgstr "Faylni oʻqishda xatolik yuz berdi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1064
+msgid "Error getting image from clipboard"
+msgstr "Tasvirni vaqtinchalik xotiradan olishda xatolik yuz berdi"
+
+#: src/session_view/room_history/message_toolbar/mod.rs:1081
+msgid "Error getting file from clipboard"
+msgstr "Buferdan faylni olishda xatolik yuz berdi"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:8
+msgid "_Location"
+msgstr "Joylashuv: %s"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:15
+msgid "_Markdown"
+msgstr "Markdown"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:89
+msgid "Send a File"
+msgstr "Fayl yuborish"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:96
+msgid "Insert an Emoji"
+msgstr "Emoji kiriting"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session_view/room_history/message_toolbar/mod.blp:121
+msgid "Message Composer"
+msgstr "Xabar kompozitori"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:136
+#: src/session_view/room_history/message_toolbar/mod.blp:139
+msgid "More Options"
+msgstr "Boshqa variantlar"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:147
+msgid "Send Message"
+msgstr "Xabarni yuborish"
+
+#: src/session_view/room_history/message_toolbar/mod.blp:171
+msgid "You don’t have permission to send messages to this room"
+msgstr "Sizda bu xonaga xabar yuborish uchun ruxsat yoʻq"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:109
+msgid "%B %-e at %I:%M %p"
+msgstr "%B %-e da %I:%M %p"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the
+#. available specifiers:
+#. <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session_view/room_history/member_timestamp/row.rs:115
+msgid "%B %-e at %H:%M"
+msgstr "%b %e %Y %H:%M"
+
+#: src/session_view/room_history/mod.rs:418
+msgid "Error getting file from drop"
+msgstr "Dropdan faylni olishda xatolik yuz berdi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1023 src/session_view/sidebar/row.rs:747
+msgid "Could not leave {room}"
+msgstr "{room} ni tark etib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1046 src/session_view/sidebar/row.rs:736
+msgid "Could not join {room}"
+msgstr "{room} guruhiga qoʻshilmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/mod.rs:1063 src/session_view/sidebar/row.rs:780
+msgid "Could not forget {room}"
+msgstr "{room} esdan chiqarilmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/mod.rs:1107
+msgid "There is a pending invite request"
+msgid_plural "There are {n} pending invite requests"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/session_view/room_history/mod.blp:7
+msgid "Room _Details"
+msgstr "Xona  Tafsilotlar"
+
+#: src/session_view/room_history/mod.blp:13
+msgid "_Invite New Members…"
+msgstr "Yangi aʼzolarni taklif qilish…"
+
+#: src/session_view/room_history/mod.blp:21 src/session_view/sidebar/mod.blp:104
+msgid "_Leave Room"
+msgstr "Xonadan chiqish"
+
+#: src/session_view/room_history/mod.blp:27 src/session_view/sidebar/mod.blp:110
+msgid "Re_join Room"
+msgstr "Xonaga qayta qoʻshilish"
+
+#: src/session_view/room_history/mod.blp:33 src/session_view/sidebar/mod.blp:116
+msgid "_Forget Room"
+msgstr "Xonani unutish"
+
+#: src/session_view/room_history/mod.blp:64
+msgid "Room Menu"
+msgstr "Xona menyusi"
+
+#: src/session_view/room_history/mod.blp:94
+#: src/session_view/room_history/mod.blp:101
+msgid "Could Not Load Room"
+msgstr "Xona yuklanmadi"
+
+#: src/session_view/room_history/mod.blp:133
+msgid "Scroll to Bottom"
+msgstr "Pastga aylantiring"
+
+#: src/session_view/room_history/mod.blp:145
+msgid "Drop Here to Send"
+msgstr "Yuborish uchun shu yerga tushing"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:257
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "1 ta ishtirokchi koʻrgan"
+msgstr[1] "{n} ta aʼzo tomonidan koʻrilgan"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/read_receipts_list/mod.rs:271
+msgid "Seen by {name}"
+msgstr "Koʻrgan: {name}"
+
+#: src/session_view/room_history/state/content.rs:100
+msgid "This room is encrypted from this point on."
+msgstr "Bu xonadan boshlab shifrlangan."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/state/content.rs:115
+#: src/session_view/room_history/state/content.rs:203
+msgid "{sender} invited {user}."
+msgstr "{user}ʼni {sender} taklif qildi."
+
+#: src/session_view/room_history/state/content.rs:127
+msgid "An unsupported state event was received."
+msgstr "Qoʻllab-quvvatlanmaydigan davlat tadbiri qabul qilindi."
+
+#: src/session_view/room_history/state/content.rs:164
+#: src/session_view/room_history/state/content.rs:389
+msgid "{user} joined this room."
+msgstr "{user} bu xonaga qoʻshildi."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session_view/room_history/state/content.rs:171
+msgid "{user} left the room."
+msgstr "{user} xonani tark etdi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:176
+msgid "{sender} banned {user}."
+msgstr "{sender} {user}ʼni blokladi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:185
+msgid "{sender} unbanned {user}."
+msgstr "{sender} {user}ʼni blokdan chiqardi."
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:194
+msgid "{sender} kicked {user} out."
+msgstr "{sender} {user}ʼni chiqarib yubordi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:212
+msgid "{user} accepted the invite."
+msgstr "{user} taklifni qabul qildi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:218
+#, fuzzy
+#| msgid "{user} rejected the invite."
+msgid "{user} declined the invite."
+msgstr "{user} taklifni rad etdi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:227
+#, fuzzy
+#| msgid "{user} rejected the invite."
+msgid "{sender} revoked the invitation for {user}."
+msgstr "{user} taklifni rad etdi."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/content.rs:239
+msgid "{user} requested to be invited to this room."
+msgstr "{user} ushbu xonaga taklif qilishni soʻradi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:246
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} ushbu xonaga taklif qilish soʻrovini qaytarib oldi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', these are variable names.
+#: src/session_view/room_history/state/content.rs:252
+msgid "{sender} denied {user}’s request to be invited to this room."
+msgstr "{sender} {user}ʼning ushbu xonaga taklif etilish soʻrovini rad qildi."
+
+#: src/session_view/room_history/state/content.rs:263
+msgid "An unsupported room member event was received."
+msgstr "Qoʻllab-quvvatlanmaydigan xona ishtirokchisi tadbiri qabul qilindi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:330
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr ""
+"{previous_user_name} koʻrsatiladigan nomini {new_user_name} qilib oʻzgartirdi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:340
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} koʻrsatiladigan nomini olib tashladi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:352
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} oʻz nomini {new_user_name} qilib belgiladi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:366
+msgid "{user} set their avatar."
+msgstr "{user} oʻz avatarini oʻrnatdi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:373
+msgid "{user} removed their avatar."
+msgstr "{user} avatarini olib tashladi."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session_view/room_history/state/content.rs:380
+msgid "{user} changed their avatar."
+msgstr "{user} oʻz avatarini oʻzgartirdi."
+
+#: src/session_view/room_history/state/creation.rs:55
+msgid "This conversation started in another room."
+msgstr "Bu suhbat boshqa xonada boshlandi."
+
+#: src/session_view/room_history/state/creation.rs:60
+msgid "The conversation starts here."
+msgstr "Suhbat shu yerda boshlanadi."
+
+#. Translators: This is a change in the room, not a change between
+#. rooms. Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session_view/room_history/state/group_row.rs:224
+msgid "1 room change"
+msgid_plural "{n} room changes"
+msgstr[0] "1 xona almashtirish"
+msgstr[1] "{n} ta xonani oʻzgartirish"
+
+#: src/session_view/room_history/title.blp:7
+msgid "Open Room Details"
+msgstr "Xona tafsilotlarini ochish"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:135
+msgid "{user} is typing…"
+msgstr "{user} yozmoqda…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session_view/room_history/typing_row.rs:142
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} aʼzosi yozmoqda…"
+msgstr[1] "{n} ta aʼzo yozmoqda…"
+
+#: src/session_view/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "Tasdiqlash qabul qilinmadi"
+
+#: src/session_view/room_history/verification_info_bar.rs:88
+msgid "Could not decline verification"
+msgstr "Tasdiqlashni rad etib boʻlmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/room_history/verification_info_bar.rs:166
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} tasdiqlanmoqchi"
+
+#: src/session_view/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "Tekshiruv davom etmoqda"
+
+#: src/session_view/sidebar/mod.rs:320
+msgid "No crypto identity"
+msgstr "Kripto identifikatori yoʻq"
+
+#: src/session_view/sidebar/mod.rs:322
+msgid "Crypto identity incomplete"
+msgstr "Kripto identifikatori toʻliq emas"
+
+#: src/session_view/sidebar/mod.rs:326
+msgid "Account recovery disabled"
+msgstr "Hisobni tiklash oʻchirilgan"
+
+#: src/session_view/sidebar/mod.rs:329
+msgid "Account recovery incomplete"
+msgstr "Hisobni tiklash tugallanmagan"
+
+#: src/session_view/sidebar/mod.blp:7
+msgid "New _Direct Chat…"
+msgstr "Yangi Shaxsiy Chat…"
+
+#: src/session_view/sidebar/mod.blp:12
+msgid "_New Room…"
+msgstr "Yangi xona…"
+
+#: src/session_view/sidebar/mod.blp:17
+msgid "_Join Room…"
+msgstr "Xonaga qoʻshilish…"
+
+#: src/session_view/sidebar/mod.blp:24
+msgid "_Keyboard Shortcuts"
+msgstr "Klaviatura yorliqlari"
+
+#: src/session_view/sidebar/mod.blp:29
+msgid "_About Fractal"
+msgstr "Fractal haqida"
+
+#: src/session_view/sidebar/mod.blp:44
+msgid "Dec_line"
+msgstr "Dec line"
+
+#: src/session_view/sidebar/mod.blp:58
+msgid "_Mark as Read"
+msgstr "Oʻqilgan deb belgilash"
+
+#: src/session_view/sidebar/mod.blp:64
+msgid "_Mark as Unread"
+msgstr "Oʻqilmagan deb belgilash"
+
+#: src/session_view/sidebar/mod.blp:72
+msgid "Move to _Favorites"
+msgstr "Sevimlilarga oʻting"
+
+#: src/session_view/sidebar/mod.blp:78
+msgid "Move to _Rooms"
+msgstr "Xonalarga oʻting"
+
+#: src/session_view/sidebar/mod.blp:84
+msgid "Move to Low _Priority"
+msgstr "Past ustuvorlikka oʻtish"
+
+#: src/session_view/sidebar/mod.blp:90
+msgid "Mark as _Direct Chat"
+msgstr "Direct Chat sifatida belgilang"
+
+#: src/session_view/sidebar/mod.blp:96
+msgid "Unmark as _Direct Chat"
+msgstr "Direct Chat belgisini olib tashlang"
+
+#: src/session_view/sidebar/mod.blp:124
+msgid "Sidebar"
+msgstr "Yon panel"
+
+#: src/session_view/sidebar/mod.blp:142
+msgid "Main Menu"
+msgstr "Asosiy menyu"
+
+#: src/session_view/sidebar/mod.blp:151
+msgid "Toggle Room Search"
+msgstr "Xona qidirishni yoqish/yopish"
+
+#: src/session_view/sidebar/mod.blp:162
+msgid "Room Search"
+msgstr "Xona qidirish"
+
+#: src/session_view/sidebar/mod.blp:163
+msgid "Search for a room"
+msgstr "Xona qidiring"
+
+#: src/session_view/sidebar/mod.blp:193
+msgid "Room List"
+msgstr "Xona roʻyxati"
+
+#: src/session_view/sidebar/mod.blp:194
+msgid "Allows to navigate between rooms"
+msgstr "Xonalar orasida harakat qilish imkonini beradi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a
+#. room is a direct chat with another user.
+#: src/session_view/sidebar/room_row.rs:286
+msgid "Direct chat with {name}"
+msgstr "{name} bilan bevosita suhbat"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session_view/sidebar/room_row.rs:298
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "1 ta bildirishnoma"
+msgstr[1] "{count} bildirishnoma"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:756
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "{room} {previous_category}ʼdan {new_category}ʼga koʻchirilmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:798
+msgid "Could not mark {room} as direct chat"
+msgstr "{room} toʻgʻridan-toʻgʻri chat sifatida belgilanmadi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session_view/sidebar/row.rs:803
+msgid "Could not unmark {room} as direct chat"
+msgstr "{room} toʻgʻridan-toʻgʻri chat belgisini olib tashlab boʻlmadi"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:124
+msgid "Join Room as Favorite"
+msgstr "Xonaga qoʻshiling"
+
+#: src/session_view/sidebar/section_row.rs:125
+msgid "Join Room"
+msgstr "Xonaga kirish"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:128
+msgid "Join Room as Low Priority"
+msgstr "Kam ustuvorlik sifatida xonaga qoʻshiling"
+
+#: src/session_view/sidebar/section_row.rs:129
+msgid "Reject Invite"
+msgstr "Taklifni rad etish"
+
+#: src/session_view/sidebar/section_row.rs:133
+#: src/session_view/sidebar/section_row.rs:146
+msgid "Move to Rooms"
+msgstr "Xonalarga oʻtish"
+
+#: src/session_view/sidebar/section_row.rs:134
+#: src/session_view/sidebar/section_row.rs:140
+msgid "Move to Low Priority"
+msgstr "Past ustuvorlikka oʻting"
+
+#: src/session_view/sidebar/section_row.rs:135
+#: src/session_view/sidebar/section_row.rs:141
+#: src/session_view/sidebar/section_row.rs:147
+msgid "Leave Room"
+msgstr "Xonani tark eting"
+
+#: src/session_view/sidebar/section_row.rs:139
+#: src/session_view/sidebar/section_row.rs:145
+msgid "Move to Favorites"
+msgstr "Sevimlilarga oʻting"
+
+#. Translators: This is an action to rejoin a room and put it in the
+#. "Favorites"
+#. section.
+#: src/session_view/sidebar/section_row.rs:153
+msgid "Rejoin Room as Favorite"
+msgstr "Sevimli xonaga qayta qoʻshiling"
+
+#: src/session_view/sidebar/section_row.rs:154
+msgid "Rejoin Room"
+msgstr "Xonaga qayta kirish"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session_view/sidebar/section_row.rs:157
+msgid "Rejoin Room as Low Priority"
+msgstr "Past ustuvorlik sifatida xonaga qayta qoʻshiling"
+
+#: src/session_list/mod.rs:164 src/session_list/mod.rs:199
+msgid "Could not restore previous sessions"
+msgstr "Oldingi seanslarni tiklab boʻlmadi"
+
+#: src/session_list/mod.rs:200
+msgid "An unexpected error happened while accessing the data directory"
+msgstr "Maʼlumotlar katalogiga kirishda kutilmagan xatolik yuz berdi"
+
+#: src/shortcuts-dialog.blp:6
+msgctxt "shortcut window"
+msgid "General"
+msgstr "Umumiy"
+
+#: src/shortcuts-dialog.blp:9
+msgctxt "shortcut window"
+msgid "Search Room by Address or Link"
+msgstr "Xonani manzil yoki havola orqali qidirish"
+
+#: src/shortcuts-dialog.blp:14
+msgctxt "shortcut window"
+msgid "Account Settings"
+msgstr "Hisob sozlamalari"
+
+#: src/shortcuts-dialog.blp:19
+msgctxt "shortcut window"
+msgid "Open Menu"
+msgstr "Menyuni ochish"
+
+#: src/shortcuts-dialog.blp:24
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "Klaviatura yorliqlari"
+
+#: src/shortcuts-dialog.blp:29
+msgctxt "shortcut window"
+msgid "Close Window"
+msgstr "Oynani yopish"
+
+#: src/shortcuts-dialog.blp:34
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Chiqish"
+
+#: src/shortcuts-dialog.blp:40
+msgctxt "shortcut window"
+msgid "Room List"
+msgstr "Xona roʻyxati"
+
+#: src/shortcuts-dialog.blp:43
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "Xonalar roʻyxatini qidirish"
+
+#: src/shortcuts-dialog.blp:48
+msgctxt "shortcut window"
+msgid "Next Room"
+msgstr "Yangi xona"
+
+#: src/shortcuts-dialog.blp:53
+msgctxt "shortcut window"
+msgid "Previous Room"
+msgstr "Xonani tark etish"
+
+#: src/shortcuts-dialog.blp:60
+msgctxt "shortcut window"
+msgid "First Room With Unread Messages"
+msgstr "Xabarlar oʻqilmagan birinchi xona"
+
+#: src/shortcuts-dialog.blp:65
+msgctxt "shortcut window"
+msgid "Next Room With Unread Messages"
+msgstr "Xabarlar oʻqilmagan keyingi xona"
+
+#: src/shortcuts-dialog.blp:70
+msgctxt "shortcut window"
+msgid "Previous Room With Unread Messages"
+msgstr "Xabarlar oʻqilmagan oldingi xona"
+
+#: src/shortcuts-dialog.blp:76
+msgctxt "shortcut window"
+msgid "Room History"
+msgstr "Xona tarixi"
+
+#: src/shortcuts-dialog.blp:79
+msgctxt "shortcut window"
+msgid "Event Properties"
+msgstr "Tadbir tafsilotlari"
+
+#: src/shortcuts-dialog.blp:84
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "Xonani yoping"
+
+#: src/user_facing_error.rs:18
+msgid "Connection timed out."
+msgstr "Ulanish vaqti tugadi."
+
+#: src/user_facing_error.rs:20
+msgid "Could not connect to the homeserver."
+msgstr "Uy serveriga ulanib boʻlmadi."
+
+#: src/user_facing_error.rs:26
+msgid "Invalid credentials."
+msgstr "Hisob maʼlumotlari yaroqsiz."
+
+#: src/user_facing_error.rs:27
+msgid "Account deactivated."
+msgstr "Hisob oʻchirilgan."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:43
+msgid "Rate limit exceeded, retry in 1 second."
+msgid_plural "Rate limit exceeded, retry in {n} seconds."
+msgstr[0] "Tezlik chegarasidan oshib ketdi, 1 soniyadan keyin qayta urining."
+msgstr[1] "Tarif chegarasidan oshib ketdi, {n} soniyadan keyin qayta urining."
+
+#: src/user_facing_error.rs:49
+msgid "Rate limit exceeded, try again later."
+msgstr "Tarif chegarasidan oshib ketdi, keyinroq qayta urinib koʻring."
+
+#: src/user_facing_error.rs:59
+msgid "Unexpected connection error."
+msgstr "Kutilmagan ulanish xatosi."
+
+#: src/user_facing_error.rs:67
+msgid "Could not decrypt the event."
+msgstr "Hodisa shifrini yechib boʻlmadi."
+
+#: src/user_facing_error.rs:69 src/user_facing_error.rs:81
+msgid "Unexpected error."
+msgstr "Kutilmagan xato."
+
+#: src/user_facing_error.rs:77
+msgid "Invalid URL."
+msgstr "URL notoʻgʻri."
+
+#: src/user_facing_error.rs:78
+msgid "Could not discover homeserver."
+msgstr "Homeserver topilmadi."
+
+#: src/user_facing_error.rs:80
+msgid "Could not open the store."
+msgstr "Doʻkonni ochib boʻlmadi."
+
+#: src/utils/matrix/media_message.rs:90
+msgid "Voice Message"
+msgstr "Ovozli xabarlar"
+
+#: src/utils/matrix/media_message.rs:125
+msgid "Voice Message From {datetime}"
+msgstr "{datetime} dan ovozli xabar"
+
+#: src/utils/matrix/mod.rs:176
+msgid "Could not generate unique session ID"
+msgstr "Noyob seans identifikatorini yaratib boʻlmadi"
+
+#: src/utils/matrix/mod.rs:177
+msgid "Could not access the session tokens"
+msgstr "Seans tokenlariga kira olmadi"
+
+#: src/utils/media/image/mod.rs:936
+msgid "Image format not supported"
+msgstr "Rasm formati qoʻllab-quvvatlanmaydi"
+
+#. Translators: Default name for image files.
+#: src/utils/media/mod.rs:36
+msgid "image"
+msgstr "tasvir"
+
+#. Translators: Default name for video files.
+#: src/utils/media/mod.rs:38
+msgid "video"
+msgstr "video"
+
+#. Translators: Default name for audio files.
+#: src/utils/media/mod.rs:40
+msgid "audio"
+msgstr "audio"
+
+#. Translators: Default name for files.
+#: src/utils/media/mod.rs:42
+msgid "file"
+msgstr "fayl"
+
+#: src/window.blp:80
+msgid "Session"
+msgstr "Sessiya"
+
+#~ msgctxt "member"
+#~ msgid "Knocked"
+#~ msgstr "Taqillatdi"
+
+#~ msgid "Allow Access"
+#~ msgstr "Kirishga ruxsat berish"
+
+#~ msgid "Discard Unsaved Changes?"
+#~ msgstr "Saqlanmagan oʻzgarishlar bekor qilinsinmi?"
+
+#~ msgid "Play {filename}"
+#~ msgstr "{filename} oʻynang"
+
+#~ msgid "Unknown duration"
+#~ msgstr "Noma'lum muddat"
+
+#~ msgid "_View Details"
+#~ msgstr "_Tafsilotlarni koʻrish"
+
+#~ msgid "Sender Context Menu"
+#~ msgstr "Yuboruvchi kontekst menyusi"
+
+#~ msgid "_Open Direct Chat"
+#~ msgstr "_Toʻgʻridan-toʻgʻri suhbatni oching"
+
+#~ msgid "Copy _Link"
+#~ msgstr "_Linkni nusxalash"
+
+#~ msgid "_Invite"
+#~ msgstr "taklif qilish"
+
+#~ msgid "M_ute"
+#~ msgstr "Ovozsiz qilish"
+
+#~ msgid "_Unmute"
+#~ msgstr "xabarnomalar yoqilsin"
+
+#~ msgid "_Kick"
+#~ msgstr "Haydash"
+
+#~ msgid "_Deny Access"
+#~ msgstr "Kirishni rad etish"
+
+#~ msgid "_Ban"
+#~ msgstr "_Ban"
+
+#~ msgid "Un_ban"
+#~ msgstr "Taqiqni bekor qilish"
+
+#~ msgid "_Remove Messages"
+#~ msgstr "_Xabarlarni oʻchirish"
+
+#~ msgid "I_gnore"
+#~ msgstr "E'tibor bermayman"
+
+#~ msgid "Stop I_gnoring"
+#~ msgstr "E'tibor bermaslikni toʻxtating"
+
+#~ msgid "Link copied to clipboard"
+#~ msgstr "Havola vaqtinchalik xotiraga nusxalandi"
+
+#~ msgid "{user}’s avatar"
+#~ msgstr "{user} avatar"
+
+#~ msgid "Creating a new Direct Chat…"
+#~ msgstr "Yangi Direct Chat yaratilmoqda…"
+
+#~ msgid "Inviting user…"
+#~ msgstr "Foydalanuvchi taklif qilinmoqda…"
+
+#~ msgid "Denying access…"
+#~ msgstr "Kirish rad etilmoqda…"
+
+#~ msgid "Kicking user…"
+#~ msgstr "Foydalanuvchi tepilmoqda…"
+
+#~ msgid "Muting member…"
+#~ msgstr "Aʼzo ovozi oʻchirilmoqda…"
+
+#~ msgid "Unmuting member…"
+#~ msgstr "Aʼzo ovozi oʻchirilmoqda…"
+
+#~ msgid "Member muted"
+#~ msgstr "A’zo ovozi oʻchirildi"
+
+#~ msgid "Member unmuted"
+#~ msgstr "A’zo ovozi yoqildi"
+
+#~ msgid "Could not mute member"
+#~ msgstr "Aʼzo ovozini oʻchirib boʻlmadi"
+
+#~ msgid "Could not unmute member"
+#~ msgstr "Aʼzo ovozini oʻchirib boʻlmadi"
+
+#~ msgid "Banning user…"
+#~ msgstr "Foydalanuvchi taqiqlanmoqda…"
+
+#~ msgid "Unbanning user…"
+#~ msgstr "Foydalanuvchi blokirovkasi olib tashlanmoqda…"
+
+#~ msgid "Removing 1 message sent by the user…"
+#~ msgid_plural "Removing {n} messages sent by the user…"
+#~ msgstr[0] "Foydalanuvchi tomonidan yuborilgan 1 ta xabar olib tashlanmoqda…"
+#~ msgstr[1] "Foydalanuvchi tomonidan yuborilgan {n} ta xabar olib tashlanmoqda…"
+
+#~ msgid "Stop ignoring user…"
+#~ msgstr "Foydalanuvchini e'tiborsiz qoldirmaslik…"
+
+#~ msgid "Ignoring user…"
+#~ msgstr "Foydalanuvchi e'tiborsiz qoldirilmoqda…"
+
+#~ msgid "Open Sender Context Menu"
+#~ msgstr "Yuboruvchi kontekst menyusini oching"
+
+#~ msgid "{user} was invited to this room."
+#~ msgstr "{user} bu xonaga taklif qilindi."
+
+#~ msgid "{user} was kicked out of the room."
+#~ msgstr "{user} xonadan haydaldi."
+
+#~ msgid "{user} was kicked out of the room and banned."
+#~ msgstr "{user} xonadan haydaldi va taqiqlandi."
+
+#~ msgid "The invitation for {user} has been revoked."
+#~ msgstr "{user} uchun taklif bekor qilindi."
+
+#~ msgid "{user}’s request to be invited to this room was denied."
+#~ msgstr "{user}ning ushbu xonaga taklif qilish soʻrovi rad etildi."
+
+#~ msgctxt "shortcut window"
+#~ msgid "Show Shortcuts"
+#~ msgstr "Yorliqlarni koʻrsatish"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the next room in the list"
+#~ msgstr "Roʻyxatdagi keyingi xonani oching"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the previous room in the list"
+#~ msgstr "Roʻyxatdagi oldingi xonani oching"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the next room with unread messages in the list"
+#~ msgstr "Roʻyxatdagi oʻqilmagan xabarlar bilan keyingi xonani oching"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the previous room with unread messages in the list"
+#~ msgstr "Roʻyxatdagi oʻqilmagan xabarlar bilan oldingi xonani oching"

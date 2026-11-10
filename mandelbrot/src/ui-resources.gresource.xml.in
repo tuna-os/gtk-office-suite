@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/tunaos/mandelbrot/">
+    <file compressed="true" preprocess="xml-stripblanks">shortcuts-dialog.ui</file>
+  </gresource>
+  <gresource prefix="/org/tunaos/mandelbrot/ui/">@UI_FILES@
+    <file compressed="true" preprocess="xml-stripblanks">account_settings/general_page/change_password_subpage.ui</file>
+  </gresource>
+</gresources>

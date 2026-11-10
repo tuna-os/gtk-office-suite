@@ -1,0 +1,20 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $EntryAddRow: Adw.EntryRow {
+  activatable: false;
+  selectable: false;
+  changed => $update_add_button() swapped;
+
+  $LoadingButton add_button {
+    sensitive: false;
+    content-icon-name: "add-symbolic";
+    valign: center;
+    halign: center;
+    clicked => $add() swapped;
+
+    styles [
+      "flat",
+    ]
+  }
+}

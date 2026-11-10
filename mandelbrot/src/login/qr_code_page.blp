@@ -1,0 +1,237 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoginQrCodePage: Adw.NavigationPage {
+  tag: "qr-code";
+  title: _("Sign in with QR Code");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {}
+
+      Gtk.ScrolledWindow {
+        hscrollbar-policy: never;
+        propagate-natural-height: true;
+        vexpand: true;
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+          tightening-threshold: 300;
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+
+          child: Gtk.Stack stack {
+            transition-type: crossfade;
+            vhomogeneous: false;
+
+            Gtk.StackPage {
+              name: "scan";
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Gtk.Label {
+                  label: _("Sign in with QR Code");
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+                  accessible-role: heading;
+
+                  styles [
+                    "title-1",
+                  ]
+
+                  accessibility {
+                    level: 1;
+                  }
+                }
+
+                Gtk.Label {
+                  label: _("On a device where you are already signed in, select “Link New Device” in the account settings, then scan the QR code that is displayed.");
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "body",
+                  ]
+                }
+
+                Adw.Bin qrcode_scanner_bin {
+                  margin-top: 12;
+                  margin-bottom: 12;
+                  valign: center;
+                  halign: center;
+                }
+              };
+            }
+
+            Gtk.StackPage {
+              name: "connecting";
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Adw.Spinner {
+                  width-request: 32;
+                  height-request: 32;
+                  halign: center;
+                }
+
+                Gtk.Label {
+                  label: _("Establishing a secure connection to your other device…");
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "body",
+                  ]
+                }
+              };
+            }
+
+            Gtk.StackPage {
+              name: "check-code";
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Gtk.Label {
+                  label: _("Enter Check Code");
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+                  accessible-role: heading;
+
+                  styles [
+                    "title-1",
+                  ]
+
+                  accessibility {
+                    level: 1;
+                  }
+                }
+
+                Gtk.Label check_code_label {
+                  justify: center;
+
+                  styles [
+                    "check-code",
+                    "numeric",
+                  ]
+                }
+
+                Gtk.Label {
+                  label: _("Enter this code on your other device to confirm the connection.");
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "body",
+                  ]
+                }
+              };
+            }
+
+            Gtk.StackPage {
+              name: "waiting";
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Adw.Spinner {
+                  width-request: 32;
+                  height-request: 32;
+                  halign: center;
+                }
+
+                Gtk.Label waiting_label {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "body",
+                  ]
+                }
+
+                Gtk.Label user_code_label {
+                  visible: false;
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "caption",
+                    "dimmed",
+                  ]
+                }
+              };
+            }
+
+            Gtk.StackPage {
+              name: "error";
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Gtk.Image {
+                  icon-name: "error-symbolic";
+                  pixel-size: 64;
+                  accessible-role: presentation;
+
+                  styles [
+                    "error",
+                  ]
+                }
+
+                Gtk.Label error_label {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+
+                  styles [
+                    "body",
+                  ]
+                }
+
+                Gtk.Button retry_button {
+                  can-shrink: true;
+                  label: _("Try Again");
+                  halign: center;
+                  clicked => $retry() swapped;
+
+                  styles [
+                    "suggested-action",
+                    "pill",
+                  ]
+                }
+              };
+            }
+          };
+        };
+      }
+    };
+  };
+}

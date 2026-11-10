@@ -48,6 +48,7 @@ FIXTURE_SETS = [
     "decks-core/tests/corpus",
 ]
 REQUIRED = ("author", "format", "features", "semantics", "permitted_losses", "used_by")
+VENDORED_PREFIXES = ("tools/", "lifafa/", "mandelbrot/")
 APP_RE = re.compile(r"^(letters|tables|decks)\b", re.I)
 
 
@@ -76,7 +77,9 @@ def tracked_dirs(root: Path) -> set[str]:
     dirs = set()
     for path in out.splitlines():
         parent = str(Path(path).parent)
-        if Path(parent).name in ("fixtures", "corpus") and not parent.startswith("tools/"):
+        # tools/ and the vendored apps keep their own fixture conventions; the
+        # manifests here describe the suite's document fixtures.
+        if Path(parent).name in ("fixtures", "corpus") and not parent.startswith(VENDORED_PREFIXES):
             dirs.add(parent)
     return dirs
 
