@@ -304,7 +304,7 @@ fn paging_scroller(
 fn header_button(
     sender: &ComponentSender<AttachmentsGallery>,
     label: &gtk::Label,
-    column: u32,
+    column: u8,
     width: Option<i32>,
 ) -> gtk::Button {
     let button = gtk::Button::new();
