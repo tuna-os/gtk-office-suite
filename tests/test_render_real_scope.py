@@ -44,9 +44,10 @@ class WhatReachesEachApp(unittest.TestCase):
         self.assertEqual(apps_reached(DCK_006), {"decks"})
 
     def test_a_shared_core_crate_runs_every_app_that_links_it(self):
-        # tables and decks link letters-core through their own core crates.
+        # decks links letters-core through decks-core; tables-core no
+        # longer does (ADR 0012, #1661).
         self.assertEqual(apps_reached(["letters-core/src/layout.rs"]),
-                         {"letters", "tables", "decks"})
+                         {"letters", "decks"})
         self.assertEqual(apps_reached(["suite-common-core/src/units.rs"]),
                          {"letters", "tables", "decks"})
         self.assertEqual(apps_reached(["suite-common/src/lib.rs"]),
