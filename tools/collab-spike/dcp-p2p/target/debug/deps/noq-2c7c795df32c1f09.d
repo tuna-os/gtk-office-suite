@@ -1,0 +1,16 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/noq-2c7c795df32c1f09.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/connection.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/endpoint.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/event_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/incoming.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/mutex.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/path.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/recv_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/tokio.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/send_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/work_limiter.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libnoq-2c7c795df32c1f09.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/connection.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/endpoint.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/event_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/incoming.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/mutex.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/path.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/recv_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/tokio.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/send_stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/work_limiter.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/connection.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/endpoint.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/event_stream.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/incoming.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/mutex.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/path.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/recv_stream.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/mod.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/runtime/tokio.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/send_stream.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/noq-1.4.0/src/work_limiter.rs:

@@ -6,7 +6,7 @@
 
 use std::sync::LazyLock;
 
-use jsonschema::{Draft, Resource, Validator};
+use jsonschema::{Draft, Registry, Validator};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -62,17 +62,21 @@ pub struct SchemaError {
 
 static VALIDATORS: LazyLock<[Validator; 5]> = LazyLock::new(|| {
     let build = |kind: Kind| -> Validator {
-        let mut options = jsonschema::options().with_draft(Draft::Draft202012);
         // `version` and `update` `$ref` the file reference by its relative
         // name, which resolves against `$id`, so it has to be registered
         // under that absolute URI (there is no network retriever).
         let file_ref: Value = serde_json::from_str(FILE_REF).expect("file-ref schema is JSON");
-        options = options.with_resource(
-            format!("{BASE}file-ref.schema.json"),
-            Resource::from_contents(file_ref).expect("file-ref schema is a schema"),
-        );
+        let registry = Registry::new()
+            .add(format!("{BASE}file-ref.schema.json"), file_ref)
+            .expect("the file-ref URI is valid")
+            .prepare()
+            .expect("file-ref schema is a schema");
         let schema: Value = serde_json::from_str(kind.source()).expect("schema is JSON");
-        options.build(&schema).expect("the draft-1 schemas compile")
+        jsonschema::options()
+            .with_draft(Draft::Draft202012)
+            .with_registry(&registry)
+            .build(&schema)
+            .expect("the draft-1 schemas compile")
     };
     Kind::ALL.map(build)
 });
@@ -82,7 +86,7 @@ pub fn validate(kind: Kind, value: &Value) -> Result<(), SchemaError> {
     let validator = &VALIDATORS[kind.index()];
     let errors: Vec<String> = validator
         .iter_errors(value)
-        .map(|e| format!("{} (at {})", e, e.instance_path))
+        .map(|e| format!("{} (at {})", e, e.instance_path()))
         .collect();
     if errors.is_empty() {
         Ok(())
