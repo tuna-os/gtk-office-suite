@@ -428,7 +428,9 @@ pub fn set_styled_text(
         if run.style.italic {
             add(pango::AttrInt::new_style(pango::Style::Italic).into());
         }
-        if run.style.underline {
+        // A linked run is drawn underlined, as a link is in PowerPoint and
+        // Impress (#1998); Ctrl+click on it opens the link.
+        if run.style.underline || run.style.link.is_some() {
             add(pango::AttrInt::new_underline(pango::Underline::Single).into());
         }
         // The run's own typeface (pptx a:latin, theme fonts resolved; odp

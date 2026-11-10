@@ -664,6 +664,32 @@ impl TextSession {
     }
 }
 
+/// The link under byte `offset` of a text box's runs (#1998): the target
+/// of the run that holds that byte, so a click on a linked word finds what
+/// it opens. A run covers its first byte up to, not including, the next
+/// run's first; the end of the text belongs to no run, and a box with no
+/// runs (plain text) has no link to find.
+pub fn link_at(runs: &[Run], offset: usize) -> Option<&str> {
+    let mut start = 0;
+    for run in runs {
+        let end = start + run.text.len();
+        if offset < end {
+            return if offset >= start { run.style.link.as_deref() } else { None };
+        }
+        start = end;
+    }
+    None
+}
+
+/// Whether a link from a document is one to open on a click: a web or mail
+/// address. The readers already keep only addresses with a scheme; this is
+/// the second check, at the point of opening, so a crafted file cannot
+/// make a click launch a `file:` path or another program's scheme.
+pub fn is_followable(uri: &str) -> bool {
+    let scheme = uri.split(':').next().unwrap_or("");
+    uri.contains(':') && ["http", "https", "mailto"].iter().any(|ok| scheme.eq_ignore_ascii_case(ok))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,6 +720,41 @@ mod tests {
 
     fn spans(t: &RichText) -> Vec<(&str, bool, bool, bool)> {
         t.runs.iter().map(|r| (r.text.as_str(), r.style.bold, r.style.italic, r.style.underline)).collect()
+    }
+
+    #[test]
+    fn a_click_finds_the_link_of_the_run_it_lands_in() {
+        let linked = RunStyle { link: Some("https://example.com/a".into()), ..Default::default() };
+        let runs = vec![run("See ", RunStyle::default()), run("the page", linked), run(" now", RunStyle::default())];
+        // "See " is bytes 0..4, "the page" 4..12, " now" 12..16.
+        assert_eq!(link_at(&runs, 0), None);
+        assert_eq!(link_at(&runs, 3), None);
+        assert_eq!(link_at(&runs, 4), Some("https://example.com/a"));
+        assert_eq!(link_at(&runs, 11), Some("https://example.com/a"));
+        assert_eq!(link_at(&runs, 12), None);
+        // The end of the text, and a box with no runs, hold no link.
+        assert_eq!(link_at(&runs, 16), None);
+        assert_eq!(link_at(&[], 0), None);
+    }
+
+    #[test]
+    fn a_link_in_a_multibyte_run_is_found_by_byte() {
+        let linked = RunStyle { link: Some("mailto:a@b.example".into()), ..Default::default() };
+        // "é" is two bytes: the link run starts at byte 3.
+        let runs = vec![run("é ", RunStyle::default()), run("café", linked)];
+        assert_eq!(link_at(&runs, 2), None);
+        assert_eq!(link_at(&runs, 3), Some("mailto:a@b.example"));
+        assert_eq!(link_at(&runs, 7), Some("mailto:a@b.example"));
+    }
+
+    #[test]
+    fn only_web_and_mail_links_are_followed() {
+        for ok in ["https://example.com", "HTTP://example.com/x", "mailto:a@b.example"] {
+            assert!(is_followable(ok), "{ok}");
+        }
+        for no in ["file:///etc/passwd", "javascript:alert(1)", "smb://host/share", "example.com", "", "https", "x-https:y"] {
+            assert!(!is_followable(no), "{no}");
+        }
     }
 
     #[test]
