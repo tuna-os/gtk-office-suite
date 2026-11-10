@@ -194,6 +194,7 @@ fn pivot_rejection_keeps_registration_and_output_atomic_on_later_sheet() {
         name: "Protected summary".into(), source_range: (0, 0, 1, 1), target_cell: (4, 0),
         row_fields: vec![PivotField { col_index: 0, name: "Region".into() }], col_fields: vec![],
         data_fields: vec![PivotDataField { col_index: 1, name: "Sales".into(), func: PivotAggFunc::Sum }],
+        extent: (0, 0),
     };
     assert_rejected(&mut controller, |c| c.add_pivot_table(pivot.clone()));
     controller.set_sheet_protection(false, None);

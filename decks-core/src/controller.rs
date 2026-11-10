@@ -18,6 +18,11 @@ use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::ops::Op;
 use suite_common_core::ops::History;
 
+/// The most undo steps a deck keeps. Each step can hold whole slides (a
+/// paste, a delete, a master edit), so an unbounded history grows with the
+/// session; past this the oldest step is forgotten (#1993).
+pub const UNDO_LIMIT: usize = 200;
+
 /// How the selected objects are being worked on (DCK-005). The mode is
 /// session state owned by the controller, not a document edit: changing
 /// it never dirties the deck or touches history.
@@ -267,7 +272,7 @@ impl DecksController {
             skipped_slides: Rc::new(RefCell::new(Vec::new())),
             dirty: Rc::new(Cell::new(false)),
             file_path: Rc::new(RefCell::new(None)),
-            history: RefCell::new(History::default()),
+            history: RefCell::new(History::with_limit(UNDO_LIMIT)),
             undo_sels: RefCell::new(Vec::new()),
             redo_sels: RefCell::new(Vec::new()),
             merge_chain: Cell::new(false),
@@ -338,7 +343,7 @@ impl DecksController {
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = Some(context);
-        *self.history.borrow_mut() = History::default();
+        *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
@@ -377,7 +382,7 @@ impl DecksController {
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = context;
-        *self.history.borrow_mut() = History::default();
+        *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
@@ -523,7 +528,7 @@ impl DecksController {
         crate::ops::ensure_all_ids(std::slice::from_mut(&mut stand_in), &mut []);
         let stand_in_id = stand_in.ids.slide;
         let slides = std::mem::replace(&mut *self.slides.borrow_mut(), vec![stand_in]);
-        let history = std::mem::take(&mut *self.history.borrow_mut());
+        let history = std::mem::replace(&mut *self.history.borrow_mut(), History::with_limit(UNDO_LIMIT));
         let selection = std::mem::take(&mut *self.selection.borrow_mut());
         let undo_sels = std::mem::take(&mut *self.undo_sels.borrow_mut());
         let redo_sels = std::mem::take(&mut *self.redo_sels.borrow_mut());
@@ -881,6 +886,7 @@ impl DecksController {
         if !merged {
             self.undo_sels.borrow_mut().push(pre_selection);
         }
+        self.trim_undo_sels();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
         if let Some(context) = self.source_context.borrow_mut().as_mut() {
@@ -1628,6 +1634,8 @@ impl DecksController {
             // Undo is the direction that restores selection.
             self.undo_sels.borrow_mut().push(pre);
             self.redo_sels.borrow_mut().pop();
+            drop(history);
+            self.trim_undo_sels();
             self.repair_selection();
             if let Some(context) = self.source_context.borrow_mut().as_mut() {
                 context.note_history_step();
@@ -1640,6 +1648,18 @@ impl DecksController {
             self.redo_sels.borrow_mut().pop();
         }
         done
+    }
+
+    /// The history forgets its oldest steps past [`UNDO_LIMIT`]; the
+    /// selections saved with them go too, oldest first, so each kept step
+    /// still restores the selection it saw.
+    fn trim_undo_sels(&self) {
+        let kept = self.history.borrow().undo_len();
+        let mut sels = self.undo_sels.borrow_mut();
+        let excess = sels.len().saturating_sub(kept);
+        if excess > 0 {
+            sels.drain(..excess);
+        }
     }
 
     pub fn can_undo(&self) -> bool {
@@ -1683,6 +1703,27 @@ mod tests {
     /// view position `si`.
     fn oid(c: &DecksController, si: usize, oi: usize) -> u64 {
         c.object_id_at(si, oi).unwrap()
+    }
+
+    /// #1993: past the limit the saved selections are forgotten with
+    /// their steps, after an edit and after a redo, so neither stack grows
+    /// with the session.
+    #[test]
+    fn saved_selections_stay_within_the_undo_limit() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        for i in 0..UNDO_LIMIT + 30 {
+            c.add_slide(i + 1, slide("S")).unwrap();
+        }
+        assert_eq!(c.history.borrow().undo_len(), UNDO_LIMIT);
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT);
+        for _ in 0..10 {
+            assert!(c.undo());
+        }
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT - 10);
+        assert_eq!(c.redo_sels.borrow().len(), 10);
+        while c.redo() {}
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT);
+        assert!(c.redo_sels.borrow().is_empty());
     }
 
     /// Each chart edit is one undo step, and one that changes nothing
@@ -1776,7 +1817,7 @@ mod tests {
         }
     }
 
-    fn styled_text_controller(runs: Vec<letters_core::model::Run>, body: crate::engine::TextBody) -> DecksController {
+    fn styled_text_controller(runs: Vec<suite_common_core::document::Run>, body: crate::engine::TextBody) -> DecksController {
         let mut s = slide("Styled");
         s.objects.push(SlideObject::TextBox {
             text: runs.iter().map(|r| r.text.as_str()).collect(),
@@ -1785,7 +1826,7 @@ mod tests {
         DecksController::new(vec![s], vec![])
     }
 
-    fn text_state(c: &DecksController) -> (String, Vec<letters_core::model::Run>, crate::engine::TextBody) {
+    fn text_state(c: &DecksController) -> (String, Vec<suite_common_core::document::Run>, crate::engine::TextBody) {
         match &c.slides.borrow()[0].objects[0] {
             SlideObject::TextBox { text, runs, body, .. } => (text.clone(), runs.clone(), body.clone()),
             _ => panic!("expected TextBox"),
@@ -1794,7 +1835,7 @@ mod tests {
 
     #[test]
     fn change_text_preserves_styled_spans_and_exact_undo_redo() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let italic = RunStyle { italic: true, ..Default::default() };
         let c = styled_text_controller(vec![
@@ -1825,7 +1866,7 @@ mod tests {
 
     #[test]
     fn change_text_unicode_insert_delete_and_replace_across_run_boundaries() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let italic = RunStyle { italic: true, ..Default::default() };
         let original = vec![
@@ -1875,7 +1916,7 @@ mod tests {
 
     #[test]
     fn change_text_empty_box_keeps_typing_style_and_noop_keeps_history() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let style = RunStyle { bold: true, font_size_hp: Some(48), ..Default::default() };
         let c = styled_text_controller(vec![Run { text: "Hi".into(), style: style.clone() }], Default::default());
         let before = text_state(&c);
@@ -1901,7 +1942,7 @@ mod tests {
     #[test]
     fn change_text_remaps_paragraph_styles_with_newlines_and_undo() {
         use crate::engine::text_body::{Anchor, ParaStyle, TextBody};
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let first = ParaStyle { margin_left: 10.0, ..Default::default() };
         let second = ParaStyle { margin_left: 20.0, ..Default::default() };
         let third = ParaStyle { margin_left: 30.0, ..Default::default() };
@@ -2538,7 +2579,7 @@ mod tests {
     #[test]
     fn a_text_session_commits_one_step_and_cancels_without_trace() {
         use crate::format::FormatEdit;
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let c = styled_text_controller(vec![Run { text: "Alpha ".into(), style: bold.clone() }, Run { text: "Beta".into(), style: RunStyle::default() }], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
@@ -2588,7 +2629,7 @@ mod tests {
 
     #[test]
     fn a_text_session_whose_box_vanished_or_changed_stays_open_with_an_error() {
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let c = styled_text_controller(vec![Run::plain("one")], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         assert!(c.begin_text_session(s, o));
@@ -2614,7 +2655,7 @@ mod tests {
     #[test]
     fn range_commands_are_one_step_each_and_reject_bad_ranges() {
         use crate::format::FormatEdit;
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let c = styled_text_controller(vec![Run::plain("héllo wörld")], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         assert!(!c.format_text_range(s, o, 2, 3, &FormatEdit::Bold(true)), "mid-character");

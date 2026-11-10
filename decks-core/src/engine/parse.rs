@@ -32,7 +32,7 @@ use std::fs::File;
 use std::path::Path;
 use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 #[path = "parse/geometry.rs"]
 mod geometry;
@@ -1379,7 +1379,7 @@ mod slide_size_tests {
 
     #[test]
     fn text_sizes_scale_with_the_slide_like_its_geometry() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         // Our own 10in slide: sizes are untouched, including "no size".
         let ours = SlideScale::default();
         let runs = vec![Run { text: "a".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];

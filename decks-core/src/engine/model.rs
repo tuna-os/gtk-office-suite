@@ -1,5 +1,5 @@
 // model.rs — the deck presentation data model.
-use letters_core::model::Run;
+use suite_common_core::document::Run;
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Split out of engine.rs (issue #247).
