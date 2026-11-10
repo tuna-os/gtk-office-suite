@@ -63,166 +63,203 @@ pub(crate) enum LightboxInput {
     Rendered(u64, Option<gtk::gdk::Texture>),
 }
 
-#[relm4::component(pub(crate))]
+/// The widgets the lightbox refreshes from its model after every message.
+///
+/// This is what `#[relm4::component]`'s `view!` block used to generate: the
+/// widget tree, the handles to the parts a `#[watch]` attribute drove, and
+/// `update_view` setting them again. It is written out so the component no
+/// longer needs the macro.
+pub(crate) struct LightboxWidgets {
+    root: gtk::Box,
+    top_bar: gtk::CenterBox,
+    title: gtk::Label,
+    middle: gtk::Box,
+    prev: gtk::Button,
+    next: gtk::Button,
+    stack: gtk::Stack,
+    scroller: gtk::ScrolledWindow,
+    picture: gtk::Picture,
+    file_icon: gtk::Image,
+    bottom_bar: gtk::CenterBox,
+    caption: gtk::Label,
+}
+
+impl LightboxWidgets {
+    /// Set every property that depends on the model (relm4's `#[watch]`).
+    fn apply(&self, model: &Lightbox) {
+        // Open while there is something to show. Zoomed, the bars, arrows
+        // and padding step aside and the document fills the window.
+        self.root.set_visible(!model.items.is_empty());
+        if model.zoom != 1 {
+            self.root.add_css_class("zoomed");
+        } else {
+            self.root.remove_css_class("zoomed");
+        }
+        let normal = model.zoom == 1;
+        let current = model.items.get(model.pos);
+
+        self.top_bar.set_visible(normal);
+        self.title.set_label(current.map(|a| a.name.as_str()).unwrap_or(""));
+
+        self.middle.set_spacing(if normal { 8 } else { 0 });
+        let several = model.items.len() > 1 && normal;
+        self.prev.set_visible(several);
+        self.next.set_visible(several);
+
+        self.stack.set_visible_child_name(if model.texture.is_some() {
+            "image"
+        } else if model.no_preview {
+            "no-preview"
+        } else {
+            "rendering"
+        });
+        self.picture.set_paintable(model.texture.as_ref());
+        self.file_icon.set_icon_name(current.map(|a| thumbnails::icon_for(&a.name)));
+        self.file_icon.set_css_classes(&[
+            "gallery-file-icon",
+            current.map(|a| thumbnails::icon_color_class(&a.name)).unwrap_or("ftype-generic"),
+        ]);
+
+        self.bottom_bar.set_visible(normal);
+        self.caption.set_label(&model.caption());
+    }
+}
+
+/// A button that sends `message()` to the component when clicked.
+fn on_click(button: &gtk::Button, sender: &ComponentSender<Lightbox>, message: fn() -> LightboxInput) {
+    let input = sender.input_sender().clone();
+    button.connect_clicked(move |_| input.emit(message()));
+}
+
+/// A button with an icon, a tooltip and style classes.
+fn icon_button(icon: &str, tooltip: &str, classes: &[&str]) -> gtk::Button {
+    let button = gtk::Button::builder().icon_name(icon).tooltip_text(tooltip).build();
+    for class in classes {
+        button.add_css_class(class);
+    }
+    button
+}
+
+/// Build the lightbox's widget tree into `root`.
+fn build_widgets(root: &gtk::Box, sender: &ComponentSender<Lightbox>, model: &Lightbox) -> LightboxWidgets {
+    // Top bar: the item's name, and a close button.
+    let top_bar = gtk::CenterBox::new();
+    top_bar.add_css_class("gallery-lightbox-bar");
+    let title = gtk::Label::new(None);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    title.set_halign(gtk::Align::Start);
+    title.add_css_class("gallery-lightbox-title");
+    top_bar.set_start_widget(Some(&title));
+    let close = icon_button("window-close-symbolic", &i18n("Close"), &["circular", "flat"]);
+    on_click(&close, sender, || LightboxInput::Close);
+    top_bar.set_end_widget(Some(&close));
+    root.append(&top_bar);
+
+    // Middle: previous, the document, next.
+    let middle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    middle.set_vexpand(true);
+
+    let prev = icon_button("go-previous-symbolic", &i18n("Previous"), &["circular", "osd"]);
+    prev.set_valign(gtk::Align::Center);
+    on_click(&prev, sender, || LightboxInput::Prev);
+    middle.append(&prev);
+
+    let stack = gtk::Stack::new();
+    stack.set_hexpand(true);
+    stack.set_vexpand(true);
+
+    let picture = gtk::Picture::new();
+    picture.set_can_shrink(true);
+    picture.set_content_fit(gtk::ContentFit::Contain);
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_hscrollbar_policy(gtk::PolicyType::Automatic);
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Automatic);
+    scroller.set_hexpand(true);
+    scroller.set_vexpand(true);
+    scroller.set_child(Some(&picture));
+    stack.add_named(&scroller, Some("image"));
+
+    let rendering = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    rendering.set_halign(gtk::Align::Center);
+    rendering.set_valign(gtk::Align::Center);
+    let spinner = gtk::Spinner::new();
+    spinner.set_spinning(true);
+    spinner.set_width_request(36);
+    spinner.set_height_request(36);
+    rendering.append(&spinner);
+    stack.add_named(&rendering, Some("rendering"));
+
+    let no_preview = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    no_preview.add_css_class("gallery-lightbox-file");
+    no_preview.set_halign(gtk::Align::Center);
+    no_preview.set_valign(gtk::Align::Center);
+    let file_icon = gtk::Image::new();
+    file_icon.set_pixel_size(96);
+    no_preview.append(&file_icon);
+    let nothing = gtk::Label::new(Some(i18n("No preview available").as_str()));
+    nothing.add_css_class("title-3");
+    no_preview.append(&nothing);
+    stack.add_named(&no_preview, Some("no-preview"));
+    middle.append(&stack);
+
+    let next = icon_button("go-next-symbolic", &i18n("Next"), &["circular", "osd"]);
+    next.set_valign(gtk::Align::Center);
+    on_click(&next, sender, || LightboxInput::Next);
+    middle.append(&next);
+    root.append(&middle);
+
+    // Bottom bar: the caption, and open and download.
+    let bottom_bar = gtk::CenterBox::new();
+    bottom_bar.add_css_class("gallery-lightbox-bar");
+    let caption = gtk::Label::new(None);
+    caption.set_halign(gtk::Align::Start);
+    caption.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    caption.add_css_class("dim-label");
+    bottom_bar.set_start_widget(Some(&caption));
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    let open = icon_button("document-open-symbolic", &i18n("Open"), &["flat"]);
+    on_click(&open, sender, || LightboxInput::OpenCurrent);
+    actions.append(&open);
+    let download = icon_button("folder-download-symbolic", &i18n("Download…"), &["flat"]);
+    on_click(&download, sender, || LightboxInput::DownloadCurrent);
+    actions.append(&download);
+    bottom_bar.set_end_widget(Some(&actions));
+    root.append(&bottom_bar);
+
+    let widgets = LightboxWidgets {
+        root: root.clone(),
+        top_bar,
+        title,
+        middle,
+        prev,
+        next,
+        stack,
+        scroller,
+        picture,
+        file_icon,
+        bottom_bar,
+        caption,
+    };
+    widgets.apply(model);
+    widgets
+}
+
 impl Component for Lightbox {
     type Init = ();
     type Input = LightboxInput;
     type Output = ();
     type CommandOutput = ();
+    type Root = gtk::Box;
+    type Widgets = LightboxWidgets;
 
-    view! {
-        gtk::Box {
-            add_css_class: "gallery-lightbox",
-            set_orientation: gtk::Orientation::Vertical,
-            #[watch]
-            set_visible: !model.items.is_empty(),
-            // Zoomed, the bars, arrows and padding step aside and the
-            // document fills the window.
-            #[watch]
-            set_class_active: ("zoomed", model.zoom != 1),
+    fn init_root() -> gtk::Box {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.add_css_class("gallery-lightbox");
+        root
+    }
 
-            gtk::CenterBox {
-                add_css_class: "gallery-lightbox-bar",
-                #[watch]
-                set_visible: model.zoom == 1,
-                #[wrap(Some)]
-                set_start_widget = &gtk::Label {
-                    #[watch]
-                    set_label: model.items.get(model.pos).map(|a| a.name.as_str()).unwrap_or(""),
-                    set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                    set_halign: gtk::Align::Start,
-                    add_css_class: "gallery-lightbox-title",
-                },
-                #[wrap(Some)]
-                set_end_widget = &gtk::Button {
-                    set_icon_name: "window-close-symbolic",
-                    set_tooltip_text: Some(i18n("Close").as_str()),
-                    add_css_class: "circular",
-                    add_css_class: "flat",
-                    connect_clicked => LightboxInput::Close,
-                },
-            },
-
-            gtk::Box {
-                set_orientation: gtk::Orientation::Horizontal,
-                set_vexpand: true,
-                #[watch]
-                set_spacing: if model.zoom == 1 { 8 } else { 0 },
-
-                gtk::Button {
-                    set_icon_name: "go-previous-symbolic",
-                    set_tooltip_text: Some(i18n("Previous").as_str()),
-                    set_valign: gtk::Align::Center,
-                    add_css_class: "circular",
-                    add_css_class: "osd",
-                    #[watch]
-                    set_visible: model.items.len() > 1 && model.zoom == 1,
-                    connect_clicked => LightboxInput::Prev,
-                },
-
-                gtk::Stack {
-                    set_hexpand: true,
-                    set_vexpand: true,
-                    #[watch]
-                    set_visible_child_name: if model.texture.is_some() {
-                        "image"
-                    } else if model.no_preview {
-                        "no-preview"
-                    } else {
-                        "rendering"
-                    },
-
-                    #[name = "scroller"]
-                    add_named[Some("image")] = &gtk::ScrolledWindow {
-                        set_hscrollbar_policy: gtk::PolicyType::Automatic,
-                        set_vscrollbar_policy: gtk::PolicyType::Automatic,
-                        set_hexpand: true,
-                        set_vexpand: true,
-
-                        #[name = "picture"]
-                        gtk::Picture {
-                            set_can_shrink: true,
-                            set_content_fit: gtk::ContentFit::Contain,
-                            #[watch]
-                            set_paintable: model.texture.as_ref(),
-                        },
-                    },
-
-                    add_named[Some("rendering")] = &gtk::Box {
-                        set_halign: gtk::Align::Center,
-                        set_valign: gtk::Align::Center,
-                        gtk::Spinner {
-                            set_spinning: true,
-                            set_width_request: 36,
-                            set_height_request: 36,
-                        },
-                    },
-
-                    add_named[Some("no-preview")] = &gtk::Box {
-                        add_css_class: "gallery-lightbox-file",
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_halign: gtk::Align::Center,
-                        set_valign: gtk::Align::Center,
-                        set_spacing: 12,
-                        gtk::Image {
-                            #[watch]
-                            set_icon_name: model.items.get(model.pos).map(|a| thumbnails::icon_for(&a.name)),
-                            set_pixel_size: 96,
-                            #[watch]
-                            set_css_classes: &[
-                                "gallery-file-icon",
-                                model.items.get(model.pos).map(|a| thumbnails::icon_color_class(&a.name)).unwrap_or("ftype-generic"),
-                            ],
-                        },
-                        gtk::Label {
-                            set_label: &i18n("No preview available"),
-                            add_css_class: "title-3",
-                        },
-                    },
-                },
-
-                gtk::Button {
-                    set_icon_name: "go-next-symbolic",
-                    set_tooltip_text: Some(i18n("Next").as_str()),
-                    set_valign: gtk::Align::Center,
-                    add_css_class: "circular",
-                    add_css_class: "osd",
-                    #[watch]
-                    set_visible: model.items.len() > 1 && model.zoom == 1,
-                    connect_clicked => LightboxInput::Next,
-                },
-            },
-
-            gtk::CenterBox {
-                add_css_class: "gallery-lightbox-bar",
-                #[watch]
-                set_visible: model.zoom == 1,
-                #[wrap(Some)]
-                set_start_widget = &gtk::Label {
-                    #[watch]
-                    set_label: &model.caption(),
-                    set_halign: gtk::Align::Start,
-                    set_ellipsize: gtk::pango::EllipsizeMode::End,
-                    add_css_class: "dim-label",
-                },
-                #[wrap(Some)]
-                set_end_widget = &gtk::Box {
-                    set_spacing: 6,
-                    gtk::Button {
-                        set_icon_name: "document-open-symbolic",
-                        set_tooltip_text: Some(i18n("Open").as_str()),
-                        add_css_class: "flat",
-                        connect_clicked => LightboxInput::OpenCurrent,
-                    },
-                    gtk::Button {
-                        set_icon_name: "folder-download-symbolic",
-                        set_tooltip_text: Some(i18n("Download…").as_str()),
-                        add_css_class: "flat",
-                        connect_clicked => LightboxInput::DownloadCurrent,
-                    },
-                },
-            },
-        }
+    fn update_view(&self, widgets: &mut LightboxWidgets, _sender: ComponentSender<Self>) {
+        widgets.apply(self);
     }
 
     fn init(_: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
@@ -238,7 +275,7 @@ impl Component for Lightbox {
             keys_added: false,
             open: Rc::new(Cell::new(false)),
         };
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model);
         model.picture = widgets.picture.clone();
         model.scroller = widgets.scroller.clone();
 
