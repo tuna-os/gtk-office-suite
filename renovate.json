@@ -55,17 +55,22 @@
       "groupSlug": "lifafa-html5ever"
     },
     {
-      "description": "Lifafa stays on the cairo-rs that its gtk4 0.9 and pangocairo 0.20 use; a newer one is a second cairo whose surfaces the toolkit cannot draw. Lift with Lifafa's gtk4 move (#2025).",
+      "description": "Lifafa's toolkit moves as one, with its relm4: gtk4 0.9, libadwaita 0.7, webkit6 0.4, pangocairo 0.20 and cairo-rs 0.20 belong together (relm4 0.9 requires gtk4 0.9, and a newer cairo-rs is a second cairo whose surfaces the toolkit cannot draw). A lone bump of any of them does not build. They move in the relm4 replacement (#2025); until then Renovate proposes none of them.",
       "matchManagers": [
         "cargo"
       ],
       "matchFileNames": [
         "lifafa/Cargo.toml"
       ],
-      "matchPackageNames": [
+      "matchDepNames": [
+        "gtk",
+        "adw",
+        "relm4",
+        "webkit6",
+        "pangocairo",
         "cairo-rs"
       ],
-      "allowedVersions": "<0.21"
+      "enabled": false
     },
     {
       "description": "Lifafa's IMAP worker uses imap-proto types that async-imap 0.12 reshaped; hold at 0.10 until the worker is ported (#1986).",
