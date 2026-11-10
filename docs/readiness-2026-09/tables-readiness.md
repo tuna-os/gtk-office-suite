@@ -226,13 +226,12 @@ Work in this order; unchecked gates remain requirements, not claims:
       and modeled permission bits across the real path (#1552, evidence above); password hashes and other credential
       material remain explicitly non-round-tripped with a consent warning, never treated as encryption. These
       chart/protection round trips are XLSX-only;
-      other offered document formats are not writable. Dynamic-array evidence is
-      deliberately narrower: engine tests cover only `SEQUENCE(3)` and a
-      blocked `SEQUENCE(2,2)` spill. Grid projection is bounded to the
-      `TablesEngine`'s configured rows and columns; no function-by-function
-      dynamic-array inventory or upstream shape/size ceiling has been
-      established. The static formula-suggestion catalog is not a runtime
-      support matrix.
+      other offered document formats are not writable. Dynamic arrays are
+      held to the measured inventory in `docs/TABLES-DYNAMIC-ARRAYS.md`
+      (#1659): the admitted functions and shapes, `#SPILL!` and `#CALC!`,
+      recalculation, undo and XLSX save and reopen, with the grid-edge clip
+      and the missing spill reference operator pinned as limits. The static
+      formula-suggestion catalog is not a runtime support matrix.
 
 Dependencies: P0 save durability, #354, #374, #400. Exit: passing XLSX create/edit/save/reopen journeys and honest import/export capabilities for every offered extension; no unsupported format is silently overwritten.
 
