@@ -23,104 +23,115 @@ pub(in crate::ui::preferences) struct ConversationsPage {
 
 impl ConversationsPage {
     pub(in crate::ui::preferences) fn build(model: &Preferences, sender: &ViewSender) -> Self {
-        relm4::view! {
-            page = adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Conversations"),
-
-                    #[name = "threading_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Group messages by conversation"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleThreading(row.is_active()));
-                        },
-                    },
-
-                    #[name = "thread_expansion_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_sensitive: model.threading,
-                        set_title: &i18n("Expandable conversations"),
-                        set_subtitle: &i18n("Off, a conversation's messages show only in the reading pane."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleThreadExpansion(row.is_active()));
-                        },
-                    },
-
-                    #[name = "threads_expanded_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_sensitive: model.threading && model.thread_expansion,
-                        set_title: &i18n("Expand conversations by default"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetThreadsExpanded(row.is_active()));
-                        },
-                    },
-
-                    #[name = "thread_newest_first_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Newest message first"),
-                        set_subtitle: &i18n("In the reading pane."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetThreadNewestFirst(row.is_active()));
-                        },
-                    },
-
-                    #[name = "fold_messages_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Fold earlier messages"),
-                        set_subtitle: &i18n("The newest always opens."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeFoldMessages(row.selected()));
-                        },
-                    },
-
-                    #[name = "thread_row_newest_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_sensitive: model.threading,
-                        set_title: &i18n("Show your own replies in the message list"),
-                        set_subtitle: &i18n("Off shows the last message that arrived."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetThreadRowNewest(row.is_active()));
-                        },
-                    },
-
-                    #[name = "reply_position_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Reply editor position"),
-                        set_subtitle: &i18n("Following the reading order puts it where the conversation ends."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeReplyPosition(row.selected()));
-                        },
-                    },
-
-                    #[name = "card_attachments_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Attachments on each message"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetCardAttachments(row.is_active()));
-                        },
-                    },
-
-                    #[name = "attachment_drawer_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Attachment drawer"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetAttachmentDrawer(row.is_active()));
-                        },
-                    },
-
-                    #[name = "confirm_thread_delete_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Confirm conversation deletion"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetConfirmThreadDelete(row.is_active()));
-                        },
-                    },
-                },
-            }
+        let page = adw::PreferencesPage::default();
+        let preferences_group_1 = adw::PreferencesGroup::default();
+        preferences_group_1.set_title(&i18n("Conversations"));
+        let threading_row = adw::SwitchRow::default();
+        threading_row.set_title(&i18n("Group messages by conversation"));
+        {
+            let sender = sender.clone();
+            threading_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleThreading(row.is_active()));
+            });
         }
+        preferences_group_1.add(&threading_row);
+        let thread_expansion_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        thread_expansion_row.set_sensitive(model.threading);
+        thread_expansion_row.set_title(&i18n("Expandable conversations"));
+        thread_expansion_row.set_subtitle(&i18n(
+            "Off, a conversation's messages show only in the reading pane.",
+        ));
+        {
+            let sender = sender.clone();
+            thread_expansion_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleThreadExpansion(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&thread_expansion_row);
+        let threads_expanded_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        threads_expanded_row.set_sensitive(model.threading && model.thread_expansion);
+        threads_expanded_row.set_title(&i18n("Expand conversations by default"));
+        {
+            let sender = sender.clone();
+            threads_expanded_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetThreadsExpanded(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&threads_expanded_row);
+        let thread_newest_first_row = adw::SwitchRow::default();
+        thread_newest_first_row.set_title(&i18n("Newest message first"));
+        thread_newest_first_row.set_subtitle(&i18n("In the reading pane."));
+        {
+            let sender = sender.clone();
+            thread_newest_first_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetThreadNewestFirst(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&thread_newest_first_row);
+        let fold_messages_row = adw::ComboRow::default();
+        fold_messages_row.set_title(&i18n("Fold earlier messages"));
+        fold_messages_row.set_subtitle(&i18n("The newest always opens."));
+        {
+            let sender = sender.clone();
+            fold_messages_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeFoldMessages(row.selected()));
+            });
+        }
+        preferences_group_1.add(&fold_messages_row);
+        let thread_row_newest_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        thread_row_newest_row.set_sensitive(model.threading);
+        thread_row_newest_row.set_title(&i18n("Show your own replies in the message list"));
+        thread_row_newest_row.set_subtitle(&i18n("Off shows the last message that arrived."));
+        {
+            let sender = sender.clone();
+            thread_row_newest_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetThreadRowNewest(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&thread_row_newest_row);
+        let reply_position_row = adw::ComboRow::default();
+        reply_position_row.set_title(&i18n("Reply editor position"));
+        reply_position_row.set_subtitle(&i18n(
+            "Following the reading order puts it where the conversation ends.",
+        ));
+        {
+            let sender = sender.clone();
+            reply_position_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeReplyPosition(row.selected()));
+            });
+        }
+        preferences_group_1.add(&reply_position_row);
+        let card_attachments_row = adw::SwitchRow::default();
+        card_attachments_row.set_title(&i18n("Attachments on each message"));
+        {
+            let sender = sender.clone();
+            card_attachments_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetCardAttachments(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&card_attachments_row);
+        let attachment_drawer_row = adw::SwitchRow::default();
+        attachment_drawer_row.set_title(&i18n("Attachment drawer"));
+        {
+            let sender = sender.clone();
+            attachment_drawer_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetAttachmentDrawer(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&attachment_drawer_row);
+        let confirm_thread_delete_row = adw::SwitchRow::default();
+        confirm_thread_delete_row.set_title(&i18n("Confirm conversation deletion"));
+        {
+            let sender = sender.clone();
+            confirm_thread_delete_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetConfirmThreadDelete(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&confirm_thread_delete_row);
+        page.add(&preferences_group_1);
         Self {
             page,
             threading_row,

@@ -20,81 +20,81 @@ pub(in crate::ui::accounts) struct AccountsPage {
 
 impl AccountsPage {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
-            page = adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Mail Accounts"),
-                    set_description: Some(
-                        i18n("Drag to reorder them in the sidebar.").as_str()
-                    ),
-                    // At the header's end, as the Tags and
-                    // Cloud Storage panels place theirs.
-                    #[wrap(Some)]
-                    set_header_suffix = &gtk::Box {
-                        set_orientation: gtk::Orientation::Horizontal,
-                        set_spacing: 6,
-                        set_valign: gtk::Align::Start,
-                        set_halign: gtk::Align::End,
-                        set_margin_start: 24,
-                        // An account just added in GNOME
-                        // Settings, without waiting for GOA
-                        // to say so.
-                        #[name = "goa_refresh_btn"]
-                        gtk::Button {
-                            set_icon_name: "view-refresh-symbolic",
-                            set_tooltip_text: Some(&i18n("Check GNOME Online Accounts for new accounts")),
-                            connect_clicked => AccountsInput::RefreshGoa,
-                        },
-                        gtk::Button {
-                            set_label: &i18n("Add Account…"),
-                            set_size_request: (130, -1),
-                            connect_clicked => AccountsInput::AddAccount,
-                        },
-                    },
-
-                    #[name = "accounts_list"]
-                    gtk::ListBox {
-                        add_css_class: "boxed-list",
-                        set_selection_mode: gtk::SelectionMode::None,
-                        connect_row_activated[sender] => move |_, row| {
-                            sender.input_sender().emit(AccountsInput::EditAccount(row.index() as usize));
-                        },
-                    },
-                },
-
-                // On This Computer (#552): folders on this computer
-                // rather than a server, offered until there is one.
-                #[name = "local_group"]
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("On This Computer"),
-                    set_description: Some(
-                        i18n("Store mail in folders that live on this computer. Move or copy mail from any account to here.").as_str()
-                    ),
-                    set_visible: false,
-                    #[wrap(Some)]
-                    set_header_suffix = &gtk::Button {
-                        set_label: &i18n("Add"),
-                        set_valign: gtk::Align::Start,
-                        connect_clicked => AccountsInput::AddLocal,
-                    },
-                },
-
-                #[name = "goa_group"]
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("GNOME Online Accounts"),
-                    set_description: Some(
-                        i18n("Mail accounts from GNOME Settings. Switch one on to use it.").as_str()
-                    ),
-                    set_visible: false,
-
-                    #[name = "goa_list"]
-                    gtk::ListBox {
-                        add_css_class: "boxed-list",
-                        set_selection_mode: gtk::SelectionMode::None,
-                    },
-                },
-            }
+        let page = adw::PreferencesPage::default();
+        let preferences_group_1 = adw::PreferencesGroup::default();
+        preferences_group_1.set_title(&i18n("Mail Accounts"));
+        preferences_group_1
+            .set_description(Some(i18n("Drag to reorder them in the sidebar.").as_str()));
+        // At the header's end, as the Tags and
+        // Cloud Storage panels place theirs.
+        let box_2 = gtk::Box::default();
+        box_2.set_orientation(gtk::Orientation::Horizontal);
+        box_2.set_spacing(6);
+        box_2.set_valign(gtk::Align::Start);
+        box_2.set_halign(gtk::Align::End);
+        box_2.set_margin_start(24);
+        // An account just added in GNOME
+        // Settings, without waiting for GOA
+        // to say so.
+        let goa_refresh_btn = gtk::Button::default();
+        goa_refresh_btn.set_icon_name("view-refresh-symbolic");
+        goa_refresh_btn
+            .set_tooltip_text(Some(&i18n("Check GNOME Online Accounts for new accounts")));
+        {
+            let sender = sender.clone();
+            goa_refresh_btn.connect_clicked(move |_| sender.input(AccountsInput::RefreshGoa));
         }
+        box_2.append(&goa_refresh_btn);
+        let button_3 = gtk::Button::default();
+        button_3.set_label(&i18n("Add Account…"));
+        button_3.set_size_request(130, -1);
+        {
+            let sender = sender.clone();
+            button_3.connect_clicked(move |_| sender.input(AccountsInput::AddAccount));
+        }
+        box_2.append(&button_3);
+        preferences_group_1.set_header_suffix(Some(&box_2));
+        let accounts_list = gtk::ListBox::default();
+        accounts_list.add_css_class("boxed-list");
+        accounts_list.set_selection_mode(gtk::SelectionMode::None);
+        {
+            let sender = sender.clone();
+            accounts_list.connect_row_activated(move |_, row| {
+                sender
+                    .input_sender()
+                    .emit(AccountsInput::EditAccount(row.index() as usize));
+            });
+        }
+        preferences_group_1.add(&accounts_list);
+        page.add(&preferences_group_1);
+        // On This Computer (#552): folders on this computer
+        // rather than a server, offered until there is one.
+        let local_group = adw::PreferencesGroup::default();
+        local_group.set_title(&i18n("On This Computer"));
+        local_group.set_description(Some(
+                        i18n("Store mail in folders that live on this computer. Move or copy mail from any account to here.").as_str()
+                    ));
+        local_group.set_visible(false);
+        let button_4 = gtk::Button::default();
+        button_4.set_label(&i18n("Add"));
+        button_4.set_valign(gtk::Align::Start);
+        {
+            let sender = sender.clone();
+            button_4.connect_clicked(move |_| sender.input(AccountsInput::AddLocal));
+        }
+        local_group.set_header_suffix(Some(&button_4));
+        page.add(&local_group);
+        let goa_group = adw::PreferencesGroup::default();
+        goa_group.set_title(&i18n("GNOME Online Accounts"));
+        goa_group.set_description(Some(
+            i18n("Mail accounts from GNOME Settings. Switch one on to use it.").as_str(),
+        ));
+        goa_group.set_visible(false);
+        let goa_list = gtk::ListBox::default();
+        goa_list.add_css_class("boxed-list");
+        goa_list.set_selection_mode(gtk::SelectionMode::None);
+        goa_group.add(&goa_list);
+        page.add(&goa_group);
         Self {
             page,
             goa_refresh_btn,

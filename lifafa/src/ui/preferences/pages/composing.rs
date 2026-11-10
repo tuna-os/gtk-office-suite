@@ -48,249 +48,255 @@ pub(in crate::ui::preferences) struct ComposingPage {
 
 impl ComposingPage {
     pub(in crate::ui::preferences) fn build(sender: &ViewSender) -> Self {
-        relm4::view! {
-            page = adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Composing"),
-
-                    #[name = "compose_inline_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Compose in the main window"),
-                        set_subtitle: &i18n("Off opens new messages in their own window."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetComposeInline(row.is_active()));
-                        },
-                    },
-
-                    #[name = "reply_inline_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Reply and forward in the main window"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetReplyInline(row.is_active()));
-                        },
-                    },
-
-                    #[name = "reply_fields_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Show From, To and Subject in the reply panel"),
-                        set_subtitle: &i18n("Off folds them behind a button."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetReplyFields(row.is_active()));
-                        },
-                    },
-
-                    #[name = "default_from_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Send new messages from"),
-                        set_subtitle: &i18n("Replies answer from the address they were sent to."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeComposeDefaultFrom(row.selected()));
-                        },
-                    },
-
-                    #[name = "paste_plain_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Paste as plain text"),
-                        set_subtitle: &i18n("Right-clicking the editor offers both either way."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetPastePlain(row.is_active()));
-                        },
-                    },
-
-                    #[name = "return_paragraph_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Return starts a new paragraph"),
-                        set_subtitle: &i18n("Shift+Return does the other."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetReturnParagraph(row.is_active()));
-                        },
-                    },
-
-                    #[name = "toolbar_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Formatting toolbar"),
-                        set_subtitle: &i18n("For new messages. The toolbar's chevron toggles it."),
-                        set_model: Some(&gtk::StringList::new(&[
-                            &i18n("Always collapsed"),
-                            &i18n("Always expanded"),
-                        ])),
-                        connect_selected_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetToolbarExpanded(row.selected() == 1));
-                        },
-                    },
-
-                    #[name = "compose_format_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Start new messages in"),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeComposeFormat(row.selected()));
-                        },
-                    },
-
-                    // Filled and connected in init: the
-                    // list grows with the fonts picked
-                    // through Other Font….
-                    #[name = "compose_font_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Font"),
-                        set_subtitle: &i18n("For rich text. Default leaves it to the recipient's own font."),
-                    },
-
-                    #[name = "compose_size_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Font size"),
-                        set_subtitle: &i18n("For rich text, in points."),
-                    },
-
-                    #[name = "compose_zoom_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Default zoom"),
-                    },
-
-                    #[name = "follow_plain_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Reply in the original's format"),
-                        set_subtitle: &i18n("Plain-text mail is answered in plain text."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetFollowPlain(row.is_active()));
-                        },
-                    },
-
-                    #[name = "signature_position_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Signature in replies"),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeSignaturePosition(row.selected()));
-                        },
-                    },
-
-                    #[name = "signature_dashes_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Separator line above the signature"),
-                        set_subtitle: &i18n("The standard “-- ” line, which other mail apps recognize."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetSignatureDashes(row.is_active()));
-                        },
-                    },
-
-                    #[name = "fold_quote_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Fold quoted text"),
-                        set_subtitle: &i18n("Replies and forwards open with the original behind •••."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetFoldQuote(row.is_active()));
-                        },
-                    },
-
-                    #[name = "undo_send_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Undo Send"),
-                        set_subtitle: &i18n("How long Undo is offered after sending."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeUndoSend(row.selected()));
-                        },
-                    },
-
-                    #[name = "request_receipts_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Request read receipts"),
-                        set_subtitle: &i18n("Not every mail app sends one."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetRequestReceipts(row.is_active()));
-                        },
-                    },
-
-                    #[name = "returned_receipts_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Returned receipts"),
-                        set_subtitle: &i18n("Sent mail shows who read it; the receipt goes here."),
-                        set_model: Some(&gtk::StringList::new(&[
-                            &i18n("Move to Trash"),
-                            &i18n("Archive"),
-                            &i18n("Keep in Inbox"),
-                        ])),
-                        connect_selected_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetReturnedReceipts(
-                                crate::ui::preferences::choices::returned_receipts_at(row.selected()),
-                            ));
-                        },
-                    },
-                },
-
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Reply Header"),
-                    set_description: Some(&i18n("{name}, {address}, {date} and {time} are filled in from the original.")),
-
-                    // Saved on Apply; the text is set and wired in build
-                    // below, beside the button that restores the default.
-                    #[name = "reply_header_row"]
-                    adw::EntryRow {
-                        set_title: &i18n("Line above the quoted message"),
-                        set_show_apply_button: true,
-                        add_suffix: reply_header_reset = &gtk::Button {
-                            set_icon_name: "edit-undo-symbolic",
-                            set_valign: gtk::Align::Center,
-                            set_tooltip_text: Some(i18n("Restore Default").as_str()),
-                            add_css_class: "flat",
-                        },
-                    },
-                },
-
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Attachment Reminder"),
-                    set_description: Some(&i18n("Send asks first when the message mentions one of these words and nothing is attached.")),
-
-                    // Saved on Apply; the text is set and wired in build
-                    // below, beside the button that restores the default.
-                    #[name = "attachment_keywords_row"]
-                    adw::EntryRow {
-                        set_title: &i18n("Words, separated by commas"),
-                        set_show_apply_button: true,
-                        add_suffix: attachment_keywords_reset = &gtk::Button {
-                            set_icon_name: "edit-undo-symbolic",
-                            set_valign: gtk::Align::Center,
-                            set_tooltip_text: Some(i18n("Restore Default").as_str()),
-                            add_css_class: "flat",
-                        },
-                    },
-                },
-
-                #[name = "spelling_group"]
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Spelling"),
-                    // The description is filled in at init with the
-                    // dictionaries the app can actually see — checking a
-                    // language without one silently checks nothing, so
-                    // honesty about what is installed beats silence.
-
-                    #[name = "spellcheck_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Check spelling as you type"),
-                        set_subtitle: &i18n("Right-click a word for corrections."),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetSpellcheck(row.is_active()));
-                        },
-                    },
-
-                    // One switch per installed dictionary, filled
-                    // in at init (#365); the subtitle names the
-                    // languages in use.
-                    #[name = "spell_lang_row"]
-                    adw::ExpanderRow {
-                        set_title: &i18n("Languages"),
-                    },
-
-                    // Words the user taught the checker ("Learn Spelling"
-                    // in the composer, or added right here). Populated
-                    // and maintained imperatively in init.
-                    #[name = "spell_words_row"]
-                    adw::ExpanderRow {
-                        set_title: &i18n("Added words"),
-                        set_subtitle: &i18n("Changes apply after a restart."),
-                    },
-                },
-            }
+        let page = adw::PreferencesPage::default();
+        let preferences_group_1 = adw::PreferencesGroup::default();
+        preferences_group_1.set_title(&i18n("Composing"));
+        let compose_inline_row = adw::SwitchRow::default();
+        compose_inline_row.set_title(&i18n("Compose in the main window"));
+        compose_inline_row.set_subtitle(&i18n("Off opens new messages in their own window."));
+        {
+            let sender = sender.clone();
+            compose_inline_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetComposeInline(row.is_active()));
+            });
         }
+        preferences_group_1.add(&compose_inline_row);
+        let reply_inline_row = adw::SwitchRow::default();
+        reply_inline_row.set_title(&i18n("Reply and forward in the main window"));
+        {
+            let sender = sender.clone();
+            reply_inline_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetReplyInline(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&reply_inline_row);
+        let reply_fields_row = adw::SwitchRow::default();
+        reply_fields_row.set_title(&i18n("Show From, To and Subject in the reply panel"));
+        reply_fields_row.set_subtitle(&i18n("Off folds them behind a button."));
+        {
+            let sender = sender.clone();
+            reply_fields_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetReplyFields(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&reply_fields_row);
+        let default_from_row = adw::ComboRow::default();
+        default_from_row.set_title(&i18n("Send new messages from"));
+        default_from_row.set_subtitle(&i18n("Replies answer from the address they were sent to."));
+        {
+            let sender = sender.clone();
+            default_from_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeComposeDefaultFrom(row.selected()));
+            });
+        }
+        preferences_group_1.add(&default_from_row);
+        let paste_plain_row = adw::SwitchRow::default();
+        paste_plain_row.set_title(&i18n("Paste as plain text"));
+        paste_plain_row.set_subtitle(&i18n("Right-clicking the editor offers both either way."));
+        {
+            let sender = sender.clone();
+            paste_plain_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetPastePlain(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&paste_plain_row);
+        let return_paragraph_row = adw::SwitchRow::default();
+        return_paragraph_row.set_title(&i18n("Return starts a new paragraph"));
+        return_paragraph_row.set_subtitle(&i18n("Shift+Return does the other."));
+        {
+            let sender = sender.clone();
+            return_paragraph_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetReturnParagraph(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&return_paragraph_row);
+        let toolbar_row = adw::ComboRow::default();
+        toolbar_row.set_title(&i18n("Formatting toolbar"));
+        toolbar_row.set_subtitle(&i18n("For new messages. The toolbar's chevron toggles it."));
+        toolbar_row.set_model(Some(&gtk::StringList::new(&[
+            &i18n("Always collapsed"),
+            &i18n("Always expanded"),
+        ])));
+        {
+            let sender = sender.clone();
+            toolbar_row.connect_selected_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetToolbarExpanded(row.selected() == 1));
+            });
+        }
+        preferences_group_1.add(&toolbar_row);
+        let compose_format_row = adw::ComboRow::default();
+        compose_format_row.set_title(&i18n("Start new messages in"));
+        {
+            let sender = sender.clone();
+            compose_format_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeComposeFormat(row.selected()));
+            });
+        }
+        preferences_group_1.add(&compose_format_row);
+        // Filled and connected in init: the
+        // list grows with the fonts picked
+        // through Other Font….
+        let compose_font_row = adw::ComboRow::default();
+        compose_font_row.set_title(&i18n("Font"));
+        compose_font_row.set_subtitle(&i18n(
+            "For rich text. Default leaves it to the recipient's own font.",
+        ));
+        preferences_group_1.add(&compose_font_row);
+        let compose_size_row = adw::ComboRow::default();
+        compose_size_row.set_title(&i18n("Font size"));
+        compose_size_row.set_subtitle(&i18n("For rich text, in points."));
+        preferences_group_1.add(&compose_size_row);
+        let compose_zoom_row = adw::ComboRow::default();
+        compose_zoom_row.set_title(&i18n("Default zoom"));
+        preferences_group_1.add(&compose_zoom_row);
+        let follow_plain_row = adw::SwitchRow::default();
+        follow_plain_row.set_title(&i18n("Reply in the original's format"));
+        follow_plain_row.set_subtitle(&i18n("Plain-text mail is answered in plain text."));
+        {
+            let sender = sender.clone();
+            follow_plain_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetFollowPlain(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&follow_plain_row);
+        let signature_position_row = adw::ComboRow::default();
+        signature_position_row.set_title(&i18n("Signature in replies"));
+        {
+            let sender = sender.clone();
+            signature_position_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeSignaturePosition(row.selected()));
+            });
+        }
+        preferences_group_1.add(&signature_position_row);
+        let signature_dashes_row = adw::SwitchRow::default();
+        signature_dashes_row.set_title(&i18n("Separator line above the signature"));
+        signature_dashes_row.set_subtitle(&i18n(
+            "The standard “-- ” line, which other mail apps recognize.",
+        ));
+        {
+            let sender = sender.clone();
+            signature_dashes_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetSignatureDashes(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&signature_dashes_row);
+        let fold_quote_row = adw::SwitchRow::default();
+        fold_quote_row.set_title(&i18n("Fold quoted text"));
+        fold_quote_row.set_subtitle(&i18n(
+            "Replies and forwards open with the original behind •••.",
+        ));
+        {
+            let sender = sender.clone();
+            fold_quote_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetFoldQuote(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&fold_quote_row);
+        let undo_send_row = adw::ComboRow::default();
+        undo_send_row.set_title(&i18n("Undo Send"));
+        undo_send_row.set_subtitle(&i18n("How long Undo is offered after sending."));
+        {
+            let sender = sender.clone();
+            undo_send_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeUndoSend(row.selected()));
+            });
+        }
+        preferences_group_1.add(&undo_send_row);
+        let request_receipts_row = adw::SwitchRow::default();
+        request_receipts_row.set_title(&i18n("Request read receipts"));
+        request_receipts_row.set_subtitle(&i18n("Not every mail app sends one."));
+        {
+            let sender = sender.clone();
+            request_receipts_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetRequestReceipts(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&request_receipts_row);
+        let returned_receipts_row = adw::ComboRow::default();
+        returned_receipts_row.set_title(&i18n("Returned receipts"));
+        returned_receipts_row
+            .set_subtitle(&i18n("Sent mail shows who read it; the receipt goes here."));
+        returned_receipts_row.set_model(Some(&gtk::StringList::new(&[
+            &i18n("Move to Trash"),
+            &i18n("Archive"),
+            &i18n("Keep in Inbox"),
+        ])));
+        {
+            let sender = sender.clone();
+            returned_receipts_row.connect_selected_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetReturnedReceipts(
+                    crate::ui::preferences::choices::returned_receipts_at(row.selected()),
+                ));
+            });
+        }
+        preferences_group_1.add(&returned_receipts_row);
+        page.add(&preferences_group_1);
+        let preferences_group_2 = adw::PreferencesGroup::default();
+        preferences_group_2.set_title(&i18n("Reply Header"));
+        preferences_group_2.set_description(Some(&i18n(
+            "{name}, {address}, {date} and {time} are filled in from the original.",
+        )));
+        // Saved on Apply; the text is set and wired in build
+        // below, beside the button that restores the default.
+        let reply_header_row = adw::EntryRow::default();
+        reply_header_row.set_title(&i18n("Line above the quoted message"));
+        reply_header_row.set_show_apply_button(true);
+        let reply_header_reset = gtk::Button::default();
+        reply_header_reset.set_icon_name("edit-undo-symbolic");
+        reply_header_reset.set_valign(gtk::Align::Center);
+        reply_header_reset.set_tooltip_text(Some(i18n("Restore Default").as_str()));
+        reply_header_reset.add_css_class("flat");
+        reply_header_row.add_suffix(&reply_header_reset);
+        preferences_group_2.add(&reply_header_row);
+        page.add(&preferences_group_2);
+        let preferences_group_3 = adw::PreferencesGroup::default();
+        preferences_group_3.set_title(&i18n("Attachment Reminder"));
+        preferences_group_3.set_description(Some(&i18n(
+            "Send asks first when the message mentions one of these words and nothing is attached.",
+        )));
+        // Saved on Apply; the text is set and wired in build
+        // below, beside the button that restores the default.
+        let attachment_keywords_row = adw::EntryRow::default();
+        attachment_keywords_row.set_title(&i18n("Words, separated by commas"));
+        attachment_keywords_row.set_show_apply_button(true);
+        let attachment_keywords_reset = gtk::Button::default();
+        attachment_keywords_reset.set_icon_name("edit-undo-symbolic");
+        attachment_keywords_reset.set_valign(gtk::Align::Center);
+        attachment_keywords_reset.set_tooltip_text(Some(i18n("Restore Default").as_str()));
+        attachment_keywords_reset.add_css_class("flat");
+        attachment_keywords_row.add_suffix(&attachment_keywords_reset);
+        preferences_group_3.add(&attachment_keywords_row);
+        page.add(&preferences_group_3);
+        let spelling_group = adw::PreferencesGroup::default();
+        spelling_group.set_title(&i18n("Spelling"));
+        // The description is filled in at init with the
+        // dictionaries the app can actually see — checking a
+        // language without one silently checks nothing, so
+        // honesty about what is installed beats silence.
+        let spellcheck_row = adw::SwitchRow::default();
+        spellcheck_row.set_title(&i18n("Check spelling as you type"));
+        spellcheck_row.set_subtitle(&i18n("Right-click a word for corrections."));
+        {
+            let sender = sender.clone();
+            spellcheck_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetSpellcheck(row.is_active()));
+            });
+        }
+        spelling_group.add(&spellcheck_row);
+        // One switch per installed dictionary, filled
+        // in at init (#365); the subtitle names the
+        // languages in use.
+        let spell_lang_row = adw::ExpanderRow::default();
+        spell_lang_row.set_title(&i18n("Languages"));
+        spelling_group.add(&spell_lang_row);
+        // Words the user taught the checker ("Learn Spelling"
+        // in the composer, or added right here). Populated
+        // and maintained imperatively in init.
+        let spell_words_row = adw::ExpanderRow::default();
+        spell_words_row.set_title(&i18n("Added words"));
+        spell_words_row.set_subtitle(&i18n("Changes apply after a restart."));
+        spelling_group.add(&spell_words_row);
+        page.add(&spelling_group);
         page.add(&super::super::grammar::group());
         let reply_header_saved = Rc::new(RefCell::new(String::new()));
         wire_reply_header(
