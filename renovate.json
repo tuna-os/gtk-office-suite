@@ -38,6 +38,47 @@
       "allowedVersions": "<0.16.3",
       "groupName": "rdocx family",
       "groupSlug": "rdocx-family"
+    },
+    {
+      "description": "Lifafa (lifafa/, its own lock): html5ever and markup5ever_rcdom move together, because RcDom implements only its own html5ever release's TreeSink, so a lone html5ever bump does not build (#2060).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "html5ever",
+        "markup5ever_rcdom"
+      ],
+      "groupName": "lifafa html5ever",
+      "groupSlug": "lifafa-html5ever"
+    },
+    {
+      "description": "Lifafa stays on the cairo-rs that its gtk4 0.9 and pangocairo 0.20 use; a newer one is a second cairo whose surfaces the toolkit cannot draw. Lift with Lifafa's gtk4 move (#2025).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "cairo-rs"
+      ],
+      "allowedVersions": "<0.21"
+    },
+    {
+      "description": "Lifafa's IMAP worker uses imap-proto types that async-imap 0.12 reshaped; hold at 0.10 until the worker is ported (#1986).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "async-imap"
+      ],
+      "allowedVersions": "<0.11"
     }
   ]
 }
