@@ -740,7 +740,7 @@
         {
             let state = controller.state.borrow();
             let sheet = state.sheet();
-            assert_eq!((sheet.cell(0, 0), sheet.cell(1, 0), sheet.cell(2, 0)), ("1".into(), "2".into(), "3".into()));
+            assert_eq!((sheet.cell(0, 0), sheet.cell(1, 0), sheet.cell(2, 0)), ("1", "2", "3"));
             assert_eq!(sheet.cell_protections[0][0], unlocked, "the unlocked cell moved with its row");
             assert_eq!(sheet.cell_protections[1][1], hidden, "the hidden formula flag moved with its row");
             assert_eq!(sheet.cell_protections[2][0], CellProtection::default());
