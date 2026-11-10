@@ -13,7 +13,7 @@
     "--socket=wayland",
     "--device=dri",
     "--filesystem=xdg-documents",
-    "--filesystem=/run/user",
+    "--filesystem=xdg-run/gvfs",
     "--own-name=org.tunaos.letters"
   ],
   "build-options": {
