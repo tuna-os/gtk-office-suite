@@ -1,0 +1,14 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/rcgen-7c751afae7348739.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/certificate.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/crl.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/csr.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/error.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/key_pair.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/oid.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/ring_like.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/sign_algo.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/string.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/librcgen-7c751afae7348739.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/certificate.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/crl.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/csr.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/error.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/key_pair.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/oid.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/ring_like.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/sign_algo.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/string.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/certificate.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/crl.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/csr.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/error.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/key_pair.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/oid.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/ring_like.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/sign_algo.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rcgen-0.14.10/src/string.rs:
