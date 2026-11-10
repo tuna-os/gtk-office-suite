@@ -661,6 +661,9 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     let props = read_sheet_props_from_ods(path);
     for sheet in &mut sheets {
         let Some(p) = props.get(&sheet.name) else { continue };
+        if let Some(setup) = &p.page_setup {
+            sheet.page_setup = setup.clone();
+        }
         if let Some((family, size)) = &p.default_font {
             (sheet.default_font_family, sheet.default_font_size) = (family.clone(), *size);
         }
@@ -889,6 +892,25 @@ mod tests {
         assert_eq!(sheets[3].protection, protected);
         assert_eq!(sheets[4].protection, element);
         assert_eq!(sheets[5].protection, element);
+    }
+
+    /// Print scale and fit-to-page come from `<pageSetup scale>` and
+    /// `<sheetPr><pageSetUpPr fitToPage>`; fitToWidth/fitToHeight default to
+    /// 1 and 0 means no limit. A scale outside 10–400% prints at 100%.
+    #[test]
+    fn xlsx_imports_print_scale_and_fit_to_page() {
+        let path = protection_fixture(
+            r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="1"><xf/></cellXfs></styleSheet>"#,
+            &[
+                ("Scaled", r#"<sheetData/><pageSetup paperSize="9" scale="46" orientation="portrait"/>"#),
+                ("OneWide", r#"<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetData/><pageSetup scale="62" fitToHeight="0"/>"#),
+                ("FlagOnly", r#"<sheetPr><pageSetUpPr fitToPage="true"/></sheetPr><sheetData/>"#),
+                ("Off", r#"<sheetPr><pageSetUpPr fitToPage="0"/></sheetPr><sheetData/><pageSetup scale="5" fitToWidth="2"/>"#),
+            ],
+        );
+        let (_, sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        let got: Vec<_> = sheets.iter().map(|s| (s.page_setup.scale, s.page_setup.fit_to_pages)).collect();
+        assert_eq!(got, vec![(0.46, None), (0.62, Some((1, 0))), (1.0, Some((1, 1))), (1.0, None)]);
     }
 
     // ── build_named_workbook unit tests ───────────────────────────────────

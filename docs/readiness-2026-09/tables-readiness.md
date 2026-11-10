@@ -88,9 +88,15 @@ Work in this order; unchecked gates remain requirements, not claims:
      XLSX keeps them (ledger claim `tables.chart.multi-series-edit`). Still
      open: choosing series and ranges by hand, placement, and a Calc rewrite
      of a generated multi-series chart.
-   - [ ] Expose pivots only with clear refresh/source/output semantics and
+   - [x] Expose pivots only with clear refresh/source/output semantics and
      undo. Until pivot definitions persist, label output as a static summary
      and warn about definition loss; do not market it as Excel pivot fidelity.
+     Insert Pivot Table chooses rows, an optional column field, the summary
+     and the placement; Refresh Pivot Tables rewrites a pivot from its source,
+     each as one undo step; the dialog and the save warning say the
+     definition is not kept on save (ledger claim `tables.pivot.dialog-refresh`,
+     #1657). Still open: an OOXML or ODS pivot definition round trip, and
+     more than one field per area from the dialog.
 5. **Daily-driver graduation on an exact packaged revision.**
    - [ ] Run real budgeting, expense-list, multi-sheet reporting and chart
      workflows from fresh Flatpak install through save, restart and reopen.
@@ -218,7 +224,7 @@ Work in this order; unchecked gates remain requirements, not claims:
       LibreOffice and diff images: labels and values match, with SSIM 0.844, 93.3% word recall and 2.76pt displacement. The baseline
       now records this fixture green for A/B; the full report has 58 green, 4 amber and 0 red in both tiers (one Letters and three
       Tables fixtures remain amber).
-      This remains open: pivot controls are not exposed in the GUI. The
+      Pivot controls are now in the GUI (Insert Pivot Table and Refresh Pivot Tables, #1657). The
       chart dialog builds one value series from the selected column and uses
       column A as categories. XLSX export can write multiple series, axis
       titles and legend position, but import keeps one category/value range,
@@ -226,13 +232,12 @@ Work in this order; unchecked gates remain requirements, not claims:
       and modeled permission bits across the real path (#1552, evidence above); password hashes and other credential
       material remain explicitly non-round-tripped with a consent warning, never treated as encryption. These
       chart/protection round trips are XLSX-only;
-      other offered document formats are not writable. Dynamic-array evidence is
-      deliberately narrower: engine tests cover only `SEQUENCE(3)` and a
-      blocked `SEQUENCE(2,2)` spill. Grid projection is bounded to the
-      `TablesEngine`'s configured rows and columns; no function-by-function
-      dynamic-array inventory or upstream shape/size ceiling has been
-      established. The static formula-suggestion catalog is not a runtime
-      support matrix.
+      other offered document formats are not writable. Dynamic arrays are
+      held to the measured inventory in `docs/TABLES-DYNAMIC-ARRAYS.md`
+      (#1659): the admitted functions and shapes, `#SPILL!` and `#CALC!`,
+      recalculation, undo and XLSX save and reopen, with the grid-edge clip
+      and the missing spill reference operator pinned as limits. The static
+      formula-suggestion catalog is not a runtime support matrix.
 
 Dependencies: P0 save durability, #354, #374, #400. Exit: passing XLSX create/edit/save/reopen journeys and honest import/export capabilities for every offered extension; no unsupported format is silently overwritten.
 

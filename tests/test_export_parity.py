@@ -279,7 +279,7 @@ class ReportsSkipCancelledRuns(unittest.TestCase):
         jobs = wf["jobs"]
         reports = {name: job for name, job in jobs.items()
                    if any(n in ("lab", "export-lab") for n in ([job.get("needs")] if isinstance(job.get("needs"), str) else job.get("needs") or []))}
-        self.assertEqual(sorted(reports), ["export-report", "report"])
+        self.assertEqual(sorted(reports), ["export-report", "export-report-post", "report", "report-post"])
         for name, job in reports.items():
             with self.subTest(job=name):
                 self.assertIn("!cancelled()", str(job.get("if", "")), f"{name} would compare a cancelled run's partial captures")

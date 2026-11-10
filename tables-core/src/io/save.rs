@@ -395,6 +395,17 @@ pub fn save_sheets_to_xlsx_bytes(
                 -1.0, // header/footer margins: leave at Excel's own default
                 -1.0,
             );
+            // Fit-to-page wins over a scale: Excel ignores `scale` while
+            // `fitToPage` is set. 100% is the default, so it is not written.
+            if let Some((wide, tall)) = sh.page_setup.fit_to_pages {
+                let pages = |n: u32| u16::try_from(n).unwrap_or(u16::MAX);
+                sheet.set_print_fit_to_pages(pages(wide), pages(tall));
+            } else {
+                let pct = (sh.page_setup.scale * 100.0).round();
+                if (10.0..=400.0).contains(&pct) && pct != 100.0 {
+                    sheet.set_print_scale(pct as u16);
+                }
+            }
         }
 
         // Priority order (TBL-003): the writer numbers rules in the order
@@ -1087,6 +1098,30 @@ mod tests {
         assert_eq!(loaded_s2.print_area, None, "Sheet2 must not inherit Sheet1's print area");
         assert!(!loaded_s2.is_row_hidden(3));
         assert!(!loaded_s2.is_col_hidden(4));
+    }
+
+    /// Print scale and fit-to-page survive a save and reload; they used to
+    /// be dropped, so a sheet set to 46% or one page wide came back at 100%.
+    #[test]
+    fn print_scale_and_fit_to_page_round_trip_through_xlsx() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scale.xlsx");
+        let setups = [(0.46, None), (1.0, Some((1, 0))), (1.0, Some((2, 3))), (1.0, None)];
+        let sheets: Vec<_> = setups
+            .iter()
+            .enumerate()
+            .map(|(i, &(scale, fit))| {
+                let mut s = SheetModel::new(&format!("Sheet{}", i + 1), 3, 3, i as u32);
+                s.page_setup.scale = scale;
+                s.page_setup.fit_to_pages = fit;
+                s
+            })
+            .collect();
+        save_sheets_to_xlsx(path.to_str().unwrap(), &sheets).unwrap();
+
+        let (_engine, loaded) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        let got: Vec<_> = loaded.iter().map(|s| (s.page_setup.scale, s.page_setup.fit_to_pages)).collect();
+        assert_eq!(got, setups.to_vec());
     }
 
     #[test]

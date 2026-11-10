@@ -265,7 +265,7 @@ pub(crate) fn show_page_setup_dialog(
     let ctl = controller.clone();
     let grid = grid.clone();
     suite_common::page_setup::show(parent, page_of(&current), move |page| {
-        crate::sheet_actions::apply(&ctl, &grid, |c| c.set_page_setup(setup_of(&page, current.scale)));
+        crate::sheet_actions::apply(&ctl, &grid, |c| c.set_page_setup(setup_of(&page, &current)));
     });
 }
 
@@ -287,8 +287,9 @@ fn page_of(setup: &suite_common::print::PageSetup) -> suite_common::page_setup::
 }
 
 /// The dialog's page as a sheet's page setup: a named size when it is one,
-/// turned for its orientation.
-fn setup_of(page: &suite_common::page_setup::Page, scale: f64) -> suite_common::print::PageSetup {
+/// turned for its orientation. The dialog has no scale or fit-to-page, so
+/// those are kept from `current` rather than reset.
+fn setup_of(page: &suite_common::page_setup::Page, current: &suite_common::print::PageSetup) -> suite_common::print::PageSetup {
     use suite_common::print::{Orientation, PageSetup, PageSize};
     let landscape = page.width_pt > page.height_pt;
     let (short, long) = if landscape { (page.height_pt, page.width_pt) } else { (page.width_pt, page.height_pt) };
@@ -308,7 +309,8 @@ fn setup_of(page: &suite_common::page_setup::Page, scale: f64) -> suite_common::
         margin_bottom_mm: mm(page.margin_bottom_pt),
         margin_left_mm: mm(page.margin_left_pt),
         margin_right_mm: mm(page.margin_right_pt),
-        scale,
+        scale: current.scale,
+        fit_to_pages: current.fit_to_pages,
     }
 }
 
@@ -358,14 +360,26 @@ mod tests {
 
     /// A sheet's page setup goes through the shared dialog's page and back
     /// unchanged: named sizes stay named, landscape stays landscape, and
-    /// each side keeps its own margin.
+    /// each side keeps its own margin, and the scale and fit-to-page the
+    /// dialog does not show are kept.
     #[test]
     fn a_page_setup_round_trips_through_the_dialogs_page() {
         for (size, orientation) in [(PageSize::A4, Orientation::Portrait), (PageSize::Letter, Orientation::Landscape), (PageSize::Legal, Orientation::Portrait)] {
-            let setup = PageSetup { size, orientation, margin_top_mm: 20.0, margin_bottom_mm: 15.0, margin_left_mm: 10.0, margin_right_mm: 12.5, scale: 0.9 };
-            assert_eq!(setup_of(&page_of(&setup), 0.9), setup);
+            let setup = PageSetup { size, orientation, margin_top_mm: 20.0, margin_bottom_mm: 15.0, margin_left_mm: 10.0, margin_right_mm: 12.5, scale: 0.9, fit_to_pages: Some((1, 0)) };
+            assert_eq!(setup_of(&page_of(&setup), &setup), setup);
         }
         let a5 = suite_common::page_setup::Page { width_pt: 419.53, height_pt: 595.28, margin_top_pt: 72.0, margin_bottom_pt: 72.0, margin_left_pt: 72.0, margin_right_pt: 72.0 };
-        assert!(matches!(setup_of(&a5, 1.0).size, PageSize::Custom { .. }), "a size with no name is kept as a custom one");
+        assert!(matches!(setup_of(&a5, &PageSetup::default()).size, PageSize::Custom { .. }), "a size with no name is kept as a custom one");
+    }
+
+    /// Changing the page in the dialog must not reset a scale or fit-to-page
+    /// loaded from the file (they used to be dropped on save).
+    #[test]
+    fn the_dialog_keeps_the_sheets_scale_and_fit_to_page() {
+        let current = PageSetup { scale: 0.46, fit_to_pages: Some((2, 3)), ..PageSetup::default() };
+        let landscape = PageSetup { orientation: Orientation::Landscape, ..PageSetup::default() };
+        let setup = setup_of(&page_of(&landscape), &current);
+        assert_eq!(setup.orientation, Orientation::Landscape);
+        assert_eq!((setup.scale, setup.fit_to_pages), (0.46, Some((2, 3))));
     }
 }
