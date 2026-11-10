@@ -32,6 +32,7 @@
 
 ### Infrastructure
 - Lifafa, the email client, is now built and tested in CI (in a Fedora 43 container, since it needs libadwaita 1.7 and WebKitGTK 6.0), and its lockfile has its own RustSec gate, which also runs daily. Its lock moves to patched rustls-webpki, webpki-roots, event-listener and pulldown-cmark, and off two yanked crates (#1986).
+- Lifafa builds again after three automerged dependency bumps broke it: html5ever and markup5ever_rcdom are both on 0.40 (two name comparisons made unambiguous for it), mail-parser goes back to 0.9 until its 0.11 port, and Renovate no longer automerges anything in lifafa/, groups html5ever with markup5ever_rcdom, and stops proposing lone bumps of Lifafa's toolkit (gtk4, libadwaita, relm4, webkit6, pangocairo, cairo-rs), async-imap or mail-parser (#2060, #2066, #2067).
 - Fuzzing now covers the collaboration byte paths as well as the document importers: the sidecar protocol codec, dcp-core's update ingest and its package check, each in the nightly smoke run.
 ### Decks
 - A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
