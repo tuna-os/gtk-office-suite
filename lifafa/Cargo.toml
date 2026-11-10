@@ -97,7 +97,7 @@ base64 = "0.23"
 getrandom = "0.4"
 
 # Gravatar (opt-in): MD5 of the email + a simple blocking HTTPS fetch
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "3", features = ["json"] }
 serde_json = "1"
 
 # GNOME Contacts integration via Evolution Data Server (D-Bus)
