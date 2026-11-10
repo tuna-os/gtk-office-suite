@@ -151,7 +151,10 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
             Engine::Text
         }
         Some(Category::Spreadsheet)
-            if matches!(plan.to, Format::Xlsx | Format::Csv | Format::Pdf) =>
+            if matches!(
+                plan.to,
+                Format::Xlsx | Format::Csv | Format::Pdf | Format::Html
+            ) =>
         {
             Engine::Sheet
         }
@@ -231,6 +234,10 @@ fn sheet(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> 
             )
             .map_err(|e| Failure::new(Exit::Convert, e))?;
         }
+        Format::Html => {
+            std::fs::write(staged, html(&sheets))
+                .map_err(|e| Failure::new(Exit::Convert, format!("writing html: {e}")))?;
+        }
         Format::Csv | Format::Pdf => {
             // One table: the first sheet, as the values it displays.
             if sheets.len() > 1 {
@@ -260,9 +267,40 @@ fn sheet(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> 
                     .map_err(|e| Failure::new(Exit::Convert, format!("writing csv: {e}")))?;
             }
         }
-        _ => unreachable!("convert() routes only xlsx, csv and pdf here"),
+        _ => unreachable!("convert() routes only xlsx, csv, pdf and html here"),
     }
     Ok(found)
+}
+
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// A standalone HTML page: one table per sheet, each under its name, holding
+/// the values the sheet displays.
+pub fn html(sheets: &[tables_core::sheet::SheetModel]) -> String {
+    let mut out = String::from("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Spreadsheet</title></head><body>\n");
+    for sheet in sheets {
+        out.push_str(&format!(
+            "<h2>{}</h2>\n<table border=\"1\">\n",
+            escape_html(&sheet.name)
+        ));
+        if let Some((last_row, last_col)) = sheet.used_extent() {
+            for r in 0..=last_row {
+                out.push_str("<tr>");
+                for c in 0..=last_col {
+                    out.push_str(&format!("<td>{}</td>", escape_html(sheet.cell(r, c))));
+                }
+                out.push_str("</tr>\n");
+            }
+        }
+        out.push_str("</table>\n");
+    }
+    out.push_str("</body></html>\n");
+    out
 }
 
 /// RFC 4180 text of a sheet's used range.

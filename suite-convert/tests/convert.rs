@@ -120,3 +120,17 @@ fn a_presentation_round_trips_between_pptx_and_odp() {
     assert_eq!(code(&run(&[&odp, &back])), 0);
     assert!(std::path::Path::new(&back).is_file());
 }
+
+#[test]
+fn a_spreadsheet_converts_to_escaped_html() {
+    let dir = tempfile::tempdir().unwrap();
+    let csv = write(dir.path(), "a.csv", "x,y\n\"<b>\",2\n");
+    let html = dir.path().join("a.html").to_string_lossy().into_owned();
+    let o = run(&[&csv, &html]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let text = std::fs::read_to_string(&html).unwrap();
+    assert!(
+        text.contains("<td>&lt;b&gt;</td>") && text.contains("<td>2</td>"),
+        "{text}"
+    );
+}
