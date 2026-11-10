@@ -238,73 +238,73 @@ pub(crate) struct Sidebar {
     reveal_accounts_late: bool,
 }
 
-#[relm4::component(pub(crate))]
+/// The sidebar's fixed frame: the boxes its per-account sections are
+/// rebuilt into, and the freeze-frame over them. The submodules read these
+/// by field when they rebuild; this is what `#[relm4::component]`'s `view!`
+/// block used to generate.
+pub(crate) struct SidebarWidgets {
+    body_overlay: gtk::Overlay,
+    pinned_box: gtk::Box,
+    sidebar_scroller: gtk::ScrolledWindow,
+    normal_box: gtk::Box,
+    footer_box: gtk::Box,
+    freeze_frame: gtk::Picture,
+}
+
+fn build_widgets(root: &gtk::Box) -> SidebarWidgets {
+    root.set_orientation(gtk::Orientation::Vertical);
+
+    // The top block (compose bar, All Inboxes) is pinned above the scroller
+    // so it never scrolls away; only the per-account sections below scroll.
+    // Contacts/Attachments pin below it, in the footer.
+    let pinned_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    // External, not Never (see the message list's scroller): row content, a
+    // deeply indented folder tree, say, must not force the window's minimum
+    // width past what edge-tiling allows. The split view's min/max sidebar
+    // widths govern instead.
+    let normal_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let sidebar_scroller = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .child(&normal_box)
+        .build();
+    // Pinned footer, below the scroller: the Contacts and Attachments rows
+    // stay put against the sidebar's bottom edge no matter how tall the
+    // account list above grows.
+    let footer_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    column.append(&pinned_box);
+    column.append(&sidebar_scroller);
+    column.append(&footer_box);
+
+    // Freeze-frame for rebuilds: the sidebar's last-rendered pixels, shown
+    // over the swap so recreating every row never shimmers. Anchored at the
+    // start and sized to the pixels it holds, so the pane animating to or
+    // from the rail beneath it can never stretch or squash the picture (the
+    // overlay clips it instead).
+    let freeze_frame = gtk::Picture::builder()
+        .visible(false)
+        .can_target(false)
+        .halign(gtk::Align::Start)
+        .content_fit(gtk::ContentFit::Fill)
+        .build();
+    let body_overlay = gtk::Overlay::builder().vexpand(true).child(&column).build();
+    body_overlay.add_overlay(&freeze_frame);
+    root.append(&body_overlay);
+
+    SidebarWidgets { body_overlay, pinned_box, sidebar_scroller, normal_box, footer_box, freeze_frame }
+}
+
 impl Component for Sidebar {
     type Init = SidebarInit;
     type Input = SidebarInput;
     type Output = SidebarOutput;
     type CommandOutput = ();
+    type Root = gtk::Box;
+    type Widgets = SidebarWidgets;
 
-    view! {
-        gtk::Box {
-            set_orientation: gtk::Orientation::Vertical,
-
-            #[name = "body_overlay"]
-            gtk::Overlay {
-                set_vexpand: true,
-
-                // The top block (compose bar, All Inboxes) is pinned above
-                // the scroller so it never scrolls away; only the per-account
-                // sections below scroll. Contacts/Attachments pin below it,
-                // in the footer.
-                #[wrap(Some)]
-                set_child = &gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-
-                    #[name = "pinned_box"]
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                    },
-
-                    #[name = "sidebar_scroller"]
-                    gtk::ScrolledWindow {
-                        set_vexpand: true,
-                        // External, not Never (see the message list's scroller): row
-                        // content — a deeply indented folder tree, say — must not force
-                        // the window's minimum width past what edge-tiling allows. The
-                        // split view's min/max sidebar widths govern instead.
-                        set_hscrollbar_policy: gtk::PolicyType::External,
-
-                        #[name = "normal_box"]
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                        },
-                    },
-
-                    // Pinned footer, below the scroller: the Contacts and
-                    // Attachments rows stay put against the sidebar's bottom
-                    // edge no matter how tall the account list above grows.
-                    #[name = "footer_box"]
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                    },
-                },
-
-                // Freeze-frame for rebuilds: the sidebar's last-rendered pixels,
-                // shown over the swap so recreating every row never shimmers.
-                // Anchored at the start and sized to the pixels it holds, so
-                // the pane animating to or from the rail beneath it can never
-                // stretch or squash the picture (the overlay clips it instead).
-                #[name = "freeze_frame"]
-                add_overlay = &gtk::Picture {
-                    set_visible: false,
-                    set_can_target: false,
-                    set_halign: gtk::Align::Start,
-                    set_content_fit: gtk::ContentFit::Fill,
-                },
-            },
-
-        }
+    fn init_root() -> Self::Root {
+        gtk::Box::new(gtk::Orientation::Vertical, 0)
     }
 
     fn init(
@@ -413,7 +413,7 @@ impl Component for Sidebar {
             reveal_accounts_late: false,
         };
 
-        let widgets = view_output!();
+        let widgets = build_widgets(&root);
         model.freeze_frame = Some(widgets.freeze_frame.clone());
         widgets
             .body_overlay
