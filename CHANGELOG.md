@@ -14,6 +14,7 @@
 - Misspelled words get their red wavy underline in the page view again. The spell checker found them, but only the old editor drew the underline; it still leaves print and PDF alone (#1894).
 - Typing quickly in a long document no longer queues a whole-document spell check and word count for every keystroke: each runs once when typing pauses (#1990).
 - A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
+- Footnotes are saved to DOCX the way Word writes them, with the note's number mark and a space before its text, and read back without that space. Opening an ODT whose footnote starts with a space, as LibreOffice writes one converted from Word, no longer moves the space into the paragraph that references the note (#1868).
 
 ### Tables
 - Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written where Place At says, two columns to the right by default, as one undo step. Refresh Pivot Tables (cell menu and command palette) rewrites the sheet's pivot tables from their sources after the data changes, as one undo step. Results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
@@ -31,6 +32,7 @@
 - Links on slide text to a web or mail address survive opening and saving, in PowerPoint and ODF files and in table cells. They used to be dropped on save, with a warning. Jumps to another slide, click actions and links on a whole shape still warn before a save drops them (#1998).
 
 ### Infrastructure
+- rdocx moves to 0.17, which takes pulldown-cmark 0.13.6, so the suite's and the fuzz targets' locks leave pulldown-cmark 0.13.4 and the RustSec waivers for RUSTSEC-2026-0433 and RUSTSEC-2026-0414 are gone (#1868, #1798).
 - Lifafa, the email client, is now built and tested in CI (in a Fedora 43 container, since it needs libadwaita 1.7 and WebKitGTK 6.0), and its lockfile has its own RustSec gate, which also runs daily. Its lock moves to patched rustls-webpki, webpki-roots, event-listener and pulldown-cmark, and off two yanked crates (#1986).
 - Lifafa's mail cache moves to rusqlite 0.41, whose bundled SQLite has the fix for RUSTSEC-2026-0459 (#1986).
 - Every Rust lockfile in the repository (the suite's, collab's, collab/headless's and Lifafa's) now has its dependencies' licences checked against one list of GPL- and AGPL-compatible licences, alongside the advisory check; AGPL-3.0-or-later is allowed for Lifafa alone. Lifafa's About window links the suite's own copy of its source, names Hylki as the app it is based on, and states the licence as AGPL v3 or later (#1975).

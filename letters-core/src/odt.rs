@@ -4127,6 +4127,18 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         f.href = attr_val(&e, "xlink:href");
                     }
                 }
+                // Inside a note, spacing belongs to the note's text, not to
+                // the paragraph that carries the reference: Writer writes
+                // the space after a Word note's mark as `<text:s/>`.
+                "text:s" | "text:tab" | "text:line-break" if note.is_some() => {
+                    if let Some(n) = note.as_mut().filter(|_| !in_citation) {
+                        match e.name().as_ref() {
+                            "text:s" => n.push_str(&" ".repeat(attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).min(1024))),
+                            "text:tab" => n.push('\t'),
+                            _ => n.push('\n'),
+                        }
+                    }
+                }
                 "text:s" if chip.is_some() => {
                     let n = attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
                     if let Some(c) = chip.as_mut() { c.1.push_str(&" ".repeat(n)); }
@@ -4179,7 +4191,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
             }
             Ok(Event::GeneralRef(r)) => {
-                if let Some(c) = chip.as_mut() {
+                if let Some(n) = note.as_mut() {
+                    if !in_citation {
+                        n.push_str(&resolve_general_ref(&r));
+                    }
+                } else if let Some(c) = chip.as_mut() {
                     c.1.push_str(&resolve_general_ref(&r));
                 } else if para.is_some() {
                     let txt = resolve_general_ref(&r);
@@ -6857,6 +6873,21 @@ mod tests {
         assert_eq!(d.paragraphs.len(), 1);
         assert_eq!(d.paragraphs[0].runs[0].text, "Statistical Release\nOctober 2020");
         assert_eq!(round_trip(&d).paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// Writer turns the space after a Word note's mark into `<text:s/>`
+    /// inside the note body: it is the note's, and the paragraph that
+    /// carries the reference stays as it was.
+    #[test]
+    fn spacing_inside_a_note_stays_in_the_note() {
+        let content = "<office:document-content><office:body><office:text>\
+             <text:p>Body text<text:note text:id=\"ftn1\" text:note-class=\"footnote\">\
+             <text:note-citation>1</text:note-citation><text:note-body>\
+             <text:p><text:s/>A note<text:tab/>with &amp; more.</text:p></text:note-body></text:note></text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        assert_eq!(d.paragraphs[0].runs.iter().map(|r| r.text.as_str()).collect::<String>(), "Body text");
+        assert_eq!(d.footnotes, [" A note\twith & more."]);
     }
 
     #[test]
