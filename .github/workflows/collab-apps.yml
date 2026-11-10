@@ -149,6 +149,15 @@ jobs:
           manifest-path: collab/Cargo.toml
           command: check advisories
           arguments: --all-features --config deny.toml
+      # collab/headless is a workspace of its own with its own lock (the two-instance
+      # test, built by the `headless` job): it links tables-core and the patched loro,
+      # and resolves crates neither other lock holds. Same deny.toml, same ignores.
+      - name: cargo deny check advisories (collab/headless/Cargo.lock)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: collab/headless/Cargo.toml
+          command: check advisories
+          arguments: --all-features --config deny.toml
 
   letters-core:
     name: letters-core with the collab feature (clippy, nextest)

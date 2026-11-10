@@ -1,7 +1,12 @@
 // fragment.rs — Tables side of the cross-app clipboard.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub use letters_core::fragment::{Fragment, GridCell, MIME};
+pub use suite_common_core::document::{GridCell, MIME};
+
+/// A copied piece of content: the suite clipboard's neutral form (ADR 0012).
+/// A Letters or Decks copy reads as neutral text, with what Tables cannot
+/// use left out.
+pub type Fragment = suite_common_core::document::Fragment;
 
 use crate::engine::TablesEngine;
 use crate::sheet::SheetModel;
@@ -112,8 +117,8 @@ mod tests {
 
     #[test]
     fn text_fragment_pastes_line_per_row() {
-        let d = letters_core::model::Document::from_plain_text("alpha\nbeta");
-        let frag = Fragment::Text(d.paragraphs);
+        use suite_common_core::document::Paragraph;
+        let frag = Fragment::Text(vec![Paragraph::plain("alpha"), Paragraph::plain("beta")]);
         let mut e = TablesEngine::new(5, 5).unwrap();
         paste_at(&mut e, 0, 0, &frag).unwrap();
         assert_eq!(e.cell(0, 0), "alpha");

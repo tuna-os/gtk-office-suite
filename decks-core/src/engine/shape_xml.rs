@@ -626,8 +626,8 @@ pub(crate) struct FrameTable {
     pub table: super::table::TableData,
 }
 
-fn runs_of(tx_body: &Node) -> Vec<letters_core::model::Run> {
-    use letters_core::model::{Run, RunStyle};
+fn runs_of(tx_body: &Node) -> Vec<suite_common_core::document::Run> {
+    use suite_common_core::document::{Run, RunStyle};
     let mut runs = Vec::new();
     for (pi, p) in tx_body.children_named("a:p").enumerate() {
         if pi > 0 {

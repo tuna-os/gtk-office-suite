@@ -3,10 +3,13 @@
 ## Unreleased
 
 ### Letters
+- Spell check follows your language: it loads the hunspell dictionary for your locale (from LANGUAGE, LC_ALL, LC_MESSAGES or LANG) and falls back to US English only when none is installed. Words with accented or non-Latin letters, such as "café" and "naïve", are checked whole instead of being split at the accent, and a curly apostrophe counts as one.
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 - Export as PDF With Typst (Approximate) works in the Flatpak: it typesets in process instead of running a `typst` program the app never shipped, does it without freezing the window, leaves no `.typ` file beside the PDF, and typesets the document itself on its own page size rather than the screen's list markers and table pipes. Text holding `#`, `$` or `//` no longer fails the export (#1985).
+- Save As Markdown now warns before it drops a document's tables and footnotes: Markdown here writes table cells as plain paragraphs and leaves footnote text out (#1981).
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
+- A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
 
 ### Tables
 - Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written where Place At says, two columns to the right by default, as one undo step. Refresh Pivot Tables (cell menu and command palette) rewrites the sheet's pivot tables from their sources after the data changes, as one undo step. Results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
@@ -14,10 +17,15 @@
 - Print scale and fit-to-page are read from XLSX and kept on save. They used to be dropped, so a sheet set to print at 46% or one page wide saved back at 100%.
 - Export to PDF prints at the sheet's print scale, or shrinks it to fit the pages its fit-to-page asks for, as Calc does. It also prints the used range or print area with each column at its own width, where it used to put every cell in one column, and leaves hidden rows and columns out.
 - Opening an ODS reads each sheet's page setup from its page style: paper size, orientation, margins, print scale and fit to pages wide and tall.
+- A workbook whose content or styling reaches far past its data, such as a lone cell near XFD1048576, is refused with a message naming the sheet instead of hanging or running out of memory while it opens. A sheet opens at up to 10 million cells (rows × columns from A1), a workbook at up to 20 million together, and opening no longer visits the blank cells inside that range.
 - Sorting moves each cell's lock and hidden-formula setting with its row, as it already moved formats, styles, borders, validation and notes. They used to stay put, so a sort on a sheet with unlocked cells locked the wrong ones.
 
 ### Decks
+- PowerPoint groups that are rotated or flipped open where PowerPoint draws them, instead of upright and unflipped. Decks has no group object yet, so saving a deck that had groups now warns that its shapes will be saved ungrouped.
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
+
+### Decks
+- A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
 
 ## v1.0 (post-release) — 2026-06-24
 
