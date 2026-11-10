@@ -965,8 +965,8 @@ dependencies = [
  "iroh",
  "iroh-blobs",
  "iroh-relay",
- "p2panda-auth",
- "p2panda-core",
+ "p2panda-auth 0.8.0",
+ "p2panda-core 0.7.1",
  "p2panda-encryption",
  "p2panda-spaces",
  "p2panda-store",
@@ -3426,7 +3426,20 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49bb2a76c0b1e159f5dbe8bccdbbacee96a08ccc23ae7486c66f58d87d3227d9"
 dependencies = [
- "p2panda-core",
+ "p2panda-core 0.7.1",
+ "petgraph",
+ "serde",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "p2panda-auth"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e42f93fd411f13fdce0643dd3cf466ee516f4e5556d339ac8801fc0a0ffab7"
+dependencies = [
+ "p2panda-core 0.8.0",
  "petgraph",
  "serde",
  "thiserror 2.0.21",
@@ -3438,6 +3451,22 @@ name = "p2panda-core"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3d46f52382b5e1352454fca91d846e23354f9189c913fd0d4a4b2ba57f13d61"
+dependencies = [
+ "blake3",
+ "cbor-core",
+ "ed25519-dalek 2.2.0",
+ "hex",
+ "rand 0.8.8",
+ "serde",
+ "serde_bytes",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "p2panda-core"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4405359c2deca4b70157624fa0ec024f063129b41a16dc78bd0d0eb3ea7223b0"
 dependencies = [
  "blake3",
  "cbor-core",
@@ -3462,7 +3491,7 @@ dependencies = [
  "hpke-rs",
  "hpke-rs-crypto",
  "hpke-rs-rust-crypto",
- "p2panda-core",
+ "p2panda-core 0.7.1",
  "rand_chacha 0.9.0",
  "serde",
  "serde_bytes",
@@ -3479,8 +3508,8 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a865b0d4483aa2b104fd5d47c03938cfcab9ddb9cdf04f7b6067cadbe101d348"
 dependencies = [
- "p2panda-auth",
- "p2panda-core",
+ "p2panda-auth 0.7.1",
+ "p2panda-core 0.7.1",
  "p2panda-encryption",
  "p2panda-store",
  "petgraph",
@@ -3495,8 +3524,8 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2efce57a23952d06691f83c11ec05d3218431bac7367dc3a15168b20e57c00df"
 dependencies = [
- "p2panda-auth",
- "p2panda-core",
+ "p2panda-auth 0.7.1",
+ "p2panda-core 0.7.1",
  "p2panda-encryption",
  "serde",
  "sqlx",
@@ -3512,7 +3541,7 @@ checksum = "ab2dfec4540ec2021949ae1e90788948528f51d76e50827895d821ffda76272e"
 dependencies = [
  "futures-channel",
  "futures-util",
- "p2panda-core",
+ "p2panda-core 0.7.1",
  "p2panda-store",
  "pin-project-lite",
  "serde",
