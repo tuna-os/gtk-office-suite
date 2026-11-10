@@ -14,6 +14,9 @@
 - Export to PDF prints at the sheet's print scale, or shrinks it to fit the pages its fit-to-page asks for, as Calc does. It also prints the used range or print area with each column at its own width, where it used to put every cell in one column, and leaves hidden rows and columns out.
 - Opening an ODS reads each sheet's page setup from its page style: paper size, orientation, margins, print scale and fit to pages wide and tall.
 
+### Decks
+- A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
+
 ## v1.0 (post-release) — 2026-06-24
 
 Features added after the v1.0 tag and GitHub release.
