@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::{i18n, i18n_f, ni18n_f};

@@ -2,7 +2,7 @@
 //! selection, or the conversation.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::{FolderKind, Message};
 use crate::ui::message_list::MessageListInput;

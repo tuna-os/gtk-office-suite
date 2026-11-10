@@ -2,7 +2,7 @@
 //! overflow menu when the window is narrow, and the menu itself.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::{i18n, i18n_f};
@@ -892,7 +892,7 @@ fn follow_button(revealer: &gtk::Revealer, remeasure: &std::rc::Rc<dyn Fn()>) {
 }
 
 /// A measurement of the toolbar row in the next idle, however many ask.
-fn remeasure_soon(sender: relm4::Sender<AppMsg>) -> std::rc::Rc<dyn Fn()> {
+fn remeasure_soon(sender: crate::relm::Sender<AppMsg>) -> std::rc::Rc<dyn Fn()> {
     let pending = std::rc::Rc::new(std::cell::Cell::new(false));
     std::rc::Rc::new(move || {
         if pending.replace(true) {

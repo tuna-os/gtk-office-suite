@@ -8,7 +8,7 @@ use self::views::ViewSnapshot;
 
 use std::rc::Rc;
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::{Message, ThreadSummary};
 pub(crate) use crate::ui::message_row::{tag_menu_entries, RowAction};
@@ -58,7 +58,7 @@ pub(crate) struct MessageList {
     shared: Rc<RowShared>,
     /// The list's own input sender, for work it schedules on the main loop
     /// (coalesced rebuilds).
-    input: relm4::Sender<MessageListInput>,
+    input: crate::relm::Sender<MessageListInput>,
     /// A rebuild asked for and not yet run: `Some(preserve_scroll)`. Several
     /// arrivals in one main-loop pass (a folder's cached copy, its synced
     /// copy, fresh thread links, a view switch's flag changes) collapse into

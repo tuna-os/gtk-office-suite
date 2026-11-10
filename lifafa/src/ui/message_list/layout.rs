@@ -7,7 +7,7 @@ use super::MessageList;
 use crate::ui::message_row::RowShared;
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 /// The message-list pane's floor. Rows ellipsize, so this is what keeps a

@@ -2,7 +2,7 @@
 //! and the account editor, Add to Contacts, message dialogs and Contacts.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::app::model::AppModel;
 use crate::app::msg::AppMsg;

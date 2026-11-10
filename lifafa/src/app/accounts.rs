@@ -2,7 +2,7 @@
 //! keeping GNOME Online Accounts imports in step.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{self, AccountConfig};
 use crate::i18n::{i18n, i18n_f};

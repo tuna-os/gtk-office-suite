@@ -81,7 +81,7 @@ pub(crate) struct FaceAnswer {
 #[derive(Default)]
 pub(super) struct Faces {
     /// Where an answer is sent, once the reader is built.
-    pub(super) input: Option<relm4::Sender<MessageViewInput>>,
+    pub(super) input: Option<crate::relm::Sender<MessageViewInput>>,
     /// The lookups already started, by address and what was asked, so each
     /// render does not start them again and a failure is not retried on
     /// every one.
@@ -137,7 +137,7 @@ impl MessageView {
                 continue;
             }
             let input = input.clone();
-            relm4::spawn(async move {
+            crate::relm::spawn(async move {
                 let lookup = email.clone();
                 let found = tokio::task::spawn_blocking(move || {
                     let avatar = ask_avatar

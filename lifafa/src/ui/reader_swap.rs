@@ -19,7 +19,7 @@
 //! the app is busy right after a click, and the pane went uncovered.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 

@@ -1,7 +1,7 @@
 //! Moving and tagging from menus and keys.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::FolderKind;
 use crate::ui::message_list::{BulkAction, MessageListInput};

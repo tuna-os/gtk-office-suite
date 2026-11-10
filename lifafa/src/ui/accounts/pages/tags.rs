@@ -1,7 +1,7 @@
 //! Settings → Tags: the tag list, Add Tag and the tag finder.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;
@@ -17,7 +17,7 @@ pub(in crate::ui::accounts) struct TagsPage {
 
 impl TagsPage {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 // Tags (#71): a name and color per keyword.
                 add = &adw::PreferencesGroup {

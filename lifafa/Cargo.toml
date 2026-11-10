@@ -29,7 +29,10 @@ gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 # AdwStyleManager:accent-color, which the System theme swatch reads.
 # libadwaita 1.7 is a 2025 release; the GNOME 50 runtime has 1.9.
 adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
-relm4 = { version = "0.11", features = ["macros", "libadwaita"] }
+# The in-tree component runtime (src/relm, from relm4) needs these:
+flume = "0.12"
+fragile = "2"
+once_cell = "1"
 # v2_44 for WebKitEditorState::changed: the composer's undo (#200) has to know
 # when the body's own text history gains or loses a step, and that signal is
 # the only thing that says so. WebKitGTK 6.0 starts at 2.40, so the floor this

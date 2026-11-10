@@ -11,8 +11,8 @@ use std::time::Duration;
 use crate::i18n::{i18n, i18n_f};
 use gtk::glib;
 use gtk::prelude::*;
-use relm4::factory::FactoryVecDeque;
-use relm4::prelude::*;
+use crate::relm::factory::FactoryVecDeque;
+use crate::relm::prelude::*;
 
 mod bar;
 mod cards;

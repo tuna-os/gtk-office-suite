@@ -2,7 +2,7 @@
 //! menus and palettes, swipes, the gallery, the rail and the peek panel.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::app::model::AppModel;
 use crate::app::msg::AppMsg;

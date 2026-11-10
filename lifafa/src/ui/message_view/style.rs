@@ -1,7 +1,7 @@
 //! What is injected into each message document: the reader style (#56),
 //! the Content-Security-Policy and the text direction.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The stylesheet that lays the reader's own fonts and colors over a message
 /// (#56), or nothing when `style` overrides nothing.

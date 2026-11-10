@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::{i18n, i18n_f, ni18n_f};
@@ -181,7 +181,7 @@ impl AppModel {
                 "This message carries no unsubscribe header, so Hylki is going by the link in it.",
             ));
         }
-        let parent = relm4::main_application()
+        let parent = crate::relm::main_application()
             .active_window()
             .unwrap_or_else(|| self.window.clone().upcast());
         let dialog = adw::MessageDialog::new(Some(&parent), Some(&heading), Some(body.as_str()));

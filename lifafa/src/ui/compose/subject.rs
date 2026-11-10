@@ -5,7 +5,7 @@ use super::merge_fields::FieldTarget;
 use super::messages::ComposeInput;
 use super::{Compose, ComposeWidgets};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The subject marks the draft edited, and gets spelling underlines.
 pub(super) fn wire_subject(widgets: &ComposeWidgets, sender: &ComponentSender<Compose>) {

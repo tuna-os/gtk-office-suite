@@ -30,7 +30,7 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{self, DrawerState};
 use crate::i18n::{i18n, ni18n_f};

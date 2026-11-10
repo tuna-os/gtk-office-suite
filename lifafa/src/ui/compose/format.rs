@@ -9,7 +9,7 @@ use crate::ui::context_menu::show_context_menu;
 use crate::ui::context_menu::MenuEntry;
 use crate::ui::rich_editor::SourceKind;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// A body as Markdown, keeping the empty line a reply opens with above its
 /// quote and signature. The conversion drops leading blank lines, which

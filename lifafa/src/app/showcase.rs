@@ -7,7 +7,7 @@
 //! child module for what it stages, called in the order the hooks were
 //! always armed (timers due at the same second fire in that order).
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::demo::demo_mode;
 use super::model::AppModel;

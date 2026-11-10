@@ -6,7 +6,7 @@ use super::types::{MessageViewInput, MessageViewOutput, TrState};
 use super::MessageView;
 use crate::i18n::i18n;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageView {
     pub(super) fn on_card_action(

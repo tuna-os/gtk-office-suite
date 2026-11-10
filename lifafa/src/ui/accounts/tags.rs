@@ -243,7 +243,7 @@ impl AccountsWindow {
         edit: Option<(usize, crate::config::Tag)>,
     ) {
         use crate::config::{Tag, TAG_COLORS};
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let (title, verb) = if edit.is_some() {
             (i18n("Edit Tag"), i18n("Save"))
         } else {

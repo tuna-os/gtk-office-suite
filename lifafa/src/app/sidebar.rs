@@ -2,7 +2,7 @@
 //! (collapsed accounts, folder order, sizes).
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n_f;

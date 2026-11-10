@@ -1,7 +1,7 @@
 //! Selecting a message: what the reader shows, read marks, and the
 //! conversation it belongs to.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::{thread_ids, Message, ThreadSummary};

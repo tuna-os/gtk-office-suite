@@ -6,7 +6,7 @@ use super::types::Field;
 use super::Compose;
 use crate::ui::rich_editor;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Ctrl+Shift+A, T, C, B or M as what it asks the composer for.
 pub(crate) fn composer_key(

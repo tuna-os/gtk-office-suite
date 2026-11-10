@@ -8,7 +8,7 @@ use super::MessageList;
 use crate::i18n::i18n;
 use crate::models::Message;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -295,7 +295,7 @@ pub(super) struct ScopePicker {
 }
 
 impl ScopePicker {
-    pub(super) fn new(button: &gtk::MenuButton, input: &relm4::Sender<MessageListInput>) -> Self {
+    pub(super) fn new(button: &gtk::MenuButton, input: &crate::relm::Sender<MessageListInput>) -> Self {
         // An ellipsizing label, so the button, not the messages, gives way
         // first in a narrow list (#29).
         let label = gtk::Label::new(Some(&SearchScope::AllFolders.button_label()));

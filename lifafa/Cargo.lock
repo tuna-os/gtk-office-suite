@@ -1639,6 +1639,8 @@ dependencies = [
  "css-inline",
  "dirs",
  "flate2",
+ "flume",
+ "fragile",
  "futures",
  "getrandom 0.4.3",
  "gettext-rs",
@@ -1654,10 +1656,10 @@ dependencies = [
  "libloading 0.9.0",
  "mail-parser",
  "markup5ever_rcdom",
+ "once_cell",
  "pangocairo",
  "poppler-rs",
  "pulldown-cmark",
- "relm4",
  "rfc2047-decoder",
  "rmcp",
  "rusqlite",
@@ -2852,41 +2854,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "relm4"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6420f090f0545e9ec9656469d139a4e1b66ff9c30b808fe2247892724f71a198"
-dependencies = [
- "flume",
- "fragile",
- "futures",
- "gtk4",
- "libadwaita",
- "once_cell",
- "relm4-css",
- "relm4-macros",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "relm4-css"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3b81d263f784b103c815afa29124486b59741eca069ce7a5999efb14f13c368"
-
-[[package]]
-name = "relm4-macros"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c9dbf50a60c82375e66b61d522c936b187a11b25c0a42e91c516326ad24a4f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
 
 [[package]]
 name = "rfc2047-decoder"

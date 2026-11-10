@@ -2,7 +2,7 @@
 //! confirmations, the "+" menu, the book picker's labels and file import.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::ContactDetails;
 use crate::i18n::{i18n, i18n_f, i18n_noop};
@@ -23,7 +23,7 @@ pub(super) struct FilterMenu {
 }
 
 impl FilterMenu {
-    pub(super) fn new(button: &gtk::MenuButton, input: &relm4::Sender<ContactsPageInput>) -> Self {
+    pub(super) fn new(button: &gtk::MenuButton, input: &crate::relm::Sender<ContactsPageInput>) -> Self {
         let column = |title: &str| {
             let col = gtk::Box::new(gtk::Orientation::Vertical, 0);
             col.add_css_class("sort-filter-column");
@@ -135,7 +135,7 @@ pub(super) struct BulkChoices {
 }
 
 impl BulkChoices {
-    pub(super) fn group_entries(&self, s: &relm4::Sender<ContactsPageInput>) -> Vec<MenuEntry> {
+    pub(super) fn group_entries(&self, s: &crate::relm::Sender<ContactsPageInput>) -> Vec<MenuEntry> {
         self.groups
             .iter()
             .map(|(g, name)| {
@@ -148,7 +148,7 @@ impl BulkChoices {
             .collect()
     }
 
-    pub(super) fn book_entries(&self, s: &relm4::Sender<ContactsPageInput>) -> Vec<MenuEntry> {
+    pub(super) fn book_entries(&self, s: &crate::relm::Sender<ContactsPageInput>) -> Vec<MenuEntry> {
         self.books
             .iter()
             .map(|(uid, name)| {

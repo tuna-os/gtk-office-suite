@@ -11,7 +11,7 @@ use crate::i18n::i18n_f;
 use crate::ui::dialog::alert;
 use crate::ui::rich_editor::{js_escape, SourceKind};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Which account to upload to, and how the links are made this time:
 /// the expiry and the password, seeded from the account's settings and
@@ -21,7 +21,7 @@ fn cloud_upload_dialog(
     parent: Option<&gtk::Window>,
     accounts: &[crate::services::cloud::CloudAccount],
     paths: Vec<std::path::PathBuf>,
-    sender: relm4::Sender<ComposeInput>,
+    sender: crate::relm::Sender<ComposeInput>,
 ) {
     if accounts.is_empty() {
         return;

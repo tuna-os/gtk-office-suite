@@ -98,7 +98,7 @@ impl TrayHandle {
     /// all; a missing watcher is not that — the item then waits for one.
     /// `mail` is `None` when the menu is not to list messages at all.
     pub(crate) fn start(
-        sender: relm4::Sender<AppMsg>,
+        sender: crate::relm::Sender<AppMsg>,
         icon: TrayIcon,
         app_png: AppIconPng,
         unread: u32,
@@ -165,7 +165,7 @@ struct HylkiTray {
     unread: u32,
     /// Unread inbox mail for the menu, or `None` when that section is off.
     mail: Option<TrayMailList>,
-    sender: relm4::Sender<AppMsg>,
+    sender: crate::relm::Sender<AppMsg>,
     /// With the symbolic icon chosen, the icon theme it was written to.
     symbolic: Option<String>,
 }

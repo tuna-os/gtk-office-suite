@@ -1,6 +1,6 @@
 //! Applying composing settings.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::ui::preferences::{PrefInput, PrefOutput};
 

@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::carddav::{self, Account, Status};
 use crate::contacts::contact_sources as sources;
@@ -23,7 +23,7 @@ use super::{
 /// the server, and say what it found. Blocking; `signing_in` when a new
 /// password was given.
 pub(super) fn report_carddav(
-    s: &relm4::Sender<ContactSourcesInput>,
+    s: &crate::relm::Sender<ContactSourcesInput>,
     saved: Result<String, String>,
     signing_in: bool,
 ) {
@@ -407,7 +407,7 @@ impl ContactSources {
                 "Evolution and other apps stop seeing them too. Nothing on the server changes.",
             ),
         };
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let s = sender.input_sender().clone();
         crate::ui::dialog::confirm_destructive(
             parent.as_ref(),

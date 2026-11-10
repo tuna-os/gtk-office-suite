@@ -7,7 +7,7 @@ use super::types::{MessageListInput, MessageListOutput};
 use super::MessageList;
 use crate::models::Message;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     pub(super) fn on_select_from_reader(

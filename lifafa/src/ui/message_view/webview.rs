@@ -6,7 +6,7 @@ use super::menu::strip_navigation_items;
 use super::MessageView;
 use crate::i18n::i18n;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use webkit6::prelude::{PolicyDecisionExt, WebViewExt};
 
 /// A web view for the print preview: same sandboxing as the reader's, since it

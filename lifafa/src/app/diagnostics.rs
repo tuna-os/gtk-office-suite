@@ -1,7 +1,7 @@
 //! Diagnostics: the memory report in the exported log.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::desktop::memory_report::{human_bytes, human_count, messages_bytes};
 use crate::i18n::i18n;

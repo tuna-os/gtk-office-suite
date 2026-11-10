@@ -9,7 +9,7 @@
 use adw::prelude::*;
 use gtk::gdk;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use std::collections::HashMap;
 

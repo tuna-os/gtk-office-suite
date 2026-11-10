@@ -1,6 +1,6 @@
 //! Saving the app's settings to disk.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::ui::contacts_page::ContactsPageInput;

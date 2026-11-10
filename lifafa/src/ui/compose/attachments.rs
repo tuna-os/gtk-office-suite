@@ -12,7 +12,7 @@ use crate::ui::context_menu::{show_context_menu, MenuEntry};
 use crate::ui::drop_zones::{DropChoice, DropContext, DropZones};
 use crate::ui::fade_label::FadeLabel;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Thumbnails of the composer's attachments by path (#299).
 pub(super) type AttachThumbs = std::rc::Rc<

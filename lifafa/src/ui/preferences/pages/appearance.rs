@@ -35,7 +35,7 @@ pub(in crate::ui::preferences) struct AppearancePage {
 
 impl AppearancePage {
     pub(in crate::ui::preferences) fn build(model: &Preferences, sender: &ViewSender) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     // Rendered as Pango markup — a bare "&" breaks it.

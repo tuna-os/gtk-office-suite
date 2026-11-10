@@ -6,7 +6,7 @@ use super::types::CardAttachment;
 use crate::encoding::escape_html;
 use crate::i18n::i18n;
 use crate::models::Message;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// A template card's banner (#360): what the message is, and its two uses.
 pub(super) fn template_row_html(key: (u32, u32)) -> String {

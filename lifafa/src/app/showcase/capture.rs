@@ -1,7 +1,7 @@
 //! The small helpers the showcase hooks share.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::app::{AppModel, AppMsg};
 use crate::ui::showcase::showcase_capture;

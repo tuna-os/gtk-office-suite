@@ -2,7 +2,7 @@
 //! local contacts.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::i18n::{i18n, i18n_f, ni18n_f};
 use crate::ui::notifications::NotifyInput;
@@ -234,7 +234,7 @@ impl AppModel {
                 // Parent on whichever window is focused (Settings,
                 // normally) — a modal behind the focused window reads
                 // as a freeze.
-                let parent = relm4::main_application()
+                let parent = crate::relm::main_application()
                     .active_window()
                     .unwrap_or_else(|| self.window.clone().upcast());
                 let alert = adw::MessageDialog::new(
@@ -264,7 +264,7 @@ impl AppModel {
                                 .arg(format!("sleep 1.5; exec '{}'", exe.display()))
                                 .spawn();
                         }
-                        relm4::main_application().quit();
+                        crate::relm::main_application().quit();
                     }
                 });
                 alert.present();

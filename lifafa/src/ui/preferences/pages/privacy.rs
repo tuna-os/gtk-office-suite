@@ -20,7 +20,7 @@ pub(in crate::ui::preferences) struct PrivacyPage {
 
 impl PrivacyPage {
     pub(in crate::ui::preferences) fn build(sender: &ViewSender) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     set_title: &i18n("Privacy"),

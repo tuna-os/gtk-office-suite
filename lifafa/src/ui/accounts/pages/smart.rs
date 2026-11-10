@@ -1,7 +1,7 @@
 //! Settings → Smart Folders: the list of saved searches.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;
@@ -15,7 +15,7 @@ pub(in crate::ui::accounts) struct SmartPage {
 
 impl SmartPage {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 // Smart folders (#417): saved searches.
                 add = &adw::PreferencesGroup {

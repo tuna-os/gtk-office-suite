@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::config::{split_identity, AccountConfig};

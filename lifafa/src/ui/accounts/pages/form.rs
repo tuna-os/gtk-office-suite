@@ -3,7 +3,7 @@
 //! Filled and read by `form`, wired by `setup`.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::form::{REPLY_COPIES_HINT, SENT_COPY_HINT};
 use super::super::{AccountsInput, AccountsWindow};
@@ -108,7 +108,7 @@ pub(in crate::ui::accounts) struct EditorForm {
 
 impl EditorForm {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 // GNOME Online Accounts owns this account's servers and
                 // credentials; Hylki only mirrors them. Saying so where

@@ -2,7 +2,7 @@
 //! routing between the sidebar, list, reader, and the per-account mail workers.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;
@@ -13,13 +13,13 @@ use crate::ui::FOCUS_ANIM_MS;
 // width, #28); its floor lives with the pane in message_list/layout.rs
 // (LIST_MIN_WIDTH).
 
-relm4::new_action_group!(WindowActionGroup, "win");
-relm4::new_stateless_action!(AccountsAction, WindowActionGroup, "accounts");
-relm4::new_stateless_action!(PreferencesAction, WindowActionGroup, "preferences");
-relm4::new_stateless_action!(AboutAction, WindowActionGroup, "about");
-relm4::new_stateless_action!(ShortcutsAction, WindowActionGroup, "shortcuts");
-relm4::new_stateless_action!(PrintAction, WindowActionGroup, "print");
-relm4::new_stateless_action!(PrintPreviewAction, WindowActionGroup, "print-preview");
+crate::new_action_group!(WindowActionGroup, "win");
+crate::new_stateless_action!(AccountsAction, WindowActionGroup, "accounts");
+crate::new_stateless_action!(PreferencesAction, WindowActionGroup, "preferences");
+crate::new_stateless_action!(AboutAction, WindowActionGroup, "about");
+crate::new_stateless_action!(ShortcutsAction, WindowActionGroup, "shortcuts");
+crate::new_stateless_action!(PrintAction, WindowActionGroup, "print");
+crate::new_stateless_action!(PrintPreviewAction, WindowActionGroup, "print-preview");
 /// Store a setting the user changed and save the settings, if it really
 /// changed; says whether it did, so the caller can apply it.
 macro_rules! pref {
@@ -152,12 +152,12 @@ use theme::{apply_app_theme, follow_motion_setting};
 use window::{exit_now, install_window_actions, save_window_geometry};
 use workers::watch_system_events;
 
-relm4::new_stateless_action!(StatusBarAction, WindowActionGroup, "status-bar");
-relm4::new_stateless_action!(ConsoleAction, WindowActionGroup, "console");
-relm4::new_stateless_action!(FindAction, WindowActionGroup, "find");
-relm4::new_stateless_action!(UndoAction, WindowActionGroup, "undo");
-relm4::new_stateless_action!(RedoAction, WindowActionGroup, "redo");
-relm4::new_stateful_action!(FullscreenAction, WindowActionGroup, "fullscreen", (), bool);
+crate::new_stateless_action!(StatusBarAction, WindowActionGroup, "status-bar");
+crate::new_stateless_action!(ConsoleAction, WindowActionGroup, "console");
+crate::new_stateless_action!(FindAction, WindowActionGroup, "find");
+crate::new_stateless_action!(UndoAction, WindowActionGroup, "undo");
+crate::new_stateless_action!(RedoAction, WindowActionGroup, "redo");
+crate::new_stateful_action!(FullscreenAction, WindowActionGroup, "fullscreen", (), bool);
 
 /// The main window's widgets: the ones the rest of the app reaches by field,
 /// and the ones that follow the model, which `apply` sets from it at build and

@@ -11,7 +11,7 @@
 //! edit.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::assistant::{fill_banner, outside};
 use super::messages::ComposeInput;

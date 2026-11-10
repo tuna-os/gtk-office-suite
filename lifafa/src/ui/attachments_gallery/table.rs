@@ -1,7 +1,7 @@
 //! One row of the gallery's table view.
 
 use adw::prelude::*;
-use relm4::ComponentSender;
+use crate::relm::ComponentSender;
 
 use crate::i18n::i18n;
 use crate::models::{ext_of, GalleryItem};

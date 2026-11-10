@@ -1,7 +1,7 @@
 //! The split reply: a composer under the reader on a Paned.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::ui::compose::{Compose, ComposeInput, ComposePrefill};
@@ -301,7 +301,7 @@ impl AppModel {
         &self,
         split: &gtk::Paned,
         bottom: bool,
-        compose: relm4::Sender<ComposeInput>,
+        compose: crate::relm::Sender<ComposeInput>,
     ) {
         let split = split.clone();
         let pane_h = split.height();

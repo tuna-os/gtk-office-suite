@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::{ContactDetails, GroupEdit, GroupFormat, Member};
 use crate::i18n::i18n;

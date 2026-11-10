@@ -7,7 +7,7 @@ use super::remote::{route_remote, strip_remote};
 use super::style::{auto_direction, inject_csp, inject_reader_style, reader_style_css};
 use super::types::CardAttachment;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The three grounds for `dark`, resolved from the live libadwaita theme
 /// instead of hard-coded values (issue #62): GROUND is the theme's own view

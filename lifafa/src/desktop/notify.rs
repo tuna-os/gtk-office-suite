@@ -263,7 +263,7 @@ pub(crate) fn play_sound(sound: &crate::config::SoundSource, restart: bool) {
 
 /// Withdraw an account's new-mail notification (once its mail has been read).
 pub(crate) fn withdraw_mail(account_id: u32) {
-    relm4::main_application().withdraw_notification(&mail_id(account_id));
+    crate::relm::main_application().withdraw_notification(&mail_id(account_id));
     POSTED.with(|p| p.borrow_mut().remove(&account_id));
 }
 
@@ -345,12 +345,12 @@ pub(crate) fn assistant_ready() {
 /// (the user got there by themselves).
 pub(crate) fn withdraw_compose_ready() {
     if COMPOSE_READY_POSTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
-        relm4::main_application().withdraw_notification(COMPOSE_READY_ID);
+        crate::relm::main_application().withdraw_notification(COMPOSE_READY_ID);
     }
 }
 
 fn send(id: &str, notification: &gio::Notification) {
-    relm4::main_application().send_notification(Some(id), notification);
+    crate::relm::main_application().send_notification(Some(id), notification);
 }
 
 #[cfg(test)]

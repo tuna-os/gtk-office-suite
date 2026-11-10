@@ -4,7 +4,7 @@ use super::MessageView;
 use crate::i18n::{i18n, ni18n_f};
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Style rules for a [`DisplayCss`](crate::ui::DisplayCss), each named by a
 /// class. A message's own colors used to be the one rule a provider held, so

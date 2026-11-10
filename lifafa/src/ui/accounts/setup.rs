@@ -24,12 +24,12 @@ impl AccountsWindow {
             });
         }
 
-        let senders = relm4::factory::FactoryVecDeque::builder()
+        let senders = crate::relm::factory::FactoryVecDeque::builder()
             .launch(gtk::ListBox::new())
             .forward(sender.input_sender(), |out| match out {
                 SenderRowOutput::Remove(addr) => AccountsInput::RemoveSenderRow(addr),
             });
-        let blacklist = relm4::factory::FactoryVecDeque::builder()
+        let blacklist = crate::relm::factory::FactoryVecDeque::builder()
             .launch(gtk::ListBox::new())
             .forward(sender.input_sender(), |out| match out {
                 SenderRowOutput::Remove(addr) => AccountsInput::RemoveBlacklistRow(addr),

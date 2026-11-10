@@ -1,7 +1,7 @@
 //! Worker events about one message: its body, source, attachments and
 //! sender check.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::{Attachment, Message};
 use crate::ui::attachments_gallery::GalleryInput;

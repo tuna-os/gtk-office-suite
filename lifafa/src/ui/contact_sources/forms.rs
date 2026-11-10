@@ -4,7 +4,7 @@
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::carddav::{self, Account};
 use crate::contacts::contact_sources::{Kind, Source};
@@ -57,7 +57,7 @@ fn given_name(typed: &str, own: &str) -> Option<String> {
 /// books in Contacts. GNOME and Evolution keep theirs.
 pub(super) fn name_group(
     source: &Source,
-    sender: relm4::Sender<ContactSourcesInput>,
+    sender: crate::relm::Sender<ContactSourcesInput>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     let own = [("own", source.own_title.as_str())];
@@ -87,7 +87,7 @@ pub(super) fn name_group(
 /// switch.
 pub(super) fn books_group(
     source: &Source,
-    sender: relm4::Sender<ContactSourcesInput>,
+    sender: crate::relm::Sender<ContactSourcesInput>,
 ) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     group.set_title(&i18n("Address books"));
@@ -128,7 +128,7 @@ pub(super) fn books_group(
 /// The add page's dropdown of what can be added, with its mark.
 pub(super) fn kind_picker(
     selected: u32,
-    sender: relm4::Sender<ContactSourcesInput>,
+    sender: crate::relm::Sender<ContactSourcesInput>,
 ) -> gtk::Widget {
     let b = gtk::Box::new(gtk::Orientation::Vertical, 18);
     let what = ADD_KINDS.get(selected as usize).unwrap_or(&ADD_KINDS[0]);
@@ -156,7 +156,7 @@ pub(super) fn carddav_form(
     account: Account,
     kind: Option<u32>,
     what: AddWhat,
-    sender: relm4::Sender<ContactSourcesInput>,
+    sender: crate::relm::Sender<ContactSourcesInput>,
 ) -> (gtk::Widget, Rc<dyn Fn() -> bool>) {
     let (preset, hint) = match what {
         AddWhat::CardDav { server, hint } => (server.filter(|_| kind.is_some()), hint),
@@ -270,7 +270,7 @@ const SECURITY: [Security; 3] = [Security::StartTls, Security::Ldaps, Security::
 /// The LDAP directory form, and what Save does with it.
 pub(super) fn ldap_form(
     dir: Directory,
-    sender: relm4::Sender<ContactSourcesInput>,
+    sender: crate::relm::Sender<ContactSourcesInput>,
 ) -> (gtk::Widget, Rc<dyn Fn() -> bool>) {
     let server = adw::PreferencesGroup::new();
     server.set_title(&i18n("Server"));

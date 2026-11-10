@@ -3,7 +3,7 @@
 //! can take it, then sent on as an AppMsg.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::i18n::{i18n, i18n_f};
 use crate::ui::notifications::NotifyInput;
@@ -41,7 +41,7 @@ pub(crate) fn queue_mailto(uri: String) {
 /// installs the sender — anything early waits here and is drained by init.
 static MAILTO_PENDING: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
-static MAILTO_SENDER: std::sync::OnceLock<relm4::Sender<AppMsg>> = std::sync::OnceLock::new();
+static MAILTO_SENDER: std::sync::OnceLock<crate::relm::Sender<AppMsg>> = std::sync::OnceLock::new();
 
 /// Turn a `mailto:` URI into a composer prefill (RFC 6068: address part plus
 /// to/cc/bcc/subject/body query keys, all percent-encoded).

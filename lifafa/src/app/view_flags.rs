@@ -6,7 +6,7 @@
 
 use std::time::{Duration, Instant};
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::FolderKind;
 use crate::worker::MailRequest;

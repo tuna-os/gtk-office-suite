@@ -8,7 +8,7 @@ use crate::i18n::i18n;
 use crate::ui::context_menu::{show_context_menu, MenuEntry};
 use crate::ui::message_actions::{KeysOf, MessageAction};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The header's buttons, one per toolbar item, packed in the saved order.
 pub(super) struct Toolbar {

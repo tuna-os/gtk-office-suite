@@ -1,6 +1,6 @@
 //! Applying general and appearance settings.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;

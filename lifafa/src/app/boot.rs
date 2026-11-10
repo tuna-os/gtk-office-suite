@@ -4,7 +4,7 @@
 //! Accounts, and the main menu and its two stateful actions.
 
 use adw::prelude::*;
-use relm4::ComponentSender;
+use crate::relm::ComponentSender;
 
 use crate::config::{self, AccountConfig};
 use crate::i18n::i18n;
@@ -62,7 +62,7 @@ fn install_globals(root: &adw::ApplicationWindow) -> config::PrivacyFile {
     // Before the workers start, so their first connection already knows
     // whether there is a network to make it on (#442).
     crate::desktop::power::read_network(prefs.metered_save_data);
-    relm4::set_global_css(include_str!("../styles.css"));
+    crate::relm::set_global_css(include_str!("../styles.css"));
     register_icons(prefs.desktop_icons);
     // Before install_scheme_css and before the reader exists: both read
     // the theme's colors back, and both listen for the light/dark flip

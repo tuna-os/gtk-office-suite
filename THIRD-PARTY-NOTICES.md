@@ -46,3 +46,38 @@ contributors), imported from <https://github.com/tuna-os/mandelbrot> at commit
 
 Licence: GPL-3.0-or-later, the same as the rest of the suite; the full text is
 `mandelbrot/LICENSE`. Its `matrixrtc/` crate is GPL-3.0-or-later as well.
+
+## relm4 runtime (`lifafa/src/relm/`)
+
+Lifafa's component runtime is a copy of the runtime of relm4 0.11.0
+(<https://github.com/Relm4/Relm4>, by Aaron Erhardt and contributors), kept in the
+tree instead of as a dependency. relm4 is MIT OR Apache-2.0; we use it under the
+MIT licence, whose text follows.
+
+```
+Copyright (c) The Relm4 authors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```

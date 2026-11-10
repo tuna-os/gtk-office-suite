@@ -6,7 +6,7 @@ use super::frame::{ground_rgba, theme_grounds_for};
 use super::snippets::paints_own_background;
 use super::MessageView;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use webkit6::prelude::WebViewExt;
 
 impl MessageView {

@@ -1,7 +1,7 @@
 //! Settings → Filters: the search box, the rules and Apply Now.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;
@@ -17,7 +17,7 @@ pub(in crate::ui::accounts) struct FiltersPage {
 
 impl FiltersPage {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 // A search box over the long lists (#141): rows
                 // that do not match the text are hidden.

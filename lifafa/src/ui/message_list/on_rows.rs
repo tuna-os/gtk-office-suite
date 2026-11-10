@@ -6,7 +6,7 @@ use super::types::{BulkAction, MessageListInput, MessageListOutput};
 use super::{MessageList, RowAction};
 use crate::models::Message;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     pub(super) fn on_bulk(&mut self, action: BulkAction, sender: &ComponentSender<Self>) {

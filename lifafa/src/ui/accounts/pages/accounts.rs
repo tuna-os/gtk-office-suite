@@ -2,7 +2,7 @@
 //! ones that can be switched on.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;
@@ -20,7 +20,7 @@ pub(in crate::ui::accounts) struct AccountsPage {
 
 impl AccountsPage {
     pub(in crate::ui::accounts) fn build(sender: &ComponentSender<AccountsWindow>) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     set_title: &i18n("Mail Accounts"),

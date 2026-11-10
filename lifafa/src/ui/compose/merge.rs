@@ -3,7 +3,7 @@
 //! message per row.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::messages::{ComposeInput, ComposeOutput, OutgoingFields};
 use super::Compose;

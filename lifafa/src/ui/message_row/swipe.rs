@@ -7,7 +7,7 @@ use crate::i18n::i18n;
 use adw::prelude::*;
 use gtk::glib;
 use gtk::subclass::prelude::ObjectSubclassIsExt;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 // A two-layer container implementing `AdwSwipeable`, so a real

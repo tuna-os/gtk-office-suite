@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::messages::ComposeInput;
 use super::{Compose, ComposeWidgets};

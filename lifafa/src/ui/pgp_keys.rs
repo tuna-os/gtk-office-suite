@@ -6,7 +6,7 @@
 //! gpg and are not kept.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::i18n::{i18n, i18n_f, ni18n_f};
 use crate::mail::pgp::{self, Gpg, ImportSummary, KeyInfo};
@@ -433,7 +433,7 @@ impl PgpKeys {
     /// passphrase that protects it.
     #[allow(deprecated)] // adw::MessageDialog: AlertDialog would change how it looks
     fn generate_dialog(&self, sender: &ComponentSender<Self>) {
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let dialog = adw::MessageDialog::new(
             parent.as_ref(),
             Some(&i18n("Generate a Key")),
@@ -560,7 +560,7 @@ impl PgpKeys {
         any.add_pattern("*");
         filters.append(&any);
         dialog.set_filters(Some(&filters));
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let s = sender.clone();
         dialog.open(parent.as_ref(), gtk::gio::Cancellable::NONE, move |res| {
             if let Ok(file) = res {
@@ -604,7 +604,7 @@ impl PgpKeys {
             .title(i18n("Export Public Key"))
             .initial_name(&name)
             .build();
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let s = sender.clone();
         dialog.save(parent.as_ref(), gtk::gio::Cancellable::NONE, move |res| {
             let Some(path) = res.ok().and_then(|file| file.path()) else {
@@ -642,7 +642,7 @@ impl PgpKeys {
         else {
             return;
         };
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let (title, body) = if secret {
             (
                 i18n("Delete your key?"),
@@ -705,7 +705,7 @@ impl PgpKeys {
     /// Ask which address to look a key up for.
     #[allow(deprecated)] // adw::MessageDialog: AlertDialog would change how it looks
     fn on_fetch(&mut self, sender: &ComponentSender<Self>) {
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let dialog = adw::MessageDialog::new(
             parent.as_ref(),
             Some(&i18n("Fetch a Key")),
@@ -762,7 +762,7 @@ impl PgpKeys {
             ));
             return;
         }
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let dialog = adw::MessageDialog::new(
             parent.as_ref(),
             Some(&i18n("Trust this key?")),

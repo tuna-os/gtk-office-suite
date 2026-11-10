@@ -2,7 +2,7 @@
 //! the factories' own boxes, handed in.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;
@@ -20,7 +20,7 @@ impl SendersPage {
         senders_box: &gtk::ListBox,
         blacklist_box: &gtk::ListBox,
     ) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 // A search box over the long lists (#141): rows
                 // that do not match the text are hidden.

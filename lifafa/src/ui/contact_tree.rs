@@ -48,7 +48,7 @@ pub(super) fn fill(
     collapsed: bool,
     inset: bool,
     folded: &std::collections::HashSet<String>,
-    input: &relm4::Sender<SidebarInput>,
+    input: &crate::relm::Sender<SidebarInput>,
 ) -> Filled {
     let mut out = Filled {
         rows: Vec::new(),
@@ -153,7 +153,7 @@ struct Ctx<'a> {
     collapsed: bool,
     inset: bool,
     folded: &'a std::collections::HashSet<String>,
-    input: &'a relm4::Sender<SidebarInput>,
+    input: &'a crate::relm::Sender<SidebarInput>,
 }
 
 impl Ctx<'_> {
@@ -308,7 +308,7 @@ impl Ctx<'_> {
 
 /// A book's menu: a new contact or group in it, when it takes them, and
 /// renaming it in Hylki.
-fn book_menu(r: &gtk::ListBoxRow, book: &TreeBook, input: &relm4::Sender<SidebarInput>) {
+fn book_menu(r: &gtk::ListBoxRow, book: &TreeBook, input: &crate::relm::Sender<SidebarInput>) {
     let (s, uid, writable, groups) = (
         input.clone(),
         book.uid.clone(),
@@ -381,7 +381,7 @@ fn slider(
 fn expander(
     key: &str,
     folded: &std::collections::HashSet<String>,
-    input: &relm4::Sender<SidebarInput>,
+    input: &crate::relm::Sender<SidebarInput>,
 ) -> (gtk::Button, gtk::Image) {
     let img = gtk::Image::from_icon_name("pan-end-symbolic");
     img.add_css_class("tree-expander-icon");
@@ -485,7 +485,7 @@ fn menu_on(row: &gtk::ListBoxRow, sections: impl Fn() -> Vec<Vec<MenuEntry>> + '
 
 /// Contacts dragged from the list land on `row`: copied, or moved while
 /// Ctrl is held. The row is outlined while they are over it.
-fn drop_target(row: &gtk::ListBoxRow, on: DropOn, input: &relm4::Sender<SidebarInput>) {
+fn drop_target(row: &gtk::ListBoxRow, on: DropOn, input: &crate::relm::Sender<SidebarInput>) {
     let target = gtk::DropTarget::new(
         String::static_type(),
         gtk::gdk::DragAction::COPY | gtk::gdk::DragAction::MOVE,

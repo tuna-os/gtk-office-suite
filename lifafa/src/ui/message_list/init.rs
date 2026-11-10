@@ -8,14 +8,14 @@ use super::{
 use crate::i18n::i18n;
 use crate::ui::message_row::RowShared;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     /// The list before any folder is shown.
     pub(super) fn initial(
         list_view: gtk::ListView,
         shared: std::rc::Rc<RowShared>,
-        input: relm4::Sender<MessageListInput>,
+        input: crate::relm::Sender<MessageListInput>,
         color_provider: crate::ui::DisplayCss,
     ) -> Self {
         MessageList {

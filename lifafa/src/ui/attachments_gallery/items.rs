@@ -3,7 +3,7 @@
 //! item does.
 
 use adw::prelude::*;
-use relm4::ComponentSender;
+use crate::relm::ComponentSender;
 
 use crate::i18n::i18n;
 use crate::models::GalleryItem;

@@ -15,7 +15,7 @@ pub(in crate::ui::preferences) struct DateTimePage {
 
 impl DateTimePage {
     pub(in crate::ui::preferences) fn build(sender: &ViewSender) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     set_title: &i18n("Date and Time"),

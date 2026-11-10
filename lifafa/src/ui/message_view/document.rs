@@ -22,7 +22,7 @@ use super::MessageView;
 use crate::encoding::escape_html;
 use crate::i18n::{i18n, ni18n_f};
 use crate::models::Message;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The wrapper's Content-Security-Policy and its one script (the frame
 /// sizer), under a nonce made for this render.

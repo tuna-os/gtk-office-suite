@@ -3,7 +3,7 @@
 use super::MessageView;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use webkit6::prelude::WebViewExt;
 
 /// A document waiting for the WebView to be ready for it (`load_after_paint`).

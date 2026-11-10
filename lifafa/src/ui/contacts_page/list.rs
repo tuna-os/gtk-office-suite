@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::ContactDetails;
 use crate::i18n::{i18n, i18n_f, ni18n_f};
@@ -378,7 +378,7 @@ impl ContactsPage {
     fn directory_hit_menu(
         &self,
         idx: usize,
-        s: &relm4::Sender<ContactsPageInput>,
+        s: &crate::relm::Sender<ContactsPageInput>,
     ) -> Vec<Vec<MenuEntry>> {
         let Some(c) = self.entry(idx) else {
             return Vec::new();
@@ -406,7 +406,7 @@ impl ContactsPage {
     }
 
     /// The menu of several selected contacts: what can be done to them all.
-    fn selection_menu(&self, s: &relm4::Sender<ContactsPageInput>) -> Vec<Vec<MenuEntry>> {
+    fn selection_menu(&self, s: &crate::relm::Sender<ContactsPageInput>) -> Vec<Vec<MenuEntry>> {
         let choices = self.bulk_choices();
         let mut first = Vec::new();
         if let Some(g) = self.scope_group().filter(|g| g.group_editable()) {
@@ -453,7 +453,7 @@ impl ContactsPage {
         &self,
         idx: usize,
         c: &ContactDetails,
-        s: &relm4::Sender<ContactsPageInput>,
+        s: &crate::relm::Sender<ContactsPageInput>,
     ) -> Vec<Vec<MenuEntry>> {
         let local = crate::contacts::is_local_book(&c.book_uid);
         let group = c.is_group();

@@ -9,7 +9,7 @@ use super::ComposeWidgets;
 use crate::contacts::Suggestion;
 use crate::ui::recipient_row::RecipientRow;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Replace the recipient being typed with the chosen suggestion, as a pill.
 /// A group puts in its members, less those the field already has; one that

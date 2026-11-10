@@ -10,7 +10,7 @@ use crate::app::AppMsg;
 use crate::config::AssistantPolicy;
 
 /// The app's main loop, as the server reaches it.
-pub(crate) type AppLink = relm4::Sender<AppMsg>;
+pub(crate) type AppLink = crate::relm::Sender<AppMsg>;
 
 /// What Settings allows now: the app writes it as it changes, each tool call
 /// reads it, so a switch turned off holds from the next call on.

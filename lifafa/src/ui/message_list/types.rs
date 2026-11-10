@@ -8,7 +8,7 @@ use super::RowAction;
 use crate::models::{Message, ThreadSummary};
 use crate::ui::message_row::Slot;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// A bulk action applied to every selected message at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

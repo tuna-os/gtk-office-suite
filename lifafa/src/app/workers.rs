@@ -1,7 +1,7 @@
 //! The mail workers: one per account, and their events turned into AppMsg.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::{AccountConfig, Protocol};

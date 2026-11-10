@@ -12,7 +12,7 @@ use crate::ui::message_list::RowAction;
 use crate::ui::message_view::{MessageView, MessageViewInput, MessageViewOutput};
 use crate::ui::reader_swap::ReaderSwap;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The widgets `init` hands back: the two it needs again after the window
 /// is built (the toolbar's header bar and the overlay the reader sits in).

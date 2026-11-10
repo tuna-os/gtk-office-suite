@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::i18n::{i18n, i18n_f};
 use crate::services::cloud::{self, CloudAccount, CloudKind};
@@ -331,7 +331,7 @@ impl SimpleComponent for CloudAccounts {
                 } else {
                     a.name.clone()
                 };
-                let parent = relm4::main_application().active_window();
+                let parent = crate::relm::main_application().active_window();
                 let s = sender.input_sender().clone();
                 crate::ui::dialog::confirm_destructive(
                     parent.as_ref(),

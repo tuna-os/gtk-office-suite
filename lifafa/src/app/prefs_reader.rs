@@ -1,7 +1,7 @@
 //! Applying reader settings: zoom, Reader View, font and color overrides.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::ui::message_list::MessageListInput;

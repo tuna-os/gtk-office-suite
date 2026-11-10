@@ -1,8 +1,8 @@
 //! The main window: its size and breakpoints, and the app and window actions.
 
 use adw::prelude::*;
-use relm4::actions::{AccelsPlus, RelmAction, RelmActionGroup};
-use relm4::prelude::*;
+use crate::relm::actions::{AccelsPlus, RelmAction, RelmActionGroup};
+use crate::relm::prelude::*;
 
 use crate::config;
 
@@ -115,7 +115,7 @@ impl AppModel {
         root: &adw::ApplicationWindow,
         sender: &ComponentSender<Self>,
     ) {
-        let app = relm4::main_application();
+        let app = crate::relm::main_application();
         app.add_action(&self.show_accounts_action);
         app.add_action(&self.focus_action);
         app.add_action(&self.reading_pane_action);
@@ -307,16 +307,16 @@ pub(super) fn install_window_actions(
     // a message (the web view would otherwise swallow it). Both spellings are
     // bound because layouts disagree about whether Ctrl+Shift+/ arrives as
     // `question` or as `slash`, and F1 is the GNOME convention.
-    relm4::main_application().set_accelerators_for_action::<PrintAction>(&["<Ctrl>p"]);
-    relm4::main_application()
+    crate::relm::main_application().set_accelerators_for_action::<PrintAction>(&["<Ctrl>p"]);
+    crate::relm::main_application()
         .set_accelerators_for_action::<PrintPreviewAction>(&["<Ctrl><Shift>p"]);
-    relm4::main_application().set_accelerators_for_action::<StatusBarAction>(&["<Ctrl><Shift>s"]);
-    relm4::main_application().set_accelerators_for_action::<FindAction>(&["<Ctrl>f"]);
-    relm4::main_application().set_accelerators_for_action::<FullscreenAction>(&["F11"]);
+    crate::relm::main_application().set_accelerators_for_action::<StatusBarAction>(&["<Ctrl><Shift>s"]);
+    crate::relm::main_application().set_accelerators_for_action::<FindAction>(&["<Ctrl>f"]);
+    crate::relm::main_application().set_accelerators_for_action::<FullscreenAction>(&["F11"]);
     // On the menu's action, so the menu shows the keys beside Settings
     // (#513).
-    relm4::main_application().set_accelerators_for_action::<AccountsAction>(&["<Ctrl>comma"]);
-    relm4::main_application().set_accelerators_for_action::<ShortcutsAction>(&[
+    crate::relm::main_application().set_accelerators_for_action::<AccountsAction>(&["<Ctrl>comma"]);
+    crate::relm::main_application().set_accelerators_for_action::<ShortcutsAction>(&[
         "<Ctrl>question",
         "<Ctrl><Shift>question",
         "<Ctrl>slash",

@@ -48,7 +48,7 @@ pub(in crate::ui::preferences) struct ComposingPage {
 
 impl ComposingPage {
     pub(in crate::ui::preferences) fn build(sender: &ViewSender) -> Self {
-        relm4::view! {
+        crate::relm::view! {
             page = adw::PreferencesPage {
                 add = &adw::PreferencesGroup {
                     set_title: &i18n("Composing"),
