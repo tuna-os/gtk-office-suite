@@ -27,12 +27,25 @@ Date: 2026-11-10 · Status: **accepted** (decided on the owner's standing instru
 
 ## Thumbnails (B2)
 
-A thumbnail is the first page as a PNG: `suite-convert --to png --page 1 --size 256 <INPUT> <OUTPUT>`, built on decision 6 (first page of the Typst PDF, rasterised). Which GTK-free rasteriser to use is **not decided here**: it needs a short spike that renders a few corpus documents, looks at the result and measures the dependency weight, because the choice decides whether the tool stays small. Until the spike, the `.thumbnailer` entry is not written.
+A thumbnail is the first page as a PNG: `suite-convert --to png --page 1 --size 256 <INPUT> <OUTPUT>`, built on decision 6 (first page of the Typst PDF, rasterised).
+
+**The rasteriser is `hayro`** (0.9, MIT OR Apache-2.0, pure Rust, `#![forbid(unsafe_code)]`, CPU only, no GTK, cairo, poppler or pango in its tree). A spike on 2026-11-10 rendered the first page at 256 px wide in a scratch crate outside the workspace:
+
+| PDF | Render time | Result |
+|---|---|---|
+| Two PDFs from the repo (`lifafa/data/demo/*.pdf`, a roadmap with a Gantt chart and a timeline) | 5 to 7 ms | Layout, text, colours and shapes correct on inspection |
+| A page compiled by `suite_export::compile_pdf` from Typst (heading, bold and italic, a table) | 3 ms (Typst compile itself 407 ms) | Text, bold and italic, and table borders correct on inspection |
+
+Release binary of the rasteriser alone: 9.6 MB unstripped; about 150 lines in `cargo tree`. A cold build with `suite-export` took 5 minutes, almost all of it Typst, which the tool needs anyway for PDF.
+
+What the spike did **not** cover, and the first corpus run of phase 2 must: PDFs with embedded raster images, charts from `tables-core`, right-to-left and CJK text, and very large pages. The documented hayro limitations (encrypted PDFs, blending and isolation groups, knockout groups) are acceptable for a thumbnail and are not for a faithful render, so `--to png` is a thumbnail format, not the loss-reported conversion path.
+
+With that settled, the `.thumbnailer` entry waits only on the tool existing (phase 1 and the Letters wiring of phase 2).
 
 ## Consequences
 
 - Phase 1 of the spec can start: a `suite-convert` crate with this argument surface, format routing, and a test that fails if `gtk4` or `libadwaita` appears in `cargo tree`.
-- B2 is unblocked in principle and gated on the rasteriser spike, not on a specification.
+- B2 is unblocked: the interface is decided and the rasteriser is chosen on evidence. It waits on the tool existing.
 - The spec's status changes from "draft, not accepted" to "interface accepted by ADR 0015; implementation not started".
 
 ## What would reverse it
