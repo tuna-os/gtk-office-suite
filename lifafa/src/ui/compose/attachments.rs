@@ -56,7 +56,7 @@ fn attachment_chip(
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "file".to_string());
     let size = std::fs::metadata(path).map(|m| m.len()).ok();
-    let (content_type, _) = gtk::gio::content_type_guess(Some(path), &[]);
+    let (content_type, _) = gtk::gio::content_type_guess(Some(path), None);
     let kind = gtk::gio::content_type_get_description(&content_type).to_string();
 
     let chip = gtk::Box::new(gtk::Orientation::Horizontal, 6);

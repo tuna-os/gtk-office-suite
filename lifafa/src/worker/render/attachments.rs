@@ -60,7 +60,7 @@ pub(in crate::worker) fn attachment_parts(
         if Some(id) == legacy {
             continue;
         }
-        let Some(part) = parsed.parts.get(id) else {
+        let Some(part) = parsed.parts.get(id as usize) else {
             continue;
         };
         // What is left where an attachment was removed, here or by
@@ -101,7 +101,7 @@ pub(in crate::worker) fn attachment_parts(
             format!("attachment-{}{ext}", i + 1)
         });
         out.push((
-            id,
+            id as usize,
             crate::models::Attachment {
                 name,
                 data: part.contents().to_vec(),
@@ -144,7 +144,7 @@ fn attachment_name_of(part: &mail_parser::MessagePart<'_>, raw: &[u8]) -> Option
     let mut repaired = Vec::new();
     let mut spliced = false;
     for h in part.headers.iter().filter(|h| names(h)) {
-        let Some(value) = raw.get(h.offset_start..h.offset_end) else {
+        let Some(value) = raw.get(h.offset_start as usize..h.offset_end as usize) else {
             return plain();
         };
         let joined = splice_encoded_words(value);
@@ -197,7 +197,7 @@ fn splice_encoded_words(value: &[u8]) -> Vec<u8> {
 /// suffix for `application/x-zerosize` (it reads the missing data as empty),
 /// so that becomes the generic type.
 pub(crate) fn guess_mime(name: &str) -> String {
-    let (content_type, _uncertain) = gtk::gio::content_type_guess(Some(name), &[]);
+    let (content_type, _uncertain) = gtk::gio::content_type_guess(Some(name), None);
     gtk::gio::content_type_get_mime_type(&content_type)
         .map(|m| m.to_string())
         .filter(|m| m != "application/x-zerosize")

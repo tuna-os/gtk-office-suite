@@ -139,7 +139,7 @@ fn header_handles(parsed: &mail_parser::Message) -> Vec<String> {
         headers
             .iter()
             .filter(|h| is_handle_header(h.name()))
-            .filter_map(|h| raw.get(h.offset_start()..h.offset_end()))
+            .filter_map(|h| raw.get(h.offset_start() as usize..h.offset_end() as usize))
             .map(|b| unfold(&String::from_utf8_lossy(b)))
             .filter(|v| !v.is_empty())
             .collect()
@@ -166,7 +166,7 @@ fn raw_header_values(parsed: &mail_parser::Message, name: &str) -> Vec<String> {
         .headers()
         .iter()
         .filter(|h| h.name().eq_ignore_ascii_case(name))
-        .filter_map(|h| raw.get(h.offset_start()..h.offset_end()))
+        .filter_map(|h| raw.get(h.offset_start() as usize..h.offset_end() as usize))
         .map(|b| unfold(&String::from_utf8_lossy(b)))
         .filter(|v| !v.is_empty())
         .collect()

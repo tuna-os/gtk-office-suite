@@ -23,28 +23,29 @@ beta = []
 # v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
 # blocking one spins a nested main loop and glib's future executor aborts when
 # re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.
-gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 # v1_7 for AdwWrapBox: the composer's format bar wraps onto a second row
 # when the composer is narrow (#358). It also carries v1_6's
 # AdwStyleManager:accent-color, which the System theme swatch reads.
 # libadwaita 1.7 is a 2025 release; the GNOME 50 runtime has 1.9.
-adw = { package = "libadwaita", version = "0.7", features = ["v1_7"] }
-relm4 = { version = "0.9", features = ["macros", "libadwaita"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
+relm4 = { version = "0.11", features = ["macros", "libadwaita"] }
 # v2_44 for WebKitEditorState::changed: the composer's undo (#200) has to know
 # when the body's own text history gains or loses a step, and that signal is
 # the only thing that says so. WebKitGTK 6.0 starts at 2.40, so the floor this
 # sets is a 2024 release; the GNOME 50 runtime has 2.50.
-webkit6 = { version = "0.4", features = ["v2_44"] }
+webkit6 = { version = "0.6", features = ["v2_44"] }
 # PDF thumbnails in the attachment gallery (first-page render via poppler-glib).
-poppler-rs = { version = "0.24", features = ["v20_9"] }
+gio-unix = "0.22"
+poppler-rs = { version = "0.26", features = ["v20_9"] }
 # "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
 # rendered PDF page to gdk::Texture the same way every other thumbnail loads.
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
-# Held at the cairo-rs that gtk4 0.9 and pangocairo 0.20 use: a newer one is
-# a second cairo whose surfaces the toolkit cannot draw (#1986).
-cairo-rs = { version = "0.20", features = ["png", "pdf"] }
+# Kept at the cairo-rs that gtk4 0.11 and pangocairo 0.22 use: a different one
+# is a second cairo whose surfaces the toolkit cannot draw (#1986).
+cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 # The printed page footer's text, laid out by Pango so any script prints (#359).
-pangocairo = "0.20"
+pangocairo = "0.22"
 # The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
 # gives every D-Bus call a fixed two-second timeout, and a provider that asks
 # for something first (pass-secret-service decrypting with a security key that
@@ -70,13 +71,9 @@ zeroize = "1"
 # Async mail stack (runs on a dedicated worker thread + tokio runtime)
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "io-std"] }
 futures = "0.3"
-# Held at 0.10: 0.12 reshaped imap-proto's types the IMAP worker uses (#1986).
-async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
+async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
 async-native-tls = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
-# Held at 0.9: 0.11 moved part offsets to u32 and made the charset decoders
-# private, which the reader, the PGP path and the attachment renderer use; that
-# port is its own change (#2066 merged the bump alone and broke the build).
-mail-parser = "0.9"
+mail-parser = "0.11"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
 rfc2047-decoder = "1"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
