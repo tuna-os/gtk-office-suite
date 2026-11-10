@@ -20,6 +20,8 @@ What would reverse it: a service that must hold state shared across running apps
 
 Consequence for A9 (shared language services): an in-tree GTK-free crate behind provider traits (spelling, grammar, translation), used by Letters and Lifafa's composer; no new process.
 
+The licence sets the direction of any sharing. Lifafa is AGPL-3.0-or-later and its Hylki-derived code is not ours to relicense (`THIRD-PARTY-NOTICES.md`); the suite is GPL-3.0-or-later. A GPL crate may be linked into Lifafa, but Lifafa's existing grammar and translation services (`lifafa/src/services/grammar`, `translate`, with their settings, downloads and keyring use) cannot be moved into a GPL crate. So A9 is built from the suite side: a new GPL crate with the provider traits and a shared result type, an adapter in Letters for hunspell, and a thin adapter in Lifafa that implements the traits over its existing services. Lifafa adopts the contract; it does not hand over its code. Lifafa does not depend on any suite crate today, so the first step of A9 is that dependency (with the `lifafa-core` extraction of #2025), not a rewrite.
+
 ## Decision 2: search is answered by each app, from its own data
 
 Each app ships its own `org.gnome.Shell.SearchProvider2` provider and answers from what it already keeps (recent documents for the office apps, the mail cache for Lifafa, rooms and messages for Mandelbrot). There is no shared indexer and no dependency on Tracker or LocalSearch.
