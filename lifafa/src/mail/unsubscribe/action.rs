@@ -78,7 +78,7 @@ pub(crate) fn one_click_post(url: &str) -> Result<(), String> {
     // Redirects are not followed: ureq turns a redirected POST into a GET,
     // and the page it lands on (a login, a "confirm" form) answers 200
     // without anything having been unsubscribed (#284).
-    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let agent = crate::http::AgentBuilder::new().redirects(0).build();
     match agent
         .post(url)
         .set("User-Agent", crate::services::logo::USER_AGENT)
@@ -86,7 +86,7 @@ pub(crate) fn one_click_post(url: &str) -> Result<(), String> {
         .send_form(&[("List-Unsubscribe", "One-Click")])
     {
         Ok(resp) => post_status(resp.status()),
-        Err(ureq::Error::Status(code, _)) => post_status(code),
+        Err(crate::http::Error::Status(code, _)) => post_status(code),
         Err(e) => Err(e.to_string()),
     }
 }

@@ -108,7 +108,7 @@ const WORDING: Wording = Wording {
     code_first: false,
 };
 
-pub(super) fn dropbox_err(what: &str, e: ureq::Error) -> String {
+pub(super) fn dropbox_err(what: &str, e: crate::http::Error) -> String {
     status_error(what, e, &WORDING)
 }
 
@@ -120,13 +120,13 @@ fn dropbox_rpc(
     access: &str,
     endpoint: &str,
     arg: &serde_json::Value,
-) -> Result<serde_json::Value, ureq::Error> {
-    ureq::post(&format!("{DROPBOX_API}/{endpoint}"))
+) -> Result<serde_json::Value, crate::http::Error> {
+    crate::http::post(&format!("{DROPBOX_API}/{endpoint}"))
         .set("Authorization", &format!("Bearer {access}"))
         .timeout(Duration::from_secs(60))
         .send_json(arg)?
         .into_json()
-        .map_err(ureq::Error::from)
+        .map_err(crate::http::Error::from)
 }
 
 /// The signed-in account: (e-mail, display name).
@@ -156,8 +156,8 @@ fn dropbox_content(
     arg: &serde_json::Value,
     body: impl Read,
     len: u64,
-) -> Result<serde_json::Value, ureq::Error> {
-    ureq::post(&format!("{DROPBOX_CONTENT}/{endpoint}"))
+) -> Result<serde_json::Value, crate::http::Error> {
+    crate::http::post(&format!("{DROPBOX_CONTENT}/{endpoint}"))
         .set("Authorization", &format!("Bearer {access}"))
         .set("Dropbox-API-Arg", &dropbox_arg(arg))
         .set("Content-Type", "application/octet-stream")
@@ -165,7 +165,7 @@ fn dropbox_content(
         .timeout(Duration::from_secs(60 * 60))
         .send(body)?
         .into_json()
-        .map_err(ureq::Error::from)
+        .map_err(crate::http::Error::from)
 }
 
 pub(super) fn dropbox_upload_and_share(
@@ -290,7 +290,7 @@ fn dropbox_share_link(
     let arg = serde_json::json!({"path": lower, "settings": settings});
     let url = match dropbox_rpc(access, "sharing/create_shared_link_with_settings", &arg) {
         Ok(v) => v["url"].as_str().unwrap_or("").to_string(),
-        Err(ureq::Error::Status(409, resp)) => {
+        Err(crate::http::Error::Status(409, resp)) => {
             let text = resp.into_string().unwrap_or_default();
             if text.contains("shared_link_already_exists") {
                 let v = dropbox_rpc(

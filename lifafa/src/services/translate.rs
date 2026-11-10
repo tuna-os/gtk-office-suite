@@ -412,7 +412,7 @@ fn run(
 ) -> Result<(Vec<String>, Option<String>), String> {
     let service = settings.service;
     let to = service_code(service, target);
-    let agent = ureq::AgentBuilder::new()
+    let agent = crate::http::AgentBuilder::new()
         .timeout(Duration::from_secs(45))
         .build();
     let mut out = Vec::with_capacity(pieces.len());

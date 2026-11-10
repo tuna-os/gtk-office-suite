@@ -53,7 +53,7 @@ pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux) Hylki";
 /// of a page is what matters, and a manifest is small.
 fn get_text(url: &str) -> Option<(String, String)> {
     use std::io::Read;
-    let resp = ureq::get(url)
+    let resp = crate::http::get(url)
         .set("User-Agent", USER_AGENT)
         .set(
             "Accept",
@@ -214,7 +214,7 @@ fn resolve_url(base: &str, href: &str) -> Option<String> {
 
 pub(super) fn get(url: &str) -> Option<Vec<u8>> {
     use std::io::Read;
-    let resp = ureq::get(url)
+    let resp = crate::http::get(url)
         .set("User-Agent", USER_AGENT)
         .timeout(std::time::Duration::from_secs(5))
         .call()

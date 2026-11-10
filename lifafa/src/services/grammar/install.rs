@@ -115,7 +115,7 @@ pub(crate) fn remove(dir: &Path) -> Result<(), String> {
 }
 
 fn download(archive: &Archive, to: &Path, progress: &Progress) -> Result<(), String> {
-    let agent = ureq::AgentBuilder::new()
+    let agent = crate::http::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(30))
         .timeout_read(Duration::from_secs(60))
         .build();

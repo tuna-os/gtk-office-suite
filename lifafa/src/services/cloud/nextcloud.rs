@@ -17,7 +17,7 @@ pub(crate) fn detect_product(base: &str) -> Option<String> {
     if base.is_empty() {
         return None;
     }
-    let v: serde_json::Value = ureq::get(&format!("{base}/status.php"))
+    let v: serde_json::Value = crate::http::get(&format!("{base}/status.php"))
         .timeout(Duration::from_secs(15))
         .call()
         .ok()?
@@ -56,7 +56,7 @@ fn dav_root(account: &CloudAccount) -> String {
 /// The OCS user endpoint answers with the display name.
 pub(super) fn nextcloud_verify(account: &CloudAccount, password: &str) -> Result<String, String> {
     let url = format!("{}/ocs/v2.php/cloud/user?format=json", account.base());
-    let v: serde_json::Value = ureq::get(&url)
+    let v: serde_json::Value = crate::http::get(&url)
         .set("Authorization", &auth(account, password))
         .set("OCS-APIRequest", "true")
         .timeout(Duration::from_secs(30))
@@ -96,7 +96,7 @@ pub(super) fn nextcloud_upload_and_share(
     // A name that is free.
     let mut remote = name.clone();
     let exists = |n: &str| {
-        ureq::head(&format!(
+        crate::http::head(&format!(
             "{root}{dir}/{}",
             crate::encoding::percent::encode(n)
         ))
@@ -113,7 +113,7 @@ pub(super) fn nextcloud_upload_and_share(
         chunked_upload(account, &authz, path, &name, size, &target, timeout)?;
     } else {
         let file = std::fs::File::open(path).map_err(|e| format!("could not read {name}: {e}"))?;
-        ureq::put(&target)
+        crate::http::put(&target)
             .set("Authorization", &authz)
             .set("Content-Length", &size.to_string())
             .set("Content-Type", "application/octet-stream")
@@ -151,11 +151,11 @@ fn make_folders(root: &str, folder: &str, authz: &str) -> Result<String, String>
     for part in folder.split('/').filter(|p| !p.is_empty()) {
         dir.push('/');
         dir.push_str(&crate::encoding::percent::encode(part));
-        let r = ureq::request("MKCOL", &format!("{root}{dir}"))
+        let r = crate::http::request("MKCOL", &format!("{root}{dir}"))
             .set("Authorization", authz)
             .call();
         match r {
-            Ok(_) | Err(ureq::Error::Status(405, _)) => {}
+            Ok(_) | Err(crate::http::Error::Status(405, _)) => {}
             Err(e) => return Err(http_err("Could not create the folder", e)),
         }
     }
@@ -182,7 +182,7 @@ fn chunked_upload(
         crate::encoding::percent::encode(account.user.trim()),
         crate::rng::token(12).map_err(|e| e.to_string())?
     );
-    ureq::request("MKCOL", &upload)
+    crate::http::request("MKCOL", &upload)
         .set("Authorization", authz)
         .set("Destination", target)
         .timeout(Duration::from_secs(60))
@@ -190,7 +190,7 @@ fn chunked_upload(
         .map_err(|e| http_err("Could not start the chunked upload", e))?;
     for (i, (offset, len)) in chunk_ranges(size, CLOUDFLARE_CHUNK).into_iter().enumerate() {
         let piece = file_slice(path, name, offset, len)?;
-        ureq::put(&format!("{upload}/{:05}", i + 1))
+        crate::http::put(&format!("{upload}/{:05}", i + 1))
             .set("Authorization", authz)
             .set("Destination", target)
             .set("Content-Length", &len.to_string())
@@ -199,7 +199,7 @@ fn chunked_upload(
             .send(piece)
             .map_err(|e| http_err(&format!("Upload failed at piece {}", i + 1), e))?;
     }
-    ureq::request("MOVE", &format!("{upload}/.file"))
+    crate::http::request("MOVE", &format!("{upload}/.file"))
         .set("Authorization", authz)
         .set("Destination", target)
         .set("OC-Total-Length", &size.to_string())
@@ -235,7 +235,7 @@ fn share_link(
         form.push(("password", p.to_string()));
     }
     let form_ref: Vec<(&str, &str)> = form.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    let v: serde_json::Value = ureq::post(&format!(
+    let v: serde_json::Value = crate::http::post(&format!(
         "{}/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json",
         account.base()
     ))

@@ -14,6 +14,7 @@ mod contacts;
 mod datefmt;
 mod desktop;
 mod encoding;
+mod http;
 mod i18n;
 mod mail;
 mod mcp;

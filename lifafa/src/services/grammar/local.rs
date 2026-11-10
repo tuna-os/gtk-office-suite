@@ -264,7 +264,7 @@ fn start() -> Result<(Child, String), String> {
         )
     })?;
     let address = format!("http://127.0.0.1:{port}/v2");
-    let agent = ureq::AgentBuilder::new()
+    let agent = crate::http::AgentBuilder::new()
         .timeout(Duration::from_secs(2))
         .build();
     let began = Instant::now();

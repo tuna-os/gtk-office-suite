@@ -24,7 +24,7 @@ const WORDING: Wording = Wording {
     code_first: false,
 };
 
-pub(super) fn seafile_err(what: &str, e: ureq::Error) -> String {
+pub(super) fn seafile_err(what: &str, e: crate::http::Error) -> String {
     status_error(what, e, &WORDING)
 }
 
@@ -38,12 +38,12 @@ pub(crate) fn seafile_login_with_code(
     code: &str,
 ) -> Result<(String, String), String> {
     let url = format!("{}/api2/auth-token/", account.base());
-    let v: serde_json::Value = ureq::post(&url)
+    let v: serde_json::Value = crate::http::post(&url)
         .set("X-SEAFILE-OTP", code.trim())
         .timeout(Duration::from_secs(30))
         .send_form(&[("username", account.user.trim()), ("password", password)])
         .map_err(|e| match e {
-            ureq::Error::Status(400, resp) => {
+            crate::http::Error::Status(400, resp) => {
                 format!(
                     "Could not sign in: {}",
                     short_error(&resp.into_string().unwrap_or_default())
@@ -66,7 +66,7 @@ pub(crate) fn seafile_login_with_code(
 /// two-step sign-in, or obtained another way and pasted).
 pub(super) fn seafile_token(account: &CloudAccount, secret: &str) -> Result<String, String> {
     let url = format!("{}/api2/auth-token/", account.base());
-    let login = ureq::post(&url)
+    let login = crate::http::post(&url)
         .timeout(Duration::from_secs(30))
         .send_form(&[("username", account.user.trim()), ("password", secret)]);
     let login_err = match login {
@@ -79,7 +79,7 @@ pub(super) fn seafile_token(account: &CloudAccount, secret: &str) -> Result<Stri
                 _ => "Could not sign in: the server gave no token.".to_string(),
             }
         }
-        Err(ureq::Error::Status(400, resp)) => {
+        Err(crate::http::Error::Status(400, resp)) => {
             let text = resp.into_string().unwrap_or_default();
             if text.to_ascii_lowercase().contains("otp") || text.contains("two") {
                 "Could not sign in: the account uses two-step verification. Enter the current code from your authenticator app in the account's settings and press Check Connection.".to_string()
@@ -98,7 +98,7 @@ pub(super) fn seafile_token(account: &CloudAccount, secret: &str) -> Result<Stri
 
 /// The signed-in account's name (or e-mail).
 pub(super) fn seafile_whoami(account: &CloudAccount, token: &str) -> Result<String, String> {
-    let v: serde_json::Value = ureq::get(&format!("{}/api2/account/info/", account.base()))
+    let v: serde_json::Value = crate::http::get(&format!("{}/api2/account/info/", account.base()))
         .set("Authorization", &seafile_auth(token))
         .timeout(Duration::from_secs(30))
         .call()
@@ -123,7 +123,7 @@ pub(super) fn seafile_whoami(account: &CloudAccount, token: &str) -> Result<Stri
 fn seafile_library(account: &CloudAccount, token: &str) -> Result<String, String> {
     let base = account.base();
     let want = account.library_clean();
-    let repos: serde_json::Value = ureq::get(&format!("{base}/api2/repos/?type=mine"))
+    let repos: serde_json::Value = crate::http::get(&format!("{base}/api2/repos/?type=mine"))
         .set("Authorization", &seafile_auth(token))
         .timeout(Duration::from_secs(60))
         .call()
@@ -148,7 +148,7 @@ fn seafile_library(account: &CloudAccount, token: &str) -> Result<String, String
             }
         }
     }
-    let v: serde_json::Value = ureq::post(&format!("{base}/api2/repos/"))
+    let v: serde_json::Value = crate::http::post(&format!("{base}/api2/repos/"))
         .set("Authorization", &seafile_auth(token))
         .timeout(Duration::from_secs(60))
         .send_form(&[("name", want.as_str()), ("desc", "Files shared from Hylki")])
@@ -223,7 +223,7 @@ pub(super) fn seafile_upload_and_share(
     } else {
         let file = std::fs::File::open(path).map_err(|e| format!("could not read {name}: {e}"))?;
         let (ctype, len, body) = multipart_upload(&fields, &name, file, size)?;
-        ureq::post(&link)
+        crate::http::post(&link)
             .set("Authorization", &authz)
             .set("Content-Type", &ctype)
             .set("Content-Length", &len.to_string())
@@ -283,14 +283,14 @@ fn seafile_make_folders(
             "{base}/api2/repos/{repo}/dir/?p={}",
             crate::encoding::percent::encode_path(&dir)
         );
-        let there = ureq::get(&url)
+        let there = crate::http::get(&url)
             .set("Authorization", authz)
             .timeout(Duration::from_secs(60))
             .call();
         match there {
             Ok(_) => {}
-            Err(ureq::Error::Status(404, _)) => {
-                ureq::post(&url)
+            Err(crate::http::Error::Status(404, _)) => {
+                crate::http::post(&url)
                     .set("Authorization", authz)
                     .timeout(Duration::from_secs(60))
                     .send_form(&[("operation", "mkdir")])
@@ -310,7 +310,7 @@ fn seafile_upload_link(
     authz: &str,
     parent: &str,
 ) -> Result<String, String> {
-    let link: serde_json::Value = ureq::get(&format!(
+    let link: serde_json::Value = crate::http::get(&format!(
         "{base}/api2/repos/{repo}/upload-link/?p={}",
         crate::encoding::percent::encode_path(parent)
     ))
@@ -347,7 +347,7 @@ fn seafile_resumable_upload(
         let piece = file_slice(path, name, offset, len)?;
         let (ctype, body_len, body) = multipart_upload(fields, name, piece, len)?;
         let end = (offset + len).saturating_sub(1);
-        last = ureq::post(link)
+        last = crate::http::post(link)
             .set("Authorization", authz)
             .set("Content-Type", &ctype)
             .set("Content-Length", &body_len.to_string())
@@ -383,7 +383,7 @@ fn seafile_share_link(
     if expires {
         form.push(("expire_days", days.as_str()));
     }
-    let v: serde_json::Value = ureq::post(&format!("{}/api/v2.1/share-links/", account.base()))
+    let v: serde_json::Value = crate::http::post(&format!("{}/api/v2.1/share-links/", account.base()))
         .set("Authorization", authz)
         .timeout(Duration::from_secs(60))
         .send_form(&form)

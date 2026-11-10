@@ -46,7 +46,7 @@ pub(super) fn spawn_jmap_push(s: JmapSession, tx: mpsc::UnboundedSender<()>) {
                     continue;
                 }
                 jmap_wire("GET events");
-                let resp = ureq::AgentBuilder::new()
+                let resp = crate::http::AgentBuilder::new()
                     .timeout_connect(Duration::from_secs(20))
                     // The server pings every 30 s; well past that means the
                     // connection is dead.
