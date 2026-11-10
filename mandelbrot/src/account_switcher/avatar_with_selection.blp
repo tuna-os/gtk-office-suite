@@ -1,0 +1,23 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AvatarWithSelection: Adw.Bin {
+  accessible-role: presentation;
+
+  child: Gtk.Overlay {
+    $Avatar child_avatar {}
+
+    [overlay]
+    Gtk.Image checkmark {
+      visible: false;
+      halign: end;
+      valign: end;
+      icon-name: "checkmark-symbolic";
+      pixel-size: 11;
+
+      styles [
+        "accent-circle",
+      ]
+    }
+  };
+}

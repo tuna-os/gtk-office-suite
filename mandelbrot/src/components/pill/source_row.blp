@@ -1,0 +1,37 @@
+using Gtk 4.0;
+
+template $PillSourceRow: ListBoxRow {
+  Gtk.Box {
+    spacing: 10;
+
+    $Avatar avatar {
+      size: 36;
+      accessible-role: presentation;
+      data: bind template.source as <$PillSource>.avatar-data;
+    }
+
+    Gtk.Box {
+      spacing: 3;
+      orientation: vertical;
+
+      Gtk.Label display_name {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+        label: bind template.source as <$PillSource>.display-name;
+      }
+
+      Gtk.Label id {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+        label: bind template.source as <$PillSource>.identifier;
+
+        styles [
+          "dimmed",
+          "caption",
+        ]
+      }
+    }
+  }
+}

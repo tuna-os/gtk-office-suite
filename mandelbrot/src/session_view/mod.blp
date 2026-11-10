@@ -1,0 +1,69 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SessionView: Adw.Bin {
+  child: Gtk.Stack stack {
+    visible-child: overlay;
+    transition-type: crossfade;
+
+    Gtk.Overlay overlay {
+      [overlay]
+      $MediaViewer media_viewer {
+        visible: false;
+      }
+
+      Adw.NavigationSplitView split_view {
+        collapsed: bind template.root as <$Window>.compact;
+
+        sidebar: $Sidebar sidebar {
+          user: bind template.session as <$Session>.user;
+          list-model: bind template.session as <$Session>.sidebar-list-model;
+        };
+
+        content: $Content content {
+          session: bind template.session;
+          only-view: bind template.root as <$Window>.compact;
+        };
+      }
+    }
+  };
+
+  Gtk.ShortcutController {
+    propagation-phase: capture;
+
+    Gtk.Shortcut {
+      trigger: "<Control>Page_Up";
+      action: "action(session.select-prev-room)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control>Page_Down";
+      action: "action(session.select-next-room)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control><Shift>Page_Down";
+      action: "action(session.select-next-unread-room)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control><Shift>Page_Up";
+      action: "action(session.select-prev-unread-room)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control><Alt>Page_Up";
+      action: "action(session.select-prev-space)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control><Alt>Page_Down";
+      action: "action(session.select-next-space)";
+    }
+
+    Gtk.Shortcut {
+      trigger: "<Control><Alt>Home";
+      action: "action(session.select-home)";
+    }
+  }
+}

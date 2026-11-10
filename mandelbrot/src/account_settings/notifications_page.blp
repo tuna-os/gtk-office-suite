@@ -1,0 +1,66 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $NotificationsPage: Adw.PreferencesPage {
+  icon-name: "notifications-symbolic";
+  title: _("Notifications");
+  name: "notifications";
+
+  Adw.PreferencesGroup {
+    $SwitchLoadingRow account_row {
+      title: _("Enable for This Account");
+      is-loading: bind template.account-loading;
+      notify::is-active => $set_account_enabled() swapped;
+    }
+
+    Adw.SwitchRow session_row {
+      selectable: false;
+      title: _("Enable for This Session");
+      notify::active => $set_session_enabled() swapped;
+    }
+  }
+
+  Adw.PreferencesGroup global {
+    title: _("Global");
+    description: _("Which messages trigger notifications in rooms that do not have more specific rules");
+
+    $CheckLoadingRow global_all_row {
+      title: _("All messages in all rooms");
+      action-name: "notifications.set-global-default";
+      action-target: "'all'";
+    }
+
+    $CheckLoadingRow global_direct_row {
+      title: _("All messages in direct chats, and mentions and keywords in all rooms");
+      action-name: "notifications.set-global-default";
+      action-target: "'direct-and-mentions'";
+    }
+
+    $CheckLoadingRow global_mentions_row {
+      title: _("Only mentions and keywords in all rooms");
+      action-name: "notifications.set-global-default";
+      action-target: "'mentions-only'";
+    }
+  }
+
+  Adw.PreferencesGroup {
+    title: _("Keywords");
+    description: _(
+      "Messages that contain one of these keywords trigger notifications. Matching on these keywords is case-insensitive."
+    );
+
+    ListBox keywords {
+      styles [
+        "boxed-list",
+      ]
+    }
+  }
+}
+
+$EntryAddRow keywords_add_row {
+  title: _("Add Keyword");
+  add-button-tooltip-text: _("Add Keyword");
+  changed => $update_keywords() swapped;
+  add => $add_keyword() swapped;
+  entry-activated => $add_keyword() swapped;
+}

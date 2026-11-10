@@ -1,0 +1,213 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ErrorPage: Adw.Bin {
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      title-widget: Adw.WindowTitle {
+        title: _("Error");
+      };
+
+      [start]
+      $AccountSwitcherButton account_switcher {}
+
+      [start]
+      Gtk.Button {
+        visible: bind account_switcher.visible inverted;
+        action-name: "app.about";
+        tooltip-text: _("About Mandelbrot");
+        icon-name: "about-symbolic";
+
+        accessibility {
+          label: _("About Mandelbrot");
+        }
+      }
+
+      [end]
+      Gtk.Button {
+        visible: bind account_switcher.visible;
+        action-name: "app.about";
+        tooltip-text: _("About Mandelbrot");
+        icon-name: "about-symbolic";
+
+        accessibility {
+          label: _("About Mandelbrot");
+        }
+      }
+    }
+
+    content: Gtk.Stack stack {
+      Gtk.StackPage {
+        name: "secret";
+
+        child: Adw.StatusPage secret_error_page {
+          title: _("Secret Portal Error");
+          icon-name: "key-symbolic";
+          vexpand: true;
+
+          Adw.Clamp linux_secret_instructions {
+            Gtk.Box {
+              orientation: vertical;
+              spacing: 12;
+
+              Gtk.Label {
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0.0;
+                label: _(
+                  "Mandelbrot relies on a Secret Portal to manage your sensitive session information and an error occurred while we were trying to restore your sessions."
+                );
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Box {
+                orientation: vertical;
+                spacing: 12;
+
+                Gtk.Label {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  xalign: 0.0;
+                  label: _("Here are a few things that might help you fix issues with the Secret Portal:");
+
+                  styles [
+                    "body",
+                  ]
+                }
+
+                Gtk.Box {
+                  spacing: 6;
+
+                  Gtk.Label {
+                    valign: start;
+                    label: "•";
+                  }
+
+                  Gtk.Label {
+                    wrap: true;
+                    wrap-mode: word_char;
+                    xalign: 0.0;
+                    label: _("Make sure you have a Secret Portal Backend Provider installed, like gnome-keyring.");
+
+                    styles [
+                      "body",
+                    ]
+                  }
+                }
+
+                Gtk.Box {
+                  spacing: 6;
+
+                  Gtk.Label {
+                    valign: start;
+                    label: "•";
+                  }
+
+                  Gtk.Box {
+                    orientation: vertical;
+                    spacing: 12;
+
+                    Gtk.Label {
+                      wrap: true;
+                      wrap-mode: word_char;
+                      xalign: 0.0;
+                      label: _(
+                        "If you prefer to use a Secret Service Provider instead, you need to allow Mandelbrot to interact with it, like this:"
+                      );
+
+                      styles [
+                        "body",
+                      ]
+                    }
+
+                    Gtk.Box {
+                      styles [
+                        "card",
+                        "linked",
+                        "command",
+                      ]
+
+                      Gtk.ScrolledWindow {
+                        vscrollbar-policy: never;
+
+                        child: Gtk.Label secret_service_override_command {
+                          xalign: 0.0;
+                          hexpand: true;
+                          selectable: true;
+                          margin-start: 10;
+                          margin-end: 10;
+
+                          styles [
+                            "monospace",
+                          ]
+                        };
+                      }
+
+                      Gtk.Button {
+                        icon-name: "copy-symbolic";
+                        tooltip-text: _("Copy Command");
+                        valign: center;
+                        halign: end;
+                        margin-start: 3;
+                        clicked => $copy_secret_service_override_command() swapped;
+
+                        styles [
+                          "flat",
+                        ]
+                      }
+                    }
+                  }
+                }
+
+                Gtk.Box {
+                  spacing: 6;
+
+                  Gtk.Label {
+                    valign: start;
+                    label: "•";
+                  }
+
+                  Gtk.Label {
+                    wrap: true;
+                    wrap-mode: word_char;
+                    xalign: 0.0;
+                    label: _("Check that you have a default keyring and that it is unlocked.");
+
+                    styles [
+                      "body",
+                    ]
+                  }
+                }
+              }
+
+              Gtk.Label {
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0.0;
+                label: _("Check the application logs and your distribution’s documentation for more details.");
+
+                styles [
+                  "body",
+                ]
+              }
+            }
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "session";
+
+        child: Adw.StatusPage session_error_page {
+          title: _("Could Not Initialize Session");
+          icon-name: "warning-symbolic";
+          vexpand: true;
+        };
+      }
+    };
+  }
+}

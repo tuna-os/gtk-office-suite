@@ -1,0 +1,107 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsJoinRuleSubpage: Adw.NavigationPage {
+  title: _("Who Can Join");
+
+  styles [
+    "form-page",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-back-button: false;
+
+      [start]
+      Gtk.Button {
+        icon-name: "go-previous-symbolic";
+        tooltip-text: _("Back");
+        clicked => $go_back() swapped;
+
+        styles [
+          "back",
+        ]
+      }
+
+      [end]
+      $LoadingButton save_button {
+        sensitive: bind template.changed;
+        content-label: _("_Save");
+        use-underline: true;
+        clicked => $save() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        child: Gtk.Box {
+          orientation: vertical;
+
+          Gtk.Box info_box {
+            visible: false;
+            margin-start: 12;
+            margin-end: 12;
+            spacing: 12;
+
+            styles [
+              "dimmed",
+            ]
+
+            Gtk.Image info_image {
+              pixel-size: 24;
+              accessible-role: presentation;
+            }
+
+            Gtk.Label info_description {
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0.0;
+
+              styles [
+                "body",
+              ]
+            }
+          }
+
+          Gtk.ListBox {
+            styles [
+              "boxed-list",
+            ]
+
+            $CheckLoadingRow {
+              title: _("Only Invited Users");
+              action-name: "join-rule.set-value";
+              action-target: "'invite'";
+            }
+
+            $CheckLoadingRow {
+              title: _("Any Registered User");
+              action-name: "join-rule.set-value";
+              action-target: "'public'";
+            }
+          }
+
+          Gtk.ListBox knock_box {
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.SwitchRow knock_row {
+              selectable: false;
+              title: _("Allow Invite Requests");
+              notify::active => $update_changed() swapped;
+            }
+          }
+        };
+      };
+    };
+  };
+}

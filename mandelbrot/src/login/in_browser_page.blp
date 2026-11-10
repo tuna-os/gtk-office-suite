@@ -1,0 +1,95 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoginInBrowserPage: Adw.NavigationPage {
+  tag: "in-browser";
+  title: _("Authentication");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {}
+
+      Gtk.ScrolledWindow scrolled_window {
+        hscrollbar-policy: never;
+        propagate-natural-height: true;
+        vexpand: true;
+
+        child: Adw.Clamp {
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+
+          child: Gtk.Box {
+            orientation: vertical;
+            spacing: 36;
+            valign: center;
+
+            Gtk.Label title {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+              label: _("Authentication");
+              accessible-role: heading;
+
+              styles [
+                "title-1",
+              ]
+
+              accessibility {
+                level: 1;
+              }
+            }
+
+            Gtk.Label instructions {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+              label: _("Click on the button below and follow the steps in the browser");
+
+              styles [
+                "body",
+              ]
+            }
+
+            Gtk.Button continue_btn {
+              halign: center;
+              clicked => $launch_url() swapped;
+
+              styles [
+                "suggested-action",
+                "standalone-button",
+                "image-text-button",
+                "pill",
+              ]
+
+              child: Gtk.Box {
+                halign: center;
+
+                Gtk.Label {
+                  label: _("Contin_ue");
+                  use-underline: true;
+                  ellipsize: end;
+                  mnemonic-widget: continue_btn;
+                }
+
+                Gtk.Image {
+                  icon-name: "external-link-symbolic";
+                  accessible-role: presentation;
+                  valign: center;
+                }
+              };
+            }
+          };
+        };
+      }
+    };
+  };
+}

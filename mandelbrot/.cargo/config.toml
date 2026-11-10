@@ -1,0 +1,5 @@
+[build]
+rustflags = ["--cfg", "ruma_identifiers_storage=\"Arc\""]
+
+[doc.extern-map.registries]
+crates-io = "https://docs.rs/"

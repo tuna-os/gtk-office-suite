@@ -1,0 +1,31 @@
+using Gtk 4.0;
+
+template $ContentMessageInfo: Gtk.Grid {
+  column-spacing: 12;
+
+  Gtk.Image icon {
+    styles [
+      "dimmed",
+    ]
+
+    layout {
+      column: 0;
+      row: 0;
+    }
+  }
+
+  Gtk.Label label {
+    wrap: true;
+    wrap-mode: word_char;
+    xalign: 0;
+
+    styles [
+      "dimmed",
+    ]
+
+    layout {
+      column: 1;
+      row: 0;
+    }
+  }
+}

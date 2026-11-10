@@ -1,0 +1,115 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentInviteRequest: Adw.Bin {
+  vexpand: true;
+  hexpand: true;
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      [title]
+      Adw.WindowTitle {
+        title: _("Invite Request");
+      }
+    }
+
+    content: Gtk.ScrolledWindow {
+      vexpand: true;
+      hscrollbar-policy: never;
+
+      child: Adw.Clamp {
+        maximum-size: 444;
+        tightening-threshold: 300;
+        vexpand: true;
+        margin-top: 24;
+        margin-bottom: 24;
+        margin-start: 24;
+        margin-end: 24;
+
+        child: Gtk.Box {
+          valign: center;
+          halign: center;
+          spacing: 24;
+          orientation: vertical;
+
+          accessibility {
+            label: _("Invite Request");
+          }
+
+          $Avatar avatar {
+            size: 150;
+            data: bind template.room as <$Room>.avatar-data;
+            accessible-role: "presentation";
+          }
+
+          Gtk.Box {
+            orientation: vertical;
+
+            Gtk.Label display_name {
+              ellipsize: end;
+              label: bind template.room as <$Room>.display-name;
+
+              styles [
+                "invite-room-name",
+              ]
+            }
+
+            Gtk.Label room_alias {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+              label: bind template.room as <$Room>.aliases as <$RoomAliases>.alias-string;
+
+              styles [
+                "dimmed",
+              ]
+            }
+          }
+
+          Gtk.Label room_topic {
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            use-markup: true;
+            label: bind template.room as <$Room>.topic-linkified;
+
+            styles [
+              "dimmed",
+              "body",
+            ]
+          }
+
+          Gtk.Label {
+            halign: center;
+            justify: center;
+            wrap: true;
+            wrap-mode: word_char;
+            label: _("You requested an invite to this room");
+
+            styles [
+              "body",
+            ]
+          }
+
+          Gtk.Box {
+            halign: center;
+            spacing: 24;
+            margin-top: 24;
+
+            $LoadingButton retract_button {
+              content-label: _("_Retract");
+              clicked => $retract() swapped;
+
+              styles [
+                "pill",
+                "large",
+                "destructive-action",
+              ]
+            }
+          }
+        };
+      };
+    };
+  }
+}

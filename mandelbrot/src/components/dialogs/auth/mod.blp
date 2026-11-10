@@ -1,0 +1,15 @@
+using Gtk 4.0;
+
+template $AuthDialog: $ToastableDialog {
+  title: _("Authentication");
+  follows-content-size: true;
+  presentation-mode: floating;
+
+  styles [
+    "alert",
+  ]
+
+  child-content: Gtk.Stack stack {
+    transition-type: slide_left;
+  };
+}

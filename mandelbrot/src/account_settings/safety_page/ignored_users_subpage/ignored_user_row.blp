@@ -1,0 +1,33 @@
+using Gtk 4.0;
+
+template $IgnoredUserRow: Gtk.Box {
+  spacing: 12;
+
+  styles [
+    "header",
+  ]
+
+  accessibility {
+    labelled-by: [
+      title,
+    ];
+  }
+
+  Gtk.Label title {
+    halign: start;
+    hexpand: true;
+    ellipsize: end;
+    label: bind template.item as <Gtk.StringObject>.string;
+
+    styles [
+      "title",
+    ]
+  }
+
+  $LoadingButton stop_ignoring_button {
+    halign: end;
+    valign: center;
+    content-label: _("Stop Ignoring");
+    clicked => $stop_ignoring_user() swapped;
+  }
+}

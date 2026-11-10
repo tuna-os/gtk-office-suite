@@ -1,0 +1,40 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentVerificationInfoBar: Adw.Bin {
+  styles [
+    "info",
+  ]
+
+  Gtk.Revealer revealer {
+    child: Gtk.Box {
+      Gtk.Label label {
+        margin-start: 12;
+        hexpand: true;
+        halign: start;
+        wrap: true;
+        wrap-mode: word_char;
+
+        styles [
+          "body",
+        ]
+      }
+
+      $LoadingButton accept_btn {
+        action-name: "verification.accept";
+        valign: center;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+
+      [end]
+      $LoadingButton cancel_btn {
+        margin-end: 12;
+        action-name: "verification.decline";
+        valign: center;
+      }
+    };
+  }
+}

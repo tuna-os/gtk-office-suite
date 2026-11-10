@@ -1,0 +1,28 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AccountSettings: Adw.PreferencesDialog {
+  title: _("Account Settings");
+  content-height: 780;
+
+  styles [
+    "account-settings",
+  ]
+
+  $AccountSettingsGeneralPage {
+    session: bind template.session;
+    account-settings: "AccountSettings";
+  }
+
+  $NotificationsPage {
+    notifications-settings: bind template.session as <$Session>.notifications as <$Notifications>.settings;
+  }
+
+  $SafetyPage {
+    session: bind template.session;
+  }
+
+  $EncryptionPage {
+    session: bind template.session;
+  }
+}

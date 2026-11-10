@@ -1,0 +1,527 @@
+# Slovak translations for fractal package.
+# Copyright (C) 2018 THE fractal'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Automatically generated, 2018.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2018-05-22 11:49+0200\n"
+"PO-Revision-Date: 2018-05-22 11:49+0200\n"
+"Last-Translator: Peter Vágner <pvagner@pvagner.tk>\n"
+"Language-Team: none\n"
+"Language: sk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 1 : (n>=2 && n<=4) ? 2 : 0;\n"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:13
+msgid "General"
+msgstr "Všeobecné"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:18
+msgid "Close the active room"
+msgstr "Zatvorenie aktívnej miestnosti"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:25
+msgid "Open / close the room sidebar search"
+msgstr "Otvorenie / zatvorenie postraného panelu hľadať miestnosti"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:31
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "Klávesové skratky"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:38
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Ukončiť"
+
+#: fractal-gtk/res/gtk/menus.ui:6
+msgid "Keyboard _Shortcuts"
+msgstr "Klávesové _skratky"
+
+#: fractal-gtk/res/gtk/menus.ui:10
+msgid "_About"
+msgstr "_O programe"
+
+#: fractal-gtk/res/gtk/menus.ui:14
+msgid "_Quit"
+msgstr "U_končiť"
+
+#: fractal-gtk/res/org.gnome.Fractal.appdata.xml:4
+#: fractal-gtk/res/org.gnome.Fractal.desktop:3
+msgid "Fractal"
+msgstr ""
+
+#: fractal-gtk/res/org.gnome.Fractal.appdata.xml:7
+msgid "Daniel García Moreno"
+msgstr ""
+
+#: fractal-gtk/res/org.gnome.Fractal.appdata.xml:8
+msgid "Matrix group messaging app"
+msgstr "Matrix aplikácia určená na skupinové konverzácie"
+
+#: fractal-gtk/res/org.gnome.Fractal.appdata.xml:11
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects."
+msgstr "Fractal je matrix aplikácia určená na skupinové konverzácie pre pracovné prostredie GNOME napísaná v programovacom jazyku Rust. Používateľské rozhranie je optimalizované na vzájomnú spoluprácu vo väčších skupinách ako sú napríklad projekty zastrešujúce vývoj open-source."
+
+#: fractal-gtk/res/org.gnome.Fractal.desktop:4
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr "Fractal je decentralizovaný bezpečný klient určený na  okamžité konverzácie a vzájomnú komunikáciu v skupinách."
+
+#: fractal-gtk/res/org.gnome.Fractal.desktop:5
+msgid "Fractal group messaging"
+msgstr "Skupinové konverzácie Fractal"
+
+#. Translators: Do NOT translate or transliterate this text (this is an icon file name)!
+#: fractal-gtk/res/org.gnome.Fractal.desktop:8
+msgid "org.gnome.Fractal"
+msgstr ""
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: fractal-gtk/res/org.gnome.Fractal.desktop:14
+msgid "Matrix;matrix.org;"
+msgstr ""
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:13
+msgid "Type of password and token storage"
+msgstr "Typ úložiska hesla a tokenu"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:14
+msgid "Type of password and token storage, default value is: Secret Service"
+msgstr "Typ úložiska hesla a tokenu, predvolená hodnota je Secret Service"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:23
+msgid "Room directory"
+msgstr "Adresár miestností"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:37 fractal-gtk/res/ui/join_room.ui:90
+msgid "Join room"
+msgstr "Vstúpiť do miestnosti"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:64
+msgid "New room"
+msgstr "Nová miestnosť"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:78 fractal-gtk/res/ui/direct_chat.ui:115
+msgid "New direct chat"
+msgstr "Nová priama konverzácia"
+
+#: fractal-gtk/res/ui/direct_chat.ui:64 fractal-gtk/res/ui/invite_user.ui:64
+#: fractal-gtk/res/ui/main_window.ui:695
+msgid "Matrix username, email or phone number"
+msgstr "Používateľské meno matrix, email alebo telefónne číslo"
+
+#: fractal-gtk/res/ui/direct_chat.ui:118 fractal-gtk/res/ui/invite_user.ui:121
+#: fractal-gtk/res/ui/join_room.ui:93 fractal-gtk/res/ui/leave_room.ui:33
+#: fractal-gtk/res/ui/new_room.ui:42 fractal-gtk/src/appop/attach.rs:66
+msgid "Cancel"
+msgstr "Zrušiť"
+
+#: fractal-gtk/res/ui/direct_chat.ui:126
+msgid "Start chat"
+msgstr "Začať konverzáciu"
+
+#: fractal-gtk/res/ui/filechooser.ui:62
+msgid "Select room image file"
+msgstr "Vyberte obrázok miestnosti"
+
+#: fractal-gtk/res/ui/invite_user.ui:137 fractal-gtk/res/ui/invite_user.ui:150
+#: fractal-gtk/src/appop/invite.rs:140
+msgid "Invite"
+msgstr "Pozvať"
+
+#: fractal-gtk/res/ui/invite.ui:19
+msgid "Invitation"
+msgstr "Pozvanie"
+
+#: fractal-gtk/res/ui/invite.ui:20
+msgid "You’ve been invited to join \"\", you can accept or reject"
+msgstr "Boli ste pozvaní vstúpiť do miestnosti \"\", prijmite alebo odmietnite pozvanie"
+
+#: fractal-gtk/res/ui/invite.ui:33
+msgid "Reject"
+msgstr "Odmietnuť"
+
+#: fractal-gtk/res/ui/invite.ui:46
+msgid "Accept"
+msgstr "Prijať"
+
+#: fractal-gtk/res/ui/join_room.ui:53
+msgid "ID or Alias"
+msgstr "ID alebo alias"
+
+#: fractal-gtk/res/ui/join_room.ui:101 fractal-gtk/src/appop/invite.rs:209
+#: fractal-gtk/src/widgets/room.rs:94
+msgid "Join"
+msgstr "Vstúpiť"
+
+#: fractal-gtk/res/ui/leave_room.ui:19
+msgid "Leave?"
+msgstr "Opustiť?"
+
+#: fractal-gtk/res/ui/leave_room.ui:20
+msgid ""
+"Once you leave, you won't be able to interact with people in the room "
+"anymore."
+msgstr "Ak miestnosť opustíte, nebudete viac môcť komunikovať s jej členmi kým opätovne nevstúpite"
+
+#: fractal-gtk/res/ui/leave_room.ui:46 fractal-gtk/res/ui/room_menu.ui:64
+msgid "Leave room"
+msgstr "Opustiť miestnosť"
+
+#: fractal-gtk/res/ui/main_window.ui:179
+msgid "Searching"
+msgstr "Vyhľadávanie"
+
+#: fractal-gtk/res/ui/main_window.ui:258
+msgid "Scroll to bottom"
+msgstr "Posunúť na spodok"
+
+#: fractal-gtk/res/ui/main_window.ui:301
+msgid "Attach files"
+msgstr "Pripojiť súbory"
+
+#: fractal-gtk/res/ui/main_window.ui:328
+msgid "Text formatting"
+msgstr "Formátovanie textu"
+
+#: fractal-gtk/res/ui/main_window.ui:401
+msgid "No room selected"
+msgstr "Nie je vybratá žiadna miestnosť"
+
+#: fractal-gtk/res/ui/main_window.ui:416
+msgid "Join a room to start chatting"
+msgstr "Konverzáciu začnete vstupom do miestnosti"
+
+#: fractal-gtk/res/ui/main_window.ui:426
+msgid "No room"
+msgstr "Žiadna miestnosť"
+
+#: fractal-gtk/res/ui/main_window.ui:473
+msgid "This is an app-notification"
+msgstr ""
+
+#: fractal-gtk/res/ui/main_window.ui:511
+msgid "Chat"
+msgstr ""
+
+#: fractal-gtk/res/ui/main_window.ui:563 fractal-gtk/src/appop/directory.rs:97
+msgid "Search"
+msgstr "Hľadať"
+
+#: fractal-gtk/res/ui/main_window.ui:609
+msgid "Directory"
+msgstr "Adresár"
+
+#: fractal-gtk/res/ui/main_window.ui:633
+msgid "Loading"
+msgstr "Načítavanie"
+
+#: fractal-gtk/res/ui/main_window.ui:659 fractal-gtk/res/ui/main_window.ui:708
+msgid "Log In"
+msgstr "Prihlásiť sa"
+
+#: fractal-gtk/res/ui/main_window.ui:678
+msgid "Username"
+msgstr "Meno používateľa"
+
+#: fractal-gtk/res/ui/main_window.ui:728
+msgid "Password"
+msgstr "Heslo"
+
+#: fractal-gtk/res/ui/main_window.ui:773
+msgid "Home server URL"
+msgstr "URL adresa domovského servera"
+
+#: fractal-gtk/res/ui/main_window.ui:791
+msgid "Identity server URL"
+msgstr "URL adresa servera totožností"
+
+#: fractal-gtk/res/ui/main_window.ui:808
+msgid "Matrix Server"
+msgstr "Matrix server"
+
+#: fractal-gtk/res/ui/main_window.ui:827
+msgid "Identity server"
+msgstr "Server totožností"
+
+#: fractal-gtk/res/ui/main_window.ui:864
+msgid "Advanced"
+msgstr "Pokročilé"
+
+#: fractal-gtk/res/ui/main_window.ui:879 fractal-gtk/src/appop/login.rs:107
+msgid "Invalid username or password"
+msgstr "Meno používateľaalebo heslo nie je správne"
+
+#: fractal-gtk/res/ui/main_window.ui:933
+msgid "Reset Password"
+msgstr "Obnoviť heslo"
+
+#: fractal-gtk/res/ui/main_window.ui:947
+msgid "Create Account"
+msgstr "Vytvoriť účet"
+
+#: fractal-gtk/res/ui/main_window.ui:961
+msgid "Log In as Guest"
+msgstr "Prihlásiť sa ako hosť"
+
+#: fractal-gtk/res/ui/main_window.ui:983
+msgid "Login"
+msgstr "Prihlásiť"
+
+#: fractal-gtk/res/ui/main_window.ui:1020
+msgid "User"
+msgstr "Používateľ"
+
+#: fractal-gtk/res/ui/main_window.ui:1043
+msgid "Add"
+msgstr "Pridať"
+
+#: fractal-gtk/res/ui/main_window.ui:1074
+msgid "Room search"
+msgstr "Hľadať miestnosť"
+
+#: fractal-gtk/res/ui/main_window.ui:1143 fractal-gtk/res/ui/new_room.ui:108
+msgid "Room name"
+msgstr "Názov miestnosti"
+
+#: fractal-gtk/res/ui/main_window.ui:1172
+msgid "Room topic"
+msgstr "Téma miestnosti"
+
+#: fractal-gtk/res/ui/main_window.ui:1245
+msgid "Members"
+msgstr "Členovia"
+
+#: fractal-gtk/res/ui/main_window.ui:1317
+#: fractal-gtk/res/ui/main_window.ui:1337
+msgid "Back"
+msgstr "Naspäť"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:28
+msgid "Markdown"
+msgstr ""
+
+#: fractal-gtk/res/ui/markdown_popover.ui:76
+msgid "> quote"
+msgstr "> citát"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:88
+msgid "**bold**"
+msgstr "**tučné**"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:104
+msgid "`code`"
+msgstr "`kód`"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:116
+msgid "*italic*"
+msgstr "*kurzíva*"
+
+#: fractal-gtk/res/ui/members.ui:25
+msgid "Search for room members"
+msgstr "Hľadať členov v miestnosti"
+
+#: fractal-gtk/res/ui/new_room.ui:14
+msgid "Private Chat"
+msgstr "Súkromná konverzácia"
+
+#: fractal-gtk/res/ui/new_room.ui:18 fractal-gtk/res/ui/new_room.ui:187
+msgid "Public"
+msgstr "Verejná"
+
+#: fractal-gtk/res/ui/new_room.ui:39
+msgid "Create new room"
+msgstr "Vytvoriť miestnosť"
+
+#: fractal-gtk/res/ui/new_room.ui:50
+msgid "Create"
+msgstr "Vytvoriť"
+
+#: fractal-gtk/res/ui/new_room.ui:152
+msgid "Visibility"
+msgstr "Viditeľnosť"
+
+#: fractal-gtk/res/ui/new_room.ui:171
+msgid "Private"
+msgstr "Súkromná"
+
+#: fractal-gtk/res/ui/room_config.ui:54
+msgid "Room avatar"
+msgstr "Obrázok miestnosti"
+
+#: fractal-gtk/res/ui/room_config.ui:80
+msgid "ID"
+msgstr "ID"
+
+#: fractal-gtk/res/ui/room_config.ui:98
+msgid "Name"
+msgstr "Názov"
+
+#: fractal-gtk/res/ui/room_config.ui:116
+msgid "Topic"
+msgstr "Téma"
+
+#: fractal-gtk/res/ui/room_config.ui:186 fractal-gtk/res/ui/room_menu.ui:37
+msgid "Room details"
+msgstr "Podrobnosti miestnosti"
+
+#: fractal-gtk/res/ui/room_menu.ui:23
+msgid "Invite to this room"
+msgstr "Pozvať do tejto miestnosti"
+
+#: fractal-gtk/res/ui/user_menu.ui:109
+msgid "Account Settings"
+msgstr "Nastavenia účtu"
+
+#: fractal-gtk/res/ui/user_menu.ui:136
+msgid "Log Out"
+msgstr "Odhlásiť sa"
+
+#: fractal-gtk/src/app/backend_loop.rs:97
+msgid "No rooms found"
+msgstr "Neboli nájdené žiadne miestnosti"
+
+#: fractal-gtk/src/app/backend_loop.rs:161
+msgid "Can’t create the room, try again"
+msgstr "Nie je možné vytvoriť miestnosť, prosím skúste to zopakovať neskôr"
+
+#: fractal-gtk/src/app/backend_loop.rs:169
+msgid "Can’t join the room, try again."
+msgstr "Nie je možné vstúpiť do miestnosti, prosím skúste to zopakovať neskôr."
+
+#: fractal-gtk/src/app/backend_loop.rs:175
+msgid "Can’t login, try again"
+msgstr "Nie je možné sa prihlásiť, skúste to zopakovať neskôr"
+
+#: fractal-gtk/src/app/backend_loop.rs:181
+msgid "Error sending message"
+msgstr "Chyba pri posielaní správy"
+
+#: fractal-gtk/src/app/backend_loop.rs:185
+msgid "Error searching for rooms"
+msgstr "Chyba pri hľadaní miestností"
+
+#: fractal-gtk/src/appop/about.rs:19
+msgid "A Matrix.org client for GNOME"
+msgstr "Klient matrix.org pre pracovné prostredie GNOME"
+
+#: fractal-gtk/src/appop/about.rs:20
+msgid "© 2017–2018 Daniel García Moreno, et al."
+msgstr "© 2017–2018 Daniel García Moreno, a ostatní."
+
+#: fractal-gtk/src/appop/about.rs:26
+msgid "Learn more about Fractal"
+msgstr "Dozvedieť sa viac o Fractal"
+
+#: fractal-gtk/src/appop/about.rs:41
+msgid "Name by"
+msgstr "Názov"
+
+#: fractal-gtk/src/appop/attach.rs:52
+msgid "Image from Clipboard"
+msgstr "Obrázok zo schránky"
+
+#: fractal-gtk/src/appop/attach.rs:67
+msgid "Send"
+msgstr "Odoslať"
+
+#: fractal-gtk/src/appop/directory.rs:60
+msgid "Searching…"
+msgstr "Vyhľadávanie"
+
+#: fractal-gtk/src/appop/invite.rs:137
+msgid "Invite to {name}"
+msgstr "Pozvať do {name}"
+
+#: fractal-gtk/src/appop/invite.rs:213
+msgid ""
+"You’ve been invited to join to <b>{room_name}</b> room by <b>{sender_name}</"
+"b>"
+msgstr "Používateľ <b>{sender_name}</b> vás pozval vstúpiť do miestnosti <b>{room_name}</b>"
+
+#: fractal-gtk/src/appop/invite.rs:217
+msgid "You’ve been invited to join to <b>{room_name}</b>"
+msgstr "Boli ste pozvaní vstúpiť do miestnosti <b>{room_name}</b>"
+
+#: fractal-gtk/src/appop/login.rs:111
+msgid "Unknown Error"
+msgstr "Neznáma chyba"
+
+#: fractal-gtk/src/appop/login.rs:165
+msgid "Passwords didn’t match, try again"
+msgstr "Heslá sa nezhodujú, skúste znovu"
+
+#: fractal-gtk/src/appop/member.rs:87
+msgid "and one more"
+msgid_plural "and {member_count} more"
+msgstr[0] "a {member_count} ďalších"
+msgstr[1] "a jeden ďalší"
+msgstr[2] "a {member_count} ďalší"
+
+#: fractal-gtk/src/appop/message.rs:169
+msgid "New Messages"
+msgstr "Nové správy"
+
+#: fractal-gtk/src/appop/message.rs:314
+msgid "Select"
+msgstr "Vybrať"
+
+#: fractal-gtk/src/appop/mod.rs:104
+msgid "Load more members"
+msgstr "Načítať viac členov"
+
+#: fractal-gtk/src/appop/room.rs:253
+msgid "Leave"
+msgstr "Opustiť"
+
+#: fractal-gtk/src/appop/room.rs:592
+msgid "EMPTY ROOM"
+msgstr "Prázdna miestnosť"
+
+#: fractal-gtk/src/appop/room.rs:594
+msgid "and"
+msgstr "a"
+
+#: fractal-gtk/src/appop/room.rs:595
+msgid "and Others"
+msgstr "a ostatní"
+
+#: fractal-gtk/src/appop/sync.rs:12
+msgid "Syncing, this could take a while"
+msgstr "Synchronizácia, môže to chvíľu trvať"
+
+#: fractal-gtk/src/widgets/roomlist.rs:433
+msgid "Invites"
+msgstr "Pozvania"
+
+#: fractal-gtk/src/widgets/roomlist.rs:434
+msgid "You don't have any invitations"
+msgstr "Nemáte žiadne pozvánky"
+
+#: fractal-gtk/src/widgets/roomlist.rs:435
+msgid "Favorites"
+msgstr "Obľúbené"
+
+#: fractal-gtk/src/widgets/roomlist.rs:436
+msgid ""
+"Drag and drop rooms here to                                        add them "
+"to your favorites"
+msgstr "Pretiahnite a pustite miestnosti sem, ak si ich želáte pridať do obľúbených"
+
+#: fractal-gtk/src/widgets/roomlist.rs:438
+msgid "Rooms"
+msgstr "Miestnosti"
+
+#: fractal-gtk/src/widgets/roomlist.rs:439
+msgid "You don't have any rooms yet"
+msgstr "Zatiaľ ste nevstúpili do žiadnych miestností"

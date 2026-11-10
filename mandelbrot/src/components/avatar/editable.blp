@@ -1,0 +1,85 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $EditableAvatar: Adw.Bin {
+  accessible-role: group;
+
+  Gtk.Overlay {
+    halign: center;
+
+    Gtk.Stack stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "default";
+
+        child: $Avatar {
+          size: 128;
+          data: bind template.data;
+        };
+      }
+
+      Gtk.StackPage {
+        name: "temp";
+
+        child: Adw.Avatar temp_avatar {
+          size: 128;
+          show-initials: true;
+          text: bind template.data as <$AvatarData>.display-name;
+          custom-image: bind template.temp-paintable;
+        };
+      }
+    }
+
+    [overlay]
+    Gtk.Image error_img {
+      visible: false;
+      halign: center;
+      valign: center;
+      icon-name: "error-symbolic";
+      icon-size: large;
+
+      styles [
+        "osd",
+        "circular",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+
+    [overlay]
+    Adw.Bin button_remove_bin {
+      halign: end;
+      valign: start;
+
+      styles [
+        "cutout",
+      ]
+
+      $ActionButton button_remove {
+        icon-name: "remove-symbolic";
+        action-name: "editable-avatar.remove-avatar";
+        default-state-tooltip-text: _("Remove Avatar");
+      }
+    }
+
+    [overlay]
+    Adw.Bin {
+      visible: bind template.editable;
+      halign: end;
+      valign: end;
+
+      styles [
+        "cutout",
+      ]
+
+      $ActionButton button_edit {
+        icon-name: "edit-symbolic";
+        action-name: "editable-avatar.edit-avatar";
+        default-state-tooltip-text: _("Select New Avatar");
+      }
+    }
+  }
+}

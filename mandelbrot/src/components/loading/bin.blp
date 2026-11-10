@@ -1,0 +1,23 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoadingBin: Gtk.Widget {
+  Gtk.Stack stack {
+    transition-type: crossfade;
+
+    Gtk.StackPage {
+      name: "child";
+
+      child: Adw.Bin child_bin {};
+    }
+
+    Gtk.StackPage {
+      name: "loading";
+
+      child: Adw.Spinner {
+        valign: center;
+        halign: center;
+      };
+    }
+  }
+}

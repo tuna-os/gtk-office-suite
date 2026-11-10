@@ -1,0 +1,5216 @@
+# Indonesian translation for fractal.
+# Copyright (C) 2018 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Kukuh Syafaat <kukuhsyafaat@gnome.org>, 2018-2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal main\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/fractal/issues\n"
+"POT-Creation-Date: 2025-02-22 11:32+0000\n"
+"PO-Revision-Date: 2025-03-05 18:16+0700\n"
+"Last-Translator: Andika Triwidada <andika@gmail.com>\n"
+"Language-Team: Indonesian <gnome-l10n-id@googlegroups.com>\n"
+"Language: id\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.5\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7
+#: src/login/session_setup_view.ui:22 src/window.ui:8
+msgid "Fractal"
+msgstr "Fractal"
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr ""
+"Fractal adalah klien perpesanan yang terdesentralisasi dan aman untuk "
+"komunikasi grup kolaboratif."
+
+#: data/org.gnome.Fractal.desktop.in.in:5
+msgid "Fractal group messaging"
+msgstr "Perpesanan grup Fractal"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:14
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "Matrix;matrix.org;obrolan;irc;komunikasi;berbicara;riot;element;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Lebar jendela"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Tinggi jendela"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Keadaan jendela termaksimalkan"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Aktifkan pemformatan markdown"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Apakah pesan harus diproses sebagai markdown saat mengirimnya"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Pengaturan sesi"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Daftar pengaturan berseri per sesi"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Sesi saat ini"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Mengobrol di Matrix"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+msgstr ""
+"Fractal adalah aplikasi perpesanan Matrix untuk GNOME yang ditulis dalam "
+"Rust. Antarmukanya dioptimalkan untuk kolaborasi dalam grup besar, seperti "
+"proyek perangkat lunak bebas, dan akan pas semua layar, besar atau kecil."
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "Penyorotan:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"Temukan kamar untuk mendiskusikan topik favorit Anda, atau berbicara secara "
+"pribadi dengan orang-orang, dengan aman berkat enkripsi ujung ke ujung"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "Mengirim pesan yang kaya format, berkas, atau lokasi Anda saat ini"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+msgstr ""
+"Membalas pesan tertentu, berreaksi dengan emoji, menyebut pengguna atau "
+"kamar, menyunting atau menghapus pesan"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "Melihat gambar, dan memutar audio dan video langsung dalam percakapan"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "Melihat siapa yang telah membaca pesan, dan siapa yang sedang mengetik"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr "Masuk ke beberapa akun sekaligus (dengan dukungan Single Sign On)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Jendela utama Fractal"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "Melihat riwayat media kamar Matrix"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "Antarmuka Fractal beradaptasi dengan layar kecil"
+
+#: src/account_chooser_dialog/mod.ui:4 src/account_chooser_dialog/mod.ui:33
+msgid "Select an Account"
+msgstr "Pilih Akun"
+
+#: src/account_chooser_dialog/mod.ui:62
+msgid "Select the account you want to open the URI with"
+msgstr "Pilih akun yang ingin Anda gunakan untuk membuka URI"
+
+#: src/account_switcher/account_switcher_button.ui:26
+msgid "Switch Accounts"
+msgstr "Beralih Akun"
+
+#: src/account_switcher/account_switcher_popover.ui:38
+msgid "_Add Account"
+msgstr "Tambah _Akun"
+
+#: src/account_switcher/session_item.ui:62
+#: src/session/view/account_settings/mod.ui:4
+msgid "Account Settings"
+msgstr "Pengaturan Akun"
+
+#: src/application.rs:285
+msgid "The Fractal Team"
+msgstr "Tim Fractal"
+
+#: src/application.rs:291
+msgid "© The Fractal Team"
+msgstr "© Tim Fractal"
+
+#: src/application.rs:305
+msgid "translator-credits"
+msgstr ""
+"Kukuh Syafaat <kukuhsyafaat@gnome.org>, 2018-2023.\n"
+"Andika Triwidada <andika@gmail.com>, 2020, 2024, 2025."
+
+#. This can't be added via the builder
+#: src/application.rs:309
+msgid "Name by"
+msgstr "Nama oleh"
+
+#: src/application.rs:424
+msgid "Session not found"
+msgstr "Sesi tidak ditemukan"
+
+#: src/components/action_button.ui:33
+msgid "Confirm Change"
+msgstr "Konfirmasi Perubahan"
+
+#: src/components/action_button.ui:52 src/components/rows/loading_row.ui:27
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:142
+#: src/session/view/account_settings/user_sessions_page/mod.ui:79
+#: src/session/view/content/room_details/history_viewer/audio.ui:54
+#: src/session/view/content/room_details/history_viewer/file.ui:53
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:60
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:86
+#: src/session/view/content/room_history/mod.ui:203
+msgid "Try Again"
+msgstr "Coba lagi"
+
+#: src/components/action_button.ui:65
+#: src/components/camera/qrcode_scanner.ui:13
+#: src/login/session_setup_view.ui:15
+#: src/session/view/content/explore/mod.ui:52
+#: src/session/view/content/room_details/history_viewer/audio.ui:17
+#: src/session/view/content/room_details/history_viewer/file.ui:16
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:23
+#: src/session/view/content/room_history/mod.ui:182 src/window.ui:17
+msgid "Loading"
+msgstr "Memuat"
+
+#: src/components/action_button.ui:89
+msgid "Success"
+msgstr "Sukses"
+
+#: src/components/action_button.ui:108
+msgid "Warning"
+msgstr "Peringatan"
+
+#: src/components/action_button.ui:126 src/error_page.ui:10
+#: src/session/view/content/room_details/invite_subpage/mod.ui:136
+#: src/session/view/content/room_details/invite_subpage/mod.ui:140
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:77
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:81
+#: src/session/view/create_dm_dialog/mod.ui:104 src/window.ui:93
+msgid "Error"
+msgstr "Galat"
+
+#: src/components/avatar/editable.rs:511
+msgid "Images"
+msgstr "Gambar"
+
+#: src/components/avatar/editable.rs:516
+msgid "Choose Avatar"
+msgstr "Pilih Avatar"
+
+#: src/components/avatar/editable.rs:518
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:204
+msgid "Choose"
+msgstr "Pilih"
+
+#: src/components/avatar/editable.rs:532
+msgid "Could not open avatar file"
+msgstr "Tidak dapat membuka berkas avatar"
+
+#: src/components/avatar/editable.rs:553
+msgid "The chosen file is not an image"
+msgstr "Berkas yang dipilih bukanlah gambar"
+
+#: src/components/avatar/editable.rs:559
+msgid "Could not determine the type of the chosen file"
+msgstr "Tidak dapat menentukan jenis berkas yang dipilih"
+
+#: src/components/avatar/editable.ui:70
+msgid "Remove Avatar"
+msgstr "Hapus Avatar"
+
+#: src/components/avatar/editable.ui:87
+msgid "Select New Avatar"
+msgstr "Pilih Avatar Baru"
+
+#: src/components/camera/qrcode_scanner.rs:90
+msgid "Camera"
+msgstr "Kamera"
+
+#: src/components/camera/qrcode_scanner.ui:22
+#: src/components/camera/qrcode_scanner.ui:35
+msgid "Could Not Connect to Camera"
+msgstr "Tidak Bisa Menyambung ke Kamera"
+
+#: src/components/camera/viewfinder.rs:72
+msgid "Viewfinder"
+msgstr "Jendela bidik"
+
+#: src/components/crypto/identity_setup_view.rs:384
+#: src/identity_verification_view/cancelled_page.rs:190
+msgid "Could not send a new verification request"
+msgstr "Tidak bisa mengirim permintaan verifikasi"
+
+#: src/components/crypto/identity_setup_view.rs:435
+msgid "Could not create the crypto identity"
+msgstr "Tidak bisa membuat identitas kripto"
+
+#: src/components/crypto/identity_setup_view.ui:9
+#: src/components/crypto/identity_setup_view.ui:35
+msgid "Verify Your New Session"
+msgstr "Verifikasikan Sesi Baru Anda"
+
+#: src/components/crypto/identity_setup_view.ui:46
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"Memverifikasi sesi Anda memungkinkan Anda dan orang yang mengobrol dengan "
+"Anda untuk memastikan bahwa tidak ada yang mencoba meniru Anda atau mencegat "
+"percakapan Anda."
+
+#: src/components/crypto/identity_setup_view.ui:55
+msgid "Verify With Another Session"
+msgstr "Verifikasi Dengan Sebuah Sesi Lain"
+
+#: src/components/crypto/identity_setup_view.ui:65
+msgid "No other devices logged into this account?"
+msgstr "Tidak ada perangkat lain yang masuk ke akun ini?"
+
+#: src/components/crypto/identity_setup_view.ui:74
+#: src/components/crypto/recovery_setup_view.ui:9
+#: src/components/crypto/recovery_setup_view.ui:35
+msgid "Recover Account"
+msgstr "Memulihkan Akun"
+
+#: src/components/crypto/identity_setup_view.ui:85
+#: src/components/crypto/identity_setup_view.ui:262
+#: src/components/crypto/recovery_setup_view.ui:98
+#: src/components/crypto/recovery_setup_view.ui:209
+#: src/components/crypto/recovery_setup_view.ui:515
+msgid "Reset"
+msgstr "Atur Ulang"
+
+#: src/components/crypto/identity_setup_view.ui:106
+#: src/identity_verification_view/mod.ui:5 src/session/view/content/mod.ui:70
+msgid "Identity Verification"
+msgstr "Verifikasi Identitas"
+
+#: src/components/crypto/identity_setup_view.ui:125
+#: src/components/crypto/identity_setup_view.ui:151
+msgid "Set Up Crypto Identity"
+msgstr "Menyiapkan Identitas Kripto"
+
+#: src/components/crypto/identity_setup_view.ui:162
+#: src/components/crypto/identity_setup_view.ui:237
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"Identitas kripto Anda memungkinkan Anda memverifikasi akun Matrix lain dan "
+"secara otomatis memercayai sesi terverifikasi mereka."
+
+#: src/components/crypto/identity_setup_view.ui:170
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr ""
+"Anda perlu menyiapkan identitas enkripsi, karena ini belum pernah dibuat."
+
+#: src/components/crypto/identity_setup_view.ui:178
+#: src/components/crypto/recovery_setup_view.ui:305
+msgid "Set Up"
+msgstr "Siapkan"
+
+#: src/components/crypto/identity_setup_view.ui:200
+#: src/components/crypto/identity_setup_view.ui:226
+#: src/components/crypto/recovery_setup_view.ui:169
+#: src/session/view/account_settings/security_page/mod.rs:263
+msgid "Reset Crypto Identity"
+msgstr "Setel Ulang Identitas Kripto"
+
+#: src/components/crypto/identity_setup_view.ui:245
+msgid ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+msgstr ""
+"Anda harus mengatur ulang identitas kripto Anda jika suatu perangkat yang "
+"bukan milik Anda berhasil diverifikasi."
+
+#: src/components/crypto/identity_setup_view.ui:253
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr ""
+"Untuk melanjutkan, Anda juga perlu mengatur ulang kunci pemulihan akun Anda."
+
+#: src/components/crypto/recovery_setup_view.rs:182
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "Membatalkan verifikasi semua pengguna dan sesi"
+
+#: src/components/crypto/recovery_setup_view.rs:187
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. "
+"Invalidates the verifications of all users and sessions."
+msgstr ""
+"Diperlukan karena identitas kripto dalam data pemulihan tidak lengkap. "
+"Membatalkan verifikasi semua pengguna dan sesi."
+
+#: src/components/crypto/recovery_setup_view.rs:197
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr ""
+"Anda mungkin tidak dapat lagi membaca pesan terenkripsi Anda sebelumnya"
+
+#: src/components/crypto/recovery_setup_view.rs:202
+msgid ""
+"Required because the backup is not set up properly. You might not be able to "
+"read your past encrypted messages anymore."
+msgstr ""
+"Diperlukan karena cadangan tidak disiapkan dengan benar. Anda mungkin tidak "
+"dapat lagi membaca pesan terenkripsi sebelumnya."
+
+#: src/components/crypto/recovery_setup_view.rs:220
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"Pastikan untuk menyimpan kunci pemulihan ini di tempat yang aman. Anda akan "
+"memerlukannya untuk memulihkan akun jika Anda kehilangan akses ke semua sesi "
+"Anda."
+
+#: src/components/crypto/recovery_setup_view.rs:222
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"Pastikan Anda mengingat frasa sandi atau menyimpannya di tempat yang aman. "
+"Anda akan memerlukannya untuk memulihkan akun jika Anda kehilangan akses ke "
+"semua sesi."
+
+#: src/components/crypto/recovery_setup_view.rs:282
+msgid "The recovery passphrase or key is invalid"
+msgstr "Frasa sandi atau kunci pemulihan tidak valid"
+
+#: src/components/crypto/recovery_setup_view.rs:285
+msgid "Could not access recovery data"
+msgstr "Tidak bisa mengakses data pemulihan"
+
+#: src/components/crypto/recovery_setup_view.rs:336
+msgid "Could not reset the crypto identity"
+msgstr "Tidak bisa mengatur ulang identitas kripto"
+
+#: src/components/crypto/recovery_setup_view.rs:389
+#: src/components/crypto/recovery_setup_view.rs:398
+#: src/components/crypto/recovery_setup_view.rs:423
+msgid "Could not reset account recovery"
+msgstr "Tidak bisa mengatur ulang pemulihan akun"
+
+#: src/components/crypto/recovery_setup_view.rs:458
+msgid "Could not reset account recovery key"
+msgstr "Tidak bisa mengatur ulang kunci pemulihan akun"
+
+#: src/components/crypto/recovery_setup_view.rs:496
+msgid "Could not enable account recovery"
+msgstr "Tidak bisa memfungsikan pemulihan akun"
+
+#: src/components/crypto/recovery_setup_view.ui:46
+msgid "Restore full access to your account."
+msgstr "Pulihkan akses penuh ke akun Anda."
+
+#: src/components/crypto/recovery_setup_view.ui:54
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"Untuk mengakses data pemulihan, kami memerlukan frasa sandi atau kunci "
+"pemulihan yang biasanya disiapkan saat Anda membuat akun."
+
+#: src/components/crypto/recovery_setup_view.ui:67
+msgid "Recovery Passphrase or Key"
+msgstr "Kunci atau Frasa Sandi Pemulihan"
+
+#: src/components/crypto/recovery_setup_view.ui:77
+#: src/session/view/sidebar/mod.rs:320
+msgid "Recover"
+msgstr "Pulihkan"
+
+#: src/components/crypto/recovery_setup_view.ui:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "Kehilangan kunci atau frasa sandi pemulihan Anda?"
+
+#: src/components/crypto/recovery_setup_view.ui:119
+#: src/components/crypto/recovery_setup_view.ui:145
+msgid "Reset Account Recovery"
+msgstr "Setel Ulang Pemulihan Akun"
+
+#: src/components/crypto/recovery_setup_view.ui:156
+msgid ""
+"Resetting account recovery can allow you to fix or reset part or all of your "
+"recovery setup."
+msgstr ""
+"Mengatur ulang pemulihan akun bisa memungkinkan Anda memperbaiki atau "
+"mengatur ulang sebagian atau seluruh pengaturan pemulihan Anda."
+
+#: src/components/crypto/recovery_setup_view.ui:174
+msgid "Reset Room Encryption Keys Backup"
+msgstr "Atur Ulang Cadangan Kunci Enkripsi Kamar"
+
+#: src/components/crypto/recovery_setup_view.ui:181
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr ""
+"Jika Anda tidak memberikan frasa sandi pemulihan baru, kunci pemulihan akan "
+"dibuat."
+
+#: src/components/crypto/recovery_setup_view.ui:189
+#: src/components/crypto/recovery_setup_view.ui:284
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"Anda tidak boleh menggunakan kembali kata sandi akun Matrix Anda sebagai "
+"frasa sandi. Jika tidak, bila seseorang berhasil mendapatkan kata sandi akun "
+"Anda, mereka juga akan dapat mengakses semua percakapan terenkripsi Anda dan "
+"menyamar sebagai Anda."
+
+#: src/components/crypto/recovery_setup_view.ui:202
+#: src/components/crypto/recovery_setup_view.ui:297
+msgid "Recovery Passphrase (Optional)"
+msgstr "Frasa Sandi Pemulihan (Opsional)"
+
+#: src/components/crypto/recovery_setup_view.ui:231
+#: src/components/crypto/recovery_setup_view.ui:257
+msgid "Set Up Account Recovery"
+msgstr "Siapkan Pemulihan Akun"
+
+#: src/components/crypto/recovery_setup_view.ui:268
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"Pemulihan akun memungkinkan Anda memulihkan identitas kripto Anda dan "
+"membaca pesan terenkripsi Anda bahkan jika Anda kehilangan akses ke semua "
+"sesi Anda."
+
+#: src/components/crypto/recovery_setup_view.ui:276
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr ""
+"Jika Anda tidak memberikan frasa sandi pemulihan, kunci pemulihan akan "
+"dibuat."
+
+#: src/components/crypto/recovery_setup_view.ui:327
+#: src/components/crypto/recovery_setup_view.ui:354
+msgid "Account Recovery Set Up Successfully"
+msgstr "Pemulihan Akun Sukses Disiapkan"
+
+#: src/components/crypto/recovery_setup_view.ui:391
+msgid "Copy Recovery Key"
+msgstr "Salin Kunci Pemulihan"
+
+#: src/components/crypto/recovery_setup_view.ui:408
+#: src/components/crypto/recovery_setup_view.ui:494
+#: src/identity_verification_view/cancelled_page.ui:52
+#: src/identity_verification_view/completed_page.ui:48
+#: src/identity_verification_view/room_left_page.ui:44
+msgid "_Done"
+msgstr "_Selesai"
+
+#: src/components/crypto/recovery_setup_view.ui:431
+#: src/components/crypto/recovery_setup_view.ui:458
+#: src/session/view/account_settings/security_page/mod.rs:343
+msgid "Account Recovery Incomplete"
+msgstr "Pemulihan Akun Belum Selesai"
+
+#: src/components/crypto/recovery_setup_view.ui:469
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "Pemulihan berhasil tetapi data pemulihan tidak lengkap."
+
+#: src/components/crypto/recovery_setup_view.ui:477
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"Untuk memperbaikinya, Anda harus mengatur ulang pemulihan dari sesi yang "
+"memiliki semua data, dan mencoba memulihkan sesi ini lagi."
+
+#: src/components/crypto/recovery_setup_view.ui:485
+msgid ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+msgstr ""
+"Perhatikan bahwa pemulihan akun dapat memiliki nama yang berbeda di klien "
+"Matrix lainnya, seperti “cadangan kunci” atau “cadangan aman”."
+
+#: src/components/crypto/recovery_setup_view.ui:506
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "Atau, Anda dapat mengatur ulang Pemulihan Akun"
+
+#: src/components/dialogs/auth.rs:275
+msgid "Please authenticate the operation with your password"
+msgstr "Harap autentikasi operasi dengan kata sandi Anda"
+
+#: src/components/dialogs/auth.rs:312
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"Harap autentikasi operasi melalui peramban dan setelah selesai tekan "
+"konfirmasi"
+
+#: src/components/dialogs/auth.ui:4 src/login/in_browser_page.ui:5
+#: src/login/in_browser_page.ui:40
+msgid "Authentication"
+msgstr "Autentikasi"
+
+#: src/components/dialogs/auth.ui:33 src/login/in_browser_page.ui:74
+msgid "Contin_ue"
+msgstr "Lanj_utkan"
+
+#: src/components/dialogs/auth.ui:64
+#: src/session/view/content/room_details/invite_subpage/mod.ui:13
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:14
+msgid "_Cancel"
+msgstr "Ba_tal"
+
+#: src/components/dialogs/auth.ui:65
+msgid "C_onfirm"
+msgstr "K_onfirmasi"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/join_room.rs:204
+#: src/session/view/content/explore/public_room_row.rs:201
+#: src/session/view/content/room_history/mod.rs:867
+#: src/session/view/content/room_history/state_row/tombstone.rs:77
+msgid "View"
+msgstr "Tilik"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/join_room.rs:207
+#: src/components/dialogs/join_room.ui:91
+msgid "Look Up"
+msgstr "Cari"
+
+#: src/components/dialogs/join_room.rs:268
+msgid ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+msgstr ""
+"Detail kamar tidak bisa dipratinjau. Bisa jadi karena kamar tidak diketahui "
+"oleh homeserver atau karena detailnya bersifat pribadi. Anda masih dapat "
+"mencoba untuk bergabung."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/join_room.rs:291
+#: src/session/view/content/explore/public_room_row.rs:182
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "{n} anggota"
+
+#: src/components/dialogs/join_room.ui:4 src/components/dialogs/join_room.ui:38
+msgid "Join a Room"
+msgstr "Gabung ke Kamar"
+
+#: src/components/dialogs/join_room.ui:17 src/login/greeter.ui:16
+#: src/login/greeter.ui:18
+#: src/session/view/content/room_details/edit_details_subpage.ui:13
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:19
+#: src/session/view/media_viewer.ui:70 src/session/view/media_viewer.ui:72
+msgid "Back"
+msgstr "Kembali"
+
+#: src/components/dialogs/join_room.ui:72
+msgid "Enter a room ID, room alias, or link to look up a room"
+msgstr "Masukkan ID kamar, alias kamar, atau taut untuk mencari suatu kamar"
+
+#: src/components/dialogs/join_room.ui:190
+#: src/session/view/content/explore/public_room_row.rs:203
+#: src/session/view/content/room_history/mod.rs:870
+#: src/session/view/content/room_history/state_row/tombstone.rs:79
+msgid "Join"
+msgstr "Gabung"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "Tolak Undangan?"
+
+#: src/components/dialogs/message_dialogs.rs:26
+msgid ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+msgstr ""
+"Apakah Anda benar-benar ingin menolak undangan ini? Anda dapat bergabung "
+"dengan kamar ini sendiri nanti."
+
+#: src/components/dialogs/message_dialogs.rs:29
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr ""
+"Apakah Anda benar-benar ingin menolak undangan ini? Anda tidak akan dapat "
+"bergabung ke kamar ini tanpanya."
+
+#: src/components/dialogs/message_dialogs.rs:32
+#: src/identity_verification_view/accept_request_page.ui:46
+#: src/session/view/content/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "Ditolak"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:37
+msgid "Leave Room?"
+msgstr "Tinggalkan Kamar?"
+
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Do you really want to leave this room? You can come back later."
+msgstr ""
+"Apakah Anda benar-benar ingin meninggalkan kamar ini? Anda bisa kembali lagi "
+"nanti."
+
+#: src/components/dialogs/message_dialogs.rs:42
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr ""
+"Apakah Anda benar-benar ingin meninggalkan kamar ini? Anda tidak akan bisa "
+"kembali tanpa undangan."
+
+#: src/components/dialogs/message_dialogs.rs:45
+msgid "Leave"
+msgstr "Tinggalkan"
+
+#: src/components/dialogs/message_dialogs.rs:56
+#: src/components/dialogs/message_dialogs.rs:318
+#: src/components/dialogs/message_dialogs.rs:379
+#: src/components/dialogs/message_dialogs.rs:414
+#: src/identity_verification_view/confirm_qr_code_page.ui:61
+#: src/session/view/account_settings/general_page/mod.rs:375
+#: src/session/view/content/room_details/edit_details_subpage.rs:271
+#: src/session/view/content/room_details/edit_details_subpage.rs:550
+#: src/session/view/content/room_details/general_page.rs:1119
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:558
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:116
+#: src/session/view/content/room_history/item_row.rs:917
+#: src/session/view/content/room_history/item_row.rs:976
+#: src/session/view/content/room_history/message_toolbar/mod.ui:77
+#: src/session/view/content/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "Batal"
+
+#: src/components/dialogs/message_dialogs.rs:65
+msgid "Ignore {user}"
+msgstr "Abaikan {user}"
+
+#: src/components/dialogs/message_dialogs.rs:69
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr ""
+"Semua pesan atau undangan yang dikirim oleh pengguna ini akan diabaikan"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:130
+msgid "Ban {user}?"
+msgstr "Cekal {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:134
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+msgstr ""
+"Anda yakin ingin mencekal {user_id}? Mereka tidak akan dapat bergabung "
+"dengan kamar lagi sampai seseorang membuka pencekalan mereka."
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:137
+#: src/components/user_page.ui:155
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:233
+msgid "Ban"
+msgstr "Cekal"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:148
+msgid "Revoke Invite for {user}?"
+msgstr "Cabut Undangan bagi {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:155
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"Anda yakin ingin mencabut undangan untuk {user_id}? Mereka masih bisa "
+"bergabung sendiri ke kamar."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:162
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"Anda yakin ingin mencabut undangan untuk {user_id}? Mereka tidak akan dapat "
+"bergabung ke kamar lagi sampai seseorang mengundang mereka kembali."
+
+#: src/components/dialogs/message_dialogs.rs:166
+#: src/components/user_page.rs:391
+msgid "Revoke Invite"
+msgstr "Cabut Undangan"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:173
+msgid "Deny Access to {user}?"
+msgstr "Tolak Akses ke {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:179
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "Anda yakin ingin menolak akses ke {user_id}?"
+
+#: src/components/dialogs/message_dialogs.rs:182
+#: src/components/user_page.rs:392
+msgid "Deny Access"
+msgstr "Tolak Akses"
+
+#: src/components/dialogs/message_dialogs.rs:189
+msgid "Kick {user}?"
+msgstr "Tendang {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:194
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"Apakah Anda yakin ingin menendang {user_id}? Mereka masih bisa bergabung "
+"lagi sendiri ke kamar."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:201
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"Apakah Anda yakin ingin menendang {user_id}? Mereka tidak akan dapat "
+"bergabung ke kamar lagi sampai seseorang mengundang mereka."
+
+#. Translators: As in, 'Kick room member'.
+#. // Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:205
+#: src/components/user_page.rs:394
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:221
+msgid "Kick"
+msgstr "Tendang"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:216
+msgid "Remove Messages Sent by {user}?"
+msgstr "Hapus Pesan yang Dikirim oleh {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:222
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"Ini menghapus semua pesan yang diterima dari homeserver. Anda yakin ingin "
+"menghapus {n} pesan yang dikirim oleh {user_id}? Ini tidak dapat dibatalkan."
+
+#: src/components/dialogs/message_dialogs.rs:227
+#: src/session/view/account_settings/general_page/mod.rs:376
+#: src/session/view/content/room_details/edit_details_subpage.rs:272
+#: src/session/view/content/room_history/item_row.rs:918
+msgid "Remove"
+msgstr "Hapus"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:233
+msgid "No Messages Sent by {user}"
+msgstr "Tidak Ada Pesan yang Dikirim oleh {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:239
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+msgstr ""
+"Tidak ada pesan yang diterima dari homeserver yang dikirim oleh {user_id}. "
+"Anda dapat mencoba memuat lebih banyak dengan melangkah lebih jauh ke "
+"belakang dalam riwayat kamar."
+
+#: src/components/dialogs/message_dialogs.rs:267
+#: src/session/view/content/room_history/item_row.rs:958
+msgid "Reason (optional)"
+msgstr "Alasan (opsional)"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:291
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "Menghapus {n} pesan terbaru yang dikirim oleh pengguna"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:362
+msgid "Mute {user}?"
+msgstr "Bisukan {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:368
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages."
+msgstr ""
+"Anda yakin ingin membisukan {user_id}? Mereka tidak akan bisa mengirim pesan "
+"baru."
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:381
+msgid "Mute"
+msgstr "Bisukan"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:397
+msgid "Promote {user}?"
+msgstr "Promosikan {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:403
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgstr ""
+"Jika Anda mempromosikan {user_id} ke level yang sama dengan Anda, Anda tidak "
+"akan dapat menurunkannya di masa mendatang."
+
+#: src/components/dialogs/message_dialogs.rs:415
+msgid "Promote"
+msgstr "Promosikan"
+
+#: src/components/dialogs/user_profile.ui:4
+msgid "User Profile"
+msgstr "Profil Pengguna"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "Luring"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "Tidak ada koneksi jaringan"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "Tidak ada koneksi internet"
+
+#: src/components/media/content_viewer.rs:118
+msgid "Image not Viewable"
+msgstr "Gambar tidak dapat dilihat"
+
+#: src/components/media/content_viewer.rs:119
+msgid "Audio Clip not Playable"
+msgstr "Klip Audio tidak Dapat Diputar"
+
+#: src/components/media/content_viewer.rs:120
+msgid "Video not Playable"
+msgstr "Video tidak dapat diputar"
+
+#: src/components/media/content_viewer.rs:121
+msgid "File not Viewable"
+msgstr "Berkas tidak dapat dilihat"
+
+#: src/components/media/location_viewer.rs:124
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "Lokasi di lintang {latitude} dan bujur {longitude}"
+
+#: src/components/pill/at_room.rs:29
+msgid "Notify the whole room"
+msgstr "Beri tahu seluruh kamar"
+
+#. Translators: As in 'Custom role'.
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/components/power_level_selection/popover.ui:149
+#: src/session/model/room/permissions.rs:72
+msgid "Custom"
+msgstr "Ubahan"
+
+#: src/components/power_level_selection/popover.ui:164
+msgid "Confirm Custom Role"
+msgstr "Konfirmasikan Peran Ubahan"
+
+#: src/components/user_page.rs:252
+#: src/session/view/account_settings/general_page/mod.ui:88
+#: src/session/view/content/room_history/sender_avatar/mod.rs:77
+msgid "Matrix user ID copied to clipboard"
+msgstr "ID pengguna Matrix disalin ke papan klip"
+
+#: src/components/user_page.rs:279
+msgid "Open Direct Chat"
+msgstr "Buka Obrolan Langsung"
+
+#: src/components/user_page.rs:281
+msgid "Create Direct Chat"
+msgstr "Buat Obrolan Langsung"
+
+#: src/components/user_page.rs:301
+#: src/session/view/content/room_history/sender_avatar/mod.rs:553
+#: src/session/view/create_dm_dialog/mod.rs:200
+msgid "Could not create a new Direct Chat"
+msgstr "Tidak bisa membuat Obrolan Langsung baru"
+
+#: src/components/user_page.rs:332
+msgid "In {room_name}"
+msgstr "Dalam {room_name}"
+
+#. Translators: As in, 'The room member was invited'.
+#: src/components/user_page.rs:343
+msgctxt "member"
+msgid "Invited"
+msgstr "Diundang"
+
+#. Translators: As in, 'The room member was banned'.
+#: src/components/user_page.rs:347
+msgctxt "member"
+msgid "Banned"
+msgstr "Dicekal"
+
+#. Translators: As in, 'The room member knocked to request access to the room'.
+#: src/components/user_page.rs:351
+msgctxt "member"
+msgid "Knocked"
+msgstr "Mengetuk"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:355
+msgctxt "member"
+msgid "Unknown"
+msgstr "Tidak diketahui"
+
+#: src/components/user_page.rs:379
+msgid "Allow Access"
+msgstr "Izinkan Akses"
+
+#: src/components/user_page.rs:478
+msgid "Could not change the role"
+msgstr "Tidak bisa mengubah peran"
+
+#: src/components/user_page.rs:500
+#: src/session/view/content/room_history/sender_avatar/mod.rs:577
+msgid "Could not invite user"
+msgstr "Tidak bisa mengundang pengguna"
+
+#: src/components/user_page.rs:534
+#: src/session/view/content/room_history/sender_avatar/mod.rs:611
+msgid "Could not revoke invite of user"
+msgstr "Tidak bisa mencabut undangan pengguna"
+
+#: src/components/user_page.rs:535
+#: src/session/view/content/room_history/sender_avatar/mod.rs:612
+msgid "Could not deny access to user"
+msgstr "Tidak bisa menolak akses ke pengguna"
+
+#: src/components/user_page.rs:536
+#: src/session/view/content/room_history/sender_avatar/mod.rs:613
+msgid "Could not kick user"
+msgstr "Tidak bisa menendang pengguna"
+
+#: src/components/user_page.rs:582
+#: src/session/view/content/room_history/sender_avatar/mod.rs:699
+msgid "Could not ban user"
+msgstr "Tidak bisa mencekal pengguna"
+
+#: src/components/user_page.rs:614
+#: src/session/view/content/room_history/sender_avatar/mod.rs:720
+msgid "Could not unban user"
+msgstr "Tidak bisa membatalkan pencekalan pengguna"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:663
+#: src/session/view/content/room_history/sender_avatar/mod.rs:775
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "Tidak bisa menghapus {n} pesan yang dikirim oleh pengguna"
+
+#: src/components/user_page.rs:679
+msgid "Identity verified"
+msgstr "Identitas terverifikasi"
+
+#: src/components/user_page.rs:686
+msgid "Identity not verified"
+msgstr "Identitas tidak terverifikasi"
+
+#: src/components/user_page.rs:701
+msgid "Could not start user verification"
+msgstr "Tidak bisa memulai verifikasi pengguna"
+
+#: src/components/user_page.rs:724
+msgid "Ignored"
+msgstr "Diabaikan"
+
+#: src/components/user_page.rs:726
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.ui:30
+msgid "Stop Ignoring"
+msgstr "Berhenti Mengabaikan"
+
+#: src/components/user_page.rs:729
+msgid "Not Ignored"
+msgstr "Tidak Diabaikan"
+
+#: src/components/user_page.rs:730
+msgid "Ignore"
+msgstr "Abaikan"
+
+#: src/components/user_page.rs:747
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.rs:100
+#: src/session/view/content/room_history/sender_avatar/mod.rs:801
+msgid "Could not stop ignoring user"
+msgstr "Tidak bisa berhenti mengabaikan pengguna"
+
+#: src/components/user_page.rs:750 src/session/view/content/invite.rs:304
+#: src/session/view/content/room_history/sender_avatar/mod.rs:804
+#: src/session/view/sidebar/row.rs:761
+msgid "Could not ignore user"
+msgstr "Tidak bisa mengabaikan pengguna"
+
+#: src/components/user_page.ui:66
+#: src/session/view/account_settings/general_page/mod.ui:87
+#: src/session/view/content/room_history/sender_avatar/mod.ui:28
+msgid "Copy Matrix User ID"
+msgstr "Salin ID Pengguna Matrix"
+
+#: src/components/user_page.ui:119
+msgid "Role"
+msgstr "Peran"
+
+#. Translators: value used to assign room member roles
+#: src/components/user_page.ui:132
+#, fuzzy
+msgid "Power Level"
+msgstr "Tingkat Daya"
+
+#. Translators: As in, 'Unan room member'.
+#: src/components/user_page.ui:162
+msgid "Unban"
+msgstr "Batalkan pencekalan"
+
+#: src/components/user_page.ui:171
+msgid "Remove Messages"
+msgstr "Hapus Pesan"
+
+#: src/components/user_page.ui:185
+#: src/session/view/account_settings/security_page/mod.ui:5
+msgid "Security"
+msgstr "Keamanan"
+
+#: src/components/user_page.ui:212
+#: src/identity_verification_view/accept_request_page.ui:57
+#: src/session/view/content/room_history/verification_info_bar.rs:172
+#: src/session/view/sidebar/mod.rs:313
+msgid "Verify"
+msgstr "Verifikasi"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "Kode QR"
+
+#: src/error_page.rs:98
+msgid "Command copied to clipboard"
+msgstr "Perintah disalin ke papan klip"
+
+#: src/error_page.ui:25
+#, fuzzy
+#| msgid "Secret Service Error"
+msgid "Secret Portal Error"
+msgstr "Galat Secret Service"
+
+#: src/error_page.ui:39
+#, fuzzy
+#| msgid ""
+#| "Fractal relies on a Secret Service Provider to manage your sensitive "
+#| "session information and an error occurred while we were trying to store "
+#| "or get your session."
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session "
+"information and an error occurred while we were trying to restore your "
+"sessions."
+msgstr ""
+"Fraktal bergantung pada Penyedia Layanan Rahasia untuk mengelola informasi "
+"sesi sensitif Anda dan terjadi galat saat kami mencoba menyimpan atau "
+"mendapatkan sesi Anda."
+
+#: src/error_page.ui:51
+#, fuzzy
+#| msgid ""
+#| "Here are a few things that might help you fix issues with the Secret "
+#| "Service:"
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr ""
+"Berikut adalah beberapa hal yang dapat membantu Anda memperbaiki masalah "
+"dengan Layanan Rahasia:"
+
+#: src/error_page.ui:68
+#, fuzzy
+#| msgid ""
+#| "Make sure you have a Secret Service Provider installed, like gnome-"
+#| "keyring."
+msgid ""
+"Make sure you have a Secret Portal Backend Provider installed, like gnome-"
+"keyring."
+msgstr ""
+"Pastikan Anda telah memasang Penyedia Layanan Rahasia, seperti gnome-keyring."
+
+#: src/error_page.ui:91
+#, fuzzy
+msgid ""
+"If you prefer to use a Secret Service Provider instead, you need to allow "
+"Fractal to interact with it, like this:"
+msgstr ""
+"Jika Anda lebih suka menggunakan Penyedia Layanan Rahasia, Anda perlu "
+"mengizinkan Fractal untuk berinteraksi dengannya, seperti ini:"
+
+#: src/error_page.ui:113
+msgid "Copy Command"
+msgstr "Salin Perintah"
+
+#: src/error_page.ui:148
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "Periksa apakah Anda memiliki ring kunci bawaan dan tidak terkunci."
+
+#: src/error_page.ui:160
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr ""
+"Periksa log aplikasi dan dokumentasi distribusi Anda untuk detail "
+"selengkapnya."
+
+#: src/error_page.ui:176
+msgid "Could Not Initialize Session"
+msgstr "Tidak Bisa Menginisialisasi Sesi"
+
+#: src/identity_verification_view/accept_request_page.rs:129
+#: src/session/model/notifications/mod.rs:307
+msgid "Login Request From Another Session"
+msgstr "Permintaan Masuk Dari Sesi Lain"
+
+#: src/identity_verification_view/accept_request_page.rs:131
+msgid "Verify the new session from the current session."
+msgstr "Verifikasi sesi baru dari sesi saat ini."
+
+#: src/identity_verification_view/accept_request_page.rs:134
+#: src/identity_verification_view/choose_method_page.rs:183
+#: src/identity_verification_view/sas_page.rs:159
+#: src/identity_verification_view/scan_qr_code_page.rs:158
+#: src/session/model/notifications/mod.rs:244
+msgid "Verification Request"
+msgstr "Permintaan Verifikasi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:138
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} meminta untuk diverifikasi. Memverifikasi pengguna meningkatkan "
+"keamanan percakapan."
+
+#: src/identity_verification_view/accept_request_page.rs:161
+msgid "Could not decline verification request"
+msgstr "Tidak bisa menolak permintaan verifikasi"
+
+#: src/identity_verification_view/accept_request_page.rs:177
+msgid "Could not accept verification request"
+msgstr "Tidak bisa menerima permintaan verifikasi"
+
+#: src/identity_verification_view/cancelled_page.rs:139
+msgid "The verification was cancelled from the other session."
+msgstr "Verifikasi dibatalkan dari sesi lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:145
+msgid "The verification was cancelled by {user}."
+msgstr "Verifikasi dibatalkan oleh {user}."
+
+#: src/identity_verification_view/cancelled_page.rs:151
+msgid "The verification process failed because it reached a timeout."
+msgstr "Proses verifikasi gagal karena mencapai batas waktu."
+
+#: src/identity_verification_view/cancelled_page.rs:153
+msgid "You accepted the request from another session."
+msgstr "Anda menerima permintaan dari sesi lain."
+
+#: src/identity_verification_view/cancelled_page.rs:156
+msgid "The emoji did not match."
+msgstr "Emoji tidak cocok."
+
+#: src/identity_verification_view/cancelled_page.rs:158
+msgid "The numbers did not match."
+msgstr "Angkanya tidak cocok."
+
+#: src/identity_verification_view/cancelled_page.rs:161
+msgid "An unexpected error happened during the verification process."
+msgstr "Terjadi galat yang tidak diharapkan selama proses verifikasi."
+
+#: src/identity_verification_view/cancelled_page.rs:166
+#: src/identity_verification_view/mod.ui:103
+#: src/identity_verification_view/mod.ui:114
+#: src/identity_verification_view/room_left_page.ui:22
+msgid "Verification Cancelled"
+msgstr "Verifikasi Dibatalkan"
+
+#: src/identity_verification_view/cancelled_page.rs:168
+msgid "Verification Error"
+msgstr "Galat Verifikasi"
+
+#: src/identity_verification_view/cancelled_page.ui:41
+msgid "Send New Request"
+msgstr "Kirim Permintaan Baru"
+
+#: src/identity_verification_view/choose_method_page.rs:175
+#: src/identity_verification_view/sas_page.rs:147
+#: src/identity_verification_view/scan_qr_code_page.rs:153
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:106
+msgid "Verify Session"
+msgstr "Verifikasi Sesi"
+
+#: src/identity_verification_view/choose_method_page.rs:179
+msgid "Scan this QR code from the other session."
+msgstr "Pindai kode QR ini dari sesi lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:189
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "Minta {user} untuk memindai kode QR ini dari sesi mereka."
+
+#: src/identity_verification_view/choose_method_page.rs:198
+msgid "Select a verification method to proceed."
+msgstr "Pilih suatu metode verifikasi untuk melanjutkan."
+
+#: src/identity_verification_view/choose_method_page.rs:201
+msgid "Click on the verification method to proceed."
+msgstr "Klik pada metode verifikasi untuk melanjutkan."
+
+#: src/identity_verification_view/choose_method_page.rs:233
+msgid "Could not access camera"
+msgstr "Tidak bisa mengakses kamera"
+
+#: src/identity_verification_view/choose_method_page.rs:250
+#: src/identity_verification_view/scan_qr_code_page.rs:221
+msgid "Could not start emoji verification"
+msgstr "Tidak bisa memulai verifikasi emoji"
+
+#: src/identity_verification_view/choose_method_page.rs:266
+#: src/identity_verification_view/confirm_qr_code_page.rs:176
+#: src/identity_verification_view/qr_code_scanned_page.rs:144
+#: src/identity_verification_view/scan_qr_code_page.rs:233
+#: src/identity_verification_view/wait_for_other_page.rs:163
+msgid "Could not cancel the verification"
+msgstr "Tidak bisa membatalkan verifikasi"
+
+#: src/identity_verification_view/choose_method_page.ui:51
+#: src/identity_verification_view/scan_qr_code_page.ui:48
+msgid "Can’t scan QR code?"
+msgstr "Tidak dapat memindai kode QR?"
+
+#: src/identity_verification_view/choose_method_page.ui:60
+msgid "Scan QR code with this session"
+msgstr "Pindai kode QR dengan sesi ini"
+
+#: src/identity_verification_view/choose_method_page.ui:69
+#: src/identity_verification_view/scan_qr_code_page.ui:67
+msgid "Compare Emoji"
+msgstr "Bandingkan Emoji"
+
+#: src/identity_verification_view/choose_method_page.ui:80
+#: src/identity_verification_view/no_supported_methods_page.rs:167
+#: src/identity_verification_view/qr_code_scanned_page.ui:48
+#: src/identity_verification_view/scan_qr_code_page.ui:78
+msgid "Cancel Verification"
+msgstr "Batalkan Verifikasi"
+
+#: src/identity_verification_view/completed_page.rs:121
+msgid "Request Complete"
+msgstr "Permintaan Selesai"
+
+#: src/identity_verification_view/completed_page.rs:123
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "Sesi baru sekarang siap untuk mengirim dan menerima pesan aman."
+
+#: src/identity_verification_view/completed_page.rs:127
+msgid "Verification Complete"
+msgstr "Verifikasi Selesai"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:130
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr ""
+"{user} diverifikasi dan Anda sekarang dapat yakin bahwa komunikasi Anda akan "
+"bersifat pribadi."
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:128
+msgid "Does the other session show a confirmation?"
+msgstr "Apakah sesi lain menunjukkan konfirmasi?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:134
+msgid "Does {user} see a confirmation on their session?"
+msgstr "Apakah {user} melihat konfirmasi pada sesi mereka?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:160
+msgid "Could not confirm the scan of the QR Code"
+msgstr "Tidak bisa mengonfirmasi pindaian Kode QR"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:19
+msgid "Confirm Scan"
+msgstr "Konfirmasi Pemindaian"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:47
+msgid "Confirm"
+msgstr "Konfirmasi"
+
+#: src/identity_verification_view/mod.rs:199
+msgid "Scan QR Code"
+msgstr "Pindai Kode QR"
+
+#: src/identity_verification_view/mod.ui:15
+msgid "New Identity Verification Request"
+msgstr "Permintaan Verifikasi Identitas Baru"
+
+#: src/identity_verification_view/mod.ui:26
+msgid "Wait for Other Party"
+msgstr "Menunggu Pihak Lain"
+
+#: src/identity_verification_view/mod.ui:37
+#: src/identity_verification_view/no_supported_methods_page.ui:22
+msgid "No Supported Verification Methods"
+msgstr "Tidak Ada Metode Verifikasi yang Didukung"
+
+#: src/identity_verification_view/mod.ui:48
+msgid "Verification Request Methods"
+msgstr "Metode Permintaan Verifikasi"
+
+#: src/identity_verification_view/mod.ui:59
+#: src/identity_verification_view/qr_code_scanned_page.ui:19
+msgid "Scan Complete"
+msgstr "Pindai Selesai"
+
+#: src/identity_verification_view/mod.ui:70
+msgid "Confirm Scan Result"
+msgstr "Konfirmasi Hasil Pemindaian"
+
+#: src/identity_verification_view/mod.ui:81
+msgid "Short Authentication String Verification"
+msgstr "Verifikasi String Otentikasi Singkat"
+
+#: src/identity_verification_view/mod.ui:92
+msgid "Verification Successful"
+msgstr "Verifikasi Sukses"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:138
+msgid ""
+"None of the methods offered by the other client are supported by Fractal."
+msgstr ""
+"Tak satu pun dari metode yang ditawarkan oleh klien lain didukung oleh "
+"Fractal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:141
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"Permintaan log masuk diterima, tetapi tidak ada metode yang ditawarkan oleh "
+"klien lain yang didukung oleh Fractal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:150
+msgid ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+msgstr ""
+"Tak satu pun dari metode yang ditawarkan oleh klien {user} didukung oleh "
+"Fractal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:157
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} mengirim permintaan verifikasi, tetapi tidak ada metode yang "
+"ditawarkan oleh klien lain yang didukung oleh Fractal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:169
+msgid "Decline Verification"
+msgstr "Tolak Verifikasi"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:191
+msgid "Could not decline the verification"
+msgstr "Tidak bisa menolak verifikasi"
+
+#: src/identity_verification_view/no_supported_methods_page.ui:44
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"Anda bisa menerima verifikasi ini dari sesi lain atau menolaknya bagi semua "
+"sesi Anda"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:118
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+msgstr ""
+"Anda berhasil memindai kode QR. Anda mungkin perlu mengonfirmasi verifikasi "
+"dari sesi lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:123
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"Anda berhasil memindai kode QR. {user} mungkin perlu mengkonfirmasi "
+"verifikasi."
+
+#: src/identity_verification_view/room_left_page.ui:37
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "Anda tidak lagi berada di kamar tempat verifikasi berlangsung"
+
+#: src/identity_verification_view/sas_page.rs:150
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr ""
+"Periksa apakah emoji yang sama muncul dalam urutan yang sama di klien lain."
+
+#: src/identity_verification_view/sas_page.rs:154
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr ""
+"Periksa apakah emoji yang sama muncul dalam urutan yang sama di klien lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:164
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"Tanyakan kepada {user} apakah mereka melihat emoji berikut muncul dalam "
+"urutan yang sama di layar."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:171
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+msgstr ""
+"Tanyakan kepada {user} apakah mereka melihat angka berikut muncul dalam "
+"urutan yang sama di layar."
+
+#: src/identity_verification_view/sas_page.rs:252
+msgid "Could not send that the data does not match"
+msgstr "Tidak bisa mengirim bahwa data tidak cocok"
+
+#: src/identity_verification_view/sas_page.rs:269
+msgid "Could not send confirmation that the data matches"
+msgstr "Tidak bisa mengirim konfirmasi bahwa data cocok"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis do not match.
+#: src/identity_verification_view/sas_page.ui:57
+msgid "Do Not Match"
+msgstr "Tidak Cocok"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis match.
+#: src/identity_verification_view/sas_page.ui:69
+msgid "Match"
+msgstr "Cocok"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:155
+msgid "Scan the QR code displayed by the other session."
+msgstr "Pindai kode QR yang ditampilkan oleh sesi lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:162
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "Pindai kode QR yang ditampilkan pada perangkat {user}."
+
+#: src/identity_verification_view/scan_qr_code_page.rs:200
+msgid "Could not validate scanned QR Code"
+msgstr "Tidak bisa memvalidasi Kode QR yang dipindai"
+
+#: src/identity_verification_view/scan_qr_code_page.ui:58
+msgid "Show a QR code to scan with another device"
+msgstr "Tampilkan kode QR untuk dipindai dengan perangkat lain"
+
+#: src/identity_verification_view/wait_for_other_page.rs:123
+msgid "Get Another Device"
+msgstr "Dapatkan Perangkat Lain"
+
+#: src/identity_verification_view/wait_for_other_page.rs:125
+msgid "Accept the verification request from another session or device."
+msgstr "Terima permintaan verifikasi dari sesi atau perangkat lain."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:133
+msgid "Waiting for {user}"
+msgstr "Menunggu {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:139
+msgid "Ask {user} to accept the verification request."
+msgstr "Minta {user} untuk menerima permintaan verifikasi."
+
+#: src/identity_verification_view/wait_for_other_page.ui:41
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+msgstr ""
+"Agar aman, verifikasi harus dilakukan bertemu muka atau menggunakan cara "
+"komunikasi yang tepercaya."
+
+#: src/identity_verification_view/wait_for_other_page.ui:55
+msgid "The request is not showing up on the other device?"
+msgstr "Permintaan tidak muncul di perangkat lain?"
+
+#: src/identity_verification_view/wait_for_other_page.ui:64
+msgid "Cancel Verification Request"
+msgstr "Batalkan Permintaan Verifikasi"
+
+#: src/login/advanced_dialog.ui:4
+msgid "Homeserver Discovery"
+msgstr "Penemuan Peladen rumah"
+
+#: src/login/advanced_dialog.ui:11
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+msgstr ""
+"Penemuan otomatis, juga dikenal sebagai \"pencarian terkenal\", memungkinkan "
+"untuk menemukan URL peladen rumah Matrix dari nama domain. Ini hanya boleh "
+"dinonaktifkan jika peladen rumah Anda tidak mendukung penemuan otomatis atau "
+"jika Anda ingin memberikan URL sendiri."
+
+#: src/login/advanced_dialog.ui:14
+msgid "_Auto-Discovery"
+msgstr "Penemuan Otom_atis"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.ui:6 src/login/greeter.ui:91
+msgid "Welcome to Fractal"
+msgstr "Selamat datang di Fractal"
+
+#: src/login/greeter.ui:26 src/login/greeter.ui:29 src/login/greeter.ui:37
+#: src/login/greeter.ui:40 src/window.ui:30 src/window.ui:33
+msgid "About Fractal"
+msgstr "Tentang Fractal"
+
+#: src/login/greeter.ui:117
+msgid "_Log In"
+msgstr "_Log Masuk"
+
+#: src/login/greeter.ui:130
+msgid "_Create Account"
+msgstr "Buat _Akun"
+
+#: src/login/homeserver_page.rs:102
+msgid "Domain Name"
+msgstr "Nama Domain"
+
+#: src/login/homeserver_page.rs:104
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "Domain peladen rumah Matrix Anda, misalnya gnome.org"
+
+#: src/login/homeserver_page.rs:107 src/login/method_page.ui:68
+msgid "Homeserver URL"
+msgstr "URL peladen rumah"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:111
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "URL peladen rumah Matrix Anda, misalnya {address}"
+
+#: src/login/homeserver_page.ui:5 src/login/homeserver_page.ui:42
+#: src/session/view/account_settings/general_page/mod.ui:93
+msgid "Homeserver"
+msgstr "Peladen rumah"
+
+#: src/login/homeserver_page.ui:100 src/login/method_page.ui:150
+msgid "Next"
+msgstr "Selanjutnya"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.ui:115
+msgid "Advanced…"
+msgstr "Tingkat Lanjut…"
+
+#: src/login/in_browser_page.ui:55
+msgid "Click on the button below and follow the steps in the browser"
+msgstr "Klik pada tombol di bawah dan ikuti langkah-langkah di peramban"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:124
+msgid "Log in to {domain_name}"
+msgstr "Masuk ke {domain_name}"
+
+#: src/login/method_page.rs:131
+msgid "Log in"
+msgstr "_Log Masuk"
+
+#: src/login/method_page.rs:174
+msgid "More SSO Providers"
+msgstr "Penyedia SSO Lainnya"
+
+#: src/login/method_page.rs:177
+msgid "Login via SSO"
+msgstr "Log Masuk melalui SSO"
+
+#: src/login/method_page.ui:5 src/window.ui:75
+msgid "Log In"
+msgstr "Log Masuk"
+
+#: src/login/method_page.ui:100
+msgid "Matrix Username"
+msgstr "Nama Pengguna Matrix"
+
+#: src/login/method_page.ui:116
+msgid "Password"
+msgstr "Kata Sandi"
+
+#: src/login/method_page.ui:132
+msgid "Single Sign-On Providers"
+msgstr "Penyedia Single Sign On"
+
+#: src/login/mod.rs:443
+msgid "Could not store session"
+msgstr "Tidak bisa menyimpan sesi"
+
+#: src/login/mod.ui:27 src/login/mod.ui:61
+msgid "Login Complete"
+msgstr "Masuk Selesai"
+
+#: src/login/mod.ui:82
+msgid "This session is ready to send and receive secure messages"
+msgstr "Sesi ini siap untuk mengirim dan menerima pesan aman"
+
+#: src/login/mod.ui:88
+msgid "Start Chatting"
+msgstr "Mulai Mengobrol"
+
+#: src/login/session_setup_view.ui:5
+msgid "Session Setup"
+msgstr "Penyiapan Sesi"
+
+#: src/login/session_setup_view.ui:43 src/window.ui:58
+msgid "Fetching Account Data…"
+msgstr "Mengambil Data Akun…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. This is the tooltip text on buttons to log in via Single Sign-On.
+#. The brand is something like Facebook, Apple, GitHub…
+#: src/login/sso_idp_button.rs:74
+msgid "Log in with {brand}"
+msgstr "Masuk dengan {brand}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:172
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Fractal: Kredensial matrix untuk {user_id}"
+
+#: src/secret/linux.rs:514
+msgid "The secret storage file is corrupted."
+msgstr "Berkas penyimpanan rahasia rusak."
+
+#: src/secret/linux.rs:518
+msgid "Could not access the secret storage file location."
+msgstr "Tidak dapat mengakses lokasi berkas penyimpanan rahasia."
+
+#: src/secret/linux.rs:521
+msgid "An unexpected error occurred when accessing the secret storage file."
+msgstr ""
+"Terjadi galat yang tidak diketahui saat mengakses berkas penyimpanan rahasia."
+
+#: src/secret/linux.rs:524
+msgid "The secret storage file has been changed by another process."
+msgstr "Berkas penyimpanan rahasia telah diubah oleh proses lain."
+
+#: src/secret/linux.rs:527
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"Permintaan ke Portal Rahasia Flatpak dibatalkan. Pastikan untuk menerima "
+"permintaan apa pun yang meminta untuk mengaksesnya."
+
+#: src/secret/linux.rs:530
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"Portal Rahasia Flatpak tidak tersedia. Pastikan xdg-desktop-portal dipasang, "
+"dan setidaknya pada versi 1.5.0."
+
+#: src/secret/linux.rs:533
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr ""
+"Galat yang tidak diketahui terjadi saat berinteraksi dengan backend D-Bus "
+"Portal Rahasia."
+
+#: src/secret/linux.rs:536
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr ""
+"Portal Rahasia Flatpak menyediakan kunci yang terlalu lemah untuk diamankan."
+
+#: src/secret/linux.rs:550
+msgid "The item was deleted."
+msgstr "Butir telah dihapus."
+
+#: src/secret/linux.rs:554 src/secret/linux.rs:576
+msgid ""
+"An unexpected error occurred when interacting with the D-Bus Secret Service."
+msgstr ""
+"Terjadi galat yang tidak diketahui saat berinteraksi dengan Layanan Rahasia "
+"D-Bus."
+
+#: src/secret/linux.rs:557
+msgid "The collection or item is locked."
+msgstr "Koleksi atau item terkunci."
+
+#: src/secret/linux.rs:560
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "Sesi Layanan Rahasia D-Bus tidak ada."
+
+#: src/secret/linux.rs:563
+msgid "The collection or item does not exist."
+msgstr "Koleksi atau item tidak ada."
+
+#: src/secret/linux.rs:567
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"Permintaan ke Layanan Rahasia D-Bus dibatalkan. Pastikan untuk menerima "
+"permintaan apa pun yang meminta untuk mengaksesnya."
+
+#: src/secret/linux.rs:570
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"Tidak dapat mengakses koleksi bawaan. Pastikan ring kunci dibuat dan "
+"ditetapkan sebagai bawaan."
+
+#: src/session/model/session.rs:720
+msgid "Could not log the session out"
+msgstr "Tidak bisa log keluar sesi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/notifications/mod.rs:248
+msgid "{user} sent a verification request"
+msgstr "{user} mengirim permintaan verifikasi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/notifications/mod.rs:311
+msgid "Verify your new session “{name}”"
+msgstr "Verifikasi sesi baru Anda \"{name}\""
+
+#: src/session/model/room/join_rule.rs:249
+msgid "Only invited users, and users can knock"
+msgstr "Hanya pengguna yang diundang, dan pengguna dapat mengetuk"
+
+#: src/session/model/room/join_rule.rs:251
+msgid "Only invited users"
+msgstr "Hanya pengguna yang diundang"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:265
+msgid "Members of {room}, and users can knock"
+msgstr "Anggota {room}, dan pengguna dapat mengetuk"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:272
+msgid "Members of {room}"
+msgstr "Anggota {room}"
+
+#: src/session/model/room/join_rule.rs:277
+msgid "Any registered user"
+msgstr "Setiap pengguna terdaftar"
+
+#: src/session/model/room/join_rule.rs:278
+#: src/session/view/content/room_details/general_page.rs:1023
+msgid "Unsupported rule"
+msgstr "Aturan yang tidak didukung"
+
+#. Translators: This is the name of a room that is empty but had another
+#. user before. Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/model/room/mod.rs:381
+msgid "Empty Room (was {user})"
+msgstr "Kamar Kosong ({user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/model/room/mod.rs:384
+msgid "Empty Room"
+msgstr "Kamar Kosong"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/model/room/mod.rs:394
+msgid "Unknown"
+msgstr "Tidak Dikenal"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/model/room/permissions.rs:70
+msgid "Default"
+msgstr "Baku"
+
+#: src/session/model/room/permissions.rs:73
+msgid "Moderator"
+msgstr "Moderator"
+
+#: src/session/model/room/permissions.rs:74
+msgid "Admin"
+msgstr "Admin"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/model/room/permissions.rs:76
+msgid "Muted"
+msgstr "Dibisukan"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/room_list/mod.rs:399
+msgid "Could not join room {room_name}"
+msgstr "Tidak  bisa bergabung dengan kamar {room_name}"
+
+#: src/session/model/sidebar_data/section/name.rs:78
+msgid "Verifications"
+msgstr "Verifikasi"
+
+#: src/session/model/sidebar_data/section/name.rs:79
+#: src/session/view/content/room_details/invite_subpage/list.rs:270
+msgid "Invited"
+msgstr "Diundang"
+
+#: src/session/model/sidebar_data/section/name.rs:80
+msgid "Favorites"
+msgstr "Favorit"
+
+#: src/session/model/sidebar_data/section/name.rs:81
+msgid "Rooms"
+msgstr "Kamar"
+
+#: src/session/model/sidebar_data/section/name.rs:82
+msgid "Low Priority"
+msgstr "Prioritas Rendah"
+
+#: src/session/model/sidebar_data/section/name.rs:83
+msgid "Historical"
+msgstr "Bentuk Historis"
+
+#: src/session/model/sidebar_data/icon_item.rs:32
+msgid "Explore"
+msgstr "Jelajahi"
+
+#: src/session/model/sidebar_data/icon_item.rs:33
+msgid "Forget Room"
+msgstr "Lupakan Kamar"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:151
+msgid "Password must be at least 8 characters long"
+msgstr "Panjang kata sandi minimal harus 8 karakter"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:154
+msgid "Password must have at least one lower-case letter"
+msgstr "Kata sandi harus memiliki setidaknya satu huruf kecil"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:158
+msgid "Password must have at least one upper-case letter"
+msgstr "Kata sandi harus memiliki setidaknya satu huruf besar"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:161
+msgid "Password must have at least one digit"
+msgstr "Kata sandi harus memiliki setidaknya satu digit"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:163
+msgid "Password must have at least one symbol"
+msgstr "Kata sandi harus memiliki setidaknya satu simbol"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:193
+msgid "Passwords do not match"
+msgstr "Kata sandi tidak cocok"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:239
+msgid "Password changed successfully"
+msgstr "Kata sandi berhasil diubah"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:251
+msgid "Password rejected for being too weak"
+msgstr "Kata sandi ditolak karena terlalu lemah"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:255
+msgid "Could not change password"
+msgstr "Tidak dapat mengubah kata sandi"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:59
+msgid "Change Password"
+msgstr "Ubah Password"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr ""
+"Mengubah kata sandi Anda akan mengeluarkan Anda dari sesi Anda yang lain."
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "Kata Sandi Baru"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:116
+msgid "Confirm New Password"
+msgstr "Konfirmasi Kata Sandi"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:152
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:78
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:89
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:87
+#: src/session/view/content/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "Lanjutkan"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:150
+msgid "Account successfully deactivated"
+msgstr "Akun berhasil dinonaktifkan"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:158
+msgid "Could not deactivate account"
+msgstr "Tidak dapat menonaktifkan akun"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:8
+#: src/session/view/account_settings/general_page/mod.ui:131
+msgid "Deactivate Account"
+msgstr "Nonaktifkan Akun"
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:43
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"Menonaktifkan akun Anda berarti Anda akan kehilangan akses ke semua pesan, "
+"kontak, berkas, dan lainnya, selamanya."
+
+#. Translators: Deactivation is a permanent action that occurs on the server.
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:52
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"Untuk mengonfirmasi bahwa Anda benar-benar ingin menonaktifkan akun ini, "
+"ketik ID pengguna Matrix Anda:"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:87
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"Identitas kripto dan pemulihan akun tidak disiapkan dengan benar. Jika ini "
+"adalah sesi terakhir Anda yang terhubung dan Anda tidak memiliki cadangan "
+"lokal terkini untuk kunci enkripsi Anda, Anda tidak akan dapat memulihkan "
+"akun Anda."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:95
+msgid ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+msgstr ""
+"Ini adalah sesi terakhir Anda yang terhubung. Pastikan Anda masih dapat "
+"mengakses kunci pemulihan atau frasa sandi, atau buat cadangan kunci "
+"enkripsi sebelum log keluar."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:118
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:123
+msgid "Log Out"
+msgstr "Keluar"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:14
+msgid "Log Out of This Session"
+msgstr "Log Keluar dari Sesi ini"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:42
+msgid "Are you sure you want to log out of this session?"
+msgstr "Anda yakin ingin log keluar sesi ini?"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:68
+msgid "Review Account Security"
+msgstr "Tinjau Keamanan Akun"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:106
+msgid "Logout Failed"
+msgstr "Log Keluar Gagal"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:125
+msgid ""
+"Logging out of this session failed. You can try again, or, if this is a "
+"permanent error, you can remove the session."
+msgstr ""
+"Gagal log keluar dari sesi ini. Anda dapat mencoba lagi, atau, jika ini "
+"adalah galat permanen, Anda dapat menghapus sesi tersebut."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:150
+msgid ""
+"Removing the session deletes the associated data from the system, but your "
+"homeserver and other sessions will not be aware that this session was logged "
+"out."
+msgstr ""
+"Menghapus sesi akan menghapus data terkait dari sistem, tetapi server rumah "
+"dan sesi lainnya tidak akan menyadari bahwa sesi ini telah keluar."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:167
+msgid "Remove Session"
+msgstr "Buang Sesi"
+
+#: src/session/view/account_settings/general_page/mod.rs:275
+#: src/session/view/content/room_details/edit_details_subpage.rs:153
+msgid "Avatar removed successfully"
+msgstr "Avatar berhasil dihapus"
+
+#: src/session/view/account_settings/general_page/mod.rs:277
+#: src/session/view/content/room_details/edit_details_subpage.rs:155
+msgid "Avatar changed successfully"
+msgstr "Avatar berhasil diubah"
+
+#: src/session/view/account_settings/general_page/mod.rs:296
+#: src/session/view/account_settings/general_page/mod.rs:306
+#: src/session/view/content/room_details/edit_details_subpage.rs:180
+#: src/session/view/content/room_details/edit_details_subpage.rs:190
+msgid "Could not load file"
+msgstr "Tidak dapat memuat berkas"
+
+#: src/session/view/account_settings/general_page/mod.rs:325
+#: src/session/view/content/room_details/edit_details_subpage.rs:217
+msgid "Could not upload avatar"
+msgstr "Tidak dapat mengunggah avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:354
+#: src/session/view/content/room_details/edit_details_subpage.rs:240
+msgid "Could not change avatar"
+msgstr "Tidak dapat mengubah avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:371
+#: src/session/view/content/room_details/edit_details_subpage.rs:265
+msgid "Remove Avatar?"
+msgstr "Hapus Avatar?"
+
+#: src/session/view/account_settings/general_page/mod.rs:372
+msgid "Do you really want to remove your avatar?"
+msgstr "Anda yakin ingin menghapus avatar Anda?"
+
+#: src/session/view/account_settings/general_page/mod.rs:410
+#: src/session/view/content/room_details/edit_details_subpage.rs:297
+msgid "Could not remove avatar"
+msgstr "Tidak dapat menghapus avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:462
+msgid "Name changed successfully"
+msgstr "Nama berhasil diubah"
+
+#: src/session/view/account_settings/general_page/mod.rs:513
+msgid "Could not change display name"
+msgstr "Tidak dapat mengubah nama kamar"
+
+#: src/session/view/account_settings/general_page/mod.ui:5
+msgid "General"
+msgstr "Umum"
+
+#: src/session/view/account_settings/general_page/mod.ui:12
+msgid "Account Avatar"
+msgstr "Avatar Akun"
+
+#: src/session/view/account_settings/general_page/mod.ui:31
+#: src/session/view/content/room_details/edit_details_subpage.ui:58
+#: src/session/view/content/room_details/edit_details_subpage.ui:68
+#: src/session/view/room_creation.ui:47 src/session/view/room_creation.ui:50
+msgid "Name"
+msgstr "Nama"
+
+#: src/session/view/account_settings/general_page/mod.ui:73
+msgid "Manage Account"
+msgstr "Kelola Akun"
+
+#: src/session/view/account_settings/general_page/mod.ui:82
+#: src/session/view/content/room_details/general_page.ui:291
+msgid "Advanced Information"
+msgstr "Informasi Tingkat Lanjut"
+
+#: src/session/view/account_settings/general_page/mod.ui:85
+msgid "Matrix User ID"
+msgstr "ID Pengguna Matrix"
+
+#: src/session/view/account_settings/general_page/mod.ui:95
+msgid "Copy Homeserver Address"
+msgstr "Salin Alamat Server Rumah"
+
+#: src/session/view/account_settings/general_page/mod.ui:96
+msgid "Homeserver address copied to clipboard"
+msgstr "Alamat server rumah disalin ke papan klip"
+
+#: src/session/view/account_settings/general_page/mod.ui:101
+msgid "Session ID"
+msgstr "ID Sesi"
+
+#: src/session/view/account_settings/general_page/mod.ui:103
+msgid "Copy Session ID"
+msgstr "Salin ID Sesi"
+
+#: src/session/view/account_settings/general_page/mod.ui:104
+msgid "Session ID copied to clipboard"
+msgstr "ID sesi disalin ke papan klip"
+
+#: src/session/view/account_settings/notifications_page.rs:303
+msgid "Could not enable account notifications"
+msgstr "Tidak dapat mengaktifkan pemberitahuan akun"
+
+#: src/session/view/account_settings/notifications_page.rs:305
+msgid "Could not disable account notifications"
+msgstr "Tidak dapat menonaktifkan pemberitahuan akun"
+
+#: src/session/view/account_settings/notifications_page.rs:357
+msgid "Could not change global notifications setting"
+msgstr "Tidak dapat mengubah setelan pemberitahuan global"
+
+#: src/session/view/account_settings/notifications_page.rs:374
+msgid "Remove “{keyword}”"
+msgstr "Hapus \"{keyword}\""
+
+#: src/session/view/account_settings/notifications_page.rs:408
+msgid "Could not remove notification keyword"
+msgstr "Tidak dapat menghapus kata kunci pemberitahuan"
+
+#: src/session/view/account_settings/notifications_page.rs:479
+msgid "Could not add notification keyword"
+msgstr "Tidak dapat menambahkan kata kunci pemberitahuan"
+
+#: src/session/view/account_settings/notifications_page.ui:5
+#: src/session/view/content/room_details/general_page.ui:136
+msgid "Notifications"
+msgstr "Notifikasi"
+
+#: src/session/view/account_settings/notifications_page.ui:11
+msgid "Enable for This Account"
+msgstr "Aktifkan untuk Akun Ini"
+
+#: src/session/view/account_settings/notifications_page.ui:19
+msgid "Enable for This Session"
+msgstr "Aktifkan untuk Sesi Ini"
+
+#: src/session/view/account_settings/notifications_page.ui:27
+msgid "Global"
+msgstr "Global"
+
+#: src/session/view/account_settings/notifications_page.ui:28
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr ""
+"Pesan mana yang memicu notifikasi di kamar yang tidak memiliki aturan yang "
+"lebih spesifik"
+
+#: src/session/view/account_settings/notifications_page.ui:31
+msgid "All messages in all rooms"
+msgstr "Semua pesan di semua kamar"
+
+#: src/session/view/account_settings/notifications_page.ui:38
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr ""
+"Semua pesan dalam obrolan langsung, serta penyebutan dan kata kunci di semua "
+"kamar"
+
+#: src/session/view/account_settings/notifications_page.ui:45
+msgid "Only mentions and keywords in all rooms"
+msgstr "Hanya penyebutan dan kata kunci di semua kamar"
+
+#: src/session/view/account_settings/notifications_page.ui:54
+msgid "Keywords"
+msgstr "Kata kunci"
+
+#: src/session/view/account_settings/notifications_page.ui:55
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+msgstr ""
+"Pesan yang berisi salah satu kata kunci ini memicu notifikasi. Pencocokan "
+"pada kata kunci ini tidak peka huruf besar/kecil."
+
+#: src/session/view/account_settings/notifications_page.ui:67
+#: src/session/view/account_settings/notifications_page.ui:68
+msgid "Add Keyword"
+msgstr "Tambahkan Kata Kunci"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:4
+#: src/session/view/account_settings/security_page/mod.ui:26
+msgid "Ignored Users"
+msgstr "Pengguna yang Diabaikan"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:18
+msgid "Toggle Ignored Users Search"
+msgstr "Jungkitkan Pencarian Pengguna yang Diabaikan"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:33
+msgid "Search for ignored users"
+msgstr "Mencari pengguna yang diabaikan"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:74
+msgid "No Ignored Users"
+msgstr "Tidak Ada Pengguna yang Diabaikan"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:75
+msgid "You can add users to this list from their room member profile"
+msgstr ""
+"Anda dapat menambahkan pengguna ke daftar ini dari profil anggota kamar "
+"mereka"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:170
+#: src/session/view/account_settings/security_page/mod.ui:168
+msgid "Export Room Encryption Keys"
+msgstr "Ekspor Kunci Enkripsi Kamar"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:173
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+msgstr ""
+"Mengekspor kunci enkripsi kamar memungkinkan Anda membuat cadangan agar "
+"dapat mendekripsi pesan di kamar terenkripsi ujung ke ujung di perangkat "
+"lain atau dengan klien Matrix lain."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:176
+msgid ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+msgstr ""
+"Cadangan harus disimpan di tempat yang aman dan harus dilindungi dengan "
+"frasa sandi yang kuat yang akan digunakan untuk mengenkripsi data."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:179
+msgid "Export Keys"
+msgstr "Kunci Ekspor"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:182
+#: src/session/view/account_settings/security_page/mod.ui:178
+msgid "Import Room Encryption Keys"
+msgstr "Impor Kunci Enkripsi Kamar"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:185
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"Mengimpor kunci enkripsi kamar memungkinkan Anda mendekripsi pesan di kamar "
+"terenkripsi end-to-end dengan cadangan sebelumnya dari klien Matrix."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:188
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "Masukkan frasa sandi yang diberikan saat berkas cadangan dibuat."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:191
+msgid "Import Keys"
+msgstr "Kunci Impor"
+
+#. Translators: Do no translate "fractal" as it is the application
+#. name.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:212
+msgid "fractal-encryption-keys"
+msgstr "kunci enkripsi-fractal"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:217
+msgid "Save Encryption Keys To…"
+msgstr "Simpan Kunci Enkripsi Ke…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:220
+msgid "Import Encryption Keys From…"
+msgstr "Impor Kunci Enkripsi Dari…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:233
+#: src/utils/matrix/media_message.rs:180
+msgid "Could not access file"
+msgstr "Tidak dapat mengakses berkas"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:263
+msgid "Passphrases do not match"
+msgstr "Frasa sandi tidak cocok"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:335
+msgid "Room encryption keys exported successfully"
+msgstr "Kunci enkripsi kamar berhasil diekspor"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:341
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "Tidak ada deskripsi kamar"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:355
+msgid "Could not export the keys"
+msgstr "Tidak dapat mengekspor kunci"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:365
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr "Frasa sandi tidak cocok dengan yang digunakan untuk mengekspor kunci."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:369
+msgid "Could not import the keys"
+msgstr "Tidak dapat mengimpor kunci"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:61
+msgid "Passphrase"
+msgstr "Frasa sandi"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:81
+msgid "Confirm Passphrase"
+msgstr "Konfirmasi Frasa Sandi"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:116
+#: src/session/view/content/room_details/history_viewer/file.ui:4
+#: src/session/view/content/room_history/message_row/file.rs:65
+msgid "File"
+msgstr "Berkas"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:120
+msgid "Choose…"
+msgstr "Pilih…"
+
+#: src/session/view/account_settings/security_page/mod.rs:231
+msgid "No Crypto Identity"
+msgstr "Tidak Ada Identitas Kripto"
+
+#: src/session/view/account_settings/security_page/mod.rs:233
+msgid "Verifying your own devices or other users is not possible"
+msgstr ""
+"Memverifikasi perangkat Anda sendiri atau pengguna lain tidak dimungkinkan"
+
+#: src/session/view/account_settings/security_page/mod.rs:236
+#: src/session/view/account_settings/security_page/mod.rs:309
+msgid "Enable…"
+msgstr "Fungsikan…"
+
+#: src/session/view/account_settings/security_page/mod.rs:239
+msgid "Enable Crypto Identity"
+msgstr "Fungsikan Identitas Kripto"
+
+#: src/session/view/account_settings/security_page/mod.rs:255
+msgid "Crypto Identity Enabled"
+msgstr "Identitas Kripto Difungsikan"
+
+#: src/session/view/account_settings/security_page/mod.rs:257
+msgid "The crypto identity exists and this device is verified"
+msgstr "Identitas kripto ada dan perangkat ini terverifikasi"
+
+#: src/session/view/account_settings/security_page/mod.rs:260
+#: src/session/view/account_settings/security_page/mod.rs:328
+msgid "Reset…"
+msgstr "Atur Ulang…"
+
+#: src/session/view/account_settings/security_page/mod.rs:274
+msgid "Crypto Identity Incomplete"
+msgstr "Identitas Kripto Tidak Lengkap"
+
+#: src/session/view/account_settings/security_page/mod.rs:276
+msgid "The crypto identity exists but this device is not verified"
+msgstr "Identitas kripto ada tetapi perangkat ini tidak terverifikasi"
+
+#: src/session/view/account_settings/security_page/mod.rs:279
+msgid "Verify…"
+msgstr "Verifikasi…"
+
+#: src/session/view/account_settings/security_page/mod.rs:282
+msgid "Verify This Session"
+msgstr "Verifikasikan Sesi Ini"
+
+#: src/session/view/account_settings/security_page/mod.rs:304
+msgid "Account Recovery Disabled"
+msgstr "Pemulihan Akun Dinonaktifkan"
+
+#: src/session/view/account_settings/security_page/mod.rs:306
+#, fuzzy
+msgid ""
+"Enable recovery to be able to restore your account without another device"
+msgstr ""
+"Aktifkan pemulihan untuk dapat memulihkan akun Anda tanpa perangkat lain"
+
+#: src/session/view/account_settings/security_page/mod.rs:312
+msgid "Enable Account Recovery"
+msgstr "Fungsikan Pemulihan Akun"
+
+#: src/session/view/account_settings/security_page/mod.rs:323
+msgid "Account Recovery Enabled"
+msgstr "Pemulihan Akun Difungsikan"
+
+#: src/session/view/account_settings/security_page/mod.rs:325
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "Kunci penandatanganan dan kunci enkripsi Anda diselaraskan"
+
+#: src/session/view/account_settings/security_page/mod.rs:331
+msgid "Reset Account Recovery Key"
+msgstr "Setel Ulang Kunci Pemulihan Akun"
+
+#: src/session/view/account_settings/security_page/mod.rs:345
+#, fuzzy
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr ""
+"Pulihkan untuk menyinkronkan kunci penandatanganan dan kunci enkripsi Anda"
+
+#: src/session/view/account_settings/security_page/mod.rs:348
+msgid "Recover…"
+msgstr "Pulihkan…"
+
+#: src/session/view/account_settings/security_page/mod.rs:351
+msgid "Recover Account Data"
+msgstr "Pulihkan Data Akun"
+
+#: src/session/view/account_settings/security_page/mod.ui:9
+msgid "Privacy"
+msgstr "Privasi"
+
+#: src/session/view/account_settings/security_page/mod.ui:13
+msgid "Send Read Receipts"
+msgstr "Kirim Laporan Dibaca"
+
+#: src/session/view/account_settings/security_page/mod.ui:14
+#, fuzzy
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"Jika ini diaktifkan, anggota lain dari kamar yang Anda ikuti dapat melacak "
+"pesan mana yang telah Anda lihat."
+
+#: src/session/view/account_settings/security_page/mod.ui:20
+msgid "Send Typing Notifications"
+msgstr "Kirim Notifikasi Pengetikan"
+
+#: src/session/view/account_settings/security_page/mod.ui:21
+#, fuzzy
+msgid ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+msgstr ""
+"Jika ini diaktifkan, anggota lain dari kamar yang Anda ikuti dapat melihat "
+"saat Anda mengetik pesan."
+
+#: src/session/view/account_settings/security_page/mod.ui:27
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"Semua pesan atau undangan yang dikirim oleh pengguna ini akan diabaikan. "
+"Anda masih akan melihat beberapa aktivitas mereka, seperti saat mereka "
+"bergabung atau keluar dari kamar."
+
+#: src/session/view/account_settings/security_page/mod.ui:36
+msgid "Crypto Identity"
+msgstr "Identitas Kripto"
+
+#: src/session/view/account_settings/security_page/mod.ui:37
+#, fuzzy
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"Memungkinkan Anda memverifikasi akun Matrix lain dan secara otomatis "
+"mempercayai sesi terverifikasi mereka"
+
+#: src/session/view/account_settings/security_page/mod.ui:99
+msgid "Account Recovery"
+msgstr "Pemulihan Akun"
+
+#: src/session/view/account_settings/security_page/mod.ui:100
+#, fuzzy
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+msgstr ""
+"Memungkinkan untuk memulihkan akun Anda sepenuhnya dengan kunci pemulihan "
+"atau frasa sandi, jika Anda kehilangan akses ke semua sesi Anda"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:5
+msgid "Sessions"
+msgstr "Sesi"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:9
+#: src/session/view/account_settings/user_sessions_page/mod.ui:13
+msgid "Current Session"
+msgstr "Sesi Saat Ini"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:24
+#: src/session/view/account_settings/user_sessions_page/mod.ui:48
+msgid "Other Active Sessions"
+msgstr "Sesi Aktif Lainnya"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:70
+#, fuzzy
+#| msgid "Failed to load the list of connected devices."
+msgid "Could not load the list of connected devices"
+msgstr "Gagal memuat daftar perangkat yang terhubung."
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:125
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:87
+msgid "Disconnect Session"
+msgstr "Putuskan Sambungan Sesi"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:185
+msgid "Last seen at %H:%M"
+msgstr "Terakhir terlihat pada %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:190
+msgid "Last seen at %I:%M %p"
+msgstr "Terakhir terlihat pada %l:%M %p"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:200
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "Terakhir terlihat kemarin pada %H:%M"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:207
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "Terakhir terlihat kemarin pada %l:%M %p"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:218
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "Terakhir terlihat %A pada %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:225
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "Terakhir terlihat %A pada %l:%M %p"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:234
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "Terakhir terlihat %-e %B pada %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:241
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "Terakhir terlihat %-e %B pada %l:%M %p"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:249
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "Terakhir terlihat %-e %B %Y pada %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:256
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "Terakhir terlihat %-e %B %Y pada %l:%M %p"
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:322
+#, fuzzy
+#| msgid "Failed to disconnect device “{device_name}”"
+msgid "Could not disconnect device “{device_name}”"
+msgstr "Gagal memutuskan sambungan perangkat \"{device_name}\""
+
+#. Translators: As in 'A verified session'.
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:34
+msgid "Verified"
+msgstr "Terverifikasi"
+
+#: src/session/view/content/explore/mod.ui:20
+msgid "Public Rooms Search"
+msgstr "Pencarian Kamar Publik"
+
+#: src/session/view/content/explore/mod.ui:21
+msgid "Search for a room in the public directory of the selected server"
+msgstr "Cari kamar di direktori publik server yang dipilih"
+
+#: src/session/view/content/explore/mod.ui:32
+msgid "Switch servers"
+msgstr "Beralih server"
+
+#: src/session/view/content/explore/mod.ui:61
+msgid "No Rooms"
+msgstr "Tidak Ada Kamar"
+
+#: src/session/view/content/explore/mod.ui:67
+msgid "No rooms matching the search were found"
+msgstr "Tidak ada kamar yang cocok dengan pencarian yang ditemukan"
+
+#: src/session/view/content/explore/mod.ui:78
+msgid "List of Public Rooms"
+msgstr "Daftar Kamar Publik"
+
+#: src/session/view/content/explore/public_room_row.rs:209
+msgid "View {room_name}"
+msgstr "Lihat {room_name}"
+
+#: src/session/view/content/explore/public_room_row.rs:211
+msgid "Join {room_name}"
+msgstr "Bergabung {room_name}"
+
+#: src/session/view/content/explore/servers_popover.ui:22
+msgid "Server List"
+msgstr "Daftar Server"
+
+#: src/session/view/content/explore/servers_popover.ui:38
+#: src/session/view/content/explore/servers_popover.ui:45
+msgid "Add Server"
+msgstr "Tambah Server"
+
+#: src/session/view/content/explore/server_row.ui:28
+#: src/session/view/content/explore/server_row.ui:30
+msgid "Remove Server"
+msgstr "Hapus Server"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/invite.rs:188
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) mengundang Anda"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:254 src/session/view/sidebar/row.rs:716
+msgid "Could not accept invitation for {room}"
+msgstr "Tidak bisa menerima undangan untuk {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:292 src/session/view/sidebar/row.rs:706
+msgid "Could not decline invitation for {room}"
+msgstr "Tidak bisa menolak undangan untuk {room}"
+
+#. Translators: This is a verb.
+#: src/session/view/content/invite.ui:13 src/session/view/content/invite.ui:39
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:167
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:209
+msgid "Invite"
+msgstr "Undang"
+
+#: src/session/view/content/invite.ui:116
+msgid "_Decline"
+msgstr "_Ditolak"
+
+#: src/session/view/content/invite.ui:126 src/session/view/sidebar/mod.ui:32
+msgid "_Accept"
+msgstr "Terim_a"
+
+#: src/session/view/content/mod.ui:4
+msgid "Main Content"
+msgstr "Konten Utama"
+
+#: src/session/view/content/mod.ui:13 src/session/view/content/mod.ui:28
+msgid "No Room Selected"
+msgstr "Tidak Ada Kamar yang Dipilih"
+
+#: src/session/view/content/mod.ui:29
+msgid "Join a room to start chatting"
+msgstr "Bergabung dengan kamar untuk memulai mengobrol"
+
+#: src/session/view/content/mod.ui:39
+#: src/session/view/content/room_history/mod.ui:218
+msgid "Room History"
+msgstr "Riwayat Kamar"
+
+#: src/session/view/content/mod.ui:50
+msgid "Room Invite"
+msgstr "Undangan Kamar"
+
+#: src/session/view/content/mod.ui:59
+msgid "Explore Rooms"
+msgstr "Jelajahi Kamar"
+
+#: src/session/view/content/room_details/addresses_subpage/completion_popover.ui:5
+#, fuzzy
+msgid "Address auto-completion"
+msgstr "Pelengkapan otomatis alamat"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:329
+msgid "Local Addresses on {homeserver}"
+msgstr "Alamat Lokal di {homeserver}"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:403
+msgid "Remove address"
+msgstr "Hapus alamat"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:407
+msgid "Remove “{address}”"
+msgstr "Hapus \"{address}\""
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:448
+#: src/session/view/content/room_details/general_page.rs:721
+#: src/session/view/room_creation.ui:132
+msgid "Main Address"
+msgstr "Alamat Utama"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:472
+msgid "Set as main address"
+msgstr "Jadikan alamat utama"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:478
+msgid "Set “{address}” as main address"
+msgstr "Tetapkan \"{address}\" sebagai alamat utama"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:522
+msgid "Could not remove public address"
+msgstr "Tidak bisa menghapus alamat publik"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:548
+msgid "Could not set main public address"
+msgstr "Tidak bisa menata alamat publik utama"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:602
+msgid "Could not add public address"
+msgstr "Tidak bisa menambah alamat publik"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:606
+msgid "This address is not registered as a local address"
+msgstr "Alamat ini tidak terdaftar sebagai alamat lokal"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:609
+msgid "This address does not belong to this room"
+msgstr "Alamat ini bukan milik kamar ini"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:663
+msgid "Unregister local address"
+msgstr "Batalkan pendaftaran alamat lokal"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:667
+msgid "Unregister “{address}”"
+msgstr "Batalkan pendaftaran \"{address}\""
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:706
+msgid "Could not unregister local address"
+msgstr "Tidak bisa membatalkan pendaftaran alamat lokal"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:739
+msgid "Register “{address}”"
+msgstr "Daftarkan \"{address}\""
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:777
+msgid "Could not register local address"
+msgstr "Tidak bisa mendaftarkan alamat lokal"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:781
+msgid "This address is already registered"
+msgstr "Alamat ini sudah didaftarkan"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:4
+msgid "Edit Room Addresses"
+msgstr "Sunting Alamat Kamar"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:14
+#: src/session/view/content/room_details/general_page.ui:170
+msgid "Public Addresses"
+msgstr "Alamat Publik"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+msgstr ""
+"Alamat publik diiklankan untuk semua pengguna di kamar dan alamat utama "
+"digunakan untuk mengidentifikasi kamar secara publik. Sebelum menambahkan "
+"alamat ke daftar ini, itu harus didaftarkan sebagai suatu alamat lokal."
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:46
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"Alamat lokal hanya dapat didaftarkan dengan homeserver Anda sendiri. Jika "
+"mereka tidak dibuat publik, hanya orang-orang di server rumah Anda yang "
+"dapat menemukannya."
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:81
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:82
+msgid "Add Public Address"
+msgstr "Tambahkan Alamat Publik"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:87
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:92
+msgid "Register Local Address"
+msgstr "Daftarkan Alamat Lokal"
+
+#. Translators: This is the placeholder for the first part of a room address, as in '@my-room:example.org'.
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:89
+#: src/session/view/room_creation.ui:134
+msgid "my-room"
+msgstr "kamarku"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:90
+#: src/session/view/room_creation.ui:135
+msgid "First part of the address, for example “my-room”"
+msgstr "Bagian pertama alamat, misalnya \"kamarku\""
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:267
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "Apakah Anda yakin ingin menghapus avatar untuk kamar ini?"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:331
+msgid "Room name saved successfully"
+msgstr "Nama kamar berhasil disimpan"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:403
+msgid "Could not change room name"
+msgstr "Tidak dapat mengubah nama kamar"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:442
+msgid "Room description saved successfully"
+msgstr "Deskripsi kamar berhasil disimpan"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:519
+msgid "Could not change room description"
+msgstr "Tidak bisa mengubah deskripsi kamar"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:539
+msgid "Discard Unsaved Changes?"
+msgstr "Buang Perubahan Yang Belum Tersimpan?"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:541
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:549
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr ""
+"Halaman ini berisi perubahan yang belum disimpan. Perubahan yang tidak "
+"disimpan akan hilang."
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:551
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:559
+msgid "Discard"
+msgstr "Buang"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:4
+msgid "Edit Room Details"
+msgstr "Sunting Rincian Kamar"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:29
+msgid "Room Avatar"
+msgstr "Avatar Kamar"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:92
+msgid "Description"
+msgstr "Deskripsi"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:140
+#: src/session/view/content/room_details/history_viewer/file_row.rs:156
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:560
+#: src/utils/matrix/media_message.rs:155
+msgid "Save"
+msgstr "Simpan"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:143
+msgid "Save Description"
+msgstr "Simpan Deskripsi"
+
+#: src/session/view/content/room_details/general_page.rs:463
+#: src/session/view/content/room_details/general_page.rs:509
+#: src/session/view/content/room_details/invite_subpage/list.rs:268
+msgid "Member"
+msgid_plural "Members"
+msgstr[0] "Anggota"
+
+#: src/session/view/content/room_details/general_page.rs:675
+msgid "Could not change notifications setting"
+msgstr "Tidak dapat mengubah pengaturan notifikasi"
+
+#: src/session/view/content/room_details/general_page.rs:716
+#: src/session/view/content/room_details/general_page.rs:755
+msgid "Copy address"
+msgstr "Salin alamat"
+
+#: src/session/view/content/room_details/general_page.rs:717
+#: src/session/view/content/room_details/general_page.rs:756
+msgid "Address copied to clipboard"
+msgstr "Alamat disalin ke papan klip"
+
+#: src/session/view/content/room_details/general_page.rs:798
+msgid "Room link copied to clipboard"
+msgstr "Tautan kamar disalin ke papan klip"
+
+#: src/session/view/content/room_details/general_page.rs:851
+msgid "Could not change who can join"
+msgstr "Tidak bisa mengubah siapa yang bisa bergabung"
+
+#: src/session/view/content/room_details/general_page.rs:899
+msgid "Could not change guest access"
+msgstr "Tidak bisa mengubah akses tamu"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/general_page.rs:916
+msgid "Publish in the {homeserver} directory"
+msgstr "Terbitkan di direktori {homeserver}"
+
+#: src/session/view/content/room_details/general_page.rs:993
+msgid "Could not publish room in directory"
+msgstr "Tidak mempublikasikan kamar dalam direktori"
+
+#: src/session/view/content/room_details/general_page.rs:995
+msgid "Could not unpublish room from directory"
+msgstr "Tidak bisa menghapus publikasi kamar dari direktori"
+
+#: src/session/view/content/room_details/general_page.rs:1016
+#: src/session/view/content/room_details/general_page.ui:277
+msgid "Anyone, even if they are not in the room"
+msgstr "Siapa pun, bahkan bila mereka tidak di dalam kamar"
+
+#: src/session/view/content/room_details/general_page.rs:1019
+#: src/session/view/content/room_details/general_page.ui:278
+msgid "Members only, since this option was selected"
+msgstr "Hanya anggota, karena opsi ini dipilih"
+
+#: src/session/view/content/room_details/general_page.rs:1021
+#: src/session/view/content/room_details/general_page.ui:280
+msgid "Members only, since they were invited"
+msgstr "Hanya anggota, karena mereka diundang"
+
+#: src/session/view/content/room_details/general_page.rs:1022
+#: src/session/view/content/room_details/general_page.ui:279
+msgid "Members only, since they joined the room"
+msgstr "Hanya anggota, karena mereka bergabung ke kamar"
+
+#: src/session/view/content/room_details/general_page.rs:1070
+msgid "Could not change who can read history"
+msgstr "Tidak dapat mengubah siapa yang dapat membaca riwayat"
+
+#: src/session/view/content/room_details/general_page.rs:1114
+msgid "Enable Encryption?"
+msgstr "Fungsikan Enkripsi?"
+
+#: src/session/view/content/room_details/general_page.rs:1115
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"Memfungsikan enkripsi akan mencegah anggota baru membaca riwayat sebelum "
+"mereka tiba. Ini tidak dapat dinonaktifkan nanti."
+
+#: src/session/view/content/room_details/general_page.rs:1120
+#: src/session/view/sidebar/mod.rs:311 src/session/view/sidebar/mod.rs:317
+msgid "Enable"
+msgstr "Fungsikan"
+
+#: src/session/view/content/room_details/general_page.rs:1130
+msgid "Could not enable encryption"
+msgstr "Tidak bisa memfungsikan enkripsi"
+
+#. Translators: As in, 'Room federated'.
+#: src/session/view/content/room_details/general_page.rs:1156
+msgid "Federated"
+msgstr "Terfederasi"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session/view/content/room_details/general_page.rs:1159
+msgid "Not federated"
+msgstr "Tidak terfederasi"
+
+#: src/session/view/content/room_details/general_page.rs:1189
+msgid "Room upgraded successfully"
+msgstr "Kamar berhasil ditingkatkan"
+
+#: src/session/view/content/room_details/general_page.rs:1193
+msgid "Could not upgrade room"
+msgstr "Tidak bisa meningkatkan kamar"
+
+#: src/session/view/content/room_details/general_page.ui:4
+#: src/session/view/content/room_details/mod.ui:4
+msgid "Room Details"
+msgstr "Detail Kamar"
+
+#: src/session/view/content/room_details/general_page.ui:62
+msgid "Edit Details"
+msgstr "Sunting Detail"
+
+#: src/session/view/content/room_details/general_page.ui:89
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:333
+msgid "There are no members in this room"
+msgstr "Tidak ada anggota dalam kamar ini"
+
+#: src/session/view/content/room_details/general_page.ui:112
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:4
+msgid "Media"
+msgstr "Media"
+
+#: src/session/view/content/room_details/general_page.ui:119
+msgid "Files"
+msgstr "Berkas"
+
+#. Translators: As in 'Audio file'.
+#: src/session/view/content/room_details/general_page.ui:127
+#: src/session/view/content/room_details/history_viewer/audio.ui:5
+#: src/session/view/content/room_history/message_row/audio.rs:90
+msgid "Audio"
+msgstr "Audio"
+
+#: src/session/view/content/room_details/general_page.ui:137
+msgid "Which messages trigger notifications in this room"
+msgstr "Pesan mana yang memicu notifikasi di kamar ini"
+
+#: src/session/view/content/room_details/general_page.ui:140
+msgid "Use Global Setting"
+msgstr "Gunakan Setelan Global"
+
+#: src/session/view/content/room_details/general_page.ui:147
+msgid "All Messages"
+msgstr "Semua Pesan"
+
+#: src/session/view/content/room_details/general_page.ui:154
+#, fuzzy
+#| msgid "Only mentions and keywords"
+msgid "Only Mentions and Keywords"
+msgstr "Hanya penyebutan dan kata kunci"
+
+#: src/session/view/content/room_details/general_page.ui:161
+msgid "Disable Notifications"
+msgstr "Nonaktifkan Notifikasi"
+
+#: src/session/view/content/room_details/general_page.ui:183
+msgid "Edit Public Addresses"
+msgstr "Sunting Alamat Publik"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session/view/content/room_details/general_page.ui:193
+#: src/session/view/content/room_history/event_context_menu.ui:13
+msgid "_Edit"
+msgstr "S_unting"
+
+#: src/session/view/content/room_details/general_page.ui:203
+msgid "This room has no public addresses"
+msgstr "Kamar ini tidak punya alamat publik"
+
+#: src/session/view/content/room_details/general_page.ui:220
+msgid "Copy Room Link"
+msgstr "Salin Tautan Kamar"
+
+#: src/session/view/content/room_details/general_page.ui:230
+msgid "Access and Visibility"
+msgstr "Akses dan Visibilitas"
+
+#: src/session/view/content/room_details/general_page.ui:240
+msgid "Who Can Join"
+msgstr "Siapa Bisa Bergabung"
+
+#: src/session/view/content/room_details/general_page.ui:244
+msgid "Only Invited Users"
+msgstr "Hanya Pengguna Yang Diundang"
+
+#: src/session/view/content/room_details/general_page.ui:245
+msgid "Any Registered User"
+msgstr "Setiap Pengguna Terdaftar"
+
+#: src/session/view/content/room_details/general_page.ui:261
+msgid "Allow Guests"
+msgstr "Izinkan Tamu"
+
+#: src/session/view/content/room_details/general_page.ui:262
+msgid "Guests are Matrix users without a registered account"
+msgstr "Tamu adalah pengguna Matrix tanpa akun terdaftar"
+
+#: src/session/view/content/room_details/general_page.ui:273
+msgid "Who Can Read History"
+msgstr "Siapa Bisa Membaca Riwayat"
+
+#: src/session/view/content/room_details/general_page.ui:294
+msgid "Matrix Room ID"
+msgstr "ID Kamar Matrix"
+
+#: src/session/view/content/room_details/general_page.ui:301
+msgid "Copy Matrix Room ID"
+msgstr "Salin ID Kamar Matrix"
+
+#: src/session/view/content/room_details/general_page.ui:302
+msgid "Matrix room ID copied to clipboard"
+msgstr "ID kamar Matrix disalin ke papan klip"
+
+#: src/session/view/content/room_details/general_page.ui:307
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:158
+msgid "Enable Encryption"
+msgstr "Fungsikan Enkripsi"
+
+#: src/session/view/content/room_details/general_page.ui:318
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:9
+msgid "Permissions"
+msgstr "Izin"
+
+#: src/session/view/content/room_details/general_page.ui:333
+msgid "Room Version"
+msgstr "Versi Kamar"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session/view/content/room_details/general_page.ui:345
+msgid "Upgrade…"
+msgstr "Tingkatkan…"
+
+#: src/session/view/content/room_details/general_page.ui:358
+msgid "Federation"
+msgstr "Federasi"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this case, the file to play is an
+#. audio file.
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:80
+msgid "Play {filename}"
+msgstr "Putar {filename}"
+
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:98
+msgid "Unknown duration"
+msgstr "Durasi tidak diketahui"
+
+#. Translators: As in "Play audio file".
+#: src/session/view/content/room_details/history_viewer/audio_row.ui:13
+msgid "Play"
+msgstr "Putar"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:26
+#: src/session/view/content/room_details/history_viewer/audio.ui:33
+msgid "No Audio"
+msgstr "Tidak Ada Audio"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:34
+msgid "This room does not contain any audio"
+msgstr "Kamar ini tidak berisi audio apa pun"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:42
+#: src/session/view/content/room_details/history_viewer/audio.ui:49
+msgid "Could Not Load Audio"
+msgstr "Tidak Bisa Memuat Audio"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:50
+#: src/session/view/content/room_details/history_viewer/file.ui:49
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:56
+#: src/session/view/content/room_history/mod.ui:199
+msgid "Check your network connection"
+msgstr "Periksa koneksi jaringan Anda"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:69
+msgid "Audio History"
+msgstr "Riwayat Audio"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/history_viewer/file_row.rs:73
+msgid "Save {filename}"
+msgstr "Simpan {filename}"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:81
+msgid "Unknown size"
+msgstr "Ukuran tidak diketahui"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:97
+msgid "Open File"
+msgstr "Buka Berkas"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:100
+#: src/session/view/content/room_details/history_viewer/file_row.rs:155
+#: src/session/view/content/room_details/history_viewer/file_row.ui:12
+#: src/session/view/content/room_history/message_row/file.ui:25
+#: src/session/view/content/room_history/message_row/file.ui:27
+#: src/utils/matrix/media_message.rs:153
+msgid "Save File"
+msgstr "Simpan Berkas"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:25
+#: src/session/view/content/room_details/history_viewer/file.ui:32
+msgid "No Files"
+msgstr "Tidak Ada Berkas"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:33
+msgid "This room does not contain any files"
+msgstr "Kamar ini tidak berisi berkas apa pun"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:41
+#: src/session/view/content/room_details/history_viewer/file.ui:48
+msgid "Could Not Load Files"
+msgstr "Tidak Bisa Memuat Berkas"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:68
+msgid "File History"
+msgstr "Riwayat Berkas"
+
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:32
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:39
+msgid "No Media"
+msgstr "Tidak Ada Media"
+
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:40
+msgid "This room does not contain any media"
+msgstr "Kamar ini tidak berisi media apa pun"
+
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:48
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:55
+msgid "Could Not Load Media"
+msgstr "Tidak Bisa Memuat Media"
+
+#: src/session/view/content/room_details/history_viewer/visual_media.ui:75
+msgid "Media History"
+msgstr "Riwayat Media"
+
+#: src/session/view/content/room_details/invite_subpage/list.rs:269
+msgid "Banned"
+msgstr "Banned"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session/view/content/room_details/invite_subpage/mod.rs:237
+msgid "Could not invite {user} to {room}"
+msgid_plural "Could not invite {n} users to {room}"
+msgstr[0] "Tidak bisa mengundang {n} pengguna ke {room}"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:4
+msgid "Invite New Members"
+msgstr "Undang Anggota Baru"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:20
+msgid "I_nvite"
+msgstr "_Undang"
+
+#. Translators: In this string, this is a verb.
+#: src/session/view/content/room_details/invite_subpage/mod.ui:58
+#: src/session/view/content/room_details/invite_subpage/mod.ui:64
+#: src/session/view/create_dm_dialog/mod.ui:53
+msgid "Search"
+msgstr "Cari"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:65
+msgid "Search for users to invite them to this room"
+msgstr "Cari pengguna untuk mengundang mereka ke kamar ini"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:73
+msgid "Matching Users"
+msgstr "Pengguna Yang Cocok"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:123
+#: src/session/view/content/room_details/invite_subpage/mod.ui:127
+#: src/session/view/create_dm_dialog/mod.ui:92
+msgid "No Users Found"
+msgstr "Tidak ada pengguna yang ditemukan"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:128
+msgid "No users matching the search were found"
+msgstr "Tidak ditemukan pengguna yang cocok dengan pencarian"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:141
+#: src/session/view/create_dm_dialog/mod.ui:105
+msgid "An error occurred while searching for matches"
+msgstr "Terjadi galat saat mencari kecocokan"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:149
+msgid "Searching for Users"
+msgstr "Mencari Pengguna"
+
+#: src/session/view/content/room_details/member_row.ui:45
+msgid "Identity Verified"
+msgstr "Identitas Terverifikasi"
+
+#. Translators: As in 'Invited Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:121
+msgctxt "members"
+msgid "Invited"
+msgid_plural "Invited"
+msgstr[0] "Diundang"
+
+#. Translators: As in 'Banned Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:123
+msgctxt "members"
+msgid "Banned"
+msgid_plural "Banned"
+msgstr[0] "Dicekal"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:278
+msgid "Invited Room Member"
+msgid_plural "Invited Room Members"
+msgstr[0] "Anggota Kamar yang Diundang"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:280
+msgid "Banned Room Member"
+msgid_plural "Banned Room Members"
+msgstr[0] "Anggota Kamar yang Dicekal"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:281
+msgid "Room Member"
+msgid_plural "Room Members"
+msgstr[0] "Anggota Kamar"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:322
+msgid "No Invited Room Members"
+msgstr "Tidak Ada Anggota Kamar yang Diundang"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:323
+msgid "There are no invited members in this room"
+msgstr "Tidak ada anggota yang diundang dalam kamar ini"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:327
+msgid "No Banned Room Members"
+msgstr "Tidak Ada Anggota Kamar yang Dicekal"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:328
+msgid "There are no banned members in this room"
+msgstr "Tidak ada anggota yang dicekal dalam kamar ini"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:332
+msgid "No Room Members"
+msgstr "Tidak Ada Anggota Kamar"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:11
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:13
+#: src/session/view/content/room_details/permissions/members_subpage.ui:12
+#: src/session/view/content/room_details/permissions/members_subpage.ui:14
+msgid "Toggle Room Members Search"
+msgstr "Jungkitkan Pencarian Anggota Kamar"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:29
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:33
+#: src/session/view/content/room_details/permissions/members_subpage.ui:30
+#: src/session/view/content/room_details/permissions/members_subpage.ui:34
+msgid "Search for room members"
+msgstr "Cari anggota kamar"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:82
+#: src/session/view/content/room_details/membership_lists.rs:186
+msgid "Could not load the full list of room members"
+msgstr "Tidak bisa memuat daftar lengkap anggota kamar"
+
+#: src/session/view/content/room_details/mod.rs:132
+msgid "The user is not in the room members list anymore"
+msgstr "Pengguna tidak ada dalam daftar anggota kamar lagi"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:4
+msgid "Add Custom Permissions"
+msgstr "Menambahkan Izin Ubahan"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:11
+msgid "_Add"
+msgstr "T_ambah"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:50
+#, fuzzy
+msgid "Assign Power Level"
+msgstr "Tetapkan Tingkat Daya"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:71
+msgid "Search Results"
+msgstr "Hasil Pencarian"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:96
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:100
+msgid "No Matching Members Found"
+msgstr "Tidak Ditemukan Pengguna yang Cocok"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:101
+msgid "No room members matching the search were found"
+msgstr "Tidak ditemukan anggota kamar yang cocok dengan pencarian"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/members_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:279
+#, fuzzy
+msgid "Members With Assigned Power Levels"
+msgstr "Anggota dengan tingkat daya khusus"
+
+#: src/session/view/content/room_details/permissions/members_subpage.ui:83
+msgid "Add"
+msgstr "Tambah"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:547
+msgid "Save Changes?"
+msgstr "Simpan Perubahan?"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:604
+msgid "Could not save permissions"
+msgstr "Tidak bisa menyimpan izin"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:30
+msgid "_Save"
+msgstr "_Simpan"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:44
+msgid "Room Actions"
+msgstr "Aksi Kamar"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:45
+#, fuzzy
+msgid "Power level required to perform different actions in the room"
+msgstr ""
+"Tingkat daya diperlukan untuk melakukan tindakan yang berbeda di dalam kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:48
+msgid "Send Messages"
+msgstr "Kirim Pesan"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:59
+msgid "Remove Own Messages"
+msgstr "Hapus Pesan Milikmu"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:70
+msgid "Remove Messages of Other Members"
+msgstr "Hapus Pesan dari Anggota Lain"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:81
+msgid "Notify Entire Room"
+msgstr "Beritahu Seluruh Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:92
+msgid "Change Room Settings"
+msgstr "Ubah Pengaturan Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:103
+msgid "Change Room Name"
+msgstr "Ubah Nama Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:114
+msgid "Change Room Description"
+msgstr "Ubah Deskripsi Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:125
+msgid "Change Room Avatar"
+msgstr "Ubah Avatar Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:136
+msgid "Change Addresses"
+msgstr "Ubah Alamat"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:147
+msgid "Change Who Can Read History"
+msgstr "Ubah Siapa yang Bisa Membaca Riwayat"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:169
+msgid "Change Permissions"
+msgstr "Ubah Izin"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:180
+#, fuzzy
+msgid "Change Server Access Control List"
+msgstr "Mengubah Daftar Kontrol Akses Server"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:191
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:111
+msgid "Upgrade Room"
+msgstr "Tingkatkan Kamar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:204
+msgid "Member Actions"
+msgstr "Aksi Anggota"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:205
+#, fuzzy
+msgid "Power level required to perform different actions on room members"
+msgstr ""
+"Tingkat daya diperlukan untuk melakukan tindakan yang berbeda pada anggota "
+"kamar"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:246
+#, fuzzy
+msgid "Members Power Levels"
+msgstr "Tingkat Kekuatan Anggota"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:247
+#, fuzzy
+msgid "Power levels defined for all members of the room"
+msgstr "Tingkat daya ditentukan untuk semua anggota kamar"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:250
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:266
+#, fuzzy
+msgid "Default Power Level"
+msgstr "Tingkat Daya Default"
+
+#. Translators: As in 'Stable version'.
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:85
+#, fuzzy
+msgid "Stable"
+msgstr "Memungkinkan"
+
+#. Translators: As in 'Experimental version'.
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:87
+#, fuzzy
+msgid "Experimental"
+msgstr "Eksperimental"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:94
+#, fuzzy
+#| msgid "Room Version"
+msgid "Version"
+msgstr "Versi"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:112
+#, fuzzy
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+msgstr ""
+"Memutakhirkan kamar ke versi yang lebih baru memungkinkan untuk mendapatkan "
+"keuntungan dari fitur-fitur baru dari spesifikasi Matrix. Ini juga dapat "
+"digunakan untuk mengatur ulang status kamar, yang seharusnya membuat kamar "
+"lebih cepat untuk bergabung. Namun itu harus digunakan dengan hemat karena "
+"dapat mengganggu, karena anggota kamar harus bergabung dengan kamar baru "
+"secara manual."
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:118
+msgid "Upgrade"
+msgstr "Tingkatkan"
+
+#: src/session/view/content/room_history/divider_row.rs:49
+msgid "This is the start of the visible history"
+msgstr "Ini adalah awal dari riwayat yang terlihat"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/divider_row.rs:61
+msgid "%A, %B %-e"
+msgstr "%A, %-e %B"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/divider_row.rs:67
+msgid "%A, %B %-e, %Y"
+msgstr "%A, %-e %B %Y"
+
+#: src/session/view/content/room_history/divider_row.rs:74
+msgid "New Messages"
+msgstr "Pesan Baru"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session/view/content/room_history/event_context_menu.ui:7
+msgid "_Reply"
+msgstr "B_alas"
+
+#. Translators: In this string, 'Forward' is a verb, this is to
+#. re-send the same message in another room, like forwarding an e-mail.
+#: src/session/view/content/room_history/event_context_menu.ui:20
+msgid "_Forward"
+msgstr "_Teruskan"
+
+#: src/session/view/content/room_history/event_context_menu.ui:27
+msgid "_Select"
+msgstr "_Pilih"
+
+#: src/session/view/content/room_history/event_context_menu.ui:34
+msgid "_Copy Text"
+msgstr "S_alin Teks"
+
+#: src/session/view/content/room_history/event_context_menu.ui:39
+#, fuzzy
+#| msgid "_Copy Thumbnail"
+msgid "Copy T_humbnail"
+msgstr "_Salin Gambar Mini"
+
+#: src/session/view/content/room_history/event_context_menu.ui:44
+#: src/session/view/media_viewer.ui:11 src/session/view/media_viewer.ui:35
+msgid "S_ave Image"
+msgstr "Simp_an Gambar"
+
+#: src/session/view/content/room_history/event_context_menu.ui:49
+#: src/session/view/media_viewer.ui:16 src/session/view/media_viewer.ui:40
+msgid "S_ave Video"
+msgstr "Simp_an Video"
+
+#: src/session/view/content/room_history/event_context_menu.ui:54
+msgid "S_ave Audio"
+msgstr "Simp_an Audio"
+
+#: src/session/view/content/room_history/event_context_menu.ui:59
+#: src/session/view/media_viewer.ui:21
+#, fuzzy
+msgid "Copy Message _Link"
+msgstr "Salin Pesan _Link"
+
+#: src/session/view/content/room_history/event_context_menu.ui:64
+#: src/session/view/content/room_history/mod.ui:121
+#, fuzzy
+#| msgid "Edit Details"
+msgid "_View Details"
+msgstr "Sunting Detail"
+
+#: src/session/view/content/room_history/event_context_menu.ui:71
+#, fuzzy
+msgid "_Discard"
+msgstr "Abaikan"
+
+#: src/session/view/content/room_history/event_context_menu.ui:78
+#, fuzzy
+msgid "Rep_ort…"
+msgstr "Rep_ort..."
+
+#: src/session/view/content/room_history/event_context_menu.ui:83
+msgid "Re_move"
+msgstr "Ha_pus"
+
+#: src/session/view/content/room_history/item_row.rs:498
+#: src/session/view/media_viewer.rs:502
+#, fuzzy
+#| msgid "Message copied to clipboard"
+msgid "Message link copied to clipboard"
+msgstr "Pesan disalin ke papan klip"
+
+#: src/session/view/content/room_history/item_row.rs:757
+msgid "Thumbnail copied to clipboard"
+msgstr "Gambar mini disalin ke papan klip"
+
+#: src/session/view/content/room_history/item_row.rs:849
+#, fuzzy
+#| msgid "Message copied to clipboard"
+msgid "Text copied to clipboard"
+msgstr "Pesan disalin ke papan klip"
+
+#: src/session/view/content/room_history/item_row.rs:911
+msgid "Remove Message?"
+msgstr "Hapus Pesan?"
+
+#: src/session/view/content/room_history/item_row.rs:913
+#, fuzzy
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr ""
+"Apakah Anda benar-benar ingin menghapus pesan ini? Ini tidak dapat "
+"dibatalkan."
+
+#: src/session/view/content/room_history/item_row.rs:927
+#, fuzzy
+#| msgid "Could not open the store."
+msgid "Could not remove message"
+msgstr "Tidak dapat membuka toko."
+
+#: src/session/view/content/room_history/item_row.rs:940
+#, fuzzy
+#| msgid "Could not deactivate account"
+msgid "Could not toggle reaction"
+msgstr "Tidak dapat menonaktifkan akun"
+
+#: src/session/view/content/room_history/item_row.rs:969
+#, fuzzy
+#| msgid "Unsupported event"
+msgid "Report Event?"
+msgstr "Acara yang tidak didukung"
+
+#: src/session/view/content/room_history/item_row.rs:971
+#, fuzzy
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+msgstr ""
+"Melaporkan peristiwa akan mengirimkan ID uniknya ke administrator server "
+"rumah Anda. Administrator tidak akan dapat melihat konten acara jika "
+"dienkripsi atau disunting."
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session/view/content/room_history/item_row.rs:978
+msgid "Report"
+msgstr "Laporan"
+
+#: src/session/view/content/room_history/item_row.rs:996
+#, fuzzy
+#| msgid "Could not decrypt the event"
+msgid "Could not report event"
+msgstr "Tidak dapat mendekripsi acara"
+
+#: src/session/view/content/room_history/item_row.rs:1015
+#, fuzzy
+#| msgid "Could not open the store."
+msgid "Could not discard message"
+msgstr "Tidak dapat membuka toko."
+
+#: src/session/view/content/room_history/item_row_context_menu.rs:85
+#: src/session/view/sidebar/mod.rs:363
+#, fuzzy
+#| msgid "Continue"
+msgid "Context Menu"
+msgstr "Menu Konteks"
+
+#: src/session/view/content/room_history/message_row/audio.rs:88
+#, fuzzy
+msgid "Audio: {filename}"
+msgstr "Audio: {filename}"
+
+#: src/session/view/content/room_history/message_row/audio.rs:195
+msgid "Could not retrieve audio file"
+msgstr "Tidak dapat mengambil berkas audio"
+
+#: src/session/view/content/room_history/message_row/audio.rs:212
+msgid "Error reading audio file"
+msgstr "Galat membaca berkas audio"
+
+#: src/session/view/content/room_history/message_row/content.rs:274
+#, fuzzy
+#| msgid ""
+#| "Unable to decrypt this message, decryption will be retried once the keys "
+#| "are available."
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"Tidak dapat mendekripsi pesan ini, dekripsi akan dicoba lagi setelah kunci "
+"tersedia."
+
+#: src/session/view/content/room_history/message_row/content.rs:278
+#, fuzzy
+#| msgid "This message has no source."
+msgid "This message was removed."
+msgstr "Pesan ini tidak memiliki sumber."
+
+#: src/session/view/content/room_history/message_row/content.rs:283
+#: src/session/view/content/room_history/message_row/content.rs:358
+msgid "Unsupported event"
+msgstr "Acara yang tidak didukung"
+
+#: src/session/view/content/room_history/message_row/file.rs:63
+#, fuzzy
+msgid "File: {filename}"
+msgstr ""
+"Dapatkan semua dokumentasi di sini, berkas opsional <filename>README.Debian</"
+"filename> memuat hal spesifik."
+
+#: src/session/view/content/room_history/message_row/location.rs:90
+msgid "Location is invalid and cannot be displayed"
+msgstr "Lokasi tidak valid dan tidak dapat ditampilkan"
+
+#: src/session/view/content/room_history/message_row/location.ui:5
+#, fuzzy
+#| msgid "Your Location"
+msgid "User Location"
+msgstr "Lokasi Anda"
+
+#. Translators: As in 'Sending message…'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:23
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:26
+msgid "Sending…"
+msgstr "Mengirim…"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:39
+#, fuzzy
+msgid "Temporary Error Sending Message"
+msgstr "Kesalahan Sementara Mengirim Pesan"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:54
+#, fuzzy
+msgid "Message Cannot Be Sent"
+msgstr "Pesan Tidak Dapat Dikirim"
+
+#. Translators: As in 'Sent message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:70
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:73
+msgid "Sent"
+msgstr "Terkirim"
+
+#. Translators: As in 'Edited message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:92
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:95
+msgid "Edited"
+msgstr "Disunting"
+
+#: src/session/view/content/room_history/message_row/mod.rs:234
+#, fuzzy
+msgid "Sent at {time}"
+msgstr "Dikirim pada {time}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:202
+#, fuzzy
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "1 anggota bereaksi dengan {reaction_key}"
+
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:222
+#, fuzzy
+#| msgid "{user} rejected the invite."
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} menolak undangan itu."
+
+#: src/session/view/content/room_history/message_row/reaction_list.ui:5
+msgid "Reactions"
+msgstr "Reaksi"
+
+#: src/session/view/content/room_history/message_row/reply.ui:9
+#, fuzzy
+msgid "In Reply To"
+msgstr "Balas ke Semua"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session/view/content/room_history/message_row/text/widgets.rs:434
+msgid "Details"
+msgstr "Rincian"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:364
+msgid "Image"
+msgstr "Gambar"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:365
+msgid "Sticker"
+msgstr "Stiker"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:366
+msgid "Video"
+msgstr "Video"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:371
+#, fuzzy
+msgid "Image: {filename}"
+msgstr "Gambar: {filename}"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:374
+#, fuzzy
+msgid "Sticker: {filename}"
+msgstr "Stiker: {filename}"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:377
+#, fuzzy
+msgid "Video: {filename}"
+msgstr "Video: {filename}"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:487
+#: src/utils/media/image/mod.rs:762
+msgid "Could not retrieve media"
+msgstr "Tidak dapat mengambil media"
+
+#: src/session/view/content/room_history/message_row/visual_media.rs:531
+#: src/utils/media/image/mod.rs:765
+#, fuzzy
+#| msgid "An unknown error occurred."
+msgid "An unexpected error occurred"
+msgstr "Terjadi galat yang tak dikenal."
+
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:21
+msgid "_Send"
+msgstr "_Kirim"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:668
+#, fuzzy
+msgid "Public Room Mention Auto-completion"
+msgstr "Kamar Publik Sebutkan Pelengkapan otomatis"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:670
+#, fuzzy
+msgid "Room Member Mention Auto-completion"
+msgstr "Pelengkapan Otomatis Penyebutan Anggota Kamar"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:346
+msgid "Reply to {user}"
+msgstr "Balas ke {user}"
+
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:362
+msgctxt "room-history"
+msgid "Edit"
+msgstr "Sunting"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:494
+#, fuzzy
+#| msgid "Could not save file"
+msgid "Could not send reply"
+msgstr "Tidak dapat menyimpan berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:511
+#, fuzzy
+#| msgid "Could not save file"
+msgid "Could not send edit"
+msgstr "Tidak dapat menyimpan berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:523
+#, fuzzy
+#| msgid "Could not open the store."
+msgid "Could not send message"
+msgstr "Tidak dapat membuka toko."
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:569
+msgid "Your Location"
+msgstr "Lokasi Anda"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:630
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "Lokasi Pengguna {geo_uri} di {iso8601_datetime}"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:653
+#, fuzzy
+#| msgid "Could not enable account notifications"
+msgid "Could not send location"
+msgstr "Tidak dapat mengaktifkan pemberitahuan akun"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:660
+#, fuzzy
+#| msgid "The location request has been cancelled."
+msgid "The location request has been cancelled"
+msgstr "Permintaan lokasi telah dibatalkan."
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:661
+#, fuzzy
+#| msgid "The location request has been cancelled."
+msgid "The location services are disabled"
+msgstr "Permintaan lokasi telah dibatalkan."
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:662
+#, fuzzy
+#| msgid "Failed to retrieve current location."
+msgid "Could not retrieve current location"
+msgstr "Gagal mengambil lokasi saat ini."
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:695
+#, fuzzy
+#| msgid "Could not save file"
+msgid "Could not send file"
+msgstr "Tidak dapat menyimpan berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:749
+msgid "Select File"
+msgstr "Pilih Berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:751
+msgid "Select"
+msgstr "Pilih"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:766
+msgid "Could not open file"
+msgstr "Tidak dapat membuka berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:792
+#: src/session/view/content/room_history/message_toolbar/mod.rs:800
+msgid "Error reading file"
+msgstr "Galat saat membaca berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:861
+msgid "Error getting image from clipboard"
+msgstr "Galat mendapatkan gambar dari papan klip"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:878
+msgid "Error getting file from clipboard"
+msgstr "Galat mendapatkan berkas dari papan klip"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:6
+msgid "_Location"
+msgstr "_Lokasi"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:12
+msgid "_Markdown"
+msgstr "_Markdown"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:92
+#, fuzzy
+#| msgid "Save File"
+msgid "Send a File"
+msgstr "Simpan Berkas"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:100
+#, fuzzy
+msgid "Insert an Emoji"
+msgstr "Menyisipkan Emoji"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session/view/content/room_history/message_toolbar/mod.ui:126
+#, fuzzy
+#| msgid "Message Entry"
+msgid "Message Composer"
+msgstr "Entri Pesan"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:145
+#: src/session/view/content/room_history/message_toolbar/mod.ui:147
+#, fuzzy
+msgid "More Options"
+msgstr "Lebih banyak pilihan"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:156
+msgid "Send Message"
+msgstr "Kirim Pesan"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:176
+#, fuzzy
+#| msgid "You don’t have permission to post to this room"
+msgid "You don’t have permission to send messages to this room"
+msgstr "Anda tidak memiliki izin untuk memposting ke kamar ini"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:109
+msgid "%B %-e at %I∶%M %p"
+msgstr "%-e %B pada %I∶%M %p"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:115
+msgid "%B %-e at %H∶%M"
+msgstr "%-e %B pada %H∶%M"
+
+#: src/session/view/content/room_history/mod.rs:321
+msgid "Error getting file from drop"
+msgstr "Galat mendapatkan berkas dari seret"
+
+#: src/session/view/content/room_history/mod.rs:865
+#: src/session/view/content/room_history/mod.rs:869
+#: src/session/view/content/room_history/state_row/tombstone.ui:14
+msgid "There is a newer version of this room"
+msgstr "Ada versi yang lebih baru dari kamar ini"
+
+#: src/session/view/content/room_history/mod.rs:872
+msgid "This room was closed"
+msgstr "Kamar ditutup"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:901
+#: src/session/view/sidebar/row.rs:739
+#, fuzzy
+#| msgid "Failed to forget {room}."
+msgid "Could not leave {room}"
+msgstr "Gagal melupakan {room}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/mod.rs:924
+#: src/session/view/sidebar/row.rs:728
+#, fuzzy
+#| msgid "Failed to forget {room}."
+msgid "Could not join {room}"
+msgstr "Gagal melupakan {room}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:941
+#: src/session/view/sidebar/row.rs:773
+#, fuzzy
+#| msgid "Failed to forget {room}."
+msgid "Could not forget {room}"
+msgstr "Gagal melupakan {room}."
+
+#: src/session/view/content/room_history/mod.rs:1012
+#, fuzzy
+msgid "Sender Context Menu"
+msgstr "Menu Konteks Pengirim"
+
+#: src/session/view/content/room_history/mod.ui:6
+msgid "Room _Details"
+msgstr "_Detail Kamar"
+
+#: src/session/view/content/room_history/mod.ui:11
+#, fuzzy
+#| msgid "_Invite New Member"
+msgid "_Invite New Members…"
+msgstr "U_ndang Anggota Baru"
+
+#: src/session/view/content/room_history/mod.ui:18
+#: src/session/view/sidebar/mod.ui:78
+msgid "_Leave Room"
+msgstr "Tingga_lkan Kamar"
+
+#: src/session/view/content/room_history/mod.ui:23
+#: src/session/view/sidebar/mod.ui:83
+msgid "Re_join Room"
+msgstr "_Gabung kembali ke Kamar"
+
+#: src/session/view/content/room_history/mod.ui:28
+#: src/session/view/sidebar/mod.ui:88
+msgid "_Forget Room"
+msgstr "_Lupakan Kamar"
+
+#. Translators: In this string, 'Mention' is a verb.
+#: src/session/view/content/room_history/mod.ui:43
+#, fuzzy
+msgid "_Mention"
+msgstr "Lebih banyak pilihan"
+
+#. Translators: In this string, 'Open' is a verb.
+#: src/session/view/content/room_history/mod.ui:49
+#, fuzzy
+#| msgid "New Direct Chat"
+msgid "_Open Direct Chat"
+msgstr "Obrolan Langsung Baru"
+
+#: src/session/view/content/room_history/mod.ui:54
+#, fuzzy
+msgid "Copy _Link"
+msgstr "Salin _Link"
+
+#. Translators: In this string, 'Invite' is a verb.
+#: src/session/view/content/room_history/mod.ui:61
+#, fuzzy
+#| msgid "Invite"
+msgid "_Invite"
+msgstr "Undang"
+
+#: src/session/view/content/room_history/mod.ui:66
+#, fuzzy
+#| msgid "Reject Invite"
+msgid "Revoke _Invite"
+msgstr "Tolak Undangan"
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/session/view/content/room_history/mod.ui:72
+#, fuzzy
+msgid "M_ute"
+msgstr "Bisu"
+
+#: src/session/view/content/room_history/mod.ui:77
+#, fuzzy
+msgid "_Unmute"
+msgstr "_Membunyikan"
+
+#. Translators: In this string, 'Kick' is a verb.
+#: src/session/view/content/room_history/mod.ui:83
+msgid "_Kick"
+msgstr "_Tendang"
+
+#: src/session/view/content/room_history/mod.ui:88
+msgid "_Deny Access"
+msgstr "Tola_k Akses"
+
+#. Translators: In this string, 'Ban' is a verb.
+#: src/session/view/content/room_history/mod.ui:94
+#, fuzzy
+msgid "_Ban"
+msgstr "Ban_d"
+
+#: src/session/view/content/room_history/mod.ui:99
+#, fuzzy
+msgid "Un_ban"
+msgstr "Un_ban"
+
+#: src/session/view/content/room_history/mod.ui:104
+#, fuzzy
+#| msgid "Remove Message?"
+msgid "_Remove Messages"
+msgstr "Hapus Pesan?"
+
+#: src/session/view/content/room_history/mod.ui:109
+msgid "I_gnore"
+msgstr "A_baikan"
+
+#: src/session/view/content/room_history/mod.ui:114
+msgid "Stop I_gnoring"
+msgstr "Berhenti Men_gabaikan"
+
+#: src/session/view/content/room_history/mod.ui:152
+msgid "Room Menu"
+msgstr "Menu Kamar"
+
+#: src/session/view/content/room_history/mod.ui:191
+#: src/session/view/content/room_history/mod.ui:198
+msgid "Could Not Load Room"
+msgstr "Tidak Bisa Memuat Kamar"
+
+#: src/session/view/content/room_history/mod.ui:232
+msgid "Scroll to Bottom"
+msgstr "Gulir ke Dasar"
+
+#: src/session/view/content/room_history/mod.ui:245
+msgid "Drop Here to Send"
+msgstr "Jatuhkan Di Sini untuk Mengirim"
+
+#: src/session/view/content/room_history/quick_reaction_chooser.ui:7
+msgid "Send a Reaction"
+msgstr "Kirim Reaksi"
+
+#: src/session/view/content/room_history/quick_reaction_chooser.ui:17
+msgid "More Reactions"
+msgstr "Lebih Banyak Reaksi"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:260
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "Dilihat oleh {n} anggota"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:274
+msgid "Seen by {name}"
+msgstr "Dilihat oleh {nama}"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:99
+msgid "Link copied to clipboard"
+msgstr "Tautan disalin ke papan klip"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:306
+#, fuzzy
+#| msgid "{user} set their avatar."
+msgid "{user}’s avatar"
+msgstr "{user} mengatur avatar mereka."
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:548
+#, fuzzy
+#| msgid "New Direct Chat"
+msgid "Creating a new Direct Chat…"
+msgstr "Obrolan Langsung Baru"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:572
+msgid "Inviting user…"
+msgstr "Mengundang pengguna…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:601
+msgid "Revoking invite…"
+msgstr "Mencabut Undangan…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:602
+msgid "Denying access…"
+msgstr "Menolak akses…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:603
+#, fuzzy
+msgid "Kicking user…"
+msgstr "Menendang {user}?"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:639
+#, fuzzy
+msgid "Muting member…"
+msgstr "Mengundang pengguna..."
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:643
+#, fuzzy
+msgid "Unmuting member…"
+msgstr "Mengundang pengguna..."
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:654
+msgid "Member muted"
+msgstr "Anggota dibisukan"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:656
+#, fuzzy
+#| msgid "Member"
+#| msgid_plural "Members"
+msgid "Member unmuted"
+msgstr "Anggota"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:659
+msgid "Could not mute member"
+msgstr "Tidak bisa membisukan anggota"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:661
+#, fuzzy
+#| msgid "Failed to copy the permalink"
+msgid "Could not unmute member"
+msgstr "Gagal menyalin permalink"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:690
+msgid "Banning user…"
+msgstr "Mencekal pengguna…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:715
+msgid "Unbanning user…"
+msgstr "Membuka pencekalan pengguna…"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/sender_avatar/mod.rs:759
+msgid "Removing 1 message sent by the user…"
+msgid_plural "Removing {n} messages sent by the user…"
+msgstr[0] "Menghapus {n} pesan yang dikirim oleh pengguna…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:793
+msgid "Stop ignoring user…"
+msgstr "Berhenti mengabaikan pengguna…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:795
+msgid "Ignoring user…"
+msgstr "Mengabaikan pengguna…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.ui:5
+#, fuzzy
+msgid "Open Sender Context Menu"
+msgstr "Buka Menu Konteks Pengirim"
+
+#: src/session/view/content/room_history/state_row/creation.rs:57
+msgid "This is the continuation of an upgraded room."
+msgstr "Ini adalah kelanjutan dari kamar yang ditingkatkan."
+
+#: src/session/view/content/room_history/state_row/creation.rs:62
+msgid "This is the beginning of this room."
+msgstr "Ini adalah awal dari kamar ini."
+
+#: src/session/view/content/room_history/state_row/creation.ui:20
+msgid "Previous room"
+msgstr "Kamar sebelumnya"
+
+#: src/session/view/content/room_history/state_row/mod.rs:95
+msgid "This room is encrypted from this point on."
+msgstr "Kamar ini dienkripsi mulai saat ini."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:110
+#: src/session/view/content/room_history/state_row/mod.rs:188
+msgid "{user} was invited to this room."
+msgstr "{user} diundang ke kamar ini."
+
+#: src/session/view/content/room_history/state_row/mod.rs:122
+msgid "An unsupported state event was received."
+msgstr "Acara negara yang tidak didukung diterima."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#. We don't know what changed so fall back to the membership.
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:160
+#: src/session/view/content/room_history/state_row/mod.rs:368
+msgid "{user} joined this room."
+msgstr "{user} bergabung dengan kamar ini."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:165
+msgid "{user} left the room."
+msgstr "{user} meninggalkan kamar."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:170
+msgid "{user} was banned."
+msgstr "{user} dilarang."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:176
+msgid "{user} was unbanned."
+msgstr "{user} tidak diblokir."
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:182
+msgid "{user} was kicked out of the room."
+msgstr "{user} diusir dari kamar."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:194
+msgid "{user} was kicked out of the room and banned."
+msgstr "{user} diusir dari kamar dan dilarang."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:200
+msgid "{user} accepted the invite."
+msgstr "{user} menerima undangan itu."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:206
+msgid "{user} rejected the invite."
+msgstr "{user} menolak undangan itu."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:212
+msgid "The invitation for {user} has been revoked."
+msgstr "Undangan untuk {user} telah dicabut."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:221
+msgid "{user} requested to be invited to this room."
+msgstr "{user} meminta untuk diundang ke kamar ini."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:228
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} menarik kembali permintaan mereka untuk diundang ke kamar ini."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:234
+msgid "{user}’s request to be invited to this room was denied."
+msgstr "Permintaan {user} untuk diundang ke kamar ini ditolak."
+
+#: src/session/view/content/room_history/state_row/mod.rs:242
+msgid "An unsupported room member event was received."
+msgstr "Acara anggota kamar yang tidak didukung telah diterima."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:312
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr ""
+"{previous_user_name} mengubah nama tampilan mereka menjadi {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:322
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} menghapus nama tampilan mereka."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:334
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} mengatur nama tampilan mereka ke {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:346
+msgid "{user} set their avatar."
+msgstr "{user} mengatur avatar mereka."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:353
+msgid "{user} removed their avatar."
+msgstr "{user} menghapus avatar mereka."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:360
+msgid "{user} changed their avatar."
+msgstr "{user} mengubah avatar mereka."
+
+#: src/session/view/content/room_history/title.ui:10
+#, fuzzy
+#| msgid "Room Details"
+msgid "Open Room Details"
+msgstr "Detail Kamar"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:135
+#, fuzzy
+#| msgid "<b>{user}</b> is typing…"
+msgid "{user} is typing…"
+msgstr "<b>{user}</b> sedang mengetik…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:142
+#, fuzzy
+#| msgid "<b>{user}</b> is typing…"
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "<b>{user}</b> sedang mengetik…"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:67
+#, fuzzy
+#| msgid "Restart verification"
+msgid "Could not accept verification"
+msgstr "Mulai ulang verifikasi"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:88
+#, fuzzy
+#| msgid "Failed to retrieve current location."
+msgid "Could not decline verification"
+msgstr "Gagal mengambil lokasi saat ini."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/verification_info_bar.rs:166
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} ingin diverifikasi"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "Verifikasi sedang berlangsung"
+
+#: src/session/view/create_dm_dialog/mod.rs:144
+msgid "An error occurred while searching for users"
+msgstr "Terjadi galat saat mencari pengguna"
+
+#: src/session/view/create_dm_dialog/mod.ui:4
+msgid "Direct Chat"
+msgstr "Obrolan Langsung"
+
+#: src/session/view/create_dm_dialog/mod.ui:30
+msgid "New Direct Chat"
+msgstr "Obrolan Langsung Baru"
+
+#: src/session/view/create_dm_dialog/mod.ui:54
+msgid "Search for people to start a new chat with"
+msgstr "Mencari orang untuk memulai obrolan baru"
+
+#: src/session/view/create_dm_dialog/mod.ui:93
+msgid "No users matching the search pattern were found"
+msgstr "Tidak ada pengguna yang cocok dengan pola pencarian yang ditemukan"
+
+#: src/session/view/event_details_dialog.rs:94
+#, fuzzy
+msgid "Original Event Source"
+msgstr "Acara Asli"
+
+#: src/session/view/event_details_dialog.rs:96
+msgid "Event Source"
+msgstr "Sumber Acara"
+
+#: src/session/view/event_details_dialog.rs:110
+#, fuzzy
+msgid "Latest Edit Source"
+msgstr "Edit Terbaru"
+
+#: src/session/view/event_details_dialog.rs:124
+msgid "Source copied to clipboard"
+msgstr "Sumber disalin ke papan klip"
+
+#: src/session/view/event_details_dialog.ui:4
+#: src/session/view/event_details_dialog.ui:14
+msgid "Event Details"
+msgstr "Rincian Acara"
+
+#: src/session/view/event_details_dialog.ui:47
+msgid "Original Event"
+msgstr "Acara Asli"
+
+#: src/session/view/event_details_dialog.ui:63
+#: src/session/view/event_details_dialog.ui:162
+msgid "Event ID"
+msgstr "ID Acara"
+
+#: src/session/view/event_details_dialog.ui:69
+#: src/session/view/event_details_dialog.ui:168
+msgid "Copy Event ID"
+msgstr "Salin ID Acara"
+
+#: src/session/view/event_details_dialog.ui:70
+#: src/session/view/event_details_dialog.ui:169
+msgid "Event ID copied to clipboard"
+msgstr "ID acara disalin ke papan klip"
+
+#: src/session/view/event_details_dialog.ui:76
+msgid "Room ID"
+msgstr "ID Kamar"
+
+#: src/session/view/event_details_dialog.ui:86
+msgid "Copy Room ID"
+msgstr "Salin ID Kamar"
+
+#: src/session/view/event_details_dialog.ui:87
+msgid "Room ID copied to clipboard"
+msgstr "ID kamar disalin ke papan klip"
+
+#: src/session/view/event_details_dialog.ui:93
+msgid "Sender ID"
+msgstr "ID Pengirim"
+
+#: src/session/view/event_details_dialog.ui:99
+msgid "Copy Sender ID"
+msgstr "Salin ID Pengirim"
+
+#: src/session/view/event_details_dialog.ui:100
+msgid "Sender ID copied to clipboard"
+msgstr "ID pengirim disalin ke papan klip"
+
+#: src/session/view/event_details_dialog.ui:106
+#: src/session/view/event_details_dialog.ui:175
+msgid "Timestamp"
+msgstr "Stempel Waktu"
+
+#: src/session/view/event_details_dialog.ui:112
+#: src/session/view/event_details_dialog.ui:181
+msgid "Copy Timestamp"
+msgstr "Salin Stempel Waktu"
+
+#: src/session/view/event_details_dialog.ui:113
+#: src/session/view/event_details_dialog.ui:182
+msgid "Timestamp copied to clipboard"
+msgstr "Stempel waktu disalin ke papan klip"
+
+#: src/session/view/event_details_dialog.ui:124
+#: src/session/view/event_details_dialog.ui:188
+msgid "View Source"
+msgstr "Lihat Sumber"
+
+#: src/session/view/event_details_dialog.ui:146
+msgid "Latest Edit"
+msgstr "Suntingan Terbaru"
+
+#: src/session/view/event_details_dialog.ui:218
+msgid "Copy Source"
+msgstr "Lihat Sumber"
+
+#: src/session/view/media_viewer.rs:469
+msgid "Image copied to clipboard"
+msgstr "Gambar disalin ke papan klip"
+
+#: src/session/view/media_viewer.ui:6 src/session/view/media_viewer.ui:30
+msgid "_Copy Image"
+msgstr "Sal_in Gambar"
+
+#: src/session/view/media_viewer.ui:80 src/session/view/media_viewer.ui:82
+msgid "Media Menu"
+msgstr "Menu Media"
+
+#: src/session/view/media_viewer.ui:92 src/session/view/media_viewer.ui:94
+msgid "Fullscreen"
+msgstr "Layar Penuh"
+
+#: src/session/view/media_viewer.ui:103 src/session/view/media_viewer.ui:105
+msgid "Exit Fullscreen"
+msgstr "Keluar dari Layar Penuh"
+
+#: src/session/view/room_creation.rs:192
+msgid "The address is already taken."
+msgstr "Alamatnya sudah diambil."
+
+#: src/session/view/room_creation.rs:224
+msgid "Cannot contain “:”"
+msgstr "Tidak boleh mengandung \":\""
+
+#: src/session/view/room_creation.rs:229
+msgid "Cannot contain “#”"
+msgstr "Tidak boleh mengandung \"#\""
+
+#: src/session/view/room_creation.rs:234
+msgid "Too long. Use a shorter address."
+msgstr "Terlalu lama. Gunakan alamat yang lebih pendek."
+
+#: src/session/view/room_creation.ui:35
+msgid "New Room"
+msgstr "Kamar Baru"
+
+#: src/session/view/room_creation.ui:59
+msgid "Description (Optional)"
+msgstr "Deskripsi (Opsional)"
+
+#: src/session/view/room_creation.ui:84
+msgid "Room Visibility"
+msgstr "Visibilitas Kamar"
+
+#: src/session/view/room_creation.ui:87
+msgid "Private"
+msgstr "Pribadi"
+
+#: src/session/view/room_creation.ui:88
+msgid "Only invited people can join this room"
+msgstr "Hanya orang yang diundang yang dapat bergabung ke kamar ini"
+
+#: src/session/view/room_creation.ui:101
+msgid "Public"
+msgstr "Publik"
+
+#: src/session/view/room_creation.ui:102
+msgid "Anyone can find and join this room"
+msgstr "Siapa pun dapat menemukan dan bergabung ke kamar ini"
+
+#: src/session/view/room_creation.ui:120
+msgid "End-to-End Encryption"
+msgstr "Enkripsi ujung ke ujung"
+
+#: src/session/view/room_creation.ui:121
+msgid "Cannot be disabled later"
+msgstr "Tidak dapat dinonaktifkan nanti"
+
+#: src/session/view/room_creation.ui:163
+msgid "_Create Room"
+msgstr "_Buat Kamar Baru"
+
+#: src/session/view/sidebar/mod.rs:311
+#, fuzzy
+msgid "No crypto identity"
+msgstr "Tidak ada identitas kripto"
+
+#: src/session/view/sidebar/mod.rs:313
+msgid "Crypto identity incomplete"
+msgstr "Identitas kripto tidak lengkap"
+
+#: src/session/view/sidebar/mod.rs:317
+msgid "Account recovery disabled"
+msgstr "Pemulihan akun dinonaktifkan"
+
+#: src/session/view/sidebar/mod.rs:320
+msgid "Account recovery incomplete"
+msgstr "Pemulihan akun belum selesai"
+
+#: src/session/view/sidebar/mod.ui:6
+msgid "New _Direct Chat…"
+msgstr "Obrolan Langsung _Baru…"
+
+#: src/session/view/sidebar/mod.ui:10
+msgid "_New Room…"
+msgstr "Kamara_n Baru…"
+
+#: src/session/view/sidebar/mod.ui:14
+msgid "_Join Room…"
+msgstr "_Gabung Ke Kamar…"
+
+#: src/session/view/sidebar/mod.ui:20
+msgid "_Keyboard Shortcuts"
+msgstr "_Pintasan Papan Tik"
+
+#: src/session/view/sidebar/mod.ui:24
+msgid "_About Fractal"
+msgstr "Tent_ang Fractal"
+
+#: src/session/view/sidebar/mod.ui:37
+msgid "Dec_line"
+msgstr "_Tolak"
+
+#: src/session/view/sidebar/mod.ui:44
+msgid "_Mark as Read"
+msgstr "_Tandai sebagai Telah Dibaca"
+
+#: src/session/view/sidebar/mod.ui:51
+msgid "Move to _Favorites"
+msgstr "Pindah ke _Favorit"
+
+#: src/session/view/sidebar/mod.ui:56
+msgid "Move to _Rooms"
+msgstr "Pindah ke _Kamar"
+
+#: src/session/view/sidebar/mod.ui:61
+msgid "Move to Low _Priority"
+msgstr "Pindah ke _Prioritas Rendah"
+
+#: src/session/view/sidebar/mod.ui:66
+msgid "Mark as _Direct Chat"
+msgstr "Tan_dai sebagai Obrolan Langsung"
+
+#: src/session/view/sidebar/mod.ui:71
+#, fuzzy
+#| msgid "New Direct Chat"
+msgid "Unmark as _Direct Chat"
+msgstr "Obrolan Langsung Baru"
+
+#: src/session/view/sidebar/mod.ui:95
+msgid "Sidebar"
+msgstr "Bilah sisi"
+
+#: src/session/view/sidebar/mod.ui:112
+msgid "Main Menu"
+msgstr "Menu Utama"
+
+#: src/session/view/sidebar/mod.ui:121
+msgid "Toggle Room Search"
+msgstr "Jungkitkan Pencarian Kamar"
+
+#: src/session/view/sidebar/mod.ui:134
+msgid "Room Search"
+msgstr "Pencarian Kamar"
+
+#: src/session/view/sidebar/mod.ui:135
+msgid "Search for a room"
+msgstr "Cari kamar"
+
+#: src/session/view/sidebar/mod.ui:170
+msgid "Room List"
+msgstr "Daftar Kamar"
+
+#: src/session/view/sidebar/mod.ui:171
+msgid "Allows to navigate between rooms"
+msgstr "Memungkinkan untuk menavigasi antar kamar"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a
+#. room is a direct chat with another user.
+#: src/session/view/sidebar/room_row.rs:265
+msgid "Direct chat with {name}"
+msgstr "Obrolan langsung dengan {name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session/view/sidebar/room_row.rs:277
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "{count} pemberitahuan"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/sidebar/row.rs:748
+#, fuzzy
+#| msgid "Failed to move {room} from {previous_category} to {new_category}."
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "Gagal berpindah {room} dari {previous_category} ke {new_category}."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/sidebar/row.rs:791
+#, fuzzy
+#| msgid "Failed to create a new Direct Chat"
+msgid "Could not mark {room} as direct chat"
+msgstr "Gagal membuat Obrolan Langsung baru"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/sidebar/row.rs:796
+#, fuzzy
+#| msgid "Could not change room name"
+msgid "Could not unmark {room} as direct chat"
+msgstr "Tidak dapat mengubah nama kamar"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/section_row.rs:108
+msgid "Join Room as Favorite"
+msgstr "Gabung ke Kamar sebagai Favorit"
+
+#: src/session/view/sidebar/section_row.rs:109
+msgid "Join Room"
+msgstr "Gabung Ke Kamar"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/section_row.rs:112
+msgid "Join Room as Low Priority"
+msgstr "Gabung ke Kamar sebagai Prioritas Rendah"
+
+#: src/session/view/sidebar/section_row.rs:113
+msgid "Reject Invite"
+msgstr "Tolak Undangan"
+
+#: src/session/view/sidebar/section_row.rs:117
+#: src/session/view/sidebar/section_row.rs:130
+msgid "Move to Rooms"
+msgstr "Pindah ke Kamar"
+
+#: src/session/view/sidebar/section_row.rs:118
+#: src/session/view/sidebar/section_row.rs:124
+msgid "Move to Low Priority"
+msgstr "Pindah ke _Prioritas Rendah"
+
+#: src/session/view/sidebar/section_row.rs:119
+#: src/session/view/sidebar/section_row.rs:125
+#: src/session/view/sidebar/section_row.rs:131
+msgid "Leave Room"
+msgstr "Tinggalkan Kamar"
+
+#: src/session/view/sidebar/section_row.rs:123
+#: src/session/view/sidebar/section_row.rs:129
+msgid "Move to Favorites"
+msgstr "Pindah ke Favorit"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/section_row.rs:137
+msgid "Rejoin Room as Favorite"
+msgstr "Gabung Kembali ke Kamar sebagai Favorit"
+
+#: src/session/view/sidebar/section_row.rs:138
+msgid "Rejoin Room"
+msgstr "Gabung kembali ke Kamar"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/section_row.rs:141
+msgid "Rejoin Room as Low Priority"
+msgstr "Gabung kembali ke Kamar sebagai Prioritas Rendah"
+
+#: src/session_list/mod.rs:160 src/session_list/mod.rs:196
+msgid "Could not restore previous sessions"
+msgstr "Tidak bisa memulihkan sesi sebelumnya"
+
+#: src/session_list/mod.rs:197
+msgid "An unexpected error happened while accessing the data directory"
+msgstr "Terjadi galat yang tidak diharapkan saat mengakses direktori data"
+
+#: src/shortcuts.ui:11
+msgctxt "shortcut window"
+msgid "General"
+msgstr "Umum"
+
+#: src/shortcuts.ui:14
+msgctxt "shortcut window"
+msgid "Show Shortcuts"
+msgstr "Tampilkan Pintasan"
+
+#: src/shortcuts.ui:20
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Keluar"
+
+#: src/shortcuts.ui:26
+msgctxt "shortcut window"
+msgid "Close Window"
+msgstr "Tutup Jendela"
+
+#. Translators: This shows and focuses the search input to find a room by its name in the room list.
+#: src/shortcuts.ui:33
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "Cari Daftar Kamar"
+
+#: src/shortcuts.ui:39
+msgctxt "shortcut window"
+msgid "Open Room With Unread Messages"
+msgstr "Buka Kamar Dengan Pesan yang Belum Dibaca"
+
+#: src/shortcuts.ui:45
+msgctxt "shortcut window"
+msgid "Open the next room in the list"
+msgstr "Buka kamar berikutnya dalam daftar"
+
+#: src/shortcuts.ui:51
+msgctxt "shortcut window"
+msgid "Open the previous room in the list"
+msgstr "Buka kamar sebelumnya dalam daftar"
+
+#: src/shortcuts.ui:57
+msgctxt "shortcut window"
+msgid "Open the next room with unread messages in the list"
+msgstr "Buka kamar berikutnya dengan pesan yang belum dibaca dalam daftar"
+
+#: src/shortcuts.ui:63
+msgctxt "shortcut window"
+msgid "Open the previous room with unread messages in the list"
+msgstr "Buka kamar sebelumnya dengan pesan yang belum dibaca dalam daftar"
+
+#: src/shortcuts.ui:69
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "Tutup Kamar"
+
+#: src/user_facing_error.rs:26
+msgid "The connection timed out. Try again later."
+msgstr "Waktu koneksi habis. Coba lagi nanti."
+
+#: src/user_facing_error.rs:28
+msgid "Could not connect to the homeserver."
+msgstr "Tidak bisa menyambung ke server rumah."
+
+#: src/user_facing_error.rs:38
+msgid "The provided username or password is invalid."
+msgstr "Nama pengguna atau kata sandi yang diberikan tidak valid."
+
+#: src/user_facing_error.rs:39
+msgid "The account is deactivated."
+msgstr "Akun dinonaktifkan."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:55
+msgid "You exceeded the homeserver’s rate limit, retry in 1 second."
+msgid_plural "You exceeded the homeserver’s rate limit, retry in {n} seconds."
+msgstr[0] "Anda melebihi batas laju peladen rumah, coba lagi dalam 1 detik."
+
+#: src/user_facing_error.rs:61
+msgid "You exceeded the homeserver’s rate limit, try again later."
+msgstr "Anda telah melampaui batas kecepatan peladen rumah, coba lagi nanti."
+
+#: src/user_facing_error.rs:71
+msgid "An unexpected connection error occurred."
+msgstr "Terjadi galat koneksi yang tidak diharapkan."
+
+#: src/user_facing_error.rs:79
+msgid "Could not decrypt the event."
+msgstr "Tidak bisa mendekripsi acara."
+
+#: src/user_facing_error.rs:81 src/user_facing_error.rs:95
+msgid "An unexpected error occurred."
+msgstr "Terjadi galat yang tak diharapkan."
+
+#: src/user_facing_error.rs:89
+msgid "This is not a valid URL."
+msgstr "Ini bukan URL yang valid."
+
+#: src/user_facing_error.rs:91
+msgid "Homeserver auto-discovery failed. Try entering the full URL manually."
+msgstr ""
+"Penemuan otomatis peladen rumah gagal. Coba masukkan URL lengkap secara "
+"manual."
+
+#: src/user_facing_error.rs:94
+msgid "Could not open the store."
+msgstr "Tidak dapat membuka toko."
+
+#: src/utils/matrix/media_message.rs:172
+msgid "Could not save file"
+msgstr "Tidak dapat menyimpan berkas"
+
+#: src/utils/matrix/mod.rs:190
+msgid "{user} sent an audio file."
+msgstr "{user} mengirim berkas audio."
+
+#: src/utils/matrix/mod.rs:193
+msgid "{user} sent a file."
+msgstr "{user} mengirim berkas."
+
+#: src/utils/matrix/mod.rs:195
+msgid "{user} sent an image."
+msgstr "{user} mengirim gambar."
+
+#: src/utils/matrix/mod.rs:198
+msgid "{user} sent their location."
+msgstr "{user} mengirim lokasi mereka."
+
+#: src/utils/matrix/mod.rs:210
+msgid "{user} sent a video."
+msgstr "{user} mengirim video."
+
+#: src/utils/matrix/mod.rs:217
+msgid "{user} sent a sticker."
+msgstr "{user} mengirim stiker."
+
+#: src/utils/matrix/mod.rs:227
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/utils/matrix/mod.rs:251
+msgid "{user} invited you"
+msgstr "{user} mengundang Anda"
+
+#: src/utils/matrix/mod.rs:280
+msgid "Could not generate unique session ID"
+msgstr "Tidak bisa menghasilkan ID sesi unik"
+
+#: src/utils/matrix/mod.rs:281
+#, fuzzy
+#| msgid "Could not log the session out"
+msgid "Could not access the session tokens"
+msgstr "Tidak bisa log keluar sesi"
+
+#: src/utils/media/image/mod.rs:763
+#, fuzzy
+#| msgid "Image file not supported"
+msgid "Image format not supported"
+msgstr "Berkas gambar tidak didukung"
+
+#. Translators: Default name for image files.
+#: src/utils/media/mod.rs:34
+msgid "image"
+msgstr "gambar"
+
+#. Translators: Default name for video files.
+#: src/utils/media/mod.rs:36
+msgid "video"
+msgstr "video"
+
+#. Translators: Default name for audio files.
+#: src/utils/media/mod.rs:38
+msgid "audio"
+msgstr "audio"
+
+#. Translators: Default name for files.
+#: src/utils/media/mod.rs:40
+msgid "file"
+msgstr "berkas"
+
+#: src/window.ui:84
+msgid "Session"
+msgstr "Sesi"

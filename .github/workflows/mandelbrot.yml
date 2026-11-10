@@ -1,0 +1,50 @@
+name: Mandelbrot
+
+# Mandelbrot (mandelbrot/) is the suite's Matrix client, a Fractal fork. It is
+# its own Cargo workspace (docs/SUITE-INTEGRATION.md): matrix-sdk and LiveKit
+# stay out of the suite's lockfile. It builds against the GNOME 51 runtime,
+# using the Flatpak manifest it ships.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mandelbrot/**'
+      - '.github/workflows/mandelbrot.yml'
+  pull_request:
+    paths:
+      - 'mandelbrot/**'
+      - '.github/workflows/mandelbrot.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mandelbrot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  matrixrtc:
+    name: Mandelbrot MatrixRTC engine (clippy, tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: clippy
+        run: cargo clippy --manifest-path mandelbrot/matrixrtc/Cargo.toml --all-targets -- -D warnings
+      - name: tests
+        run: cargo test --manifest-path mandelbrot/matrixrtc/Cargo.toml
+
+  flatpak:
+    name: Mandelbrot Flatpak build
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+        with:
+          manifest-path: mandelbrot/org.tunaos.mandelbrot.json
+          build-bundle: false
+          cache: false

@@ -1,0 +1,124 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentExplore: Adw.BreakpointBin {
+  vexpand: true;
+  hexpand: true;
+  width-request: 360;
+  height-request: 294;
+
+  styles [
+    "view",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      [title]
+      Adw.Clamp search_clamp {
+        maximum-size: 400;
+        hexpand: true;
+
+        child: Gtk.SearchEntry search_entry {
+          search-changed => $trigger_search() swapped;
+
+          accessibility {
+            label: _("Public Rooms Search");
+            description: _("Search for a room in the public directory of the selected server");
+          }
+        };
+      }
+
+      [end]
+      Gtk.MenuButton servers_button {
+        valign: center;
+        direction: down;
+
+        accessibility {
+          description: _("Switch servers");
+        }
+
+        popover: $ExploreServersPopover servers_popover {};
+      }
+    }
+
+    [top]
+    Adw.Bin second_top_bar {
+      visible: false;
+
+      styles [
+        "padded-top-bar",
+      ]
+    }
+
+    content: Gtk.Stack stack {
+      transition-type: crossfade;
+
+      styles [
+        "explore",
+      ]
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Loading");
+
+        child: Adw.Spinner {};
+      }
+
+      Gtk.StackPage {
+        name: "empty";
+        title: _("No Rooms");
+
+        child: Adw.StatusPage {
+          icon-name: "system-search-symbolic";
+          title: _("No Rooms");
+          description: _("No rooms matching the search were found");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "results";
+        title: _("List of Public Rooms");
+
+        child: Gtk.ScrolledWindow scrolled_window {
+          vexpand: true;
+          hscrollbar-policy: never;
+
+          child: Adw.ClampScrollable {
+            vexpand: true;
+            hexpand: true;
+            maximum-size: 750;
+            tightening-threshold: 550;
+
+            child: Gtk.ListView listview {
+              margin-end: 24;
+              margin-start: 24;
+              tab-behavior: item;
+
+              styles [
+                "public-rooms",
+              ]
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Error");
+
+        child: Adw.StatusPage {
+          icon-name: "error-symbolic";
+          title: _("Error");
+          description: _("An error occurred while searching for matches");
+        };
+      }
+    };
+  };
+
+  Adw.Breakpoint {
+    condition ("max-width: 700px")
+    apply => $switch_to_narrow_mode() swapped;
+    unapply => $switch_to_wide_mode() swapped;
+  }
+}

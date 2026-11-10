@@ -1,0 +1,16 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessageSenderName: Adw.Bin {
+  focusable: true;
+
+  Gtk.Label label {
+    ellipsize: end;
+    label: bind template.sender as <$Member>.disambiguated-name;
+
+    styles [
+      "heading",
+      "accent",
+    ]
+  }
+}

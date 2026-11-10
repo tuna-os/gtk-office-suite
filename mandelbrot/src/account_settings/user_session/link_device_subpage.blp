@@ -1,0 +1,296 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LinkDeviceSubpage: Adw.NavigationPage {
+  title: _("Link New Device");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      vexpand: true;
+
+      child: Adw.Clamp {
+        maximum-size: 400;
+        tightening-threshold: 300;
+        margin-top: 24;
+        margin-bottom: 24;
+        margin-start: 12;
+        margin-end: 12;
+
+        child: Gtk.Stack stack {
+          transition-type: crossfade;
+          vhomogeneous: false;
+
+          Gtk.StackPage {
+            name: "loading";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Adw.Spinner {
+                width-request: 32;
+                height-request: 32;
+                halign: center;
+              }
+
+              Gtk.Label {
+                label: _("Preparing the QR code…");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "qr";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Gtk.Label {
+                label: _("Scan this QR code with the device you want to sign in. The new device will be signed in with your account and will receive its encryption keys.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              $TriQRCode qrcode {
+                halign: center;
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "check-code";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Gtk.Label {
+                label: _("Enter Check Code");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+                accessible-role: heading;
+
+                styles [
+                  "title-1",
+                ]
+
+                accessibility {
+                  level: 1;
+                }
+              }
+
+              Gtk.Label check_code_instructions {
+                label: _("Enter the 2-digit code displayed on the other device to confirm the connection.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.ListBox {
+                accessible-role: group;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.EntryRow check_code_entry {
+                  title: _("Check Code");
+                  input-purpose: digits;
+                  selectable: false;
+                  entry-activated => $confirm_check_code() swapped;
+
+                  accessibility {
+                    described-by: [
+                      check_code_instructions,
+                    ];
+                  }
+                }
+              }
+
+              $LoadingButton confirm_check_code_button {
+                content-label: _("Confirm");
+                halign: center;
+                clicked => $confirm_check_code() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "confirm-browser";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Gtk.Label {
+                label: _("To finish, allow the new sign-in in your browser.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              $LoadingButton open_browser_button {
+                content-label: _("Continue in Browser");
+                halign: center;
+                clicked => $open_browser() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "waiting";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Adw.Spinner {
+                width-request: 32;
+                height-request: 32;
+                halign: center;
+              }
+
+              Gtk.Label waiting_label {
+                label: _("Waiting for the new device…");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "success";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Gtk.Image {
+                icon-name: "checkmark-symbolic";
+                pixel-size: 64;
+                accessible-role: presentation;
+
+                styles [
+                  "success",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("The new device is now signed in with your account.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Button {
+                can-shrink: true;
+                label: _("Done");
+                halign: center;
+                action-name: "account-settings.close-subpage";
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "error";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+
+              Gtk.Image {
+                icon-name: "error-symbolic";
+                pixel-size: 64;
+                accessible-role: presentation;
+
+                styles [
+                  "error",
+                ]
+              }
+
+              Gtk.Label error_label {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Button retry_button {
+                can-shrink: true;
+                label: _("Try Again");
+                halign: center;
+                clicked => $retry() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          }
+        };
+      };
+    };
+  };
+}

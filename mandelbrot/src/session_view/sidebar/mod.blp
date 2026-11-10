@@ -1,0 +1,317 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu primary_menu {
+  section {
+    item {
+      label: _("New _Direct Chat…");
+      action: "session.create-direct-chat";
+    }
+
+    item {
+      label: _("_New Room…");
+      action: "session.create-room";
+    }
+
+    item {
+      label: _("_Join Room…");
+      action: "session.join-room";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Keyboard Shortcuts");
+      action: "app.shortcuts";
+    }
+
+    item {
+      label: _("_About Mandelbrot");
+      action: "app.about";
+    }
+  }
+}
+
+menu room_row_menu {
+  section {
+    item {
+      label: _("_Accept");
+      action: "room-row.accept-invite";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Dec_line");
+      action: "room-row.decline-invite";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("_Retract");
+      action: "room-row.retract-invite-request";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Mark as Read");
+      action: "room-row.mark-as-read";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("_Mark as Unread");
+      action: "room-row.mark-as-unread";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("Move to _Favorites");
+      action: "room-row.set-favorite";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Move to _Rooms");
+      action: "room-row.set-normal";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Move to Low _Priority");
+      action: "room-row.set-lowpriority";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Mark as _Direct Chat");
+      action: "room-row.set-direct-chat";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Unmark as _Direct Chat");
+      action: "room-row.unset-direct-chat";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Leave Room");
+      action: "room-row.leave";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("Re_join Room");
+      action: "room-row.join";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("_Forget Room");
+      action: "room-row.forget";
+      hidden-when: "action-missing";
+    }
+  }
+}
+
+template $Sidebar: Adw.NavigationPage {
+  title: _("Sidebar");
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      show-title: false;
+
+      [start]
+      $AccountSwitcherButton account_switcher_button {
+        valign: center;
+      }
+
+      [start]
+      Gtk.ToggleButton space_switcher_button {
+        valign: center;
+        visible: false;
+        icon-name: "sidebar-show-symbolic";
+        active: bind space_split_view.show-sidebar bidirectional;
+        tooltip-text: _("Show Spaces");
+      }
+
+      [end]
+      Gtk.MenuButton appmenu_button {
+        valign: center;
+        icon-name: "menu-primary-symbolic";
+        menu-model: primary_menu;
+        primary: true;
+        tooltip-text: _("Main Menu");
+      }
+
+      [end]
+      Gtk.ToggleButton search_button {
+        valign: center;
+        icon-name: "system-search-symbolic";
+        active: bind room_search.search-mode-enabled;
+        action-name: "session.toggle-room-search";
+        tooltip-text: _("Toggle Room Search");
+      }
+    }
+
+    [top]
+    Gtk.SearchBar room_search {
+      child: Gtk.SearchEntry room_search_entry {
+        activate => $activate_first_search_result() swapped;
+        hexpand: true;
+      };
+
+      accessibility {
+        label: _("Room Search");
+        description: _("Search for a room");
+      }
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {
+        session: bind template.user as <$User>.session;
+      }
+
+      Adw.Banner security_banner {
+        revealed: false;
+        button-clicked => $fix_security_issue() swapped;
+      }
+
+      Adw.OverlaySplitView space_split_view {
+        vexpand: true;
+        show-sidebar: false;
+        collapsed: bind template.root as <$Window>.compact;
+        min-sidebar-width: 60;
+        max-sidebar-width: 60;
+
+        sidebar: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Gtk.ListView space_rail {
+            single-click-activate: true;
+            tab-behavior: item;
+
+            styles [
+              "navigation-sidebar",
+              "space-rail",
+            ]
+
+            accessibility {
+              label: _("Spaces");
+              description: _("Allows to show only the rooms of a space");
+            }
+          };
+        };
+
+        content: Gtk.Box {
+          orientation: vertical;
+
+          Gtk.Box space_header {
+            visible: false;
+            spacing: 6;
+
+            styles [
+              "space-header",
+            ]
+
+            Gtk.Button space_back_button {
+              valign: center;
+              icon-name: "go-previous-symbolic";
+              tooltip-text: _("Parent Space");
+              clicked => $go_back_to_parent_space() swapped;
+
+              styles [
+                "flat",
+              ]
+            }
+
+            Gtk.Button space_overview_button {
+              hexpand: true;
+              tooltip-text: _("Space Overview");
+              clicked => $show_space_overview() swapped;
+
+              styles [
+                "flat",
+              ]
+
+              child: Gtk.Box {
+                spacing: 12;
+
+                $Avatar space_header_avatar {
+                  size: 24;
+                  accessible-role: presentation;
+                }
+
+                Gtk.Label space_header_name {
+                  hexpand: true;
+                  xalign: 0;
+                  ellipsize: end;
+
+                  styles [
+                    "heading",
+                  ]
+                }
+
+                Gtk.Image {
+                  icon-name: "go-next-symbolic";
+                  accessible-role: presentation;
+                }
+              };
+            }
+          }
+
+          Stack room_stack {
+            transition-type: crossfade;
+
+            StackPage {
+              name: "no-results";
+
+              child: Adw.StatusPage {
+                icon-name: "system-search-symbolic";
+                title: _("No Rooms");
+                description: _("No rooms matching the search were found");
+
+                styles [
+                  "compact",
+                ]
+              };
+            }
+
+            StackPage {
+              name: "room-list";
+
+              child: Gtk.ScrolledWindow scrolled_window {
+                vexpand: true;
+                hscrollbar-policy: never;
+
+                child: Gtk.ListView listview {
+                  single-click-activate: true;
+                  tab-behavior: item;
+
+                  styles [
+                    "navigation-sidebar",
+                    "sidebar-list",
+                  ]
+
+                  accessibility {
+                    label: _("Room List");
+                    description: _("Allows to navigate between rooms");
+                  }
+                };
+              };
+            }
+          }
+        };
+      }
+    };
+  }
+}

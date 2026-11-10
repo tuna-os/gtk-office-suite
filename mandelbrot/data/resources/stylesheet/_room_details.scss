@@ -1,0 +1,117 @@
+// Room details.
+
+@use 'vendor';
+
+visual-media-history-viewer {
+  background: black;
+  color: white;
+
+  headerbar {
+    background: none;
+    box-shadow: none;
+  }
+
+  gridview {
+    background: none;
+    padding: 2px;
+  }
+}
+
+visual-media-history-viewer-item {
+  background-color: var(--border-color);
+  transition: vendor.$ease-out-quad;
+
+  &:hover, &:focus {
+    transform: scale(1.03);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  > overlay > image {
+    border-radius: 100%;
+    padding: 12px;
+    -gtk-icon-size: 24px;
+  }
+}
+
+file-history-viewer, audio-history-viewer {
+  listview > row {
+    border-radius: 0;
+    padding: 6px;
+
+    &:last-child {
+      border-bottom-width: 0;
+    }
+  }
+}
+
+.room-details listview {
+	background: transparent;
+}
+
+members-list {
+  listview > row, members-list list > row {
+    padding: 8px 12px;
+    min-height: 32px;
+  }
+
+  listview > row {
+    margin-bottom: 6px;
+    border-radius: vendor.$card_radius;
+  }
+
+  row .icon {
+    &:dir(ltr) {
+      margin-right: 6px;
+    }
+
+    &:dir(rtl) {
+      margin-left: 6px;
+    }
+  }
+}
+
+dragoverlay statuspage {
+  background-color: color-mix(in srgb, var(--accent-bg-color) var(--dim-opacity), transparent);
+  color: var(--accent-fg-color);
+}
+
+.public-address-tag {
+  color: var(--accent-fg-color);
+  background-color: var(--accent-bg-color);
+  border-radius: 0.4em;
+  padding: 0.3em 0.5em;
+  margin-left: 0.5em;
+}
+
+.permissions-member-list > row {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  margin: 6px;
+}
+
+permissions-member-row {
+  padding: 8px;
+  border-radius: vendor.$card_radius;
+
+  @include vendor.focus-ring();
+
+  &:hover, &.has-open-popup {
+    background-color: vendor.$hover_color;
+  }
+
+  &:active {
+    background-color: vendor.$active_color;
+  }
+}
+
+.user-search-results {
+	padding: 12px 0px;
+
+  > row {
+    border-radius: vendor.$menu_radius;
+  }
+}

@@ -1,0 +1,80 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SidebarSectionRow: Adw.Bin {
+  notify::parent => $update_expanded_accessibility_state() swapped;
+
+  Gtk.Box {
+    spacing: 12;
+
+    Gtk.Label display_name {
+      halign: start;
+      hexpand: true;
+      ellipsize: end;
+      label: bind template.label;
+
+      styles [
+        "dimmed",
+      ]
+    }
+
+    [end]
+    Gtk.Stack {
+      visible: bind $invert_boolean(
+        $logical_or(
+          template.section as <$SidebarSection>.is-expanded,
+          template.section as <$SidebarSection>.is-read
+          ) as <bool>
+      ) as <bool>;
+      visible-child-name: bind $ternary_string(
+        template.section as <$SidebarSection>.has-notifications,
+        "count",
+        "dot"
+      ) as <string>;
+
+      Gtk.StackPage {
+        name: "dot";
+
+        child: Gtk.Image {
+          halign: end;
+          icon-name: "dot-symbolic";
+
+          styles [
+            "dimmed",
+          ]
+
+          accessibility {
+            label: "Unread messages";
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "count";
+
+        child: Gtk.Label notification_count {
+          hexpand: true;
+          halign: end;
+          valign: center;
+          yalign: 1.0;
+          label: bind template.section as <$SidebarSection>.notification-count;
+
+          styles [
+            "notification-count",
+          ]
+        };
+      }
+    }
+
+    [end]
+    Gtk.Image arrow {
+      icon-name: "expander-arrow-symbolic";
+      accessible-role: presentation;
+
+      styles [
+        "arrow",
+        "dimmed",
+      ]
+    }
+  }
+}

@@ -1,0 +1,15 @@
+using Gtk 4.0;
+
+template $ContextMenuBin: Gtk.Widget {
+  focusable: true;
+
+  Gtk.GestureClick click_gesture {
+    button: 3;
+    exclusive: true;
+  }
+
+  Gtk.GestureLongPress long_press_gesture {
+    touch-only: true;
+    exclusive: true;
+  }
+}

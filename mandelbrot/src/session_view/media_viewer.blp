@@ -1,0 +1,141 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu media-secondary-menu-model {
+  section {
+    item {
+      label: _("_Copy Image");
+      action: "media-viewer.copy-image";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("S_ave Image");
+      action: "media-viewer.save-image";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("S_ave Video");
+      action: "media-viewer.save-video";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("Copy Message _Link");
+      action: "media-viewer.permalink";
+      hidden-when: "action-disabled";
+    }
+  }
+}
+
+menu media-context-menu-model {
+  section {
+    item {
+      label: _("_Copy Image");
+      action: "media-viewer.copy-image";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("S_ave Image");
+      action: "media-viewer.save-image";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("S_ave Video");
+      action: "media-viewer.save-video";
+      hidden-when: "action-disabled";
+    }
+  }
+}
+
+template $MediaViewer: Gtk.Widget {
+  Adw.ToolbarView toolbar_view {
+    extend-content-to-top-edge: bind template.fullscreened;
+    reveal-top-bars: bind template.fullscreened inverted;
+    overflow: visible;
+
+    [top]
+    Gtk.HeaderBar header_bar {
+      title-widget: Gtk.Label {
+        label: bind template.filename;
+        single-line-mode: true;
+        ellipsize: end;
+
+        styles [
+          "title",
+        ]
+      };
+
+      [start]
+      Gtk.Button back {
+        icon-name: "go-previous-symbolic";
+        action-name: "media-viewer.close";
+        tooltip-text: _("Back");
+
+        accessibility {
+          label: _("Back");
+        }
+      }
+
+      [end]
+      Gtk.MenuButton menu {
+        icon-name: "menu-secondary-symbolic";
+        menu-model: media-secondary-menu-model;
+        tooltip-text: _("Media Menu");
+        primary: true;
+
+        accessibility {
+          label: _("Media Menu");
+        }
+      }
+
+      [end]
+      Gtk.Button {
+        visible: bind template.fullscreened inverted;
+        icon-name: "fullscreen-symbolic";
+        action-name: "win.toggle-fullscreen";
+        tooltip-text: _("Fullscreen");
+
+        accessibility {
+          label: _("Fullscreen");
+        }
+      }
+
+      [end]
+      Gtk.Button {
+        visible: bind template.fullscreened;
+        icon-name: "restore-symbolic";
+        action-name: "win.toggle-fullscreen";
+        tooltip-text: _("Exit Fullscreen");
+
+        accessibility {
+          label: _("Exit Fullscreen");
+        }
+      }
+    }
+
+    content: $ScaleRevealer revealer {
+      child: $MediaContentViewer media {
+        autoplay: true;
+        has-context-menu: true;
+
+        popover: Gtk.PopoverMenu {
+          has-arrow: false;
+          halign: start;
+          menu-model: media-context-menu-model;
+        };
+      };
+    };
+  }
+
+  Gtk.EventControllerMotion {
+    motion => $handle_motion() swapped;
+  }
+
+  Gtk.GestureClick {
+    released => $handle_click() swapped;
+  }
+}

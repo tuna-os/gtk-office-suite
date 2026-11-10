@@ -1,0 +1,36 @@
+using Gtk 4.0;
+
+template $ContentVisualMediaHistoryViewerItem: Gtk.Widget {
+  focusable: true;
+  accessible-role: button;
+  height-request: 150;
+  width-request: 150;
+
+  Gtk.GestureClick {
+    released => $activate() swapped;
+  }
+
+  Gtk.Overlay overlay {
+    Gtk.Picture picture {
+      content-fit: cover;
+    }
+
+    [overlay]
+    Gtk.Image play_icon {
+      visible: false;
+      halign: center;
+      valign: center;
+      icon-name: "play-symbolic";
+      accessible-role: presentation;
+
+      styles [
+        "osd",
+        "circular",
+      ]
+
+      layout {
+        measure: true;
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AccountChooserDialog: Adw.Dialog {
+  title: _("Select an Account");
+  content-width: 360;
+  content-height: 360;
+
+  styles [
+    "account-chooser",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    [top]
+    Adw.Clamp {
+      hexpand: true;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-start: 12;
+        margin-end: 12;
+
+        Gtk.Label heading {
+          wrap: true;
+          wrap-mode: word_char;
+          max-width-chars: 20;
+          justify: center;
+          xalign: 0.5;
+          label: _("Select an Account");
+
+          styles [
+            "title-2",
+          ]
+        }
+      };
+    }
+
+    content: Gtk.ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        margin-top: 24;
+        margin-bottom: 12;
+        margin-start: 12;
+        margin-end: 12;
+
+        child: Gtk.Box {
+          orientation: vertical;
+          spacing: 24;
+
+          Gtk.Label {
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            label: _("Select the account you want to open the URI with");
+
+            styles [
+              "body",
+            ]
+          }
+
+          Gtk.ListBox accounts {
+            activate-on-single-click: true;
+            row-activated => $select_row() swapped;
+          }
+        };
+      };
+    };
+  };
+}

@@ -1,0 +1,32 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoadingButtonRow: Adw.PreferencesRow {
+  activatable: true;
+  selectable: false;
+  accessible-role: button;
+
+  styles [
+    "button",
+  ]
+
+  accessibility {
+    labelled-by: [
+      title,
+    ];
+  }
+
+  $LoadingBin loading_bin {
+    child: Gtk.Label title {
+      label: bind template.title;
+      ellipsize: end;
+      mnemonic-widget: template;
+      xalign: 0.5;
+      justify: center;
+
+      styles [
+        "title",
+      ]
+    };
+  }
+}

@@ -1,0 +1,282 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsGeneralPage: Adw.PreferencesPage {
+  title: _("Room Details");
+
+  Adw.PreferencesGroup {
+    Gtk.Box {
+      spacing: 12;
+      orientation: vertical;
+
+      $Avatar avatar {
+        size: 128;
+        accessible-role: presentation;
+        data: bind template.room as <$Room>.avatar-data;
+        watched-room: bind template.room;
+        watched-safety-setting: "invite-avatars";
+      }
+
+      Gtk.Label {
+        wrap: true;
+        wrap-mode: word_char;
+        justify: center;
+        label: bind template.room as <$Room>.display-name;
+
+        styles [
+          "title-1",
+        ]
+      }
+
+      Gtk.Label room_topic {
+        wrap: true;
+        wrap-mode: word_char;
+        justify: center;
+        use-markup: true;
+        selectable: true;
+        label: bind template.room as <$Room>.topic-linkified;
+        visible: bind $string_not_empty(template.room as <$Room>.topic-linkified) as <bool>;
+
+        styles [
+          "body",
+        ]
+      }
+
+      Gtk.Button edit_details_btn {
+        can-shrink: true;
+        halign: center;
+        label: _("Edit Details");
+        action-name: "details.show-subpage";
+        action-target: "'edit-details'";
+
+        styles [
+          "pill",
+        ]
+      }
+    }
+  }
+
+  Adw.PreferencesGroup direct_members_group {
+    Gtk.ListBox direct_members_list {
+      selection-mode: none;
+
+      styles [
+        "boxed-list",
+      ]
+    }
+
+    Gtk.Label no_direct_members_label {
+      wrap: true;
+      wrap-mode: word_char;
+      xalign: 0.0;
+      label: _("There are no members in this room");
+
+      styles [
+        "dimmed",
+        "body",
+      ]
+    }
+  }
+
+  Adw.PreferencesGroup members_row_group {
+    $ButtonCountRow members_row {
+      icon-name: "users-symbolic";
+      action-name: "details.show-subpage";
+      action-target: "'members'";
+    }
+  }
+
+  Adw.PreferencesGroup {
+    $ButtonCountRow {
+      title: _("Media");
+      action-name: "details.show-subpage";
+      action-target: "'visual-media-history'";
+    }
+
+    $ButtonCountRow {
+      title: _("Files");
+      action-name: "details.show-subpage";
+      action-target: "'file-history'";
+    }
+
+    $ButtonCountRow {
+      // Translators: As in 'Audio file'.
+      title: _("Audio");
+      action-name: "details.show-subpage";
+      action-target: "'audio-history'";
+    }
+  }
+
+  Adw.PreferencesGroup notifications {
+    title: _("Notifications");
+    description: _("Which messages trigger notifications in this room");
+
+    $CheckLoadingRow notifications_global_row {
+      title: _("Use Global Setting");
+      action-name: "room.set-notifications-setting";
+      action-target: "'global'";
+    }
+
+    $CheckLoadingRow notifications_all_row {
+      title: _("All Messages");
+      action-name: "room.set-notifications-setting";
+      action-target: "'all'";
+    }
+
+    $CheckLoadingRow notifications_mentions_row {
+      title: _("Only Mentions and Keywords");
+      action-name: "room.set-notifications-setting";
+      action-target: "'mentions-only'";
+    }
+
+    $CheckLoadingRow notifications_mute_row {
+      title: _("Disable Notifications");
+      action-name: "room.set-notifications-setting";
+      action-target: "'mute'";
+    }
+  }
+
+  Adw.PreferencesGroup addresses_group {
+    title: _("Public Addresses");
+    visible: bind $invert_boolean(template.room as <$Room>.is-direct) as <bool>;
+
+    [header-suffix]
+    Gtk.Button edit_addresses_button {
+      action-name: "details.show-subpage";
+      action-target: "'addresses'";
+
+      styles [
+        "flat",
+      ]
+
+      accessibility {
+        description: _("Edit Public Addresses");
+      }
+
+      Adw.ButtonContent {
+        icon-name: "edit-symbolic";
+        use-underline: true;
+        // Translators: In this string, 'Edit' is a verb.
+        label: _("_Edit");
+      }
+    }
+
+    Gtk.Label no_addresses_label {
+      wrap: true;
+      wrap-mode: word_char;
+      xalign: 0.0;
+      label: _("This room has no public addresses");
+
+      styles [
+        "dimmed",
+      ]
+    }
+
+    Gtk.ListBox {
+      selection-mode: none;
+      margin-top: 12;
+      accessible-role: group;
+
+      styles [
+        "boxed-list",
+      ]
+
+      Adw.ButtonRow {
+        selectable: false;
+        title: _("Copy Room Link");
+        activated => $copy_permalink() swapped;
+      }
+    }
+  }
+
+  Adw.PreferencesGroup visibility_group {
+    title: _("Access and Visibility");
+    visible: bind $invert_boolean(template.room as <$Room>.is-direct) as <bool>;
+
+    $ButtonCountRow join_rule {
+      title: _("Who Can Join");
+      subtitle: bind template.room as <$Room>.join-rule as <$RoomJoinRule>.display-name;
+      action-name: "details.show-subpage";
+      action-target: "'join-rule'";
+
+      styles [
+        "property",
+      ]
+    }
+
+    $SwitchLoadingRow guest_access {
+      title: _("Allow Guests");
+      subtitle: _("Guests are Matrix users without a registered account");
+      notify::is-active => $toggle_guest_access() swapped;
+    }
+
+    $SwitchLoadingRow publish {
+      notify::is-active => $toggle_publish() swapped;
+    }
+
+    $ButtonCountRow history_visibility {
+      title: _("Who Can Read History");
+      action-name: "details.show-subpage";
+      action-target: "'history-visibility'";
+
+      styles [
+        "property",
+      ]
+    }
+  }
+
+  Adw.PreferencesGroup {
+    title: _("Advanced Information");
+
+    $CopyableRow room_id {
+      title: _("Matrix Room ID");
+      subtitle: bind template.room as <$Room>.room-id-string;
+      main-title: subtitle;
+      copy-button-tooltip-text: _("Copy Matrix Room ID");
+      toast-text: _("Matrix room ID copied to clipboard");
+    }
+
+    $SwitchLoadingRow encryption {
+      title: _("Enable Encryption");
+      is-active: bind template.room as <$Room>.is-encrypted;
+      notify::is-active => $enable_encryption() swapped;
+    }
+
+    $ButtonCountRow {
+      title: _("Permissions");
+      visible: bind $invert_boolean(template.room as <$Room>.is-direct) as <bool>;
+      action-name: "details.show-subpage";
+      action-target: "'permissions'";
+    }
+
+    Adw.ActionRow room_version {
+      selectable: false;
+      title: _("Room Version");
+      subtitle: bind template.room as <$Room>.version;
+
+      styles [
+        "property",
+      ]
+
+      $LoadingButton upgrade_button {
+        // Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+        content-label: _("Upgrade…");
+        valign: center;
+        clicked => $upgrade() swapped;
+
+        styles [
+          "destructive-action",
+        ]
+      }
+    }
+
+    Adw.ActionRow room_federated {
+      selectable: false;
+      title: _("Federation");
+
+      styles [
+        "property",
+      ]
+    }
+  }
+}

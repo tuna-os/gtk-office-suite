@@ -1,0 +1,130 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CallPrescreen: Adw.Bin {
+  vexpand: true;
+  hexpand: true;
+
+  styles [
+    "call-prescreen",
+  ]
+
+  child: Adw.Clamp {
+    maximum-size: 500;
+    tightening-threshold: 400;
+    margin-top: 24;
+    margin-bottom: 24;
+    margin-start: 24;
+    margin-end: 24;
+
+    child: Gtk.Box {
+      orientation: vertical;
+      valign: center;
+      spacing: 24;
+
+      accessibility {
+        label: _("Join Call");
+      }
+
+      Adw.Bin camera_preview {
+        overflow: hidden;
+        height-request: 280;
+
+        styles [
+          "call-camera-preview",
+          "card",
+        ]
+
+        child: Gtk.Stack preview_stack {
+          transition-type: crossfade;
+
+          Gtk.StackPage {
+            name: "off";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              halign: center;
+              valign: center;
+              spacing: 12;
+
+              Gtk.Image {
+                icon-name: "camera-disabled-symbolic";
+                pixel-size: 48;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("Camera is off");
+
+                styles [
+                  "dimmed",
+                ]
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "preview";
+
+            // Placeholder for the local camera preview. This will hold a
+            // `gdk::Paintable` fed by the local camera once the engine is
+            // bound.
+            child: Gtk.Picture preview_picture {
+              content-fit: cover;
+            };
+          }
+        };
+      }
+
+      Gtk.Box {
+        halign: center;
+        spacing: 12;
+
+        Gtk.ToggleButton microphone_button {
+          icon-name: "microphone-symbolic";
+          tooltip-text: _("Microphone");
+          toggled => $microphone_toggled() swapped;
+
+          styles [
+            "circular",
+            "large",
+          ]
+
+          accessibility {
+            label: _("Enable or disable the microphone");
+          }
+        }
+
+        Gtk.ToggleButton camera_button {
+          icon-name: "camera-web-symbolic";
+          tooltip-text: _("Camera");
+          toggled => $camera_toggled() swapped;
+
+          styles [
+            "circular",
+            "large",
+          ]
+
+          accessibility {
+            label: _("Enable or disable the camera");
+          }
+        }
+      }
+
+      Gtk.Button join_button {
+        halign: center;
+        label: _("Join Call");
+        clicked => $join_clicked() swapped;
+
+        styles [
+          "pill",
+          "large",
+          "suggested-action",
+        ]
+      }
+    };
+  };
+}

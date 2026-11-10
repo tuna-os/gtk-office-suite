@@ -1,0 +1,81 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CallParticipantTile: Adw.Bin {
+  overflow: hidden;
+
+  styles [
+    "call-participant-tile",
+    "card",
+  ]
+
+  child: Gtk.Overlay {
+    child: Gtk.Stack video_stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "avatar";
+
+        child: Gtk.Box {
+          orientation: vertical;
+          halign: center;
+          valign: center;
+
+          $Avatar avatar {
+            size: 96;
+            data: bind template.participant as <$CallParticipant>.avatar-data;
+            accessible-role: "presentation";
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "video";
+
+        // Placeholder for the remote video stream. This will hold a
+        // `gdk::Paintable` provided by a gtk4paintablesink once the engine
+        // is bound.
+        child: Gtk.Picture video_picture {
+          content-fit: cover;
+
+          styles [
+            "call-video-placeholder",
+          ]
+        };
+      }
+    };
+
+    [overlay]
+    Gtk.Box {
+      halign: start;
+      valign: end;
+      margin-start: 8;
+      margin-end: 8;
+      margin-bottom: 8;
+      spacing: 6;
+
+      styles [
+        "call-participant-info",
+        "osd",
+      ]
+
+      Gtk.Image muted_icon {
+        icon-name: "microphone-disabled-symbolic";
+        visible: bind template.participant as <$CallParticipant>.muted;
+
+        accessibility {
+          label: _("Muted");
+        }
+      }
+
+      Gtk.Label name_label {
+        ellipsize: end;
+        label: bind template.participant as <$CallParticipant>.display-name;
+
+        styles [
+          "caption-heading",
+        ]
+      }
+    }
+  };
+}

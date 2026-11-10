@@ -1,0 +1,74 @@
+using Gtk 4.0;
+
+template $RoomDetailsPermissionsMemberRow: Box {
+  focusable: true;
+  spacing: 12;
+
+  $Avatar {
+    size: 32;
+    data: bind template.member as <$RoomDetailsPermissionsMemberPowerLevel>.user as <$User>.avatar-data;
+    accessible-role: "presentation";
+  }
+
+  Gtk.Box {
+    orientation: vertical;
+
+    Gtk.Label title {
+      halign: start;
+      ellipsize: end;
+      label: bind template.member as <$RoomDetailsPermissionsMemberPowerLevel>.user as <$User>.display-name;
+
+      styles [
+        "title",
+      ]
+    }
+
+    Gtk.Label subtitle {
+      hexpand: true;
+      halign: start;
+      ellipsize: end;
+      label: bind template.member as <$RoomDetailsPermissionsMemberPowerLevel>.user as <$User>.user-id-string;
+
+      styles [
+        "subtitle",
+      ]
+    }
+  }
+
+  Gtk.Box suffixes {
+    Gtk.Box selected_box {
+      accessible-role: group;
+      spacing: 12;
+      margin-end: 6;
+
+      Gtk.Label selected_level_label {}
+
+      $RoleBadge selected_role_badge {
+        valign: center;
+        role: bind template.member as <$RoomDetailsPermissionsMemberPowerLevel>.role;
+      }
+    }
+
+    Gtk.Box arrow_box {
+      valign: center;
+
+      Gtk.Image {
+        icon-name: "pan-down-symbolic";
+        accessible-role: presentation;
+
+        styles [
+          "dropdown-arrow",
+        ]
+      }
+
+      $PowerLevelSelectionPopover popover {
+        notify::visible => $popover_visible() swapped;
+        notify::selected-power-level => $power_level_changed() swapped;
+      }
+    }
+  }
+
+  Gtk.GestureClick {
+    released => $activate_row() swapped;
+  }
+}
