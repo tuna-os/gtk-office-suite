@@ -14,7 +14,7 @@ The feature list and the order to build it in is
 | Part | Source | Licence | Toolkit | State |
 |---|---|---|---|---|
 | Letters, Tables, Decks | this workspace | GPL-3.0-or-later | gtk4 0.11, libadwaita 0.9 | shipped |
-| Lifafa (mail) | `lifafa/`, imported from tuna-os/lifafa | AGPL-3.0-or-later | moving from gtk4 0.9 + relm4 to gtk4 0.11 (PR [#1960](https://github.com/tuna-os/gtk-office-suite/pull/1960)) | imported, not yet compiling on the new stack |
+| Lifafa (mail) | `lifafa/`, imported from tuna-os/lifafa | AGPL-3.0-or-later | gtk4 0.11 and libadwaita 0.9, still on relm4 (PR [#1960](https://github.com/tuna-os/gtk-office-suite/pull/1960)) | compiles in CI; relm4 port pending |
 | Mandelbrot (chat, calls) | `mandelbrot/`, imported from tuna-os/mandelbrot | GPL-3.0-or-later | gtk4 0.11, libadwaita 0.9, no relm4 | imported as is |
 
 Lifafa and Mandelbrot are each their own Cargo workspace with their own
@@ -51,9 +51,12 @@ that builds it in the Flatpak SDK it needs.
   work; it goes component by component with CI as the compiler.
 - Both imported apps are large. They keep their own tests; they join the
   suite's evidence only as their journeys are written.
-- Lifafa is AGPL and the office apps are GPL; linking them into one binary is
-  not on the table, so integration is by process boundary (portals, D-Bus,
-  `GApplication` actions), which is also what makes the hand-offs safe.
+- Lifafa is AGPL (from Hylki, whose authors hold the copyright, so it is not
+  ours to relicense) and the office apps are GPL. The two licences may be
+  combined (AGPLv3 section 13), so nothing here depends on a relicence.
+  Integration is nonetheless by process boundary (portals, D-Bus,
+  `GApplication` actions), for independent updates and a smaller attack
+  surface. The notices are tracked in #1975.
 - "Fully featured" is measured the way the office apps are: against a
   reference (LibreOffice for documents, Thunderbird and Evolution for mail,
   Element and Fractal for chat) and tracked in the capability ledger.

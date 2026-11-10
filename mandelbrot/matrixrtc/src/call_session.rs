@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use ruma::{OwnedDeviceId, OwnedUserId};
+use ruma::{OwnedDeviceId, OwnedUserId, events::call::member::LivekitFocus};
 use serde_json::{Value as JsonValue, json};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -241,6 +241,26 @@ impl RtcCallSession {
             memberships: self.memberships(),
         };
         session.get_active_focus(&FocusActive::livekit_oldest_membership())
+    }
+
+    /// The LiveKit focus to connect to when joining.
+    ///
+    /// `oldest_membership` focus selection puts every participant on the
+    /// oldest membership's focus, so as soon as anyone is in the session that
+    /// is the one to connect to, whatever our own `foci_preferred` say.
+    /// Connecting to our own homeserver's SFU instead splits a federated call
+    /// in two: both sides see each other's membership but no media (Element
+    /// Call's `federation-oldest-membership-bug.spec.ts`). Only the first
+    /// participant uses its own first preferred LiveKit focus, which then
+    /// becomes the session's.
+    ///
+    /// Feed the room's current call member state in with
+    /// [`Self::on_room_state_update`] before calling this.
+    pub fn livekit_focus_to_join(&self, foci_preferred: &[Transport]) -> Option<LivekitFocus> {
+        self.get_active_focus()
+            .as_ref()
+            .and_then(Transport::as_livekit)
+            .or_else(|| foci_preferred.iter().find_map(Transport::as_livekit))
     }
 
     /// The call intent of the session, based on what members advertise. If

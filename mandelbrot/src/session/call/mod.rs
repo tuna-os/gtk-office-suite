@@ -629,21 +629,27 @@ impl CallManager {
             },
         );
 
-        // Feed the initial member snapshot into the engine.  When the
-        // `calls-media` feature is enabled the membership join is deferred
-        // until the SFU connection is confirmed (#9); otherwise we join
-        // immediately.
-        let join_room_id = room_id.to_owned();
+        // Feed the initial member snapshot into the engine and join. With the
+        // `calls-media` feature the media task does both itself: it needs the
+        // snapshot to pick the SFU (the oldest membership's), and it only
+        // joins once that SFU is reachable (#9).
         #[cfg(not(feature = "calls-media"))]
-        let foci = self.imp().preferred_foci.borrow().clone();
-        let _join_handle = spawn_tokio!(async move {
-            if let Some((events, joined)) = room_call_member_snapshot(&client, &join_room_id).await
-            {
-                engine.on_room_state_update(&events, |user_id| joined.contains(user_id), now_ms());
-            }
-            #[cfg(not(feature = "calls-media"))]
-            engine.join_rtc_session(foci);
-        });
+        {
+            let join_room_id = room_id.to_owned();
+            let foci = self.imp().preferred_foci.borrow().clone();
+            let _join_handle = spawn_tokio!(async move {
+                if let Some((events, joined)) =
+                    room_call_member_snapshot(&client, &join_room_id).await
+                {
+                    engine.on_room_state_update(
+                        &events,
+                        |user_id| joined.contains(user_id),
+                        now_ms(),
+                    );
+                }
+                engine.join_rtc_session(foci);
+            });
+        }
 
         Some(state)
     }

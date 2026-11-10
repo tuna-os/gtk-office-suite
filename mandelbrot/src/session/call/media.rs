@@ -173,18 +173,24 @@ async fn get_openid_token(client: &Client) -> Result<OpenIdToken, String> {
     })
 }
 
-/// The `LiveKit` service URL to use for the call.
-fn service_url(engine: &RtcCallSession, preferred_foci: &[Transport]) -> Option<String> {
+/// The `LiveKit` service URL to join the call through.
+///
+/// Learns who is already in the call first: everyone must connect to the
+/// oldest membership's focus, and only the first participant to the one it
+/// prefers (pre-warmed from `.well-known`).
+async fn sfu_to_join(
+    client: &Client,
+    room_id: &OwnedRoomId,
+    engine: &RtcCallSession,
+    preferred_foci: &[Transport],
+) -> Result<String, String> {
+    if let Some((events, joined)) = super::room_call_member_snapshot(client, room_id).await {
+        engine.on_room_state_update(&events, |user_id| joined.contains(user_id), super::now_ms());
+    }
     engine
-        .get_active_focus()
-        .as_ref()
-        .and_then(Transport::as_livekit)
+        .livekit_focus_to_join(preferred_foci)
         .map(|focus| focus.service_url)
-        .or_else(|| {
-            preferred_foci
-                .iter()
-                .find_map(|focus| focus.as_livekit().map(|focus| focus.service_url))
-        })
+        .ok_or_else(|| "no LiveKit focus available for this call".to_owned())
 }
 
 /// Run the media connection until the task is aborted or the user leaves.
@@ -209,14 +215,7 @@ async fn run(
     // Subscribe before connecting so that no key event is lost.
     let mut engine_events = engine.subscribe();
 
-    // Resolve the focus: preferred foci first (pre-warming from
-    // .well-known), falling back to the active focus of the session
-    // once we are in it.
-    let service_url = preferred_foci
-        .iter()
-        .find_map(|focus| focus.as_livekit().map(|lk| lk.service_url))
-        .or_else(|| service_url(&engine, &preferred_foci))
-        .ok_or_else(|| "no LiveKit focus available for this call".to_owned())?;
+    let service_url = sfu_to_join(&client, &room_id, &engine, &preferred_foci).await?;
 
     let http = mandelbrot_matrixrtc::reqwest::Client::new();
 

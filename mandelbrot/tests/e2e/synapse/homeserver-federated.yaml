@@ -66,3 +66,16 @@ serve_server_wellknown: true
 rc_message:
   per_second: 0.5
   burst_count: 30
+# Each harness script registers all of its users back to back (run-huddle.sh
+# five at once); Synapse's default registration limit (burst 3) rejects the
+# fourth with a 429. Logins are limited for the same reason.
+rc_registration:
+  per_second: 10
+  burst_count: 50
+rc_login:
+  address:
+    per_second: 10
+    burst_count: 50
+  account:
+    per_second: 10
+    burst_count: 50
