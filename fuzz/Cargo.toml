@@ -12,6 +12,8 @@ libfuzzer-sys = "0.4"
 letters-core = { path = "../letters-core" }
 tables-core = { path = "../tables-core" }
 decks-core = { path = "../decks-core" }
+# The sidecar protocol: its lines carry what other collaborators sent (#1995).
+suite-collab = { path = "../suite-collab" }
 tempfile = "3"
 
 [[bin]]
@@ -73,6 +75,13 @@ bench = false
 [[bin]]
 name = "tables_xlsx_parts"
 path = "fuzz_targets/tables_xlsx_parts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "collab_codec"
+path = "fuzz_targets/collab_codec.rs"
 test = false
 doc = false
 bench = false

@@ -32,7 +32,7 @@ use std::fs::File;
 use std::path::Path;
 use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 #[path = "parse/geometry.rs"]
 mod geometry;
@@ -551,6 +551,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if rot.is_some() { shape.rotation = rot; }
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if rot.is_some() { pic.rotation = rot; }
+                                } else if in_grp_pr {
+                                    // The group's own rotation and flips (#1989).
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:off" => {
@@ -807,10 +812,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let paint = cxn_paint.get(cxn_index).cloned().unwrap_or_default();
                             cxn_index += 1;
                             if let Some(shape) = current_shape.take() {
-                                let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
                                 let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
                                 let kind = ShapeKind::from_prst(shape.prst.as_deref().unwrap_or("line"));
-                                objects.push(SlideObject::Shape { kind, x, y, w, h, rotation: shape.rotation.unwrap_or(0.0), style: paint.style });
+                                objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                             }
                         } else if name.as_ref() == "p:sp" {
                             // This shape's fill and outline, resolved by the
@@ -866,10 +871,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         kind
                                     }
                                 };
-                                let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
                                 let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
-                                
-                                let rotation = shape.rotation.unwrap_or(0.0);
 
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) || role.is_some() {
                                     let (runs, mut body) = shape.resolve(text_style);
@@ -933,12 +936,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
-                                    let (x, y, w, h) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)));
+                                    let ((x, y, w, h), rotation) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)), pic.rotation.unwrap_or(0.0));
                                     let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
-                                    
+
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
-                                        PictureRect { x, y, w, h, rotation: pic.rotation.unwrap_or(0.0), crop: pic.crop },
+                                        PictureRect { x, y, w, h, rotation, crop: pic.crop },
                                         &slide_image_rels,
                                         &mut archive,
                                         &mut budget,
@@ -1379,7 +1382,7 @@ mod slide_size_tests {
 
     #[test]
     fn text_sizes_scale_with_the_slide_like_its_geometry() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         // Our own 10in slide: sizes are untouched, including "no size".
         let ours = SlideScale::default();
         let runs = vec![Run { text: "a".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];

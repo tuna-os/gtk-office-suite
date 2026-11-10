@@ -536,7 +536,7 @@ fn the_run_invariant_rejects_a_text_box_that_disagrees_with_itself() {
     {
         let mut slides = controller.slides.borrow_mut();
         if let Some(SlideObject::TextBox { runs, .. }) = slides[0].objects.get_mut(0) {
-            runs.push(letters_core::model::Run::plain("goodbye"));
+            runs.push(suite_common_core::document::Run::plain("goodbye"));
         }
     }
 

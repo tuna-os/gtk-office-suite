@@ -9,7 +9,6 @@ license = "GPL-3.0-or-later"
 # docs/DEVELOPMENT.md layering rule.
 [dependencies]
 suite-common-core = { path = "../suite-common-core" }
-letters-core = { path = "../letters-core" }
 zip = "9.0"
 quick-xml = "0.42"
 # NamedTempFile for extracted images (gh-268): production code writes
