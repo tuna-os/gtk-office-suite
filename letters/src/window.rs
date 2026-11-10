@@ -58,11 +58,13 @@ impl LettersWindow {
         style_label.set_margin_start(12);
         status_bar.append(&style_label);
         // Zoom slider in status bar
-        let zoom_adj = gtk4::Adjustment::new(100.0, 50.0, 200.0, 5.0, 10.0, 0.0);
+        // It starts at the stored zoom the pages open at, not 100% (#1895).
+        let stored_zoom = settings.double("zoom-level").clamp(50.0, 200.0);
+        let zoom_adj = gtk4::Adjustment::new(stored_zoom, 50.0, 200.0, 5.0, 10.0, 0.0);
         let zoom_slider = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&zoom_adj));
         zoom_slider.set_width_request(120);
         zoom_slider.set_draw_value(false);
-        let zoom_label = gtk4::Label::new(Some("100%"));
+        let zoom_label = gtk4::Label::new(Some(&crate::page_container::zoom_text(stored_zoom)));
         status_bar.append(&zoom_label);
         status_bar.append(&zoom_slider);
         // Wire zoom slider to update all PageContainers
@@ -72,7 +74,7 @@ impl LettersWindow {
             let s = settings.clone();
             zoom_slider.connect_value_changed(move |slider| {
                 let val = slider.value();
-                zl.set_text(&format!("{}%", val as i32));
+                zl.set_text(&crate::page_container::zoom_text(val));
                 let _ = s.set_double("zoom-level", val);
                 // The tab's child *is* its PageContainer; this used to look
                 // one level down and so never found one to zoom.
@@ -80,6 +82,17 @@ impl LettersWindow {
                     if let Some(pc) = find_page_container(&tv.nth_page(i).child()) {
                         pc.set_zoom(val);
                     }
+                }
+            });
+        }
+        // Ctrl+scroll zooms a page and stores the level: the slider and
+        // its label follow the stored level.
+        {
+            let slider = zoom_slider.clone();
+            settings.connect_changed(Some("zoom-level"), move |s, key| {
+                let level = s.double(key).clamp(50.0, 200.0);
+                if (slider.value() - level).abs() > f64::EPSILON {
+                    slider.set_value(level);
                 }
             });
         }
