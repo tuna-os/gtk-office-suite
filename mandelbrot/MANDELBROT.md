@@ -279,8 +279,9 @@ ISO repos only), all on GitHub-hosted runners. Setup for Mandelbrot:
   `ghcr.io/tuna-os/mandelbrot:latest` → `update-index.py` pushes to
   `tuna-os/docs`); optional `promote-to-prod.yml` for the main→prod model.
 
-* One secret: `FLATPAK_INDEX_TOKEN` (PAT that pushes to tuna-os/docs); GHCR
-  uses `GITHUB_TOKEN`. First publish auto-registers in the index.
+* One secret: `FLATPAK_INDEX_DEPLOY_KEY` (org secret, private half of a write
+  deploy key on tuna-os/docs); GHCR uses `GITHUB_TOKEN`. First publish
+  auto-registers in the index.
 
 * Expect 30–60 min cold flatpak builds (matrix-sdk); mold + flatpak-builder
   cache mitigate. x86_64 only initially.

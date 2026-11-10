@@ -71,10 +71,10 @@ jobs:
       contents: write
       packages: write
     # Pinned to a reviewed commit, not @main: a job holding write scopes
-    # and the index token must not run whatever the shared branch holds at
-    # publish time (#286, #1007). Renovate proposes digest bumps; review the
-    # tuna-os/.github diff before merging one.
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@ee54cb55a291eed5b313a3ae49828193332952c5 # main
+    # and the index deploy key must not run whatever the shared branch
+    # holds at publish time (#286, #1007). Renovate proposes digest bumps;
+    # review the tuna-os/.github diff before merging one.
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@4078f531ac74703f203bde835ef6c25e9321b97b # main
     with:
       app-id: org.tunaos.${{ matrix.app }}
       manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
@@ -84,11 +84,11 @@ jobs:
       # `||` would fall through to C and publish anyway regardless of the
       # toggle (caught by testing on mariner, tuna-os/mariner#17).
       publish: ${{ (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
-    # Only the one secret the called workflow declares, not `inherit`
-    # (every repository and organisation secret). GITHUB_TOKEN is passed
-    # implicitly, limited by `permissions` above.
+    # Only the docs deploy key the called workflow pushes the index with,
+    # not `inherit` (every repository and organisation secret). GITHUB_TOKEN
+    # is passed implicitly, limited by `permissions` above.
     secrets:
-      FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
+      FLATPAK_INDEX_DEPLOY_KEY: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
 
   # The /app tree of each app as a tarball on the release, for remotes that
   # repackage the vendor's own download (FlatPark, extra-data) instead of
