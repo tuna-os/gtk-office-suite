@@ -3,6 +3,10 @@
 
 use super::accounts::AccountConfig;
 
+// keyring-core and its Secret Service store, under the name the code below
+// has always used for its keyring calls (#2024).
+use keyring_core as keyring;
+
 /// Service name used for keyring entries; password items are keyed by email.
 pub(super) const KEYRING_SERVICE: &str = "co.hyprlab.Hylki";
 
@@ -134,18 +138,54 @@ pub(super) fn on_keyring_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send 
     }
 }
 
+/// Connect to the Secret Service, unless already connected. A failed attempt
+/// is not kept: at login the keyring can still be starting (#375), so the
+/// next call tries again.
+fn store_ready() -> keyring::Result<()> {
+    if keyring::get_default_store().is_none() {
+        keyring::set_default_store(zbus_secret_service_keyring_store::Store::new()?);
+    }
+    Ok(())
+}
+
+/// Drop the connection after an error that may come from it, so the next
+/// call connects again: the keyring daemon may have restarted, or been
+/// locked and unlocked.
+fn reconnect_after(e: &keyring::Error) {
+    if matches!(
+        e,
+        keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_)
+    ) {
+        keyring::unset_default_store();
+    }
+}
+
+/// An entry for `user` under `service`, connecting first if needed.
+fn entry(service: &str, user: &str) -> keyring::Result<keyring::Entry> {
+    store_ready()?;
+    keyring::Entry::new(service, user)
+}
+
 fn keyring_entry(key: &str) -> keyring::Result<keyring::Entry> {
-    keyring::Entry::new(KEYRING_SERVICE, key)
+    entry(KEYRING_SERVICE, key)
 }
 
 fn set_secret(key: &str, secret: &str) -> keyring::Result<()> {
     let (key, secret) = (key.to_owned(), secret.to_owned());
-    on_keyring_thread(move || keyring_entry(&key)?.set_password(&secret))
+    on_keyring_thread(move || {
+        keyring_entry(&key)?
+            .set_password(&secret)
+            .inspect_err(reconnect_after)
+    })
 }
 
 fn delete_secret(key: &str) -> keyring::Result<()> {
     let key = key.to_owned();
-    on_keyring_thread(move || keyring_entry(&key)?.delete_credential())
+    on_keyring_thread(move || {
+        keyring_entry(&key)?
+            .delete_credential()
+            .inspect_err(reconnect_after)
+    })
 }
 
 /// Keyring key for an account's separate SMTP password.
@@ -309,33 +349,37 @@ pub(crate) fn delete_cloud_password(key: &str) {
 /// Hylki set up without asking anyone, also while Hylki is not running
 /// (#408).
 fn eds_entry(uid: &str, label: &str) -> keyring::Result<keyring::Entry> {
-    // Hylki's own attributes stay, as the keyring crate finds its items by
-    // them; EDS finds the item by the source UID alone.
-    let mut cred = keyring::secret_service::SsCredential::new_with_target(
-        None,
+    store_ready()?;
+    let label = format!("Evolution Data Source \"{label}\"");
+    keyring::Entry::new_with_modifiers(
         KEYRING_SERVICE,
         &format!("eds:{uid}"),
-    )?;
-    cred.attributes.extend([
-        (
-            "xdg:schema".to_string(),
-            "org.gnome.Evolution.Data.Source".to_string(),
-        ),
-        ("e-source-uid".to_string(), uid.to_string()),
-        (
-            "eds-origin".to_string(),
-            "evolution-data-server".to_string(),
-        ),
-    ]);
-    cred.label = format!("Evolution Data Source \"{label}\"");
-    Ok(keyring::Entry::new_with_credential(Box::new(cred)))
+        &std::collections::HashMap::from([("label", label.as_str())]),
+    )
+}
+
+/// The attributes EDS finds its item by. Hylki's own (service, username)
+/// stay, as the keyring crate finds its items by them; EDS looks up by the
+/// source UID alone. Set after the password, as the store takes only a label
+/// when it creates an item; setting them again on an item that has them is
+/// harmless.
+fn eds_attributes(entry: &keyring::Entry, uid: &str) -> keyring::Result<()> {
+    entry.update_attributes(&std::collections::HashMap::from([
+        ("xdg:schema", "org.gnome.Evolution.Data.Source"),
+        ("e-source-uid", uid),
+        ("eds-origin", "evolution-data-server"),
+    ]))
 }
 
 /// Store the password EDS signs in to the source `uid` with; `label` names
 /// the source in the keyring's own app.
 pub(crate) fn store_eds_password(uid: &str, label: &str, password: &str) -> keyring::Result<()> {
     let (uid, label, password) = (uid.to_owned(), label.to_owned(), password.to_owned());
-    on_keyring_thread(move || eds_entry(&uid, &label)?.set_password(&password))
+    on_keyring_thread(move || {
+        let entry = eds_entry(&uid, &label)?;
+        entry.set_password(&password).inspect_err(reconnect_after)?;
+        eds_attributes(&entry, &uid)
+    })
 }
 
 /// Whether the keyring holds EDS's password for the source `uid`.
@@ -405,7 +449,10 @@ fn read_key(key: &str) -> Result<Option<String>, String> {
         move || match keyring_entry(&key).and_then(|e| e.get_password()) {
             Ok(password) => Ok(Some(password)),
             Err(keyring::Error::NoEntry) => Ok(load_legacy_key(&key)),
-            Err(e) => Err(e.to_string()),
+            Err(e) => {
+                reconnect_after(&e);
+                Err(e.to_string())
+            }
         },
     )
 }
@@ -426,7 +473,7 @@ pub(crate) fn read_smtp_password(email: &str) -> Result<Option<String>, String> 
 /// it is: the old app may still be installed and using it.
 fn load_legacy_key(key: &str) -> Option<String> {
     for pred in crate::desktop::legacy::PREDECESSORS {
-        let Ok(old) = keyring::Entry::new(pred.keyring_service, key) else {
+        let Ok(old) = entry(pred.keyring_service, key) else {
             continue;
         };
         let Ok(password) = old.get_password() else {
@@ -457,5 +504,147 @@ fn delete_key(key: &str) {
     match delete_secret(key) {
         Ok(()) | Err(keyring::Error::NoEntry) => {}
         Err(e) => tracing::warn!("could not delete keyring entry for {key}: {e}"),
+    }
+}
+
+/// Items stored the way keyring 3 (`async-secret-service`) stores them must
+/// keep being found, and must not be written a second time, whatever version
+/// of the `keyring` crate reads them (#2024). These need a real, unlocked
+/// Secret Service and `secret-tool` (libsecret), so they are ignored by
+/// default; lifafa.yml runs them under `dbus-run-session` with
+/// gnome-keyring. Each test seeds its items with `secret-tool store` and the
+/// exact attributes keyring 3.x writes, so they do not depend on the crate
+/// version under test to write the "old" item.
+#[cfg(test)]
+mod keyring_migration {
+    use super::*;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    /// Store `secret` under `service`/`user` the way keyring 3's
+    /// `SsCredential::new_with_target(None, ..)` does, plus `extra`.
+    fn seed_v3(service: &str, user: &str, secret: &str, extra: &[(&str, &str)]) {
+        let label = format!("{user}@{service}:default (keyring v3.6.3)");
+        let mut args = vec![
+            "store".to_string(),
+            format!("--label={label}"),
+            "service".into(),
+            service.into(),
+            "username".into(),
+            user.into(),
+            "target".into(),
+            "default".into(),
+            "application".into(),
+            "rust-keyring".into(),
+        ];
+        for (k, v) in extra {
+            args.push((*k).into());
+            args.push((*v).into());
+        }
+        let mut child = Command::new("secret-tool")
+            .args(&args)
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("secret-tool (libsecret) is needed for these tests");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(secret.as_bytes())
+            .unwrap();
+        assert!(child.wait().unwrap().success(), "secret-tool store failed");
+    }
+
+    /// How many items the keyring holds for `service`/`user`.
+    fn count(service: &str, user: &str) -> usize {
+        let out = Command::new("secret-tool")
+            .args(["search", "--all", "service", service, "username", user])
+            .output()
+            .expect("secret-tool (libsecret) is needed for these tests");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        text.lines().filter(|l| l.starts_with("[/")).count()
+    }
+
+    #[test]
+    #[ignore = "needs a Secret Service; lifafa.yml runs it with gnome-keyring"]
+    fn account_secrets_stored_by_keyring_3_are_found() {
+        let email = "found@example.com";
+        seed_v3(KEYRING_SERVICE, email, "imap-pass", &[]);
+        seed_v3(KEYRING_SERVICE, &smtp_key(email), "smtp-pass", &[]);
+        seed_v3(KEYRING_SERVICE, &oauth_key(email), "refresh-token", &[]);
+        seed_v3(KEYRING_SERVICE, &session_key(email), "session", &[]);
+        seed_v3(
+            KEYRING_SERVICE,
+            &alias_smtp_key(email, "alias@example.com"),
+            "alias-pass",
+            &[],
+        );
+        assert_eq!(read_password(email), Ok(Some("imap-pass".into())));
+        assert_eq!(read_smtp_password(email), Ok(Some("smtp-pass".into())));
+        assert_eq!(load_oauth_refresh(email).as_deref(), Some("refresh-token"));
+        assert_eq!(read_session(email), Ok(Some("session".into())));
+        assert_eq!(
+            load_alias_smtp_password(email, "alias@example.com").as_deref(),
+            Some("alias-pass")
+        );
+    }
+
+    #[test]
+    #[ignore = "needs a Secret Service; lifafa.yml runs it with gnome-keyring"]
+    fn saving_over_a_keyring_3_item_replaces_it() {
+        let email = "replace@example.com";
+        seed_v3(KEYRING_SERVICE, email, "old", &[]);
+        store_password(email, "new").unwrap();
+        assert_eq!(read_password(email), Ok(Some("new".into())));
+        assert_eq!(count(KEYRING_SERVICE, email), 1, "a second copy was written");
+        delete_password(email);
+        assert_eq!(read_password(email), Ok(None));
+        assert_eq!(count(KEYRING_SERVICE, email), 0);
+    }
+
+    #[test]
+    #[ignore = "needs a Secret Service; lifafa.yml runs it with gnome-keyring"]
+    fn eds_items_stored_by_keyring_3_are_found() {
+        let uid = "eds-source-uid-1";
+        seed_v3(
+            KEYRING_SERVICE,
+            &format!("eds:{uid}"),
+            "eds-pass",
+            &[
+                ("xdg:schema", "org.gnome.Evolution.Data.Source"),
+                ("e-source-uid", uid),
+                ("eds-origin", "evolution-data-server"),
+            ],
+        );
+        assert!(has_eds_password(uid));
+        store_eds_password(uid, "Work", "eds-new").unwrap();
+        assert_eq!(count(KEYRING_SERVICE, &format!("eds:{uid}")), 1);
+        // EDS itself looks the item up by the source UID alone.
+        let out = Command::new("secret-tool")
+            .args(["lookup", "e-source-uid", uid])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "eds-new");
+        delete_eds_password(uid);
+        assert!(!has_eds_password(uid));
+    }
+
+    #[test]
+    #[ignore = "needs a Secret Service; lifafa.yml runs it with gnome-keyring"]
+    fn predecessor_items_are_carried_over_once() {
+        for (i, pred) in crate::desktop::legacy::PREDECESSORS.iter().enumerate() {
+            let email = format!("legacy{i}@example.com");
+            seed_v3(pred.keyring_service, &email, "from-predecessor", &[]);
+            assert_eq!(read_password(&email), Ok(Some("from-predecessor".into())));
+            // Copied to the current service, once; the old item is left.
+            assert_eq!(count(KEYRING_SERVICE, &email), 1);
+            assert_eq!(read_password(&email), Ok(Some("from-predecessor".into())));
+            assert_eq!(count(KEYRING_SERVICE, &email), 1);
+            assert_eq!(count(pred.keyring_service, &email), 1);
+        }
     }
 }
