@@ -161,6 +161,16 @@ impl Response {
             .map(|(_, v)| v.as_str())
     }
 
+    /// The media type of the body, without parameters such as the charset;
+    /// `text/plain` when the server named none.
+    pub fn content_type(&self) -> &str {
+        self.header("Content-Type")
+            .and_then(|v| v.split(';').next())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .unwrap_or("text/plain")
+    }
+
     /// The reason phrase for the status.
     pub fn status_text(&self) -> &str {
         ureq::http::StatusCode::from_u16(self.status)
@@ -193,10 +203,11 @@ impl Response {
     }
 }
 
-enum Body {
+enum Body<'a> {
     None,
-    Bytes(Vec<u8>),
-    Stream(Box<dyn Read + Send + 'static>),
+    Owned(Vec<u8>),
+    Bytes(&'a [u8]),
+    Stream(&'a mut dyn Read),
 }
 
 /// A request being put together.
@@ -231,16 +242,17 @@ impl Request {
         self.dispatch(Body::None)
     }
 
-    pub fn send(self, reader: impl Read + Send + 'static) -> Result<Response, Error> {
-        self.dispatch(Body::Stream(Box::new(reader)))
+    /// Sends what `reader` yields, without holding it in memory.
+    pub fn send(self, mut reader: impl Read) -> Result<Response, Error> {
+        self.dispatch(Body::Stream(&mut reader))
     }
 
     pub fn send_bytes(self, bytes: &[u8]) -> Result<Response, Error> {
-        self.dispatch(Body::Bytes(bytes.to_vec()))
+        self.dispatch(Body::Bytes(bytes))
     }
 
     pub fn send_string(self, text: &str) -> Result<Response, Error> {
-        self.dispatch(Body::Bytes(text.as_bytes().to_vec()))
+        self.dispatch(Body::Bytes(text.as_bytes()))
     }
 
     pub fn send_json(self, body: impl serde::Serialize) -> Result<Response, Error> {
@@ -250,7 +262,7 @@ impl Request {
         } else {
             self.set("Content-Type", "application/json")
         };
-        req.dispatch(Body::Bytes(bytes))
+        req.dispatch(Body::Owned(bytes))
     }
 
     pub fn send_form(self, pairs: &[(&str, &str)]) -> Result<Response, Error> {
@@ -264,14 +276,14 @@ impl Request {
         } else {
             self.set("Content-Type", "application/x-www-form-urlencoded")
         };
-        req.dispatch(Body::Bytes(body.into_bytes()))
+        req.dispatch(Body::Owned(body.into_bytes()))
     }
 
     fn has(&self, name: &str) -> bool {
         self.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(name))
     }
 
-    fn dispatch(self, body: Body) -> Result<Response, Error> {
+    fn dispatch(self, body: Body<'_>) -> Result<Response, Error> {
         let mut url = self.url.clone();
         for (i, (k, v)) in self.query.iter().enumerate() {
             url.push(if i == 0 && !url.contains('?') { '?' } else { '&' });
@@ -291,6 +303,12 @@ impl Request {
                     .map_err(|e| Error::transport(ErrorKind::InvalidUrl, e.to_string()))?;
                 run(agent, req, self.timeout)
             }
+            Body::Owned(b) => {
+                let req = builder
+                    .body(b)
+                    .map_err(|e| Error::transport(ErrorKind::InvalidUrl, e.to_string()))?;
+                run(agent, req, self.timeout)
+            }
             Body::Bytes(b) => {
                 let req = builder
                     .body(b)
@@ -299,7 +317,7 @@ impl Request {
             }
             Body::Stream(r) => {
                 let req = builder
-                    .body(ureq::SendBody::from_owned_reader(r))
+                    .body(ureq::SendBody::from_reader(r))
                     .map_err(|e| Error::transport(ErrorKind::InvalidUrl, e.to_string()))?;
                 run(agent, req, self.timeout)
             }
