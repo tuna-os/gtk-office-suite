@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use tables_core::engine::TablesEngine;
 use tables_core::io::{load_workbook, save_sheets_to_xlsx_bytes};
-use tables_core::sheet::{col_x, hit_row_divider, row_y, visible_cols, visible_rows, SheetModel, ROW_HEADER_WIDTH};
+use tables_core::sheet::{FilterColumn, FilterDef, col_x, hit_row_divider, row_y, visible_cols, visible_rows, SheetModel, ROW_HEADER_WIDTH};
 use tables_core::sparse::SparseGrid;
 
 const SAMPLES: usize = 7;
@@ -240,4 +240,35 @@ fn a_frame_costs_the_same_at_the_top_and_the_bottom_of_a_million_rows() {
     assert!(bottom_p50 <= top_p50 * 4 + allowance, "bottom p50 {bottom_p50:?} vs top {top_p50:?}");
     assert!(bottom_p95 <= top_p95 * 4 + allowance, "bottom p95 {bottom_p95:?} vs top {top_p95:?}");
     assert!(bottom_p95 <= Duration::from_millis(5), "a frame's geometry took {bottom_p95:?}");
+}
+
+/// #1994: a filtered 50 000-row sheet. Every committed edit re-derives the
+/// filter, and load and save list each criterion column's distinct values;
+/// listing them used to compare each value with all the ones before it,
+/// seconds on a column of mostly different values.
+#[test]
+fn a_filter_over_fifty_thousand_rows_stays_within_budget() {
+    let (rows, cols) = (50_000, 26);
+    let mut sheet = SheetModel::new("Filtered", rows, cols, 1);
+    for row in 0..rows {
+        for col in 0..cols {
+            // Half the rows start with blank columns: the blank-row check
+            // has to look past them.
+            if col >= 20 || row % 2 == 0 {
+                *sheet.cell_mut(row, col) = format!("{}", (row * 7 + col) % 40_000);
+            }
+        }
+    }
+    let def = FilterDef {
+        range: Some((0, 0, rows - 1, cols - 1)),
+        columns: vec![FilterColumn { col: 22, hidden: ["5".to_string()].into_iter().collect() }],
+    };
+    p95("derive a 50k-row filter", || {
+        black_box(def.derive_hidden(&sheet));
+    });
+    let distinct = p95("list a 50k-row column's distinct values", || {
+        black_box(def.distinct_values(&sheet, 22));
+    });
+    assert!(distinct <= Duration::from_millis(500), "distinct values took {distinct:?}");
+    assert_eq!(def.distinct_values(&sheet, 22).len(), 40_000);
 }
