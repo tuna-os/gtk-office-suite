@@ -62,7 +62,7 @@ ignore = [
     { id = "RUSTSEC-2026-0414", reason = "pulldown-cmark wikilink event growth needs ENABLE_WIKILINKS, which nothing here or in rdocx sets; rdocx pins =0.13.4 so 0.13.5 cannot be locked (#1798); review by 2027-01-01" },
     # collab/Cargo.lock, the collabd sidecar's own lock (RFC-0005 option B; the product's
     # lock is unaffected: `tests/test_collab_defaults.py`). `collab-apps.yml` runs this
-    # gate on it. These are matched only when that lock is read; the product's `advisories`
+    # gate on it, and on collab/headless/Cargo.lock, the two-instance test's own (#1997). These are matched only when that lock is read; the product's `advisories`
     # job does not see the crates and does not need them.
     { id = "RUSTSEC-2026-0319", reason = "anymap2 unmaintained, no patched release; via matrix-sdk 0.19.1 (collab/Cargo.lock only; the Matrix binding is wired in a later pull request) — resolve with the Matrix binding (#1043); review by 2027-01-01" },
     # libsqlite3-sys via rusqlite via matrix-sdk 0.19.1 (collab/Cargo.lock

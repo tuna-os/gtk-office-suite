@@ -7,6 +7,7 @@
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
 - Typing quickly in a long document no longer queues a whole-document spell check and word count for every keystroke: each runs once when typing pauses (#1990).
+- A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
 
 ### Tables
 - Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written where Place At says, two columns to the right by default, as one undo step. Refresh Pivot Tables (cell menu and command palette) rewrites the sheet's pivot tables from their sources after the data changes, as one undo step. Results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
@@ -18,6 +19,9 @@
 
 ### Decks
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
+
+### Decks
+- A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
 
 ## v1.0 (post-release) — 2026-06-24
 
