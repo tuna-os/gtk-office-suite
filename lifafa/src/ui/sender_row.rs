@@ -42,7 +42,7 @@ impl FactoryComponent for SenderRow {
         &mut self,
         _index: &DynamicIndex,
         root: Self::Root,
-        _returned_widget: &gtk::Widget,
+        _returned_widget: &gtk::ListBoxRow,
         sender: FactorySender<Self>,
     ) -> Self::Widgets {
         let remove = gtk::Button::builder()
