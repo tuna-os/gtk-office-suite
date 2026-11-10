@@ -23,7 +23,7 @@ beta = []
 # v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
 # blocking one spins a nested main loop and glib's future executor aborts when
 # re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.
-gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 # v1_7 for AdwWrapBox: the composer's format bar wraps onto a second row
 # when the composer is narrow (#358). It also carries v1_6's
 # AdwStyleManager:accent-color, which the System theme swatch reads.
