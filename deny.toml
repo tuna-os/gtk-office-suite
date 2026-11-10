@@ -79,7 +79,7 @@ ignore = [
     # wrote; Lifafa opens only the cache it writes in its own data directory.
     # The fix is rusqlite 0.41 (libsqlite3-sys 0.39), a manifest change for
     # Lifafa tracked from #1986.
-    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys C SQLite CVE via rusqlite/matrix-sdk 0.19.1 (collab/Cargo.lock: 0.39 unreachable behind the pin, migration is upstream's call (#1043); sqlite feature off in all builds so the C never compiles) and via rusqlite 0.32 bundled (lifafa/Cargo.lock: the mail cache only, in Lifafa's own data dir; fixed by moving Lifafa to rusqlite 0.41, #1986); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys C SQLite CVE via rusqlite/matrix-sdk 0.19.1 (collab/Cargo.lock: 0.39 unreachable behind the pin, migration is upstream's call (#1043); sqlite feature off in all builds so the C never compiles); lifafa/Cargo.lock no longer needs it since Lifafa moved to rusqlite 0.41 (#1986); review by 2027-01-01" },
     # lifafa/Cargo.lock, the email client's own lock (#1957; gtk4 0.9 cannot share the
     # product's lock). `lifafa.yml` runs this gate on it. Matched only when that lock is
     # read; neither the product's nor collab's lock holds these crates.
@@ -94,3 +94,49 @@ ignore = [
     # expand at compile time to code std now provides.
     { id = "RUSTSEC-2026-0441", reason = "pin-utils archived, no further release; via async-imap 0.12.0 (latest) in lifafa/Cargo.lock only — drop when async-imap moves to core::pin::pin! (#1986); review by 2027-01-01" },
 ]
+
+# Licence policy (#1975). The office apps and collab are GPL-3.0-or-later;
+# Lifafa (lifafa/) is AGPL-3.0-or-later, from hyprlab's Hylki. Every
+# dependency of every lock in this repository (Cargo.lock, collab/Cargo.lock,
+# collab/headless/Cargo.lock, lifafa/Cargo.lock) has to be under a licence
+# that can be combined with both, so a crate under anything not listed here
+# fails `cargo deny check licenses` until someone has looked at it. For a
+# crate offered under several licences ("MIT OR Apache-2.0"), one listed
+# choice is enough.
+[licenses]
+confidence-threshold = 0.9
+# One list serves four locks, so a licence one of them never uses is expected.
+unused-allowed-license = "allow"
+unused-license-exception = "allow"
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "bzip2-1.0.6",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "GPL-3.0-or-later",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "NCSA",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+exceptions = [
+    # Lifafa itself. AGPL-3.0-or-later stays limited to this one crate: GPLv3
+    # and AGPLv3 section 13 each allow the combination, but nothing else in
+    # the suite should pull in AGPL code unnoticed.
+    { allow = ["AGPL-3.0-or-later"], crate = "hylki" },
+]
+
+[licenses.private]
+# Workspace crates that are not published (publish = false) are ours; their
+# licence is the directory's, stated above.
+ignore = true
