@@ -4850,6 +4850,7 @@ dependencies = [
 name = "suite-convert"
 version = "0.1.0"
 dependencies = [
+ "decks-core",
  "letters-core",
  "serde_json",
  "suite-common-core",

@@ -106,3 +106,17 @@ fn a_spreadsheet_converts_to_pdf() {
     assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
     assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
 }
+
+#[test]
+fn a_presentation_round_trips_between_pptx_and_odp() {
+    let dir = tempfile::tempdir().unwrap();
+    let pptx = dir.path().join("a.pptx");
+    let deck = decks_core::Deck::new();
+    decks_core::write_deck(&pptx.to_string_lossy(), &deck).unwrap();
+    let odp = dir.path().join("a.odp").to_string_lossy().into_owned();
+    let back = dir.path().join("b.pptx").to_string_lossy().into_owned();
+    let o = run(&[&pptx.to_string_lossy(), &odp]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    assert_eq!(code(&run(&[&odp, &back])), 0);
+    assert!(std::path::Path::new(&back).is_file());
+}

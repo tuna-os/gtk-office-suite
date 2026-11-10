@@ -155,6 +155,9 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         {
             Engine::Sheet
         }
+        Some(Category::Presentation) if matches!(plan.to, Format::Odp | Format::Pptx) => {
+            Engine::Deck
+        }
         _ => {
             return Err(Failure::new(
                 Exit::Convert,
@@ -176,6 +179,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
     let found = match engine {
         Engine::Text => text(&input.path, &staged)?,
         Engine::Sheet => sheet(&input.path, &staged, plan.to)?,
+        Engine::Deck => deck(&input.path, &staged)?,
     };
 
     match &args.output {
@@ -195,6 +199,15 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
 enum Engine {
     Text,
     Sheet,
+    Deck,
+}
+
+fn deck(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
+    let (deck, report, _opaque) = decks_core::read_deck_with_report(&input.to_string_lossy())
+        .map_err(|e| Failure::new(Exit::Parse, e))?;
+    decks_core::write_deck(&staged.to_string_lossy(), &deck)
+        .map_err(|e| Failure::new(Exit::Convert, e))?;
+    Ok(losses(&report))
 }
 
 fn text(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
