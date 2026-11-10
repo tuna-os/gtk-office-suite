@@ -30,6 +30,7 @@ fn test_pivot_table_evaluation_and_placement() {
             PivotDataField { col_index: 2, name: "Sales".to_string(), func: PivotAggFunc::Sum },
             PivotDataField { col_index: 2, name: "Sales".to_string(), func: PivotAggFunc::Count },
         ],
+        extent: (0, 0),
     };
 
     controller.add_pivot_table(pivot);
@@ -87,6 +88,7 @@ fn test_pivot_column_fields_create_cross_tab_intersections() {
             name: "Sales".into(),
             func: PivotAggFunc::Sum,
         }],
+        extent: (0, 0),
     };
     let result = controller.evaluate_pivot_table(&pivot);
     controller.add_pivot_table(pivot);
@@ -413,4 +415,143 @@ fn tbl005_every_permission_round_trips_on_protected_and_unprotected_sheets() {
             assert_eq!(reopened.protection, sheet.protection, "protected={protected}: {}", sheet.name);
         }
     }
+}
+
+/// The Insert Pivot Table dialog's path (#1657): fields named from the
+/// selection's header row, a spec built from the picks, inserted and undone
+/// as one step through the controller.
+#[test]
+fn a_pivot_built_from_dialog_choices_inserts_and_undoes_as_one_step() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    for (row, values) in [
+        ["Region", "", "Sales"],
+        ["North", "Q1", "100"],
+        ["North", "Q2", "50"],
+        ["South", "Q1", "200"],
+        ["South", "Q2", "150"],
+    ]
+    .iter()
+    .enumerate()
+    {
+        for (col, value) in values.iter().enumerate() {
+            controller.edit_cell(row, col, *value);
+        }
+    }
+    let range = (0, 0, 4, 2);
+    let (fields, spec) = {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        (
+            PivotTableSpec::source_fields(&sheet, range),
+            PivotTableSpec::from_choice(&sheet, range, 0, Some(1), 2, PivotAggFunc::Sum, None).unwrap(),
+        )
+    };
+    assert_eq!(fields, ["Region", "Column B", "Sales"]);
+    assert_eq!(spec.target_cell, (0, 4), "placed two columns right of the source");
+    assert_eq!(spec.col_fields[0].col_index, 1);
+
+    controller.add_pivot_table(spec);
+    {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert_eq!(sheet.pivot_tables.len(), 1);
+        assert_eq!(sheet.data[0][4], "Region");
+        assert_eq!(sheet.data[0][5], "Q1 - Sum of Sales");
+        assert_eq!(sheet.data[1][4..7], ["North", "100", "50"]);
+        assert_eq!(sheet.data[2][4..7], ["South", "200", "150"]);
+        // The source is untouched.
+        assert_eq!(sheet.data[0][..3], ["Region", "", "Sales"]);
+    }
+
+    controller.undo();
+    let state = controller.state.borrow();
+    let sheet = state.sheet();
+    assert!(sheet.pivot_tables.is_empty());
+    assert_eq!(sheet.data[0][4], "");
+    assert_eq!(sheet.data[2][6], "");
+}
+
+#[test]
+fn a_pivot_needs_a_data_row_and_fields_inside_the_selection() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    controller.edit_cell(0, 0, "Region");
+    controller.edit_cell(0, 1, "Sales");
+    controller.edit_cell(1, 0, "North");
+    controller.edit_cell(1, 1, "1");
+    let state = controller.state.borrow();
+    let sheet = state.sheet();
+    assert!(PivotTableSpec::source_fields(&sheet, (0, 0, 0, 1)).is_empty(), "a header with no rows under it");
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 2, PivotAggFunc::Sum, None).is_none());
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, Some(5), 1, PivotAggFunc::Sum, None).is_none());
+    assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 1, PivotAggFunc::Count, None).is_some());
+}
+
+/// A pivot keeps its definition, so refreshing it after the source is edited
+/// rewrites its table: a changed figure, a new group and a group that is gone
+/// all show, the stale row is cleared, and one undo puts the old table back.
+#[test]
+fn refreshing_a_pivot_follows_source_edits_and_undoes_as_one_step() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    for (row, values) in [["Region", "Sales"], ["North", "100"], ["North", "50"], ["South", "200"]]
+        .iter()
+        .enumerate()
+    {
+        for (col, value) in values.iter().enumerate() {
+            controller.edit_cell(row, col, *value);
+        }
+    }
+    let range = (0, 0, 3, 1);
+    let spec = {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        PivotTableSpec::from_choice(&sheet, range, 0, None, 1, PivotAggFunc::Sum, Some((10, 0))).unwrap()
+    };
+    assert_eq!(spec.target_cell, (10, 0), "placed where asked");
+    controller.add_pivot_table(spec);
+    let column = |c: &WorkbookController, col: usize| {
+        let state = c.state.borrow();
+        let sheet = state.sheet();
+        (10..14).map(|r| sheet.data[r][col].clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(column(&controller, 0), ["Region", "North", "South", ""]);
+    assert_eq!(controller.state.borrow().sheet().pivot_tables[0].extent, (3, 2));
+
+    // Edits alone leave the pivot as it was, as in Calc and Excel.
+    controller.edit_cell(2, 1, "75");
+    controller.edit_cell(3, 0, "East");
+    assert_eq!(column(&controller, 1), ["Sum of Sales", "150", "200", ""]);
+
+    assert_eq!(controller.refresh_pivot_tables(), 1);
+    assert_eq!(column(&controller, 0), ["Region", "East", "North", ""]);
+    assert_eq!(column(&controller, 1), ["Sum of Sales", "200", "175", ""]);
+
+    // A source with fewer groups leaves no stale row under the table.
+    controller.edit_cell(1, 0, "East");
+    controller.edit_cell(2, 0, "East");
+    assert_eq!(controller.refresh_pivot_tables(), 1);
+    assert_eq!(column(&controller, 0), ["Region", "East", "", ""]);
+    assert_eq!(column(&controller, 1), ["Sum of Sales", "375", "", ""]);
+    assert_eq!(controller.state.borrow().sheet().pivot_tables[0].extent, (2, 2));
+
+    controller.undo();
+    assert_eq!(column(&controller, 0), ["Region", "East", "North", ""]);
+    assert_eq!(column(&controller, 1), ["Sum of Sales", "200", "175", ""]);
+    assert_eq!(controller.state.borrow().sheet().pivot_tables[0].extent, (3, 2));
+}
+
+#[test]
+fn a_pivot_cannot_be_placed_inside_its_source_and_refresh_needs_one() {
+    let mut controller = WorkbookController::new(20, 10).unwrap();
+    for (row, values) in [["Region", "Sales"], ["North", "1"]].iter().enumerate() {
+        for (col, value) in values.iter().enumerate() {
+            controller.edit_cell(row, col, *value);
+        }
+    }
+    {
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 1, PivotAggFunc::Sum, Some((1, 1))).is_none());
+        assert!(PivotTableSpec::from_choice(&sheet, (0, 0, 1, 1), 0, None, 1, PivotAggFunc::Sum, Some((2, 0))).is_some());
+    }
+    assert_eq!(controller.refresh_pivot_tables(), 0, "no pivot to refresh");
 }

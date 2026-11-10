@@ -58,11 +58,13 @@ impl LettersWindow {
         style_label.set_margin_start(12);
         status_bar.append(&style_label);
         // Zoom slider in status bar
-        let zoom_adj = gtk4::Adjustment::new(100.0, 50.0, 200.0, 5.0, 10.0, 0.0);
+        // It starts at the stored zoom the pages open at, not 100% (#1895).
+        let stored_zoom = settings.double("zoom-level").clamp(50.0, 200.0);
+        let zoom_adj = gtk4::Adjustment::new(stored_zoom, 50.0, 200.0, 5.0, 10.0, 0.0);
         let zoom_slider = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&zoom_adj));
         zoom_slider.set_width_request(120);
         zoom_slider.set_draw_value(false);
-        let zoom_label = gtk4::Label::new(Some("100%"));
+        let zoom_label = gtk4::Label::new(Some(&crate::page_container::zoom_text(stored_zoom)));
         status_bar.append(&zoom_label);
         status_bar.append(&zoom_slider);
         // Wire zoom slider to update all PageContainers
@@ -72,7 +74,7 @@ impl LettersWindow {
             let s = settings.clone();
             zoom_slider.connect_value_changed(move |slider| {
                 let val = slider.value();
-                zl.set_text(&format!("{}%", val as i32));
+                zl.set_text(&crate::page_container::zoom_text(val));
                 let _ = s.set_double("zoom-level", val);
                 // The tab's child *is* its PageContainer; this used to look
                 // one level down and so never found one to zoom.
@@ -80,6 +82,17 @@ impl LettersWindow {
                     if let Some(pc) = find_page_container(&tv.nth_page(i).child()) {
                         pc.set_zoom(val);
                     }
+                }
+            });
+        }
+        // Ctrl+scroll zooms a page and stores the level: the slider and
+        // its label follow the stored level.
+        {
+            let slider = zoom_slider.clone();
+            settings.connect_changed(Some("zoom-level"), move |s, key| {
+                let level = s.double(key).clamp(50.0, 200.0);
+                if (slider.value() - level).abs() > f64::EPSILON {
+                    slider.set_value(level);
                 }
             });
         }
@@ -512,19 +525,34 @@ impl LettersWindow {
             let a = gtk::gio::SimpleAction::new("export-pdf-typst", None);
             a.connect_activate(move |_, _| {
                 let Some(buf) = active_buffer(&tv) else { return };
-                let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+                // From the model (LET-003), not the buffer's text, which
+                // carries drawn list markers, table pipes and note marks.
+                let source = crate::engine::typst_source(&crate::bridge::document_of(&buf));
                 let dlg = gtk::FileDialog::new();
                 dlg.set_initial_name(Some("Untitled.pdf"));
                 let w2 = w.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
                     let Ok(file) = result else { return };
-                    let written = suite_common::locations::save_location(&file).and_then(|path| {
-                        crate::engine::export_pdf(&text, &path.to_string_lossy())
-                            .and_then(|()| suite_common::locations::commit_save(&path))
+                    let path = match suite_common::locations::save_location(&file) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could Not Export PDF"), &e);
+                            return;
+                        }
+                    };
+                    // Typesetting a long document takes a while: do it off
+                    // the main thread (#1985), and finish the save back on it,
+                    // where the staged remote locations live.
+                    let w3 = w2.clone();
+                    glib::spawn_future_local(async move {
+                        let target = path.clone();
+                        let compiled = gio::spawn_blocking(move || crate::engine::export_pdf(&source, &target.to_string_lossy()))
+                            .await
+                            .unwrap_or_else(|_| Err("PDF export stopped unexpectedly".to_string()));
+                        if let Err(e) = compiled.and_then(|()| suite_common::locations::commit_save(&path)) {
+                            suite_common::show_error_dialog(Some(&w3), &suite_common::i18n("Could Not Export PDF"), &e);
+                        }
                     });
-                    if let Err(e) = written {
-                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could Not Export PDF"), &e);
-                    }
                 });
             });
             app.add_action(&a);
@@ -1121,13 +1149,16 @@ fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
 
 fn connect_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
     let wc = wc.clone();
+    // One pending count, not one per keystroke: each clones the document
+    // (#1990).
+    let idle = crate::idle::IdleOnce::default();
     buf.connect_changed(move |b| {
         // Idle, not inline (LET-003): "changed" fires synchronously from the
         // model's own projection while the live model is borrowed, and the
         // count reads the model — reading it here would panic on the
         // outstanding borrow and take the app down on every keystroke.
         let (b, wc) = (b.clone(), wc.clone());
-        glib::idle_add_local_once(move || update_word_count(&b, &wc));
+        idle.schedule(move || update_word_count(&b, &wc));
     });
 }
 

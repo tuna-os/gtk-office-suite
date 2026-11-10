@@ -62,7 +62,35 @@ ignore = [
     { id = "RUSTSEC-2026-0414", reason = "pulldown-cmark wikilink event growth needs ENABLE_WIKILINKS, which nothing here or in rdocx sets; rdocx pins =0.13.4 so 0.13.5 cannot be locked (#1798); review by 2027-01-01" },
     # collab/Cargo.lock, the collabd sidecar's own lock (RFC-0005 option B; the product's
     # lock is unaffected: `tests/test_collab_defaults.py`). `collab-apps.yml` runs this
-    # gate on it. These are matched only when that lock is read; the product's `advisories`
+    # gate on it, and on collab/headless/Cargo.lock, the two-instance test's own (#1997). These are matched only when that lock is read; the product's `advisories`
     # job does not see the crates and does not need them.
     { id = "RUSTSEC-2026-0319", reason = "anymap2 unmaintained, no patched release; via matrix-sdk 0.19.1 (collab/Cargo.lock only; the Matrix binding is wired in a later pull request) — resolve with the Matrix binding (#1043); review by 2027-01-01" },
+    # libsqlite3-sys via rusqlite via matrix-sdk 0.19.1 (collab/Cargo.lock
+    # only): C SQLite CVE-2026-119375, published 2026-11-09. The patched
+    # 0.39 line is unreachable — rusqlite 0.40 requires ^0.38, so migration
+    # is upstream's call (matrix-sdk). The `sqlite` feature
+    # (matrix-sdk/sqlite with bundled-sqlite) is off in every build, test
+    # and shipped artifact, so the vulnerable C never compiles; this gate
+    # runs --all-features, which is the only reason it sees it. Re-check
+    # on matrix-sdk movement (#1043).
+    # Lifafa (lifafa/Cargo.lock) does bundle SQLite (rusqlite 0.32, `bundled`)
+    # for its mail cache, so this one does reach a shipped binary there. The
+    # flaw needs a crafted database and -wal pair that a less trusted party
+    # wrote; Lifafa opens only the cache it writes in its own data directory.
+    # The fix is rusqlite 0.41 (libsqlite3-sys 0.39), a manifest change for
+    # Lifafa tracked from #1986.
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys C SQLite CVE via rusqlite/matrix-sdk 0.19.1 (collab/Cargo.lock: 0.39 unreachable behind the pin, migration is upstream's call (#1043); sqlite feature off in all builds so the C never compiles) and via rusqlite 0.32 bundled (lifafa/Cargo.lock: the mail cache only, in Lifafa's own data dir; fixed by moving Lifafa to rusqlite 0.41, #1986); review by 2027-01-01" },
+    # lifafa/Cargo.lock, the email client's own lock (#1957; gtk4 0.9 cannot share the
+    # product's lock). `lifafa.yml` runs this gate on it. Matched only when that lock is
+    # read; neither the product's nor collab's lock holds these crates.
+    #
+    # zvariant, zvariant_derive and zbus_names were folded into zbus 6 and are no longer
+    # released on their own. Lifafa reaches them through zbus 4 (keyring 3, secret-service
+    # 4) and zbus 5 (ksni 0.3); the move to zbus 6 is #2027, with keyring 4 (#2024).
+    { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; via zbus 4/5 in lifafa/Cargo.lock only (keyring 3, secret-service, ksni) — resolve with Lifafa's zbus 6 move (#2027, #2024); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; via zbus 4/5 in lifafa/Cargo.lock only — resolve with Lifafa's zbus 6 move (#2027, #2024); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; via zbus 4/5 in lifafa/Cargo.lock only — resolve with Lifafa's zbus 6 move (#2027, #2024); review by 2027-01-01" },
+    # pin-utils is archived; async-imap 0.12 (the latest) still depends on it. Its macros
+    # expand at compile time to code std now provides.
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils archived, no further release; via async-imap 0.12.0 (latest) in lifafa/Cargo.lock only — drop when async-imap moves to core::pin::pin! (#1986); review by 2027-01-01" },
 ]

@@ -46,7 +46,7 @@ SINKS = {
         "save_sheets_to_xlsx_with_engine",
         "load_workbook",
         "slot.write",
-        "to_pdf_with_setup",
+        "to_pdf_for_sheet",
     ],
     "decks": [
         "save_deck",

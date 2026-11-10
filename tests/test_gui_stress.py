@@ -108,6 +108,81 @@ class ClassificationTests(unittest.TestCase):
     def test_nonzero_exit_with_no_evidence_is_not_silently_a_pass(self):
         self.assertEqual(stress.classify("", [], 1, False), stress.CLASS_UNKNOWN)
 
+    def test_undelivered_input_is_not_an_assertion_mismatch(self):
+        # #442/#1951: the framework samples the focused text after each
+        # typeText (GUI_TEST_VERIFY_TYPING=1). A journey that then fails on
+        # text the trace never saw land is undelivered stimulus, filed
+        # separately so a crash cannot hide in it either way.
+        failures = [{"message": "AssertionError: 'alha beta' != 'alpha beta'",
+                     "text": ""}]
+        self.assertEqual(stress.classify("", failures, 1, False, True),
+                         stress.CLASS_INPUT)
+
+    def test_delivery_evidence_does_not_clear_a_failure(self):
+        # The trace re-labels; the journey still failed, so a passing
+        # verdict is never manufactured from it.
+        self.assertEqual(stress.classify("", [], 0, False, True),
+                         stress.CLASS_PASS)
+
+    def test_delivery_evidence_does_not_hide_a_crash(self):
+        failures = [{"message": "AssertionError: widget gone", "text": ""}]
+        self.assertEqual(stress.classify("Segmentation fault", failures, 1,
+                                         False, True),
+                         stress.CLASS_CRASH)
+
+
+class DeliveryTraceTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp(prefix="stress-delivery-")
+
+    def _journey(self, name, entries):
+        path = os.path.join(self.dir, name)
+        os.makedirs(path)
+        with open(os.path.join(path, "input_trace.json"), "w") as handle:
+            json.dump(entries, handle)
+        return path
+
+    def test_a_trace_that_never_saw_the_text_is_undelivered(self):
+        self._journey("LettersClipboardSmoke.test_copy_paste_round_trip", [
+            {"type": "type_text", "text": "alpha beta",
+             "delivered": False, "observed": "alha beta"},
+        ])
+        self.assertEqual(
+            stress.trace_shows_undelivered_input(self.dir),
+            ["LettersClipboardSmoke.test_copy_paste_round_trip"])
+
+    def test_a_trace_that_saw_the_text_is_not_undelivered(self):
+        self._journey("TablesSheetStructureSmoke.test_sort", [
+            {"type": "type_text", "text": "apple",
+             "delivered": True, "observed": "apple"},
+        ])
+        self.assertEqual(stress.trace_shows_undelivered_input(self.dir), [])
+
+    def test_traces_without_delivery_marks_are_not_undelivered(self):
+        # Older artifacts predate the sampling: no mark means unknown,
+        # never a delivery failure.
+        self._journey("LettersSmoke.test_launch", [
+            {"type": "type_text", "text": "x"},
+            {"type": "key_combo", "combo": "<Control>a"},
+        ])
+        self.assertEqual(stress.trace_shows_undelivered_input(self.dir), [])
+
+    def test_broken_and_missing_traces_are_not_evidence(self):
+        self._journey("Broken.test_x", "not a list")
+        broken = os.path.join(self.dir, "Broken.test_x", "input_trace.json")
+        with open(broken, "w") as handle:
+            handle.write("{unclosed")
+        self.assertEqual(stress.trace_shows_undelivered_input(self.dir), [])
+        self.assertEqual(
+            stress.trace_shows_undelivered_input(os.path.join(self.dir, "absent")), [])
+
+    def test_artifact_dirs_map_to_junit_journey_ids(self):
+        self.assertEqual(
+            stress._artifact_name(
+                "test_smoke.LettersClipboardSmoke::test_copy_paste_round_trip"),
+            "LettersClipboardSmoke.test_copy_paste_round_trip")
+
 
 class JUnitTests(unittest.TestCase):
     def setUp(self):

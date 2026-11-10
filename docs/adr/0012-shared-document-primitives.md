@@ -189,6 +189,64 @@ To avoid risky monolithic code refactors across all three applications simultane
    - Clear `KNOWN_SIBLING_EDGES` in `tests/test_core_shell_split.py`.
    - All three cores are completely independent peers.
 
+## Implementation record
+
+**Slice 2 (#1675), done.** `suite_common_core::document` defines `Run`,
+`RunStyle`, `Paragraph`, `ParaStyle`, `Alignment`, `ListKind` and `VertAlign`
+with the Tier 1 fields above. Two fields Letters gained after this ADR are
+classified here: `upright` is Tier 1 (the italic counterpart of `regular`),
+`kerned` is Tier 2 (Letters typography).
+
+- `Alignment`, `ListKind` and `VertAlign` are defined once, in the shared
+  module; `letters_core::model` re-exports them, so existing paths keep
+  working.
+- Letters keeps its own `RunStyle` and `ParaStyle`, which carry the Tier 1
+  fields plus its Tier 2 extensions, and converts at its boundary
+  (`letters_core::neutral`, `From` both ways). Going neutral drops only the
+  Tier 2 fields; coming back gives them their defaults. Folding the
+  Tier 1 fields into a shared struct that Letters embeds would rewrite some
+  460 struct literals across Letters and Decks, and is left to a later
+  slice rather than done while those files are under active edit.
+- Every shared type reads with `#[serde(default)]`, and Letters' styles now
+  do too, so each side reads the other's JSON: Letters' extra fields are
+  ignored by the shared types, and a shared payload reads in Letters with
+  the Tier 2 fields at their defaults (`letters-core/tests/neutral_document.rs`).
+
+**Slice 3 (#1661), done.** The clipboard fragment and its DTOs live in
+`suite_common_core::document`: `MIME`, `GridCell`, the `ToNeutral` trait and
+`Fragment<P = Paragraph>`, with its JSON, plain-text and HTML forms.
+
+- `Fragment` is generic over the paragraph type so Letters can carry its own
+  paragraphs (`letters_core::fragment::Fragment` is `Fragment<Paragraph>` of
+  Letters') while Tables uses the shared one. The JSON on the clipboard is
+  the same shape either way, so a copy in one app pastes in another.
+- `tables-core` no longer depends on `letters-core`: its fragment module
+  re-exports the shared types. The `KNOWN_SIBLING_EDGES` ratchet in
+  `tests/test_core_shell_split.py` drops that edge; `decks-core` to
+  `letters-core` is left for the Decks slice (#1662).
+
+**Slice 4 (#1662), Decks.** `decks-core` no longer depends on `letters-core`.
+Its slides, notes, tables, PPTX and ODP readers and writers, templates,
+undo and tests use `suite_common_core::document::{Run, RunStyle}` (re-exported
+as `decks_core::engine::{Run, RunStyle}` as before), and its clipboard is
+`Fragment<ClipParagraph>`.
+
+- A slide's runs only ever used the Tier 1 fields, so the persisted JSON
+  (recovery snapshots, collaboration ops) keeps its field names. Older
+  payloads still carrying Letters' defaulted fields read, the extras
+  ignored; the Letters fields Decks no longer writes (`image`,
+  `image_extent_emu`, `footnote`, `html`, `chip`, `revision`) were all
+  optional to read, so an older build reads the new payloads too.
+- Pasting from Letters still names what a slide cannot hold and leaves out
+  pictures and deleted tracked text. `ClipParagraph` reads those markers
+  (`decks_core::fragment::Foreign`) from the clipboard JSON beside the
+  neutral style and never writes them, so what Decks copies is plain
+  neutral JSON.
+- `KNOWN_SIBLING_EDGES` is now empty: no core crate depends on a sibling.
+- Letters still keeps its own extended `RunStyle` and `ParaStyle` with
+  conversions at its boundary (slice 2); folding their Tier 1 fields into
+  the shared structs is the remaining work.
+
 ## Consequences
 
 ### Positive

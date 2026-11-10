@@ -242,22 +242,11 @@ pub(crate) fn remove_section_break(buf: &gtk::TextBuffer) -> bool {
 /// query can only match document content: list markers, table pipes and
 /// footnote "[n]" live in the buffer alone and never match.
 pub(crate) fn find_matches(doc: &letters_core::model::Document, query: &str) -> Vec<(usize, usize)> {
-    if query.is_empty() {
-        return Vec::new();
-    }
-    let folded: Vec<char> = letters_core::edit::sequence_text(doc).to_lowercase().chars().collect();
-    let needle: Vec<char> = query.to_lowercase().chars().collect();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i + needle.len() <= folded.len() {
-        if folded[i..i + needle.len()] == needle[..] {
-            out.push((i, i + needle.len()));
-            i += needle.len();
-        } else {
-            i += 1;
-        }
-    }
-    out
+    // The matching itself lives in letters-core (#1978): it compares
+    // against the original sequence text char by char, because offsets
+    // taken from a lowercased copy skew wherever case folding changes a
+    // character's length (Turkish `İ`).
+    letters_core::edit::find_matches(doc, query)
 }
 
 /// Buffer offsets of sequence-offset `matches`: the caret and the

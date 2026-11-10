@@ -565,7 +565,7 @@
       "app": "tables",
       "issue": 1659,
       "title": "Dynamic-array functions spill as the inventory says and survive XLSX save and reopen",
-      "scope": "The functions and shapes in docs/TABLES-DYNAMIC-ARRAYS.md, on the pinned IronCalc 0.9.1: values and shape of each spill, #SPILL! in every direction and its clearing, #CALC! for an empty result, recalculation with source edits and resizes, a source on another sheet, and one undo step per spill. XLSX writes each as an array formula marked dynamic (with the _xlfn. and _xlws. prefixes the newer functions need), stores only the anchor, and the spill is recomputed in full on reopening. Pinned limits: a spill past the grid is clipped with no #SPILL!, and the spill reference operator (E1#) yields the anchor alone. One GUI journey drives the visible grid through a spill, its blocking, clearing, undo and redo; the #CALC! presentation has none. Does not certify Excel itself or a Calc that evaluates these functions (24.8 and later); what a Calc 24.2 rewrite does is pinned in tables-core/tests/soffice_oracle.rs and described in the inventory, not cited here.",
+      "scope": "The functions and shapes in docs/TABLES-DYNAMIC-ARRAYS.md, on the pinned IronCalc 0.9.1: values and shape of each spill, #SPILL! in every direction and its clearing, #CALC! for an empty result, recalculation with source edits and resizes, a source on another sheet, and one undo step per spill. XLSX writes each as an array formula marked dynamic (with the _xlfn. and _xlws. prefixes the newer functions need), stores only the anchor, and the spill is recomputed in full on reopening. Pinned limits: a spill past the grid is clipped with no #SPILL!, and the spill reference operator (E1#) yields the anchor alone. Two GUI journeys drive the visible grid: a spill through its blocking, clearing, undo and redo, and a FILTER from #CALC! to a spill and back as its source is edited and undone. Does not certify Excel itself or a Calc that evaluates these functions (24.8 and later); what a Calc 24.2 rewrite does is pinned in tables-core/tests/soffice_oracle.rs and described in the inventory, not cited here.",
       "status": "verified",
       "revision": "a539fb7d0aa137fe9f7b3fbad08c62a1906065b9",
       "requires": [
@@ -575,11 +575,13 @@
       ],
       "evidence": {
         "gui": [
-          "tests/gui/test_smoke.py::TablesDynamicArraySmoke::test_a_spill_blocks_clears_and_follows_undo_redo"
+          "tests/gui/test_smoke.py::TablesDynamicArraySmoke::test_a_spill_blocks_clears_and_follows_undo_redo",
+          "tests/gui/test_smoke.py::TablesDynamicArraySmoke::test_an_empty_result_shows_calc_and_spills_when_its_source_matches"
         ],
         "model": [
           "tables-core::dynamic_arrays::each_admitted_function_spills_the_shape_and_values_its_row_says",
           "tables-core::dynamic_arrays::a_blocked_spill_shows_spill_in_every_direction_and_clears_with_the_blocker",
+          "tables-core::dynamic_arrays::an_empty_result_is_a_calc_error_not_an_empty_spill",
           "tables-core::dynamic_arrays::a_spill_recalculates_with_source_edits_and_resizes",
           "tables-core::dynamic_arrays::references_into_a_spill_and_a_spill_from_another_sheet_work",
           "tables-core::dynamic_arrays::undo_and_redo_take_a_spill_out_and_back",
@@ -806,6 +808,31 @@
           "letters-core::docx::docx_page_geometry_keeps_every_twip_through_repeated_saves",
           "letters-core::docx::an_inline_image_between_text_stays_in_its_paragraph_through_every_save",
           "letters-core::odt::tests::the_body_font_and_size_survive_a_save"
+        ]
+      }
+    },
+    {
+      "id": "tables.pivot.dialog-refresh",
+      "app": "tables",
+      "issue": 1657,
+      "title": "A pivot table is made from a selected table in the window, refreshed after source edits, and its results survive XLSX save and reopen",
+      "scope": "Insert Pivot Table over a selected table with a header row: rows by one field, optionally columns by another, one value summarized by sum, count, average, min or max, placed at a chosen cell outside the selection (two columns to its right by default). The controller writes it as one undo step. A pivot keeps its definition in the sheet and is rewritten only by Refresh Pivot Tables, as in Calc and Excel; a refresh follows changed figures, new groups and vanished groups, clears the rows the new table no longer covers, and is one undo step. XLSX saves the results as values and the save warning says the pivot definition is not kept; reopening gives the values with no pivot. Does not certify an OOXML or ODS pivot definition round trip, more than one row, column or value field from the dialog, or Excel pivot compatibility.",
+      "status": "verified",
+      "revision": "ee8626d932491f3e4defd85bb925e7e98386bc27",
+      "requires": ["model", "format", "gui"],
+      "evidence": {
+        "model": [
+          "tables-core::pivot_and_protection_tests::test_pivot_table_evaluation_and_placement",
+          "tables-core::pivot_and_protection_tests::a_pivot_built_from_dialog_choices_inserts_and_undoes_as_one_step",
+          "tables-core::pivot_and_protection_tests::a_pivot_needs_a_data_row_and_fields_inside_the_selection",
+          "tables-core::pivot_and_protection_tests::refreshing_a_pivot_follows_source_edits_and_undoes_as_one_step",
+          "tables-core::pivot_and_protection_tests::a_pivot_cannot_be_placed_inside_its_source_and_refresh_needs_one"
+        ],
+        "format": [
+          "tables-core::pivot_and_protection_tests::test_pivot_column_fields_create_cross_tab_intersections"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::TablesPivotSmoke::test_a_pivot_from_the_dialog_follows_a_refresh_and_undo"
         ]
       }
     },

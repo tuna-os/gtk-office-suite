@@ -286,6 +286,11 @@ impl Default for PageContainer {
 }
 
 
+/// The status bar's zoom readout for `level` percent: "161%".
+pub(crate) fn zoom_text(level: f64) -> String {
+    format!("{}%", level.round() as i64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,6 +306,15 @@ mod tests {
 
     fn container() -> PageContainer {
         PageContainer::new()
+    }
+
+    /// The readout shows the level the pages are at, rounded: a stored
+    /// 161% reads 161%, not the 100% the slider used to start at (#1895).
+    #[test]
+    fn zoom_readout_shows_the_level() {
+        assert_eq!(zoom_text(161.0), "161%");
+        assert_eq!(zoom_text(100.0), "100%");
+        assert_eq!(zoom_text(132.6), "133%", "rounded, not truncated");
     }
 
     #[test]

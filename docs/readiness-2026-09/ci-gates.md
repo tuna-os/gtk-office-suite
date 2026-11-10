@@ -492,6 +492,8 @@ by hand:
 | `vlm-audit (decks)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (letters)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `vlm-audit (tables)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
+| `Lifafa (check, tests)` | `lifafa.yml` → `build` | optional | Path-filtered to lifafa/, deny.toml and its own workflow (#1986): Lifafa is its own cargo workspace and lock, so it reports nothing on other pull requests and requiring it would block them forever. |
+| `Lifafa RustSec advisory gate` | `lifafa.yml` → `advisories` | optional | Path-filtered like `build`, and also scheduled daily so a new advisory against lifafa/Cargo.lock shows without a change here; it runs `cargo deny check advisories` on that lock, which the product's `advisories` job does not read (#1986). |
 | `Mandelbrot Flatpak build` | `mandelbrot.yml` → `flatpak` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Builds the Matrix client with its own Flatpak manifest against the GNOME 51 runtime. |
 | `Mandelbrot MatrixRTC engine (clippy, tests)` | `mandelbrot.yml` → `matrixrtc` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Lints and tests the MatrixRTC engine crate, which has no GTK dependency. |
 | `Fuzz importer smoke tests` | `nightly.yml` → `fuzz-smoke` | optional | Skipped on pull requests by design (nightly cost). |
@@ -508,12 +510,17 @@ by hand:
 | `Flatpak bundle (decks)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Flatpak bundle (letters)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Flatpak bundle (tables)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
+| `Post the export parity report` | `render-parity.yml` → `export-report-post` | optional | Only posts what `export-report` found with the write token `export-report` does not get (#1678); it judges nothing, and a fork's pull request skips it. |
+| `Post the render parity report` | `render-parity.yml` → `report-post` | optional | Only posts what `report` found (the sticky comment, and on main the scoreboard and issue sync) with the write token `report` does not get (#1678); it judges nothing, and a fork's pull request skips it. |
 | `Prior-release bundle (decks)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Prior-release bundle (letters)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Prior-release bundle (tables)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Tier C (Flatpak in a GNOME VM)` | `render-parity.yml` → `vm` | optional | Tier C needs the bundles above and is continue-on-error; it never runs on an ordinary pull request. |
 | `export-lab (name not derivable)` | `render-parity.yml` → `export-lab` | optional | Started only for the apps a pull request reaches, like `lab`. `export-report` is the required verdict: it runs on every pull request and fails when an export lab in scope did not succeed. |
 | `lab (name not derivable)` | `render-parity.yml` → `lab` | optional | Started only for the apps a pull request reaches (tools/render-lab/real_scope.py), so its check names are not known before the run. `report` is the required verdict: it runs on every pull request and fails when a lab in scope did not succeed. |
+| `Publish real-document results (decks)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
+| `Publish real-document results (letters)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
+| `Publish real-document results (tables)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
 
 <!-- required-checks:end -->
 <!-- required-checks:end -->

@@ -1099,6 +1099,8 @@ impl TablesWindow {
             win_ref.clone(), state.clone(), controller.clone(), drawing_area.clone());
         let edit_chart_dialog = crate::chart_dialog::edit_opener(
             win_ref.clone(), state.clone(), controller.clone(), drawing_area.clone());
+        let show_pivot_dialog = crate::pivot_dialog::opener(
+            win_ref.clone(), state.clone(), controller.clone(), drawing_area.clone());
 
         let s_pdf = state.clone();
         let win_ref = Rc::new(RefCell::new(None));
@@ -1131,7 +1133,7 @@ impl TablesWindow {
                                 // formula into its current result.
                                 let sheet_model = st.sheets[st.active_sheet].borrow().clone();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_for_sheet(&st.engine, &sheet_model, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
@@ -1214,6 +1216,8 @@ impl TablesWindow {
             mk("merge-cells", toggle_merge);
             mk("insert-chart", show_chart_dialog);
             mk("edit-chart", edit_chart_dialog);
+            mk("insert-pivot-table", show_pivot_dialog);
+            mk("refresh-pivot-tables", crate::pivot_dialog::refresher(controller.clone(), drawing_area.clone()));
             {
                 let ctl = controller.clone();
                 let da = drawing_area.clone();
@@ -1333,6 +1337,8 @@ impl TablesWindow {
             ("app.merge-cells", &suite_common::i18n("Merge Cells")),
             ("app.insert-chart", &suite_common::i18n("Insert Chart…")),
             ("app.edit-chart", &suite_common::i18n("Edit Chart…")),
+            ("app.insert-pivot-table", &suite_common::i18n("Insert Pivot Table…")),
+            ("app.refresh-pivot-tables", &suite_common::i18n("Refresh Pivot Tables")),
             ("app.conditional-format", &suite_common::i18n("Conditional Formatting…")),
             ("app.filter-by-column", &suite_common::i18n("Filter by Selected Column…")),
             ("app.clear-filter", &suite_common::i18n("Clear Filter")),
