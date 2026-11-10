@@ -114,5 +114,9 @@ growing it.
 To report a security vulnerability, don't open a public issue: follow
 [SECURITY.md](SECURITY.md).
 
-GTK Office Suite is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)).
-By contributing, you agree that your contributions are licensed the same way.
+GTK Office Suite is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)),
+except `lifafa/`, which is AGPL-3.0-or-later (see `lifafa/LICENSE`). By
+contributing, you agree that your contributions are licensed the same way as
+the directory they change: new files under `lifafa/` carry
+`SPDX-License-Identifier: AGPL-3.0-or-later`, everything else
+`GPL-3.0-or-later`.
