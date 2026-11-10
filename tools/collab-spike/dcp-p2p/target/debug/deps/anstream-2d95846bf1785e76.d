@@ -1,0 +1,14 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/anstream-2d95846bf1785e76.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/strip.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/wincon.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/_macros.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/auto.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/buffer.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/fmt.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/strip.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libanstream-2d95846bf1785e76.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/strip.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/wincon.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/stream.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/_macros.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/auto.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/buffer.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/fmt.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/strip.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/mod.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/strip.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/adapter/wincon.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/stream.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/_macros.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/auto.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/buffer.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/fmt.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anstream-1.0.0/src/strip.rs:
