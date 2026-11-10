@@ -11,9 +11,11 @@ name: lifafa
 #               lifafa/. It needs libadwaita 1.7 and WebKitGTK 6.0 at 2.44 or
 #               later, which Ubuntu 24.04 does not ship, so it runs in a Fedora 43
 #               container. Its few widget tests need a display: Xvfb.
-#   advisories  `cargo deny check advisories` on lifafa/Cargo.lock, against
-#               deny.toml (its ignores for this lock are the ones that name
-#               lifafa/), as collab-apps.yml does for collab/Cargo.lock.
+#   advisories  `cargo deny check advisories licenses` on lifafa/Cargo.lock,
+#               against deny.toml (its ignores for this lock are the ones that
+#               name lifafa/; its licence policy is shared, with an exception
+#               for Lifafa's own AGPL-3.0-or-later), as collab-apps.yml does
+#               for collab/Cargo.lock.
 on:
   push:
     branches: [main]
@@ -101,9 +103,9 @@ jobs:
       # The advisories of lifafa/Cargo.lock, against deny.toml (its ignores for
       # this lock are the ones that name lifafa/). The product's own gate is
       # ci.yml's `advisories`; collab/Cargo.lock's is collab-apps.yml's.
-      - name: cargo deny check advisories (lifafa/Cargo.lock)
+      - name: cargo deny check advisories licenses (lifafa/Cargo.lock)
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           manifest-path: lifafa/Cargo.toml
-          command: check advisories
+          command: check advisories licenses
           arguments: --all-features --config deny.toml
