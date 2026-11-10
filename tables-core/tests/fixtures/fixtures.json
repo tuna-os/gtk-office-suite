@@ -25,6 +25,26 @@
       ],
       "permitted_losses": [],
       "used_by": ["tables-core/src/io/load.rs"]
+    },
+    "picture-quad.png": {
+      "author": {"app": "Pillow", "version": "13.0.0"},
+      "format": "png",
+      "features": ["tables/xlsx-round-trip"],
+      "semantics": [
+        "8x8 red/green/blue/yellow quadrant PNG: the picture reader sniffs it by magic bytes, anchors it from a drawing, and the save round trip keeps its bytes verbatim"
+      ],
+      "permitted_losses": [],
+      "used_by": ["tables-core/src/io/pictures.rs"]
+    },
+    "picture-red.jpg": {
+      "author": {"app": "Pillow", "version": "13.0.0"},
+      "format": "jpg",
+      "features": ["tables/xlsx-round-trip"],
+      "semantics": [
+        "8x8 red JPEG: the picture reader sniffs it, the gdk-pixbuf path decodes it for the grid, and the save round trip keeps its bytes verbatim"
+      ],
+      "permitted_losses": [],
+      "used_by": ["tables-core/src/io/pictures.rs"]
     }
   }
 }
