@@ -1,0 +1,35 @@
+# Fuzz targets for the collaboration byte paths (#1995): what dcp-core does
+# with updates and files that other collaborators published. Its own
+# workspace, like the root fuzz crate, so cargo-fuzz's nightly build and
+# libfuzzer-sys stay out of collab/Cargo.lock.
+[package]
+name = "collab-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+dcp-core = { path = "../dcp-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "dcp_update_ingest"
+path = "fuzz_targets/dcp_update_ingest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dcp_check_package"
+path = "fuzz_targets/dcp_check_package.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

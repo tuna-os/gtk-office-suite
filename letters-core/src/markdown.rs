@@ -531,6 +531,9 @@ pub fn lossy_features(doc: &Document) -> Vec<&'static str> {
     if any_run(|s| s.font_size_hp.is_some()) { lost.push("font size"); }
     if any_run(|s| s.color.is_some()) { lost.push("text color"); }
     if any_run(|s| s.vert_align.is_some()) { lost.push("superscript/subscript"); }
+    // `serialize` writes neither (#1981).
+    if doc.paragraphs.iter().any(|p| p.style.table_cell.is_some()) { lost.push("tables"); }
+    if !doc.footnotes.is_empty() || any_run(|s| s.footnote.is_some()) { lost.push("footnotes"); }
     lost
 }
 

@@ -1,41 +1,109 @@
-name: Lifafa
+name: lifafa
 
-# Lifafa (lifafa/) is the suite's email client. It is its own Cargo workspace
-# (docs/LIFAFA-INTEGRATION.md) and needs libadwaita 1.7 or later, so it is
-# compiled inside the GNOME 50 SDK rather than on the Ubuntu runner.
-
+# Lifafa, the suite's email client (imported in #1957), has its own cargo
+# workspace and Cargo.lock: the root Cargo.toml excludes it because its gtk4
+# 0.9 cannot share a lockfile with the suite's gtk4 0.11. Its fork's own
+# workflows were not imported, so nothing here built it, ran its tests or
+# checked its lockfile against RustSec, although the suite's "Send by Email"
+# hands drafts to it (#1956) and it parses untrusted mail for a living (#1986).
+#
+#   build       `cargo check --all-targets --locked` and `cargo test --locked` in
+#               lifafa/. It needs libadwaita 1.7 and WebKitGTK 6.0 at 2.44 or
+#               later, which Ubuntu 24.04 does not ship, so it runs in a Fedora 43
+#               container. Its few widget tests need a display: Xvfb.
+#   advisories  `cargo deny check advisories` on lifafa/Cargo.lock, against
+#               deny.toml (its ignores for this lock are the ones that name
+#               lifafa/), as collab-apps.yml does for collab/Cargo.lock.
 on:
   push:
     branches: [main]
     paths:
       - 'lifafa/**'
+      - 'deny.toml'
       - '.github/workflows/lifafa.yml'
   pull_request:
     paths:
       - 'lifafa/**'
+      - 'deny.toml'
       - '.github/workflows/lifafa.yml'
+  # A new advisory against Lifafa's lock lands with no change in this
+  # repository, so the gate also runs on a schedule.
+  schedule:
+    - cron: '17 5 * * *'
   workflow_dispatch:
 
+# A newer push to the same ref supersedes the queued or running one.
 concurrency:
   group: lifafa-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
 
 permissions:
   contents: read
 
 jobs:
-  check:
-    name: Lifafa compiles (GNOME 50 SDK)
+  build:
+    name: Lifafa (check, tests)
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
-      options: --privileged
+      image: docker.io/library/fedora:43@sha256:f01112b9a1f1d0504ad962d9adfa401425033f8ab067e0a821904ebdde5b8ca5
+    steps:
+      - name: Install the GTK, libadwaita, WebKitGTK and Poppler development files
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            gcc gcc-c++ make git pkgconf-pkg-config glib2-devel \
+            gtk4-devel libadwaita-devel webkitgtk6.0-devel poppler-glib-devel \
+            cairo-devel pango-devel openssl-devel dbus-devel gettext \
+            xorg-x11-server-Xvfb mesa-dri-drivers
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: lifafa
+          shared-key: lifafa
+          cache-on-failure: true
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          pkg-config --modversion gtk4 libadwaita-1 webkitgtk-6.0 poppler-glib
+      # --locked: lifafa/Cargo.lock is the one Lifafa's workspace resolves to.
+      - name: cargo check --all-targets --locked
+        working-directory: lifafa
+        run: cargo check --all-targets --locked
+      # GSK_RENDERER=cairo: Xvfb has no GPU, and the widget tests only need
+      # GTK and libadwaita to initialise.
+      - name: cargo test --locked
+        working-directory: lifafa
+        env:
+          GSK_RENDERER: cairo
+          DISPLAY: ':99'
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+          for _ in $(seq 50); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+          cargo test --locked --no-fail-fast -- --test-threads=2
+
+  advisories:
+    name: Lifafa RustSec advisory gate
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: cargo check, in the SDK
-        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+      # The advisories of lifafa/Cargo.lock, against deny.toml (its ignores for
+      # this lock are the ones that name lifafa/). The product's own gate is
+      # ci.yml's `advisories`; collab/Cargo.lock's is collab-apps.yml's.
+      - name: cargo deny check advisories (lifafa/Cargo.lock)
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
-          manifest-path: lifafa/ci/check.yml
-          build-bundle: false
-          cache: false
+          manifest-path: lifafa/Cargo.toml
+          command: check advisories
+          arguments: --all-features --config deny.toml
