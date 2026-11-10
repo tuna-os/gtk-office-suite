@@ -18,6 +18,11 @@ use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::ops::Op;
 use suite_common_core::ops::History;
 
+/// The most undo steps a deck keeps. Each step can hold whole slides (a
+/// paste, a delete, a master edit), so an unbounded history grows with the
+/// session; past this the oldest step is forgotten (#1993).
+pub const UNDO_LIMIT: usize = 200;
+
 /// How the selected objects are being worked on (DCK-005). The mode is
 /// session state owned by the controller, not a document edit: changing
 /// it never dirties the deck or touches history.
@@ -267,7 +272,7 @@ impl DecksController {
             skipped_slides: Rc::new(RefCell::new(Vec::new())),
             dirty: Rc::new(Cell::new(false)),
             file_path: Rc::new(RefCell::new(None)),
-            history: RefCell::new(History::default()),
+            history: RefCell::new(History::with_limit(UNDO_LIMIT)),
             undo_sels: RefCell::new(Vec::new()),
             redo_sels: RefCell::new(Vec::new()),
             merge_chain: Cell::new(false),
@@ -338,7 +343,7 @@ impl DecksController {
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = Some(context);
-        *self.history.borrow_mut() = History::default();
+        *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
@@ -377,7 +382,7 @@ impl DecksController {
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
         crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = context;
-        *self.history.borrow_mut() = History::default();
+        *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
@@ -523,7 +528,7 @@ impl DecksController {
         crate::ops::ensure_all_ids(std::slice::from_mut(&mut stand_in), &mut []);
         let stand_in_id = stand_in.ids.slide;
         let slides = std::mem::replace(&mut *self.slides.borrow_mut(), vec![stand_in]);
-        let history = std::mem::take(&mut *self.history.borrow_mut());
+        let history = std::mem::replace(&mut *self.history.borrow_mut(), History::with_limit(UNDO_LIMIT));
         let selection = std::mem::take(&mut *self.selection.borrow_mut());
         let undo_sels = std::mem::take(&mut *self.undo_sels.borrow_mut());
         let redo_sels = std::mem::take(&mut *self.redo_sels.borrow_mut());
@@ -881,6 +886,7 @@ impl DecksController {
         if !merged {
             self.undo_sels.borrow_mut().push(pre_selection);
         }
+        self.trim_undo_sels();
         self.redo_sels.borrow_mut().clear();
         self.merge_chain.set(false);
         if let Some(context) = self.source_context.borrow_mut().as_mut() {
@@ -1628,6 +1634,8 @@ impl DecksController {
             // Undo is the direction that restores selection.
             self.undo_sels.borrow_mut().push(pre);
             self.redo_sels.borrow_mut().pop();
+            drop(history);
+            self.trim_undo_sels();
             self.repair_selection();
             if let Some(context) = self.source_context.borrow_mut().as_mut() {
                 context.note_history_step();
@@ -1640,6 +1648,18 @@ impl DecksController {
             self.redo_sels.borrow_mut().pop();
         }
         done
+    }
+
+    /// The history forgets its oldest steps past [`UNDO_LIMIT`]; the
+    /// selections saved with them go too, oldest first, so each kept step
+    /// still restores the selection it saw.
+    fn trim_undo_sels(&self) {
+        let kept = self.history.borrow().undo_len();
+        let mut sels = self.undo_sels.borrow_mut();
+        let excess = sels.len().saturating_sub(kept);
+        if excess > 0 {
+            sels.drain(..excess);
+        }
     }
 
     pub fn can_undo(&self) -> bool {
@@ -1683,6 +1703,27 @@ mod tests {
     /// view position `si`.
     fn oid(c: &DecksController, si: usize, oi: usize) -> u64 {
         c.object_id_at(si, oi).unwrap()
+    }
+
+    /// #1993: past the limit the saved selections are forgotten with
+    /// their steps, after an edit and after a redo, so neither stack grows
+    /// with the session.
+    #[test]
+    fn saved_selections_stay_within_the_undo_limit() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        for i in 0..UNDO_LIMIT + 30 {
+            c.add_slide(i + 1, slide("S")).unwrap();
+        }
+        assert_eq!(c.history.borrow().undo_len(), UNDO_LIMIT);
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT);
+        for _ in 0..10 {
+            assert!(c.undo());
+        }
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT - 10);
+        assert_eq!(c.redo_sels.borrow().len(), 10);
+        while c.redo() {}
+        assert_eq!(c.undo_sels.borrow().len(), UNDO_LIMIT);
+        assert!(c.redo_sels.borrow().is_empty());
     }
 
     /// Each chart edit is one undo step, and one that changes nothing

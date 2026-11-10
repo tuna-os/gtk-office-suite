@@ -16,6 +16,9 @@
 - Opening an ODS reads each sheet's page setup from its page style: paper size, orientation, margins, print scale and fit to pages wide and tall.
 - Sorting moves each cell's lock and hidden-formula setting with its row, as it already moved formats, styles, borders, validation and notes. They used to stay put, so a sort on a sheet with unlocked cells locked the wrong ones.
 
+### Decks
+- Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
+
 ## v1.0 (post-release) — 2026-06-24
 
 Features added after the v1.0 tag and GitHub release.
