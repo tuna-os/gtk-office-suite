@@ -40,7 +40,7 @@ pub(super) fn parse(html: &str) -> Vec<Node> {
             .borrow()
             .iter()
             .find(
-                |c| matches!(&c.data, NodeData::Element { name, .. } if name.local.as_ref() == tag),
+                |c| matches!(&c.data, NodeData::Element { name, .. } if &*name.local == tag),
             )
             .cloned()
     }
