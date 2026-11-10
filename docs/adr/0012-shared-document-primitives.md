@@ -212,6 +212,19 @@ classified here: `upright` is Tier 1 (the italic counterpart of `regular`),
   ignored by the shared types, and a shared payload reads in Letters with
   the Tier 2 fields at their defaults (`letters-core/tests/neutral_document.rs`).
 
+**Slice 3 (#1661), done.** The clipboard fragment and its DTOs live in
+`suite_common_core::document`: `MIME`, `GridCell`, the `ToNeutral` trait and
+`Fragment<P = Paragraph>`, with its JSON, plain-text and HTML forms.
+
+- `Fragment` is generic over the paragraph type so Letters can carry its own
+  paragraphs (`letters_core::fragment::Fragment` is `Fragment<Paragraph>` of
+  Letters') while Tables uses the shared one. The JSON on the clipboard is
+  the same shape either way, so a copy in one app pastes in another.
+- `tables-core` no longer depends on `letters-core`: its fragment module
+  re-exports the shared types. The `KNOWN_SIBLING_EDGES` ratchet in
+  `tests/test_core_shell_split.py` drops that edge; `decks-core` to
+  `letters-core` is left for the Decks slice (#1662).
+
 ## Consequences
 
 ### Positive

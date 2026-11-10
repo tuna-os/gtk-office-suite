@@ -95,7 +95,6 @@ APPLICATION_CORE_CRATES = ("letters-core", "tables-core", "decks-core")
 # document primitives into suite-common-core. No other sibling core dependency is
 # permitted, and these must be removed as migration phases complete.
 KNOWN_SIBLING_EDGES = {
-    ("tables-core", "letters-core"),
     ("decks-core", "letters-core"),
 }
 

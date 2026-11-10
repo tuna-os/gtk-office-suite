@@ -4987,7 +4987,6 @@ dependencies = [
  "calamine",
  "chrono",
  "ironcalc_base",
- "letters-core",
  "loro",
  "proptest",
  "regex",
