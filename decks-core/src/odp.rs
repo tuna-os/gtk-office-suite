@@ -8,7 +8,7 @@
 // circles, speaker notes, slide backgrounds, multi-slide order.
 // Fidelity is measured against the Impress oracle, never ported.
 
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Write;
