@@ -80,7 +80,7 @@ fn link_tags(html: &str) -> Vec<Vec<(String, String)>> {
 
     fn walk(node: &Handle, tags: &mut Vec<Vec<(String, String)>>) {
         if let NodeData::Element { name, attrs, .. } = &node.data {
-            if name.local.as_ref() == "link" {
+            if &*name.local == "link" {
                 tags.push(
                     attrs
                         .borrow()
