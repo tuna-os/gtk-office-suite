@@ -5629,11 +5629,11 @@ class TablesSheetStructureSmoke(TablesCellEntryMixin, BaseGUITestCase):
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("<Shift>F10")
         # GTK 4.14 gives a popover menu's items no accessible names, so the
-        # menu is checked by its thirteen items and used as the keyboard does:
+        # menu is checked by its fourteen items and used as the keyboard does:
         # it opens on its first item, Insert Rows Above, and Return runs it.
         self.wait_until(
             lambda: len(self.app.findChildren(lambda n: n.roleName == "menu item" and n.showing)),
-            lambda n: n == 13, description="the cells' context menu and its thirteen commands")
+            lambda n: n == 14, description="the cells' context menu and its fourteen commands")
         rawinput.keyCombo("Return")
         self._wait_cells(lambda c: c.get((1, 0), ("",))[0] == "head", "Insert Rows Above to move A1 down a row")
 
@@ -10532,6 +10532,97 @@ class TablesChartEditorSmoke(BaseGUITestCase):
             description="the original title back after one undo")
         self.assertIn("Revenue", chart)
         self.assertIsNone(self.process.poll(), "tables crashed editing a chart")
+
+
+class TablesPivotSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A pivot table made in the window (#1657): Insert Pivot Table over a
+    selected table, with its rows, a column field, the summary and where it
+    goes chosen in the dialog; a source edit shows only after Refresh Pivot
+    Tables, and one undo takes the refresh back. The grouping and the sums
+    are tables_core's (tables-core/tests/pivot_and_protection_tests.rs pins
+    them); this proves the dialog's choices and the refresh reach them."""
+
+    app_name = "tables"
+    aid = "org.tunaos.tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-pivot-")
+        super().setUp()
+
+    def _values(self):
+        snap = self.trigger_snapshot(self.aid)
+        return {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+
+    def _pivot(self):
+        values = self._values()
+        return [[values.get((r, c), "") for c in range(3)] for r in range(5, 8)]
+
+    def _showing(self, name, roles):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.name == name and n.roleName in roles and n.showing,
+                                   retry=False, requireResult=False)
+
+    def test_a_pivot_from_the_dialog_follows_a_refresh_and_undo(self):
+        from dogtail import rawinput
+
+        self.gapplication_action(self.aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
+        self._wait_for_a_new_document()
+        for ref, value in [("A1", "Region"), ("B1", "Quarter"), ("C1", "Sales"),
+                           ("A2", "North"), ("B2", "Q1"), ("C2", "100"),
+                           ("A3", "North"), ("B3", "Q2"), ("C3", "50"),
+                           ("A4", "South"), ("B4", "Q1"), ("C4", "200")]:
+            self._put(ref, value)
+
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("A1:C4")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description="the selection of A1:C4 to hand focus back to fx")
+        self.gapplication_action(self.aid, "insert-pivot-table")
+        insert = self.wait_until(lambda: self._showing("Insert", ("push button",)), bool,
+                                 description="the Insert Pivot Table dialog")
+
+        # Columns: (None), Region, Quarter, Sales. Two steps down is Quarter.
+        columns = self.wait_until(lambda: self._showing("Columns", ("combo box", "list item")), bool,
+                                  description="the dialog's Columns field")
+        columns.grabFocus()
+        rawinput.keyCombo("space")
+        rawinput.keyCombo("Down")
+        rawinput.keyCombo("Down")
+        rawinput.keyCombo("Return")
+
+        place_at = self.wait_until(lambda: self._showing("Place At", ("text", "entry")), bool,
+                                   description="the dialog's Place At field")
+        place_at.grabFocus()
+        rawinput.keyCombo("<Control>a")
+        rawinput.typeText("A6")
+        self.take_screenshot("pivot_dialog_choices")
+        insert.do_action(0)
+
+        self.wait_until(self._pivot, lambda p: p[0][0] == "Region",
+                        description="the pivot to be written at A6")
+        self.assertEqual(self._pivot(), [
+            ["Region", "Q1 - Sum of Sales", "Q2 - Sum of Sales"],
+            ["North", "100", "50"],
+            ["South", "200", "0"],
+        ])
+
+        # A source edit leaves the pivot as it was until it is refreshed.
+        self._put("C4", "300")
+        self.assertEqual(self._pivot()[2][1], "200", "a pivot is rewritten on refresh, not on every edit")
+        self.gapplication_action(self.aid, "refresh-pivot-tables")
+        self.wait_until(self._pivot, lambda p: p[2][1] == "300",
+                        description="Refresh Pivot Tables to show the edited 300")
+
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._pivot, lambda p: p[2][1] == "200",
+                        description="undo to take the refresh back")
+        self.assertEqual(self._values().get((3, 2)), "300", "undo took the source edit too")
+        self.assertIsNone(self.process.poll(), "tables crashed making a pivot table")
 
 
 class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):

@@ -810,6 +810,31 @@
       }
     },
     {
+      "id": "tables.pivot.dialog-refresh",
+      "app": "tables",
+      "issue": 1657,
+      "title": "A pivot table is made from a selected table in the window, refreshed after source edits, and its results survive XLSX save and reopen",
+      "scope": "Insert Pivot Table over a selected table with a header row: rows by one field, optionally columns by another, one value summarized by sum, count, average, min or max, placed at a chosen cell outside the selection (two columns to its right by default). The controller writes it as one undo step. A pivot keeps its definition in the sheet and is rewritten only by Refresh Pivot Tables, as in Calc and Excel; a refresh follows changed figures, new groups and vanished groups, clears the rows the new table no longer covers, and is one undo step. XLSX saves the results as values and the save warning says the pivot definition is not kept; reopening gives the values with no pivot. Does not certify an OOXML or ODS pivot definition round trip, more than one row, column or value field from the dialog, or Excel pivot compatibility.",
+      "status": "verified",
+      "revision": "ee8626d932491f3e4defd85bb925e7e98386bc27",
+      "requires": ["model", "format", "gui"],
+      "evidence": {
+        "model": [
+          "tables-core::pivot_and_protection_tests::test_pivot_table_evaluation_and_placement",
+          "tables-core::pivot_and_protection_tests::a_pivot_built_from_dialog_choices_inserts_and_undoes_as_one_step",
+          "tables-core::pivot_and_protection_tests::a_pivot_needs_a_data_row_and_fields_inside_the_selection",
+          "tables-core::pivot_and_protection_tests::refreshing_a_pivot_follows_source_edits_and_undoes_as_one_step",
+          "tables-core::pivot_and_protection_tests::a_pivot_cannot_be_placed_inside_its_source_and_refresh_needs_one"
+        ],
+        "format": [
+          "tables-core::pivot_and_protection_tests::test_pivot_column_fields_create_cross_tab_intersections"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::TablesPivotSmoke::test_a_pivot_from_the_dialog_follows_a_refresh_and_undo"
+        ]
+      }
+    },
+    {
       "id": "tables.chart.multi-series-edit",
       "app": "tables",
       "issue": 1658,

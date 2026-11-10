@@ -1117,6 +1117,11 @@ pub struct PivotTableSpec {
     pub row_fields: Vec<PivotField>,
     pub col_fields: Vec<PivotField>,
     pub data_fields: Vec<PivotDataField>,
+    /// Rows and columns of the table last written at `target_cell`, so a
+    /// refresh can clear what the new table no longer covers. (0, 0)
+    /// before the pivot is first written.
+    #[cfg_attr(feature = "collab", serde(default))]
+    pub extent: (usize, usize),
 }
 
 impl PivotAggFunc {
@@ -1157,9 +1162,11 @@ impl PivotTableSpec {
     /// A pivot over `range` with rows grouped by field `row`, optionally
     /// split into columns by field `column`, summarizing field `value` with
     /// `func`. Fields are offsets into the range's columns, as
-    /// [`Self::source_fields`] lists them. It is placed two columns right
-    /// of the range, level with its header, so it overwrites none of it.
-    /// `None` when a field is out of range or the range has no data rows.
+    /// [`Self::source_fields`] lists them. It is placed at `target`, or
+    /// by default ([`Self::default_target`]) two columns right of the range,
+    /// level with its header. `None` when a field is out of range, the range
+    /// has no data rows, or `target` lies inside the range, which the pivot
+    /// would overwrite.
     pub fn from_choice(
         sheet: &SheetModel,
         range: (usize, usize, usize, usize),
@@ -1167,7 +1174,13 @@ impl PivotTableSpec {
         column: Option<usize>,
         value: usize,
         func: PivotAggFunc,
+        target: Option<(usize, usize)>,
     ) -> Option<Self> {
+        let target = target.unwrap_or_else(|| Self::default_target(range));
+        let (r0, c0, r1, c1) = range;
+        if (r0..=r1).contains(&target.0) && (c0..=c1).contains(&target.1) {
+            return None;
+        }
         let fields = Self::source_fields(sheet, range);
         let field = |i: usize| fields.get(i).map(|name| PivotField { col_index: range.1 + i, name: name.clone() });
         let row_field = field(row)?;
@@ -1179,11 +1192,18 @@ impl PivotTableSpec {
         Some(PivotTableSpec {
             name: format!("Pivot{}", sheet.pivot_tables.len() + 1),
             source_range: range,
-            target_cell: (range.0, range.3 + 2),
+            target_cell: target,
             row_fields: vec![row_field],
             col_fields,
             data_fields: vec![PivotDataField { col_index: value_field.col_index, name: value_field.name, func }],
+            extent: (0, 0),
         })
+    }
+
+    /// Where a pivot over `range` goes unless placed elsewhere: two columns
+    /// to its right, level with its header row.
+    pub fn default_target(range: (usize, usize, usize, usize)) -> (usize, usize) {
+        (range.0, range.3 + 2)
     }
 }
 
