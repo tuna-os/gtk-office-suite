@@ -1,0 +1,39 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentTypingRow: Adw.Bin {
+  styles [
+    "room-history-row",
+  ]
+
+  accessibility {
+    labelled-by: [
+      label,
+    ];
+  }
+
+  Gtk.Revealer {
+    transition-type: slide_up;
+    reveal-child: bind template.is-empty inverted;
+
+    child: Gtk.Box {
+      spacing: 9;
+
+      $OverlappingAvatars avatar_list {
+        avatar-size: 30;
+        spacing: 2;
+        max-avatars: 5;
+        accessible-role: presentation;
+      }
+
+      Gtk.Label label {
+        use-markup: true;
+        ellipsize: end;
+
+        styles [
+          "dimmed",
+        ]
+      }
+    };
+  }
+}

@@ -1,0 +1,117 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $UserSessionListSubpage: Adw.NavigationPage {
+  title: _("Sessions");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup link_device_group {
+        visible: false;
+
+        Gtk.ListBox {
+          styles [
+            "boxed-list",
+          ]
+
+          Adw.ButtonRow {
+            selectable: false;
+            title: _("Link New Device…");
+            start-icon-name: "devices-symbolic";
+            action-name: "account-settings.show-subpage";
+            action-target: "'link-new-device'";
+          }
+        }
+      }
+
+      Adw.PreferencesGroup current_session_group {
+        title: _("Current Session");
+
+        Gtk.ListBox current_session {
+          row-activated => $show_session_subpage() swapped;
+
+          styles [
+            "content",
+          ]
+
+          accessibility {
+            label: _("Current Session");
+          }
+        }
+      }
+
+      Adw.PreferencesGroup other_sessions_group {
+        title: _("Other Active Sessions");
+
+        Gtk.Stack stack {
+          transition-type: crossfade;
+
+          Gtk.StackPage {
+            name: "loading";
+
+            child: Adw.Spinner {
+              width-request: 32;
+              height-request: 32;
+              halign: center;
+              margin-top: 24;
+              margin-bottom: 24;
+            };
+          }
+
+          Gtk.StackPage {
+            name: "list";
+
+            child: Gtk.ListBox other_sessions {
+              row-activated => $show_session_subpage() swapped;
+
+              styles [
+                "content",
+              ]
+
+              accessibility {
+                label: _("Other Active Sessions");
+              }
+            };
+          }
+
+          Gtk.StackPage {
+            name: "error";
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              margin-top: 24;
+              margin-bottom: 24;
+
+              Gtk.Label {
+                wrap: true;
+                wrap-mode: word_char;
+                label: _("Could not load the list of connected devices");
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              Gtk.Button {
+                can-shrink: true;
+                label: _("Try Again");
+                halign: center;
+                action-name: "account-settings.reload-user-sessions";
+
+                styles [
+                  "suggested-action",
+                  "standalone-button",
+                  "pill",
+                ]
+              }
+            };
+          }
+        }
+      }
+    };
+  };
+}

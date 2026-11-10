@@ -1,0 +1,5061 @@
+# British English translation for fractal.
+# Copyright (C) 2019 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Zander Brown <zbrown@gnome.org>, 2019.
+# Bruce Cowan <bruce@bcowan.me.uk>, 2019-2024.
+# Andi Chandler <andi@gowling.com>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal master\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2024-04-16 09:49+0000\n"
+"PO-Revision-Date: 2024-04-18 21:04+0100\n"
+"Last-Translator: Bruce Cowan <bruce@bcowan.me.uk>\n"
+"Language-Team: English - United Kingdom <en@li.org>\n"
+"Language: en_GB\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Gtranslator 46.0\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7 src/window.ui:8
+msgid "Fractal"
+msgstr "Fractal"
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr ""
+"Fractal is a decentralised, secure messaging client for collaborative group "
+"communication."
+
+#: data/org.gnome.Fractal.desktop.in.in:5
+msgid "Fractal group messaging"
+msgstr "Fractal group messaging"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:14
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "Window width"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "Window height"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "Window maximised state"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "Enable markdown formatting"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "Whether messages should be processed as markdown when sending them"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "Session settings"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "Serialised list of settings per session"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "Current session"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "Chat on Matrix"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+msgstr ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimised for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "Highlights:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"Find rooms to discuss your favourite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "Send rich formatted messages, files, or your current location"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+msgstr ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "View images, and play audio and video directly in the conversation"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "See who has read messages, and who is typing"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr "Log into multiple accounts at once (with Single-Sign On support)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "Fractal’s main window"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "View the media history of a Matrix room"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "Fractal’s interface adapts to small screens"
+
+#: src/account_chooser_dialog/mod.ui:4 src/account_chooser_dialog/mod.ui:33
+msgid "Select an Account"
+msgstr "Select an Account"
+
+#: src/account_chooser_dialog/mod.ui:62
+msgid "Select the account you want to open the URI with"
+msgstr "Select the account you want to open the URI with"
+
+#: src/account_switcher/account_switcher_button.ui:14
+msgid "Switch Accounts"
+msgstr "Switch Accounts"
+
+#: src/account_switcher/account_switcher_popover.ui:38
+msgid "_Add Account"
+msgstr "_Add Account"
+
+#: src/account_switcher/session_item.ui:56
+#: src/account_switcher/session_item.ui:58
+#: src/session/view/account_settings/mod.ui:4
+msgid "Account Settings"
+msgstr "Account Settings"
+
+#: src/application.rs:192
+msgid "The Fractal Team"
+msgstr "The Fractal Team"
+
+#: src/application.rs:198
+msgid "© 2017-2024 The Fractal Team"
+msgstr "© 2017-2024 The Fractal Team"
+
+#: src/application.rs:212
+msgid "translator-credits"
+msgstr ""
+"Zander Brown <zbrown@gnome.org>\n"
+"Bruce Cowan <bruce@bcowan.me.uk>\n"
+"Andi Chandler <andi@gowling.com>"
+
+#. This can't be added via the builder
+#: src/application.rs:216
+msgid "Name by"
+msgstr "Name by"
+
+#: src/application.rs:302
+msgid "Session not found"
+msgstr "Session not found"
+
+#: src/components/action_button.ui:34
+msgid "Confirm Change"
+msgstr "Confirm Change"
+
+#: src/components/action_button.ui:54 src/components/rows/loading_row.ui:26
+#: src/session/view/account_settings/user_sessions_page/mod.ui:89
+#: src/session/view/content/room_history/mod.ui:216
+msgid "Try Again"
+msgstr "Try Again"
+
+#: src/components/action_button.ui:67 src/components/spinner.rs:31
+#: src/login/session_setup_view.ui:15
+#: src/session/view/content/explore/mod.ui:53
+#: src/session/view/content/room_history/mod.ui:188 src/window.ui:18
+msgid "Loading"
+msgstr "Loading"
+
+#: src/components/action_button.ui:88
+msgid "Success"
+msgstr "Success"
+
+#: src/components/action_button.ui:107
+msgid "Warning"
+msgstr "Warning"
+
+#: src/components/action_button.ui:125 src/error_page.ui:10
+#: src/session/view/account_settings/user_sessions_page/mod.ui:84
+#: src/session/view/content/room_details/invite_subpage/mod.ui:108
+#: src/session/view/create_dm_dialog/mod.ui:104 src/window.ui:75
+msgid "Error"
+msgstr "Error"
+
+#: src/components/auth_dialog.rs:236
+msgid "Please authenticate the operation with your password"
+msgstr "Please authenticate the operation with your password"
+
+#: src/components/auth_dialog.rs:275
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+
+#: src/components/auth_dialog.ui:4
+msgid "Authentication"
+msgstr "Authentication"
+
+#: src/components/auth_dialog.ui:20
+msgid "Authenticate via Browser"
+msgstr "Authenticate via Browser"
+
+#: src/components/auth_dialog.ui:43
+#: src/session/view/content/room_details/invite_subpage/mod.ui:13
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:14
+msgid "_Cancel"
+msgstr "_Cancel"
+
+#: src/components/auth_dialog.ui:44
+msgid "C_onfirm"
+msgstr "C_onfirm"
+
+#: src/components/crypto/identity_setup_view.rs:273
+#: src/session/view/account_settings/security_page/mod.rs:241
+msgid "Reset Crypto Identity"
+msgstr "Reset Crypto Identity"
+
+#: src/components/crypto/identity_setup_view.rs:275
+msgid "This will invalidate the verifications of all users and sessions."
+msgstr "This will invalidate the verifications of all users and sessions."
+
+#: src/components/crypto/identity_setup_view.rs:279
+#: src/components/crypto/identity_setup_view.ui:85
+#: src/components/crypto/recovery_setup_view.ui:98
+#: src/components/crypto/recovery_setup_view.ui:189
+#: src/session/view/account_settings/security_page/mod.rs:238
+#: src/session/view/account_settings/security_page/mod.rs:306
+msgid "Reset"
+msgstr "Reset"
+
+#: src/components/crypto/identity_setup_view.rs:284
+msgid ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+msgstr ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+
+#: src/components/crypto/identity_setup_view.rs:286
+msgid ""
+"Since no other sessions are available to verify this device and account "
+"recovery cannot be used, you need to reset your crypto identity."
+msgstr ""
+"Since no other sessions are available to verify this device and account "
+"recovery cannot be used, you need to reset your crypto identity."
+
+#: src/components/crypto/identity_setup_view.rs:290
+#: src/components/crypto/identity_setup_view.ui:125
+msgid "Set Up Crypto Identity"
+msgstr "Set Up Crypto Identity"
+
+#: src/components/crypto/identity_setup_view.rs:292
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr "You need to set up a crypto identity, since it has never been created."
+
+#: src/components/crypto/identity_setup_view.rs:295
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+
+#: src/components/crypto/identity_setup_view.rs:299
+#: src/components/crypto/recovery_setup_view.ui:285
+msgid "Set Up"
+msgstr "Set Up"
+
+#: src/components/crypto/identity_setup_view.rs:422
+#: src/identity_verification_view/cancelled_page.rs:185
+msgid "Could not send a new verification request"
+msgstr "Could not send a new verification request"
+
+#: src/components/crypto/identity_setup_view.rs:473
+#: src/components/crypto/recovery_setup_view.rs:336
+msgid "Could not create the crypto identity"
+msgstr "Could not create the crypto identity"
+
+#: src/components/crypto/identity_setup_view.ui:9
+#: src/components/crypto/identity_setup_view.ui:35
+msgid "Verify Your New Session"
+msgstr "Verify Your New Session"
+
+#: src/components/crypto/identity_setup_view.ui:46
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+
+#: src/components/crypto/identity_setup_view.ui:55
+msgid "Verify With Another Session"
+msgstr "Verify With Another Session"
+
+#: src/components/crypto/identity_setup_view.ui:65
+msgid "No other devices logged into this account?"
+msgstr "No other devices logged into this account?"
+
+#: src/components/crypto/identity_setup_view.ui:74
+#: src/components/crypto/recovery_setup_view.ui:9
+#: src/components/crypto/recovery_setup_view.ui:35
+msgid "Recover Account"
+msgstr "Recover Account"
+
+#: src/components/crypto/identity_setup_view.ui:106
+#: src/identity_verification_view/mod.ui:5 src/session/view/content/mod.ui:70
+msgid "Identity Verification"
+msgstr "Identity Verification"
+
+#: src/components/crypto/recovery_setup_view.rs:174
+msgid "Reset Crypto Identity and Account Recovery Key"
+msgstr "Reset Crypto Identity and Account Recovery Key"
+
+#: src/components/crypto/recovery_setup_view.rs:176
+#: src/session/view/account_settings/security_page/mod.rs:309
+msgid "Reset Account Recovery Key"
+msgstr "Reset Account Recovery Key"
+
+#: src/components/crypto/recovery_setup_view.rs:182
+msgid ""
+"This will invalidate the verifications of all users and sessions, and you "
+"might not be able to read your encrypted messages anymore."
+msgstr ""
+"This will invalidate the verifications of all users and sessions, and you "
+"might not be able to read your encrypted messages any more."
+
+#: src/components/crypto/recovery_setup_view.rs:184
+msgid "You might not be able to read your encrypted messages anymore."
+msgstr "You might not be able to read your encrypted messages any more."
+
+#: src/components/crypto/recovery_setup_view.rs:199
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+
+#: src/components/crypto/recovery_setup_view.rs:201
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+
+#: src/components/crypto/recovery_setup_view.rs:285
+msgid "The recovery passphrase or key is invalid"
+msgstr "The recovery passphrase or key is invalid"
+
+#: src/components/crypto/recovery_setup_view.rs:288
+msgid "Could not access recovery data"
+msgstr "Could not access recovery data"
+
+#: src/components/crypto/recovery_setup_view.rs:371
+msgid "Could not reset account recovery key"
+msgstr "Could not reset account recovery key"
+
+#: src/components/crypto/recovery_setup_view.rs:409
+msgid "Could not enable account recovery"
+msgstr "Could not enable account recovery"
+
+#: src/components/crypto/recovery_setup_view.ui:46
+msgid "Restore full access to your account."
+msgstr "Restore full access to your account."
+
+#: src/components/crypto/recovery_setup_view.ui:54
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+
+#: src/components/crypto/recovery_setup_view.ui:67
+msgid "Recovery Passphrase or Key"
+msgstr "Recovery Passphrase or Key"
+
+#: src/components/crypto/recovery_setup_view.ui:77
+#: src/session/view/account_settings/security_page/mod.rs:326
+#: src/session/view/sidebar/mod.rs:315
+msgid "Recover"
+msgstr "Recover"
+
+#: src/components/crypto/recovery_setup_view.ui:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "Lost your recovery passphrase or key?"
+
+#: src/components/crypto/recovery_setup_view.ui:161
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+
+#: src/components/crypto/recovery_setup_view.ui:169
+#: src/components/crypto/recovery_setup_view.ui:264
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+
+#: src/components/crypto/recovery_setup_view.ui:182
+#: src/components/crypto/recovery_setup_view.ui:277
+msgid "Recovery Passphrase (Optional)"
+msgstr "Recovery Passphrase (Optional)"
+
+#: src/components/crypto/recovery_setup_view.ui:211
+#: src/components/crypto/recovery_setup_view.ui:237
+msgid "Set Up Account Recovery"
+msgstr "Set Up Account Recovery"
+
+#: src/components/crypto/recovery_setup_view.ui:248
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+
+#: src/components/crypto/recovery_setup_view.ui:256
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+
+#: src/components/crypto/recovery_setup_view.ui:307
+#: src/components/crypto/recovery_setup_view.ui:334
+msgid "Account Recovery Set Up Successfully"
+msgstr "Account Recovery Set Up Successfully"
+
+#: src/components/crypto/recovery_setup_view.ui:371
+msgid "Copy Recovery Key"
+msgstr "Copy Recovery Key"
+
+#: src/components/crypto/recovery_setup_view.ui:388
+#: src/components/crypto/recovery_setup_view.ui:473
+msgid "OK"
+msgstr "OK"
+
+#: src/components/crypto/recovery_setup_view.ui:410
+#: src/components/crypto/recovery_setup_view.ui:437
+#: src/session/view/account_settings/security_page/mod.rs:321
+msgid "Account Recovery Incomplete"
+msgstr "Account Recovery Incomplete"
+
+#: src/components/crypto/recovery_setup_view.ui:448
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "The recovery was successful but the recovery data was incomplete."
+
+#: src/components/crypto/recovery_setup_view.ui:456
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+
+#: src/components/crypto/recovery_setup_view.ui:464
+msgid ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+msgstr ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+
+#: src/components/editable_avatar.rs:349
+msgid "Images"
+msgstr "Images"
+
+#: src/components/editable_avatar.rs:354
+msgid "Choose Avatar"
+msgstr "Choose Avatar"
+
+#: src/components/editable_avatar.rs:356
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:202
+msgid "Choose"
+msgstr "Choose"
+
+#: src/components/editable_avatar.rs:370
+msgid "Could not open avatar file"
+msgstr "Could not open avatar file"
+
+#: src/components/editable_avatar.rs:391
+msgid "The chosen file is not an image"
+msgstr "The chosen file is not an image"
+
+#: src/components/editable_avatar.rs:397
+msgid "Could not determine the type of the chosen file"
+msgstr "Could not determine the type of the chosen file"
+
+#: src/components/editable_avatar.ui:54
+msgid "Remove Avatar"
+msgstr "Remove Avatar"
+
+#: src/components/editable_avatar.ui:71
+msgid "Select New Avatar"
+msgstr "Select New Avatar"
+
+#: src/components/offline_banner.rs:96
+msgid "Offline"
+msgstr "Offline"
+
+#: src/components/offline_banner.rs:103
+msgid "No network connection"
+msgstr "No network connection"
+
+#: src/components/offline_banner.rs:106
+msgid "No Internet connection"
+msgstr "No Internet connection"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/join_room_dialog.rs:191
+#: src/session/view/content/explore/public_room_row.rs:168
+#: src/session/view/content/room_history/mod.rs:959
+#: src/session/view/content/room_history/state_row/tombstone.rs:88
+msgid "View"
+msgstr "View"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/join_room_dialog.rs:194 src/components/join_room_dialog.ui:91
+msgid "Look Up"
+msgstr "Look Up"
+
+#: src/components/join_room_dialog.rs:257
+msgid ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+msgstr ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/join_room_dialog.rs:279
+#: src/session/view/content/explore/public_room_row.rs:149
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "1 member"
+msgstr[1] "{n} members"
+
+#: src/components/join_room_dialog.ui:4 src/components/join_room_dialog.ui:38
+msgid "Join a Room"
+msgstr "Join a Room"
+
+#: src/components/join_room_dialog.ui:17 src/login/greeter.ui:16
+#: src/login/greeter.ui:18
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:19
+#: src/session/view/media_viewer.ui:56 src/session/view/media_viewer.ui:58
+msgid "Back"
+msgstr "Back"
+
+#: src/components/join_room_dialog.ui:72
+msgid "Enter a room ID, room alias, or permalink to look up a room"
+msgstr "Enter a room ID, room alias, or permalink to look up a room"
+
+#: src/components/join_room_dialog.ui:191
+#: src/session/view/content/explore/public_room_row.rs:170
+#: src/session/view/content/room_history/mod.rs:962
+#: src/session/view/content/room_history/state_row/tombstone.rs:90
+msgid "Join"
+msgstr "Join"
+
+#: src/components/location_viewer.rs:135
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "Location at latitude {latitude} and longitude {longitude}"
+
+#: src/components/media_content_viewer.rs:132
+msgid "Image not Viewable"
+msgstr "Image not Viewable"
+
+#: src/components/media_content_viewer.rs:133
+msgid "Audio Clip not Playable"
+msgstr "Audio Clip not Playable"
+
+#: src/components/media_content_viewer.rs:134
+msgid "Video not Playable"
+msgstr "Video not Playable"
+
+#: src/components/media_content_viewer.rs:135
+msgid "File not Viewable"
+msgstr "File not Viewable"
+
+#: src/components/reaction_chooser.ui:7
+msgid "Send a Reaction"
+msgstr "Send a Reaction"
+
+#: src/components/reaction_chooser.ui:17
+msgid "More Reactions"
+msgstr "More Reactions"
+
+#. Translators: As in 'Custom role'.
+#. Translators: As in, 'Custom power level'.
+#: src/components/power_level_selection/popover.ui:149
+#: src/session/model/room/permissions.rs:73
+msgid "Custom"
+msgstr "Custom"
+
+#: src/components/power_level_selection/popover.ui:164
+msgid "Confirm Custom Role"
+msgstr "Confirm Custom Role"
+
+#: src/components/user_page.rs:264
+#: src/session/view/account_settings/general_page/mod.ui:74
+#: src/session/view/content/room_history/sender_avatar/mod.rs:80
+msgid "Matrix user ID copied to clipboard"
+msgstr "Matrix user ID copied to clipboard"
+
+#: src/components/user_page.rs:286
+msgid "Open Direct Chat"
+msgstr "Open Direct Chat"
+
+#: src/components/user_page.rs:288
+msgid "Create Direct Chat"
+msgstr "Create Direct Chat"
+
+#: src/components/user_page.rs:312
+#: src/session/view/content/room_history/sender_avatar/mod.rs:517
+#: src/session/view/create_dm_dialog/mod.rs:198
+msgid "Could not create a new Direct Chat"
+msgstr "Could not create a new Direct Chat"
+
+#: src/components/user_page.rs:345
+msgid "In {room_name}"
+msgstr "In {room_name}"
+
+#. Translators: As in, 'The room member was invited'.
+#: src/components/user_page.rs:356
+msgctxt "member"
+msgid "Invited"
+msgstr "Invited"
+
+#. Translators: As in, 'The room member was banned'.
+#: src/components/user_page.rs:361
+msgctxt "member"
+msgid "Banned"
+msgstr "Banned"
+
+#. Translators: As in, 'The room member knocked to request access to the room'.
+#: src/components/user_page.rs:366
+msgctxt "member"
+msgid "Knocked"
+msgstr "Knocked"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:371
+msgctxt "member"
+msgid "Unknown"
+msgstr "Unknown"
+
+#: src/components/user_page.rs:392
+msgid "Allow Access"
+msgstr "Allow Access"
+
+#: src/components/user_page.rs:404 src/utils/message_dialog.rs:121
+msgid "Revoke Invite"
+msgstr "Revoke Invite"
+
+#: src/components/user_page.rs:405 src/utils/message_dialog.rs:137
+msgid "Deny Access"
+msgstr "Deny Access"
+
+#. Translators: As in, 'Kick room member'.
+#. // Translators: As in, 'Kick room member'.
+#: src/components/user_page.rs:407
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:221
+#: src/utils/message_dialog.rs:159
+msgid "Kick"
+msgstr "Kick"
+
+#: src/components/user_page.rs:494
+msgid "Could not change the role"
+msgstr "Could not change the role"
+
+#: src/components/user_page.rs:516
+#: src/session/view/content/room_history/sender_avatar/mod.rs:541
+msgid "Could not invite user"
+msgstr "Could not invite user"
+
+#: src/components/user_page.rs:550
+#: src/session/view/content/room_history/sender_avatar/mod.rs:574
+msgid "Could not revoke invite of user"
+msgstr "Could not revoke invite of user"
+
+#: src/components/user_page.rs:551
+#: src/session/view/content/room_history/sender_avatar/mod.rs:575
+msgid "Could not deny access to user"
+msgstr "Could not deny access to user"
+
+#: src/components/user_page.rs:552
+#: src/session/view/content/room_history/sender_avatar/mod.rs:576
+msgid "Could not kick user"
+msgstr "Could not kick user"
+
+#: src/components/user_page.rs:598
+#: src/session/view/content/room_history/sender_avatar/mod.rs:661
+msgid "Could not ban user"
+msgstr "Could not ban user"
+
+#: src/components/user_page.rs:626
+#: src/session/view/content/room_history/sender_avatar/mod.rs:681
+msgid "Could not unban user"
+msgstr "Could not unban user"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:674
+#: src/session/view/content/room_history/sender_avatar/mod.rs:735
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "Could not remove 1 message sent by the user"
+msgstr[1] "Could not remove {n} messages sent by the user"
+
+#: src/components/user_page.rs:691
+msgid "Identity verified"
+msgstr "Identity verified"
+
+#: src/components/user_page.rs:698
+msgid "Identity not verified"
+msgstr "Identity not verified"
+
+#: src/components/user_page.rs:714
+msgid "Could not start user verification"
+msgstr "Could not start user verification"
+
+#: src/components/user_page.rs:740
+msgid "Ignored"
+msgstr "Ignored"
+
+#: src/components/user_page.rs:742
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.ui:30
+msgid "Stop Ignoring"
+msgstr "Stop Ignoring"
+
+#: src/components/user_page.rs:745
+msgid "Not Ignored"
+msgstr "Not Ignored"
+
+#: src/components/user_page.rs:746
+msgid "Ignore"
+msgstr "Ignore"
+
+#: src/components/user_page.rs:763
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.rs:100
+#: src/session/view/content/room_history/sender_avatar/mod.rs:760
+msgid "Could not stop ignoring user"
+msgstr "Could not stop ignoring user"
+
+#: src/components/user_page.rs:766
+#: src/session/view/content/room_history/sender_avatar/mod.rs:763
+msgid "Could not ignore user"
+msgstr "Could not ignore user"
+
+#: src/components/user_page.ui:68
+#: src/session/view/account_settings/general_page/mod.ui:73
+#: src/session/view/content/room_history/sender_avatar/mod.ui:27
+msgid "Copy Matrix User ID to Clipboard"
+msgstr "Copy Matrix User ID to Clipboard"
+
+#: src/components/user_page.ui:113
+msgid "Role"
+msgstr "Role"
+
+#: src/components/user_page.ui:126
+msgid "Power Level"
+msgstr "Power Level"
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/user_page.ui:168
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:233
+#: src/utils/message_dialog.rs:92
+msgid "Ban"
+msgstr "Ban"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.ui:180
+msgid "Unban"
+msgstr "Unban"
+
+#: src/components/user_page.ui:195
+msgid "Remove Messages"
+msgstr "Remove Messages"
+
+#: src/components/user_page.ui:209
+#: src/session/view/account_settings/security_page/mod.ui:5
+msgid "Security"
+msgstr "Security"
+
+#: src/components/user_page.ui:236
+#: src/identity_verification_view/accept_request_page.ui:58
+#: src/session/view/account_settings/security_page/mod.rs:257
+#: src/session/view/content/room_history/verification_info_bar.rs:165
+#: src/session/view/sidebar/mod.rs:308
+msgid "Verify"
+msgstr "Verify"
+
+#: src/components/user_profile_dialog.ui:4
+msgid "User Profile"
+msgstr "User Profile"
+
+#: src/contrib/qr_code_scanner/mod.ui:13 src/contrib/qr_code_scanner/mod.ui:26
+msgid "Could Not Connect to Camera"
+msgstr "Could Not Connect to Camera"
+
+#: src/contrib/qr_code_scanner/mod.ui:36
+msgid "Camera"
+msgstr "Camera"
+
+#. Translators: This is the widget where we see a camera's output
+#: src/contrib/qr_code_scanner/mod.ui:41
+msgid "Viewfinder"
+msgstr "Viewfinder"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "QR Code"
+
+#: src/error_page.ui:25
+msgid "Secret Service Error"
+msgstr "Secret Service Error"
+
+#: src/error_page.ui:39
+msgid ""
+"Fractal relies on a Secret Service Provider to manage your sensitive session "
+"information and an error occurred while we were trying to store or get your "
+"session."
+msgstr ""
+"Fractal relies on a Secret Service Provider to manage your sensitive session "
+"information and an error occurred while we were trying to store or get your "
+"session."
+
+#: src/error_page.ui:51
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Service:"
+msgstr ""
+"Here are a few things that might help you fix issues with the Secret Service:"
+
+#: src/error_page.ui:68
+msgid ""
+"Make sure you have a Secret Service Provider installed, like gnome-keyring."
+msgstr ""
+"Make sure you have a Secret Service Provider installed, like gnome-keyring."
+
+#: src/error_page.ui:87
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "Check that you have a default keyring and that it is unlocked."
+
+#: src/error_page.ui:99
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+
+#: src/error_page.ui:115
+msgid "Could Not Initialize Session"
+msgstr "Could Not Initialise Session"
+
+#: src/identity_verification_view/accept_request_page.rs:128
+msgid "Login Request From Another Session"
+msgstr "Login Request From Another Session"
+
+#: src/identity_verification_view/accept_request_page.rs:130
+msgid "Verify the new session from the current session."
+msgstr "Verify the new session from the current session."
+
+#: src/identity_verification_view/accept_request_page.rs:133
+#: src/identity_verification_view/choose_method_page.rs:178
+#: src/identity_verification_view/sas_page.rs:155
+#: src/identity_verification_view/scan_qr_code_page.rs:167
+msgid "Verification Request"
+msgstr "Verification Request"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:137
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+
+#: src/identity_verification_view/accept_request_page.rs:160
+msgid "Could not decline verification request"
+msgstr "Could not decline verification request"
+
+#: src/identity_verification_view/accept_request_page.rs:176
+msgid "Could not accept verification request"
+msgstr "Could not accept verification request"
+
+#: src/identity_verification_view/accept_request_page.ui:47
+#: src/session/view/content/room_history/verification_info_bar.rs:166
+#: src/utils/message_dialog.rs:27
+msgid "Decline"
+msgstr "Decline"
+
+#: src/identity_verification_view/cancelled_page.rs:134
+msgid "The verification was cancelled from the other session."
+msgstr "The verification was cancelled from the other session."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:140
+msgid "The verification was cancelled by {user}."
+msgstr "The verification was cancelled by {user}."
+
+#: src/identity_verification_view/cancelled_page.rs:146
+msgid "The verification process failed because it reached a timeout."
+msgstr "The verification process failed because it reached a timeout."
+
+#: src/identity_verification_view/cancelled_page.rs:148
+msgid "You accepted the request from another session."
+msgstr "You accepted the request from another session."
+
+#: src/identity_verification_view/cancelled_page.rs:151
+msgid "The emoji did not match."
+msgstr "The emoji did not match."
+
+#: src/identity_verification_view/cancelled_page.rs:153
+msgid "The numbers did not match."
+msgstr "The numbers did not match."
+
+#: src/identity_verification_view/cancelled_page.rs:156
+msgid "An unexpected error happened during the verification process."
+msgstr "An unexpected error happened during the verification process."
+
+#: src/identity_verification_view/cancelled_page.rs:161
+#: src/identity_verification_view/mod.ui:113
+msgid "Verification Cancelled"
+msgstr "Verification Cancelled"
+
+#: src/identity_verification_view/cancelled_page.rs:163
+msgid "Verification Error"
+msgstr "Verification Error"
+
+#: src/identity_verification_view/cancelled_page.ui:41
+msgid "Send New Request"
+msgstr "Send New Request"
+
+#: src/identity_verification_view/cancelled_page.ui:52
+#: src/identity_verification_view/completed_page.ui:47
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#: src/identity_verification_view/choose_method_page.rs:170
+#: src/identity_verification_view/sas_page.rs:143
+#: src/identity_verification_view/scan_qr_code_page.rs:162
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:74
+msgid "Verify Session"
+msgstr "Verify Session"
+
+#: src/identity_verification_view/choose_method_page.rs:174
+msgid "Scan this QR code from the other session."
+msgstr "Scan this QR code from the other session."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:184
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "Ask {user} to scan this QR code from their session."
+
+#: src/identity_verification_view/choose_method_page.rs:193
+msgid "Select a verification method to proceed."
+msgstr "Select a verification method to proceed."
+
+#: src/identity_verification_view/choose_method_page.rs:196
+msgid "Click on the verification method to proceed."
+msgstr "Click on the verification method to proceed."
+
+#: src/identity_verification_view/choose_method_page.rs:228
+msgid "Could not access camera"
+msgstr "Could not access camera"
+
+#: src/identity_verification_view/choose_method_page.rs:245
+#: src/identity_verification_view/scan_qr_code_page.rs:239
+msgid "Could not start emoji verification"
+msgstr "Could not start emoji verification"
+
+#: src/identity_verification_view/choose_method_page.rs:261
+#: src/identity_verification_view/confirm_qr_code_page.rs:175
+#: src/identity_verification_view/qr_code_scanned_page.rs:143
+#: src/identity_verification_view/scan_qr_code_page.rs:255
+#: src/identity_verification_view/wait_for_other_page.rs:162
+msgid "Could not cancel the verification"
+msgstr "Could not cancel the verification"
+
+#: src/identity_verification_view/choose_method_page.ui:51
+#: src/identity_verification_view/scan_qr_code_page.ui:48
+msgid "Can’t scan QR code?"
+msgstr "Can’t scan QR code?"
+
+#: src/identity_verification_view/choose_method_page.ui:60
+msgid "Scan QR code with this session"
+msgstr "Scan QR code with this session"
+
+#: src/identity_verification_view/choose_method_page.ui:69
+#: src/identity_verification_view/scan_qr_code_page.ui:66
+msgid "Compare Emoji"
+msgstr "Compare Emoji"
+
+#: src/identity_verification_view/choose_method_page.ui:80
+#: src/identity_verification_view/no_supported_methods_page.rs:163
+#: src/identity_verification_view/qr_code_scanned_page.ui:48
+#: src/identity_verification_view/scan_qr_code_page.ui:77
+msgid "Cancel Verification"
+msgstr "Cancel Verification"
+
+#: src/identity_verification_view/completed_page.rs:120
+msgid "Request Complete"
+msgstr "Request Complete"
+
+#: src/identity_verification_view/completed_page.rs:122
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "The new session is now ready to send and receive secure messages."
+
+#: src/identity_verification_view/completed_page.rs:126
+msgid "Verification Complete"
+msgstr "Verification Complete"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:129
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:127
+msgid "Does the other session show a confirmation?"
+msgstr "Does the other session show a confirmation?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:133
+msgid "Does {user} see a confirmation on their session?"
+msgstr "Does {user} see a confirmation on their session?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:159
+msgid "Could not confirm the scan of the QR Code"
+msgstr "Could not confirm the scan of the QR Code"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:19
+msgid "Confirm Scan"
+msgstr "Confirm Scan"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:47
+msgid "Confirm"
+msgstr "Confirm"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:61
+#: src/session/view/account_settings/general_page/mod.rs:280
+#: src/session/view/content/room_details/general_page/mod.rs:525
+#: src/session/view/content/room_details/general_page/mod.rs:1299
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:588
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:80
+#: src/session/view/content/room_history/item_row.rs:774
+#: src/session/view/content/room_history/item_row.rs:831
+#: src/session/view/content/room_history/message_toolbar/mod.ui:78
+#: src/session/view/content/room_history/message_toolbar/mod.ui:80
+#: src/session/view/content/room_history/verification_info_bar.rs:170
+#: src/utils/message_dialog.rs:51 src/utils/message_dialog.rs:259
+#: src/utils/message_dialog.rs:317 src/utils/message_dialog.rs:352
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/identity_verification_view/mod.ui:14
+msgid "New Identity Verification Request"
+msgstr "New Identity Verification Request"
+
+#: src/identity_verification_view/mod.ui:25
+msgid "Wait for Other Party"
+msgstr "Wait for Other Party"
+
+#: src/identity_verification_view/mod.ui:36
+#: src/identity_verification_view/no_supported_methods_page.ui:22
+msgid "No Supported Verification Methods"
+msgstr "No Supported Verification Methods"
+
+#: src/identity_verification_view/mod.ui:47
+msgid "Verification Request Methods"
+msgstr "Verification Request Methods"
+
+#: src/identity_verification_view/mod.ui:58
+msgid "Scan QR Code"
+msgstr "Scan QR Code"
+
+#: src/identity_verification_view/mod.ui:69
+#: src/identity_verification_view/qr_code_scanned_page.ui:19
+msgid "Scan Complete"
+msgstr "Scan Complete"
+
+#: src/identity_verification_view/mod.ui:80
+msgid "Confirm Scan Result"
+msgstr "Confirm Scan Result"
+
+#: src/identity_verification_view/mod.ui:91
+msgid "Short Authentication String Verification"
+msgstr "Short Authentication String Verification"
+
+#: src/identity_verification_view/mod.ui:102
+msgid "Verification Successful"
+msgstr "Verification Successful"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:134
+msgid ""
+"None of the methods offered by the other client are supported by Fractal."
+msgstr ""
+"None of the methods offered by the other client are supported by Fractal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:137
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:146
+msgid ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+msgstr ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:153
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+
+#: src/identity_verification_view/no_supported_methods_page.rs:165
+msgid "Decline Verification"
+msgstr "Decline Verification"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:187
+msgid "Could not decline the verification"
+msgstr "Could not decline the verification"
+
+#: src/identity_verification_view/no_supported_methods_page.ui:44
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:117
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+msgstr ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:122
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+
+#: src/identity_verification_view/sas_page.rs:146
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr "Check if the same emoji appear in the same order on the other client."
+
+#: src/identity_verification_view/sas_page.rs:150
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr ""
+"Check if the same numbers appear in the same order on the other client."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:160
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:167
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+msgstr ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+
+#: src/identity_verification_view/sas_page.rs:249
+msgid "Could not send that the data does not match"
+msgstr "Could not send that the data does not match"
+
+#: src/identity_verification_view/sas_page.rs:266
+msgid "Could not send confirmation that the data matches"
+msgstr "Could not send confirmation that the data matches"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis do not match.
+#: src/identity_verification_view/sas_page.ui:57
+msgid "Do Not Match"
+msgstr "Do Not Match"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis match.
+#: src/identity_verification_view/sas_page.ui:69
+msgid "Match"
+msgstr "Match"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:164
+msgid "Scan the QR code displayed by the other session."
+msgstr "Scan the QR code displayed by the other session."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:171
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "Scan the QR code shown on the device of {user}."
+
+#: src/identity_verification_view/scan_qr_code_page.rs:212
+msgid "Could not validate scanned QR Code"
+msgstr "Could not validate scanned QR Code"
+
+#: src/identity_verification_view/scan_qr_code_page.ui:57
+msgid "Show a QR code to scan with another device"
+msgstr "Show a QR code to scan with another device"
+
+#: src/identity_verification_view/wait_for_other_page.rs:122
+msgid "Get Another Device"
+msgstr "Get Another Device"
+
+#: src/identity_verification_view/wait_for_other_page.rs:124
+msgid "Accept the verification request from another session or device."
+msgstr "Accept the verification request from another session or device."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:132
+msgid "Waiting for {user}"
+msgstr "Waiting for {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:138
+msgid "Ask {user} to accept the verification request."
+msgstr "Ask {user} to accept the verification request."
+
+#: src/identity_verification_view/wait_for_other_page.ui:41
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+msgstr ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+
+#: src/identity_verification_view/wait_for_other_page.ui:55
+msgid "The request is not showing up on the other device?"
+msgstr "The request is not showing up on the other device?"
+
+#: src/identity_verification_view/wait_for_other_page.ui:64
+msgid "Cancel Verification Request"
+msgstr "Cancel Verification Request"
+
+#: src/login/advanced_dialog.ui:4
+msgid "Homeserver Discovery"
+msgstr "Homeserver Discovery"
+
+#: src/login/advanced_dialog.ui:11
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+msgstr ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+
+#: src/login/advanced_dialog.ui:14
+msgid "_Auto-Discovery"
+msgstr "_Auto-Discovery"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.ui:6 src/login/greeter.ui:91
+msgid "Welcome to Fractal"
+msgstr "Welcome to Fractal"
+
+#: src/login/greeter.ui:26 src/login/greeter.ui:29 src/login/greeter.ui:37
+#: src/login/greeter.ui:40
+msgid "About Fractal"
+msgstr "About Fractal"
+
+#: src/login/greeter.ui:117
+msgid "_Log In"
+msgstr "_Log In"
+
+#: src/login/greeter.ui:130
+msgid "_Create Account"
+msgstr "_Create Account"
+
+#: src/login/homeserver_page.rs:115
+msgid "Domain Name"
+msgstr "Domain Name"
+
+#: src/login/homeserver_page.rs:117
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "The domain of your Matrix homeserver, for example gnome.org"
+
+#: src/login/homeserver_page.rs:120 src/login/method_page.ui:68
+msgid "Homeserver URL"
+msgstr "Homeserver URL"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:124
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "The URL of your Matrix homeserver, for example {address}"
+
+#: src/login/homeserver_page.ui:5 src/login/homeserver_page.ui:42
+#: src/session/view/account_settings/general_page/mod.ui:79
+msgid "Homeserver"
+msgstr "Homeserver"
+
+#: src/login/homeserver_page.ui:100 src/login/method_page.ui:150
+msgid "Next"
+msgstr "Next"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.ui:115
+msgid "Advanced…"
+msgstr "Advanced…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. This is the tooltip text on buttons to log in via Single Sign-On.
+#. The brand is something like Facebook, Apple, GitHub…
+#: src/login/idp_button.rs:121
+msgid "Log in with {brand}"
+msgstr "Log in with {brand}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:129
+msgid "Log in to {domain_name}"
+msgstr "Log in to {domain_name}"
+
+#: src/login/method_page.rs:136
+msgid "Log in"
+msgstr "Log in"
+
+#: src/login/method_page.rs:179
+msgid "More SSO Providers"
+msgstr "More SSO Providers"
+
+#: src/login/method_page.rs:182
+msgid "Login via SSO"
+msgstr "Login via SSO"
+
+#: src/login/method_page.ui:5 src/window.ui:57
+msgid "Log In"
+msgstr "Log In"
+
+#: src/login/method_page.ui:100
+msgid "Matrix Username"
+msgstr "Matrix Username"
+
+#: src/login/method_page.ui:116
+msgid "Password"
+msgstr "Password"
+
+#: src/login/method_page.ui:132
+msgid "Single Sign-On Providers"
+msgstr "Single Sign-On Providers"
+
+#: src/login/mod.rs:465
+msgid "Could not store session"
+msgstr "Could not store session"
+
+#: src/login/mod.ui:25 src/login/mod.ui:59
+msgid "Login Complete"
+msgstr "Login Complete"
+
+#: src/login/mod.ui:80
+msgid "This session is ready to send and receive secure messages"
+msgstr "This session is ready to send and receive secure messages"
+
+#: src/login/mod.ui:86
+msgid "Start Chatting"
+msgstr "Start Chatting"
+
+#: src/login/session_setup_view.ui:5
+msgid "Session Setup"
+msgstr "Session Setup"
+
+#: src/login/sso_page.ui:5 src/login/sso_page.ui:41
+msgid "Single Sign-On"
+msgstr "Single Sign-On"
+
+#: src/login/sso_page.ui:56
+msgid "Please follow the steps in the browser"
+msgstr "Please follow the steps in the browser"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:90
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "Fractal: Matrix credentials for {user_id}"
+
+#: src/secret/linux.rs:143
+msgid "Malformed version in stored session"
+msgstr "Malformed version in stored session"
+
+#: src/secret/linux.rs:168
+msgid "Could not find profile in stored session"
+msgstr "Could not find profile in stored session"
+
+#: src/secret/linux.rs:181
+msgid "Malformed homeserver in stored session"
+msgstr "Malformed homeserver in stored session"
+
+#: src/secret/linux.rs:187
+msgid "Could not find homeserver in stored session"
+msgstr "Could not find homeserver in stored session"
+
+#: src/secret/linux.rs:197
+msgid "Malformed user ID in stored session"
+msgstr "Malformed user ID in stored session"
+
+#: src/secret/linux.rs:203
+msgid "Could not find user ID in stored session"
+msgstr "Could not find user ID in stored session"
+
+#: src/secret/linux.rs:211
+msgid "Could not find device ID in stored session"
+msgstr "Could not find device ID in stored session"
+
+#: src/secret/linux.rs:219
+msgid "Could not find database path in stored session"
+msgstr "Could not find database path in stored session"
+
+#: src/secret/linux.rs:231 src/secret/linux.rs:241
+msgid "Malformed secret in stored session"
+msgstr "Malformed secret in stored session"
+
+#: src/secret/linux.rs:250
+msgid "Could not get secret in stored session"
+msgstr "Could not get secret in stored session"
+
+#: src/secret/linux.rs:413
+msgid "The secret storage file is corrupted."
+msgstr "The secret storage file is corrupted."
+
+#: src/secret/linux.rs:417
+msgid "Could not access the secret storage file location."
+msgstr "Could not access the secret storage file location."
+
+#: src/secret/linux.rs:420
+msgid "An unknown error occurred when accessing the secret storage file."
+msgstr "An unknown error occurred when accessing the secret storage file."
+
+#: src/secret/linux.rs:423
+msgid "The secret storage file has been changed by another process."
+msgstr "The secret storage file has been changed by another process."
+
+#: src/secret/linux.rs:426
+msgid ""
+"An unknown error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr ""
+"An unknown error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+
+#: src/secret/linux.rs:429
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+
+#: src/secret/linux.rs:432
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+
+#: src/secret/linux.rs:435
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr ""
+"The Flatpak Secret Portal provided a key that is too weak to be secure."
+
+#: src/secret/linux.rs:447
+msgid "The item was deleted."
+msgstr "The item was deleted."
+
+#: src/secret/linux.rs:451 src/secret/linux.rs:471
+msgid ""
+"An unknown error occurred when interacting with the D-Bus Secret Service."
+msgstr ""
+"An unknown error occurred when interacting with the D-Bus Secret Service."
+
+#: src/secret/linux.rs:454
+msgid "The collection or item is locked."
+msgstr "The collection or item is locked."
+
+#: src/secret/linux.rs:457
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "The D-Bus Secret Service session does not exist."
+
+#: src/secret/linux.rs:460
+msgid "The collection or item does not exist."
+msgstr "The collection or item does not exist."
+
+#: src/secret/linux.rs:464
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+
+#: src/secret/linux.rs:467
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+
+#: src/session/model/session.rs:827
+msgid "Could not log the session out"
+msgstr "Could not log the session out"
+
+#: src/session/model/room/join_rule.rs:276
+msgid "Only invited users, and users can knock"
+msgstr "Only invited users, and users can knock"
+
+#: src/session/model/room/join_rule.rs:278
+msgid "Only invited users"
+msgstr "Only invited users"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:292
+msgid "Members of {room}, and users can knock"
+msgstr "Members of {room}, and users can knock"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:299
+msgid "Members of {room}"
+msgstr "Members of {room}"
+
+#: src/session/model/room/join_rule.rs:304
+msgid "Any registered user"
+msgstr "Any registered user"
+
+#: src/session/model/room/join_rule.rs:305
+#: src/session/view/content/room_details/general_page/mod.rs:1203
+msgid "Unsupported rule"
+msgstr "Unsupported rule"
+
+#: src/session/model/room/mod.rs:1178
+msgid "Empty Room (was {user})"
+msgstr "Empty Room (was {user})"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/model/room/mod.rs:1181
+msgid "Empty Room"
+msgstr "Empty Room"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/model/room/mod.rs:1191
+msgid "Unknown"
+msgstr "Unknown"
+
+#. Translators: As in 'Default power level'.
+#: src/session/model/room/permissions.rs:71
+msgid "Default"
+msgstr "Default"
+
+#: src/session/model/room/permissions.rs:74
+msgid "Moderator"
+msgstr "Moderator"
+
+#: src/session/model/room/permissions.rs:75
+msgid "Admin"
+msgstr "Admin"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/model/room/permissions.rs:77
+msgid "Muted"
+msgstr "Muted"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/room_list/mod.rs:406
+#: src/session/view/content/room_history/mod.rs:556
+msgid "Could not join room {room_name}. Try again later."
+msgstr "Could not join room {room_name}. Try again later."
+
+#: src/session/model/sidebar_data/category/category_type.rs:29
+msgid "Verifications"
+msgstr "Verifications"
+
+#: src/session/model/sidebar_data/category/category_type.rs:30
+#: src/session/view/content/room_details/invite_subpage/invitee_list.rs:261
+msgid "Invited"
+msgstr "Invited"
+
+#: src/session/model/sidebar_data/category/category_type.rs:31
+msgid "Favorites"
+msgstr "Favourites"
+
+#: src/session/model/sidebar_data/category/category_type.rs:32
+msgid "Rooms"
+msgstr "Rooms"
+
+#: src/session/model/sidebar_data/category/category_type.rs:33
+msgid "Low Priority"
+msgstr "Low Priority"
+
+#: src/session/model/sidebar_data/category/category_type.rs:34
+msgid "Historical"
+msgstr "Historical"
+
+#: src/session/model/sidebar_data/icon_item.rs:30
+msgid "Explore"
+msgstr "Explore"
+
+#: src/session/model/sidebar_data/icon_item.rs:31
+msgid "Forget Room"
+msgstr "Forget Room"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:147
+msgid "Password must be at least 8 characters long"
+msgstr "Password must be at least 8 characters long"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:150
+msgid "Password must have at least one lower-case letter"
+msgstr "Password must have at least one lower-case letter"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:154
+msgid "Password must have at least one upper-case letter"
+msgstr "Password must have at least one upper-case letter"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:157
+msgid "Password must have at least one digit"
+msgstr "Password must have at least one digit"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:159
+msgid "Password must have at least one symbol"
+msgstr "Password must have at least one symbol"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:189
+msgid "Passwords do not match"
+msgstr "Passwords do not match"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:239
+msgid "Password changed successfully"
+msgstr "Password changed successfully"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:251
+msgid "Password rejected for being too weak"
+msgstr "Password rejected for being too weak"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:255
+msgid "Could not change password"
+msgstr "Could not change password"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:58
+msgid "Change Password"
+msgstr "Change Password"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr "Changing your password will log you out of your other sessions."
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "New Password"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:116
+msgid "Confirm New Password"
+msgstr "Confirm New Password"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:147
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:70
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:70
+#: src/session/view/content/room_history/verification_info_bar.rs:169
+msgid "Continue"
+msgstr "Continue"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:139
+msgid "Account successfully deactivated"
+msgstr "Account successfully deactivated"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:148
+msgid "Could not deactivate account"
+msgstr "Could not deactivate account"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:117
+msgid "Deactivate Account"
+msgstr "Deactivate Account"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:41
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files and more, forever."
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:49
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:79
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:87
+msgid ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+msgstr ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:7
+msgid "Log Out of This Session"
+msgstr "Log Out of This Session"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:35
+msgid "Are you sure you want to log out of this session?"
+msgstr "Are you sure you want to log out of this session?"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:58
+msgid "Review Account Security"
+msgstr "Review Account Security"
+
+#: src/session/view/account_settings/general_page/mod.rs:194
+#: src/session/view/content/room_details/general_page/mod.rs:429
+msgid "Avatar removed successfully"
+msgstr "Avatar removed successfully"
+
+#: src/session/view/account_settings/general_page/mod.rs:196
+#: src/session/view/content/room_details/general_page/mod.rs:431
+msgid "Avatar changed successfully"
+msgstr "Avatar changed successfully"
+
+#: src/session/view/account_settings/general_page/mod.rs:215
+#: src/session/view/content/room_details/general_page/mod.rs:454
+msgid "Could not load file"
+msgstr "Could not load file"
+
+#: src/session/view/account_settings/general_page/mod.rs:230
+#: src/session/view/content/room_details/general_page/mod.rs:478
+msgid "Could not upload avatar"
+msgstr "Could not upload avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:259
+#: src/session/view/content/room_details/general_page/mod.rs:499
+msgid "Could not change avatar"
+msgstr "Could not change avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:276
+#: src/session/view/content/room_details/general_page/mod.rs:519
+msgid "Remove Avatar?"
+msgstr "Remove Avatar?"
+
+#: src/session/view/account_settings/general_page/mod.rs:277
+msgid "Do you really want to remove your avatar?"
+msgstr "Do you really want to remove your avatar?"
+
+#: src/session/view/account_settings/general_page/mod.rs:281
+#: src/session/view/content/room_details/general_page/mod.rs:526
+#: src/session/view/content/room_history/item_row.rs:775
+#: src/utils/message_dialog.rs:181
+msgid "Remove"
+msgstr "Remove"
+
+#: src/session/view/account_settings/general_page/mod.rs:315
+#: src/session/view/content/room_details/general_page/mod.rs:552
+msgid "Could not remove avatar"
+msgstr "Could not remove avatar"
+
+#: src/session/view/account_settings/general_page/mod.rs:367
+msgid "Name changed successfully"
+msgstr "Name changed successfully"
+
+#: src/session/view/account_settings/general_page/mod.rs:418
+msgid "Could not change display name"
+msgstr "Could not change display name"
+
+#: src/session/view/account_settings/general_page/mod.ui:5
+msgid "General"
+msgstr "General"
+
+#: src/session/view/account_settings/general_page/mod.ui:12
+msgid "Account Avatar"
+msgstr "Account Avatar"
+
+#: src/session/view/account_settings/general_page/mod.ui:32
+#: src/session/view/room_creation.ui:53
+msgid "Name"
+msgstr "Name"
+
+#: src/session/view/account_settings/general_page/mod.ui:68
+#: src/session/view/content/room_details/general_page/mod.ui:280
+msgid "Advanced Information"
+msgstr "Advanced Information"
+
+#: src/session/view/account_settings/general_page/mod.ui:71
+msgid "Matrix User ID"
+msgstr "Matrix User ID"
+
+#: src/session/view/account_settings/general_page/mod.ui:81
+msgid "Copy Homeserver Address to Clipboard"
+msgstr "Copy Homeserver Address to Clipboard"
+
+#: src/session/view/account_settings/general_page/mod.ui:82
+msgid "Homeserver address copied to clipboard"
+msgstr "Homeserver address copied to clipboard"
+
+#: src/session/view/account_settings/general_page/mod.ui:87
+msgid "Session ID"
+msgstr "Session ID"
+
+#: src/session/view/account_settings/general_page/mod.ui:89
+msgid "Copy Session ID to Clipboard"
+msgstr "Copy Session ID to Clipboard"
+
+#: src/session/view/account_settings/general_page/mod.ui:90
+msgid "Session ID copied to clipboard"
+msgstr "Session ID copied to clipboard"
+
+#: src/session/view/account_settings/general_page/mod.ui:102
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:108
+msgid "Log Out"
+msgstr "Log Out"
+
+#: src/session/view/account_settings/notifications_page.rs:287
+msgid "Could not enable account notifications"
+msgstr "Could not enable account notifications"
+
+#: src/session/view/account_settings/notifications_page.rs:289
+msgid "Could not disable account notifications"
+msgstr "Could not disable account notifications"
+
+#: src/session/view/account_settings/notifications_page.rs:341
+msgid "Could not change global notifications setting"
+msgstr "Could not change global notifications setting"
+
+#: src/session/view/account_settings/notifications_page.rs:358
+msgid "Remove “{keyword}”"
+msgstr "Remove “{keyword}”"
+
+#: src/session/view/account_settings/notifications_page.rs:385
+msgid "Could not remove notification keyword"
+msgstr "Could not remove notification keyword"
+
+#: src/session/view/account_settings/notifications_page.rs:456
+msgid "Could not add notification keyword"
+msgstr "Could not add notification keyword"
+
+#: src/session/view/account_settings/notifications_page.ui:5
+#: src/session/view/content/room_details/general_page/mod.ui:165
+msgid "Notifications"
+msgstr "Notifications"
+
+#: src/session/view/account_settings/notifications_page.ui:11
+msgid "Enable for This Account"
+msgstr "Enable for This Account"
+
+#: src/session/view/account_settings/notifications_page.ui:19
+msgid "Enable for This Session"
+msgstr "Enable for This Session"
+
+#: src/session/view/account_settings/notifications_page.ui:27
+msgid "Global"
+msgstr "Global"
+
+#: src/session/view/account_settings/notifications_page.ui:28
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+
+#: src/session/view/account_settings/notifications_page.ui:31
+msgid "All messages in all rooms"
+msgstr "All messages in all rooms"
+
+#: src/session/view/account_settings/notifications_page.ui:38
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr "All messages in direct chats, and mentions and keywords in all rooms"
+
+#: src/session/view/account_settings/notifications_page.ui:45
+msgid "Only mentions and keywords in all rooms"
+msgstr "Only mentions and keywords in all rooms"
+
+#: src/session/view/account_settings/notifications_page.ui:54
+msgid "Keywords"
+msgstr "Keywords"
+
+#: src/session/view/account_settings/notifications_page.ui:55
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+msgstr ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+
+#: src/session/view/account_settings/notifications_page.ui:67
+#: src/session/view/account_settings/notifications_page.ui:68
+msgid "Add Keyword"
+msgstr "Add Keyword"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:4
+#: src/session/view/account_settings/security_page/mod.ui:26
+msgid "Ignored Users"
+msgstr "Ignored Users"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:18
+msgid "Toggle Ignored Users Search"
+msgstr "Toggle Ignored Users Search"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:33
+msgid "Search for ignored users"
+msgstr "Search for ignored users"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:74
+msgid "No Ignored Users"
+msgstr "No Ignored Users"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:75
+msgid "You can add users to this list from their room member profile"
+msgstr "You can add users to this list from their room member profile"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:168
+#: src/session/view/account_settings/security_page/mod.ui:167
+msgid "Export Room Encryption Keys"
+msgstr "Export Room Encryption Keys"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:171
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+msgstr ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:174
+msgid ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+msgstr ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:177
+msgid "Export Keys"
+msgstr "Export Keys"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:180
+#: src/session/view/account_settings/security_page/mod.ui:176
+msgid "Import Room Encryption Keys"
+msgstr "Import Room Encryption Keys"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:183
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:186
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "Enter the passphrase provided when the backup file was created."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:189
+msgid "Import Keys"
+msgstr "Import Keys"
+
+#. Translators: Do no translate "fractal" as it is the application
+#. name.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:210
+msgid "fractal-encryption-keys"
+msgstr "fractal-encryption-keys"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:215
+msgid "Save Encryption Keys To…"
+msgstr "Save Encryption Keys To…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:218
+msgid "Import Encryption Keys From…"
+msgstr "Import Encryption Keys From…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:231
+#: src/utils/media.rs:218
+msgid "Could not access file"
+msgstr "Could not access file"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:261
+msgid "Passphrases do not match"
+msgstr "Passphrases do not match"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:333
+msgid "Room encryption keys exported successfully"
+msgstr "Room encryption keys exported successfully"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:338
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "Imported 1 room encryption key"
+msgstr[1] "Imported {n} room encryption keys"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:352
+msgid "Could not export the keys"
+msgstr "Could not export the keys"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:362
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr "The passphrase doesn't match the one used to export the keys."
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:366
+msgid "Could not import the keys"
+msgstr "Could not import the keys"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:61
+msgid "Passphrase"
+msgstr "Passphrase"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:81
+msgid "Confirm Passphrase"
+msgstr "Confirm Passphrase"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:116
+#: src/session/view/content/room_details/history_viewer/file.ui:4
+#: src/session/view/content/room_history/message_row/file.rs:65
+msgid "File"
+msgstr "File"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:120
+msgid "Choose…"
+msgstr "Choose…"
+
+#: src/session/view/account_settings/security_page/mod.rs:209
+msgid "No Crypto Identity"
+msgstr "No Crypto Identity"
+
+#: src/session/view/account_settings/security_page/mod.rs:211
+msgid "Verifying your own devices or other users is not possible"
+msgstr "Verifying your own devices or other users is not possible"
+
+#: src/session/view/account_settings/security_page/mod.rs:214
+#: src/session/view/account_settings/security_page/mod.rs:287
+#: src/session/view/content/room_details/general_page/mod.rs:1300
+#: src/session/view/sidebar/mod.rs:306 src/session/view/sidebar/mod.rs:312
+msgid "Enable"
+msgstr "Enable"
+
+#: src/session/view/account_settings/security_page/mod.rs:217
+msgid "Enable Crypto Identity"
+msgstr "Enable Crypto Identity"
+
+#: src/session/view/account_settings/security_page/mod.rs:233
+msgid "Crypto Identity Enabled"
+msgstr "Crypto Identity Enabled"
+
+#: src/session/view/account_settings/security_page/mod.rs:235
+msgid "The crypto identity exists and this device is verified"
+msgstr "The crypto identity exists and this device is verified"
+
+#: src/session/view/account_settings/security_page/mod.rs:252
+msgid "Crypto Identity Incomplete"
+msgstr "Crypto Identity Incomplete"
+
+#: src/session/view/account_settings/security_page/mod.rs:254
+msgid "The crypto identity exists but this device is not verified"
+msgstr "The crypto identity exists but this device is not verified"
+
+#: src/session/view/account_settings/security_page/mod.rs:260
+msgid "Verify This Session"
+msgstr "Verify This Session"
+
+#: src/session/view/account_settings/security_page/mod.rs:282
+msgid "Account Recovery Disabled"
+msgstr "Account Recovery Disabled"
+
+#: src/session/view/account_settings/security_page/mod.rs:284
+msgid ""
+"Enable recovery to be able to restore your account without another device"
+msgstr ""
+"Enable recovery to be able to restore your account without another device"
+
+#: src/session/view/account_settings/security_page/mod.rs:290
+msgid "Enable Account Recovery"
+msgstr "Enable Account Recovery"
+
+#: src/session/view/account_settings/security_page/mod.rs:301
+msgid "Account Recovery Enabled"
+msgstr "Account Recovery Enabled"
+
+#: src/session/view/account_settings/security_page/mod.rs:303
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "Your signing keys and encryption keys are synchronised"
+
+#: src/session/view/account_settings/security_page/mod.rs:323
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr "Recover to synchronise your signing keys and encryption keys"
+
+#: src/session/view/account_settings/security_page/mod.rs:329
+msgid "Recover Account Data"
+msgstr "Recover Account Data"
+
+#: src/session/view/account_settings/security_page/mod.ui:9
+msgid "Privacy"
+msgstr "Privacy"
+
+#: src/session/view/account_settings/security_page/mod.ui:13
+msgid "Send Read Receipts"
+msgstr "Send Read Receipts"
+
+#: src/session/view/account_settings/security_page/mod.ui:14
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+
+#: src/session/view/account_settings/security_page/mod.ui:20
+msgid "Send Typing Notifications"
+msgstr "Send Typing Notifications"
+
+#: src/session/view/account_settings/security_page/mod.ui:21
+msgid ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+msgstr ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+
+#: src/session/view/account_settings/security_page/mod.ui:27
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+
+#: src/session/view/account_settings/security_page/mod.ui:36
+msgid "Crypto Identity"
+msgstr "Crypto Identity"
+
+#: src/session/view/account_settings/security_page/mod.ui:37
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+
+#: src/session/view/account_settings/security_page/mod.ui:99
+msgid "Account Recovery"
+msgstr "Account Recovery"
+
+#: src/session/view/account_settings/security_page/mod.ui:100
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+msgstr ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:5
+msgid "Sessions"
+msgstr "Sessions"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:42
+#: src/session/view/account_settings/user_sessions_page/mod.ui:46
+msgid "Current Session"
+msgstr "Current Session"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:57
+#: src/session/view/account_settings/user_sessions_page/mod.ui:61
+msgid "Other Active Sessions"
+msgstr "Other Active Sessions"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:85
+msgid "Could not load the list of connected devices"
+msgstr "Could not load the list of connected devices"
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:110
+msgid "Disconnect Session"
+msgstr "Disconnect Session"
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:163
+msgid "Could not disconnect device “{device_name}”"
+msgstr "Could not disconnect device “{device_name}”"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:211
+msgid "Last seen at %H:%M"
+msgstr "Last seen at %H:%M"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:216
+msgid "Last seen at %I:%M %p"
+msgstr "Last seen at %I:%M %p"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:226
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "Last seen yesterday at %H:%M"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:233
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "Last seen yesterday at %I:%M %p"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:244
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "Last seen %A at %H:%M"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:251
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "Last seen %A at %I:%M %p"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:260
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "Last seen %-e %B at %H:%M"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:267
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "Last seen %-e %B at %I:%M %p"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:275
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "Last seen %-e %B %Y at %H:%M"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:282
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "Last seen %-e %B %Y at %I:%M %p"
+
+#. Translators: As in 'A verified session'.
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:34
+msgid "Verified"
+msgstr "Verified"
+
+#: src/session/view/content/explore/mod.ui:20
+msgid "Public Rooms Search"
+msgstr "Public Rooms Search"
+
+#: src/session/view/content/explore/mod.ui:21
+msgid "Search for a room in the public directory of the selected server"
+msgstr "Search for a room in the public directory of the selected server"
+
+#: src/session/view/content/explore/mod.ui:32
+msgid "Switch servers"
+msgstr "Switch servers"
+
+#: src/session/view/content/explore/mod.ui:69
+msgid "No Rooms"
+msgstr "No Rooms"
+
+#: src/session/view/content/explore/mod.ui:75
+msgid "No rooms matching the search were found"
+msgstr "No rooms matching the search were found"
+
+#: src/session/view/content/explore/mod.ui:86
+msgid "List of Public Rooms"
+msgstr "List of Public Rooms"
+
+#: src/session/view/content/explore/public_room_row.rs:176
+msgid "View {room_name}"
+msgstr "View {room_name}"
+
+#: src/session/view/content/explore/public_room_row.rs:178
+msgid "Join {room_name}"
+msgstr "Join {room_name}"
+
+#: src/session/view/content/explore/servers_popover.ui:22
+msgid "Server List"
+msgstr "Server List"
+
+#: src/session/view/content/explore/servers_popover.ui:38
+#: src/session/view/content/explore/servers_popover.ui:45
+msgid "Add Server"
+msgstr "Add Server"
+
+#: src/session/view/content/explore/server_row.ui:28
+#: src/session/view/content/explore/server_row.ui:30
+msgid "Remove Server"
+msgstr "Remove Server"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/invite.rs:83 src/utils/matrix.rs:249
+msgid "{user} invited you"
+msgstr "{user} invited you"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:209
+msgid "Could not accept invitation for {room}. Try again later."
+msgstr "Could not accept invitation for {room}. Try again later."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:242
+msgid "Could not decline invitation for {room}. Try again later."
+msgstr "Could not decline invitation for {room}. Try again later."
+
+#. Translators: This is a verb.
+#: src/session/view/content/invite.ui:13 src/session/view/content/invite.ui:39
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:99
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:209
+msgid "Invite"
+msgstr "Invite"
+
+#: src/session/view/content/invite.ui:100
+msgid "_Decline"
+msgstr "_Decline"
+
+#: src/session/view/content/invite.ui:110 src/session/view/sidebar/mod.ui:32
+msgid "_Accept"
+msgstr "_Accept"
+
+#: src/session/view/content/mod.ui:4
+msgid "Main Content"
+msgstr "Main Content"
+
+#: src/session/view/content/mod.ui:13 src/session/view/content/mod.ui:28
+msgid "No Room Selected"
+msgstr "No Room Selected"
+
+#: src/session/view/content/mod.ui:29
+msgid "Join a room to start chatting"
+msgstr "Join a room to start chatting"
+
+#: src/session/view/content/mod.ui:39
+#: src/session/view/content/room_history/mod.ui:231
+msgid "Room History"
+msgstr "Room History"
+
+#: src/session/view/content/mod.ui:50
+msgid "Room Invite"
+msgstr "Room Invite"
+
+#: src/session/view/content/mod.ui:59
+msgid "Explore Rooms"
+msgstr "Explore Rooms"
+
+#: src/session/view/content/room_details/addresses_subpage/completion_popover.ui:5
+msgid "Address auto-completion"
+msgstr "Address auto-completion"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:303
+msgid "Local Addresses on {homeserver}"
+msgstr "Local Addresses on {homeserver}"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:377
+msgid "Remove address"
+msgstr "Remove address"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:381
+msgid "Remove “{address}”"
+msgstr "Remove “{address}”"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:408
+#: src/session/view/content/room_details/general_page/mod.rs:913
+#: src/session/view/room_creation.ui:116
+msgid "Main Address"
+msgstr "Main Address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:432
+msgid "Set as main address"
+msgstr "Set as main address"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:438
+msgid "Set “{address}” as main address"
+msgstr "Set “{address}” as main address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:476
+msgid "Could not remove public address"
+msgstr "Could not remove public address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:502
+msgid "Could not set main public address"
+msgstr "Could not set main public address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:556
+msgid "Could not add public address"
+msgstr "Could not add public address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:560
+msgid "This address is not registered as a local address"
+msgstr "This address is not registered as a local address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:563
+msgid "This address does not belong to this room"
+msgstr "This address does not belong to this room"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:617
+msgid "Unregister local address"
+msgstr "Unregister local address"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:621
+msgid "Unregister “{address}”"
+msgstr "Unregister “{address}”"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:652
+msgid "Could not unregister local address"
+msgstr "Could not unregister local address"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:685
+msgid "Register “{address}”"
+msgstr "Register “{address}”"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:723
+msgid "Could not register local address"
+msgstr "Could not register local address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:727
+msgid "This address is already registered"
+msgstr "This address is already registered"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:4
+msgid "Edit Room Addresses"
+msgstr "Edit Room Addresses"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:14
+#: src/session/view/content/room_details/general_page/mod.ui:199
+msgid "Public Addresses"
+msgstr "Public Addresses"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+msgstr ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:46
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:81
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:82
+msgid "Add Public Address"
+msgstr "Add Public Address"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:87
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:92
+msgid "Register Local Address"
+msgstr "Register Local Address"
+
+#. Translators: This is the placeholder for the first part of a room address, as in '@my-room:example.org'.
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:89
+#: src/session/view/room_creation.ui:118
+msgid "my-room"
+msgstr "my-room"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:90
+#: src/session/view/room_creation.ui:119
+msgid "First part of the address, for example “my-room”"
+msgstr "First part of the address, for example “my-room”"
+
+#: src/session/view/content/room_details/general_page/mod.rs:521
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "Do you really want to remove the avatar for this room?"
+
+#: src/session/view/content/room_details/general_page/mod.rs:630
+msgid "Room name saved successfully"
+msgstr "Room name saved successfully"
+
+#: src/session/view/content/room_details/general_page/mod.rs:655
+msgid "Room topic saved successfully"
+msgstr "Room topic saved successfully"
+
+#: src/session/view/content/room_details/general_page/mod.rs:727
+msgid "Could not change room name"
+msgstr "Could not change room name"
+
+#: src/session/view/content/room_details/general_page/mod.rs:751
+msgid "Could not change room topic"
+msgstr "Could not change room topic"
+
+#: src/session/view/content/room_details/general_page/mod.rs:764
+#: src/session/view/content/room_details/invite_subpage/invitee_list.rs:258
+msgid "Member"
+msgid_plural "Members"
+msgstr[0] "Member"
+msgstr[1] "Members"
+
+#: src/session/view/content/room_details/general_page/mod.rs:867
+msgid "Could not change notifications setting"
+msgstr "Could not change notifications setting"
+
+#: src/session/view/content/room_details/general_page/mod.rs:908
+#: src/session/view/content/room_details/general_page/mod.rs:947
+msgid "Copy address"
+msgstr "Copy address"
+
+#: src/session/view/content/room_details/general_page/mod.rs:909
+#: src/session/view/content/room_details/general_page/mod.rs:948
+msgid "Address copied to clipboard"
+msgstr "Address copied to clipboard"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1031
+msgid "Could not change who can join"
+msgstr "Could not change who can join"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1079
+msgid "Could not change guest access"
+msgstr "Could not change guest access"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/general_page/mod.rs:1096
+msgid "Publish in the {homeserver} directory"
+msgstr "Publish in the {homeserver} directory"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1173
+msgid "Could not publish room in directory"
+msgstr "Could not publish room in directory"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1175
+msgid "Could not unpublish room from directory"
+msgstr "Could not unpublish room from directory"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1196
+#: src/session/view/content/room_details/general_page/mod.ui:266
+msgid "Anyone, even if they are not in the room"
+msgstr "Anyone, even if they are not in the room"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1199
+#: src/session/view/content/room_details/general_page/mod.ui:267
+msgid "Members only, since this option was selected"
+msgstr "Members only, since this option was selected"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1201
+#: src/session/view/content/room_details/general_page/mod.ui:269
+msgid "Members only, since they were invited"
+msgstr "Members only, since they were invited"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1202
+#: src/session/view/content/room_details/general_page/mod.ui:268
+msgid "Members only, since they joined the room"
+msgstr "Members only, since they joined the room"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1250
+msgid "Could not change who can read history"
+msgstr "Could not change who can read history"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1294
+msgid "Enable Encryption?"
+msgstr "Enable Encryption?"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1295
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+
+#: src/session/view/content/room_details/general_page/mod.rs:1310
+msgid "Could not enable encryption"
+msgstr "Could not enable encryption"
+
+#. Translators: As in, 'Room federated'.
+#: src/session/view/content/room_details/general_page/mod.rs:1336
+msgid "Federated"
+msgstr "Federated"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session/view/content/room_details/general_page/mod.rs:1339
+msgid "Not federated"
+msgstr "Not federated"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1369
+msgid "Room upgraded successfully"
+msgstr "Room upgraded successfully"
+
+#: src/session/view/content/room_details/general_page/mod.rs:1373
+msgid "Could not upgrade room"
+msgstr "Could not upgrade room"
+
+#: src/session/view/content/room_details/general_page/mod.ui:4
+#: src/session/view/content/room_details/mod.ui:4
+msgid "Room Details"
+msgstr "Room Details"
+
+#: src/session/view/content/room_details/general_page/mod.ui:13
+msgid "Room Avatar"
+msgstr "Room Avatar"
+
+#: src/session/view/content/room_details/general_page/mod.ui:63
+msgid "Description"
+msgstr "Description"
+
+#: src/session/view/content/room_details/general_page/mod.ui:104
+msgid "Edit Details"
+msgstr "Edit Details"
+
+#: src/session/view/content/room_details/general_page/mod.ui:115
+msgid "Save Details"
+msgstr "Save Details"
+
+#: src/session/view/content/room_details/general_page/mod.ui:141
+#: src/session/view/content/room_details/history_viewer/media.ui:4
+msgid "Media"
+msgstr "Media"
+
+#: src/session/view/content/room_details/general_page/mod.ui:148
+msgid "Files"
+msgstr "Files"
+
+#. Translators: As in 'Audio file'.
+#: src/session/view/content/room_details/general_page/mod.ui:156
+#: src/session/view/content/room_details/history_viewer/audio.ui:5
+#: src/session/view/content/room_history/message_row/audio.rs:94
+msgid "Audio"
+msgstr "Audio"
+
+#: src/session/view/content/room_details/general_page/mod.ui:166
+msgid "Which messages trigger notifications in this room"
+msgstr "Which messages trigger notifications in this room"
+
+#: src/session/view/content/room_details/general_page/mod.ui:169
+msgid "Use Global Setting"
+msgstr "Use Global Setting"
+
+#: src/session/view/content/room_details/general_page/mod.ui:176
+msgid "All Messages"
+msgstr "All Messages"
+
+#: src/session/view/content/room_details/general_page/mod.ui:183
+msgid "Only Mentions and Keywords"
+msgstr "Only Mentions and Keywords"
+
+#: src/session/view/content/room_details/general_page/mod.ui:190
+msgid "Disable Notifications"
+msgstr "Disable Notifications"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session/view/content/room_details/general_page/mod.ui:203
+msgctxt "room details"
+msgid "Edit"
+msgstr "Edit"
+
+#: src/session/view/content/room_details/general_page/mod.ui:207
+msgid "Edit Public Addresses"
+msgstr "Edit Public Addresses"
+
+#: src/session/view/content/room_details/general_page/mod.ui:216
+msgid "This room has no public addresses"
+msgstr "This room has no public addresses"
+
+#: src/session/view/content/room_details/general_page/mod.ui:226
+msgid "Access and Visibility"
+msgstr "Access and Visibility"
+
+#: src/session/view/content/room_details/general_page/mod.ui:229
+msgid "Who Can Join"
+msgstr "Who Can Join"
+
+#: src/session/view/content/room_details/general_page/mod.ui:233
+msgid "Only Invited Users"
+msgstr "Only Invited Users"
+
+#: src/session/view/content/room_details/general_page/mod.ui:234
+msgid "Any Registered User"
+msgstr "Any Registered User"
+
+#: src/session/view/content/room_details/general_page/mod.ui:250
+msgid "Allow Guests"
+msgstr "Allow Guests"
+
+#: src/session/view/content/room_details/general_page/mod.ui:251
+msgid "Guests are Matrix users without a registered account"
+msgstr "Guests are Matrix users without a registered account"
+
+#: src/session/view/content/room_details/general_page/mod.ui:262
+msgid "Who Can Read History"
+msgstr "Who Can Read History"
+
+#: src/session/view/content/room_details/general_page/mod.ui:283
+msgid "Matrix Room ID"
+msgstr "Matrix Room ID"
+
+#: src/session/view/content/room_details/general_page/mod.ui:290
+msgid "Copy Matrix Room ID to Clipboard"
+msgstr "Copy Matrix Room ID to Clipboard"
+
+#: src/session/view/content/room_details/general_page/mod.ui:291
+msgid "Matrix room ID copied to clipboard"
+msgstr "Matrix room ID copied to clipboard"
+
+#: src/session/view/content/room_details/general_page/mod.ui:296
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:158
+msgid "Enable Encryption"
+msgstr "Enable Encryption"
+
+#: src/session/view/content/room_details/general_page/mod.ui:307
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:9
+msgid "Permissions"
+msgstr "Permissions"
+
+#: src/session/view/content/room_details/general_page/mod.ui:315
+msgid "Room Version"
+msgstr "Room Version"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session/view/content/room_details/general_page/mod.ui:327
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:82
+msgid "Upgrade"
+msgstr "Upgrade"
+
+#: src/session/view/content/room_details/general_page/mod.ui:340
+msgid "Federation"
+msgstr "Federation"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this case, the file to play is an
+#. audio file.
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:79
+msgid "Play {filename}"
+msgstr "Play {filename}"
+
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:97
+msgid "Unknown duration"
+msgstr "Unknown duration"
+
+#. Translators: As in "Play audio file".
+#: src/session/view/content/room_details/history_viewer/audio_row.ui:13
+msgid "Play"
+msgstr "Play"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/history_viewer/file_row.rs:79
+msgid "Save {filename}"
+msgstr "Save {filename}"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:87
+msgid "Unknown size"
+msgstr "Unknown size"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:118
+#: src/session/view/content/room_details/history_viewer/file_row.ui:12
+#: src/session/view/content/room_history/message_row/file.ui:25
+#: src/session/view/content/room_history/message_row/file.ui:27
+#: src/utils/media.rs:191
+msgid "Save File"
+msgstr "Save File"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:119
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:590
+#: src/utils/media.rs:193
+msgid "Save"
+msgstr "Save"
+
+#: src/session/view/content/room_details/invite_subpage/invitee_list.rs:259
+msgid "Banned"
+msgstr "Banned"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session/view/content/room_details/invite_subpage/mod.rs:237
+msgid "Could not invite {user} to {room}. Try again later."
+msgid_plural "Could not invite {n} users to {room}. Try again later."
+msgstr[0] "Could not invite {user} to {room}. Try again later."
+msgstr[1] "Could not invite {n} users to {room}. Try again later."
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:4
+msgid "Invite New Members"
+msgstr "Invite New Members"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:19
+msgid "I_nvite"
+msgstr "I_nvite"
+
+#. Translators: In this string, this is a verb.
+#: src/session/view/content/room_details/invite_subpage/mod.ui:55
+#: src/session/view/create_dm_dialog/mod.ui:53
+msgid "Search"
+msgstr "Search"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:56
+msgid "Search for users to invite them to this room"
+msgstr "Search for users to invite them to this room"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:101
+#: src/session/view/create_dm_dialog/mod.ui:92
+msgid "No Users Found"
+msgstr "No Users Found"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:102
+msgid "No users matching the search were found"
+msgstr "No users matching the search were found"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:109
+#: src/session/view/create_dm_dialog/mod.ui:105
+msgid "An error occurred while searching for matches"
+msgstr "An error occurred while searching for matches"
+
+#: src/session/view/content/room_details/members_page/members_list_view/extra_lists.rs:161
+msgid "Could not load the full list of room members"
+msgstr "Could not load the full list of room members"
+
+#: src/session/view/content/room_details/members_page/members_list_view/member_row.ui:45
+msgid "Identity Verified"
+msgstr "Identity Verified"
+
+#. Translators: As in 'Invited Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:117
+msgctxt "members"
+msgid "Invited"
+msgid_plural "Invited"
+msgstr[0] "Invited"
+msgstr[1] "Invited"
+
+#. Translators: As in 'Banned Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:119
+msgctxt "members"
+msgid "Banned"
+msgid_plural "Banned"
+msgstr[0] "Banned"
+msgstr[1] "Banned"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:214
+msgid "Invited Room Member"
+msgid_plural "Invited Room Members"
+msgstr[0] "Invited Room Member"
+msgstr[1] "Invited Room Members"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:215
+msgid "Banned Room Member"
+msgid_plural "Banned Room Members"
+msgstr[0] "Banned Room Member"
+msgstr[1] "Banned Room Members"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:216
+msgid "Room Member"
+msgid_plural "Room Members"
+msgstr[0] "Room Member"
+msgstr[1] "Room Members"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:11
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:13
+#: src/session/view/content/room_details/permissions/members_subpage.ui:12
+#: src/session/view/content/room_details/permissions/members_subpage.ui:14
+msgid "Toggle Room Members Search"
+msgstr "Toggle Room Members Search"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:29
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:33
+#: src/session/view/content/room_details/permissions/members_subpage.ui:30
+#: src/session/view/content/room_details/permissions/members_subpage.ui:34
+msgid "Search for room members"
+msgstr "Search for room members"
+
+#: src/session/view/content/room_details/members_page/mod.rs:84
+msgid "The user is not in the room members list anymore"
+msgstr "The user is not in the room members list any more"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:4
+msgid "Add Custom Permissions"
+msgstr "Add Custom Permissions"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:11
+msgid "_Add"
+msgstr "_Add"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:50
+msgid "Assign Power Level"
+msgstr "Assign Power Level"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:71
+msgid "Search Results"
+msgstr "Search Results"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:96
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:100
+msgid "No Matching Members Found"
+msgstr "No Matching Members Found"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:101
+msgid "No room members matching the search were found"
+msgstr "No room members matching the search were found"
+
+#: src/session/view/content/room_details/permissions/members_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:279
+msgid "Members With Assigned Power Levels"
+msgstr "Members With Assigned Power Levels"
+
+#: src/session/view/content/room_details/permissions/members_subpage.ui:83
+msgid "Add"
+msgstr "Add"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:577
+msgid "Save Changes?"
+msgstr "Save Changes?"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:579
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:589
+msgid "Discard"
+msgstr "Discard"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:634
+msgid "Could not save permissions"
+msgstr "Could not save permissions"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:30
+msgid "_Save"
+msgstr "_Save"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:44
+msgid "Room Actions"
+msgstr "Room Actions"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:45
+msgid "Power level required to perform different actions in the room"
+msgstr "Power level required to perform different actions in the room"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:48
+msgid "Send Messages"
+msgstr "Send Messages"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:59
+msgid "Remove Own Messages"
+msgstr "Remove Own Messages"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:70
+msgid "Remove Messages of Other Members"
+msgstr "Remove Messages of Other Members"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:81
+msgid "Notify Entire Room"
+msgstr "Notify Entire Room"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:92
+msgid "Change Room Settings"
+msgstr "Change Room Settings"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:103
+msgid "Change Room Name"
+msgstr "Change Room Name"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:114
+msgid "Change Room Topic"
+msgstr "Change Room Topic"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:125
+msgid "Change Room Avatar"
+msgstr "Change Room Avatar"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:136
+msgid "Change Addresses"
+msgstr "Change Addresses"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:147
+msgid "Change Who Can Read History"
+msgstr "Change Who Can Read History"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:169
+msgid "Change Permissions"
+msgstr "Change Permissions"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:180
+msgid "Change Server Access Control List"
+msgstr "Change Server Access Control List"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:191
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:75
+msgid "Upgrade Room"
+msgstr "Upgrade Room"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:204
+msgid "Member Actions"
+msgstr "Member Actions"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:205
+msgid "Power level required to perform different actions on room members"
+msgstr "Power level required to perform different actions on room members"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:246
+msgid "Members Power Levels"
+msgstr "Members Power Levels"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:247
+msgid "Power levels defined for all members of the room"
+msgstr "Power levels defined for all members of the room"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:250
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:266
+msgid "Default Power Level"
+msgstr "Default Power Level"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:59
+msgid "Version"
+msgstr "Version"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:76
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+msgstr ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:131
+msgid "{version} (unstable)"
+msgstr "{version} (unstable)"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session/view/content/room_history/event_actions.ui:12
+#: src/session/view/content/room_history/event_actions.ui:103
+msgid "_Reply"
+msgstr "_Reply"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session/view/content/room_history/event_actions.ui:18
+#: src/session/view/content/room_history/event_actions.ui:109
+msgid "_Edit"
+msgstr "_Edit"
+
+#. Translators: In this string, 'Forward' is a verb, this is to
+#. re-send the same message in another room, like forwarding an e-mail.
+#: src/session/view/content/room_history/event_actions.ui:25
+#: src/session/view/content/room_history/event_actions.ui:116
+msgid "_Forward"
+msgstr "_Forward"
+
+#: src/session/view/content/room_history/event_actions.ui:32
+#: src/session/view/content/room_history/event_actions.ui:123
+#: src/session/view/content/room_history/event_actions.ui:193
+msgid "_Select"
+msgstr "_Select"
+
+#: src/session/view/content/room_history/event_actions.ui:39
+#: src/session/view/content/room_history/event_actions.ui:130
+msgid "_Copy Text"
+msgstr "_Copy Text"
+
+#: src/session/view/content/room_history/event_actions.ui:44
+msgid "Copy T_humbnail"
+msgstr "Copy T_humbnail"
+
+#: src/session/view/content/room_history/event_actions.ui:49
+#: src/session/view/content/room_history/event_actions.ui:140
+#: src/session/view/media_viewer.ui:11
+msgid "S_ave Image"
+msgstr "S_ave Image"
+
+#: src/session/view/content/room_history/event_actions.ui:54
+#: src/session/view/content/room_history/event_actions.ui:145
+#: src/session/view/media_viewer.ui:16
+msgid "S_ave Video"
+msgstr "S_ave Video"
+
+#: src/session/view/content/room_history/event_actions.ui:59
+#: src/session/view/content/room_history/event_actions.ui:150
+#: src/session/view/media_viewer.ui:21
+msgid "S_ave Audio"
+msgstr "S_ave Audio"
+
+#: src/session/view/content/room_history/event_actions.ui:64
+#: src/session/view/content/room_history/event_actions.ui:155
+#: src/session/view/content/room_history/event_actions.ui:200
+#: src/session/view/content/room_history/mod.ui:58
+#: src/session/view/media_viewer.ui:26
+msgid "_Permalink"
+msgstr "_Permalink"
+
+#: src/session/view/content/room_history/event_actions.ui:69
+#: src/session/view/content/room_history/event_actions.ui:160
+#: src/session/view/content/room_history/event_actions.ui:205
+#: src/session/view/content/room_history/mod.ui:125
+msgid "_View Details"
+msgstr "_View Details"
+
+#: src/session/view/content/room_history/event_actions.ui:76
+#: src/session/view/content/room_history/event_actions.ui:167
+msgid "_Try Again"
+msgstr "_Try Again"
+
+#: src/session/view/content/room_history/event_actions.ui:81
+#: src/session/view/content/room_history/event_actions.ui:172
+msgid "_Discard"
+msgstr "_Discard"
+
+#: src/session/view/content/room_history/event_actions.ui:88
+msgid "Rep_ort…"
+msgstr "Rep_ort…"
+
+#: src/session/view/content/room_history/event_actions.ui:93
+#: src/session/view/content/room_history/event_actions.ui:184
+#: src/session/view/content/room_history/event_actions.ui:217
+msgid "Re_move"
+msgstr "Re_move"
+
+#: src/session/view/content/room_history/event_actions.ui:135
+msgid "_Copy Thumbnail"
+msgstr "_Copy Thumbnail"
+
+#: src/session/view/content/room_history/event_actions.ui:179
+#: src/session/view/content/room_history/event_actions.ui:212
+msgid "Rep_ort"
+msgstr "Rep_ort"
+
+#: src/session/view/content/room_history/item_row.rs:279
+msgid "This is the start of the visible history"
+msgstr "This is the start of the visible history"
+
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/item_row.rs:319
+msgid "%A, %B %-e"
+msgstr "%A, %-e %B"
+
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/item_row.rs:325
+msgid "%A, %B %-e, %Y"
+msgstr "%A, %-e %B, %Y"
+
+#: src/session/view/content/room_history/item_row.rs:331
+msgid "New Messages"
+msgstr "New Messages"
+
+#: src/session/view/content/room_history/item_row.rs:475
+#: src/session/view/content/room_history/mod.rs:586
+#: src/session/view/content/room_history/sender_avatar/mod.rs:103
+#: src/session/view/media_viewer.rs:518
+msgid "Permalink copied to clipboard"
+msgstr "Permalink copied to clipboard"
+
+#: src/session/view/content/room_history/item_row.rs:586
+#: src/session/view/content/room_history/item_row.rs:617
+#: src/session/view/content/room_history/item_row.rs:631
+#: src/session/view/content/room_history/item_row.rs:656
+#: src/session/view/content/room_history/item_row.rs:687
+#: src/session/view/content/room_history/item_row.rs:705
+#: src/session/view/content/room_history/item_row.rs:723
+msgid "Text copied to clipboard"
+msgstr "Text copied to clipboard"
+
+#: src/session/view/content/room_history/item_row.rs:671
+msgid "Thumbnail copied to clipboard"
+msgstr "Thumbnail copied to clipboard"
+
+#: src/session/view/content/room_history/item_row.rs:768
+msgid "Remove Message?"
+msgstr "Remove Message?"
+
+#: src/session/view/content/room_history/item_row.rs:770
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr "Do you really want to remove this message? This cannot be undone."
+
+#: src/session/view/content/room_history/item_row.rs:784
+msgid "Could not remove message"
+msgstr "Could not remove message"
+
+#: src/session/view/content/room_history/item_row.rs:798
+msgid "Could not toggle reaction"
+msgstr "Could not toggle reaction"
+
+#: src/session/view/content/room_history/item_row.rs:813
+#: src/utils/message_dialog.rs:208
+msgid "Reason (optional)"
+msgstr "Reason (optional)"
+
+#: src/session/view/content/room_history/item_row.rs:824
+msgid "Report Event?"
+msgstr "Report Event?"
+
+#: src/session/view/content/room_history/item_row.rs:826
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+msgstr ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session/view/content/room_history/item_row.rs:833
+msgid "Report"
+msgstr "Report"
+
+#: src/session/view/content/room_history/item_row.rs:851
+msgid "Could not report event"
+msgstr "Could not report event"
+
+#: src/session/view/content/room_history/item_row.rs:871
+msgid "Could not discard message"
+msgstr "Could not discard message"
+
+#: src/session/view/content/room_history/item_row.rs:892
+msgid "Could not retry to send message"
+msgstr "Could not retry to send message"
+
+#: src/session/view/content/room_history/message_row/audio.rs:92
+msgid "Audio: {filename}"
+msgstr "Audio: {filename}"
+
+#: src/session/view/content/room_history/message_row/audio.rs:195
+#: src/session/view/content/room_history/message_row/audio.rs:199
+msgid "Could not retrieve audio file"
+msgstr "Could not retrieve audio file"
+
+#: src/session/view/content/room_history/message_row/audio.rs:212
+msgid "Error reading audio file"
+msgstr "Error reading audio file"
+
+#: src/session/view/content/room_history/message_row/content.rs:322
+#: src/session/view/content/room_history/message_row/content.rs:364
+msgid "Unsupported event"
+msgstr "Unsupported event"
+
+#: src/session/view/content/room_history/message_row/content.rs:343
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+
+#: src/session/view/content/room_history/message_row/content.rs:353
+msgid "This message was removed."
+msgstr "This message was removed."
+
+#: src/session/view/content/room_history/message_row/file.rs:63
+msgid "File: {filename}"
+msgstr "File: {filename}"
+
+#: src/session/view/content/room_history/message_row/location.rs:102
+msgid "Location is invalid and cannot be displayed"
+msgstr "Location is invalid and cannot be displayed"
+
+#: src/session/view/content/room_history/message_row/location.ui:5
+msgid "User Location"
+msgstr "User Location"
+
+#: src/session/view/content/room_history/message_row/media.rs:331
+msgid "Image: {filename}"
+msgstr "Image: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:332
+msgid "Sticker: {filename}"
+msgstr "Sticker: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:333
+msgid "Video: {filename}"
+msgstr "Video: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:337
+msgid "Image"
+msgstr "Image"
+
+#: src/session/view/content/room_history/message_row/media.rs:338
+msgid "Sticker"
+msgstr "Sticker"
+
+#: src/session/view/content/room_history/message_row/media.rs:339
+msgid "Video"
+msgstr "Video"
+
+#: src/session/view/content/room_history/message_row/media.rs:409
+msgid "Image file not supported"
+msgstr "Image file not supported"
+
+#: src/session/view/content/room_history/message_row/media.rs:446
+#: src/session/view/content/room_history/message_row/media.rs:451
+msgid "Could not retrieve media"
+msgstr "Could not retrieve media"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.rs:91
+msgid "Could not send the message"
+msgstr "Could not send the message"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.rs:97
+msgid "An error occurred with the sending queue"
+msgstr "An error occurred with the sending queue"
+
+#. Translators: As in 'Sending message…'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:14
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:17
+msgid "Sending…"
+msgstr "Sending…"
+
+#. Translators: As in 'Sent message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:45
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:48
+msgid "Sent"
+msgstr "Sent"
+
+#. Translators: As in 'Edited message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:67
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:70
+msgid "Edited"
+msgstr "Edited"
+
+#: src/session/view/content/room_history/message_row/mod.rs:242
+msgid "Sent at {time}"
+msgstr "Sent at {time}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:206
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "1 member reacted with {reaction_key}"
+msgstr[1] "{n} members reacted with {reaction_key}"
+
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:224
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} reacted with {reaction_key}"
+
+#: src/session/view/content/room_history/message_row/reaction_list.ui:5
+msgid "Reactions"
+msgstr "Reactions"
+
+#: src/session/view/content/room_history/message_row/reply.ui:9
+msgid "In Reply To"
+msgstr "In Reply To"
+
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:21
+msgid "_Send"
+msgstr "_Send"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:619
+msgid "Public Room Mention Auto-completion"
+msgstr "Public Room Mention Auto-completion"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:621
+msgid "Room Member Mention Auto-completion"
+msgstr "Room Member Mention Auto-completion"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:400
+msgid "Reply to {user}"
+msgstr "Reply to {user}"
+
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:455
+msgctxt "room-history"
+msgid "Edit"
+msgstr "Edit"
+
+#. Show the dialog as loading.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:651
+msgid "Your Location"
+msgstr "Your Location"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable
+#. name.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:712
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "User Location {geo_uri} at {iso8601_datetime}"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:732
+msgid "The location request has been cancelled"
+msgstr "The location request has been cancelled"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:733
+msgid "The location services are disabled"
+msgstr "The location services are disabled"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:734
+msgid "Could not retrieve current location"
+msgstr "Could not retrieve current location"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:774
+msgid "Select File"
+msgstr "Select File"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:776
+msgid "Select"
+msgstr "Select"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:791
+msgid "Could not open file"
+msgstr "Could not open file"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:840
+msgid "Error reading file"
+msgstr "Error reading file"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:865
+msgid "Error getting image from clipboard"
+msgstr "Error getting image from clipboard"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:882
+msgid "Error getting file from clipboard"
+msgstr "Error getting file from clipboard"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:6
+msgid "_Location"
+msgstr "_Location"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:12
+msgid "_Markdown"
+msgstr "_Markdown"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:96
+#: src/session/view/content/room_history/message_toolbar/mod.ui:98
+msgid "Send a File"
+msgstr "Send a File"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:107
+#: src/session/view/content/room_history/message_toolbar/mod.ui:109
+msgid "Insert an Emoji"
+msgstr "Insert an Emoji"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session/view/content/room_history/message_toolbar/mod.ui:132
+msgid "Message Composer"
+msgstr "Message Composer"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:146
+#: src/session/view/content/room_history/message_toolbar/mod.ui:148
+msgid "More Options"
+msgstr "More Options"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:158
+#: src/session/view/content/room_history/message_toolbar/mod.ui:164
+msgid "Send Message"
+msgstr "Send Message"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:179
+msgid "You don’t have permission to send messages to this room"
+msgstr "You don’t have permission to send messages to this room"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:117
+msgid "%B %-e at %I∶%M %p"
+msgstr "%-e %B at %I∶%M %p"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:123
+msgid "%B %-e at %H∶%M"
+msgstr "%-e %b at %H:%M"
+
+#: src/session/view/content/room_history/mod.rs:338
+msgid "Error getting file from drop"
+msgstr "Error getting file from drop"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:537
+msgid "Could not leave {room}"
+msgstr "Could not leave {room}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:573
+#: src/session/view/sidebar/row.rs:490
+msgid "Could not forget {room}"
+msgstr "Could not forget {room}"
+
+#: src/session/view/content/room_history/mod.rs:751
+#: src/session/view/sidebar/mod.rs:418
+msgid "Context Menu"
+msgstr "Context Menu"
+
+#: src/session/view/content/room_history/mod.rs:771
+msgid "Sender Context Menu"
+msgstr "Sender Context Menu"
+
+#: src/session/view/content/room_history/mod.rs:957
+#: src/session/view/content/room_history/mod.rs:961
+#: src/session/view/content/room_history/state_row/tombstone.ui:14
+msgid "There is a newer version of this room"
+msgstr "There is a newer version of this room"
+
+#: src/session/view/content/room_history/mod.rs:964
+msgid "This room was closed"
+msgstr "This room was closed"
+
+#: src/session/view/content/room_history/mod.ui:6
+msgid "Room _Details"
+msgstr "Room _Details"
+
+#: src/session/view/content/room_history/mod.ui:11
+msgid "_Invite New Members…"
+msgstr "_Invite New Members…"
+
+#: src/session/view/content/room_history/mod.ui:16
+msgid "Room _Permalink"
+msgstr "Room _Permalink"
+
+#: src/session/view/content/room_history/mod.ui:22
+#: src/session/view/sidebar/mod.ui:61
+msgid "_Leave Room"
+msgstr "_Leave Room"
+
+#: src/session/view/content/room_history/mod.ui:27
+#: src/session/view/sidebar/mod.ui:66
+msgid "Re_join Room"
+msgstr "Re_join Room"
+
+#: src/session/view/content/room_history/mod.ui:32
+#: src/session/view/sidebar/mod.ui:71
+msgid "_Forget Room"
+msgstr "_Forget Room"
+
+#. Translators: In this string, 'Mention' is a verb.
+#: src/session/view/content/room_history/mod.ui:47
+msgid "_Mention"
+msgstr "_Mention"
+
+#. Translators: In this string, 'Open' is a verb.
+#: src/session/view/content/room_history/mod.ui:53
+msgid "_Open Direct Chat"
+msgstr "_Open Direct Chat"
+
+#. Translators: In this string, 'Invite' is a verb.
+#: src/session/view/content/room_history/mod.ui:65
+msgid "_Invite"
+msgstr "_Invite"
+
+#: src/session/view/content/room_history/mod.ui:70
+msgid "Revoke _Invite"
+msgstr "Revoke _Invite"
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/session/view/content/room_history/mod.ui:76
+msgid "M_ute"
+msgstr "M_ute"
+
+#: src/session/view/content/room_history/mod.ui:81
+msgid "_Unmute"
+msgstr "_Unmute"
+
+#. Translators: In this string, 'Kick' is a verb.
+#: src/session/view/content/room_history/mod.ui:87
+msgid "_Kick"
+msgstr "_Kick"
+
+#: src/session/view/content/room_history/mod.ui:92
+msgid "_Deny Access"
+msgstr "_Deny Access"
+
+#. Translators: In this string, 'Ban' is a verb.
+#: src/session/view/content/room_history/mod.ui:98
+msgid "_Ban"
+msgstr "_Ban"
+
+#: src/session/view/content/room_history/mod.ui:103
+msgid "Un_ban"
+msgstr "Un_ban"
+
+#: src/session/view/content/room_history/mod.ui:108
+msgid "_Remove Messages"
+msgstr "_Remove Messages"
+
+#: src/session/view/content/room_history/mod.ui:113
+msgid "I_gnore"
+msgstr "I_gnore"
+
+#: src/session/view/content/room_history/mod.ui:118
+msgid "Stop I_gnoring"
+msgstr "Stop I_gnoring"
+
+#: src/session/view/content/room_history/mod.ui:160
+msgid "Room Menu"
+msgstr "Room Menu"
+
+#: src/session/view/content/room_history/mod.ui:204
+#: src/session/view/content/room_history/mod.ui:211
+msgid "Could Not Load Room"
+msgstr "Could Not Load Room"
+
+#: src/session/view/content/room_history/mod.ui:212
+msgid "Check your network connection."
+msgstr "Check your network connection."
+
+#: src/session/view/content/room_history/mod.ui:246
+msgid "Scroll to Bottom"
+msgstr "Scroll to Bottom"
+
+#: src/session/view/content/room_history/mod.ui:258
+msgid "Drop Here to Send"
+msgstr "Drop Here to Send"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:259
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "Seen by 1 member"
+msgstr[1] "Seen by {n} members"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:272
+msgid "Seen by {name}"
+msgstr "Seen by {name}"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:271
+msgid "{user}’s avatar"
+msgstr "{user}’s avatar"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:512
+msgid "Creating a new Direct Chat…"
+msgstr "Creating a new Direct Chat…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:536
+msgid "Inviting user…"
+msgstr "Inviting user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:564
+msgid "Revoking invite…"
+msgstr "Revoking invite…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:565
+msgid "Denying access…"
+msgstr "Denying access…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:566
+msgid "Kicking user…"
+msgstr "Kicking user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:601
+msgid "Muting member…"
+msgstr "Muting member…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:604
+msgid "Unmuting member…"
+msgstr "Unmuting member…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:614
+msgid "Member muted"
+msgstr "Member muted"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:616
+msgid "Member unmuted"
+msgstr "Member unmuted"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:621
+msgid "Could not mute member"
+msgstr "Could not mute member"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:623
+msgid "Could not unmute member"
+msgstr "Could not unmute member"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:652
+msgid "Banning user…"
+msgstr "Banning user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:676
+msgid "Unbanning user…"
+msgstr "Unbanning user…"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/sender_avatar/mod.rs:719
+msgid "Removing 1 message sent by the user…"
+msgid_plural "Removing {n} messages sent by the user…"
+msgstr[0] "Removing 1 message sent by the user…"
+msgstr[1] "Removing {n} messages sent by the user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:752
+msgid "Stop ignoring user…"
+msgstr "Stop ignoring user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:754
+msgid "Ignoring user…"
+msgstr "Ignoring user…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.ui:5
+msgid "Open Sender Context Menu"
+msgstr "Open Sender Context Menu"
+
+#: src/session/view/content/room_history/state_row/creation.rs:69
+msgid "This is the continuation of an upgraded room."
+msgstr "This is the continuation of an upgraded room."
+
+#: src/session/view/content/room_history/state_row/creation.rs:74
+msgid "This is the beginning of this room."
+msgstr "This is the beginning of this room."
+
+#: src/session/view/content/room_history/state_row/creation.ui:20
+msgid "Previous room"
+msgstr "Previous room"
+
+#: src/session/view/content/room_history/state_row/mod.rs:113
+msgid "This room is encrypted from this point on."
+msgstr "This room is encrypted from this point on."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:128
+#: src/session/view/content/room_history/state_row/mod.rs:244
+msgid "{user} was invited to this room."
+msgstr "{user} was invited to this room."
+
+#: src/session/view/content/room_history/state_row/mod.rs:140
+msgid "An unsupported state event was received."
+msgstr "An unsupported state event was received."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#. We don't know what changed so fall back to the membership.
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:216
+#: src/session/view/content/room_history/state_row/mod.rs:373
+msgid "{user} joined this room."
+msgstr "{user} joined this room."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:221
+msgid "{user} left the room."
+msgstr "{user} left the room."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:226
+msgid "{user} was banned."
+msgstr "{user} was banned."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:232
+msgid "{user} was unbanned."
+msgstr "{user} was unbanned."
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:238
+msgid "{user} was kicked out of the room."
+msgstr "{user} was kicked out of the room."
+
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:250
+msgid "{user} was kicked out of the room and banned."
+msgstr "{user} was kicked out of the room and banned."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:256
+msgid "{user} accepted the invite."
+msgstr "{user} accepted the invite."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:262
+msgid "{user} rejected the invite."
+msgstr "{user} rejected the invite."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:268
+msgid "The invitation for {user} has been revoked."
+msgstr "The invitation for {user} has been revoked."
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:277
+msgid "{user} requested to be invited to this room."
+msgstr "{user} requested to be invited to this room."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:284
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} retracted their request to be invited to this room."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:290
+msgid "{user}’s request to be invited to this room was denied."
+msgstr "{user}’s request to be invited to this room was denied."
+
+#: src/session/view/content/room_history/state_row/mod.rs:298
+msgid "An unsupported room member event was received."
+msgstr "An unsupported room member event was received."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:317
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr "{previous_user_name} changed their display name to {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:327
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} removed their display name."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:339
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} set their display name to {new_user_name}."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:351
+msgid "{user} set their avatar."
+msgstr "{user} set their avatar."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:358
+msgid "{user} removed their avatar."
+msgstr "{user} removed their avatar."
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:365
+msgid "{user} changed their avatar."
+msgstr "{user} changed their avatar."
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:137
+msgid "{user} is typing…"
+msgstr "{user} is typing…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:144
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} member is typing…"
+msgstr[1] "{n} members are typing…"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "Could not accept verification"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:86
+msgid "Could not decline verification"
+msgstr "Could not decline verification"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/verification_info_bar.rs:159
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} wants to be verified"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:168
+msgid "Verification in progress"
+msgstr "Verification in progress"
+
+#: src/session/view/create_dm_dialog/mod.rs:140
+msgid "An error occurred while searching for users"
+msgstr "An error occurred while searching for users"
+
+#: src/session/view/create_dm_dialog/mod.ui:4
+msgid "Direct Chat"
+msgstr "Direct Chat"
+
+#: src/session/view/create_dm_dialog/mod.ui:30
+msgid "New Direct Chat"
+msgstr "New Direct Chat"
+
+#: src/session/view/create_dm_dialog/mod.ui:54
+msgid "Search for people to start a new chat with"
+msgstr "Search for people to start a new chat with"
+
+#: src/session/view/create_dm_dialog/mod.ui:93
+msgid "No users matching the search pattern were found"
+msgstr "No users matching the search pattern were found"
+
+#: src/session/view/event_details_dialog.rs:53
+msgid "Source copied to clipboard"
+msgstr "Source copied to clipboard"
+
+#: src/session/view/event_details_dialog.rs:114
+msgid "Original Event Source"
+msgstr "Original Event Source"
+
+#: src/session/view/event_details_dialog.rs:116
+msgid "Event Source"
+msgstr "Event Source"
+
+#: src/session/view/event_details_dialog.rs:130
+msgid "Latest Edit Source"
+msgstr "Latest Edit Source"
+
+#: src/session/view/event_details_dialog.ui:4
+#: src/session/view/event_details_dialog.ui:14
+msgid "Event Details"
+msgstr "Event Details"
+
+#: src/session/view/event_details_dialog.ui:47
+msgid "Original Event"
+msgstr "Original Event"
+
+#: src/session/view/event_details_dialog.ui:63
+#: src/session/view/event_details_dialog.ui:157
+msgid "Event ID"
+msgstr "Event ID"
+
+#: src/session/view/event_details_dialog.ui:69
+#: src/session/view/event_details_dialog.ui:163
+msgid "Copy Event ID to Clipboard"
+msgstr "Copy Event ID to Clipboard"
+
+#: src/session/view/event_details_dialog.ui:70
+#: src/session/view/event_details_dialog.ui:164
+msgid "Event ID copied to clipboard"
+msgstr "Event ID copied to clipboard"
+
+#: src/session/view/event_details_dialog.ui:76
+msgid "Room ID"
+msgstr "Room ID"
+
+#: src/session/view/event_details_dialog.ui:84
+msgid "Copy Room ID to Clipboard"
+msgstr "Copy Room ID to Clipboard"
+
+#: src/session/view/event_details_dialog.ui:85
+msgid "Room ID copied to clipboard"
+msgstr "Room ID copied to clipboard"
+
+#: src/session/view/event_details_dialog.ui:91
+msgid "Sender ID"
+msgstr "Sender ID"
+
+#: src/session/view/event_details_dialog.ui:97
+msgid "Copy Sender ID to Clipboard"
+msgstr "Copy Sender ID to Clipboard"
+
+#: src/session/view/event_details_dialog.ui:98
+msgid "Sender ID copied to clipboard"
+msgstr "Sender ID copied to clipboard"
+
+#: src/session/view/event_details_dialog.ui:104
+#: src/session/view/event_details_dialog.ui:170
+msgid "Timestamp"
+msgstr "Timestamp"
+
+#: src/session/view/event_details_dialog.ui:110
+#: src/session/view/event_details_dialog.ui:176
+msgid "Copy Timestamp to Clipboard"
+msgstr "Copy Timestamp to Clipboard"
+
+#: src/session/view/event_details_dialog.ui:111
+#: src/session/view/event_details_dialog.ui:177
+msgid "Timestamp copied to clipboard"
+msgstr "Timestamp copied to clipboard"
+
+#: src/session/view/event_details_dialog.ui:121
+#: src/session/view/event_details_dialog.ui:182
+msgid "View Source"
+msgstr "View Source"
+
+#: src/session/view/event_details_dialog.ui:141
+msgid "Latest Edit"
+msgstr "Latest Edit"
+
+#: src/session/view/event_details_dialog.ui:213
+msgid "Copy Source to Clipboard"
+msgstr "Copy Source to Clipboard"
+
+#: src/session/view/media_viewer.rs:478
+msgid "Image copied to clipboard"
+msgstr "Image copied to clipboard"
+
+#: src/session/view/media_viewer.ui:6
+msgid "_Copy Image"
+msgstr "_Copy Image"
+
+#: src/session/view/media_viewer.ui:66 src/session/view/media_viewer.ui:68
+msgid "Media Menu"
+msgstr "Media Menu"
+
+#: src/session/view/media_viewer.ui:78 src/session/view/media_viewer.ui:80
+msgid "Fullscreen"
+msgstr "Fullscreen"
+
+#: src/session/view/media_viewer.ui:89 src/session/view/media_viewer.ui:91
+msgid "Exit Fullscreen"
+msgstr "Exit Fullscreen"
+
+#: src/session/view/room_creation.rs:185
+msgid "The address is already taken."
+msgstr "The address is already taken."
+
+#: src/session/view/room_creation.rs:217
+msgid "Cannot contain “:”"
+msgstr "Cannot contain “:”"
+
+#: src/session/view/room_creation.rs:222
+msgid "Cannot contain “#”"
+msgstr "Cannot contain “#”"
+
+#: src/session/view/room_creation.rs:227
+msgid "Too long. Use a shorter address."
+msgstr "Too long. Use a shorter address."
+
+#: src/session/view/room_creation.ui:36
+msgid "New Room"
+msgstr "New Room"
+
+#: src/session/view/room_creation.ui:60
+msgid "Topic (Optional)"
+msgstr "Topic (Optional)"
+
+#: src/session/view/room_creation.ui:68
+msgid "Room Visibility"
+msgstr "Room Visibility"
+
+#: src/session/view/room_creation.ui:71
+msgid "Private"
+msgstr "Private"
+
+#: src/session/view/room_creation.ui:72
+msgid "Only invited people can join this room"
+msgstr "Only invited people can join this room"
+
+#: src/session/view/room_creation.ui:85
+msgid "Public"
+msgstr "Public"
+
+#: src/session/view/room_creation.ui:86
+msgid "Anyone can find and join this room"
+msgstr "Anyone can find and join this room"
+
+#: src/session/view/room_creation.ui:104
+msgid "End-to-End Encryption"
+msgstr "End-to-End Encryption"
+
+#: src/session/view/room_creation.ui:105
+msgid "Cannot be disabled later"
+msgstr "Cannot be disabled later"
+
+#: src/session/view/room_creation.ui:147
+msgid "_Create Room"
+msgstr "_Create Room"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/category_row.rs:96
+msgid "Join Room as Favorite"
+msgstr "Join Room as Favourite"
+
+#: src/session/view/sidebar/category_row.rs:97
+msgid "Join Room"
+msgstr "Join Room"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/category_row.rs:100
+msgid "Join Room as Low Priority"
+msgstr "Join Room as Low Priority"
+
+#: src/session/view/sidebar/category_row.rs:101
+msgid "Reject Invite"
+msgstr "Reject Invite"
+
+#: src/session/view/sidebar/category_row.rs:105
+#: src/session/view/sidebar/category_row.rs:118
+msgid "Move to Rooms"
+msgstr "Move to Rooms"
+
+#: src/session/view/sidebar/category_row.rs:106
+#: src/session/view/sidebar/category_row.rs:112
+msgid "Move to Low Priority"
+msgstr "Move to Low Priority"
+
+#: src/session/view/sidebar/category_row.rs:107
+#: src/session/view/sidebar/category_row.rs:113
+#: src/session/view/sidebar/category_row.rs:119
+msgid "Leave Room"
+msgstr "Leave Room"
+
+#: src/session/view/sidebar/category_row.rs:111
+#: src/session/view/sidebar/category_row.rs:117
+msgid "Move to Favorites"
+msgstr "Move to Favourites"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/category_row.rs:125
+msgid "Rejoin Room as Favorite"
+msgstr "Rejoin Room as Favourite"
+
+#: src/session/view/sidebar/category_row.rs:126
+msgid "Rejoin Room"
+msgstr "Rejoin Room"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/category_row.rs:129
+msgid "Rejoin Room as Low Priority"
+msgstr "Rejoin Room as Low Priority"
+
+#: src/session/view/sidebar/mod.rs:306
+msgid "No crypto identity"
+msgstr "No crypto identity"
+
+#: src/session/view/sidebar/mod.rs:308
+msgid "Crypto identity incomplete"
+msgstr "Crypto identity incomplete"
+
+#: src/session/view/sidebar/mod.rs:312
+msgid "Account recovery disabled"
+msgstr "Account recovery disabled"
+
+#: src/session/view/sidebar/mod.rs:315
+msgid "Account recovery incomplete"
+msgstr "Account recovery incomplete"
+
+#: src/session/view/sidebar/mod.ui:6
+msgid "New _Direct Chat…"
+msgstr "New _Direct Chat…"
+
+#: src/session/view/sidebar/mod.ui:10
+msgid "_New Room…"
+msgstr "_New Room…"
+
+#: src/session/view/sidebar/mod.ui:14
+msgid "_Join Room…"
+msgstr "_Join Room…"
+
+#: src/session/view/sidebar/mod.ui:20
+msgid "_Keyboard Shortcuts"
+msgstr "_Keyboard Shortcuts"
+
+#: src/session/view/sidebar/mod.ui:24
+msgid "_About Fractal"
+msgstr "_About Fractal"
+
+#: src/session/view/sidebar/mod.ui:37
+msgid "_Reject"
+msgstr "_Reject"
+
+#: src/session/view/sidebar/mod.ui:44
+msgid "Move to _Favorites"
+msgstr "Move to _Favourites"
+
+#: src/session/view/sidebar/mod.ui:49
+msgid "Move to _Rooms"
+msgstr "Move to _Rooms"
+
+#: src/session/view/sidebar/mod.ui:54
+msgid "Move to Low _Priority"
+msgstr "Move to Low _Priority"
+
+#: src/session/view/sidebar/mod.ui:78
+msgid "Sidebar"
+msgstr "Sidebar"
+
+#: src/session/view/sidebar/mod.ui:92
+msgid "Main Menu"
+msgstr "Main Menu"
+
+#: src/session/view/sidebar/mod.ui:100
+msgid "Toggle Room Search"
+msgstr "Toggle Room Search"
+
+#: src/session/view/sidebar/mod.ui:113
+msgid "Room Search"
+msgstr "Room Search"
+
+#: src/session/view/sidebar/mod.ui:114
+msgid "Search for a room"
+msgstr "Search for a room"
+
+#: src/session/view/sidebar/mod.ui:149
+msgid "Room List"
+msgstr "Room List"
+
+#: src/session/view/sidebar/mod.ui:150
+msgid "Allows to navigate between rooms"
+msgstr "Allows to navigate between rooms"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a
+#. room is a direct chat with another user.
+#: src/session/view/sidebar/room_row.rs:251
+msgid "Direct chat with {name}"
+msgstr "Direct chat with {name}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/sidebar/row.rs:475
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "Could not move {room} from {previous_category} to {new_category}"
+
+#: src/session_list/mod.rs:254
+msgid "Could not restore previous sessions"
+msgstr "Could not restore previous sessions"
+
+#: src/shortcuts.ui:11
+msgctxt "shortcut window"
+msgid "General"
+msgstr "General"
+
+#: src/shortcuts.ui:14
+msgctxt "shortcut window"
+msgid "Show Shortcuts"
+msgstr "Show Shortcuts"
+
+#: src/shortcuts.ui:20
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Quit"
+
+#. Translators: This shows and focuses the search input to find a room by its name in the room list.
+#: src/shortcuts.ui:27
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "Search Room List"
+
+#: src/shortcuts.ui:33
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "Close Room"
+
+#: src/user_facing_error.rs:25
+msgid "The connection timed out. Try again later."
+msgstr "The connection timed out. Try again later."
+
+#: src/user_facing_error.rs:27
+msgid "Could not connect to the homeserver."
+msgstr "Could not connect to the homeserver."
+
+#: src/user_facing_error.rs:37
+msgid "The provided username or password is invalid."
+msgstr "The provided username or password is invalid."
+
+#: src/user_facing_error.rs:38
+msgid "The account is deactivated."
+msgstr "The account is deactivated."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:45
+msgid "You exceeded the homeserver’s rate limit, retry in 1 second."
+msgid_plural "You exceeded the homeserver’s rate limit, retry in {n} seconds."
+msgstr[0] "You exceeded the homeserver’s rate limit, retry in 1 second."
+msgstr[1] "You exceeded the homeserver’s rate limit, retry in {n} seconds."
+
+#: src/user_facing_error.rs:51
+msgid "You exceeded the homeserver’s rate limit, try again later."
+msgstr "You exceeded the homeserver’s rate limit, try again later."
+
+#: src/user_facing_error.rs:61
+msgid "An unknown connection error occurred."
+msgstr "An unknown connection error occurred."
+
+#: src/user_facing_error.rs:69
+msgid "Could not decrypt the event."
+msgstr "Could not decrypt the event."
+
+#: src/user_facing_error.rs:71 src/user_facing_error.rs:85
+msgid "An unknown error occurred."
+msgstr "An unknown error occurred."
+
+#: src/user_facing_error.rs:79
+msgid "This is not a valid URL."
+msgstr "This is not a valid URL."
+
+#: src/user_facing_error.rs:81
+msgid "Homeserver auto-discovery failed. Try entering the full URL manually."
+msgstr "Homeserver auto-discovery failed. Try entering the full URL manually."
+
+#: src/user_facing_error.rs:84
+msgid "Could not open the store."
+msgstr "Could not open the store."
+
+#: src/utils/matrix.rs:184
+msgid "{user} sent an audio file."
+msgstr "{user} sent an audio file."
+
+#: src/utils/matrix.rs:187
+msgid "{user} sent a file."
+msgstr "{user} sent a file."
+
+#: src/utils/matrix.rs:189
+msgid "{user} sent an image."
+msgstr "{user} sent an image."
+
+#: src/utils/matrix.rs:192
+msgid "{user} sent their location."
+msgstr "{user} sent their location."
+
+#: src/utils/matrix.rs:204
+msgid "{user} sent a video."
+msgstr "{user} sent a video."
+
+#: src/utils/matrix.rs:207
+msgid "{user} sent a verification request."
+msgstr "{user} sent a verification request."
+
+#: src/utils/matrix.rs:215
+msgid "{user} sent a sticker."
+msgstr "{user} sent a sticker."
+
+#: src/utils/matrix.rs:225
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Default name for image files.
+#: src/utils/media.rs:33
+msgid "image"
+msgstr "image"
+
+#. Translators: Default name for video files.
+#: src/utils/media.rs:35
+msgid "video"
+msgstr "video"
+
+#. Translators: Default name for audio files.
+#: src/utils/media.rs:37
+msgid "audio"
+msgstr "audio"
+
+#. Translators: Default name for files.
+#: src/utils/media.rs:39
+msgid "file"
+msgstr "file"
+
+#: src/utils/media.rs:210
+msgid "Could not save file"
+msgstr "Could not save file"
+
+#. We are rejecting an invite.
+#: src/utils/message_dialog.rs:19
+msgid "Decline Invite?"
+msgstr "Decline Invite?"
+
+#: src/utils/message_dialog.rs:21
+msgid ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+msgstr ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+
+#: src/utils/message_dialog.rs:24
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+
+#. We are leaving a room that was joined.
+#: src/utils/message_dialog.rs:32
+msgid "Leave Room?"
+msgstr "Leave Room?"
+
+#: src/utils/message_dialog.rs:34
+msgid "Do you really want to leave this room? You can come back later."
+msgstr "Do you really want to leave this room? You can come back later."
+
+#: src/utils/message_dialog.rs:37
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+
+#: src/utils/message_dialog.rs:40
+msgid "Leave"
+msgstr "Leave"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:85
+msgid "Ban {user}?"
+msgstr "Ban {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:89
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+msgstr ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:103
+msgid "Revoke Invite for {user}?"
+msgstr "Revoke Invite for {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:110
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:117
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:128
+msgid "Deny Access to {user}?"
+msgstr "Deny Access to {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:134
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "Are you sure you want to deny access to {user_id}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:143
+msgid "Kick {user}?"
+msgstr "Kick {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:148
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:155
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:170
+msgid "Remove Messages Sent by {user}?"
+msgstr "Remove Messages Sent by {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:176
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgstr[1] ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:187
+msgid "No Messages Sent by {user}"
+msgstr "No Messages Sent by {user}"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:193
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+msgstr ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:232
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "Remove the latest message sent by the user"
+msgstr[1] "Remove the {n} latest messages sent by the user"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:300
+msgid "Mute {user}?"
+msgstr "Mute {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:306
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages."
+msgstr ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages."
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/utils/message_dialog.rs:319
+msgid "Mute"
+msgstr "Mute"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:335
+msgid "Promote {user}?"
+msgstr "Promote {user}?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/utils/message_dialog.rs:341
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgstr ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+
+#: src/utils/message_dialog.rs:353
+msgid "Promote"
+msgstr "Promote"
+
+#: src/window.ui:66
+msgid "Session"
+msgstr "Session"
+
+#~ msgid "Identity verification was started"
+#~ msgstr "Identity verification was started"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Close the active room"
+#~ msgstr "Close the active room"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open / close the room sidebar search"
+#~ msgstr "Open / close the room sidebar search"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the previous room in the list"
+#~ msgstr "Open the previous room in the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the next room in the list"
+#~ msgstr "Open the next room in the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the previous room with unread messages in the list"
+#~ msgstr "Open the previous room with unread messages in the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the next room with unread messages in the list"
+#~ msgstr "Open the next room with unread messages in the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the first room of the list"
+#~ msgstr "Open the first room of the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "Open the last room of the list"
+#~ msgstr "Open the last room of the list"
+
+#~ msgctxt "shortcut window"
+#~ msgid "View older messages"
+#~ msgstr "View older messages"
+
+#~ msgctxt "shortcut window"
+#~ msgid "View newer messages"
+#~ msgstr "View newer messages"
+
+#~ msgctxt "shortcut message"
+#~ msgid "Composing a new message"
+#~ msgstr "Composing a new message"
+
+#~ msgctxt "shortcut message"
+#~ msgid "Write on a new line"
+#~ msgstr "Write on a new line"
+
+#~ msgid "Daniel García Moreno"
+#~ msgstr "Daniel García Moreno"
+
+#~ msgid "Matrix group messaging app"
+#~ msgstr "Matrix group messaging app"
+
+#~ msgid "Type of password and token storage"
+#~ msgstr "Type of password and token storage"
+
+#~ msgid "Type of password and token storage, default value is: Secret Service"
+#~ msgstr ""
+#~ "Type of password and token storage, default value is: Secret Service"
+
+#~ msgid "If markdown sending is active"
+#~ msgstr "If markdown sending is active"
+
+#~ msgid "Whether support for sending markdown messages is on"
+#~ msgstr "Whether support for sending markdown messages is on"
+
+#~ msgid "X position of the main window on startup"
+#~ msgstr "X position of the main window on startup"
+
+#~ msgid "Y position of the main window on startup"
+#~ msgstr "Y position of the main window on startup"
+
+#~ msgid "Width of the main window on startup"
+#~ msgstr "Width of the main window on startup"
+
+#~ msgid "Height of the main window on startup"
+#~ msgstr "Height of the main window on startup"
+
+#~ msgid "Other people can find you by searching for any of these identifiers."
+#~ msgstr ""
+#~ "Other people can find you by searching for any of these identifiers."
+
+#~ msgid "Type in your name"
+#~ msgstr "Type in your name"
+
+#~ msgid "Email"
+#~ msgstr "E-mail"
+
+#~ msgid "Phone"
+#~ msgstr "Phone"
+
+#~ msgid "Device ID"
+#~ msgstr "Device ID"
+
+#~ msgid "Also erase all messages"
+#~ msgstr "Also erase all messages"
+
+#~ msgid "Check your email"
+#~ msgstr "Check your e-mail"
+
+#~ msgid "Apply"
+#~ msgstr "Apply"
+
+#~ msgid "New direct chat"
+#~ msgstr "New direct chat"
+
+#~ msgid "Select room image file"
+#~ msgstr "Select room image file"
+
+#~ msgid "Invitation"
+#~ msgstr "Invitation"
+
+#~ msgid "ID or Alias"
+#~ msgstr "ID or Alias"
+
+#~ msgid "Join room"
+#~ msgstr "Join room"
+
+#~ msgid "Close"
+#~ msgstr "Close"
+
+#~ msgid ""
+#~ "Once you leave, you won’t be able to interact with people in the room "
+#~ "anymore."
+#~ msgstr ""
+#~ "Once you leave, you won’t be able to interact with people in the room any "
+#~ "more."
+
+#~ msgid "What is your Provider?"
+#~ msgstr "What is your Provider?"
+
+#~ msgid "Matrix provider domain, e.g. myserver.co"
+#~ msgstr "Matrix provider domain, e.g. myserver.com"
+
+#~ msgid "The domain may not be empty."
+#~ msgstr "The domain may not be empty."
+
+#~ msgid "_User ID"
+#~ msgstr "_User ID"
+
+#~ msgid "_Password"
+#~ msgstr "_Password"
+
+#~ msgid "User name, email, or phone number"
+#~ msgstr "User name, e-mail, or phone number"
+
+#~ msgid "_Forgot Password?"
+#~ msgstr "_Forgot Password?"
+
+#~ msgid "Keyboard _Shortcuts"
+#~ msgstr "Keyboard _Shortcuts"
+
+#~ msgid "No room"
+#~ msgstr "No room"
+
+#~ msgid "Chat"
+#~ msgstr "Chat"
+
+#~ msgid "Directory"
+#~ msgstr "Directory"
+
+#~ msgid "User"
+#~ msgstr "User"
+
+#~ msgid "> quote"
+#~ msgstr "> quote"
+
+#~ msgid "**bold**"
+#~ msgstr "**bold**"
+
+#~ msgid "`code`"
+#~ msgstr "`code`"
+
+#~ msgid "*italic*"
+#~ msgstr "*italic*"
+
+#~ msgid "Loading more media"
+#~ msgstr "Loading more media"
+
+#~ msgid "Save as…"
+#~ msgstr "Save As…"
+
+#~ msgid "Open With…"
+#~ msgstr "Open With…"
+
+#~ msgid "Copy Selection"
+#~ msgstr "Copy Selection"
+
+#~ msgid "Private Chat"
+#~ msgstr "Private Chat"
+
+#~ msgid "Create"
+#~ msgstr "Create"
+
+#~ msgid "Ch_ange"
+#~ msgstr "Ch_ange"
+
+#~ msgid "Add name"
+#~ msgstr "Add name"
+
+#~ msgid "Add topic"
+#~ msgstr "Add topic"
+
+#~ msgid "Type in your room topic"
+#~ msgstr "Type in your room topic"
+
+#~ msgid "For all messages"
+#~ msgstr "For all messages"
+
+#~ msgid "Only for mentions"
+#~ msgstr "Only for mentions"
+
+#~ msgid "Shared Media"
+#~ msgstr "Shared Media"
+
+#~ msgid "photos"
+#~ msgstr "photos"
+
+#~ msgid "documents"
+#~ msgstr "documents"
+
+#~ msgid "New members can see"
+#~ msgstr "New members can see"
+
+#~ msgid "All room history"
+#~ msgstr "All room history"
+
+#~ msgid "Allow joining without invite"
+#~ msgstr "Allow joining without invite"
+
+#~ msgid "Show rooms from:"
+#~ msgstr "Show rooms from:"
+
+#~ msgid "Your homeserver"
+#~ msgstr "Your homeserver"
+
+#~ msgid "Other Protocol"
+#~ msgstr "Other Protocol"
+
+#~ msgid "Couldn’t save file"
+#~ msgstr "Couldn’t save file"
+
+#~ msgid "Email is already in use"
+#~ msgstr "E-mail is already in use"
+
+#~ msgid "Phone number is already in use"
+#~ msgstr "Phone number is already in use"
+
+#~ msgid "Couldn’t add the phone number."
+#~ msgstr "Couldn’t add the phone number."
+
+#~ msgid "Can’t create the room, try again"
+#~ msgstr "Can’t create the room, try again"
+
+#~ msgid "Can’t join the room, try again."
+#~ msgstr "Can’t join the room, try again."
+
+#~ msgid "Can’t login, try again"
+#~ msgstr "Can’t login, try again"
+
+#~ msgid "Error deleting message"
+#~ msgstr "Error deleting message"
+
+#~ msgid "A Matrix.org client for GNOME"
+#~ msgstr "A Matrix.org client for GNOME"
+
+#~ msgid "© 2017–2018 Daniel García Moreno, et al."
+#~ msgstr "© 2017–2018 Daniel García Moreno, et al."
+
+#~ msgid "Learn more about Fractal"
+#~ msgstr "Learn more about Fractal"
+
+#~ msgid "Enter the code received via SMS"
+#~ msgstr "Enter the code received via SMS"
+
+#~ msgid ""
+#~ "In order to add this email address, go to your inbox and follow the link "
+#~ "you received. Once you’ve done that, click Continue."
+#~ msgstr ""
+#~ "In order to add this e-mail address, go to your inbox and follow the link "
+#~ "you received. Once you’ve done that, click Continue."
+
+#~ msgid ""
+#~ "You’ve been invited to join <b>{room_name}</b> room by <b>{sender_name}</"
+#~ "b>"
+#~ msgstr ""
+#~ "You’ve been invited to join <b>{room_name}</b> room by <b>{sender_name}</"
+#~ "b>"
+
+#~ msgid "You’ve been invited to join <b>{room_name}</b>"
+#~ msgstr "You’ve been invited to join <b>{room_name}</b>"
+
+#~ msgid "Passwords didn’t match, try again"
+#~ msgstr "Passwords didn’t match, try again"
+
+#~ msgid " (direct message)"
+#~ msgstr " (direct message)"
+
+#~ msgid "EMPTY ROOM"
+#~ msgstr "EMPTY ROOM"
+
+#~ msgid "{m1} and {m2}"
+#~ msgstr "{m1} and {m2}"
+
+#~ msgid "{m1} and Others"
+#~ msgstr "{m1} and Others"
+
+#~ msgid "Several users are typing…"
+#~ msgstr "Several users are typing…"
+
+#~ msgid "Syncing, this could take a while"
+#~ msgstr "Syncing, this could take a while"
+
+#~ msgid "Save media as"
+#~ msgstr "Save media as"
+
+#~ msgid "You have been kicked from {}"
+#~ msgstr "You have been kicked from {}"
+
+#~ msgid ""
+#~ "Kicked by: {}\n"
+#~ " “{}”"
+#~ msgstr ""
+#~ "Kicked by: {}\n"
+#~ " “{}”"
+
+#~ msgid "Error while loading previous media"
+#~ msgstr "Error while loading previous media"
+
+#~ msgid "Privileged"
+#~ msgstr "Privileged"
+
+#~ msgid "Open"
+#~ msgstr "Open"
+
+#~ msgid "%R"
+#~ msgstr "%R"
+
+#~ msgid "Invites"
+#~ msgstr "Invites"
+
+#~ msgid "You don’t have any invitations"
+#~ msgstr "You don’t have any invitations"
+
+#~ msgid "Drag and drop rooms here to add them to your favorites"
+#~ msgstr "Drag and drop rooms here to add them to your favourites"
+
+#~ msgid "You don’t have any rooms yet"
+#~ msgstr "You don’t have any rooms yet"

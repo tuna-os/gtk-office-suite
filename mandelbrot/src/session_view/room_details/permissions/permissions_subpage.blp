@@ -1,0 +1,300 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsPermissionsSubpage: Adw.NavigationPage {
+  title: _("Permissions");
+
+  child: Adw.NavigationView navigation {
+    Adw.NavigationPage {
+      title: _("Permissions");
+      tag: "permissions";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-back-button: false;
+
+          [start]
+          Gtk.Button back_button {
+            icon-name: "go-previous-symbolic";
+            tooltip-text: _("Back");
+            clicked => $go_back() swapped;
+
+            styles [
+              "back",
+            ]
+          }
+
+          [end]
+          $LoadingButton save_button {
+            visible: bind template.editable;
+            sensitive: bind template.changed;
+            label: _("_Save");
+            use-underline: true;
+            clicked => $save() swapped;
+
+            styles [
+              "suggested-action",
+            ]
+          }
+        }
+
+        content: Adw.PreferencesPage {
+          Adw.PreferencesGroup room_actions_group {
+            title: _("Room Actions");
+            // Translators: value used to assign room member roles.
+            description: _("Power level required to perform different actions in the room");
+
+            $PowerLevelSelectionRow messages_row {
+              title: _("Send Messages");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow redact_own_row {
+              title: _("Remove Own Messages");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $redact_own_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow redact_others_row {
+              title: _("Remove Messages of Other Members");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $redact_others_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow notify_room_row {
+              title: _("Notify Entire Room");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow state_row {
+              title: _("Change Room Settings");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $state_default_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow name_row {
+              title: _("Change Room Name");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow topic_row {
+              title: _("Change Room Description");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow avatar_row {
+              title: _("Change Room Avatar");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow aliases_row {
+              title: _("Change Addresses");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow history_visibility_row {
+              title: _("Change Who Can Read History");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow encryption_row {
+              title: _("Enable Encryption");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow power_levels_row {
+              title: _("Change Permissions");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow server_acl_row {
+              title: _("Change Server Access Control List");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow upgrade_row {
+              title: _("Upgrade Room");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+          }
+
+          Adw.PreferencesGroup member_actions_group {
+            title: _("Member Actions");
+            // Translators: value used to assign room member roles.
+            description: _("Power level required to perform different actions on room members");
+
+            $PowerLevelSelectionRow invite_row {
+              // Translators: This is a verb.
+              title: _("Invite");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow kick_row {
+              // Translators: As in, 'Kick room member'.
+              title: _("Kick");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+
+            $PowerLevelSelectionRow ban_row {
+              // Translators: As in, 'Ban room member'.
+              title: _("Ban");
+              use-subtitle: true;
+              permissions: bind template.permissions;
+              selected-power-level-changed => $value_changed() swapped;
+
+              styles [
+                "property",
+              ]
+            }
+          }
+
+          Adw.PreferencesGroup members_group {
+            // Translators: value used to assign room member roles.
+            title: _("Members Power Levels");
+            // Translators: value used to assign room member roles.
+            description: _("Power levels defined for all members of the room");
+
+            Adw.SpinRow members_default_spin_row {
+              // Translators: value used to assign room member roles.
+              title: _("Default Power Level");
+              numeric: true;
+
+              adjustment: Gtk.Adjustment members_default_adjustment {
+                lower: -9007199254740991;
+                page-increment: 10;
+                step-increment: 1;
+                notify::value => $value_changed() swapped;
+              };
+            }
+
+            Adw.ActionRow members_default_text_row {
+              selectable: false;
+              // Translators: value used to assign room member roles.
+              title: _("Default Power Level");
+
+              accessibility {
+                described-by: [
+                  members_default_label,
+                ];
+              }
+
+              Gtk.Label members_default_label {
+                valign: center;
+              }
+            }
+
+            $ButtonCountRow members_privileged_button {
+              // Translators: value used to assign room member roles.
+              title: _("Members With Assigned Power Levels");
+              action-name: "navigation.push";
+              action-target: "'members'";
+            }
+          }
+        };
+      };
+    }
+
+    $RoomDetailsPermissionsMembersSubpage members_subpage {
+      tag: "members";
+      editable: bind template.editable;
+    }
+
+    $RoomDetailsPermissionsAddMembersSubpage add_members_subpage {
+      tag: "add-members";
+    }
+  };
+}

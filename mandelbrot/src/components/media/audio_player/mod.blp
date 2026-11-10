@@ -1,0 +1,92 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AudioPlayer: Adw.BreakpointBin {
+  margin-start: 6;
+  margin-end: 6;
+  width-request: 200;
+  height-request: 100;
+
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 6;
+
+    Gtk.Box {
+      spacing: 6;
+
+      Gtk.Label position_label {
+        styles [
+          "caption",
+        ]
+      }
+
+      Gtk.Overlay {
+        $Waveform waveform {
+          hexpand: true;
+          seek => $seek() swapped;
+        }
+
+        [overlay]
+        Adw.Spinner spinner {
+          visible: false;
+          height-request: 20;
+          width-request: 20;
+          halign: center;
+          valign: center;
+        }
+
+        [overlay]
+        Gtk.Image error_img {
+          visible: false;
+          icon-name: "error-symbolic";
+          halign: center;
+          valign: center;
+        }
+      }
+
+      Gtk.Label remaining_label {
+        styles [
+          "caption",
+        ]
+      }
+    }
+
+    Gtk.Box bottom_box {
+      spacing: 6;
+
+      Adw.Bin play_button_bin {
+        child: Gtk.Button play_button {
+          halign: center;
+          clicked => $toggle_playing() swapped;
+
+          styles [
+            "flat",
+          ]
+        };
+      }
+
+      Gtk.Label name_label {
+        hexpand: true;
+        xalign: 0.0;
+        ellipsize: end;
+      }
+
+      Gtk.Label position_label_narrow {
+        visible: false;
+        halign: end;
+        label: bind position_label.label;
+
+        styles [
+          "caption",
+        ]
+      }
+    }
+  }
+}
+
+Gtk.SizeGroup {
+  widgets [
+    position_label,
+    play_button_bin,
+  ]
+}

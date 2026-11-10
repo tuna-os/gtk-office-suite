@@ -1,0 +1,156 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PowerLevelSelectionPopover: Gtk.Popover {
+  styles [
+    "menu",
+    "role-selection-popover",
+  ]
+
+  child: Gtk.ScrolledWindow {
+    hscrollbar-policy: never;
+    max-content-height: 400;
+    propagate-natural-width: true;
+    propagate-natural-height: true;
+
+    child: Gtk.Box {
+      orientation: vertical;
+
+      Gtk.ListBox {
+        row-activated => $row_activated() swapped;
+
+        Gtk.ListBoxRow admin_row {
+          selectable: false;
+
+          child: Gtk.Box {
+            accessible-role: group;
+            spacing: 6;
+
+            Gtk.Label {
+              label: "100";
+              width-chars: 3;
+              xalign: 1.0;
+            }
+
+            $RoleBadge {
+              role: administrator;
+              valign: center;
+            }
+
+            Image admin_selected {
+              icon-name: "object-select-symbolic";
+              accessible-role: presentation;
+            }
+          };
+        }
+
+        Gtk.ListBoxRow mod_row {
+          selectable: false;
+
+          child: Gtk.Box {
+            accessible-role: group;
+            spacing: 6;
+
+            Gtk.Label {
+              label: "50";
+              width-chars: 3;
+              xalign: 1.0;
+            }
+
+            $RoleBadge {
+              role: moderator;
+              valign: center;
+            }
+
+            Gtk.Image mod_selected {
+              icon-name: "object-select-symbolic";
+              accessible-role: presentation;
+            }
+          };
+        }
+
+        Gtk.ListBoxRow default_row {
+          selectable: false;
+
+          child: Gtk.Box {
+            accessible-role: group;
+            spacing: 6;
+
+            Gtk.Label default_pl_label {
+              width-chars: 3;
+              xalign: 1.0;
+            }
+
+            $RoleBadge {
+              role: default;
+              valign: center;
+            }
+
+            Gtk.Image default_selected {
+              icon-name: "object-select-symbolic";
+              accessible-role: presentation;
+            }
+          };
+        }
+
+        Gtk.ListBoxRow muted_row {
+          selectable: false;
+
+          child: Gtk.Box {
+            accessible-role: group;
+            spacing: 6;
+
+            Gtk.Label muted_pl_label {
+              width-chars: 3;
+              xalign: 1.0;
+            }
+
+            $RoleBadge {
+              role: muted;
+              valign: center;
+            }
+
+            Gtk.Image muted_selected {
+              icon-name: "object-select-symbolic";
+              accessible-role: presentation;
+            }
+          };
+        }
+      }
+
+      Gtk.Separator {}
+
+      Gtk.ListBox {
+        Adw.SpinRow custom_row {
+          selectable: false;
+          // Translators: As in 'Custom role'.
+          title: C_("role", "Custom");
+          numeric: true;
+
+          adjustment: Gtk.Adjustment custom_adjustment {
+            // js_int::MIN_SAFE_INT.
+            lower: -9007199254740991;
+            upper: 100;
+            page-increment: 10;
+            step-increment: 1;
+            notify::value => $custom_value_changed() swapped;
+          };
+
+          Gtk.Button custom_confirm {
+            icon-name: "checkmark-symbolic";
+            tooltip-text: _("Confirm Custom Role");
+            clicked => $custom_value_confirmed() swapped;
+            valign: center;
+            sensitive: false;
+
+            styles [
+              "suggested-action",
+              "circular",
+              "spin-confirm",
+            ]
+          }
+        }
+      }
+    };
+  };
+}

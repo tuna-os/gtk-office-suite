@@ -1,0 +1,4962 @@
+# Hindi translation for fractal.
+# Copyright (C) 2024 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# Scrambled777 <weblate.scrambled777@simplelogin.com>, 2024.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal main\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/fractal/issues\n"
+"POT-Creation-Date: 2024-07-20 09:31+0000\n"
+"PO-Revision-Date: 2024-07-21 10:01+0530\n"
+"Last-Translator: Scrambled777 <weblate.scrambled777@simplelogin.com>\n"
+"Language-Team: Hindi <indlinux-hindi@lists.sourceforge.net>\n"
+"Language: hi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Generator: Gtranslator 46.1\n"
+
+#: data/org.gnome.Fractal.desktop.in.in:3
+#: data/org.gnome.Fractal.metainfo.xml.in.in:7
+#: src/login/session_setup_view.ui:22 src/window.ui:8
+msgid "Fractal"
+msgstr "फ्रैक्टल"
+
+#: data/org.gnome.Fractal.desktop.in.in:4
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr "फ्रैक्टल सहयोगात्मक समूह संचार के लिए एक विकेन्द्रीकृत, सुरक्षित मैसेजिंग क्लाइंट है।"
+
+#: data/org.gnome.Fractal.desktop.in.in:5
+msgid "Fractal group messaging"
+msgstr "फ्रैक्टल ग्रुप मैसेजिंग"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: data/org.gnome.Fractal.desktop.in.in:14
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr "मैट्रिक्स;matrix.org;चैट;irc;संचार;talk;riot;element;"
+
+#: data/org.gnome.Fractal.gschema.xml.in:6
+msgid "Window width"
+msgstr "विंडो चौड़ाई"
+
+#: data/org.gnome.Fractal.gschema.xml.in:10
+msgid "Window height"
+msgstr "विंडो ऊंचाई"
+
+#: data/org.gnome.Fractal.gschema.xml.in:14
+msgid "Window maximized state"
+msgstr "विंडो अधिकतमीकृत स्थिति"
+
+#: data/org.gnome.Fractal.gschema.xml.in:18
+msgid "Enable markdown formatting"
+msgstr "मार्कडाउन प्रारूपण सक्षम करें"
+
+#: data/org.gnome.Fractal.gschema.xml.in:19
+msgid "Whether messages should be processed as markdown when sending them"
+msgstr "क्या संदेशों को भेजते समय उन्हें मार्कडाउन के रूप में संसाधित किया जाना चाहिए"
+
+#: data/org.gnome.Fractal.gschema.xml.in:23
+msgid "Session settings"
+msgstr "सत्र सेटिंग"
+
+#: data/org.gnome.Fractal.gschema.xml.in:24
+msgid "Serialized list of settings per session"
+msgstr "प्रति सत्र सेटिंग्स की क्रमबद्ध सूची"
+
+#: data/org.gnome.Fractal.gschema.xml.in:28
+msgid "Current session"
+msgstr "वर्तमान सत्र"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Chat on Matrix"
+msgstr "मैट्रिक्स पर चैट करें"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:10
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects, and will fit all screens, big or small."
+msgstr ""
+"फ्रैक्टल गनोम के लिए Rust में लिखा गया एक मैट्रिक्स मैसेजिंग ऐप है। इसका इंटरफ़ेस मुफ्त "
+"सॉफ़्टवेयर परियोजनाओं जैसे बड़े समूहों में सहयोग के लिए अनुकूलित है, और यह बड़ी या छोटी सभी "
+"स्क्रीन पर समुचित होगा।"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:14
+msgid "Highlights:"
+msgstr "मुख्य अंश:"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:16
+msgid ""
+"Find rooms to discuss your favorite topics, or talk privately to people, "
+"securely thanks to end-to-end encryption"
+msgstr ""
+"अपने पसंदीदा विषयों पर चर्चा करने या लोगों से निजी तौर पर बात करने के लिए कक्ष ढूंढें, अंत-"
+"से-अंत कूटलेखन के लिए सुरक्षित रूप से धन्यवाद"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:17
+msgid "Send rich formatted messages, files, or your current location"
+msgstr "रिच फ़ॉर्मेट वाले संदेश, फाइलें, या अपना वर्तमान स्थान भेजें"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:18
+msgid ""
+"Reply to specific messages, react with emoji, mention users or rooms, edit "
+"or remove messages"
+msgstr ""
+"विशिष्ट संदेशों का उत्तर दें, इमोजी के साथ प्रतिक्रिया दें, उपयोक्ताओं या कमरों का उल्लेख करें, "
+"संदेशों को संपादित करें या हटाएं"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:19
+msgid "View images, and play audio and video directly in the conversation"
+msgstr "छवियां देखें, और सीधे वार्तालाप में ऑडियो और वीडियो चलाएं"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:20
+msgid "See who has read messages, and who is typing"
+msgstr "देखें कि किसने संदेश पढ़ा है और कौन टाइप कर रहा है"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:21
+msgid "Log into multiple accounts at once (with Single-Sign On support)"
+msgstr "एक साथ कई खातों में लॉग इन करें (एकल-साइन ऑन समर्थन के साथ)"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:39
+msgid "Fractal’s main window"
+msgstr "फ्रैक्टल की मुख्य विंडो"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:43
+msgid "View the media history of a Matrix room"
+msgstr "मैट्रिक्स कक्ष का मीडिया इतिहास देखें"
+
+#: data/org.gnome.Fractal.metainfo.xml.in.in:47
+msgid "Fractal’s interface adapts to small screens"
+msgstr "फ्रैक्टल का इंटरफ़ेस छोटी स्क्रीन के अनुकूल है"
+
+#: src/account_chooser_dialog/mod.ui:4 src/account_chooser_dialog/mod.ui:33
+msgid "Select an Account"
+msgstr "एक खाता चुनें"
+
+#: src/account_chooser_dialog/mod.ui:62
+msgid "Select the account you want to open the URI with"
+msgstr "वह खाता चुनें जिससे आप URI खोलना चाहते हैं"
+
+#: src/account_switcher/account_switcher_button.ui:14
+msgid "Switch Accounts"
+msgstr "खाते बदलें"
+
+#: src/account_switcher/account_switcher_popover.ui:38
+msgid "_Add Account"
+msgstr "खाता जोड़ें (_A)"
+
+#: src/account_switcher/session_item.ui:56
+#: src/account_switcher/session_item.ui:58
+#: src/session/view/account_settings/mod.ui:4
+msgid "Account Settings"
+msgstr "खाता सेटिंग"
+
+#: src/application.rs:209
+msgid "The Fractal Team"
+msgstr "फ्रैक्टल टीम"
+
+#: src/application.rs:215
+msgid "© 2017-2024 The Fractal Team"
+msgstr "© 2017-2024 फ्रैक्टल टीम"
+
+#: src/application.rs:229
+msgid "translator-credits"
+msgstr "Scrambled777 <weblate.scrambled777@simplelogin.com>"
+
+#. This can't be added via the builder
+#: src/application.rs:233
+msgid "Name by"
+msgstr "नाम द्वारा"
+
+#: src/application.rs:348
+msgid "Session not found"
+msgstr "सत्र नहीं मिला"
+
+#: src/components/action_button.ui:34
+msgid "Confirm Change"
+msgstr "परिवर्तन की पुष्टि करें"
+
+#: src/components/action_button.ui:54 src/components/rows/loading_row.ui:26
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:125
+#: src/session/view/account_settings/user_sessions_page/mod.ui:89
+#: src/session/view/content/room_details/history_viewer/audio.ui:61
+#: src/session/view/content/room_details/history_viewer/file.ui:60
+#: src/session/view/content/room_details/history_viewer/media.ui:67
+#: src/session/view/content/room_history/mod.ui:204
+msgid "Try Again"
+msgstr "पुनः प्रयास करें"
+
+#: src/components/action_button.ui:67 src/components/loading/spinner.rs:31
+#: src/login/session_setup_view.ui:15
+#: src/session/view/content/explore/mod.ui:53
+#: src/session/view/content/room_details/history_viewer/audio.ui:17
+#: src/session/view/content/room_details/history_viewer/file.ui:16
+#: src/session/view/content/room_details/history_viewer/media.ui:23
+#: src/session/view/content/room_history/mod.ui:176 src/window.ui:18
+msgid "Loading"
+msgstr "लोड हो रहा है"
+
+#: src/components/action_button.ui:88
+msgid "Success"
+msgstr "सफलता"
+
+#: src/components/action_button.ui:107
+msgid "Warning"
+msgstr "चेतावनी"
+
+#: src/components/action_button.ui:125 src/error_page.ui:10
+#: src/session/view/account_settings/user_sessions_page/mod.ui:84
+#: src/session/view/content/room_details/invite_subpage/mod.ui:136
+#: src/session/view/content/room_details/invite_subpage/mod.ui:140
+#: src/session/view/create_dm_dialog/mod.ui:104 src/window.ui:75
+msgid "Error"
+msgstr "त्रुटि"
+
+#: src/components/avatar/editable.rs:357
+msgid "Images"
+msgstr "छवियां"
+
+#: src/components/avatar/editable.rs:362
+msgid "Choose Avatar"
+msgstr "अवतार चुनें"
+
+#: src/components/avatar/editable.rs:364
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:202
+msgid "Choose"
+msgstr "चुनें"
+
+#: src/components/avatar/editable.rs:378
+msgid "Could not open avatar file"
+msgstr "अवतार फाइल नहीं खुल सकी"
+
+#: src/components/avatar/editable.rs:399
+msgid "The chosen file is not an image"
+msgstr "चुनी गई फाइल कोई छवि नहीं है"
+
+#: src/components/avatar/editable.rs:405
+msgid "Could not determine the type of the chosen file"
+msgstr "चुनी गई फाइल का प्रकार निर्धारित नहीं किया जा सका"
+
+#: src/components/avatar/editable.ui:54
+msgid "Remove Avatar"
+msgstr "अवतार हटाएं"
+
+#: src/components/avatar/editable.ui:71
+msgid "Select New Avatar"
+msgstr "नया अवतार चुनें"
+
+#: src/components/crypto/identity_setup_view.rs:400
+#: src/identity_verification_view/cancelled_page.rs:189
+msgid "Could not send a new verification request"
+msgstr "नया सत्यापन अनुरोध नहीं भेजा जा सका"
+
+#: src/components/crypto/identity_setup_view.rs:451
+msgid "Could not create the crypto identity"
+msgstr "क्रिप्टो पहचान नहीं बनाई जा सकी"
+
+#: src/components/crypto/identity_setup_view.ui:9
+#: src/components/crypto/identity_setup_view.ui:35
+msgid "Verify Your New Session"
+msgstr "अपना नया सत्र सत्यापित करें"
+
+#: src/components/crypto/identity_setup_view.ui:46
+msgid ""
+"Verifying your session allows you and the people you chat with to be sure "
+"that no one is trying to impersonate you or intercept your conversations."
+msgstr ""
+"अपने सत्र को सत्यापित करने से आप और जिन लोगों से आप चैट करते हैं, उन्हें यह सुनिश्चित करने में "
+"मदद मिलती है कि कोई भी आपका प्रतिरूपण करने या आपकी बातचीत में बाधा डालने की कोशिश "
+"नहीं कर रहा है।"
+
+#: src/components/crypto/identity_setup_view.ui:55
+msgid "Verify With Another Session"
+msgstr "किसी अन्य सत्र से सत्यापित करें"
+
+#: src/components/crypto/identity_setup_view.ui:65
+msgid "No other devices logged into this account?"
+msgstr "क्या इस खाते में कोई अन्य उपकरण लॉग इन नहीं है?"
+
+#: src/components/crypto/identity_setup_view.ui:74
+#: src/components/crypto/recovery_setup_view.ui:9
+#: src/components/crypto/recovery_setup_view.ui:35
+msgid "Recover Account"
+msgstr "खाता पुनर्प्राप्त करें"
+
+#: src/components/crypto/identity_setup_view.ui:85
+#: src/components/crypto/identity_setup_view.ui:262
+#: src/components/crypto/recovery_setup_view.ui:98
+#: src/components/crypto/recovery_setup_view.ui:209
+#: src/components/crypto/recovery_setup_view.ui:513
+#: src/session/view/account_settings/security_page/mod.rs:251
+#: src/session/view/account_settings/security_page/mod.rs:319
+msgid "Reset"
+msgstr "रीसेट करें"
+
+#: src/components/crypto/identity_setup_view.ui:106
+#: src/identity_verification_view/mod.ui:5 src/session/view/content/mod.ui:70
+msgid "Identity Verification"
+msgstr "पहचान सत्यापन"
+
+#: src/components/crypto/identity_setup_view.ui:125
+#: src/components/crypto/identity_setup_view.ui:151
+msgid "Set Up Crypto Identity"
+msgstr "क्रिप्टो पहचान स्थापित करें"
+
+#: src/components/crypto/identity_setup_view.ui:162
+#: src/components/crypto/identity_setup_view.ui:237
+msgid ""
+"Your crypto identity allows you to verify other Matrix accounts and "
+"automatically trust their verified sessions."
+msgstr ""
+"आपकी क्रिप्टो पहचान आपको अन्य मैट्रिक्स खातों को सत्यापित करने और स्वचालित रूप से उनके "
+"सत्यापित सत्रों पर भरोसा करने की अनुमति देती है।"
+
+#: src/components/crypto/identity_setup_view.ui:170
+msgid "You need to set up a crypto identity, since it has never been created."
+msgstr ""
+"आपको एक क्रिप्टो पहचान स्थापित करने की आवश्यकता है, क्योंकि यह कभी नहीं बनाई गई है।"
+
+#: src/components/crypto/identity_setup_view.ui:178
+#: src/components/crypto/recovery_setup_view.ui:305
+msgid "Set Up"
+msgstr "स्थापित करें"
+
+#: src/components/crypto/identity_setup_view.ui:200
+#: src/components/crypto/identity_setup_view.ui:226
+#: src/components/crypto/recovery_setup_view.ui:169
+#: src/session/view/account_settings/security_page/mod.rs:254
+msgid "Reset Crypto Identity"
+msgstr "क्रिप्टो पहचान रीसेट करें"
+
+#: src/components/crypto/identity_setup_view.ui:245
+msgid ""
+"You should reset your crypto identity if a device that does not belong to "
+"you managed to be verified."
+msgstr ""
+"यदि कोई उपकरण जो आपका नहीं है उसे सत्यापित किया जा सके तो आपको अपनी क्रिप्टो पहचान "
+"रीसेट करनी चाहिए।"
+
+#: src/components/crypto/identity_setup_view.ui:253
+msgid "To proceed, you will also need to reset your account recovery key."
+msgstr "आगे बढ़ने के लिए, आपको अपनी खाता पुनर्प्राप्ति कुंजी भी रीसेट करनी होगी।"
+
+#: src/components/crypto/recovery_setup_view.rs:174
+msgid "Invalidates the verifications of all users and sessions"
+msgstr "सभी उपयोक्ताओं और सत्रों का सत्यापन अमान्य हो जाएगा"
+
+#: src/components/crypto/recovery_setup_view.rs:179
+msgid ""
+"Required because the crypto identity in the recovery data is incomplete. "
+"Invalidates the verifications of all users and sessions."
+msgstr ""
+"यह आवश्यक है क्योंकि पुनर्प्राप्ति डेटा में क्रिप्टो पहचान अपूर्ण है। सभी उपयोक्ताओं और सत्रों "
+"का सत्यापन अमान्य हो जाएगा।"
+
+#: src/components/crypto/recovery_setup_view.rs:189
+msgid "You might not be able to read your past encrypted messages anymore"
+msgstr "अब आप अपने पिछले कूटलेखित संदेशों को पढ़ने में सक्षम नहीं हो सकते हैं"
+
+#: src/components/crypto/recovery_setup_view.rs:194
+msgid ""
+"Required because the backup is not set up properly. You might not be able to "
+"read your past encrypted messages anymore."
+msgstr ""
+"यह आवश्यक है क्योंकि बैकअप ठीक से निर्धारित नहीं किया गया है। अब आप अपने पिछले कूटलेखित "
+"संदेशों को पढ़ने में सक्षम नहीं हो सकते हैं।"
+
+#: src/components/crypto/recovery_setup_view.rs:212
+msgid ""
+"Make sure to store this recovery key in a safe place. You will need it to "
+"recover your account if you lose access to all your sessions."
+msgstr ""
+"इस पुनर्प्राप्ति कुंजी को सुरक्षित स्थान पर संग्रहीत करना सुनिश्चित करें। यदि आप अपने सभी "
+"सत्रों तक पहुंच खो देते हैं तो आपको अपना खाता पुनर्प्राप्त करने के लिए इसकी आवश्यकता होगी।"
+
+#: src/components/crypto/recovery_setup_view.rs:214
+msgid ""
+"Make sure to remember your passphrase or to store it in a safe place. You "
+"will need it to recover your account if you lose access to all your sessions."
+msgstr ""
+"सुनिश्चित करें कि आप अपना पासफ़्रेज़ याद रखें या इसे किसी सुरक्षित स्थान पर संग्रहीत करें। यदि "
+"आप अपने सभी सत्रों तक पहुंच खो देते हैं तो आपको अपना खाता पुनर्प्राप्त करने के लिए इसकी "
+"आवश्यकता होगी।"
+
+#: src/components/crypto/recovery_setup_view.rs:295
+msgid "The recovery passphrase or key is invalid"
+msgstr "पुनर्प्राप्ति पासफ़्रेज़ या कुंजी अमान्य है"
+
+#: src/components/crypto/recovery_setup_view.rs:298
+msgid "Could not access recovery data"
+msgstr "पुनर्प्राप्ति डेटा तक नहीं पहुंच सके"
+
+#: src/components/crypto/recovery_setup_view.rs:354
+msgid "Could not reset the crypto identity"
+msgstr "क्रिप्टो पहचान रीसेट नहीं की जा सकी"
+
+#: src/components/crypto/recovery_setup_view.rs:378
+#: src/components/crypto/recovery_setup_view.rs:403
+msgid "Could not reset account recovery"
+msgstr "खाता पुनर्प्राप्ति रीसेट नहीं की जा सकी"
+
+#: src/components/crypto/recovery_setup_view.rs:438
+msgid "Could not reset account recovery key"
+msgstr "खाता पुनर्प्राप्ति कुंजी रीसेट नहीं किया जा सका"
+
+#: src/components/crypto/recovery_setup_view.rs:476
+msgid "Could not enable account recovery"
+msgstr "खाता पुनर्प्राप्ति सक्षम नहीं किया जा सका"
+
+#: src/components/crypto/recovery_setup_view.ui:46
+msgid "Restore full access to your account."
+msgstr "अपने खाते तक पूर्ण पहुंच बहाल करें।"
+
+#: src/components/crypto/recovery_setup_view.ui:54
+msgid ""
+"To access the recovery data, we need the recovery passphrase or the recovery "
+"key that is usually set up when you create your account."
+msgstr ""
+"पुनर्प्राप्ति डेटा तक पहुंचने के लिए, हमें पुनर्प्राप्ति पासफ़्रेज़ या पुनर्प्राप्ति कुंजी की आवश्यकता "
+"होती है जो आमतौर पर आपके द्वारा अपना खाता बनाते समय निर्धारित की जाती है।"
+
+#: src/components/crypto/recovery_setup_view.ui:67
+msgid "Recovery Passphrase or Key"
+msgstr "पुनर्प्राप्ति पासफ़्रेज़ या कुंजी"
+
+#: src/components/crypto/recovery_setup_view.ui:77
+#: src/session/view/account_settings/security_page/mod.rs:339
+#: src/session/view/sidebar/mod.rs:327
+msgid "Recover"
+msgstr "पुनर्प्राप्त करें"
+
+#: src/components/crypto/recovery_setup_view.ui:88
+msgid "Lost your recovery passphrase or key?"
+msgstr "क्या आपका पुनर्प्राप्ति पासफ़्रेज़ या कुंजी खो गई है?"
+
+#: src/components/crypto/recovery_setup_view.ui:119
+#: src/components/crypto/recovery_setup_view.ui:145
+msgid "Reset Account Recovery"
+msgstr "खाता पुनर्प्राप्ति रीसेट करें"
+
+#: src/components/crypto/recovery_setup_view.ui:156
+msgid ""
+"Resetting account recovery can allow you to fix or reset part or all of your "
+"recovery setup."
+msgstr ""
+"खाता पुनर्प्राप्ति को रीसेट करने से आप अपने पुनर्प्राप्ति सेटअप के कुछ भाग या संपूर्ण को ठीक "
+"या रीसेट कर सकते हैं।"
+
+#: src/components/crypto/recovery_setup_view.ui:174
+msgid "Reset Room Encryption Keys Backup"
+msgstr "कक्ष कूटलेखन कुंजी बैकअप रीसेट करें"
+
+#: src/components/crypto/recovery_setup_view.ui:181
+msgid ""
+"If you do not provide a new recovery passphrase, a recovery key will be "
+"created."
+msgstr ""
+"यदि आप नया पुनर्प्राप्ति पासफ़्रेज़ प्रदान नहीं करते हैं, तो एक पुनर्प्राप्ति कुंजी बनाई जाएगी।"
+
+#: src/components/crypto/recovery_setup_view.ui:189
+#: src/components/crypto/recovery_setup_view.ui:284
+msgid ""
+"You should not reuse the password of your Matrix account as a passphrase. "
+"Otherwise, if someone manages to get your account password, they will also "
+"be able to access all your encrypted conversations and to impersonate you."
+msgstr ""
+"आपको अपने मैट्रिक्स खाते के पासवर्ड को पासफ़्रेज़ के रूप में पुन: उपयोग नहीं करना चाहिए। "
+"अन्यथा, यदि कोई आपके खाते का पासवर्ड प्राप्त करने में सफल हो जाता है, तो वे आपकी सभी "
+"कूटलेखित बातचीत तक भी पहुंच सकेंगे और आपका प्रतिरूपण कर सकेंगे।"
+
+#: src/components/crypto/recovery_setup_view.ui:202
+#: src/components/crypto/recovery_setup_view.ui:297
+msgid "Recovery Passphrase (Optional)"
+msgstr "पुनर्प्राप्ति पासफ़्रेज़ (वैकल्पिक)"
+
+#: src/components/crypto/recovery_setup_view.ui:231
+#: src/components/crypto/recovery_setup_view.ui:257
+msgid "Set Up Account Recovery"
+msgstr "खाता पुनर्प्राप्ति निर्धारित करें"
+
+#: src/components/crypto/recovery_setup_view.ui:268
+msgid ""
+"Account recovery allows you to recover your crypto identity and to read your "
+"encrypted messages even if you lose access to all your sessions."
+msgstr ""
+"खाता पुनर्प्राप्ति आपको अपनी क्रिप्टो पहचान पुनर्प्राप्त करने और आपके कूटलेखित संदेशों को पढ़ने "
+"की अनुमति देती है, भले ही आप अपने सभी सत्रों तक पहुंच खो दें।"
+
+#: src/components/crypto/recovery_setup_view.ui:276
+msgid ""
+"If you do not provide a recovery passphrase, a recovery key will be created."
+msgstr ""
+"यदि आप पुनर्प्राप्ति पासफ़्रेज़ प्रदान नहीं करते हैं, तो एक पुनर्प्राप्ति कुंजी बनाई जाएगी।"
+
+#: src/components/crypto/recovery_setup_view.ui:327
+#: src/components/crypto/recovery_setup_view.ui:354
+msgid "Account Recovery Set Up Successfully"
+msgstr "खाता पुनर्प्राप्ति सफलतापूर्वक स्थापित किया गया"
+
+#: src/components/crypto/recovery_setup_view.ui:391
+msgid "Copy Recovery Key"
+msgstr "पुनर्प्राप्ति कुंजी कॉपी करें"
+
+#: src/components/crypto/recovery_setup_view.ui:408
+#: src/components/crypto/recovery_setup_view.ui:493
+msgid "OK"
+msgstr "ठीक है"
+
+#: src/components/crypto/recovery_setup_view.ui:430
+#: src/components/crypto/recovery_setup_view.ui:457
+#: src/session/view/account_settings/security_page/mod.rs:334
+msgid "Account Recovery Incomplete"
+msgstr "खाता पुनर्प्राप्ति अपूर्ण"
+
+#: src/components/crypto/recovery_setup_view.ui:468
+msgid "The recovery was successful but the recovery data was incomplete."
+msgstr "पुनर्प्राप्ति सफल रही लेकिन पुनर्प्राप्ति डेटा अधूरा था।"
+
+#: src/components/crypto/recovery_setup_view.ui:476
+msgid ""
+"To fix this, you should reset the recovery from a session that has all the "
+"data, and attempt to recover this session again."
+msgstr ""
+"इसे ठीक करने के लिए, आपको उस सत्र से पुनर्प्राप्ति को रीसेट करना चाहिए जिसमें सारा डेटा "
+"है, और इस सत्र को फिर से पुनर्प्राप्त करने का प्रयास करना चाहिए।"
+
+#: src/components/crypto/recovery_setup_view.ui:484
+msgid ""
+"Note that account recovery can have a different name in other Matrix "
+"clients, like “key backup” or “secure backup”."
+msgstr ""
+"ध्यान दें कि खाता पुनर्प्राप्ति का अन्य मैट्रिक्स क्लाइंट में एक अलग नाम हो सकता है, जैसे “कुंजी "
+"बैकअप” या “सुरक्षित बैकअप”।"
+
+#: src/components/crypto/recovery_setup_view.ui:504
+msgid "Alternatively, you can reset Account Recovery"
+msgstr "वैकल्पिक रूप से, आप खाता पुनर्प्राप्ति रीसेट कर सकते हैं"
+
+#: src/components/dialogs/auth.rs:239
+msgid "Please authenticate the operation with your password"
+msgstr "कृपया अपने पासवर्ड से अभियान को प्रमाणित करें"
+
+#: src/components/dialogs/auth.rs:278
+msgid ""
+"Please authenticate the operation via the browser and, once completed, press "
+"confirm"
+msgstr ""
+"कृपया ब्राउज़र के माध्यम से अभियान को प्रमाणित करें और, एक बार पूरा होने पर पुष्टि करें दबाएं"
+
+#: src/components/dialogs/auth.ui:4
+msgid "Authentication"
+msgstr "प्रमाणीकरण"
+
+#: src/components/dialogs/auth.ui:20
+msgid "Authenticate via Browser"
+msgstr "ब्राउज़र के माध्यम से प्रमाणित करें"
+
+#: src/components/dialogs/auth.ui:43
+#: src/session/view/content/room_details/invite_subpage/mod.ui:13
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:14
+msgid "_Cancel"
+msgstr "रद्द करें (_C)"
+
+#: src/components/dialogs/auth.ui:44
+msgid "C_onfirm"
+msgstr "पुष्टि करें (_o)"
+
+#. Translators: This is a verb, as in 'View Room'.
+#: src/components/dialogs/join_room.rs:227
+#: src/session/view/content/explore/public_room_row.rs:199
+#: src/session/view/content/room_history/mod.rs:1009
+#: src/session/view/content/room_history/state_row/tombstone.rs:94
+msgid "View"
+msgstr "देखें"
+
+#. Translators: This is a verb, as in 'Look up Room'.
+#: src/components/dialogs/join_room.rs:230
+#: src/components/dialogs/join_room.ui:91
+msgid "Look Up"
+msgstr "खोजें"
+
+#: src/components/dialogs/join_room.rs:293
+msgid ""
+"The room details cannot be previewed. It can be because the room is not "
+"known by the homeserver or because its details are private. You can still "
+"try to join it."
+msgstr ""
+"कक्ष के विवरण का पूर्वावलोकन नहीं किया जा सकता। ऐसा इसलिए हो सकता है क्योंकि होमसर्वर "
+"को कक्ष के बारे में पता नहीं है या इसका विवरण निजी है। आप अभी भी इसमें शामिल होने का "
+"प्रयास कर सकते हैं।"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/join_room.rs:315
+#: src/session/view/content/explore/public_room_row.rs:180
+msgid "1 member"
+msgid_plural "{n} members"
+msgstr[0] "1 सदस्य"
+msgstr[1] "{n} सदस्य"
+
+#: src/components/dialogs/join_room.ui:4 src/components/dialogs/join_room.ui:38
+msgid "Join a Room"
+msgstr "कक्ष से जुड़ें"
+
+#: src/components/dialogs/join_room.ui:17 src/login/greeter.ui:16
+#: src/login/greeter.ui:18
+#: src/session/view/content/room_details/edit_details_subpage.ui:13
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:19
+#: src/session/view/media_viewer.ui:56 src/session/view/media_viewer.ui:58
+msgid "Back"
+msgstr "पीछे"
+
+#: src/components/dialogs/join_room.ui:72
+msgid "Enter a room ID, room alias, or link to look up a room"
+msgstr "किसी कक्ष को देखने के लिए कक्ष की ID, कक्ष का उपनाम या स्थायी लिंक दर्ज करें"
+
+#: src/components/dialogs/join_room.ui:193
+#: src/session/view/content/explore/public_room_row.rs:201
+#: src/session/view/content/room_history/mod.rs:1012
+#: src/session/view/content/room_history/state_row/tombstone.rs:96
+msgid "Join"
+msgstr "जुड़ें"
+
+#. We are rejecting an invite.
+#: src/components/dialogs/message_dialogs.rs:24
+msgid "Decline Invite?"
+msgstr "आमंत्रण अस्वीकारें?"
+
+#: src/components/dialogs/message_dialogs.rs:26
+msgid ""
+"Do you really want to decline this invite? You can join this room on your "
+"own later."
+msgstr ""
+"क्या आप वाकई इस आमंत्रण को अस्वीकारना चाहते हैं? आप बाद में स्वयं इस कक्ष में शामिल हो सकते "
+"हैं।"
+
+#: src/components/dialogs/message_dialogs.rs:29
+msgid ""
+"Do you really want to decline this invite? You will not be able to join this "
+"room without it."
+msgstr ""
+"क्या आप वाकई इस आमंत्रण को अस्वीकारना चाहते हैं? इसके बिना आप इस कक्ष से नहीं जुड़ पाएंगे।"
+
+#: src/components/dialogs/message_dialogs.rs:32
+#: src/identity_verification_view/accept_request_page.ui:46
+#: src/session/view/content/room_history/verification_info_bar.rs:173
+msgid "Decline"
+msgstr "अस्वीकारें"
+
+#. We are leaving a room that was joined.
+#: src/components/dialogs/message_dialogs.rs:37
+msgid "Leave Room?"
+msgstr "कक्ष छोड़ें?"
+
+#: src/components/dialogs/message_dialogs.rs:39
+msgid "Do you really want to leave this room? You can come back later."
+msgstr "क्या आप वाकई यह कक्ष छोड़ना चाहते हैं? आप बाद में वापस आ सकते हैं।"
+
+#: src/components/dialogs/message_dialogs.rs:42
+msgid ""
+"Do you really want to leave this room? You will not be able to come back "
+"without an invitation."
+msgstr "क्या आप वाकई यह कक्ष छोड़ना चाहते हैं? आप बिना निमंत्रण के वापस नहीं आ सकेंगे।"
+
+#: src/components/dialogs/message_dialogs.rs:45
+msgid "Leave"
+msgstr "छोड़ें"
+
+#: src/components/dialogs/message_dialogs.rs:56
+#: src/components/dialogs/message_dialogs.rs:308
+#: src/components/dialogs/message_dialogs.rs:369
+#: src/components/dialogs/message_dialogs.rs:404
+#: src/identity_verification_view/confirm_qr_code_page.ui:61
+#: src/session/view/account_settings/general_page/mod.rs:293
+#: src/session/view/content/room_details/edit_details_subpage.rs:258
+#: src/session/view/content/room_details/edit_details_subpage.rs:537
+#: src/session/view/content/room_details/general_page.rs:1022
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:595
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:80
+#: src/session/view/content/room_history/item_row.rs:937
+#: src/session/view/content/room_history/item_row.rs:994
+#: src/session/view/content/room_history/message_toolbar/mod.ui:78
+#: src/session/view/content/room_history/message_toolbar/mod.ui:80
+#: src/session/view/content/room_history/verification_info_bar.rs:177
+msgid "Cancel"
+msgstr "रद्द करें"
+
+#: src/components/dialogs/message_dialogs.rs:65
+msgid "Ignore {user}"
+msgstr "{user} को अनदेखा करें"
+
+#: src/components/dialogs/message_dialogs.rs:69
+msgid "All messages or invitations sent by this user will be ignored"
+msgstr "इस उपयोक्ता द्वारा भेजे गए सभी संदेश या आमंत्रण अनदेखा कर दिए जाएंगे"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:134
+msgid "Ban {user}?"
+msgstr "{user} पर प्रतिबंध लगाएं?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:138
+msgid ""
+"Are you sure you want to ban {user_id}? They will not be able to join the "
+"room again until someone unbans them."
+msgstr ""
+"क्या आप वाकई {user_id} पर प्रतिबंध लगाना चाहते हैं? जब तक कोई उन पर से प्रतिबंध हटा "
+"नहीं देता तब तक वे कक्ष में दोबारा शामिल नहीं हो सकेंगे।"
+
+#. Translators: As in, 'Ban room member'.
+#: src/components/dialogs/message_dialogs.rs:141
+#: src/components/user_page.ui:169
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:233
+msgid "Ban"
+msgstr "प्रतिबंधित करें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:152
+msgid "Revoke Invite for {user}?"
+msgstr "{user} के लिए आमंत्रण रद्द करें?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:159
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will still be "
+"able to join the room on their own."
+msgstr ""
+"क्या आप वाकई {user_id} के लिए आमंत्रण रद्द करना चाहते हैं? वे अभी भी स्वयं कक्ष में शामिल "
+"हो सकेंगे।"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:166
+msgid ""
+"Are you sure you want to revoke the invite for {user_id}? They will not be "
+"able to join the room again until someone reinvites them."
+msgstr ""
+"क्या आप वाकई {user_id} के लिए आमंत्रण रद्द करना चाहते हैं? जब तक कोई उन्हें दोबारा "
+"आमंत्रित नहीं करता, वे कक्ष में दोबारा शामिल नहीं हो पाएंगे।"
+
+#: src/components/dialogs/message_dialogs.rs:170
+#: src/components/user_page.rs:423
+msgid "Revoke Invite"
+msgstr "आमंत्रण निरस्त करें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:177
+msgid "Deny Access to {user}?"
+msgstr "{user} की पहुंच अस्वीकारें?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:183
+msgid "Are you sure you want to deny access to {user_id}?"
+msgstr "क्या आप वाकई {user_id} की पहुंच अस्वीकार करना चाहते हैं?"
+
+#: src/components/dialogs/message_dialogs.rs:186
+#: src/components/user_page.rs:424
+msgid "Deny Access"
+msgstr "पहुंच अस्वीकारें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:192
+msgid "Kick {user}?"
+msgstr "{user} को बाहर निकालें?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:197
+msgid ""
+"Are you sure you want to kick {user_id}? They will still be able to join the "
+"room again on their own."
+msgstr ""
+"क्या आप वाकई {user_id} को बाहर निकालना चाहते हैं? वे फिर से स्वयं कक्ष में शामिल हो सकेंगे।"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:204
+msgid ""
+"Are you sure you want to kick {user_id}? They will not be able to join the "
+"room again until someone invites them."
+msgstr ""
+"क्या आप वाकई {user_id} को बाहर निकालना चाहते हैं? जब तक कोई उन्हें आमंत्रित नहीं करता "
+"तब तक वे कक्ष में दोबारा शामिल नहीं हो सकेंगे।"
+
+#. Translators: As in, 'Kick room member'.
+#. // Translators: As in, 'Kick room member'.
+#: src/components/dialogs/message_dialogs.rs:208
+#: src/components/user_page.rs:426
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:221
+msgid "Kick"
+msgstr "बाहर निकालें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:219
+msgid "Remove Messages Sent by {user}?"
+msgstr "{user} द्वारा भेजे गए संदेश हटाएं?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:225
+msgid ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove 1 message sent by {user_id}? This cannot be undone."
+msgid_plural ""
+"This removes all the messages received from the homeserver. Are you sure you "
+"want to remove {n} messages sent by {user_id}? This cannot be undone."
+msgstr[0] ""
+"यह होमसर्वर से प्राप्त सभी संदेशों को हटा देता है। क्या आप वाकई {user_id} द्वारा भेजा "
+"गया एक संदेश हटाना चाहते हैं? इसे पूर्ववत नहीं किया जा सकता।"
+msgstr[1] ""
+"यह होमसर्वर से प्राप्त सभी संदेशों को हटा देता है। क्या आप वाकई {user_id} द्वारा भेजे गए "
+"{n} संदेशों को हटाना चाहते हैं? इसे पूर्ववत नहीं किया जा सकता।"
+
+#: src/components/dialogs/message_dialogs.rs:230
+#: src/session/view/account_settings/general_page/mod.rs:294
+#: src/session/view/content/room_details/edit_details_subpage.rs:259
+#: src/session/view/content/room_history/item_row.rs:938
+msgid "Remove"
+msgstr "हटाएं"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:236
+msgid "No Messages Sent by {user}"
+msgstr "{user} ने कोई संदेश नहीं भेजा"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:242
+msgid ""
+"There are no messages received from the homeserver sent by {user_id}. You "
+"can try to load more by going further back in the room history."
+msgstr ""
+"{user_id} द्वारा भेजे गए होमसर्वर से कोई संदेश प्राप्त नहीं हुआ है। आप कक्ष के इतिहास में और "
+"पीछे जाकर और अधिक लोड करने का प्रयास कर सकते हैं।"
+
+#: src/components/dialogs/message_dialogs.rs:257
+#: src/session/view/content/room_history/item_row.rs:976
+msgid "Reason (optional)"
+msgstr "कारण (वैकल्पिक)"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:281
+msgid "Remove the latest message sent by the user"
+msgid_plural "Remove the {n} latest messages sent by the user"
+msgstr[0] "उपयोक्ता द्वारा भेजे गए नवीनतम संदेश को हटायें"
+msgstr[1] "उपयोगकर्ता द्वारा भेजे गए {n} नवीनतम संदेशों को हटायें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:352
+msgid "Mute {user}?"
+msgstr "{user} को मूक करें?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:358
+msgid ""
+"Are you sure you want to mute {user_id}? They will not be able to send new "
+"messages."
+msgstr "क्या आप वाकई {user_id} को मूक करना चाहते हैं? वे नये संदेश नहीं भेज सकेंगे।"
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/components/dialogs/message_dialogs.rs:371
+msgid "Mute"
+msgstr "मूक"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:387
+msgid "Promote {user}?"
+msgstr "{user} को पदोन्नत करें?"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/dialogs/message_dialogs.rs:393
+msgid ""
+"If you promote {user_id} to the same level as yours, you will not be able to "
+"demote them in the future."
+msgstr ""
+"यदि आप {user_id} को अपने समान स्तर पर पदोन्नत करते हैं, तो आप भविष्य में उन्हें पदावनत "
+"नहीं कर पाएंगे।"
+
+#: src/components/dialogs/message_dialogs.rs:405
+msgid "Promote"
+msgstr "पदोन्नति करें"
+
+#: src/components/dialogs/user_profile.ui:4
+msgid "User Profile"
+msgstr "उपयोक्ता प्रोफाइल"
+
+#: src/components/offline_banner.rs:102
+msgid "Offline"
+msgstr "ऑफलाइन"
+
+#: src/components/offline_banner.rs:109
+msgid "No network connection"
+msgstr "कोई नेटवर्क कनेक्शन नहीं है"
+
+#: src/components/offline_banner.rs:112
+msgid "No Internet connection"
+msgstr "कोई नेटवर्क कनेक्शन नहीं है"
+
+#: src/components/media/content_viewer.rs:132
+msgid "Image not Viewable"
+msgstr "छवि देखने योग्य नहीं है"
+
+#: src/components/media/content_viewer.rs:133
+msgid "Audio Clip not Playable"
+msgstr "ऑडियो क्लिप चलाने योग्य नहीं"
+
+#: src/components/media/content_viewer.rs:134
+msgid "Video not Playable"
+msgstr "वीडियो चलने योग्य नहीं है"
+
+#: src/components/media/content_viewer.rs:135
+msgid "File not Viewable"
+msgstr "फाइल देखने योग्य नहीं है"
+
+#: src/components/media/location_viewer.rs:135
+msgid "Location at latitude {latitude} and longitude {longitude}"
+msgstr "अक्षांश {latitude} और देशांतर {longitude} पर स्थान"
+
+#: src/components/reaction_chooser.ui:7
+msgid "Send a Reaction"
+msgstr "प्रतिक्रिया भेजें"
+
+#: src/components/reaction_chooser.ui:17
+msgid "More Reactions"
+msgstr "अधिक प्रतिक्रियाएं"
+
+#: src/components/pill/at_room.rs:29
+msgid "Notify the whole room"
+msgstr "संपूर्ण कक्ष को सूचित करें"
+
+#. Translators: As in 'Custom role'.
+#. Translators: As in, 'Custom power level', meaning permissions.
+#: src/components/power_level_selection/popover.ui:149
+#: src/session/model/room/permissions.rs:73
+msgid "Custom"
+msgstr "तदनुकूल"
+
+#: src/components/power_level_selection/popover.ui:164
+msgid "Confirm Custom Role"
+msgstr "तदनुकूल भूमिका की पुष्टि करें"
+
+#: src/components/user_page.rs:283
+#: src/session/view/account_settings/general_page/mod.ui:74
+#: src/session/view/content/room_history/sender_avatar/mod.rs:76
+msgid "Matrix user ID copied to clipboard"
+msgstr "मैट्रिक्स उपयोक्ता ID को क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/components/user_page.rs:305
+msgid "Open Direct Chat"
+msgstr "सीधा चैट खोलें"
+
+#: src/components/user_page.rs:307
+msgid "Create Direct Chat"
+msgstr "सीधा चैट बनाएं"
+
+#: src/components/user_page.rs:331
+#: src/session/view/content/room_history/sender_avatar/mod.rs:534
+#: src/session/view/create_dm_dialog/mod.rs:202
+msgid "Could not create a new Direct Chat"
+msgstr "नई सीधी चैट नहीं बनाई जा सकी"
+
+#: src/components/user_page.rs:364
+msgid "In {room_name}"
+msgstr "{room_name} में"
+
+#. Translators: As in, 'The room member was invited'.
+#: src/components/user_page.rs:375
+msgctxt "member"
+msgid "Invited"
+msgstr "आमंत्रित"
+
+#. Translators: As in, 'The room member was banned'.
+#: src/components/user_page.rs:380
+msgctxt "member"
+msgid "Banned"
+msgstr "प्रतिबंधित"
+
+#. Translators: As in, 'The room member knocked to request access to the room'.
+#: src/components/user_page.rs:385
+msgctxt "member"
+msgid "Knocked"
+msgstr "दस्तक दी"
+
+#. Translators: As in, 'The room member has an unknown role'.
+#: src/components/user_page.rs:390
+msgctxt "member"
+msgid "Unknown"
+msgstr "अज्ञात"
+
+#: src/components/user_page.rs:411
+msgid "Allow Access"
+msgstr "प्रवेश की अनुमति दें"
+
+#: src/components/user_page.rs:513
+msgid "Could not change the role"
+msgstr "भूमिका नहीं बदली जा सकी"
+
+#: src/components/user_page.rs:535
+#: src/session/view/content/room_history/sender_avatar/mod.rs:558
+msgid "Could not invite user"
+msgstr "प्रयोक्ता को आमंत्रित नहीं किया जा सका"
+
+#: src/components/user_page.rs:569
+#: src/session/view/content/room_history/sender_avatar/mod.rs:591
+msgid "Could not revoke invite of user"
+msgstr "उपयोक्ता का आमंत्रित निरस्त नहीं किया जा सका"
+
+#: src/components/user_page.rs:570
+#: src/session/view/content/room_history/sender_avatar/mod.rs:592
+msgid "Could not deny access to user"
+msgstr "उपयोक्ता की पहुंच अस्वीकार नहीं की जा सकी"
+
+#: src/components/user_page.rs:571
+#: src/session/view/content/room_history/sender_avatar/mod.rs:593
+msgid "Could not kick user"
+msgstr "उपयोक्ता को बाहर नहीं निकाल सके"
+
+#: src/components/user_page.rs:617
+#: src/session/view/content/room_history/sender_avatar/mod.rs:678
+msgid "Could not ban user"
+msgstr "उपयोक्ता पर प्रतिबंध नहीं लगाया जा सका"
+
+#: src/components/user_page.rs:645
+#: src/session/view/content/room_history/sender_avatar/mod.rs:698
+msgid "Could not unban user"
+msgstr "उपयोक्ता का प्रतिबंध हटाया नहीं जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/components/user_page.rs:693
+#: src/session/view/content/room_history/sender_avatar/mod.rs:752
+msgid "Could not remove 1 message sent by the user"
+msgid_plural "Could not remove {n} messages sent by the user"
+msgstr[0] "उपयोक्ता द्वारा भेजा गया 1 संदेश हटाया नहीं जा सका"
+msgstr[1] "उपयोक्ता द्वारा भेजे गए {n} संदेशों को हटाया नहीं जा सका"
+
+#: src/components/user_page.rs:710
+msgid "Identity verified"
+msgstr "पहचान सत्यापित"
+
+#: src/components/user_page.rs:717
+msgid "Identity not verified"
+msgstr "पहचान सत्यापित नहीं है"
+
+#: src/components/user_page.rs:733
+msgid "Could not start user verification"
+msgstr "उपयोक्ता सत्यापन शुरू नहीं हो सका"
+
+#: src/components/user_page.rs:759
+msgid "Ignored"
+msgstr "नजरअंदाज किया गया"
+
+#: src/components/user_page.rs:761
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.ui:30
+msgid "Stop Ignoring"
+msgstr "नजरअंदाज करना बंद करें"
+
+#: src/components/user_page.rs:764
+msgid "Not Ignored"
+msgstr "नजरअंदाज नहीं किया गया"
+
+#: src/components/user_page.rs:765
+msgid "Ignore"
+msgstr "नजरअंदाज करें"
+
+#: src/components/user_page.rs:782
+#: src/session/view/account_settings/security_page/ignored_users_subpage/ignored_user_row.rs:100
+#: src/session/view/content/room_history/sender_avatar/mod.rs:777
+msgid "Could not stop ignoring user"
+msgstr "उपयोक्ता को नज़रअंदाज करना बंद नहीं किया जा सका"
+
+#: src/components/user_page.rs:785 src/session/view/content/invite.rs:302
+#: src/session/view/content/room_history/sender_avatar/mod.rs:780
+#: src/session/view/sidebar/row.rs:582
+msgid "Could not ignore user"
+msgstr "उपयोक्ता को नजरअंदाज नहीं किया जा सका"
+
+#: src/components/user_page.ui:66
+#: src/session/view/account_settings/general_page/mod.ui:73
+#: src/session/view/content/room_history/sender_avatar/mod.ui:27
+msgid "Copy Matrix User ID"
+msgstr "मैट्रिक्स उपयोक्ता ID कॉपी करें"
+
+#: src/components/user_page.ui:114
+msgid "Role"
+msgstr "भूमिका"
+
+#. Translators: value used to assign room member roles
+#: src/components/user_page.ui:127
+msgid "Power Level"
+msgstr "अधिकार का स्तर"
+
+#. Translators: As in, 'Unban room member'.
+#: src/components/user_page.ui:181
+msgid "Unban"
+msgstr "अप्रतिबंधित करें"
+
+#: src/components/user_page.ui:196
+msgid "Remove Messages"
+msgstr "संदेश हटाएं"
+
+#: src/components/user_page.ui:210
+#: src/session/view/account_settings/security_page/mod.ui:5
+msgid "Security"
+msgstr "सुरक्षा"
+
+#: src/components/user_page.ui:237
+#: src/identity_verification_view/accept_request_page.ui:57
+#: src/session/view/account_settings/security_page/mod.rs:270
+#: src/session/view/content/room_history/verification_info_bar.rs:172
+#: src/session/view/sidebar/mod.rs:320
+msgid "Verify"
+msgstr "सत्यापित करें"
+
+#: src/contrib/qr_code_scanner/mod.ui:13 src/contrib/qr_code_scanner/mod.ui:26
+msgid "Could Not Connect to Camera"
+msgstr "कैमरे से जुड़ सके"
+
+#: src/contrib/qr_code_scanner/mod.ui:36
+msgid "Camera"
+msgstr "कैमरा"
+
+#. Translators: This is the widget where we see a camera's output
+#: src/contrib/qr_code_scanner/mod.ui:41
+msgid "Viewfinder"
+msgstr "दृश्यदर्शी"
+
+#: src/contrib/qr_code.rs:52
+msgid "QR Code"
+msgstr "QR कोड"
+
+#: src/error_page.rs:98
+msgid "Command copied to clipboard"
+msgstr "कमांड क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/error_page.ui:25
+msgid "Secret Portal Error"
+msgstr "गुप्त पोर्टल त्रुटि"
+
+#: src/error_page.ui:39
+msgid ""
+"Fractal relies on a Secret Portal to manage your sensitive session "
+"information and an error occurred while we were trying to restore your "
+"sessions."
+msgstr ""
+"फ्रैक्टल आपकी संवेदनशील सत्र जानकारी को प्रबंधित करने के लिए एक गुप्त पोर्टल पर निर्भर "
+"करता है और जब हम आपके सत्रों को पुनर्स्थापित करने का प्रयास कर रहे थे, तब एक त्रुटि घटित "
+"हुई।"
+
+#: src/error_page.ui:51
+msgid ""
+"Here are a few things that might help you fix issues with the Secret Portal:"
+msgstr ""
+"यहां कुछ चीजें दी गई हैं जो आपको गुप्त पोर्टल से संबंधित समस्याओं को ठीक करने में मदद कर सकती "
+"हैं:"
+
+#: src/error_page.ui:68
+msgid ""
+"Make sure you have a Secret Portal Backend Provider installed, like gnome-"
+"keyring."
+msgstr ""
+"सुनिश्चित करें कि आपके पास एक गुप्त पोर्टल बैकएंड प्रदाता स्थापित है, जैसे gnome-keyring."
+
+#: src/error_page.ui:91
+msgid ""
+"If you prefer to use a Secret Service Provider instead, you need to allow "
+"Fractal to interact with it, like this:"
+msgstr ""
+"यदि आप इसके बजाय किसी गुप्त सेवा प्रदाता का उपयोग करना पसंद करते हैं, तो आपको फ्रैक्टल "
+"को उसके साथ बातचीत करने की अनुमति देनी होगी, इस प्रकार:"
+
+#: src/error_page.ui:113
+msgid "Copy Command"
+msgstr "कमांड कॉपी करें"
+
+#: src/error_page.ui:148
+msgid "Check that you have a default keyring and that it is unlocked."
+msgstr "जांचें कि आपके पास एक तयशुदा कीरिंग है और वह खुली है।"
+
+#: src/error_page.ui:160
+msgid ""
+"Check the application logs and your distribution’s documentation for more "
+"details."
+msgstr "अधिक विवरण के लिए एप्लिकेशन लॉग और अपने वितरण के दस्तावेज़ देखें।"
+
+#: src/error_page.ui:176
+msgid "Could Not Initialize Session"
+msgstr "सत्र प्रारंभ नहीं किया जा सका"
+
+#: src/identity_verification_view/accept_request_page.rs:129
+#: src/session/model/notifications/mod.rs:296
+msgid "Login Request From Another Session"
+msgstr "दूसरे सत्र से लॉगिन अनुरोध"
+
+#: src/identity_verification_view/accept_request_page.rs:131
+msgid "Verify the new session from the current session."
+msgstr "वर्तमान सत्र से नये सत्र का सत्यापन करें।"
+
+#: src/identity_verification_view/accept_request_page.rs:134
+#: src/identity_verification_view/choose_method_page.rs:183
+#: src/identity_verification_view/sas_page.rs:159
+#: src/identity_verification_view/scan_qr_code_page.rs:179
+#: src/session/model/notifications/mod.rs:227
+msgid "Verification Request"
+msgstr "सत्यापन अनुरोध"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/accept_request_page.rs:138
+msgid ""
+"{user} asked to be verified. Verifying a user increases the security of the "
+"conversation."
+msgstr ""
+"{user} को सत्यापित करने के लिए कहा गया। किसी उपयोक्ता को सत्यापित करने से बातचीत की "
+"सुरक्षा बढ़ जाती है।"
+
+#: src/identity_verification_view/accept_request_page.rs:161
+msgid "Could not decline verification request"
+msgstr "सत्यापन अनुरोध अस्वीकार नहीं किया जा सका"
+
+#: src/identity_verification_view/accept_request_page.rs:177
+msgid "Could not accept verification request"
+msgstr "सत्यापन अनुरोध स्वीकार नहीं किया जा सका"
+
+#: src/identity_verification_view/cancelled_page.rs:138
+msgid "The verification was cancelled from the other session."
+msgstr "दूसरे सत्र से सत्यापन निरस्त कर दिया गया।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/cancelled_page.rs:144
+msgid "The verification was cancelled by {user}."
+msgstr "सत्यापन {user} द्वारा रद्द कर दिया गया था।"
+
+#: src/identity_verification_view/cancelled_page.rs:150
+msgid "The verification process failed because it reached a timeout."
+msgstr "सत्यापन प्रक्रिया विफल हो गई क्योंकि यह समयबाह्य पर पहुंच गई।"
+
+#: src/identity_verification_view/cancelled_page.rs:152
+msgid "You accepted the request from another session."
+msgstr "आपने दूसरे सत्र का अनुरोध स्वीकार कर लिया।"
+
+#: src/identity_verification_view/cancelled_page.rs:155
+msgid "The emoji did not match."
+msgstr "इमोजी मेल नहीं खा रहा।"
+
+#: src/identity_verification_view/cancelled_page.rs:157
+msgid "The numbers did not match."
+msgstr "नंबर मेल नहीं खाते।"
+
+#: src/identity_verification_view/cancelled_page.rs:160
+msgid "An unexpected error happened during the verification process."
+msgstr "सत्यापन प्रक्रिया के दौरान एक अप्रत्याशित त्रुटि हुई।"
+
+#: src/identity_verification_view/cancelled_page.rs:165
+#: src/identity_verification_view/mod.ui:113
+#: src/identity_verification_view/mod.ui:124
+#: src/identity_verification_view/room_left_page.ui:22
+msgid "Verification Cancelled"
+msgstr "सत्यापन रद्द किया गया"
+
+#: src/identity_verification_view/cancelled_page.rs:167
+msgid "Verification Error"
+msgstr "सत्यापन त्रुटि"
+
+#: src/identity_verification_view/cancelled_page.ui:41
+msgid "Send New Request"
+msgstr "नया अनुरोध भेजें"
+
+#: src/identity_verification_view/cancelled_page.ui:52
+#: src/identity_verification_view/completed_page.ui:48
+#: src/identity_verification_view/room_left_page.ui:44
+msgid "Dismiss"
+msgstr "खारिज करें"
+
+#: src/identity_verification_view/choose_method_page.rs:175
+#: src/identity_verification_view/sas_page.rs:147
+#: src/identity_verification_view/scan_qr_code_page.rs:174
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:74
+msgid "Verify Session"
+msgstr "सत्र सत्यापित करें"
+
+#: src/identity_verification_view/choose_method_page.rs:179
+msgid "Scan this QR code from the other session."
+msgstr "इस QR कोड को दूसरे सत्र से स्कैन करें।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/choose_method_page.rs:189
+msgid "Ask {user} to scan this QR code from their session."
+msgstr "{user} को अपने सत्र से इस QR कोड को स्कैन करने के लिए कहें।"
+
+#: src/identity_verification_view/choose_method_page.rs:198
+msgid "Select a verification method to proceed."
+msgstr "आगे बढ़ने के लिए एक सत्यापन विधि चुनें।"
+
+#: src/identity_verification_view/choose_method_page.rs:201
+msgid "Click on the verification method to proceed."
+msgstr "आगे बढ़ने के लिए सत्यापन विधि पर क्लिक करें।"
+
+#: src/identity_verification_view/choose_method_page.rs:233
+msgid "Could not access camera"
+msgstr "कैमरे तक नहीं पहुंच सका"
+
+#: src/identity_verification_view/choose_method_page.rs:250
+#: src/identity_verification_view/scan_qr_code_page.rs:255
+msgid "Could not start emoji verification"
+msgstr "इमोजी सत्यापन प्रारंभ नहीं किया जा सका"
+
+#: src/identity_verification_view/choose_method_page.rs:266
+#: src/identity_verification_view/confirm_qr_code_page.rs:176
+#: src/identity_verification_view/qr_code_scanned_page.rs:144
+#: src/identity_verification_view/scan_qr_code_page.rs:271
+#: src/identity_verification_view/wait_for_other_page.rs:163
+msgid "Could not cancel the verification"
+msgstr "सत्यापन रद्द नहीं किया जा सका"
+
+#: src/identity_verification_view/choose_method_page.ui:51
+#: src/identity_verification_view/scan_qr_code_page.ui:48
+msgid "Can’t scan QR code?"
+msgstr "QR कोड स्कैन नहीं कर सकते?"
+
+#: src/identity_verification_view/choose_method_page.ui:60
+msgid "Scan QR code with this session"
+msgstr "इस सत्र के साथ QR कोड स्कैन करें"
+
+#: src/identity_verification_view/choose_method_page.ui:69
+#: src/identity_verification_view/scan_qr_code_page.ui:67
+msgid "Compare Emoji"
+msgstr "इमोजी की तुलना करें"
+
+#: src/identity_verification_view/choose_method_page.ui:80
+#: src/identity_verification_view/no_supported_methods_page.rs:167
+#: src/identity_verification_view/qr_code_scanned_page.ui:48
+#: src/identity_verification_view/scan_qr_code_page.ui:78
+msgid "Cancel Verification"
+msgstr "सत्यापन रद्द करें"
+
+#: src/identity_verification_view/completed_page.rs:121
+msgid "Request Complete"
+msgstr "अनुरोध पूर्ण"
+
+#: src/identity_verification_view/completed_page.rs:123
+msgid "The new session is now ready to send and receive secure messages."
+msgstr "नया सत्र अब सुरक्षित संदेश भेजने और प्राप्त करने के लिए तैयार है।"
+
+#: src/identity_verification_view/completed_page.rs:127
+msgid "Verification Complete"
+msgstr "सत्यापन पूर्ण"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/completed_page.rs:130
+msgid ""
+"{user} is verified and you can now be sure that your communication will be "
+"private."
+msgstr "{user} सत्यापित है और अब आप निश्चिंत हो सकते हैं कि आपका संचार निजी रहेगा।"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:128
+msgid "Does the other session show a confirmation?"
+msgstr "क्या अन्य सत्र कोई पुष्टिकरण दिखाता है?"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/confirm_qr_code_page.rs:134
+msgid "Does {user} see a confirmation on their session?"
+msgstr "क्या {user} को अपने सत्र की पुष्टि दिखाई देती है?"
+
+#: src/identity_verification_view/confirm_qr_code_page.rs:160
+msgid "Could not confirm the scan of the QR Code"
+msgstr "QR कोड के स्कैन की पुष्टि नहीं हो सकी"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:19
+msgid "Confirm Scan"
+msgstr "स्कैन की पुष्टि करें"
+
+#: src/identity_verification_view/confirm_qr_code_page.ui:47
+msgid "Confirm"
+msgstr "पुष्टि करें"
+
+#: src/identity_verification_view/mod.ui:14
+msgid "New Identity Verification Request"
+msgstr "नई पहचान सत्यापन अनुरोध"
+
+#: src/identity_verification_view/mod.ui:25
+msgid "Wait for Other Party"
+msgstr "अन्य पार्टी की प्रतीक्षा करें"
+
+#: src/identity_verification_view/mod.ui:36
+#: src/identity_verification_view/no_supported_methods_page.ui:22
+msgid "No Supported Verification Methods"
+msgstr "कोई समर्थित सत्यापन विधियां नहीं"
+
+#: src/identity_verification_view/mod.ui:47
+msgid "Verification Request Methods"
+msgstr "सत्यापन अनुरोध विधियां"
+
+#: src/identity_verification_view/mod.ui:58
+msgid "Scan QR Code"
+msgstr "स्कैन QR कोड"
+
+#: src/identity_verification_view/mod.ui:69
+#: src/identity_verification_view/qr_code_scanned_page.ui:19
+msgid "Scan Complete"
+msgstr "स्कैन पूर्ण"
+
+#: src/identity_verification_view/mod.ui:80
+msgid "Confirm Scan Result"
+msgstr "स्कैन परिणाम की पुष्टि करें"
+
+#: src/identity_verification_view/mod.ui:91
+msgid "Short Authentication String Verification"
+msgstr "लघु प्रमाणीकरण स्ट्रिंग सत्यापन"
+
+#: src/identity_verification_view/mod.ui:102
+msgid "Verification Successful"
+msgstr "सत्यापन सफल"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:138
+msgid ""
+"None of the methods offered by the other client are supported by Fractal."
+msgstr "अन्य क्लाइंट द्वारा प्रस्तावित कोई भी तरीका फ्रैक्टल द्वारा समर्थित नहीं है।"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:141
+msgid ""
+"A login request was received, but none of the methods offered by the other "
+"client are supported by Fractal."
+msgstr ""
+"एक लॉगिन अनुरोध प्राप्त हुआ था, लेकिन अन्य क्लाइंट द्वारा प्रस्तावित कोई भी तरीका फ्रैक्टल "
+"द्वारा समर्थित नहीं है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:150
+msgid ""
+"None of the methods offered by {user}’s client are supported by Fractal."
+msgstr "{user} के क्लाइंट द्वारा दी गई कोई भी विधि फ्रैक्टल द्वारा समर्थित नहीं है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/no_supported_methods_page.rs:157
+msgid ""
+"{user} sent a verification request, but none of the methods offered by the "
+"other client are supported by Fractal."
+msgstr ""
+"{user} ने एक सत्यापन अनुरोध भेजा, लेकिन अन्य क्लाइंट द्वारा प्रस्तावित कोई भी तरीका "
+"फ्रैक्टल द्वारा समर्थित नहीं है।"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:169
+msgid "Decline Verification"
+msgstr "सत्यापन अस्वीकार करें"
+
+#: src/identity_verification_view/no_supported_methods_page.rs:191
+msgid "Could not decline the verification"
+msgstr "सत्यापन को अस्वीकार नहीं किया जा सका"
+
+#: src/identity_verification_view/no_supported_methods_page.ui:44
+msgid ""
+"You can accept this verification from another session or decline it for all "
+"your sessions"
+msgstr ""
+"आप इस सत्यापन को किसी अन्य सत्र से स्वीकार कर सकते हैं या अपने सभी सत्रों के लिए इसे "
+"अस्वीकार कर सकते हैं"
+
+#: src/identity_verification_view/qr_code_scanned_page.rs:118
+msgid ""
+"You scanned the QR code successfully. You may need to confirm the "
+"verification from the other session."
+msgstr ""
+"आपने QR कोड सफलतापूर्वक स्कैन कर लिया। आपको दूसरे सत्र से सत्यापन की पुष्टि करने की "
+"आवश्यकता हो सकती है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/qr_code_scanned_page.rs:123
+msgid ""
+"You scanned the QR code successfully. {user} may need to confirm the "
+"verification."
+msgstr ""
+"आपने QR कोड सफलतापूर्वक स्कैन कर लिया। {user} को सत्यापन की पुष्टि करने की आवश्यकता हो "
+"सकती है।"
+
+#: src/identity_verification_view/room_left_page.ui:37
+msgid "You are no longer in the room where the verification was taking place"
+msgstr "अब आप उस कक्ष में नहीं हैं जहां सत्यापन हो रहा था"
+
+#: src/identity_verification_view/sas_page.rs:150
+msgid "Check if the same emoji appear in the same order on the other client."
+msgstr "जांचें कि क्या वही इमोजी दूसरे क्लाइंट पर उसी क्रम में दिखाई देता है।"
+
+#: src/identity_verification_view/sas_page.rs:154
+msgid "Check if the same numbers appear in the same order on the other client."
+msgstr "जांचें कि क्या वही नंबर दूसरे क्लाइंट पर उसी क्रम में दिखाई देते हैं।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:164
+msgid ""
+"Ask {user} if they see the following emoji appear in the same order on their "
+"screen."
+msgstr ""
+"{user} से पूछें कि क्या उन्हें अपनी स्क्रीन पर निम्नलिखित इमोजी उसी क्रम में दिखाई देते हैं।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/sas_page.rs:171
+msgid ""
+"Ask {user} if they see the following numbers appear in the same order on "
+"their screen."
+msgstr ""
+"{user} से पूछें कि क्या उन्हें अपनी स्क्रीन पर निम्नलिखित संख्याएं समान क्रम में दिखाई देती हैं।"
+
+#: src/identity_verification_view/sas_page.rs:253
+msgid "Could not send that the data does not match"
+msgstr "डेटा मेल नहीं खाता इसलिए नहीं भेजा जा सका"
+
+#: src/identity_verification_view/sas_page.rs:270
+msgid "Could not send confirmation that the data matches"
+msgstr "डेटा मेल खाता है इसकी पुष्टि नहीं भेजी जा सकी"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis do not match.
+#: src/identity_verification_view/sas_page.ui:57
+msgid "Do Not Match"
+msgstr "मेल नहीं खाते"
+
+#. Translators: During emoji comparison, this is the label of the button to click when the emojis match.
+#: src/identity_verification_view/sas_page.ui:69
+msgid "Match"
+msgstr "मिलान"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:176
+msgid "Scan the QR code displayed by the other session."
+msgstr "दूसरे सत्र द्वारा प्रदर्शित QR कोड को स्कैन करें।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/scan_qr_code_page.rs:183
+msgid "Scan the QR code shown on the device of {user}."
+msgstr "{user} के उपकरण पर दिखाए गए QR कोड को स्कैन करें।"
+
+#: src/identity_verification_view/scan_qr_code_page.rs:227
+msgid "Could not validate scanned QR Code"
+msgstr "स्कैन किए गए QR कोड को मान्य नहीं किया जा सका"
+
+#: src/identity_verification_view/scan_qr_code_page.ui:58
+msgid "Show a QR code to scan with another device"
+msgstr "किसी अन्य उपकरण से स्कैन करने के लिए एक QR कोड दिखाएं"
+
+#: src/identity_verification_view/wait_for_other_page.rs:123
+msgid "Get Another Device"
+msgstr "कोई अन्य उपकरण प्राप्त करें"
+
+#: src/identity_verification_view/wait_for_other_page.rs:125
+msgid "Accept the verification request from another session or device."
+msgstr "किसी अन्य सत्र या उपकरण से सत्यापन अनुरोध स्वीकार करें।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:133
+msgid "Waiting for {user}"
+msgstr "{user} की प्रतीक्षा में"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/identity_verification_view/wait_for_other_page.rs:139
+msgid "Ask {user} to accept the verification request."
+msgstr "{user} से सत्यापन अनुरोध स्वीकार करने के लिए कहें।"
+
+#: src/identity_verification_view/wait_for_other_page.ui:41
+msgid ""
+"To be secure, the verification should happen in person or use a trusted way "
+"of communication."
+msgstr ""
+"सुरक्षित होने के लिए, सत्यापन व्यक्तिगत रूप से होना चाहिए या संचार के विश्वसनीय तरीके का "
+"उपयोग करना चाहिए।"
+
+#: src/identity_verification_view/wait_for_other_page.ui:55
+msgid "The request is not showing up on the other device?"
+msgstr "अनुरोध अन्य उपकरण पर दिखाई नहीं दे रहा है?"
+
+#: src/identity_verification_view/wait_for_other_page.ui:64
+msgid "Cancel Verification Request"
+msgstr "सत्यापन अनुरोध रद्द करें"
+
+#: src/login/advanced_dialog.ui:4
+msgid "Homeserver Discovery"
+msgstr "होमसर्वर खोज"
+
+#: src/login/advanced_dialog.ui:11
+msgid ""
+"Auto-discovery, also known as “well-known lookup”, allows to discover the "
+"URL of a Matrix homeserver from a domain name. This should only be disabled "
+"if your homeserver doesn’t support auto-discovery or if you want to provide "
+"the URL yourself."
+msgstr ""
+"स्वत: खोज, जिसे “प्रसिद्ध खोज” के रूप में भी जाना जाता है, एक डोमेन नाम से मैट्रिक्स "
+"होमसर्वर का URL खोजने की अनुमति देता है। इसे केवल तभी अक्षम किया जाना चाहिए यदि आपका "
+"होमसर्वर स्वत: खोज का समर्थन नहीं करता है या यदि आप स्वयं URL प्रदान करना चाहते हैं।"
+
+#: src/login/advanced_dialog.ui:14
+msgid "_Auto-Discovery"
+msgstr "स्वत: खोज (_A)"
+
+#. Translators: Fractal is the application name.
+#: src/login/greeter.ui:6 src/login/greeter.ui:91
+msgid "Welcome to Fractal"
+msgstr "फ्रैक्टल में आपका स्वागत है"
+
+#: src/login/greeter.ui:26 src/login/greeter.ui:29 src/login/greeter.ui:37
+#: src/login/greeter.ui:40
+msgid "About Fractal"
+msgstr "फ्रैक्टल के बारे में"
+
+#: src/login/greeter.ui:117
+msgid "_Log In"
+msgstr "लॉगिन (_L)"
+
+#: src/login/greeter.ui:130
+msgid "_Create Account"
+msgstr "खाता बनाएं (_C)"
+
+#: src/login/homeserver_page.rs:119
+msgid "Domain Name"
+msgstr "डोमेन नाम"
+
+#: src/login/homeserver_page.rs:121
+msgid "The domain of your Matrix homeserver, for example gnome.org"
+msgstr "आपके मैट्रिक्स होमसर्वर का डोमेन, उदाहरण के लिए gnome.org"
+
+#: src/login/homeserver_page.rs:124 src/login/method_page.ui:68
+msgid "Homeserver URL"
+msgstr "होमसर्वर URL"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/homeserver_page.rs:128
+msgid "The URL of your Matrix homeserver, for example {address}"
+msgstr "आपके मैट्रिक्स होमसर्वर का URL, उदाहरण के लिए {address}"
+
+#: src/login/homeserver_page.ui:5 src/login/homeserver_page.ui:42
+#: src/session/view/account_settings/general_page/mod.ui:79
+msgid "Homeserver"
+msgstr "होमसर्वर"
+
+#: src/login/homeserver_page.ui:100 src/login/method_page.ui:150
+msgid "Next"
+msgstr "अगला"
+
+#. Translators: As in 'Advanced Settings'.
+#: src/login/homeserver_page.ui:115
+msgid "Advanced…"
+msgstr "उन्नत…"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. This is the tooltip text on buttons to log in via Single Sign-On.
+#. The brand is something like Facebook, Apple, GitHub…
+#: src/login/idp_button.rs:124
+msgid "Log in with {brand}"
+msgstr "{brand} से लॉगिन करें"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/login/method_page.rs:136
+msgid "Log in to {domain_name}"
+msgstr "{domain_name} में लॉगिन करें"
+
+#: src/login/method_page.rs:143
+msgid "Log in"
+msgstr "लॉगिन"
+
+#: src/login/method_page.rs:186
+msgid "More SSO Providers"
+msgstr "अधिक SSO प्रदाता"
+
+#: src/login/method_page.rs:189
+msgid "Login via SSO"
+msgstr "SSO के माध्यम से लॉगिन करें"
+
+#: src/login/method_page.ui:5 src/window.ui:57
+msgid "Log In"
+msgstr "लॉगिन"
+
+#: src/login/method_page.ui:100
+msgid "Matrix Username"
+msgstr "मैट्रिक्स उपयोक्तानाम"
+
+#: src/login/method_page.ui:116
+msgid "Password"
+msgstr "पासवर्ड"
+
+#: src/login/method_page.ui:132
+msgid "Single Sign-On Providers"
+msgstr "एकल साइन-ऑन प्रदाता"
+
+#: src/login/mod.rs:479
+msgid "Could not store session"
+msgstr "सत्र संग्रहित नहीं किया जा सका"
+
+#: src/login/mod.ui:25 src/login/mod.ui:59
+msgid "Login Complete"
+msgstr "लॉगिन पूर्ण"
+
+#: src/login/mod.ui:80
+msgid "This session is ready to send and receive secure messages"
+msgstr "यह सत्र सुरक्षित संदेश भेजने और प्राप्त करने के लिए तैयार है"
+
+#: src/login/mod.ui:86
+msgid "Start Chatting"
+msgstr "चैटिंग शुरू करें"
+
+#: src/login/session_setup_view.ui:5
+msgid "Session Setup"
+msgstr "सत्र सेटअप"
+
+#: src/login/session_setup_view.ui:45
+msgid "Fetching Account Data…"
+msgstr "खाता डेटा लाया जा रहा है…"
+
+#: src/login/sso_page.ui:5 src/login/sso_page.ui:41
+msgid "Single Sign-On"
+msgstr "एकल साइन-ऑन"
+
+#: src/login/sso_page.ui:56
+msgid "Please follow the steps in the browser"
+msgstr "कृपया ब्राउज़र में दिए गए चरणों का पालन करें"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/secret/linux.rs:109
+msgid "Fractal: Matrix credentials for {user_id}"
+msgstr "फ्रैक्टल: {user_id} के लिए मैट्रिक्स प्रत्ययपत्र"
+
+#: src/secret/linux.rs:162
+msgid "Malformed version in stored session"
+msgstr "संग्रहीत सत्र में विकृत संस्करण"
+
+#: src/secret/linux.rs:187
+msgid "Could not find profile in stored session"
+msgstr "संग्रहीत सत्र में प्रोफाइल नहीं मिल सकी"
+
+#: src/secret/linux.rs:200
+msgid "Malformed homeserver in stored session"
+msgstr "संग्रहीत सत्र में विकृत होमसर्वर"
+
+#: src/secret/linux.rs:206
+msgid "Could not find homeserver in stored session"
+msgstr "संग्रहीत सत्र में होमसर्वर नहीं मिल सका"
+
+#: src/secret/linux.rs:216
+msgid "Malformed user ID in stored session"
+msgstr "संग्रहीत सत्र में विकृत उपयोक्ता ID"
+
+#: src/secret/linux.rs:222
+msgid "Could not find user ID in stored session"
+msgstr "संग्रहीत सत्र में उपयोक्ता ID नहीं मिल सकी"
+
+#: src/secret/linux.rs:230
+msgid "Could not find device ID in stored session"
+msgstr "संग्रहीत सत्र में उपकरण ID नहीं मिल सकी"
+
+#: src/secret/linux.rs:238
+msgid "Could not find database path in stored session"
+msgstr "संग्रहीत सत्र में डेटाबेस पथ नहीं मिल सका"
+
+#: src/secret/linux.rs:250 src/secret/linux.rs:260
+msgid "Malformed secret in stored session"
+msgstr "संग्रहीत सत्र में विकृत रहस्य"
+
+#: src/secret/linux.rs:269
+msgid "Could not get secret in stored session"
+msgstr "संग्रहित सत्र में रहस्य नहीं मिल सका"
+
+#: src/secret/linux.rs:418
+msgid "The secret storage file is corrupted."
+msgstr "गुप्त संग्रहण फाइल दूषित है।"
+
+#: src/secret/linux.rs:422
+msgid "Could not access the secret storage file location."
+msgstr "गुप्त संग्रहण फाइल स्थान तक नहीं पहुंच सका।"
+
+#: src/secret/linux.rs:425
+msgid "An unknown error occurred when accessing the secret storage file."
+msgstr "गुप्त संग्रहण फाइल तक पहुँचते समय एक अज्ञात त्रुटि उत्पन्न हुई।"
+
+#: src/secret/linux.rs:428
+msgid "The secret storage file has been changed by another process."
+msgstr "गुप्त संग्रहण फाइल को किसी अन्य प्रक्रिया द्वारा बदल दिया गया है।"
+
+#: src/secret/linux.rs:431
+msgid ""
+"An unknown error occurred when interacting with the D-Bus Secret Portal "
+"backend."
+msgstr "डी-बस गुप्त पोर्टल बैकएंड के साथ अंत:क्रिया करते समय एक अज्ञात त्रुटि उत्पन्न हुई।"
+
+#: src/secret/linux.rs:434
+msgid ""
+"The request to the Flatpak Secret Portal was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"फ्लैटपैक गुप्त पोर्टल का अनुरोध रद्द कर दिया गया था। इस तक पहुंचने के किसी भी संकेत को "
+"स्वीकार करना सुनिश्चित करें।"
+
+#: src/secret/linux.rs:437
+msgid ""
+"The Flatpak Secret Portal is not available. Make sure xdg-desktop-portal is "
+"installed, and it is at least at version 1.5.0."
+msgstr ""
+"फ्लैटपैक गुप्त पोर्टल उपलब्ध नहीं है। सुनिश्चित करें कि xdg-desktop-portal स्थापित है, और "
+"यह कम से कम संस्करण 1.5.0 पर है।"
+
+#: src/secret/linux.rs:440
+msgid "The Flatpak Secret Portal provided a key that is too weak to be secure."
+msgstr "फ्लैटपैक गुप्त पोर्टल ने एक कुंजी प्रदान की जो सुरक्षित होने के लिए बहुत कमज़ोर है।"
+
+#: src/secret/linux.rs:454
+msgid "The item was deleted."
+msgstr "वस्तु हटा दी गयी।"
+
+#: src/secret/linux.rs:458 src/secret/linux.rs:478
+msgid ""
+"An unknown error occurred when interacting with the D-Bus Secret Service."
+msgstr "डी-बस गुप्त सेवा के साथ अंत:क्रिया करते समय एक अज्ञात त्रुटि उत्पन्न हुई।"
+
+#: src/secret/linux.rs:461
+msgid "The collection or item is locked."
+msgstr "संग्रह या वस्तु लॉक है।"
+
+#: src/secret/linux.rs:464
+msgid "The D-Bus Secret Service session does not exist."
+msgstr "डी-बस गुप्त सेवा सत्र मौजूद नहीं है।"
+
+#: src/secret/linux.rs:467
+msgid "The collection or item does not exist."
+msgstr "संग्रह या वस्तु मौजूद नहीं है।"
+
+#: src/secret/linux.rs:471
+msgid ""
+"The request to the D-Bus Secret Service was cancelled. Make sure to accept "
+"any prompt asking to access it."
+msgstr ""
+"डी-बस गुप्त सेवा का अनुरोध रद्द कर दिया गया। इस तक पहुंचने के लिए पूछे जाने वाले किसी भी "
+"संकेत को स्वीकार करना सुनिश्चित करें।"
+
+#: src/secret/linux.rs:474
+msgid ""
+"Could not access the default collection. Make sure a keyring was created and "
+"set as default."
+msgstr ""
+"तयशुदा संग्रह तक नहीं पहुंच सका। सुनिश्चित करें कि एक कीरिंग बनाई गई है और उसे तयशुदा के रूप "
+"में निर्धारित किया गया है।"
+
+#: src/session/model/session.rs:950
+msgid "Could not log the session out"
+msgstr "सत्र को लॉग आउट नहीं किया जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/notifications/mod.rs:231
+msgid "{user} sent a verification request"
+msgstr "{user} ने सत्यापन अनुरोध भेजा"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/notifications/mod.rs:300
+msgid "Verify your new session “{name}”"
+msgstr "अपना नया सत्र “{name}” सत्यापित करें"
+
+#: src/session/model/room/join_rule.rs:281
+msgid "Only invited users, and users can knock"
+msgstr "केवल आमंत्रित उपयोक्ता, और उपयोक्ता दस्तक दे सकते हैं"
+
+#: src/session/model/room/join_rule.rs:283
+msgid "Only invited users"
+msgstr "केवल आमंत्रित उपयोक्ता"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:297
+msgid "Members of {room}, and users can knock"
+msgstr "{room} के सदस्य और उपयोक्ता दस्तक दे सकते हैं"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/model/room/join_rule.rs:304
+msgid "Members of {room}"
+msgstr "{room} के सदस्य"
+
+#: src/session/model/room/join_rule.rs:309
+msgid "Any registered user"
+msgstr "कोई भी पंजीकृत उपयोक्ता"
+
+#: src/session/model/room/join_rule.rs:310
+#: src/session/view/content/room_details/general_page.rs:926
+msgid "Unsupported rule"
+msgstr "असमर्थित नियम"
+
+#: src/session/model/room/mod.rs:1330
+msgid "Empty Room (was {user})"
+msgstr "खाली कक्ष ({user} था)"
+
+#. Translators: This is the name of a room without other users.
+#: src/session/model/room/mod.rs:1333
+msgid "Empty Room"
+msgstr "खाली कक्ष"
+
+#. Translators: This is displayed when the room name is unknown yet.
+#: src/session/model/room/mod.rs:1343
+msgid "Unknown"
+msgstr "अज्ञात"
+
+#. Translators: As in 'Default power level', meaning permissions.
+#: src/session/model/room/permissions.rs:71
+msgid "Default"
+msgstr "तयशुदा"
+
+#: src/session/model/room/permissions.rs:74
+msgid "Moderator"
+msgstr "मॉडरेटर"
+
+#: src/session/model/room/permissions.rs:75
+msgid "Admin"
+msgstr "व्यवस्थापक"
+
+#. Translators: As in 'Muted room member', a member that cannot send messages.
+#: src/session/model/room/permissions.rs:77
+msgid "Muted"
+msgstr "म्यूट किया गया"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/model/room_list/mod.rs:406
+#: src/session/view/content/room_history/mod.rs:597
+msgid "Could not join room {room_name}. Try again later."
+msgstr "कक्ष {room_name} में शामिल नहीं हो सका। बाद में पुन: प्रयास करें।"
+
+#: src/session/model/sidebar_data/category/category_type.rs:29
+msgid "Verifications"
+msgstr "सत्यापन"
+
+#: src/session/model/sidebar_data/category/category_type.rs:30
+#: src/session/view/content/room_details/invite_subpage/list.rs:270
+msgid "Invited"
+msgstr "आमंत्रित"
+
+#: src/session/model/sidebar_data/category/category_type.rs:31
+msgid "Favorites"
+msgstr "पसंदीदा"
+
+#: src/session/model/sidebar_data/category/category_type.rs:32
+msgid "Rooms"
+msgstr "कक्ष"
+
+#: src/session/model/sidebar_data/category/category_type.rs:33
+msgid "Low Priority"
+msgstr "निम्न प्राथमिकता"
+
+#: src/session/model/sidebar_data/category/category_type.rs:34
+msgid "Historical"
+msgstr "ऐतिहासिक"
+
+#: src/session/model/sidebar_data/icon_item.rs:30
+msgid "Explore"
+msgstr "अन्वेषण करें"
+
+#: src/session/model/sidebar_data/icon_item.rs:31
+msgid "Forget Room"
+msgstr "कक्ष भूलें"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:154
+msgid "Password must be at least 8 characters long"
+msgstr "पासवर्ड कम से कम 8 अक्षर लंबा होना चाहिए"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:157
+msgid "Password must have at least one lower-case letter"
+msgstr "पासवर्ड में कम से कम एक छोटा अक्षर होना चाहिए"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:161
+msgid "Password must have at least one upper-case letter"
+msgstr "पासवर्ड में कम से कम एक बड़ा अक्षर होना चाहिए"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:164
+msgid "Password must have at least one digit"
+msgstr "पासवर्ड में कम से कम एक अंक होना चाहिए"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:166
+msgid "Password must have at least one symbol"
+msgstr "पासवर्ड में कम से कम एक चिन्ह अवश्य होना चाहिए"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:196
+msgid "Passwords do not match"
+msgstr "पासवर्ड मेल नहीं खाते"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:246
+msgid "Password changed successfully"
+msgstr "पासवर्ड सफलतापूर्वक बदला गया"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:258
+msgid "Password rejected for being too weak"
+msgstr "पासवर्ड बहुत कमज़ोर होने के कारण अस्वीकृत कर दिया गया"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.rs:262
+msgid "Could not change password"
+msgstr "पासवर्ड नहीं बदला जा सका"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:58
+msgid "Change Password"
+msgstr "पासवर्ड बदलें"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:43
+msgid "Changing your password will log you out of your other sessions."
+msgstr "अपना पासवर्ड बदलने से आप अपने अन्य सत्रों से लॉग आउट हो जायेंगे।"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:70
+msgid "New Password"
+msgstr "नया पासवर्ड"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:116
+msgid "Confirm New Password"
+msgstr "नए पासवर्ड की पुष्टि करें"
+
+#: src/session/view/account_settings/general_page/change_password_subpage.ui:147
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:70
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:77
+#: src/session/view/content/room_history/verification_info_bar.rs:176
+msgid "Continue"
+msgstr "जारी रखें"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:149
+msgid "Account successfully deactivated"
+msgstr "खाता सफलतापूर्वक निष्क्रिय कर दिया गया"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.rs:158
+msgid "Could not deactivate account"
+msgstr "खाता निष्क्रिय नहीं किया जा सका"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:117
+msgid "Deactivate Account"
+msgstr "खाता निष्क्रिय करें"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:41
+msgid ""
+"Deactivating your account means you will lose access to all your messages, "
+"contacts, files, and more, forever."
+msgstr ""
+"अपने खाते को निष्क्रिय करने का मतलब है कि आप अपने सभी संदेशों, संपर्कों, फाइलों और बहुत कुछ "
+"तक पहुंच हमेशा के लिए खो देंगे।"
+
+#: src/session/view/account_settings/general_page/deactivate_account_subpage.ui:49
+msgid ""
+"To confirm that you really want to deactivate this account, type in your "
+"Matrix user ID:"
+msgstr ""
+"यह पुष्टि करने के लिए कि आप वास्तव में इस खाते को निष्क्रिय करना चाहते हैं, अपनी मैट्रिक्स "
+"उपयोक्ता ID टाइप करें:"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:86
+msgid ""
+"The crypto identity and account recovery are not set up properly. If this is "
+"your last connected session and you have no recent local backup of your "
+"encryption keys, you will not be able to restore your account."
+msgstr ""
+"क्रिप्टो पहचान और खाता पुनर्प्राप्ति ठीक से निर्धारित नहीं की गई है। यदि यह आपका अंतिम "
+"जुड़ा सत्र है और आपके पास अपनी कूटलेखन कुंजियों का कोई हालिया स्थानीय बैकअप नहीं है, तो आप "
+"अपना खाता पुनर्स्थापित नहीं कर पाएंगे।"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.rs:94
+msgid ""
+"This is your last connected session. Make sure that you can still access "
+"your recovery key or passphrase, or to backup your encryption keys before "
+"logging out."
+msgstr ""
+"यह आपका अंतिम जुड़ा सत्र है। सुनिश्चित करें कि आप अभी भी अपनी पुनर्प्राप्ति कुंजी या पासफ़्रेज़ "
+"तक पहुंच सकते हैं, या लॉग आउट करने से पहले अपनी कूटलेखन कुंजी का बैकअप ले सकते हैं।"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:7
+#: src/session/view/account_settings/general_page/mod.ui:102
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:111
+msgid "Log Out"
+msgstr "लॉग आउट"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:14
+msgid "Log Out of This Session"
+msgstr "इस सत्र से लॉग आउट करें"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:42
+msgid "Are you sure you want to log out of this session?"
+msgstr "क्या आप वाकई इस सत्र से लॉग आउट करना चाहते हैं?"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:65
+msgid "Review Account Security"
+msgstr "खाता सुरक्षा की समीक्षा करें"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:94
+msgid "Logout Failed"
+msgstr "लॉगआउट विफल"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:113
+msgid ""
+"Logging out of this session failed. You can try again, or, if this is a "
+"permanent error, you can remove the session."
+msgstr ""
+"इस सत्र से लॉग आउट करना विफल रहा। आप पुनः प्रयास कर सकते हैं, या, यदि यह एक स्थायी "
+"त्रुटि है, तो आप सत्र को हटा सकते हैं।"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:131
+msgid ""
+"Removing the session deletes the associated data from the system, but your "
+"homeserver and other sessions will not be aware that this session was logged "
+"out."
+msgstr ""
+"सत्र को हटाने से सिस्टम से संबद्ध डेटा मिट जाता है, लेकिन आपके होमसर्वर और अन्य सत्रों को "
+"पता नहीं चलेगा कि यह सत्र लॉग आउट हो गया था।"
+
+#: src/session/view/account_settings/general_page/log_out_subpage.ui:143
+msgid "Remove Session"
+msgstr "सत्र हटाएं"
+
+#: src/session/view/account_settings/general_page/mod.rs:207
+#: src/session/view/content/room_details/edit_details_subpage.rs:153
+msgid "Avatar removed successfully"
+msgstr "अवतार सफलतापूर्वक हटा दिया गया"
+
+#: src/session/view/account_settings/general_page/mod.rs:209
+#: src/session/view/content/room_details/edit_details_subpage.rs:155
+msgid "Avatar changed successfully"
+msgstr "अवतार सफलतापूर्वक बदला गया"
+
+#: src/session/view/account_settings/general_page/mod.rs:228
+#: src/session/view/content/room_details/edit_details_subpage.rs:180
+msgid "Could not load file"
+msgstr "फाइल लोड नहीं हो सकी"
+
+#: src/session/view/account_settings/general_page/mod.rs:243
+#: src/session/view/content/room_details/edit_details_subpage.rs:204
+msgid "Could not upload avatar"
+msgstr "अवतार अपलोड नहीं किया जा सका"
+
+#: src/session/view/account_settings/general_page/mod.rs:272
+#: src/session/view/content/room_details/edit_details_subpage.rs:227
+msgid "Could not change avatar"
+msgstr "अवतार नहीं बदला जा सका"
+
+#: src/session/view/account_settings/general_page/mod.rs:289
+#: src/session/view/content/room_details/edit_details_subpage.rs:252
+msgid "Remove Avatar?"
+msgstr "अवतार हटाएं?"
+
+#: src/session/view/account_settings/general_page/mod.rs:290
+msgid "Do you really want to remove your avatar?"
+msgstr "क्या आप सचमुच अपना अवतार हटाना चाहते हैं?"
+
+#: src/session/view/account_settings/general_page/mod.rs:328
+#: src/session/view/content/room_details/edit_details_subpage.rs:284
+msgid "Could not remove avatar"
+msgstr "अवतार हटाया नहीं जा सका"
+
+#: src/session/view/account_settings/general_page/mod.rs:380
+msgid "Name changed successfully"
+msgstr "नाम सफलतापूर्वक बदला गया"
+
+#: src/session/view/account_settings/general_page/mod.rs:431
+msgid "Could not change display name"
+msgstr "प्रदर्शन नाम नहीं बदला जा सका"
+
+#: src/session/view/account_settings/general_page/mod.ui:5
+msgid "General"
+msgstr "सामान्य"
+
+#: src/session/view/account_settings/general_page/mod.ui:12
+msgid "Account Avatar"
+msgstr "खाता अवतार"
+
+#: src/session/view/account_settings/general_page/mod.ui:32
+#: src/session/view/content/room_details/edit_details_subpage.ui:58
+#: src/session/view/content/room_details/edit_details_subpage.ui:68
+#: src/session/view/room_creation.ui:47 src/session/view/room_creation.ui:50
+msgid "Name"
+msgstr "नाम"
+
+#: src/session/view/account_settings/general_page/mod.ui:68
+#: src/session/view/content/room_details/general_page.ui:238
+msgid "Advanced Information"
+msgstr "उन्नत जानकारी"
+
+#: src/session/view/account_settings/general_page/mod.ui:71
+msgid "Matrix User ID"
+msgstr "मैट्रिक्स उपयोक्ता ID"
+
+#: src/session/view/account_settings/general_page/mod.ui:81
+msgid "Copy Homeserver Address"
+msgstr "होमसर्वर पता कॉपी करें"
+
+#: src/session/view/account_settings/general_page/mod.ui:82
+msgid "Homeserver address copied to clipboard"
+msgstr "होमसर्वर पता क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/account_settings/general_page/mod.ui:87
+msgid "Session ID"
+msgstr "सत्र ID"
+
+#: src/session/view/account_settings/general_page/mod.ui:89
+msgid "Copy Session ID"
+msgstr "सत्र ID कॉपी करें"
+
+#: src/session/view/account_settings/general_page/mod.ui:90
+msgid "Session ID copied to clipboard"
+msgstr "सत्र ID क्लिपबोर्ड पर कॉपी की गई"
+
+#: src/session/view/account_settings/notifications_page.rs:315
+msgid "Could not enable account notifications"
+msgstr "खाता अधिसूचनाएं सक्षम नहीं कर सका"
+
+#: src/session/view/account_settings/notifications_page.rs:317
+msgid "Could not disable account notifications"
+msgstr "खाता अधिसूचनाएं अक्षम नहीं की जा सकी"
+
+#: src/session/view/account_settings/notifications_page.rs:369
+msgid "Could not change global notifications setting"
+msgstr "वैश्विक अधिसूचना सेटिंग नहीं बदली जा सकी"
+
+#: src/session/view/account_settings/notifications_page.rs:386
+msgid "Remove “{keyword}”"
+msgstr "“{keyword}” हटाएं"
+
+#: src/session/view/account_settings/notifications_page.rs:420
+msgid "Could not remove notification keyword"
+msgstr "अधिसूचना खोजशब्द हटाया नहीं जा सका"
+
+#: src/session/view/account_settings/notifications_page.rs:491
+msgid "Could not add notification keyword"
+msgstr "अधिसूचना खोजशब्द नहीं जोड़ा जा सका"
+
+#: src/session/view/account_settings/notifications_page.ui:5
+#: src/session/view/content/room_details/general_page.ui:113
+msgid "Notifications"
+msgstr "अधिसूचनाएं"
+
+#: src/session/view/account_settings/notifications_page.ui:11
+msgid "Enable for This Account"
+msgstr "इस खाते के लिए सक्षम करें"
+
+#: src/session/view/account_settings/notifications_page.ui:19
+msgid "Enable for This Session"
+msgstr "इस सत्र के लिए सक्षम करें"
+
+#: src/session/view/account_settings/notifications_page.ui:27
+msgid "Global"
+msgstr "वैश्विक"
+
+#: src/session/view/account_settings/notifications_page.ui:28
+msgid ""
+"Which messages trigger notifications in rooms that do not have more specific "
+"rules"
+msgstr "कौन से संदेश उन कक्षों में अधिसूचनाएं सक्रिय करते हैं जिनमें अधिक विशिष्ट नियम नहीं हैं"
+
+#: src/session/view/account_settings/notifications_page.ui:31
+msgid "All messages in all rooms"
+msgstr "सभी कक्षों में सभी संदेश"
+
+#: src/session/view/account_settings/notifications_page.ui:38
+msgid "All messages in direct chats, and mentions and keywords in all rooms"
+msgstr "प्रत्यक्ष चैट में सभी संदेश, और सभी कक्षों में उल्लेख और खोजशब्द"
+
+#: src/session/view/account_settings/notifications_page.ui:45
+msgid "Only mentions and keywords in all rooms"
+msgstr "सभी कक्षों में केवल उल्लेख और खोजशब्द"
+
+#: src/session/view/account_settings/notifications_page.ui:54
+msgid "Keywords"
+msgstr "खोजशब्द"
+
+#: src/session/view/account_settings/notifications_page.ui:55
+msgid ""
+"Messages that contain one of these keywords trigger notifications. Matching "
+"on these keywords is case-insensitive."
+msgstr ""
+"जिन संदेशों में इनमें से कोई एक खोजशब्द होता है, वे अधिसूचनाएं सक्रिय करते हैं। इन खोजशब्द पर "
+"मिलान करना केस-असंवेदनशील है।"
+
+#: src/session/view/account_settings/notifications_page.ui:67
+#: src/session/view/account_settings/notifications_page.ui:68
+msgid "Add Keyword"
+msgstr "खोजशब्द जोड़ें"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:4
+#: src/session/view/account_settings/security_page/mod.ui:26
+msgid "Ignored Users"
+msgstr "उपेक्षित उपयोक्ता"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:18
+msgid "Toggle Ignored Users Search"
+msgstr "उपेक्षित उपयोक्ता खोज को टॉगल करें"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:33
+msgid "Search for ignored users"
+msgstr "उपेक्षित उपयोक्ताओं को खोजें"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:74
+msgid "No Ignored Users"
+msgstr "कोई उपेक्षित उपयोक्ता नहीं"
+
+#: src/session/view/account_settings/security_page/ignored_users_subpage/mod.ui:75
+msgid "You can add users to this list from their room member profile"
+msgstr "आप उपयोक्ताओं को उनके कक्ष सदस्य प्रोफाइल से इस सूची में जोड़ सकते हैं"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:168
+#: src/session/view/account_settings/security_page/mod.ui:167
+msgid "Export Room Encryption Keys"
+msgstr "निर्यात कक्ष कूटलेखन कुंजियां"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:171
+msgid ""
+"Exporting your room encryption keys allows you to make a backup to be able "
+"to decrypt your messages in end-to-end encrypted rooms on another device or "
+"with another Matrix client."
+msgstr ""
+"अपने कक्ष कूटलेखन कुंजियों को निर्यात करने से आप किसी अन्य उपकरण पर या किसी अन्य मैट्रिक्स "
+"क्लाइंट के साथ अंत-से-अंत कूटलेखित कक्ष में अपने संदेशों को विकोड करने में सक्षम होने के लिए बैकअप "
+"बना सकते हैं।"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:174
+msgid ""
+"The backup must be stored in a safe place and must be protected with a "
+"strong passphrase that will be used to encrypt the data."
+msgstr ""
+"बैकअप को एक सुरक्षित स्थान पर संग्रहीत किया जाना चाहिए और एक मजबूत पासफ़्रेज़ के साथ "
+"संरक्षित किया जाना चाहिए जिसका उपयोग डेटा को कूटलेखित करने के लिए किया जाएगा।"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:177
+msgid "Export Keys"
+msgstr "कुंजी निर्यात करें"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:180
+#: src/session/view/account_settings/security_page/mod.ui:176
+msgid "Import Room Encryption Keys"
+msgstr "कक्ष कूटलेखन कुंजियां आयात करें"
+
+#. Translators: 'Room encryption keys' are encryption keys for all rooms.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:183
+msgid ""
+"Importing your room encryption keys allows you to decrypt your messages in "
+"end-to-end encrypted rooms with a previous backup from a Matrix client."
+msgstr ""
+"अपने कक्ष कूटलेखन कुंजियों को आयात करने से आप मैट्रिक्स क्लाइंट से पिछले बैकअप के साथ अंत-से-अंत "
+"कूटलेखित कक्ष में अपने संदेशों को विकोड कर सकते हैं।"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:186
+msgid "Enter the passphrase provided when the backup file was created."
+msgstr "बैकअप फाइल बनाते समय प्रदान किया गया पासफ़्रेज़ दर्ज करें।"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:189
+msgid "Import Keys"
+msgstr "कुंजी आयात करें"
+
+#. Translators: Do no translate "fractal" as it is the application
+#. name.
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:210
+msgid "fractal-encryption-keys"
+msgstr "फ्रैक्टल-कूटलेखन-कुंजियां"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:215
+msgid "Save Encryption Keys To…"
+msgstr "कूटलेखन कुंजियां यहां सहेजें…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:218
+msgid "Import Encryption Keys From…"
+msgstr "यहां से कूटलेखन कुंजियां आयात करें…"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:231
+#: src/utils/media.rs:218
+msgid "Could not access file"
+msgstr "फाइल तक नहीं पहुंच सका"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:261
+msgid "Passphrases do not match"
+msgstr "पासफ़्रेज़ मेल नहीं खाते"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:333
+msgid "Room encryption keys exported successfully"
+msgstr "कक्ष कूटलेखन कुंजियां सफलतापूर्वक निर्यात की गई"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:338
+msgid "Imported 1 room encryption key"
+msgid_plural "Imported {n} room encryption keys"
+msgstr[0] "आयातित 1 कक्ष की कूटलेखन कुंजी"
+msgstr[1] "आयातित {n} कक्षों की कूटलेखन कुंजी"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:352
+msgid "Could not export the keys"
+msgstr "कुंजियां निर्यात नहीं कर सका"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:362
+msgid "The passphrase doesn't match the one used to export the keys."
+msgstr "पासफ़्रेज़ कुंजी निर्यात करने के लिए उपयोग किए गए पासफ़्रेज़ से मेल नहीं खाता है।"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.rs:366
+msgid "Could not import the keys"
+msgstr "कुंजियां आयात नहीं कर सका"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:61
+msgid "Passphrase"
+msgstr "पासफ़्रेज़"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:81
+msgid "Confirm Passphrase"
+msgstr "पासफ़्रेज़ की पुष्टि करें"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:116
+#: src/session/view/content/room_details/history_viewer/file.ui:4
+#: src/session/view/content/room_history/message_row/file.rs:65
+msgid "File"
+msgstr "फाइल"
+
+#: src/session/view/account_settings/security_page/import_export_keys_subpage.ui:120
+msgid "Choose…"
+msgstr "चुनें…"
+
+#: src/session/view/account_settings/security_page/mod.rs:222
+msgid "No Crypto Identity"
+msgstr "कोई क्रिप्टो पहचान नहीं"
+
+#: src/session/view/account_settings/security_page/mod.rs:224
+msgid "Verifying your own devices or other users is not possible"
+msgstr "आपके अपने उपकरण या अन्य उपयोक्ताओं को सत्यापित करना संभव नहीं है"
+
+#: src/session/view/account_settings/security_page/mod.rs:227
+#: src/session/view/account_settings/security_page/mod.rs:300
+#: src/session/view/content/room_details/general_page.rs:1023
+#: src/session/view/sidebar/mod.rs:318 src/session/view/sidebar/mod.rs:324
+msgid "Enable"
+msgstr "सक्षम"
+
+#: src/session/view/account_settings/security_page/mod.rs:230
+msgid "Enable Crypto Identity"
+msgstr "क्रिप्टो पहचान सक्षम करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:246
+msgid "Crypto Identity Enabled"
+msgstr "क्रिप्टो पहचान सक्षम"
+
+#: src/session/view/account_settings/security_page/mod.rs:248
+msgid "The crypto identity exists and this device is verified"
+msgstr "क्रिप्टो पहचान मौजूद है और यह उपकरण सत्यापित है"
+
+#: src/session/view/account_settings/security_page/mod.rs:265
+msgid "Crypto Identity Incomplete"
+msgstr "क्रिप्टो पहचान अपूर्ण"
+
+#: src/session/view/account_settings/security_page/mod.rs:267
+msgid "The crypto identity exists but this device is not verified"
+msgstr "क्रिप्टो पहचान मौजूद है लेकिन यह उपकरण सत्यापित नहीं है"
+
+#: src/session/view/account_settings/security_page/mod.rs:273
+msgid "Verify This Session"
+msgstr "इस सत्र की पुष्टि करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:295
+msgid "Account Recovery Disabled"
+msgstr "खाता पुनर्प्राप्ति अक्षम"
+
+#: src/session/view/account_settings/security_page/mod.rs:297
+msgid ""
+"Enable recovery to be able to restore your account without another device"
+msgstr ""
+"किसी अन्य उपकरण के बिना अपना खाता पुनर्स्थापित करने में सक्षम होने के लिए पुनर्प्राप्ति "
+"सक्षम करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:303
+msgid "Enable Account Recovery"
+msgstr "खाता पुनर्प्राप्ति सक्षम करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:314
+msgid "Account Recovery Enabled"
+msgstr "खाता पुनर्प्राप्ति सक्षम"
+
+#: src/session/view/account_settings/security_page/mod.rs:316
+msgid "Your signing keys and encryption keys are synchronized"
+msgstr "आपकी हस्ताक्षर कुंजियां और कूटलेखन कुंजियां समन्वयित हैं"
+
+#: src/session/view/account_settings/security_page/mod.rs:322
+msgid "Reset Account Recovery Key"
+msgstr "खाता पुनर्प्राप्ति कुंजी रीसेट करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:336
+msgid "Recover to synchronize your signing keys and encryption keys"
+msgstr "अपनी हस्ताक्षर कुंजी और कूटलेखन कुंजी को समन्वयित करने के लिए पुनर्प्राप्त करें"
+
+#: src/session/view/account_settings/security_page/mod.rs:342
+msgid "Recover Account Data"
+msgstr "खाता डेटा पुनर्प्राप्त करें"
+
+#: src/session/view/account_settings/security_page/mod.ui:9
+msgid "Privacy"
+msgstr "गोपनीयता"
+
+#: src/session/view/account_settings/security_page/mod.ui:13
+msgid "Send Read Receipts"
+msgstr "पठन रसीद भेजें"
+
+#: src/session/view/account_settings/security_page/mod.ui:14
+msgid ""
+"Allow other members of the rooms you participate in to track which messages "
+"you have seen"
+msgstr ""
+"जिन कमरों में आप भाग लेते हैं उनके अन्य सदस्यों को यह ट्रैक करने की अनुमति दें कि आपने कौन से "
+"संदेश देखे हैं"
+
+#: src/session/view/account_settings/security_page/mod.ui:20
+msgid "Send Typing Notifications"
+msgstr "टाइपिंग अधिसूचनाएं भेजें"
+
+#: src/session/view/account_settings/security_page/mod.ui:21
+msgid ""
+"Allow other members of the rooms you participate in to see when you are "
+"typing a message"
+msgstr ""
+"जब आप संदेश लिख रहे हों तो उन कमरों के अन्य सदस्यों को देखने की अनुमति दें जिनमें आप भाग लेते हैं"
+
+#: src/session/view/account_settings/security_page/mod.ui:27
+msgid ""
+"All messages or invitations sent by these users will be ignored. You will "
+"still see some of their activity, like when they join or leave a room."
+msgstr ""
+"इन उपयोक्ताओं द्वारा भेजे गए सभी संदेशों या निमंत्रणों को अनदेखा कर दिया जाएगा। आप अभी "
+"भी उनकी कुछ गतिविधि देखेंगे, जैसे जब वे किसी कक्ष में शामिल होते हैं या छोड़ते हैं।"
+
+#: src/session/view/account_settings/security_page/mod.ui:36
+msgid "Crypto Identity"
+msgstr "क्रिप्टो पहचान"
+
+#: src/session/view/account_settings/security_page/mod.ui:37
+msgid ""
+"Allows you to verify other Matrix accounts and automatically trust their "
+"verified sessions"
+msgstr ""
+"आपको अन्य मैट्रिक्स खातों को सत्यापित करने और स्वचालित रूप से उनके सत्यापित सत्रों पर "
+"भरोसा करने की अनुमति देता है"
+
+#: src/session/view/account_settings/security_page/mod.ui:99
+msgid "Account Recovery"
+msgstr "खाता पुनर्प्राप्ति"
+
+#: src/session/view/account_settings/security_page/mod.ui:100
+msgid ""
+"Allows to fully recover your account with a recovery key or passphrase, if "
+"you ever lose access to all your sessions"
+msgstr ""
+"यदि आप कभी भी अपने सभी सत्रों तक पहुंच खो देते हैं, तो पुनर्प्राप्ति कुंजी या पासफ़्रेज़ के साथ "
+"आपके खाते को पूरी तरह से पुनर्प्राप्त करने की अनुमति देता है"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:5
+msgid "Sessions"
+msgstr "सत्र"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:42
+#: src/session/view/account_settings/user_sessions_page/mod.ui:46
+msgid "Current Session"
+msgstr "वर्तमान सत्र"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:57
+#: src/session/view/account_settings/user_sessions_page/mod.ui:61
+msgid "Other Active Sessions"
+msgstr "अन्य सक्रिय सत्र"
+
+#: src/session/view/account_settings/user_sessions_page/mod.ui:85
+msgid "Could not load the list of connected devices"
+msgstr "जुड़े हुए उपकरणों की सूची लोड नहीं की जा सकी"
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:113
+msgid "Disconnect Session"
+msgstr "सत्र को वियोजित करें"
+
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:166
+msgid "Could not disconnect device “{device_name}”"
+msgstr "उपकरण \"{device_name}\" को वियोजित नहीं किया जा सका"
+
+#. Translators: Time in 24h format, i.e. "23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:214
+msgid "Last seen at %H:%M"
+msgstr "अंतिम बार %H:%M पर देखा गया"
+
+#. Translators: Time in 12h format, i.e. "11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:219
+msgid "Last seen at %I:%M %p"
+msgstr "अंतिम बार %I:%M %p पर देखा गया"
+
+#. Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:229
+#, no-c-format
+msgid "Last seen yesterday at %H:%M"
+msgstr "अंतिम बार कल %H:%M पर देखा गया"
+
+#. Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
+#. PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:236
+#, no-c-format
+msgid "Last seen yesterday at %I:%M %p"
+msgstr "अंतिम बार कल %I:%M %p पर देखा गया"
+
+#. Translators: this is the name of the week day followed by a time in 24h
+#. format, i.e. "Last seen Monday at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:247
+#, no-c-format
+msgid "Last seen %A at %H:%M"
+msgstr "अंतिम बार %A को %H:%M पर देखा गया"
+
+#. Translators: this is the week day name followed by a time in 12h format, i.e.
+#. "Last seen Monday at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:254
+#, no-c-format
+msgid "Last seen %A at %I:%M %p"
+msgstr "अंतिम बार %A को %I:%M %p पर देखा गया"
+
+#. Translators: this is the month and day and the time in 24h format, i.e. "Last
+#. seen February 3 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:263
+#, no-c-format
+msgid "Last seen %B %-e at %H:%M"
+msgstr "अंतिम बार %-e %B को %H:%M पर देखा गया"
+
+#. Translators: this is the month and day and the time in 12h format, i.e. "Last
+#. seen February 3 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:270
+#, no-c-format
+msgid "Last seen %B %-e at %I:%M %p"
+msgstr "अंतिम बार %-e %B को %I:%M %p पर देखा गया"
+
+#. Translators: this is the full date and the time in 24h format, i.e. "Last
+#. seen February 3 2015 at 23:04".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:278
+#, no-c-format
+msgid "Last seen %B %-e %Y at %H:%M"
+msgstr "अंतिम बार %-e %B %Y को %H:%M पर देखा गया"
+
+#. Translators: this is the full date and the time in 12h format, i.e. "Last
+#. seen February 3 2015 at 11:04 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/account_settings/user_sessions_page/user_session_row.rs:285
+#, no-c-format
+msgid "Last seen %B %-e %Y at %I:%M %p"
+msgstr "अंतिम बार %-e %B %Y को %I:%M %p पर देखा गया"
+
+#. Translators: As in 'A verified session'.
+#: src/session/view/account_settings/user_sessions_page/user_session_row.ui:34
+msgid "Verified"
+msgstr "सत्यापित"
+
+#: src/session/view/content/explore/mod.ui:20
+msgid "Public Rooms Search"
+msgstr "सार्वजनिक कक्ष खोजें"
+
+#: src/session/view/content/explore/mod.ui:21
+msgid "Search for a room in the public directory of the selected server"
+msgstr "चयनित सर्वर की सार्वजनिक निर्देशिका में एक कक्ष खोजें"
+
+#: src/session/view/content/explore/mod.ui:32
+msgid "Switch servers"
+msgstr "सर्वर बदलें"
+
+#: src/session/view/content/explore/mod.ui:69
+msgid "No Rooms"
+msgstr "कोई कक्ष नहीं"
+
+#: src/session/view/content/explore/mod.ui:75
+msgid "No rooms matching the search were found"
+msgstr "खोज से मेल खाने वाला कोई कक्ष नहीं मिलें"
+
+#: src/session/view/content/explore/mod.ui:86
+msgid "List of Public Rooms"
+msgstr "सार्वजनिक कक्षों की सूची"
+
+#: src/session/view/content/explore/public_room_row.rs:207
+msgid "View {room_name}"
+msgstr "{room_name} देखें"
+
+#: src/session/view/content/explore/public_room_row.rs:209
+msgid "Join {room_name}"
+msgstr "{room_name} से जुड़ें"
+
+#: src/session/view/content/explore/servers_popover.ui:22
+msgid "Server List"
+msgstr "सर्वर सूची"
+
+#: src/session/view/content/explore/servers_popover.ui:38
+#: src/session/view/content/explore/servers_popover.ui:45
+msgid "Add Server"
+msgstr "सर्वर जोड़े"
+
+#: src/session/view/content/explore/server_row.ui:28
+#: src/session/view/content/explore/server_row.ui:30
+msgid "Remove Server"
+msgstr "सर्वर हटाएं"
+
+#: src/session/view/content/invite.rs:187
+msgid "{user_name} ({user_id}) invited you"
+msgstr "{user_name} ({user_id}) ने आपको आमंत्रित किया है"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:249
+msgid "Could not accept invitation for {room}. Try again later."
+msgstr "{room} के लिए निमंत्रण स्वीकार नहीं किया जा सका। बाद में पुन: प्रयास करें।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/invite.rs:289
+msgid "Could not decline invitation for {room}. Try again later."
+msgstr "{room} के लिए आमंत्रण अस्वीकार नहीं किया जा सका। बाद में पुन: प्रयास करें।"
+
+#. Translators: This is a verb.
+#: src/session/view/content/invite.ui:13 src/session/view/content/invite.ui:39
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:99
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:209
+msgid "Invite"
+msgstr "आमंत्रण"
+
+#: src/session/view/content/invite.ui:125
+msgid "_Decline"
+msgstr "अस्वीकारें (_D)"
+
+#: src/session/view/content/invite.ui:135 src/session/view/sidebar/mod.ui:32
+msgid "_Accept"
+msgstr "स्वीकारें (_A)"
+
+#: src/session/view/content/mod.ui:4
+msgid "Main Content"
+msgstr "मुख्य सामग्री"
+
+#: src/session/view/content/mod.ui:13 src/session/view/content/mod.ui:28
+msgid "No Room Selected"
+msgstr "कोई कक्ष चयनित नहीं"
+
+#: src/session/view/content/mod.ui:29
+msgid "Join a room to start chatting"
+msgstr "चैटिंग शुरू करने के लिए किसी कक्ष से जुड़ें"
+
+#: src/session/view/content/mod.ui:39
+#: src/session/view/content/room_history/mod.ui:219
+msgid "Room History"
+msgstr "कक्ष इतिहास"
+
+#: src/session/view/content/mod.ui:50
+msgid "Room Invite"
+msgstr "कक्ष निमंत्रण"
+
+#: src/session/view/content/mod.ui:59
+msgid "Explore Rooms"
+msgstr "कक्षों का अन्वेषण करें"
+
+#: src/session/view/content/room_details/addresses_subpage/completion_popover.ui:5
+msgid "Address auto-completion"
+msgstr "पते की स्वत: पूर्णता"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:328
+msgid "Local Addresses on {homeserver}"
+msgstr "{homeserver} पर स्थानीय पते"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:402
+msgid "Remove address"
+msgstr "पता हटाएं"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:406
+msgid "Remove “{address}”"
+msgstr "“{address}” हटाएं"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:447
+#: src/session/view/content/room_details/general_page.rs:624
+#: src/session/view/room_creation.ui:132
+msgid "Main Address"
+msgstr "मुख्य पता"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:471
+msgid "Set as main address"
+msgstr "मुख्य पते के रूप में निर्धारित करें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:477
+msgid "Set “{address}” as main address"
+msgstr "“{address}” को मुख्य पते के रूप में निर्धारित करें"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:521
+msgid "Could not remove public address"
+msgstr "सार्वजनिक पता नहीं हटाया जा सका"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:547
+msgid "Could not set main public address"
+msgstr "मुख्य सार्वजनिक पता निर्धारित नहीं किया जा सका"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:601
+msgid "Could not add public address"
+msgstr "सार्वजनिक पता नहीं जोड़ा जा सका"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:605
+msgid "This address is not registered as a local address"
+msgstr "यह पता स्थानीय पते के रूप में पंजीकृत नहीं है"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:608
+msgid "This address does not belong to this room"
+msgstr "यह पता इस कक्ष का नहीं है"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:662
+msgid "Unregister local address"
+msgstr "स्थानीय पता अपंजीकृत करें"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:666
+msgid "Unregister “{address}”"
+msgstr "“{address}” को अपंजीकृत करें"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:705
+msgid "Could not unregister local address"
+msgstr "स्थानीय पता अपंजीकृत नहीं किया जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:738
+msgid "Register “{address}”"
+msgstr "“{address}” पंजीकृत करें"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:776
+msgid "Could not register local address"
+msgstr "स्थानीय पता पंजीकृत नहीं किया जा सका"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.rs:780
+msgid "This address is already registered"
+msgstr "यह पता पहले से ही पंजीकृत है"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:4
+msgid "Edit Room Addresses"
+msgstr "कक्ष पते संपादित करें"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:14
+#: src/session/view/content/room_details/general_page.ui:147
+msgid "Public Addresses"
+msgstr "सार्वजनिक पते"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:15
+msgid ""
+"Public addresses are advertised for all users in the room and the main "
+"address is used to identify a room publicly. Before adding an address to "
+"this list, it must be registered as a local address."
+msgstr ""
+"कक्ष के सभी उपयोक्ताओं के लिए सार्वजनिक पते विज्ञापित किए जाते हैं और मुख्य पते का उपयोग "
+"सार्वजनिक रूप से कक्ष की पहचान करने के लिए किया जाता है। इस सूची में कोई पता जोड़ने से "
+"पहले, इसे स्थानीय पते के रूप में पंजीकृत किया जाना चाहिए।"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:46
+msgid ""
+"Local addresses can only be registered with your own homeserver. If they are "
+"not made public, only people on your homeserver can discover them."
+msgstr ""
+"स्थानीय पते केवल आपके अपने होमसर्वर से ही पंजीकृत किये जा सकते हैं। यदि उन्हें सार्वजनिक नहीं "
+"किया जाता है, तो केवल आपके होमसर्वर पर मौजूद लोग ही उन्हें खोज सकते हैं।"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:81
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:82
+msgid "Add Public Address"
+msgstr "सार्वजनिक पता जोड़ें"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:87
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:92
+msgid "Register Local Address"
+msgstr "स्थानीय पता पंजीकृत करें"
+
+#. Translators: This is the placeholder for the first part of a room address, as in '@my-room:example.org'.
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:89
+#: src/session/view/room_creation.ui:134
+msgid "my-room"
+msgstr "मेरा-कक्ष"
+
+#: src/session/view/content/room_details/addresses_subpage/mod.ui:90
+#: src/session/view/room_creation.ui:135
+msgid "First part of the address, for example “my-room”"
+msgstr "पते का पहला भाग, उदाहरण के लिए “मेरा-कक्ष”"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:254
+msgid "Do you really want to remove the avatar for this room?"
+msgstr "क्या आप वास्तव में इस कक्ष का अवतार हटाना चाहते हैं?"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:318
+msgid "Room name saved successfully"
+msgstr "कक्ष नाम सफलतापूर्वक सहेजा गया"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:390
+msgid "Could not change room name"
+msgstr "कक्ष नाम नहीं बदला जा सका"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:429
+msgid "Room description saved successfully"
+msgstr "कक्ष विवरण सफलतापूर्वक सहेजा गया"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:506
+msgid "Could not change room description"
+msgstr "कक्ष विवरण नहीं बदला जा सका"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:526
+msgid "Discard Unsaved Changes?"
+msgstr "सहेजे न गए परिवर्तन त्यागें?"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:528
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:586
+msgid ""
+"This page contains unsaved changes. Changes which are not saved will be lost."
+msgstr ""
+"इस पृष्ठ में सहेजे न गए परिवर्तन शामिल हैं। जो परिवर्तन सहेजे नहीं गए वे नष्ट हो जाएंगे।"
+
+#: src/session/view/content/room_details/edit_details_subpage.rs:538
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:596
+msgid "Discard"
+msgstr "त्यागें"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:4
+msgid "Edit Room Details"
+msgstr "कक्ष विवरण संपादित करें"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:29
+msgid "Room Avatar"
+msgstr "कक्ष अवतार"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:92
+msgid "Description"
+msgstr "विवरण"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:140
+#: src/session/view/content/room_details/history_viewer/file_row.rs:155
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:597
+#: src/utils/media.rs:193
+msgid "Save"
+msgstr "सहेजें"
+
+#: src/session/view/content/room_details/edit_details_subpage.ui:143
+msgid "Save Description"
+msgstr "विवरण सहेजें"
+
+#: src/session/view/content/room_details/general_page.rs:502
+#: src/session/view/content/room_details/invite_subpage/list.rs:268
+msgid "Member"
+msgid_plural "Members"
+msgstr[0] "सदस्य"
+msgstr[1] "सदस्य"
+
+#: src/session/view/content/room_details/general_page.rs:578
+msgid "Could not change notifications setting"
+msgstr "अधिसूचना सेटिंग नहीं बदली जा सकी"
+
+#: src/session/view/content/room_details/general_page.rs:619
+#: src/session/view/content/room_details/general_page.rs:658
+msgid "Copy address"
+msgstr "पता कॉपी करें"
+
+#: src/session/view/content/room_details/general_page.rs:620
+#: src/session/view/content/room_details/general_page.rs:659
+msgid "Address copied to clipboard"
+msgstr "पता क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_details/general_page.rs:701
+msgid "Room link copied to clipboard"
+msgstr "कक्ष का लिंक क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_details/general_page.rs:754
+msgid "Could not change who can join"
+msgstr "कौन जुड़ सकता है, इसे बदला नहीं जा सका"
+
+#: src/session/view/content/room_details/general_page.rs:802
+msgid "Could not change guest access"
+msgstr "अतिथि अभिगम नहीं बदल सके"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/general_page.rs:819
+msgid "Publish in the {homeserver} directory"
+msgstr "{homeserver} निर्देशिका में प्रकाशित करें"
+
+#: src/session/view/content/room_details/general_page.rs:896
+msgid "Could not publish room in directory"
+msgstr "निर्देशिका में कक्ष प्रकाशित नहीं किया जा सका"
+
+#: src/session/view/content/room_details/general_page.rs:898
+msgid "Could not unpublish room from directory"
+msgstr "निर्देशिका से कक्ष अप्रकाशित नहीं किया जा सका"
+
+#: src/session/view/content/room_details/general_page.rs:919
+#: src/session/view/content/room_details/general_page.ui:224
+msgid "Anyone, even if they are not in the room"
+msgstr "कोई भी, भले ही वे कक्ष में न हों"
+
+#: src/session/view/content/room_details/general_page.rs:922
+#: src/session/view/content/room_details/general_page.ui:225
+msgid "Members only, since this option was selected"
+msgstr "केवल सदस्य, जबसे यह विकल्प चुना गया था"
+
+#: src/session/view/content/room_details/general_page.rs:924
+#: src/session/view/content/room_details/general_page.ui:227
+msgid "Members only, since they were invited"
+msgstr "केवल सदस्य, जबसे उन्हें आमंत्रित किया गया था"
+
+#: src/session/view/content/room_details/general_page.rs:925
+#: src/session/view/content/room_details/general_page.ui:226
+msgid "Members only, since they joined the room"
+msgstr "केवल सदस्य, जब से वे कक्ष में शामिल हुए"
+
+#: src/session/view/content/room_details/general_page.rs:973
+msgid "Could not change who can read history"
+msgstr "इतिहास कौन पढ़ सकता है, इसे बदला नहीं जा सकता"
+
+#: src/session/view/content/room_details/general_page.rs:1017
+msgid "Enable Encryption?"
+msgstr "कूटलेखन सक्षम करें?"
+
+#: src/session/view/content/room_details/general_page.rs:1018
+msgid ""
+"Enabling encryption will prevent new members to read the history before they "
+"arrived. This cannot be disabled later."
+msgstr ""
+"कूटलेखन सक्षम करने से नए सदस्यों को आने से पहले इतिहास पढ़ने से रोका जा सकेगा। इसे बाद में "
+"अक्षम नहीं किया जा सकता।"
+
+#: src/session/view/content/room_details/general_page.rs:1033
+msgid "Could not enable encryption"
+msgstr "कूटलेखन सक्षम नहीं किया जा सका"
+
+#. Translators: As in, 'Room federated'.
+#: src/session/view/content/room_details/general_page.rs:1059
+msgid "Federated"
+msgstr "संघबद्ध"
+
+#. Translators: As in, 'Room not federated'.
+#: src/session/view/content/room_details/general_page.rs:1062
+msgid "Not federated"
+msgstr "संघबद्ध नहीं"
+
+#: src/session/view/content/room_details/general_page.rs:1092
+msgid "Room upgraded successfully"
+msgstr "कक्ष सफलतापूर्वक उन्नयन किया गया"
+
+#: src/session/view/content/room_details/general_page.rs:1096
+msgid "Could not upgrade room"
+msgstr "कक्ष उन्नयन नहीं किया जा सका"
+
+#: src/session/view/content/room_details/general_page.ui:4
+#: src/session/view/content/room_details/mod.ui:4
+msgid "Room Details"
+msgstr "कक्ष विवरण"
+
+#: src/session/view/content/room_details/general_page.ui:62
+msgid "Edit Details"
+msgstr "विवरण संपादित करें"
+
+#: src/session/view/content/room_details/general_page.ui:89
+#: src/session/view/content/room_details/history_viewer/media.ui:4
+msgid "Media"
+msgstr "मीडिया"
+
+#: src/session/view/content/room_details/general_page.ui:96
+msgid "Files"
+msgstr "फाइलें"
+
+#. Translators: As in 'Audio file'.
+#: src/session/view/content/room_details/general_page.ui:104
+#: src/session/view/content/room_details/history_viewer/audio.ui:5
+#: src/session/view/content/room_history/message_row/audio.rs:94
+msgid "Audio"
+msgstr "ऑडियो"
+
+#: src/session/view/content/room_details/general_page.ui:114
+msgid "Which messages trigger notifications in this room"
+msgstr "कौन से संदेश इस कक्ष में अधिसूचनाएं सक्रिय करते हैं"
+
+#: src/session/view/content/room_details/general_page.ui:117
+msgid "Use Global Setting"
+msgstr "वैश्विक सेटिंग का प्रयोग करें"
+
+#: src/session/view/content/room_details/general_page.ui:124
+msgid "All Messages"
+msgstr "सभी संदेश"
+
+#: src/session/view/content/room_details/general_page.ui:131
+msgid "Only Mentions and Keywords"
+msgstr "केवल उल्लेख और खोजशब्द"
+
+#: src/session/view/content/room_details/general_page.ui:138
+msgid "Disable Notifications"
+msgstr "अधिसूचनाएं अक्षम करें"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session/view/content/room_details/general_page.ui:151
+msgctxt "room details"
+msgid "Edit"
+msgstr "संपादित करें"
+
+#: src/session/view/content/room_details/general_page.ui:155
+msgid "Edit Public Addresses"
+msgstr "सार्वजनिक पते संपादित करें"
+
+#: src/session/view/content/room_details/general_page.ui:164
+msgid "This room has no public addresses"
+msgstr "इस कक्ष का कोई सार्वजनिक पता नहीं है"
+
+#: src/session/view/content/room_details/general_page.ui:176
+msgid "Copy Room Link"
+msgstr "कक्ष का लिंक कॉपी करें"
+
+#: src/session/view/content/room_details/general_page.ui:184
+msgid "Access and Visibility"
+msgstr "अभिगम और दृश्यता"
+
+#: src/session/view/content/room_details/general_page.ui:187
+msgid "Who Can Join"
+msgstr "कौन जुड़ सकता है"
+
+#: src/session/view/content/room_details/general_page.ui:191
+msgid "Only Invited Users"
+msgstr "केवल आमंत्रित उपयोक्ता"
+
+#: src/session/view/content/room_details/general_page.ui:192
+msgid "Any Registered User"
+msgstr "कोई भी पंजीकृत उपयोक्ता"
+
+#: src/session/view/content/room_details/general_page.ui:208
+msgid "Allow Guests"
+msgstr "अतिथियों को अनुमति दें"
+
+#: src/session/view/content/room_details/general_page.ui:209
+msgid "Guests are Matrix users without a registered account"
+msgstr "अतिथि बिना पंजीकृत खाते के मैट्रिक्स उपयोक्ता हैं"
+
+#: src/session/view/content/room_details/general_page.ui:220
+msgid "Who Can Read History"
+msgstr "कौन इतिहास पढ़ सकता है"
+
+#: src/session/view/content/room_details/general_page.ui:241
+msgid "Matrix Room ID"
+msgstr "मैट्रिक्स कक्ष ID"
+
+#: src/session/view/content/room_details/general_page.ui:248
+msgid "Copy Matrix Room ID"
+msgstr "मैट्रिक्स कक्ष ID कॉपी करें"
+
+#: src/session/view/content/room_details/general_page.ui:249
+msgid "Matrix room ID copied to clipboard"
+msgstr "मैट्रिक्स कक्ष ID को क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_details/general_page.ui:254
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:158
+msgid "Enable Encryption"
+msgstr "कूटलेखन सक्षम करें"
+
+#: src/session/view/content/room_details/general_page.ui:265
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:9
+msgid "Permissions"
+msgstr "अनुमतियां"
+
+#: src/session/view/content/room_details/general_page.ui:273
+msgid "Room Version"
+msgstr "कक्ष संस्करण"
+
+#. Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+#: src/session/view/content/room_details/general_page.ui:285
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:82
+msgid "Upgrade"
+msgstr "उन्नयन"
+
+#: src/session/view/content/room_details/general_page.ui:298
+msgid "Federation"
+msgstr "महासंघ"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this case, the file to play is an
+#. audio file.
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:75
+msgid "Play {filename}"
+msgstr "{filename} चलायें"
+
+#: src/session/view/content/room_details/history_viewer/audio_row.rs:93
+msgid "Unknown duration"
+msgstr "अज्ञात अवधि"
+
+#. Translators: As in "Play audio file".
+#: src/session/view/content/room_details/history_viewer/audio_row.ui:13
+msgid "Play"
+msgstr "चलाएं"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:33
+#: src/session/view/content/room_details/history_viewer/audio.ui:40
+msgid "No Audio"
+msgstr "कोई ऑडियो नहीं"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:41
+msgid "This room does not contain any audio"
+msgstr "इस कक्ष में कोई ऑडियो नहीं है"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:49
+#: src/session/view/content/room_details/history_viewer/audio.ui:56
+msgid "Could Not Load Audio"
+msgstr "ऑडियो लोड नहीं हो सका"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:57
+#: src/session/view/content/room_details/history_viewer/file.ui:56
+#: src/session/view/content/room_details/history_viewer/media.ui:63
+#: src/session/view/content/room_history/mod.ui:200
+msgid "Check your network connection"
+msgstr "अपना नेटवर्क कनेक्शन जांचें"
+
+#: src/session/view/content/room_details/history_viewer/audio.ui:76
+msgid "Audio History"
+msgstr "ऑडियो इतिहास"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_details/history_viewer/file_row.rs:73
+msgid "Save {filename}"
+msgstr "{filename} सहेजें"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:81
+msgid "Unknown size"
+msgstr "अज्ञात आकार"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:97
+msgid "Open File"
+msgstr "फाइल खोलें"
+
+#: src/session/view/content/room_details/history_viewer/file_row.rs:100
+#: src/session/view/content/room_details/history_viewer/file_row.rs:154
+#: src/session/view/content/room_details/history_viewer/file_row.ui:12
+#: src/session/view/content/room_history/message_row/file.ui:25
+#: src/session/view/content/room_history/message_row/file.ui:27
+#: src/utils/media.rs:191
+msgid "Save File"
+msgstr "फाइल सहेजें"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:32
+#: src/session/view/content/room_details/history_viewer/file.ui:39
+msgid "No Files"
+msgstr "कोई फाइल नहीं"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:40
+msgid "This room does not contain any files"
+msgstr "इस कक्ष में कोई भी फाइल नहीं है"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:48
+#: src/session/view/content/room_details/history_viewer/file.ui:55
+msgid "Could Not Load Files"
+msgstr "फाइलें लोड नहीं हो सकी"
+
+#: src/session/view/content/room_details/history_viewer/file.ui:75
+msgid "File History"
+msgstr "फाइल इतिहास"
+
+#: src/session/view/content/room_details/history_viewer/media.ui:39
+#: src/session/view/content/room_details/history_viewer/media.ui:46
+msgid "No Media"
+msgstr "कोई मीडिया नहीं"
+
+#: src/session/view/content/room_details/history_viewer/media.ui:47
+msgid "This room does not contain any media"
+msgstr "इस कक्ष में कोई मीडिया नहीं है"
+
+#: src/session/view/content/room_details/history_viewer/media.ui:55
+#: src/session/view/content/room_details/history_viewer/media.ui:62
+msgid "Could Not Load Media"
+msgstr "मीडिया लोड नहीं हो सका"
+
+#: src/session/view/content/room_details/history_viewer/media.ui:82
+msgid "Media History"
+msgstr "मीडिया इतिहास"
+
+#: src/session/view/content/room_details/invite_subpage/list.rs:269
+msgid "Banned"
+msgstr "प्रतिबंधित"
+
+#. Translators: Do NOT translate the content between '{' and '}', these
+#. are variable names.
+#: src/session/view/content/room_details/invite_subpage/mod.rs:241
+msgid "Could not invite {user} to {room}. Try again later."
+msgid_plural "Could not invite {n} users to {room}. Try again later."
+msgstr[0] "{user} को {room} में आमंत्रित नहीं किया जा सका। बाद में पुन: प्रयास करें।"
+msgstr[1] ""
+"{n} उपयोक्ताओं को {room} में आमंत्रित नहीं किया जा सका। बाद में पुन: प्रयास करें।"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:4
+msgid "Invite New Members"
+msgstr "नये सदस्यों को आमंत्रित करें"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:20
+msgid "I_nvite"
+msgstr "आमंत्रित करें (_n)"
+
+#. Translators: In this string, this is a verb.
+#: src/session/view/content/room_details/invite_subpage/mod.ui:58
+#: src/session/view/content/room_details/invite_subpage/mod.ui:64
+#: src/session/view/create_dm_dialog/mod.ui:53
+msgid "Search"
+msgstr "खोजें"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:65
+msgid "Search for users to invite them to this room"
+msgstr "उपयोक्ताओं को इस कक्ष में आमंत्रित करने के लिए उन्हें खोजें"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:73
+msgid "Matching Users"
+msgstr "मेल खाते उपयोक्ता"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:123
+#: src/session/view/content/room_details/invite_subpage/mod.ui:127
+#: src/session/view/create_dm_dialog/mod.ui:92
+msgid "No Users Found"
+msgstr "कोई उपयोक्ता नहीं मिले"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:128
+msgid "No users matching the search were found"
+msgstr "खोज से मेल खाता कोई उपयोक्ता नहीं मिला"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:141
+#: src/session/view/create_dm_dialog/mod.ui:105
+msgid "An error occurred while searching for matches"
+msgstr "मिलान खोजते समय त्रुटि उत्पन्न हुई"
+
+#: src/session/view/content/room_details/invite_subpage/mod.ui:149
+msgid "Searching for Users"
+msgstr "उपयोक्ताओं की खोज"
+
+#: src/session/view/content/room_details/members_page/members_list_view/extra_lists.rs:170
+msgid "Could not load the full list of room members"
+msgstr "कक्ष के सदस्यों की पूरी सूची लोड नहीं की जा सकी"
+
+#: src/session/view/content/room_details/members_page/members_list_view/member_row.ui:45
+msgid "Identity Verified"
+msgstr "पहचान सत्यापित"
+
+#. Translators: As in 'Invited Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:119
+msgctxt "members"
+msgid "Invited"
+msgid_plural "Invited"
+msgstr[0] "आमंत्रित"
+msgstr[1] "आमंत्रित"
+
+#. Translators: As in 'Banned Room Member(s)'.
+#: src/session/view/content/room_details/members_page/members_list_view/membership_subpage_row.rs:121
+msgctxt "members"
+msgid "Banned"
+msgid_plural "Banned"
+msgstr[0] "प्रतिबंधित"
+msgstr[1] "प्रतिबंधित"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:220
+msgid "Invited Room Member"
+msgid_plural "Invited Room Members"
+msgstr[0] "आमंत्रित कक्ष सदस्य"
+msgstr[1] "आमंत्रित कक्ष सदस्य"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:221
+msgid "Banned Room Member"
+msgid_plural "Banned Room Members"
+msgstr[0] "प्रतिबंधित कक्ष सदस्य"
+msgstr[1] "प्रतिबंधित कक्ष सदस्य"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.rs:222
+msgid "Room Member"
+msgid_plural "Room Members"
+msgstr[0] "कक्ष सदस्य"
+msgstr[1] "कक्ष सदस्य"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:11
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:13
+#: src/session/view/content/room_details/permissions/members_subpage.ui:12
+#: src/session/view/content/room_details/permissions/members_subpage.ui:14
+msgid "Toggle Room Members Search"
+msgstr "कक्ष सदस्यों की खोज को टॉगल करें"
+
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:29
+#: src/session/view/content/room_details/members_page/members_list_view/mod.ui:33
+#: src/session/view/content/room_details/permissions/members_subpage.ui:30
+#: src/session/view/content/room_details/permissions/members_subpage.ui:34
+msgid "Search for room members"
+msgstr "कक्ष सदस्यों को खोजें"
+
+#: src/session/view/content/room_details/members_page/mod.rs:90
+msgid "The user is not in the room members list anymore"
+msgstr "उपयोक्ता अब कक्ष सदस्यों की सूची में नहीं है"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:4
+msgid "Add Custom Permissions"
+msgstr "तदनुकूल अनुमतियां जोड़ें"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:11
+msgid "_Add"
+msgstr "जोड़ें (_A)"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:50
+msgid "Assign Power Level"
+msgstr "अधिकार स्तर निर्दिष्ट करें"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:71
+msgid "Search Results"
+msgstr "खोज के परिणाम"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:96
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:100
+msgid "No Matching Members Found"
+msgstr "कोई मेल खाने वाला सदस्य नहीं मिले"
+
+#: src/session/view/content/room_details/permissions/add_members_subpage.ui:101
+msgid "No room members matching the search were found"
+msgstr "खोज से मेल खाने वाला कोई भी कक्ष सदस्य नहीं मिले"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/members_subpage.ui:4
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:279
+msgid "Members With Assigned Power Levels"
+msgstr "निर्दिष्ट अधिकार स्तर वाले सदस्य"
+
+#: src/session/view/content/room_details/permissions/members_subpage.ui:83
+msgid "Add"
+msgstr "जोड़ें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:584
+msgid "Save Changes?"
+msgstr "परिवर्तन सहेजें?"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.rs:641
+msgid "Could not save permissions"
+msgstr "अनुमतियां सहेजी नहीं जा सकी"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:30
+msgid "_Save"
+msgstr "सहेजें (_S)"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:44
+msgid "Room Actions"
+msgstr "कक्ष कार्रवाई"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:45
+msgid "Power level required to perform different actions in the room"
+msgstr "कक्ष में विभिन्न कार्रवाई को करने के लिए आवश्यक अधिकार स्तर"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:48
+msgid "Send Messages"
+msgstr "संदेश भेजें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:59
+msgid "Remove Own Messages"
+msgstr "स्वयं के संदेश हटाएं"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:70
+msgid "Remove Messages of Other Members"
+msgstr "अन्य सदस्यों के संदेश हटाएं"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:81
+msgid "Notify Entire Room"
+msgstr "संपूर्ण कक्ष को सूचित करें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:92
+msgid "Change Room Settings"
+msgstr "कक्ष सेटिंग बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:103
+msgid "Change Room Name"
+msgstr "कक्ष नाम बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:114
+msgid "Change Room Description"
+msgstr "कक्ष विवरण बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:125
+msgid "Change Room Avatar"
+msgstr "कक्ष अवतार बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:136
+msgid "Change Addresses"
+msgstr "पता बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:147
+msgid "Change Who Can Read History"
+msgstr "बदलें कि इतिहास कौन पढ़ सकता है"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:169
+msgid "Change Permissions"
+msgstr "अनुमतियां बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:180
+msgid "Change Server Access Control List"
+msgstr "सर्वर अभिगम नियंत्रण सूची बदलें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:191
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:75
+msgid "Upgrade Room"
+msgstr "कक्ष उन्नयन करें"
+
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:204
+msgid "Member Actions"
+msgstr "सदस्य कार्रवाई"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:205
+msgid "Power level required to perform different actions on room members"
+msgstr "कक्ष के सदस्यों पर विभिन्न कार्रवाई करने के लिए आवश्यक अधिकार स्तर"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:246
+msgid "Members Power Levels"
+msgstr "सदस्यों का अधिकार स्तर"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:247
+msgid "Power levels defined for all members of the room"
+msgstr "कक्ष के सभी सदस्यों के लिए अधिकार स्तर परिभाषित"
+
+#. Translators: value used to assign room member roles
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:250
+#: src/session/view/content/room_details/permissions/permissions_subpage.ui:266
+msgid "Default Power Level"
+msgstr "तयशुदा अधिकार स्तर"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:59
+msgid "Version"
+msgstr "संस्करण"
+
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:76
+msgid ""
+"Upgrading a room to a more recent version allows to benefit from new "
+"features from the Matrix specification. It can also be used to reset the "
+"room state, which should make the room faster to join. However it should be "
+"used sparingly because it can be disruptive, as room members need to join "
+"the new room manually."
+msgstr ""
+"किसी कक्ष को नवीनतम संस्करण में अपग्रेड करने से मैट्रिक्स विनिर्देश से नई सुविधाओं का लाभ "
+"उठाया जा सकता है। इसका उपयोग कक्ष की स्थिति को रीसेट करने के लिए भी किया जा सकता "
+"है, जिससे कक्ष में शामिल होने की गति तेज हो जाएगी। हालाँकि इसका उपयोग संयम से किया "
+"जाना चाहिए क्योंकि यह विघटनकारी हो सकता है, क्योंकि कक्ष के सदस्यों को नए कक्ष में मैन्युअल "
+"रूप से शामिल होने की आवश्यकता होती है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_details/room_upgrade_dialog.rs:131
+msgid "{version} (unstable)"
+msgstr "{version} (अस्थिर)"
+
+#. Translators: In this string, 'Reply' is a verb.
+#: src/session/view/content/room_history/event_actions.ui:12
+#: src/session/view/content/room_history/event_actions.ui:98
+msgid "_Reply"
+msgstr "जवाब (_R)"
+
+#. Translators: In this string, 'Edit' is a verb.
+#: src/session/view/content/room_history/event_actions.ui:18
+#: src/session/view/content/room_history/event_actions.ui:104
+msgid "_Edit"
+msgstr "संपादन (_E)"
+
+#. Translators: In this string, 'Forward' is a verb, this is to
+#. re-send the same message in another room, like forwarding an e-mail.
+#: src/session/view/content/room_history/event_actions.ui:25
+#: src/session/view/content/room_history/event_actions.ui:111
+msgid "_Forward"
+msgstr "आगे (_F)"
+
+#: src/session/view/content/room_history/event_actions.ui:32
+#: src/session/view/content/room_history/event_actions.ui:118
+#: src/session/view/content/room_history/event_actions.ui:183
+msgid "_Select"
+msgstr "चुनें (_S)"
+
+#: src/session/view/content/room_history/event_actions.ui:39
+#: src/session/view/content/room_history/event_actions.ui:125
+msgid "_Copy Text"
+msgstr "पाठ कॉपी करें (_C)"
+
+#: src/session/view/content/room_history/event_actions.ui:44
+msgid "Copy T_humbnail"
+msgstr "थंबनेल कॉपी करें (_h)"
+
+#: src/session/view/content/room_history/event_actions.ui:49
+#: src/session/view/content/room_history/event_actions.ui:135
+#: src/session/view/media_viewer.ui:11
+msgid "S_ave Image"
+msgstr "छवि सहेजें (_a)"
+
+#: src/session/view/content/room_history/event_actions.ui:54
+#: src/session/view/content/room_history/event_actions.ui:140
+#: src/session/view/media_viewer.ui:16
+msgid "S_ave Video"
+msgstr "वीडियो सहेजें (_a)"
+
+#: src/session/view/content/room_history/event_actions.ui:59
+#: src/session/view/content/room_history/event_actions.ui:145
+#: src/session/view/media_viewer.ui:21
+msgid "S_ave Audio"
+msgstr "ऑडियो सहेजें (_a)"
+
+#: src/session/view/content/room_history/event_actions.ui:64
+#: src/session/view/content/room_history/event_actions.ui:150
+#: src/session/view/content/room_history/event_actions.ui:190
+#: src/session/view/media_viewer.ui:26
+msgid "Copy Message _Link"
+msgstr "संदेश लिंक कॉपी करें (_L)"
+
+#: src/session/view/content/room_history/event_actions.ui:69
+#: src/session/view/content/room_history/event_actions.ui:155
+#: src/session/view/content/room_history/event_actions.ui:195
+#: src/session/view/content/room_history/mod.ui:121
+msgid "_View Details"
+msgstr "विवरण देखें (_D)"
+
+#: src/session/view/content/room_history/event_actions.ui:76
+#: src/session/view/content/room_history/event_actions.ui:162
+msgid "_Discard"
+msgstr "त्यागें (_D)"
+
+#: src/session/view/content/room_history/event_actions.ui:83
+msgid "Rep_ort…"
+msgstr "रिपोर्ट (_o)…"
+
+#: src/session/view/content/room_history/event_actions.ui:88
+#: src/session/view/content/room_history/event_actions.ui:174
+#: src/session/view/content/room_history/event_actions.ui:207
+msgid "Re_move"
+msgstr "हटाएं (_m)"
+
+#: src/session/view/content/room_history/event_actions.ui:130
+msgid "_Copy Thumbnail"
+msgstr "थंबनेल कॉपी करें (_C)"
+
+#: src/session/view/content/room_history/event_actions.ui:169
+#: src/session/view/content/room_history/event_actions.ui:202
+msgid "Rep_ort"
+msgstr "रिपोर्ट (_o)"
+
+#: src/session/view/content/room_history/item_row.rs:336
+msgid "This is the start of the visible history"
+msgstr "यह दृश्यमान इतिहास की शुरुआत है"
+
+# Adopted for Hindi locale
+#. Translators: This is a date format in the day divider without the
+#. year. For example, "Friday, May 5".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/item_row.rs:376
+msgid "%A, %B %-e"
+msgstr "%A, %-e %B"
+
+# Adopted for Hindi locale.
+#. Translators: This is a date format in the day divider with the
+#. year. For ex. "Friday, May 5, 2023".
+#. Please use `-` before specifiers that add spaces on single
+#. digits. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/item_row.rs:382
+msgid "%A, %B %-e, %Y"
+msgstr "%A, %-e %B, %Y"
+
+#: src/session/view/content/room_history/item_row.rs:388
+msgid "New Messages"
+msgstr "नए संदेश"
+
+#: src/session/view/content/room_history/item_row.rs:540
+#: src/session/view/media_viewer.rs:554
+msgid "Message link copied to clipboard"
+msgstr "संदेश लिंक क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_history/item_row.rs:677
+#: src/session/view/content/room_history/item_row.rs:724
+#: src/session/view/content/room_history/item_row.rs:744
+#: src/session/view/content/room_history/item_row.rs:779
+#: src/session/view/content/room_history/item_row.rs:825
+#: src/session/view/content/room_history/item_row.rs:853
+#: src/session/view/content/room_history/item_row.rs:881
+msgid "Text copied to clipboard"
+msgstr "पाठ को क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_history/item_row.rs:799
+msgid "Thumbnail copied to clipboard"
+msgstr "थंबनेल क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_history/item_row.rs:931
+msgid "Remove Message?"
+msgstr "संदेश हटाएं?"
+
+#: src/session/view/content/room_history/item_row.rs:933
+msgid "Do you really want to remove this message? This cannot be undone."
+msgstr "क्या आप वाकई इस संदेश को हटाना चाहते हैं? इसे पूर्ववत नहीं किया जा सकता।"
+
+#: src/session/view/content/room_history/item_row.rs:947
+msgid "Could not remove message"
+msgstr "संदेश हटाया नहीं जा सका"
+
+#: src/session/view/content/room_history/item_row.rs:961
+msgid "Could not toggle reaction"
+msgstr "प्रतिक्रिया टॉगल नहीं कर सका"
+
+#: src/session/view/content/room_history/item_row.rs:987
+msgid "Report Event?"
+msgstr "घटना की रिपोर्ट करें?"
+
+#: src/session/view/content/room_history/item_row.rs:989
+msgid ""
+"Reporting an event will send its unique ID to the administrator of your "
+"homeserver. The administrator will not be able to see the content of the "
+"event if it is encrypted or redacted."
+msgstr ""
+"किसी घटना की रिपोर्ट करने से इसकी विशिष्ट ID आपके होमसर्वर के व्यवस्थापक को भेज दी "
+"जाएगी। यदि घटना कूटलेखित या संपादित किया गया है तो व्यवस्थापक घटना की सामग्री को "
+"नहीं देख पाएगा।"
+
+#. Translators: This is a verb, as in 'Report Event'.
+#: src/session/view/content/room_history/item_row.rs:996
+msgid "Report"
+msgstr "रिपोर्ट"
+
+#: src/session/view/content/room_history/item_row.rs:1014
+msgid "Could not report event"
+msgstr "घटना की रिपोर्ट नहीं की जा सकी"
+
+#: src/session/view/content/room_history/item_row.rs:1032
+msgid "Could not discard message"
+msgstr "संदेश त्यागे नहीं जा सके"
+
+#: src/session/view/content/room_history/message_row/audio.rs:92
+msgid "Audio: {filename}"
+msgstr "ऑडियो: {filename}"
+
+#: src/session/view/content/room_history/message_row/audio.rs:198
+#: src/session/view/content/room_history/message_row/audio.rs:202
+msgid "Could not retrieve audio file"
+msgstr "ऑडियो फाइल पुनर्प्राप्त नहीं की जा सकी"
+
+#: src/session/view/content/room_history/message_row/audio.rs:219
+msgid "Error reading audio file"
+msgstr "ऑडियो फाइल पढ़ने में त्रुटि"
+
+#: src/session/view/content/room_history/message_row/content.rs:240
+msgid ""
+"Could not decrypt this message, decryption will be retried once the keys are "
+"available."
+msgstr ""
+"इस संदेश को विकोड नहीं किया जा सका, कुंजी उपलब्ध होने पर विकोडन का पुनः प्रयास किया "
+"जाएगा।"
+
+#: src/session/view/content/room_history/message_row/content.rs:250
+msgid "This message was removed."
+msgstr "यह संदेश हटा दिया गया।"
+
+#: src/session/view/content/room_history/message_row/content.rs:261
+#: src/session/view/content/room_history/message_row/content.rs:423
+msgid "Unsupported event"
+msgstr "असमर्थित घटना"
+
+#: src/session/view/content/room_history/message_row/file.rs:63
+msgid "File: {filename}"
+msgstr "फाइल: {filename}"
+
+#: src/session/view/content/room_history/message_row/location.rs:102
+msgid "Location is invalid and cannot be displayed"
+msgstr "स्थान अमान्य है और प्रदर्शित नहीं किया जा सकता"
+
+#: src/session/view/content/room_history/message_row/location.ui:5
+msgid "User Location"
+msgstr "उपयोक्ता स्थान"
+
+#: src/session/view/content/room_history/message_row/media.rs:331
+msgid "Image: {filename}"
+msgstr "छवि: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:332
+msgid "Sticker: {filename}"
+msgstr "स्टीकर: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:333
+msgid "Video: {filename}"
+msgstr "वीडियो: {filename}"
+
+#: src/session/view/content/room_history/message_row/media.rs:337
+msgid "Image"
+msgstr "छवि"
+
+#: src/session/view/content/room_history/message_row/media.rs:338
+msgid "Sticker"
+msgstr "स्टीकर"
+
+#: src/session/view/content/room_history/message_row/media.rs:339
+msgid "Video"
+msgstr "वीडियो"
+
+#: src/session/view/content/room_history/message_row/media.rs:416
+msgid "Image file not supported"
+msgstr "छवि फाइल समर्थित नहीं है"
+
+#: src/session/view/content/room_history/message_row/media.rs:455
+#: src/session/view/content/room_history/message_row/media.rs:461
+msgid "Could not retrieve media"
+msgstr "मीडिया पुनर्प्राप्त नहीं किया जा सका"
+
+#. Translators: As in 'Sending message…'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:14
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:17
+msgid "Sending…"
+msgstr "भेजा जा रहा है…"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:30
+msgid "Temporary Error Sending Message"
+msgstr "संदेश भेजने में अस्थायी त्रुटि"
+
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:45
+msgid "Message Cannot Be Sent"
+msgstr "संदेश नहीं भेजा जा सकता"
+
+#. Translators: As in 'Sent message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:61
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:64
+msgid "Sent"
+msgstr "भेजा गया"
+
+#. Translators: As in 'Edited message'.
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:83
+#: src/session/view/content/room_history/message_row/message_state_stack.ui:86
+msgid "Edited"
+msgstr "संपादित"
+
+#: src/session/view/content/room_history/message_row/mod.rs:254
+msgid "Sent at {time}"
+msgstr "{time} पर भेजा गया"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:210
+msgid "1 member reacted with {reaction_key}"
+msgid_plural "{n} members reacted with {reaction_key}"
+msgstr[0] "1 सदस्य ने {reaction_key} के साथ प्रतिक्रिया व्यक्त की"
+msgstr[1] "{n} सदस्यों ने {reaction_key} के साथ प्रतिक्रिया दी"
+
+#: src/session/view/content/room_history/message_row/reaction/mod.rs:228
+msgid "{user} reacted with {reaction_key}"
+msgstr "{user} ने {reaction_key} के साथ प्रतिक्रिया व्यक्त की"
+
+#: src/session/view/content/room_history/message_row/reaction_list.ui:5
+msgid "Reactions"
+msgstr "प्रतिक्रियाएं"
+
+#: src/session/view/content/room_history/message_row/reply.ui:9
+msgid "In Reply To"
+msgstr "इसके जवाब में"
+
+#. Translators: this is the fallback title for an expander.
+#: src/session/view/content/room_history/message_row/text/widgets.rs:428
+msgid "Details"
+msgstr "विवरण"
+
+#: src/session/view/content/room_history/message_toolbar/attachment_dialog.ui:21
+msgid "_Send"
+msgstr "भेजें (_S)"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:677
+msgid "Public Room Mention Auto-completion"
+msgstr "सार्वजनिक कक्ष उल्लेख की स्वतः पूर्णता"
+
+#: src/session/view/content/room_history/message_toolbar/completion/completion_popover.rs:679
+msgid "Room Member Mention Auto-completion"
+msgstr "कक्ष सदस्य उल्लेख की स्वतः पूर्णता"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name. In this string, 'Reply' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:433
+msgid "Reply to {user}"
+msgstr "{user} को उत्तर दें"
+
+#. Translators: In this string, 'Edit' is a noun.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:445
+msgctxt "room-history"
+msgid "Edit"
+msgstr "संपादित करें"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:621
+msgid "Could not send reply"
+msgstr "जवाब नहीं भेजा जा सका"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:636
+msgid "Could not send edit"
+msgstr "संपादन नहीं भेजा जा सका"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:647
+msgid "Could not send message"
+msgstr "संदेश नहीं भेजा जा सका"
+
+#. Show the dialog as loading.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:689
+msgid "Your Location"
+msgstr "आपका स्थान"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable
+#. name.
+#: src/session/view/content/room_history/message_toolbar/mod.rs:750
+msgid "User Location {geo_uri} at {iso8601_datetime}"
+msgstr "उपयोक्ता स्थान {geo_uri} {iso8601_datetime} पर"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:772
+msgid "Could not send location"
+msgstr "स्थान नहीं भेजा जा सका"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:779
+msgid "The location request has been cancelled"
+msgstr "स्थान संबंधी अनुरोध रद्द कर दिया गया"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:780
+msgid "The location services are disabled"
+msgstr "स्थान सेवाएं अक्षम हैं"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:781
+msgid "Could not retrieve current location"
+msgstr "वर्तमान स्थान पुनर्प्राप्त नहीं किया जा सका"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:826
+msgid "Could not send file"
+msgstr "फाइल नहीं भेजी जा सकी"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:866
+msgid "Select File"
+msgstr "फाइल चुनें"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:868
+msgid "Select"
+msgstr "चुनें"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:883
+msgid "Could not open file"
+msgstr "फाइल नहीं खुल रही"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:902
+msgid "Error reading file"
+msgstr "फाइल पढ़ने में त्रुटि"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:959
+msgid "Error getting image from clipboard"
+msgstr "क्लिपबोर्ड से छवि प्राप्त करने में त्रुटि"
+
+#: src/session/view/content/room_history/message_toolbar/mod.rs:976
+msgid "Error getting file from clipboard"
+msgstr "क्लिपबोर्ड से फाइल प्राप्त करने में त्रुटि"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:6
+msgid "_Location"
+msgstr "स्थान (_L)"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:12
+msgid "_Markdown"
+msgstr "मार्कडाउन (_M)"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:96
+#: src/session/view/content/room_history/message_toolbar/mod.ui:98
+msgid "Send a File"
+msgstr "फाइल भेजें"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:107
+#: src/session/view/content/room_history/message_toolbar/mod.ui:109
+msgid "Insert an Emoji"
+msgstr "एक इमोजी सम्मिलित करें"
+
+#. Translators: This is the name of the input widget where messages
+#. are entered before being sent, for accessibility tools.
+#: src/session/view/content/room_history/message_toolbar/mod.ui:132
+msgid "Message Composer"
+msgstr "संदेश रचयिता"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:146
+#: src/session/view/content/room_history/message_toolbar/mod.ui:148
+msgid "More Options"
+msgstr "अधिक विकल्प"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:158
+#: src/session/view/content/room_history/message_toolbar/mod.ui:164
+msgid "Send Message"
+msgstr "संदेश भेजें"
+
+#: src/session/view/content/room_history/message_toolbar/mod.ui:179
+msgid "You don’t have permission to send messages to this room"
+msgstr "आपको इस कक्ष में संदेश भेजने की अनुमति नहीं है"
+
+#. Translators: this is a date and a time in 12h format.
+#. For example, "May 5 at 01:20 PM".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:120
+msgid "%B %-e at %I∶%M %p"
+msgstr "%B %-e %I∶%M %p बजे"
+
+#. Translators: this is a date and a time in 24h format.
+#. For example, "May 5 at 13:20".
+#. Do not change the time format as it will follow the system settings.
+#. See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
+#: src/session/view/content/room_history/member_timestamp/row.rs:126
+msgid "%B %-e at %H∶%M"
+msgstr "%B %-e %H∶%M बजे"
+
+#: src/session/view/content/room_history/mod.rs:354
+msgid "Error getting file from drop"
+msgstr "छोड़ी गई फाइल प्राप्त करने में त्रुटि"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:578
+msgid "Could not leave {room}"
+msgstr "{room} नहीं छोड़ सका"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/mod.rs:614
+#: src/session/view/sidebar/row.rs:593
+msgid "Could not forget {room}"
+msgstr "{room} नहीं भूल सका"
+
+#: src/session/view/content/room_history/mod.rs:785
+#: src/session/view/sidebar/mod.rs:430
+msgid "Context Menu"
+msgstr "संदर्भ मेनू"
+
+#: src/session/view/content/room_history/mod.rs:805
+msgid "Sender Context Menu"
+msgstr "प्रेषक संदर्भ मेनू"
+
+#: src/session/view/content/room_history/mod.rs:1007
+#: src/session/view/content/room_history/mod.rs:1011
+#: src/session/view/content/room_history/state_row/tombstone.ui:14
+msgid "There is a newer version of this room"
+msgstr "इस कक्ष का एक नया संस्करण है"
+
+#: src/session/view/content/room_history/mod.rs:1014
+msgid "This room was closed"
+msgstr "यह कक्ष बंद था"
+
+#: src/session/view/content/room_history/mod.ui:6
+msgid "Room _Details"
+msgstr "कक्ष विवरण (_D)"
+
+#: src/session/view/content/room_history/mod.ui:11
+msgid "_Invite New Members…"
+msgstr "नये सदस्यों को आमंत्रित करें (_I)…"
+
+#: src/session/view/content/room_history/mod.ui:18
+#: src/session/view/sidebar/mod.ui:71
+msgid "_Leave Room"
+msgstr "कक्ष छोड़ें (_L)"
+
+#: src/session/view/content/room_history/mod.ui:23
+#: src/session/view/sidebar/mod.ui:76
+msgid "Re_join Room"
+msgstr "कक्ष में पुनः जुड़ें (_j)"
+
+#: src/session/view/content/room_history/mod.ui:28
+#: src/session/view/sidebar/mod.ui:81
+msgid "_Forget Room"
+msgstr "कक्ष भूलें (_F)"
+
+#. Translators: In this string, 'Mention' is a verb.
+#: src/session/view/content/room_history/mod.ui:43
+msgid "_Mention"
+msgstr "उल्लेख (_M)"
+
+#. Translators: In this string, 'Open' is a verb.
+#: src/session/view/content/room_history/mod.ui:49
+msgid "_Open Direct Chat"
+msgstr "सीधी चैट खोलें (_O)"
+
+#: src/session/view/content/room_history/mod.ui:54
+msgid "Copy _Link"
+msgstr "लिंक कॉपी करें (_L)"
+
+#. Translators: In this string, 'Invite' is a verb.
+#: src/session/view/content/room_history/mod.ui:61
+msgid "_Invite"
+msgstr "आमंत्रित करें (_I)"
+
+#: src/session/view/content/room_history/mod.ui:66
+msgid "Revoke _Invite"
+msgstr "आमंत्रण निरस्त करें (_I)"
+
+#. Translators: In this string, 'Mute' is a verb, as in 'Mute room member'.
+#: src/session/view/content/room_history/mod.ui:72
+msgid "M_ute"
+msgstr "म्यूट (_u)"
+
+#: src/session/view/content/room_history/mod.ui:77
+msgid "_Unmute"
+msgstr "अनम्यूट (_U)"
+
+#. Translators: In this string, 'Kick' is a verb.
+#: src/session/view/content/room_history/mod.ui:83
+msgid "_Kick"
+msgstr "बाहर निकालें (_K)"
+
+#: src/session/view/content/room_history/mod.ui:88
+msgid "_Deny Access"
+msgstr "पहुंच अस्वीकारें (_D)"
+
+#. Translators: In this string, 'Ban' is a verb.
+#: src/session/view/content/room_history/mod.ui:94
+msgid "_Ban"
+msgstr "प्रतिबंध लगायें (_B)"
+
+#: src/session/view/content/room_history/mod.ui:99
+msgid "Un_ban"
+msgstr "प्रतिबंध हटायें (_b)"
+
+#: src/session/view/content/room_history/mod.ui:104
+msgid "_Remove Messages"
+msgstr "संदेश हटाएं (_R)"
+
+#: src/session/view/content/room_history/mod.ui:109
+msgid "I_gnore"
+msgstr "नजरअंदाज करें (_g)"
+
+#: src/session/view/content/room_history/mod.ui:114
+msgid "Stop I_gnoring"
+msgstr "नजरअंदाज करना बंद करें (_g)"
+
+#: src/session/view/content/room_history/mod.ui:148
+msgid "Room Menu"
+msgstr "कक्ष मेनू"
+
+#: src/session/view/content/room_history/mod.ui:192
+#: src/session/view/content/room_history/mod.ui:199
+msgid "Could Not Load Room"
+msgstr "कक्ष लोड नहीं हो सका"
+
+#: src/session/view/content/room_history/mod.ui:234
+msgid "Scroll to Bottom"
+msgstr "नीचे स्क्रॉल करें"
+
+#: src/session/view/content/room_history/mod.ui:246
+msgid "Drop Here to Send"
+msgstr "भेजने के लिए यहां छोड़ें"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:267
+msgid "Seen by 1 member"
+msgid_plural "Seen by {n} members"
+msgstr[0] "1 सदस्य द्वारा देखा गया"
+msgstr[1] "{n} सदस्यों द्वारा देखा गया"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/read_receipts_list/mod.rs:280
+msgid "Seen by {name}"
+msgstr "{name} द्वारा देखा गया"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:99
+msgid "Link copied to clipboard"
+msgstr "लिंक क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:281
+msgid "{user}’s avatar"
+msgstr "{user} का अवतार"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:529
+msgid "Creating a new Direct Chat…"
+msgstr "नई सीधी चैट बनाई जा रही है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:553
+msgid "Inviting user…"
+msgstr "उपयोक्ता को आमंत्रित किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:581
+msgid "Revoking invite…"
+msgstr "आमंत्रण निरस्त किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:582
+msgid "Denying access…"
+msgstr "पहुंच अस्वीकार की जा रही है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:583
+msgid "Kicking user…"
+msgstr "उपयोक्ता को बाहर निकाला जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:618
+msgid "Muting member…"
+msgstr "सदस्य म्यूट किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:621
+msgid "Unmuting member…"
+msgstr "सदस्य अनम्यूट किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:631
+msgid "Member muted"
+msgstr "सदस्य म्यूट कर दिया गया"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:633
+msgid "Member unmuted"
+msgstr "सदस्य अनम्यूट कर दिया गया"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:638
+msgid "Could not mute member"
+msgstr "सदस्य को म्यूट नहीं किया जा सका"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:640
+msgid "Could not unmute member"
+msgstr "सदस्य को अनम्यूट नहीं किया जा सका"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:669
+msgid "Banning user…"
+msgstr "उपयोक्ता को प्रतिबंधित किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:693
+msgid "Unbanning user…"
+msgstr "उपयोक्ता से प्रतिबंध हटाया जा रहा है…"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/sender_avatar/mod.rs:736
+msgid "Removing 1 message sent by the user…"
+msgid_plural "Removing {n} messages sent by the user…"
+msgstr[0] "उपयोक्ता द्वारा भेजा गया 1 संदेश हटाया जा रहा है…"
+msgstr[1] "उपयोगकर्ता द्वारा भेजे गए {n} संदेशों को हटाया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:769
+msgid "Stop ignoring user…"
+msgstr "उपयोक्ता को नज़रअंदाज करना बंद करें…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.rs:771
+msgid "Ignoring user…"
+msgstr "उपयोक्ता को नजरअंदाज किया जा रहा है…"
+
+#: src/session/view/content/room_history/sender_avatar/mod.ui:5
+msgid "Open Sender Context Menu"
+msgstr "प्रेषक संदर्भ मेनू खोलें"
+
+#: src/session/view/content/room_history/state_row/creation.rs:69
+msgid "This is the continuation of an upgraded room."
+msgstr "यह उन्नत कक्ष की निरंतरता है।"
+
+#: src/session/view/content/room_history/state_row/creation.rs:74
+msgid "This is the beginning of this room."
+msgstr "यह इस कक्ष की शुरुआत है।"
+
+#: src/session/view/content/room_history/state_row/creation.ui:20
+msgid "Previous room"
+msgstr "पिछला कक्ष"
+
+#: src/session/view/content/room_history/state_row/mod.rs:113
+msgid "This room is encrypted from this point on."
+msgstr "अब से यह कक्ष कूटलेखित है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:128
+#: src/session/view/content/room_history/state_row/mod.rs:244
+msgid "{user} was invited to this room."
+msgstr "{user} को इस कक्ष में आमंत्रित किया गया।"
+
+#: src/session/view/content/room_history/state_row/mod.rs:140
+msgid "An unsupported state event was received."
+msgstr "एक असमर्थित स्थिति संदेश प्राप्त हुआ।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#. We don't know what changed so fall back to the membership.
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:216
+#: src/session/view/content/room_history/state_row/mod.rs:373
+msgid "{user} joined this room."
+msgstr "{user} इस कक्ष से जुड़ गए।"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:221
+msgid "{user} left the room."
+msgstr "{user} ने कक्ष छोड़ दिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:226
+msgid "{user} was banned."
+msgstr "{user} पर प्रतिबंध लगा दिया गया था।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:232
+msgid "{user} was unbanned."
+msgstr "{user} पर प्रतिबंध हटा दिया गया था।"
+
+#. Translators: Do NOT translate the content between '{' and
+#. '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:238
+msgid "{user} was kicked out of the room."
+msgstr "{user} को कक्ष से बाहर निकाल दिया गया।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is
+#. a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:250
+msgid "{user} was kicked out of the room and banned."
+msgstr "{user} को कक्ष से बाहर निकाल दिया गया और प्रतिबंधित कर दिया गया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:256
+msgid "{user} accepted the invite."
+msgstr "{user} ने आमंत्रण स्वीकार कर लिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:262
+msgid "{user} rejected the invite."
+msgstr "{user} ने आमंत्रण अस्वीकार कर दिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:268
+msgid "The invitation for {user} has been revoked."
+msgstr "{user} का निमंत्रण रद्द कर दिया गया है।"
+
+#. Translators: Do NOT translate the content between '{' and '}', this
+#. is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:277
+msgid "{user} requested to be invited to this room."
+msgstr "{user} ने इस कक्ष में आमंत्रित किए जाने का अनुरोध किया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:284
+msgid "{user} retracted their request to be invited to this room."
+msgstr "{user} ने इस कक्ष में आमंत्रित किए जाने का अपना अनुरोध वापस ले लिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:290
+msgid "{user}’s request to be invited to this room was denied."
+msgstr "इस कक्ष में आमंत्रित किए जाने का {user} का अनुरोध अस्वीकार कर दिया गया।"
+
+#: src/session/view/content/room_history/state_row/mod.rs:298
+msgid "An unsupported room member event was received."
+msgstr "एक असमर्थित कक्ष सदस्य की घटना प्राप्त हुई थी।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:317
+msgid "{previous_user_name} changed their display name to {new_user_name}."
+msgstr "{previous_user_name} ने अपना प्रदर्शन नाम बदलकर {new_user_name} कर दिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:327
+msgid "{previous_user_name} removed their display name."
+msgstr "{previous_user_name} ने अपना प्रदर्शन नाम हटा दिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:339
+msgid "{user_id} set their display name to {new_user_name}."
+msgstr "{user_id} ने अपना प्रदर्शन नाम {new_user_name} पर निर्धारित किया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:351
+msgid "{user} set their avatar."
+msgstr "{user} ने अपना अवतार निर्धारित किया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:358
+msgid "{user} removed their avatar."
+msgstr "{user} ने अपना अवतार हटा दिया।"
+
+#. Translators: Do NOT translate the content between
+#. '{' and '}', this is a variable name.
+#: src/session/view/content/room_history/state_row/mod.rs:365
+msgid "{user} changed their avatar."
+msgstr "{user} ने अपना अवतार बदल लिया।"
+
+#: src/session/view/content/room_history/title.ui:9
+msgid "Open Room Details"
+msgstr "कक्ष विवरण खोलें"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:142
+msgid "{user} is typing…"
+msgstr "{user} टाइप कर रहा है…"
+
+#. Translators: Do NOT translate the content between '{' and '}', these are
+#. variable names.
+#: src/session/view/content/room_history/typing_row.rs:149
+msgid "{n} member is typing…"
+msgid_plural "{n} members are typing…"
+msgstr[0] "{n} सदस्य टाइप कर रहा है…"
+msgstr[1] "{n} सदस्य टाइप कर रहे हैं…"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:67
+msgid "Could not accept verification"
+msgstr "सत्यापन स्वीकार नहीं किया जा सका"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:88
+msgid "Could not decline verification"
+msgstr "सत्यापन अस्वीकार नहीं किया जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/content/room_history/verification_info_bar.rs:166
+msgid "{user_name} wants to be verified"
+msgstr "{user_name} सत्यापित होना चाहता है"
+
+#: src/session/view/content/room_history/verification_info_bar.rs:175
+msgid "Verification in progress"
+msgstr "सत्यापन प्रगति पर है"
+
+#: src/session/view/create_dm_dialog/mod.rs:144
+msgid "An error occurred while searching for users"
+msgstr "उपयोक्ताओं को खोजते समय एक त्रुटि उत्पन्न हुई"
+
+#: src/session/view/create_dm_dialog/mod.ui:4
+msgid "Direct Chat"
+msgstr "सीधी चैट"
+
+#: src/session/view/create_dm_dialog/mod.ui:30
+msgid "New Direct Chat"
+msgstr "नई सीधी चैट"
+
+#: src/session/view/create_dm_dialog/mod.ui:54
+msgid "Search for people to start a new chat with"
+msgstr "नई चैट शुरू करने के लिए लोगों को खोजें"
+
+#: src/session/view/create_dm_dialog/mod.ui:93
+msgid "No users matching the search pattern were found"
+msgstr "खोज प्रतिमान से मेल खाते कोई उपयोक्ता नहीं मिला"
+
+#: src/session/view/event_details_dialog.rs:53
+msgid "Source copied to clipboard"
+msgstr "स्रोत क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/event_details_dialog.rs:114
+msgid "Original Event Source"
+msgstr "मूल घटना स्रोत"
+
+#: src/session/view/event_details_dialog.rs:116
+msgid "Event Source"
+msgstr "घटना स्रोत"
+
+#: src/session/view/event_details_dialog.rs:130
+msgid "Latest Edit Source"
+msgstr "नवीनतम संपादन स्रोत"
+
+#: src/session/view/event_details_dialog.ui:4
+#: src/session/view/event_details_dialog.ui:14
+msgid "Event Details"
+msgstr "घटना विवरण"
+
+#: src/session/view/event_details_dialog.ui:47
+msgid "Original Event"
+msgstr "मूल घटना"
+
+#: src/session/view/event_details_dialog.ui:63
+#: src/session/view/event_details_dialog.ui:157
+msgid "Event ID"
+msgstr "घटना ID"
+
+#: src/session/view/event_details_dialog.ui:69
+#: src/session/view/event_details_dialog.ui:163
+msgid "Copy Event ID"
+msgstr "घटना ID कॉपी करें"
+
+#: src/session/view/event_details_dialog.ui:70
+#: src/session/view/event_details_dialog.ui:164
+msgid "Event ID copied to clipboard"
+msgstr "घटना ID को क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/event_details_dialog.ui:76
+msgid "Room ID"
+msgstr "कक्ष ID"
+
+#: src/session/view/event_details_dialog.ui:84
+msgid "Copy Room ID"
+msgstr "कक्ष ID कॉपी करें"
+
+#: src/session/view/event_details_dialog.ui:85
+msgid "Room ID copied to clipboard"
+msgstr "कक्ष ID को क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/event_details_dialog.ui:91
+msgid "Sender ID"
+msgstr "प्रेषक ID"
+
+#: src/session/view/event_details_dialog.ui:97
+msgid "Copy Sender ID"
+msgstr "प्रेषक ID कॉपी करें"
+
+#: src/session/view/event_details_dialog.ui:98
+msgid "Sender ID copied to clipboard"
+msgstr "प्रेषक ID क्लिपबोर्ड पर कॉपी की गई"
+
+#: src/session/view/event_details_dialog.ui:104
+#: src/session/view/event_details_dialog.ui:170
+msgid "Timestamp"
+msgstr "समय-चिह्न"
+
+#: src/session/view/event_details_dialog.ui:110
+#: src/session/view/event_details_dialog.ui:176
+msgid "Copy Timestamp"
+msgstr "समय-चिह्न कॉपी करें"
+
+#: src/session/view/event_details_dialog.ui:111
+#: src/session/view/event_details_dialog.ui:177
+msgid "Timestamp copied to clipboard"
+msgstr "समय-चिह्न क्लिपबोर्ड पर कॉपी किया गया"
+
+#: src/session/view/event_details_dialog.ui:121
+#: src/session/view/event_details_dialog.ui:182
+msgid "View Source"
+msgstr "स्रोत देखें"
+
+#: src/session/view/event_details_dialog.ui:141
+msgid "Latest Edit"
+msgstr "नवीनतम संपादन"
+
+#: src/session/view/event_details_dialog.ui:213
+msgid "Copy Source"
+msgstr "स्रोत कॉपी करें"
+
+#: src/session/view/media_viewer.rs:514
+msgid "Image copied to clipboard"
+msgstr "छवि क्लिपबोर्ड पर कॉपी की गई"
+
+#: src/session/view/media_viewer.ui:6
+msgid "_Copy Image"
+msgstr "छवि कॉपी करें (_C)"
+
+#: src/session/view/media_viewer.ui:66 src/session/view/media_viewer.ui:68
+msgid "Media Menu"
+msgstr "मीडिया मेनू"
+
+#: src/session/view/media_viewer.ui:78 src/session/view/media_viewer.ui:80
+msgid "Fullscreen"
+msgstr "पूर्णस्क्रीन"
+
+#: src/session/view/media_viewer.ui:89 src/session/view/media_viewer.ui:91
+msgid "Exit Fullscreen"
+msgstr "पूर्णस्क्रीन से बाहर निकलें"
+
+#: src/session/view/room_creation.rs:192
+msgid "The address is already taken."
+msgstr "पता पहले ही लिया जा चुका है।"
+
+#: src/session/view/room_creation.rs:224
+msgid "Cannot contain “:”"
+msgstr "“:” शामिल नहीं हो सकता"
+
+#: src/session/view/room_creation.rs:229
+msgid "Cannot contain “#”"
+msgstr "“:” शामिल नहीं हो सकता"
+
+#: src/session/view/room_creation.rs:234
+msgid "Too long. Use a shorter address."
+msgstr "बहुत लंबा। छोटे पते का उपयोग करें।"
+
+#: src/session/view/room_creation.ui:35
+msgid "New Room"
+msgstr "नया कक्ष"
+
+#: src/session/view/room_creation.ui:59
+msgid "Description (Optional)"
+msgstr "विवरण (वैकल्पिक)"
+
+#: src/session/view/room_creation.ui:84
+msgid "Room Visibility"
+msgstr "कक्ष दृश्यता"
+
+#: src/session/view/room_creation.ui:87
+msgid "Private"
+msgstr "निजी"
+
+#: src/session/view/room_creation.ui:88
+msgid "Only invited people can join this room"
+msgstr "केवल आमंत्रित लोग ही इस कक्ष से जुड़ सकते हैं"
+
+#: src/session/view/room_creation.ui:101
+msgid "Public"
+msgstr "सार्वजनिक"
+
+#: src/session/view/room_creation.ui:102
+msgid "Anyone can find and join this room"
+msgstr "कोई भी इस कक्ष को खोज और जुड़ सकता है"
+
+#: src/session/view/room_creation.ui:120
+msgid "End-to-End Encryption"
+msgstr "अंत-से-अंत कूटलेखन"
+
+#: src/session/view/room_creation.ui:121
+msgid "Cannot be disabled later"
+msgstr "बाद में अक्षम नहीं किया जा सकता"
+
+#: src/session/view/room_creation.ui:163
+msgid "_Create Room"
+msgstr "कक्ष बनाएं (_C)"
+
+#. Translators: This is an action to join a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/category_row.rs:115
+msgid "Join Room as Favorite"
+msgstr "पसंदीदा के रूप में कक्ष से जुड़ें"
+
+#: src/session/view/sidebar/category_row.rs:116
+msgid "Join Room"
+msgstr "कक्ष से जुड़ें"
+
+#. Translators: This is an action to join a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/category_row.rs:119
+msgid "Join Room as Low Priority"
+msgstr "निम्न प्राथमिकता के रूप में कक्ष से जुड़ें"
+
+#: src/session/view/sidebar/category_row.rs:120
+msgid "Reject Invite"
+msgstr "आमंत्रण अस्वीकारें"
+
+#: src/session/view/sidebar/category_row.rs:124
+#: src/session/view/sidebar/category_row.rs:137
+msgid "Move to Rooms"
+msgstr "कक्षों पर जाएं"
+
+#: src/session/view/sidebar/category_row.rs:125
+#: src/session/view/sidebar/category_row.rs:131
+msgid "Move to Low Priority"
+msgstr "निम्न प्राथमिकता में ले जाएं"
+
+#: src/session/view/sidebar/category_row.rs:126
+#: src/session/view/sidebar/category_row.rs:132
+#: src/session/view/sidebar/category_row.rs:138
+msgid "Leave Room"
+msgstr "कक्ष छोड़ें"
+
+#: src/session/view/sidebar/category_row.rs:130
+#: src/session/view/sidebar/category_row.rs:136
+msgid "Move to Favorites"
+msgstr "पसंदीदा पर जाएं"
+
+#. Translators: This is an action to rejoin a room and put it in the "Favorites"
+#. section.
+#: src/session/view/sidebar/category_row.rs:144
+msgid "Rejoin Room as Favorite"
+msgstr "पसंदीदा के रूप में कक्ष से पुनः जुड़ें"
+
+#: src/session/view/sidebar/category_row.rs:145
+msgid "Rejoin Room"
+msgstr "कक्ष से पुनः जुड़ें"
+
+#. Translators: This is an action to rejoin a room and put it in the "Low
+#. Priority" section.
+#: src/session/view/sidebar/category_row.rs:148
+msgid "Rejoin Room as Low Priority"
+msgstr "निम्न प्राथमिकता के रूप में कक्ष से पुनः जुड़ें"
+
+#: src/session/view/sidebar/mod.rs:318
+msgid "No crypto identity"
+msgstr "कोई क्रिप्टो पहचान नहीं"
+
+#: src/session/view/sidebar/mod.rs:320
+msgid "Crypto identity incomplete"
+msgstr "क्रिप्टो पहचान अधूरी"
+
+#: src/session/view/sidebar/mod.rs:324
+msgid "Account recovery disabled"
+msgstr "खाता पुनर्प्राप्ति अक्षम"
+
+#: src/session/view/sidebar/mod.rs:327
+msgid "Account recovery incomplete"
+msgstr "खाता पुनर्प्राप्ति अपूर्ण"
+
+#: src/session/view/sidebar/mod.ui:6
+msgid "New _Direct Chat…"
+msgstr "नई सीधी चैट (_D)…"
+
+#: src/session/view/sidebar/mod.ui:10
+msgid "_New Room…"
+msgstr "नया कक्ष (_N)…"
+
+#: src/session/view/sidebar/mod.ui:14
+msgid "_Join Room…"
+msgstr "कक्ष से जुड़ें (_J)…"
+
+#: src/session/view/sidebar/mod.ui:20
+msgid "_Keyboard Shortcuts"
+msgstr "कीबोर्ड शॉर्टकट (_K)"
+
+#: src/session/view/sidebar/mod.ui:24
+msgid "_About Fractal"
+msgstr "फ्रैक्टल के बारे में (_A)"
+
+#: src/session/view/sidebar/mod.ui:37
+msgid "_Reject"
+msgstr "अस्वीकारें (_R)"
+
+#: src/session/view/sidebar/mod.ui:44
+msgid "Move to _Favorites"
+msgstr "पसंदीदा पर जाएं (_F)"
+
+#: src/session/view/sidebar/mod.ui:49
+msgid "Move to _Rooms"
+msgstr "कक्षों में जाएं (_R)"
+
+#: src/session/view/sidebar/mod.ui:54
+msgid "Move to Low _Priority"
+msgstr "निम्न प्राथमिकता पर जाएं (_P)"
+
+#: src/session/view/sidebar/mod.ui:59
+msgid "Mark as _Direct Chat"
+msgstr "सीधी चैट चिह्नित करें (_D)"
+
+#: src/session/view/sidebar/mod.ui:64
+msgid "Unmark as _Direct Chat"
+msgstr "सीधी चैट अचिह्नित करें (_D)"
+
+#: src/session/view/sidebar/mod.ui:88
+msgid "Sidebar"
+msgstr "पार्श्वपट्टी"
+
+#: src/session/view/sidebar/mod.ui:105
+msgid "Main Menu"
+msgstr "मुख्य मेनू"
+
+#: src/session/view/sidebar/mod.ui:114
+msgid "Toggle Room Search"
+msgstr "कक्ष खोज को टॉगल करें"
+
+#: src/session/view/sidebar/mod.ui:127
+msgid "Room Search"
+msgstr "कक्ष खोज"
+
+#: src/session/view/sidebar/mod.ui:128
+msgid "Search for a room"
+msgstr "कक्ष खोजें"
+
+#: src/session/view/sidebar/mod.ui:163
+msgid "Room List"
+msgstr "कक्ष सूची"
+
+#: src/session/view/sidebar/mod.ui:164
+msgid "Allows to navigate between rooms"
+msgstr "कक्षों के बीच नेविगेट करने की अनुमति देता है"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a
+#. room is a direct chat with another user.
+#: src/session/view/sidebar/room_row.rs:286
+msgid "Direct chat with {name}"
+msgstr "{name} के साथ सीधी चैट"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name. Presented to screen readers when a room has notifications
+#. for unread messages.
+#: src/session/view/sidebar/room_row.rs:298
+msgid "1 notification"
+msgid_plural "{count} notifications"
+msgstr[0] "1 अधिसूचना"
+msgstr[1] "{count} अधिसूचनाएं"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a variable name.
+#: src/session/view/sidebar/row.rs:572
+msgid "Could not move {room} from {previous_category} to {new_category}"
+msgstr "{room} को {previous_category} से {new_category} में नहीं ले जाया जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/sidebar/row.rs:609
+msgid "Could not mark {room} as direct chat"
+msgstr "{room} को सीधी चैट चिह्नित नहीं किया जा सका"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/session/view/sidebar/row.rs:614
+msgid "Could not unmark {room} as direct chat"
+msgstr "{room} को सीधी चैट अचिह्नित नहीं किया जा सका"
+
+#: src/session_list/mod.rs:272
+msgid "Could not restore previous sessions"
+msgstr "पिछले सत्रों को पुनर्स्थापित नहीं किया जा सका"
+
+#: src/shortcuts.ui:11
+msgctxt "shortcut window"
+msgid "General"
+msgstr "सामान्य"
+
+#: src/shortcuts.ui:14
+msgctxt "shortcut window"
+msgid "Show Shortcuts"
+msgstr "शॉर्टकट दिखाएं"
+
+#: src/shortcuts.ui:20
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "छोड़ें"
+
+#. Translators: This shows and focuses the search input to find a room by its name in the room list.
+#: src/shortcuts.ui:27
+msgctxt "shortcut window"
+msgid "Search Room List"
+msgstr "कक्ष सूची खोजें"
+
+#: src/shortcuts.ui:33
+msgctxt "shortcut window"
+msgid "Close Room"
+msgstr "कक्ष बंद करें"
+
+#: src/user_facing_error.rs:26
+msgid "The connection timed out. Try again later."
+msgstr "कनेक्शन का समय समाप्त हो गया। बाद में पुन: प्रयास।"
+
+#: src/user_facing_error.rs:28
+msgid "Could not connect to the homeserver."
+msgstr "होमसर्वर से कनेक्ट नहीं हो सका।"
+
+#: src/user_facing_error.rs:38
+msgid "The provided username or password is invalid."
+msgstr "प्रदत्त उपयोक्ता नाम या पासवर्ड अमान्य है।"
+
+#: src/user_facing_error.rs:39
+msgid "The account is deactivated."
+msgstr "खाता निष्क्रिय कर दिया गया है।"
+
+#. Translators: Do NOT translate the content between '{' and '}',
+#. this is a variable name.
+#: src/user_facing_error.rs:55
+msgid "You exceeded the homeserver’s rate limit, retry in 1 second."
+msgid_plural "You exceeded the homeserver’s rate limit, retry in {n} seconds."
+msgstr[0] "आपने होमसर्वर की दर सीमा पार कर ली है, 1 सेकंड में पुनः प्रयास करें।"
+msgstr[1] "आपने होमसर्वर की दर सीमा पार कर ली है, {n} सेकंड में पुनः प्रयास करें।"
+
+#: src/user_facing_error.rs:61
+msgid "You exceeded the homeserver’s rate limit, try again later."
+msgstr "आपने होमसर्वर की दर सीमा पार कर ली है, बाद में पुनः प्रयास करें।"
+
+#: src/user_facing_error.rs:71
+msgid "An unknown connection error occurred."
+msgstr "एक अज्ञात कनेक्शन त्रुटि उत्पन्न हुई।"
+
+#: src/user_facing_error.rs:79
+msgid "Could not decrypt the event."
+msgstr "घटना को विकोड नहीं किया जा सका।"
+
+#: src/user_facing_error.rs:81 src/user_facing_error.rs:95
+msgid "An unknown error occurred."
+msgstr "एक अज्ञात त्रुटि हुई।"
+
+#: src/user_facing_error.rs:89
+msgid "This is not a valid URL."
+msgstr "यह मान्य URL नहीं है।"
+
+#: src/user_facing_error.rs:91
+msgid "Homeserver auto-discovery failed. Try entering the full URL manually."
+msgstr "होमसर्वर की स्वतः-खोज विफल रही। पूर्ण URL मैन्युअल रूप से दर्ज करने का प्रयास करें।"
+
+#: src/user_facing_error.rs:94
+msgid "Could not open the store."
+msgstr "स्टोर नहीं खोल सके।"
+
+#: src/utils/matrix.rs:184
+msgid "{user} sent an audio file."
+msgstr "{user} ने एक ऑडियो फाइल भेजी।"
+
+#: src/utils/matrix.rs:187
+msgid "{user} sent a file."
+msgstr "{user} ने एक फाइल भेजी।"
+
+#: src/utils/matrix.rs:189
+msgid "{user} sent an image."
+msgstr "{user} ने एक छवि भेजी।"
+
+#: src/utils/matrix.rs:192
+msgid "{user} sent their location."
+msgstr "{user} ने अपना स्थान भेजा।"
+
+#: src/utils/matrix.rs:204
+msgid "{user} sent a video."
+msgstr "{user} ने एक वीडियो भेजा।"
+
+#: src/utils/matrix.rs:211
+msgid "{user} sent a sticker."
+msgstr "{user} ने एक स्टीकर भेजा।"
+
+#: src/utils/matrix.rs:221
+msgid "{user}: {message}"
+msgstr "{user}: {message}"
+
+#. Translators: Do NOT translate the content between '{' and '}', this is a
+#. variable name.
+#: src/utils/matrix.rs:245
+msgid "{user} invited you"
+msgstr "{user} ने आपको आमंत्रित किया"
+
+#. Translators: Default name for image files.
+#: src/utils/media.rs:33
+msgid "image"
+msgstr "छवि"
+
+#. Translators: Default name for video files.
+#: src/utils/media.rs:35
+msgid "video"
+msgstr "वीडियो"
+
+#. Translators: Default name for audio files.
+#: src/utils/media.rs:37
+msgid "audio"
+msgstr "ऑडियो"
+
+#. Translators: Default name for files.
+#: src/utils/media.rs:39
+msgid "file"
+msgstr "फाइल"
+
+#: src/utils/media.rs:210
+msgid "Could not save file"
+msgstr "फाइल नहीं सहेज सके"
+
+#: src/window.ui:66
+msgid "Session"
+msgstr "सत्र"

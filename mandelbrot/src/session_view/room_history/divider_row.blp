@@ -1,0 +1,38 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentDividerRow: Adw.Bin {
+  focusable: true;
+  margin-top: 20;
+  margin-bottom: 10;
+
+  styles [
+    "room-history-row",
+  ]
+
+  accessibility {
+    labelled-by: [
+      inner_label,
+    ];
+  }
+
+  child: Gtk.Box {
+    spacing: 12;
+    margin-start: 24;
+    margin-end: 24;
+
+    Gtk.Separator {
+      valign: center;
+      hexpand: true;
+    }
+
+    Gtk.Label inner_label {
+      ellipsize: end;
+    }
+
+    Gtk.Separator {
+      valign: center;
+      hexpand: true;
+    }
+  };
+}

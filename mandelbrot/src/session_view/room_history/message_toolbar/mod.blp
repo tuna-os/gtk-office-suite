@@ -1,0 +1,315 @@
+using Gtk 4.0;
+using Adw 1;
+using GtkSource 5;
+
+menu message-menu-model {
+  section {
+    item {
+      label: _("_Location");
+      action: "message-toolbar.send-location";
+      icon: "map-marker-symbolic";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("_Poll");
+      action: "message-toolbar.create-poll";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("_Markdown");
+      action: "message-toolbar.markdown";
+    }
+  }
+}
+
+template $MessageToolbar: Adw.Bin {
+  Gtk.Stack main_stack {
+    transition-type: crossfade;
+    vhomogeneous: false;
+
+    Gtk.StackPage {
+      name: "composer";
+
+      child: Gtk.Box {
+        orientation: vertical;
+
+        Gtk.Box related_event_toolbar {
+          spacing: 12;
+          visible: bind template.current-composer-state as <$ContentComposerState>.has-relation;
+
+          styles [
+            "related-event-toolbar",
+          ]
+
+          Gtk.Box {
+            margin-bottom: 6;
+            margin-top: 8;
+            orientation: vertical;
+
+            $LabelWithWidgets related_event_header {
+              valign: center;
+              hexpand: true;
+              margin-top: 2;
+
+              styles [
+                "heading",
+              ]
+            }
+
+            $ContentMessageContent related_event_content {
+              format: ellipsized;
+
+              styles [
+                "event-content",
+              ]
+            }
+
+            Gtk.GestureClick {
+              pressed => $handle_related_event_click() swapped;
+            }
+          }
+
+          Gtk.Button {
+            halign: end;
+            valign: start;
+            icon-name: "close-symbolic";
+            tooltip-text: _("Cancel");
+            clicked => $clear_related_event() swapped;
+
+            styles [
+              "circular",
+            ]
+          }
+        }
+
+        Gtk.Box {
+          styles [
+            "toolbar",
+          ]
+
+          Gtk.Button attach_button {
+            valign: end;
+            icon-name: "attachment-symbolic";
+            tooltip-text: _("Send a File");
+            clicked => $select_file() swapped;
+          }
+
+          Gtk.Button {
+            valign: end;
+            icon-name: "emoji-symbolic";
+            tooltip-text: _("Insert an Emoji");
+            clicked => $open_emoji() swapped;
+          }
+
+          $CustomEntry {
+            Gtk.ScrolledWindow {
+              vexpand: true;
+              hexpand: true;
+              vscrollbar-policy: external;
+              max-content-height: 200;
+              propagate-natural-height: true;
+
+              child: GtkSource.View message_entry {
+                hexpand: true;
+                accepts-tab: false;
+                top-margin: 7;
+                bottom-margin: 7;
+                wrap-mode: word;
+                paste-clipboard => $paste_from_clipboard() swapped;
+                copy-clipboard => $copy_to_clipboard() swapped;
+                cut-clipboard => $cut_to_clipboard() swapped;
+
+                accessibility {
+                  // Translators: This is the name of the input widget where messages
+                  // are entered before being sent, for accessibility tools.
+                  label: _("Message Composer");
+                }
+
+                Gtk.EventControllerKey {
+                  key-pressed => $key_pressed() swapped;
+                }
+              };
+            }
+          }
+
+          Gtk.MenuButton {
+            valign: end;
+            direction: up;
+            icon-name: "more-symbolic";
+            menu-model: message-menu-model;
+            tooltip-text: _("More Options");
+
+            accessibility {
+              label: _("More Options");
+            }
+          }
+
+          Gtk.Button record_voice_button {
+            valign: end;
+            icon-name: "microphone-symbolic";
+            tooltip-text: _("Record Voice Message");
+            clicked => $start_voice_recording() swapped;
+          }
+
+          Gtk.Button send_button {
+            valign: end;
+            icon-name: "send-symbolic";
+            focus-on-click: false;
+            tooltip-text: _("Send Message");
+            clicked => $send_text_message() swapped;
+
+            styles [
+              "suggested-action",
+              "circular",
+              "send-text-message-button",
+            ]
+          }
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "recording";
+
+      child: Gtk.Box {
+        spacing: 6;
+
+        styles [
+          "toolbar",
+          "voice-recording-toolbar",
+        ]
+
+        Gtk.Button {
+          valign: center;
+          icon-name: "close-symbolic";
+          tooltip-text: _("Cancel Recording");
+          clicked => $cancel_voice_recording() swapped;
+
+          styles [
+            "circular",
+          ]
+        }
+
+        Gtk.Label {
+          valign: center;
+          label: "●";
+
+          accessibility {
+            // Translators: This describes the red dot displayed while recording
+            // a voice message, for accessibility tools.
+            label: _("Recording");
+          }
+
+          styles [
+            "recording-indicator",
+          ]
+        }
+
+        Gtk.Label recording_time_label {
+          valign: center;
+          label: "0:00";
+
+          styles [
+            "numeric",
+          ]
+        }
+
+        Gtk.LevelBar recording_level_bar {
+          hexpand: true;
+          valign: center;
+          min-value: 0;
+          max-value: 1.0;
+
+          accessibility {
+            // Translators: This describes the sound level of the microphone while
+            // recording a voice message, for accessibility tools.
+            label: _("Sound Level");
+          }
+        }
+
+        Gtk.Button send_voice_button {
+          valign: center;
+          icon-name: "send-symbolic";
+          focus-on-click: false;
+          tooltip-text: _("Send Voice Message");
+          clicked => $send_voice_recording() swapped;
+
+          styles [
+            "suggested-action",
+            "circular",
+            "send-text-message-button",
+          ]
+        }
+      };
+    }
+
+    Gtk.StackPage {
+      name: "no-permission";
+
+      child: Adw.Clamp {
+        hexpand: true;
+
+        styles [
+          "composer-replacement",
+        ]
+
+        child: Gtk.Label {
+          label: _("You don’t have permission to send messages to this room");
+          wrap: true;
+          wrap-mode: word_char;
+          halign: center;
+          valign: center;
+          justify: center;
+
+          styles [
+            "heading",
+          ]
+        };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "tombstoned";
+
+      child: Adw.Clamp {
+        hexpand: true;
+
+        styles [
+          "composer-replacement",
+        ]
+
+        child: Adw.WrapBox {
+          child-spacing: 12;
+          line-spacing: 12;
+          justify: fill;
+          justify-last-line: true;
+          halign: center;
+
+          Gtk.Label tombstoned_label {
+            wrap: true;
+            wrap-mode: word_char;
+            halign: center;
+            valign: center;
+            justify: center;
+
+            styles [
+              "heading",
+            ]
+          }
+
+          $LoadingButton tombstoned_button {
+            halign: center;
+            clicked => $join_or_view_successor() swapped;
+
+            styles [
+              "text-button",
+              "suggested-action",
+            ]
+          }
+        };
+      };
+    }
+  }
+}

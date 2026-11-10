@@ -1,0 +1,151 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsUpgradeDialog: Adw.Dialog {
+  title: C_("dialog title", "Upgrade Room");
+  follows-content-size: true;
+
+  styles [
+    "alert",
+  ]
+
+  accessibility {
+    described-by: [
+      description,
+    ];
+  }
+
+  child: Gtk.WindowHandle {
+    child: Gtk.Box {
+      orientation: vertical;
+
+      Gtk.ScrolledWindow {
+        propagate-natural-width: true;
+        propagate-natural-height: true;
+        hscrollbar-policy: never;
+
+        styles [
+          "body-scrolled-window",
+          "undershoot-bottom",
+        ]
+
+        child: Gtk.Box {
+          orientation: vertical;
+
+          styles [
+            "message-area",
+            "has-heading",
+            "has-body",
+          ]
+
+          Adw.Bin {
+            styles [
+              "heading-bin",
+            ]
+
+            Gtk.Label {
+              justify: center;
+              xalign: 0.5;
+              label: C_("dialog title", "Upgrade Room");
+
+              styles [
+                "title-2",
+              ]
+            }
+          }
+
+          Gtk.Label description {
+            vexpand: true;
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            xalign: 0.5;
+            max-width-chars: 60;
+            label: _(
+              "Upgrading a room to a more recent version allows to benefit from new features from the Matrix specification. It can also be used to reset the room state, which should make the room faster to join. However it should be used sparingly because it can be disruptive, as room members need to join the new room manually."
+            );
+
+            styles [
+              "body",
+            ]
+          }
+
+          Gtk.ListBox {
+            margin-top: 6;
+            margin-start: 24;
+            margin-end: 24;
+            accessible-role: group;
+
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.ComboRow version_combo {
+              selectable: false;
+              title: _("Version");
+            }
+          }
+
+          Gtk.Label invite_only_warning_label {
+            vexpand: true;
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            xalign: 0.5;
+            max-width-chars: 60;
+            label: _(
+              "After the upgrade, you will be the only member of the room and other members will need to be re-invited manually. This could be avoided by using third-party upgrade tooling that handles this for you."
+            );
+
+            styles [
+              "warning",
+              "body",
+            ]
+          }
+
+          Gtk.Label creators_warning_label {
+            vexpand: true;
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            xalign: 0.5;
+            max-width-chars: 60;
+
+            styles [
+              "warning",
+              "body",
+            ]
+          }
+        };
+      }
+
+      Adw.WrapBox {
+        child-spacing: 12;
+        line-spacing: 12;
+        justify: fill;
+        justify-last-line: true;
+
+        styles [
+          "response-area",
+        ]
+
+        Gtk.Button {
+          can-shrink: true;
+          label: _("Cancel");
+          clicked => $cancel() swapped;
+        }
+
+        Gtk.Button {
+          can-shrink: true;
+          // Translators: In this string, 'Upgrade' is a verb, as in 'Upgrade Room'.
+          label: _("Upgrade");
+          clicked => $upgrade() swapped;
+
+          styles [
+            "destructive-action",
+          ]
+        }
+      }
+    };
+  };
+}

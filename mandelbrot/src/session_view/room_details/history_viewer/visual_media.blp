@@ -1,0 +1,89 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentVisualMediaHistoryViewer: Adw.NavigationPage {
+  title: _("Media");
+
+  Gtk.Overlay {
+    [overlay]
+    $MediaViewer media_viewer {
+      visible: false;
+    }
+
+    Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {}
+
+      content: Gtk.Stack stack {
+        transition-type: crossfade;
+
+        Gtk.StackPage {
+          name: "loading";
+          title: _("Loading");
+
+          child: Adw.Spinner {};
+        }
+
+        Gtk.StackPage {
+          name: "empty";
+          title: _("No Media");
+
+          child: Adw.StatusPage {
+            visible: true;
+            hexpand: true;
+            vexpand: true;
+            icon-name: "image-symbolic";
+            title: _("No Media");
+            description: _("This room does not contain any media");
+          };
+        }
+
+        Gtk.StackPage {
+          name: "error";
+          title: _("Could Not Load Media");
+
+          child: Adw.StatusPage {
+            visible: true;
+            hexpand: true;
+            vexpand: true;
+            icon-name: "error-symbolic";
+            title: _("Could Not Load Media");
+            description: _("Check your network connection");
+
+            child: Gtk.Button {
+              can-shrink: true;
+              label: _("Try Again");
+              halign: center;
+              clicked => $load_more_items() swapped;
+
+              styles [
+                "pill",
+              ]
+            };
+          };
+        }
+
+        Gtk.StackPage {
+          name: "content";
+          title: _("Media History");
+
+          child: Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
+            vexpand: true;
+
+            Adw.ClampScrollable {
+              maximum-size: 1000;
+              tightening-threshold: 800;
+              vscroll-policy: natural;
+
+              Gtk.GridView grid_view {
+                min-columns: 2;
+                max-columns: 5;
+              }
+            }
+          };
+        }
+      };
+    }
+  }
+}

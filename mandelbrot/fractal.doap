@@ -1,0 +1,66 @@
+<Project xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:foaf="http://xmlns.com/foaf/0.1/"
+         xmlns:gnome="http://api.gnome.org/doap-extensions#"
+         xmlns="http://usefulinc.com/ns/doap#">
+
+  <name xml:lang="en">Fractal</name>
+  <shortdesc xml:lang="en">Chat on Matrix</shortdesc>
+  <description xml:lang="en">
+    Fractal is a Matrix messaging app for GNOME written in Rust. Its interface is optimized for
+    collaboration in large groups, such as free software projects, and will fit all screens, big or small.
+
+    Highlights:
+    - Find rooms to discuss your favorite topics, or talk privately to people, securely thanks to end-to-end encryption
+    - Send rich formatted messages, files, or your current location
+    - Reply to specific messages, react with emoji, mention users or rooms, edit or remove messages
+    - View images, and play audio and video directly in the conversation
+    - See who has read messages, and who is typing
+    - Log into multiple accounts at once (with Single-Sign On support)
+  </description>
+
+  <homepage rdf:resource="https://gitlab.gnome.org/World/fractal" />
+  <support-forum rdf:resource="https://discourse.gnome.org/tag/fractal" />
+  <bug-database rdf:resource="https://gitlab.gnome.org/World/fractal/issues" />
+
+  <programming-language>Rust</programming-language>
+  <platform>GTK 4</platform>
+  <platform>Libadwaita</platform>
+
+  <maintainer>
+    <foaf:Person>
+      <foaf:name>Kévin Commaille</foaf:name>
+      <gnome:userid>kcommaille</gnome:userid>
+      <foaf:account>
+        <foaf:OnlineAccount>
+          <foaf:accountServiceHomepage rdf:resource="https://gitlab.gnome.org"/>
+          <foaf:accountName>kcommaille</foaf:accountName>
+        </foaf:OnlineAccount>
+      </foaf:account>
+    </foaf:Person>
+  </maintainer>
+  <maintainer>
+    <foaf:Person>
+      <foaf:name>Alexandre Franke</foaf:name>
+      <gnome:userid>afranke</gnome:userid>
+      <foaf:account>
+        <foaf:OnlineAccount>
+          <foaf:accountServiceHomepage rdf:resource="https://gitlab.gnome.org"/>
+          <foaf:accountName>afranke</foaf:accountName>
+        </foaf:OnlineAccount>
+      </foaf:account>
+    </foaf:Person>
+  </maintainer>
+  <maintainer>
+    <foaf:Person>
+      <foaf:name>Julian Sparber</foaf:name>
+      <gnome:userid>jsparber</gnome:userid>
+      <foaf:account>
+        <foaf:OnlineAccount>
+          <foaf:accountServiceHomepage rdf:resource="https://gitlab.gnome.org"/>
+          <foaf:accountName>jsparber</foaf:accountName>
+        </foaf:OnlineAccount>
+      </foaf:account>
+    </foaf:Person>
+  </maintainer>
+</Project>

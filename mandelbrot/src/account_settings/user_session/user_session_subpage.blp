@@ -1,0 +1,94 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $UserSessionSubpage: Adw.NavigationPage {
+  title: bind template.user-session as <$UserSession>.display-name-or-device-id;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        $CopyableRow {
+          title: _("Matrix Session ID");
+          main-title: "subtitle";
+          copy-button-tooltip-text: _("Copy Matrix Session ID");
+          toast-text: _("Matrix session ID copied to clipboard");
+          subtitle: bind template.user-session as <$UserSession>.device-id-string;
+        }
+
+        Adw.EntryRow display_name {
+          title: _("Public Name");
+          text: bind template.user-session as <$UserSession>.display-name;
+          changed => $display_name_changed() swapped;
+          entry-activated => $rename_user_session() swapped;
+
+          [suffix]
+          $ActionButton display_name_button {
+            visible: false;
+            state: confirm;
+            clicked => $rename_user_session() swapped;
+          }
+        }
+
+        Adw.ActionRow verified_status {}
+
+        Adw.ActionRow {
+          title: _("Last Seen");
+          subtitle: bind $unwrap_string_or_empty(
+            template.user-session as <$UserSession>.last-seen-datetime-string
+            ) as <string>;
+          visible: bind $string_not_empty(template.user-session as <$UserSession>.last-seen-datetime-string) as <bool>;
+
+          styles [
+            "property",
+          ]
+        }
+
+        Adw.ActionRow {
+          title: _("Last Location");
+          subtitle: bind $unwrap_string_or_empty(template.user-session as <$UserSession>.last-seen-ip) as <string>;
+          visible: bind $string_not_empty(template.user-session as <$UserSession>.last-seen-ip) as <bool>;
+
+          styles [
+            "property",
+          ]
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Adw.ButtonRow log_out_button {
+          title: _("Log Out");
+          end-icon-name: "go-next-symbolic";
+          action-name: "account-settings.show-subpage";
+          action-target: "'log-out'";
+
+          styles [
+            "destructive-action",
+          ]
+        }
+
+        $LoadingButtonRow loading_disconnect_button {
+          title: _("Disconnect");
+          activated => $disconnect_with_request() swapped;
+
+          styles [
+            "destructive-action",
+          ]
+        }
+
+        Adw.ButtonRow open_url_disconnect_button {
+          visible: false;
+          title: _("Disconnect");
+          end-icon-name: "external-link-symbolic";
+          activated => $open_disconnect_url() swapped;
+
+          styles [
+            "destructive-action",
+          ]
+        }
+      }
+    };
+  };
+}

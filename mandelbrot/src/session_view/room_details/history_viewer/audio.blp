@@ -1,0 +1,82 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentAudioHistoryViewer: Adw.NavigationPage {
+  // Translators: As in 'Audio file'.
+  title: _("Audio");
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.Stack stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Loading");
+
+        child: Adw.Spinner {};
+      }
+
+      Gtk.StackPage {
+        name: "empty";
+        title: _("No Audio");
+
+        child: Adw.StatusPage {
+          visible: true;
+          hexpand: true;
+          vexpand: true;
+          icon-name: "audio-symbolic";
+          title: _("No Audio");
+          description: _("This room does not contain any audio");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Could Not Load Audio");
+
+        child: Adw.StatusPage {
+          visible: true;
+          hexpand: true;
+          vexpand: true;
+          icon-name: "error-symbolic";
+          title: _("Could Not Load Audio");
+          description: _("Check your network connection");
+
+          child: Gtk.Button {
+            can-shrink: true;
+            label: _("Try Again");
+            halign: center;
+            clicked => $load_more_items() swapped;
+
+            styles [
+              "pill",
+            ]
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "content";
+        title: _("Audio History");
+
+        child: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          vexpand: true;
+
+          Adw.ClampScrollable {
+            Gtk.ListView list_view {
+              show-separators: true;
+
+              styles [
+                "navigation-sidebar",
+              ]
+            }
+          }
+        };
+      }
+    };
+  }
+}

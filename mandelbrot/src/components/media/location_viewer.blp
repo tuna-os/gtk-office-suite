@@ -1,0 +1,22 @@
+using Gtk 4.0;
+using Adw 1;
+using Shumate 1.0;
+
+Gtk.Image marker_img {
+  icon-name: "map-marker-symbolic";
+  pixel-size: 32;
+
+  styles [
+    "map-marker",
+  ]
+}
+
+template $LocationViewer: Adw.Bin {
+  child: Shumate.SimpleMap map {
+    overflow: hidden;
+
+    styles [
+      "map",
+    ]
+  };
+}

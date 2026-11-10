@@ -1,0 +1,31 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SidebarVerificationRow: Adw.Bin {
+  Gtk.Box {
+    spacing: 12;
+
+    Gtk.Image {
+      icon-name: "devices-symbolic";
+    }
+
+    Gtk.Label display_name {
+      ellipsize: end;
+      label: bind template.identity-verification as <$IdentityVerification>.display-name;
+    }
+
+    [end]
+    Gtk.Label {
+      hexpand: true;
+      halign: end;
+      valign: center;
+      yalign: 1.0;
+      label: "•";
+
+      styles [
+        "notification-count",
+        "highlight",
+      ]
+    }
+  }
+}

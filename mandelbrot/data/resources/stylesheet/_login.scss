@@ -1,0 +1,31 @@
+// Login and setup.
+
+login {
+  min-width: 250px;
+}
+
+qrcode {
+  background-color: white;
+  padding: 12px;
+}
+
+.check-code {
+  font-size: 64px;
+  font-weight: 800;
+}
+
+.sso-button {
+  padding: 4px;
+  -gtk-icon-size: 26px;
+  min-height: 34px;
+}
+
+setup-view {
+  clamp {
+    margin: 12px;
+  }
+
+  .text-button {
+    min-width: 200px;
+  }
+}

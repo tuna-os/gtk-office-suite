@@ -1,0 +1,29 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationSasEmoji: Adw.Bin {
+  valign: center;
+
+  accessibility {
+    labelled-by: [
+      emoji,
+    ];
+
+    described-by: [
+      emoji_name,
+    ];
+  }
+
+  Gtk.Box {
+    spacing: 6;
+    orientation: vertical;
+
+    Gtk.Label emoji {
+      styles [
+        "emoji",
+      ]
+    }
+
+    Gtk.Label emoji_name {}
+  }
+}

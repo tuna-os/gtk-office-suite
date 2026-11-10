@@ -1,0 +1,148 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ImportExportKeysSubpage: Adw.NavigationPage {
+  styles [
+    "form-page",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      vexpand: true;
+
+      child: Adw.Clamp {
+        maximum-size: 444;
+
+        child: Gtk.Box box {
+          accessible-role: form;
+          orientation: vertical;
+
+          Gtk.Box {
+            styles [
+              "paragraphs",
+            ]
+
+            orientation: vertical;
+
+            Gtk.Label description {
+              label: "";
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0.0;
+
+              styles [
+                "body",
+              ]
+            }
+
+            Gtk.Label instructions {
+              label: "";
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0.0;
+
+              styles [
+                "body",
+              ]
+            }
+          }
+
+          Gtk.Box {
+            orientation: vertical;
+            spacing: 12;
+
+            Gtk.ListBox {
+              styles [
+                "boxed-list",
+              ]
+
+              accessible-role: group;
+
+              Adw.PasswordEntryRow passphrase {
+                selectable: false;
+                title: _("Passphrase");
+                entry-activated => $proceed() swapped;
+                changed => $validate_passphrase_confirmation() swapped;
+              }
+            }
+
+            Gtk.Box confirm_passphrase_box {
+              orientation: vertical;
+              spacing: 6;
+
+              Gtk.ListBox {
+                styles [
+                  "boxed-list",
+                ]
+
+                accessible-role: group;
+
+                Adw.PasswordEntryRow confirm_passphrase {
+                  selectable: false;
+                  title: _("Confirm Passphrase");
+                  entry-activated => $proceed() swapped;
+                  changed => $validate_passphrase_confirmation() swapped;
+                }
+              }
+
+              Gtk.Revealer confirm_passphrase_error_revealer {
+                child: Gtk.Label confirm_passphrase_error {
+                  styles [
+                    "caption",
+                  ]
+
+                  accessible-role: status;
+                  wrap: true;
+                  wrap-mode: word_char;
+                  xalign: 0.0;
+                };
+              }
+            }
+          }
+
+          Gtk.ListBox {
+            styles [
+              "boxed-list",
+            ]
+
+            accessible-role: group;
+
+            Adw.ActionRow file_row {
+              selectable: false;
+              title: _("File");
+              subtitle: bind template.file-path-string;
+
+              Gtk.Button file_button {
+                label: _("Choose…");
+                valign: center;
+                clicked => $choose_file() swapped;
+              }
+            }
+          }
+
+          Gtk.ListBox {
+            styles [
+              "boxed-list",
+            ]
+
+            accessible-role: group;
+
+            $LoadingButtonRow proceed_button {
+              styles [
+                "suggested-action",
+              ]
+
+              sensitive: false;
+              activated => $proceed() swapped;
+            }
+          }
+        };
+      };
+    };
+  };
+}

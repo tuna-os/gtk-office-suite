@@ -1,0 +1,43 @@
+using Gtk 4.0;
+
+template $MembersPageMembershipSubpageRow: Gtk.ListBoxRow {
+  selectable: false;
+
+  accessibility {
+    labelled-by: [
+      title,
+    ];
+  }
+
+  child: Gtk.Box {
+    spacing: 6;
+
+    Gtk.Image {
+      valign: center;
+      accessible-role: presentation;
+      icon-name: bind template.icon-name;
+
+      styles [
+        "icon",
+      ]
+    }
+
+    Gtk.Label title {
+      valign: center;
+      hexpand: true;
+      xalign: 0.0;
+      ellipsize: end;
+      label: bind template.label;
+    }
+
+    Gtk.Label members_count {
+      valign: center;
+    }
+
+    Gtk.Image {
+      valign: center;
+      icon-name: "go-next-symbolic";
+      accessible-role: presentation;
+    }
+  };
+}

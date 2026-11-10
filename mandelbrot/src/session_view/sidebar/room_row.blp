@@ -1,0 +1,76 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SidebarRoomRow: Adw.Bin {
+  Gtk.Box {
+    tooltip-text: bind template.room as <$Room>.display-name;
+    spacing: 12;
+
+    $Avatar avatar {
+      size: 24;
+      data: bind template.room as <$Room>.avatar-data;
+      watched-room: bind template.room;
+      watched-safety-setting: invite-avatars;
+      accessible-role: presentation;
+    }
+
+    Gtk.Box display_name_box {
+      spacing: 6;
+
+      Gtk.Image room_icon {
+        visible: false;
+
+        styles [
+          "dimmed",
+        ]
+      }
+
+      Gtk.Label display_name {
+        ellipsize: end;
+        label: bind template.room as <$Room>.display-name;
+      }
+    }
+
+    [end]
+    Gtk.Stack {
+      visible: bind $logical_or(
+        template.room as <$Room>.has-notifications,
+        $invert_boolean(template.room as <$Room>.is-read) as <bool>
+      ) as <bool>;
+      visible-child-name: bind $ternary_string(template.room as <$Room>.has-notifications, "count", "dot") as <string>;
+
+      Gtk.StackPage {
+        name: "dot";
+
+        child: Gtk.Image {
+          halign: end;
+          icon-name: "dot-symbolic";
+
+          styles [
+            "dimmed",
+          ]
+
+          accessibility {
+            label: "Unread messages";
+          }
+        };
+      }
+
+      Gtk.StackPage {
+        name: "count";
+
+        child: Gtk.Label notification_count {
+          hexpand: true;
+          halign: end;
+          valign: center;
+          yalign: 1.0;
+          label: bind template.room as <$Room>.notification-count;
+
+          styles [
+            "notification-count",
+          ]
+        };
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMemberTimestampRow: Adw.Bin {
+  Gtk.Box {
+    spacing: 10;
+
+    $Avatar {
+      size: 36;
+      data: bind template.data as <$ContentMemberTimestamp>.member as <$Member>.avatar-data;
+      accessible-role: presentation;
+    }
+
+    Gtk.Box {
+      spacing: 3;
+      orientation: vertical;
+
+      Gtk.Label {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+        label: bind template.data as <$ContentMemberTimestamp>.member as <$Member>.disambiguated-name;
+      }
+
+      Gtk.Label timestamp {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+
+        styles [
+          "dimmed",
+          "caption",
+        ]
+      }
+    }
+  }
+}

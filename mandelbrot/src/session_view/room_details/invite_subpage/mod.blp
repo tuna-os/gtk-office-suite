@@ -1,0 +1,126 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsInviteSubpage: Adw.NavigationPage {
+  title: _("Invite New Members");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-back-button: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Gtk.Button cancel_button {
+        label: _("_Cancel");
+        use-underline: true;
+        clicked => $close() swapped;
+      }
+
+      [end]
+      $LoadingButton invite_button {
+        content-label: _("I_nvite");
+        use-underline: true;
+        sensitive: false;
+        clicked => $invite() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    [top]
+    Adw.Clamp {
+      margin-bottom: 6;
+      margin-end: 30;
+      margin-start: 30;
+      margin-top: 6;
+      hexpand: true;
+
+      $PillSearchEntry search_entry {
+        editable: bind invite_button.is-loading inverted;
+        pill-removed => $remove_pill_invitee() swapped;
+      }
+    }
+
+    content: Gtk.Stack stack {
+      transition-type: crossfade;
+
+      Gtk.StackPage {
+        name: "no-search";
+        // Translators: In this string, this is a verb.
+        title: _("Search");
+
+        child: Adw.StatusPage no_search_page {
+          vexpand: true;
+          icon-name: "system-search-symbolic";
+          // Translators: In this string, this is a verb.
+          title: _("Search");
+          description: _("Search for users to invite them to this room");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "results";
+        title: _("Matching Users");
+
+        child: Gtk.ScrolledWindow matching_page {
+          child: Adw.ClampScrollable {
+            child: Gtk.ListView list_view {
+              margin-end: 12;
+              margin-start: 12;
+              single-click-activate: true;
+              tab-behavior: item;
+              activate => $toggle_item_is_invitee() swapped;
+
+              factory: Gtk.BuilderListItemFactory {
+                template Gtk.ListItem {
+                  activatable: bind template.item as <$RoomDetailsInviteItem>.can-invite;
+                  selectable: false;
+
+                  child: $RoomDetailsInviteRow row {
+                    item: bind template.item;
+                  };
+                }
+              };
+
+              styles [
+                "user-search-results",
+              ]
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "no-results";
+        title: _("No Users Found");
+
+        child: Adw.StatusPage no_matching_page {
+          icon-name: "system-search-symbolic";
+          title: _("No Users Found");
+          description: _("No users matching the search were found");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+        title: _("Error");
+
+        child: Adw.StatusPage error_page {
+          icon-name: "error-symbolic";
+          title: _("Error");
+          description: _("An error occurred while searching for matches");
+        };
+      }
+
+      Gtk.StackPage {
+        name: "loading";
+        title: _("Searching for Users");
+
+        child: Adw.Spinner {};
+      }
+    };
+  };
+}

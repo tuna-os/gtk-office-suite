@@ -1,0 +1,91 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationSasPage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label title {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label instructions {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Gtk.Box row_1 {
+          valign: center;
+          halign: center;
+          spacing: 30;
+          margin-top: 24;
+        }
+
+        Gtk.Box row_2 {
+          valign: center;
+          halign: center;
+          spacing: 30;
+          margin-bottom: 24;
+        }
+
+        Adw.WrapBox {
+          child-spacing: 12;
+          line-spacing: 12;
+          align: 0.5;
+
+          $LoadingButton mismatch_btn {
+            // Translators: During emoji comparison, this is the label of the button to click
+            // when the emojis do not match.
+            content-label: _("Do Not Match");
+            halign: center;
+            clicked => $data_mismatch() swapped;
+
+            styles [
+              "destructive-action",
+              "pill",
+            ]
+          }
+
+          $LoadingButton match_btn {
+            // Translators: During emoji comparison, this is the label of the button to click
+            // when the emojis match.
+            content-label: _("Match");
+            halign: center;
+            clicked => $data_match() swapped;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+          }
+        }
+      };
+    };
+  }
+}

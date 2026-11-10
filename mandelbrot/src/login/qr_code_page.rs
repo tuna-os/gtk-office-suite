@@ -1,0 +1,353 @@
+use adw::{prelude::*, subclass::prelude::*};
+use futures_util::StreamExt;
+use gettextrs::gettext;
+use gtk::{glib, glib::clone};
+use matrix_sdk::{
+    Client,
+    authentication::oauth::qrcode::{
+        LoginProgress, Msc4108IntentData, QRCodeLoginError, QrCodeData, QrCodeIntentData,
+        QrProgress,
+    },
+    config::RequestConfig,
+};
+use tokio::task::AbortHandle;
+use tracing::warn;
+
+use super::{Login, client_registration_data};
+use crate::{
+    components::{OfflineBanner, QrCodeScanner, ScannedQrCode},
+    gettext_f, spawn, spawn_tokio, toast,
+};
+
+mod imp {
+    use std::cell::RefCell;
+
+    use glib::subclass::InitializingObject;
+
+    use super::*;
+
+    #[derive(Debug, Default, gtk::CompositeTemplate, glib::Properties)]
+    #[template(resource = "/org/tunaos/mandelbrot/ui/login/qr_code_page.ui")]
+    #[properties(wrapper_type = super::LoginQrCodePage)]
+    pub struct LoginQrCodePage {
+        #[template_child]
+        stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        qrcode_scanner_bin: TemplateChild<adw::Bin>,
+        #[template_child]
+        check_code_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        waiting_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        user_code_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        error_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        retry_button: TemplateChild<gtk::Button>,
+        /// The ancestor `Login` object.
+        #[property(get, set, nullable)]
+        login: glib::WeakRef<Login>,
+        /// The QR code scanner, if any.
+        qrcode_scanner: RefCell<Option<(QrCodeScanner, glib::SignalHandlerId)>>,
+        /// The abort handle for the ongoing login task.
+        abort_handle: RefCell<Option<AbortHandle>>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for LoginQrCodePage {
+        const NAME: &'static str = "LoginQrCodePage";
+        type Type = super::LoginQrCodePage;
+        type ParentType = adw::NavigationPage;
+
+        fn class_init(klass: &mut Self::Class) {
+            OfflineBanner::ensure_type();
+
+            Self::bind_template(klass);
+            Self::bind_template_callbacks(klass);
+        }
+
+        fn instance_init(obj: &InitializingObject<Self>) {
+            obj.init_template();
+        }
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for LoginQrCodePage {}
+
+    impl WidgetImpl for LoginQrCodePage {
+        fn grab_focus(&self) -> bool {
+            if self.stack.visible_child_name().as_deref() == Some("error") {
+                self.retry_button.grab_focus()
+            } else {
+                false
+            }
+        }
+    }
+
+    impl NavigationPageImpl for LoginQrCodePage {
+        fn shown(&self) {
+            spawn!(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    imp.start().await;
+                }
+            ));
+        }
+
+        fn hidden(&self) {
+            self.clean();
+        }
+    }
+
+    #[gtk::template_callbacks]
+    impl LoginQrCodePage {
+        /// Start to scan a QR code.
+        async fn start(&self) {
+            self.clean();
+            self.stack.set_visible_child_name("scan");
+
+            let Some(qrcode_scanner) = QrCodeScanner::new().await else {
+                self.show_error(&gettext("Could not access the camera"));
+                return;
+            };
+
+            self.qrcode_scanner_bin.set_child(Some(&qrcode_scanner));
+
+            let qrcode_detected_handler = qrcode_scanner.connect_qrcode_detected(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                move |_, scanned| {
+                    imp.qrcode_detected(scanned);
+                }
+            ));
+
+            self.qrcode_scanner
+                .replace(Some((qrcode_scanner, qrcode_detected_handler)));
+        }
+
+        /// Try to scan a QR code again after an error.
+        #[template_callback]
+        async fn retry(&self) {
+            self.start().await;
+        }
+
+        /// Handle a detected QR code.
+        fn qrcode_detected(&self, scanned: ScannedQrCode) {
+            if self.abort_handle.borrow().is_some() {
+                // A login is already ongoing.
+                return;
+            }
+
+            let obj = self.obj();
+
+            let ScannedQrCode::Login(qr_code_data) = scanned else {
+                toast!(obj, gettext("The scanned QR code is not a sign-in QR code"));
+                return;
+            };
+
+            let QrCodeIntentData::Msc4108 {
+                data: Msc4108IntentData::Reciprocate { server_name },
+                ..
+            } = qr_code_data.intent_data()
+            else {
+                toast!(
+                    obj,
+                    gettext(
+                        "Invalid QR code, it must be generated by a device that is already signed in"
+                    )
+                );
+                return;
+            };
+            let server_name = server_name.clone();
+
+            self.drop_qrcode_scanner();
+
+            spawn!(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    imp.login_with_qr_code(qr_code_data, server_name).await;
+                }
+            ));
+        }
+
+        /// Log in with the given QR code data and server name.
+        async fn login_with_qr_code(&self, qr_code_data: QrCodeData, server_name: String) {
+            let Some(login) = self.login.upgrade() else {
+                return;
+            };
+
+            self.stack.set_visible_child_name("connecting");
+
+            // Build the client for the homeserver advertised in the QR code.
+            let client_handle = spawn_tokio!(async move {
+                Client::builder()
+                    .server_name_or_homeserver_url(server_name)
+                    .request_config(RequestConfig::new().retry_limit(2))
+                    .build()
+                    .await
+            });
+
+            let client = match client_handle.await.expect("task was not aborted") {
+                Ok(client) => client,
+                Err(error) => {
+                    warn!("Could not build client for QR code login: {error}");
+                    self.show_error(&gettext("Could not connect to the homeserver"));
+                    return;
+                }
+            };
+
+            login.set_client(Some(client.clone()));
+
+            let (sender, mut receiver) = futures_channel::mpsc::unbounded();
+
+            let handle = spawn_tokio!(async move {
+                let registration_data = client_registration_data();
+                let oauth = client.oauth();
+                let qr_login = oauth
+                    .login_with_qr_code(Some(&registration_data))
+                    .scan(&qr_code_data);
+                let mut progress = qr_login.subscribe_to_progress();
+
+                let progress_task = tokio::spawn(async move {
+                    while let Some(state) = progress.next().await {
+                        if sender.unbounded_send(state).is_err() {
+                            break;
+                        }
+                    }
+                });
+
+                let result = qr_login.await;
+                progress_task.abort();
+
+                result
+            });
+
+            self.abort_handle.replace(Some(handle.abort_handle()));
+
+            spawn!(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    while let Some(progress) = receiver.next().await {
+                        imp.update_progress(progress);
+                    }
+                }
+            ));
+
+            let Ok(result) = handle.await else {
+                // The task was aborted.
+                self.abort_handle.take();
+                return;
+            };
+
+            self.abort_handle.take();
+
+            match result {
+                Ok(()) => {
+                    login.create_session().await;
+                }
+                Err(error) => {
+                    warn!("Could not log in with QR code: {error}");
+                    self.show_error(&login_error_message(&error));
+                }
+            }
+        }
+
+        /// Update the UI according to the progress of the login.
+        fn update_progress(&self, progress: LoginProgress<QrProgress>) {
+            match progress {
+                LoginProgress::Starting => {
+                    self.stack.set_visible_child_name("connecting");
+                }
+                LoginProgress::EstablishingSecureChannel(QrProgress { check_code }) => {
+                    self.check_code_label.set_label(&format!("{check_code:02}"));
+                    self.stack.set_visible_child_name("check-code");
+                }
+                LoginProgress::WaitingForToken { user_code } => {
+                    self.waiting_label.set_label(&gettext(
+                        "Confirm the sign-in on your other device to continue",
+                    ));
+                    self.user_code_label.set_label(&gettext_f(
+                        // Translators: Do NOT translate the content between '{' and '}', this is
+                        // a variable name.
+                        "Security code: {code}",
+                        &[("code", &user_code)],
+                    ));
+                    self.user_code_label.set_visible(true);
+                    self.stack.set_visible_child_name("waiting");
+                }
+                LoginProgress::SyncingSecrets => {
+                    self.waiting_label
+                        .set_label(&gettext("Setting up the session…"));
+                    self.user_code_label.set_visible(false);
+                    self.stack.set_visible_child_name("waiting");
+                }
+                LoginProgress::Done => {}
+            }
+        }
+
+        /// Show the given error message.
+        fn show_error(&self, message: &str) {
+            self.error_label.set_label(message);
+            self.stack.set_visible_child_name("error");
+            self.retry_button.grab_focus();
+        }
+
+        /// Drop the QR code scanner, if any.
+        fn drop_qrcode_scanner(&self) {
+            if let Some((qrcode_scanner, handler)) = self.qrcode_scanner.take() {
+                qrcode_scanner.disconnect(handler);
+            }
+            self.qrcode_scanner_bin.set_child(None::<&gtk::Widget>);
+        }
+
+        /// Reset this page.
+        fn clean(&self) {
+            if let Some(handle) = self.abort_handle.take() {
+                handle.abort();
+            }
+
+            self.drop_qrcode_scanner();
+
+            self.stack.set_visible_child_name("scan");
+        }
+    }
+}
+
+glib::wrapper! {
+    /// A page to log in by scanning a QR code displayed on a device that is
+    /// already logged in, as defined in MSC4108.
+    pub struct LoginQrCodePage(ObjectSubclass<imp::LoginQrCodePage>)
+        @extends gtk::Widget, adw::NavigationPage,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+}
+
+impl LoginQrCodePage {
+    /// The tag for this page.
+    pub(super) const TAG: &str = "qr-code";
+
+    pub fn new() -> Self {
+        glib::Object::new()
+    }
+}
+
+/// Get a user-facing error message for the given QR code login error.
+fn login_error_message(error: &QRCodeLoginError) -> String {
+    match error {
+        QRCodeLoginError::OAuth(_) => {
+            gettext("The homeserver does not support signing in with a QR code")
+        }
+        QRCodeLoginError::LoginFailure { .. } => {
+            gettext("The sign-in was refused or cancelled on the other device")
+        }
+        QRCodeLoginError::NotFound => {
+            gettext("The QR code has expired, generate a new one on the other device")
+        }
+        QRCodeLoginError::SecureChannel(_) => {
+            gettext("Could not establish a secure connection to the other device")
+        }
+        _ => gettext("Could not sign in with QR code"),
+    }
+}

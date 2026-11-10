@@ -1,0 +1,89 @@
+# Overlay turning the single-site stack into TWO federated homeservers,
+# each with its own SFU and MSC4195 auth service — the topology Element Call
+# uses in docker-compose-dev.yml for its federation Playwright specs.
+#
+# Use with:
+#   podman-compose -f compose.yml -f compose-federated.yml up -d
+#
+# Layout:
+#   site 1  synapse.m.localhost            client http://127.0.0.1:8008
+#           livekit      :7880   udp 50100-50200
+#           auth-service :6080
+#   site 2  synapse.othersite.m.localhost  client http://127.0.0.1:18008
+#           livekit-1      :17880  udp 50300-50400
+#           auth-service-1 :16080
+#
+# Federation between the two goes through nginx on host port 8448 (https),
+# routed by Host/SNI — both homeservers resolve their peer's server name to
+# 127.0.0.1, and 8448 is the default Matrix federation port, so one published
+# port serves both sites.
+#
+# Each lk-jwt-service must be able to validate MSC4195 OpenID tokens from
+# BOTH homeservers, because a client whose homeserver is site 2 fetches its
+# SFU token from site 1's auth service when site 1 owns the oldest
+# membership. Hence both get both `extra_hosts` entries.
+
+services:
+  synapse:
+    volumes:
+      - ./synapse_tmp:/data:Z
+      - ./synapse/homeserver-federated.yaml:/data/cfg/homeserver.yaml:Z
+
+  synapse-1:
+    image: ghcr.io/element-hq/synapse:latest
+    hostname: homeserver-1
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/cfg/homeserver.yaml
+      - UID=0
+      - GID=0
+    volumes:
+      - ./synapse_tmp_othersite:/data:Z
+      - ./synapse/homeserver-othersite.yaml:/data/cfg/homeserver.yaml:Z
+    networks:
+      - mrtc
+
+  nginx:
+    volumes:
+      - ./nginx/nginx-federated.conf:/etc/nginx/conf.d/default.conf:Z
+      - ./tls/dev_tls_m.localhost.key:/root/ssl/key.pem:Z
+      - ./tls/dev_tls_m.localhost.crt:/root/ssl/cert.pem:Z
+    ports:
+      - "8008:80"
+      - "18008:18008"
+      - "8448:8448"
+    depends_on:
+      - synapse
+      - synapse-1
+    networks:
+      mrtc:
+        aliases:
+          - synapse.m.localhost
+          - synapse.othersite.m.localhost
+          - matrix-rtc.m.localhost
+          - matrix-rtc.othersite.m.localhost
+
+  auth-service:
+    extra_hosts:
+      - "synapse.m.localhost:127.0.0.1"
+      - "synapse.othersite.m.localhost:127.0.0.1"
+
+  livekit-1:
+    image: docker.io/livekit/livekit-server:v1.10.1
+    network_mode: host
+    command: --dev --config /etc/livekit.yaml
+    volumes:
+      - ./livekit/livekit-othersite.yaml:/etc/livekit.yaml:Z
+
+  auth-service-1:
+    image: ghcr.io/element-hq/lk-jwt-service:0.4.4
+    network_mode: host
+    extra_hosts:
+      - "synapse.m.localhost:127.0.0.1"
+      - "synapse.othersite.m.localhost:127.0.0.1"
+    environment:
+      - LIVEKIT_JWT_PORT=16080
+      - LIVEKIT_URL=ws://127.0.0.1:17880
+      - LIVEKIT_KEY=devkey
+      - LIVEKIT_SECRET=secret
+      - LIVEKIT_INSECURE_SKIP_VERIFY_TLS=YES_I_KNOW_WHAT_I_AM_DOING
+      - LIVEKIT_FULL_ACCESS_HOMESERVERS=*

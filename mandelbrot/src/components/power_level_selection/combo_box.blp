@@ -1,0 +1,44 @@
+using Gtk 4.0;
+
+template $PowerLevelSelectionComboBox: Gtk.ToggleButton {
+  accessible-role: combo_box;
+  width-request: 170;
+  active: bind popover.visible;
+  notify::active => $active_changed() swapped;
+
+  styles [
+    "combo",
+  ]
+
+  child: Gtk.Box {
+    Gtk.Box selected_box {
+      accessible-role: group;
+      spacing: 12;
+      margin-end: 6;
+      hexpand: true;
+
+      Gtk.Label selected_level_label {}
+
+      $RoleBadge selected_role_badge {
+        valign: center;
+      }
+    }
+
+    Gtk.Image {
+      icon-name: "pan-down-symbolic";
+      accessible-role: presentation;
+      halign: end;
+      valign: center;
+
+      styles [
+        "dropdown-arrow",
+      ]
+    }
+
+    $PowerLevelSelectionPopover popover {
+      has-arrow: false;
+      permissions: bind template.permissions;
+      selected-power-level: bind template.selected-power-level bidirectional;
+    }
+  };
+}

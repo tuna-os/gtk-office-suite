@@ -1,0 +1,31 @@
+using Gtk 4.0;
+
+template $AccountSwitcherButton: Gtk.ToggleButton {
+  visible: bind $invert_boolean(template.root as <$Window>.session-selection as <$FixedSelection>.is-empty) as <bool>;
+  tooltip-text: bind template
+    .root as <$Window>
+    .session-selection as <$FixedSelection>
+    .selected-item as <$SessionInfo>
+    .user-id-string;
+  toggled => $toggle_popover() swapped;
+
+  styles [
+    "image-button",
+    "circular",
+  ]
+
+  accessibility {
+    description: _("Switch Accounts");
+    has-popup: true;
+  }
+
+  child: $Avatar {
+    size: 24;
+    data: bind template
+      .root as <$Window>
+      .session-selection as <$FixedSelection>
+      .selected-item as <$SessionInfo>
+      .avatar-data;
+    accessible-role: presentation;
+  };
+}

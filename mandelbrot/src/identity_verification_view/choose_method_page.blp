@@ -1,0 +1,94 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationChooseMethodPage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label title {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label instructions {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        $TriQRCode qrcode {
+          valign: center;
+          halign: center;
+          margin-top: 24;
+          margin-bottom: 24;
+
+          styles [
+            "card",
+          ]
+        }
+
+        Gtk.Label cannot_scan_label {
+          label: _("Can’t scan QR code?");
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+        }
+
+        $LoadingButton scan_qr_code_btn {
+          halign: center;
+          content-label: _("Scan QR code with this session");
+          clicked => $start_qr_code_scan() swapped;
+
+          styles [
+            "pill",
+          ]
+        }
+
+        $LoadingButton start_sas_btn {
+          content-label: _("Compare Emoji");
+          halign: center;
+          clicked => $start_sas() swapped;
+
+          styles [
+            "pill",
+          ]
+        }
+
+        $LoadingButton cancel_btn {
+          halign: center;
+          content-label: _("Cancel Verification");
+          clicked => $cancel() swapped;
+
+          styles [
+            "destructive-action",
+            "pill",
+          ]
+        }
+      };
+    };
+  }
+}

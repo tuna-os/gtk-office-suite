@@ -1,0 +1,69 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SafetyPage: Adw.PreferencesPage {
+  icon-name: "safety-symbolic";
+  title: _("Safety");
+  name: "safety";
+
+  Adw.PreferencesGroup {
+    $ButtonCountRow ignored_users_row {
+      title: _("Ignored Users");
+      subtitle: _(
+        "All messages or invitations sent by these users will be ignored. You will still see some of their activity, like when they join or leave a room."
+      );
+      action-name: "account-settings.show-subpage";
+      action-target: "'ignored-users'";
+    }
+  }
+
+  Adw.PreferencesGroup {
+    title: _("Privacy");
+
+    Adw.SwitchRow public_read_receipts_row {
+      selectable: false;
+      title: _("Send Read Receipts");
+      subtitle: _("Allow other members of the rooms you participate in to track which messages you have seen");
+    }
+
+    Adw.SwitchRow typing_row {
+      selectable: false;
+      title: _("Send Typing Notifications");
+      subtitle: _("Allow other members of the rooms you participate in to see when you are typing a message");
+    }
+  }
+
+  Adw.PreferencesGroup media_previews {
+    title: _("Media Previews");
+    description: _(
+      "Which rooms automatically show previews for images and videos. Hidden previews can always be shown by clicking on the media."
+    );
+
+    $CheckLoadingRow media_previews_on_row {
+      title: _("Show in all rooms");
+      action-name: "safety.set-media-previews-enabled";
+      action-target: "'on'";
+    }
+
+    $CheckLoadingRow media_previews_private_row {
+      title: _("Show only in private rooms");
+      action-name: "safety.set-media-previews-enabled";
+      action-target: "'private'";
+    }
+
+    $CheckLoadingRow media_previews_off_row {
+      title: _("Hide in all rooms");
+      action-name: "safety.set-media-previews-enabled";
+      action-target: "'off'";
+    }
+  }
+
+  Adw.PreferencesGroup {
+    $SwitchLoadingRow invite_avatars_row {
+      title: _("Show Avatars for Invites");
+      subtitle: _("Display the avatars of the room and the inviter");
+      is-loading: bind template.invite-avatars-loading;
+      notify::is-active => $set_invite_avatars_enabled() swapped;
+    }
+  }
+}

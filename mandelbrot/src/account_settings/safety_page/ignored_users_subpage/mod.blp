@@ -1,0 +1,71 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IgnoredUsersSubpage: Adw.NavigationPage {
+  title: _("Ignored Users");
+  tag: "ignored-users";
+
+  Gtk.Stack stack {
+    Gtk.StackPage {
+      name: "list";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          [end]
+          Gtk.ToggleButton search_button {
+            icon-name: "system-search-symbolic";
+            tooltip-text: _("Toggle Ignored Users Search");
+          }
+        }
+
+        [top]
+        Gtk.SearchBar search_bar {
+          search-mode-enabled: bind search_button.active no-sync-create;
+
+          child: Adw.Clamp {
+            hexpand: true;
+            maximum-size: 750;
+            tightening-threshold: 550;
+
+            Gtk.SearchEntry search_entry {
+              placeholder-text: _("Search for ignored users");
+            }
+          };
+        }
+
+        content: Gtk.ScrolledWindow {
+          hexpand: true;
+          vexpand: true;
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+
+          child: Adw.ClampScrollable {
+            margin-start: 12;
+            margin-end: 12;
+
+            child: Gtk.ListView list_view {
+              show-separators: true;
+            };
+          };
+        };
+      };
+    }
+
+    Gtk.StackPage {
+      name: "empty";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: Adw.StatusPage {
+          icon-name: "users-symbolic";
+          title: _("No Ignored Users");
+          description: _("You can add users to this list from their room member profile");
+          vexpand: true;
+        };
+      };
+    }
+  }
+}

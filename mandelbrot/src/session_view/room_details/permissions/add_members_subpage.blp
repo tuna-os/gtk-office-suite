@@ -1,0 +1,94 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsPermissionsAddMembersSubpage: Adw.NavigationPage {
+  title: _("Add Custom Permissions");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [end]
+      Gtk.Button add_button {
+        label: _("_Add");
+        use-underline: true;
+        sensitive: false;
+        clicked => $add_members() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    [top]
+    Adw.Clamp {
+      margin-bottom: 6;
+      margin-end: 30;
+      margin-start: 30;
+      margin-top: 6;
+
+      $PillSearchEntry search_entry {}
+    }
+
+    [top]
+    Adw.Clamp {
+      margin-bottom: 6;
+      margin-end: 30;
+      margin-start: 30;
+      margin-top: 6;
+
+      Gtk.Box {
+        spacing: 12;
+        halign: center;
+
+        Gtk.Label power_level_combo_label {
+          // Translators: value used to assign room member roles.
+          label: _("Assign Power Level");
+          xalign: 0;
+          ellipsize: end;
+        }
+
+        $PowerLevelSelectionComboBox power_level_combo {
+          accessibility {
+            labelled-by: [
+              power_level_combo_label,
+            ];
+          }
+        }
+      }
+    }
+
+    content: Gtk.Stack stack {
+      Gtk.StackPage {
+        name: "list";
+        title: _("Search Results");
+
+        child: Gtk.ScrolledWindow {
+          child: Adw.ClampScrollable {
+            child: Gtk.ListView list_view {
+              margin-end: 12;
+              margin-start: 12;
+              single-click-activate: true;
+              tab-behavior: item;
+
+              styles [
+                "user-search-results",
+              ]
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "no-match";
+        title: _("No Matching Members Found");
+
+        child: Adw.StatusPage no_matching_page {
+          icon-name: "system-search-symbolic";
+          title: _("No Matching Members Found");
+          description: _("No room members matching the search were found");
+        };
+      }
+    };
+  };
+}

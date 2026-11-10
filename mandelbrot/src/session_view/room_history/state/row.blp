@@ -1,0 +1,23 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentStateRow: Adw.Bin {
+  child: Gtk.Box {
+    spacing: 2;
+    orientation: vertical;
+
+    styles [
+      "event-content",
+    ]
+
+    $ContentStateContent {
+      event: bind template.event;
+    }
+
+    $ContentReadReceiptsList read_receipts {
+      visible: bind template.event as <$RoomEvent>.has-read-receipts;
+      members: bind template.event as <$RoomEvent>.timeline as <$Timeline>.room as <$Room>.members;
+      source: bind template.event as <$RoomEvent>.read-receipts;
+    }
+  };
+}

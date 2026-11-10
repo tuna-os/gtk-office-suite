@@ -1,0 +1,521 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CryptoRecoverySetupView: Adw.Bin {
+  child: Adw.NavigationView navigation {
+    Adw.NavigationPage {
+      tag: "recover";
+      title: _("Recover Account");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Recover Account");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("Restore full access to your account.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Label {
+                label: _(
+                  "To access the recovery data, we need the recovery passphrase or the recovery key that is usually set up when you create your account."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.ListBox {
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.PasswordEntryRow recover_entry {
+                  title: _("Recovery Passphrase or Key");
+                  changed => $recover_entry_changed() swapped;
+                }
+              }
+
+              $LoadingButton recover_btn {
+                sensitive: false;
+                can-shrink: true;
+                label: _("Recover");
+                halign: center;
+                clicked => $recover() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("Lost your recovery passphrase or key?");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Button {
+                can-shrink: true;
+                halign: center;
+                label: _("Reset");
+                action-name: "navigation.push";
+                action-target: "'reset'";
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage reset_page {
+      tag: "reset";
+      title: _("Reset Account Recovery");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Reset Account Recovery");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Resetting account recovery can allow you to fix or reset part or all of your recovery setup."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.ListBox {
+                styles [
+                  "boxed-list",
+                ]
+
+                $SwitchLoadingRow reset_identity_row {
+                  title: _("Reset Crypto Identity");
+                }
+
+                $SwitchLoadingRow reset_backup_row {
+                  title: _("Reset Room Encryption Keys Backup");
+                }
+              }
+
+              Gtk.Label {
+                label: _("If you do not provide a new recovery passphrase, a recovery key will be created.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "You should not reuse the password of your Matrix account as a passphrase. Otherwise, if someone manages to get your account password, they will also be able to access all your encrypted conversations and to impersonate you."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.ListBox {
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.PasswordEntryRow reset_entry {
+                  title: _("Recovery Passphrase (Optional)");
+                }
+              }
+
+              $LoadingButton reset_btn {
+                label: _("Reset");
+                halign: center;
+                clicked => $reset() swapped;
+
+                styles [
+                  "destructive-action",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "enable";
+      title: _("Set Up Account Recovery");
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Set Up Account Recovery");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Account recovery allows you to recover your crypto identity and to read your encrypted messages even if you lose access to all your sessions."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("If you do not provide a recovery passphrase, a recovery key will be created.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Label {
+                label: _(
+                  "You should not reuse the password of your Matrix account as a passphrase. Otherwise, if someone manages to get your account password, they will also be able to access all your encrypted conversations and to impersonate you."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.ListBox {
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.PasswordEntryRow enable_entry {
+                  title: _("Recovery Passphrase (Optional)");
+                }
+              }
+
+              $LoadingButton enable_btn {
+                can-shrink: true;
+                label: _("Set Up");
+                halign: "center";
+                clicked => $enable() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "success";
+      title: _("Account Recovery Set Up Successfully");
+      can-pop: false;
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Account Recovery Set Up Successfully");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label success_description {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Box success_key_box {
+                Gtk.Label success_key_label {
+                  wrap: true;
+                  wrap-mode: word;
+                  selectable: true;
+                  xalign: 0.0;
+                  hexpand: true;
+                  margin-start: 12;
+                  margin-end: 12;
+                  margin-top: 12;
+                  margin-bottom: 12;
+
+                  styles [
+                    "monospace",
+                  ]
+                }
+
+                Gtk.Button success_key_copy_btn {
+                  icon-name: "copy-symbolic";
+                  tooltip-text: _("Copy Recovery Key");
+                  valign: center;
+                  margin-end: 12;
+                  clicked => $copy_key() swapped;
+
+                  styles [
+                    "flat",
+                  ]
+                }
+
+                styles [
+                  "card",
+                ]
+              }
+
+              Gtk.Button success_confirm_btn {
+                can-shrink: true;
+                label: _("_Done");
+                use-underline: true;
+                halign: center;
+                clicked => $emit_completed() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage {
+      tag: "incomplete";
+      title: _("Account Recovery Incomplete");
+      can-pop: false;
+      shown => $grab_focus() swapped;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            maximum-size: 400;
+            tightening-threshold: 300;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              valign: center;
+              halign: center;
+
+              Gtk.Label {
+                label: _("Account Recovery Incomplete");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-1",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("The recovery was successful but the recovery data was incomplete.");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Label {
+                label: _(
+                  "To fix this, you should reset the recovery from a session that has all the data, and attempt to recover this session again."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Label {
+                label: _(
+                  "Note that account recovery can have a different name in other Matrix clients, like “key backup” or “secure backup”."
+                );
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Button incomplete_confirm_btn {
+                can-shrink: true;
+                label: _("_Done");
+                use-underline: true;
+                halign: center;
+                clicked => $emit_completed() swapped;
+
+                styles [
+                  "suggested-action",
+                  "pill",
+                ]
+              }
+
+              Gtk.Label {
+                label: _("Alternatively, you can reset Account Recovery");
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+              }
+
+              Gtk.Button {
+                can-shrink: true;
+                label: _("Reset");
+                halign: center;
+                clicked => $show_reset() swapped;
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      };
+    }
+  };
+}

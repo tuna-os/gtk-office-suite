@@ -1,0 +1,97 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $PublicRoomRow: Adw.Bin {
+  accessibility {
+    labelled-by: [
+      display_name,
+    ];
+
+    described-by: [
+      description,
+    ];
+  }
+
+  child: Gtk.Box {
+    spacing: 12;
+
+    $Avatar avatar {
+      size: 48;
+      valign: start;
+      accessible-role: presentation;
+    }
+
+    Gtk.Box {
+      spacing: 6;
+      orientation: vertical;
+      hexpand: true;
+      halign: start;
+
+      Gtk.Label display_name {
+        halign: start;
+        ellipsize: end;
+        xalign: 0;
+
+        styles [
+          "bold",
+        ]
+      }
+
+      Gtk.Label description {
+        ellipsize: end;
+        lines: 4;
+        wrap: true;
+        wrap-mode: word_char;
+        xalign: 0;
+        use-markup: true;
+        selectable: true;
+
+        styles [
+          "body",
+        ]
+      }
+
+      Gtk.Label alias {
+        ellipsize: end;
+        halign: start;
+        xalign: 0;
+
+        styles [
+          "dimmed",
+        ]
+      }
+
+      Gtk.Box {
+        spacing: 12;
+
+        $LoadingButton button {
+          valign: center;
+          clicked => $join_or_view() swapped;
+
+          styles [
+            "padded-button",
+          ]
+        }
+
+        Gtk.Box members_count_box {
+          halign: center;
+          spacing: 6;
+
+          Gtk.Image {
+            icon-name: "users-symbolic";
+
+            styles [
+              "dimmed",
+            ]
+          }
+
+          Gtk.Label members_count {
+            styles [
+              "dimmed",
+            ]
+          }
+        }
+      }
+    }
+  };
+}

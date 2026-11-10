@@ -1,0 +1,11 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Avatar: Adw.Bin {
+  notify::scale-factor => $update_scale_factor() swapped;
+
+  child: Adw.Avatar avatar {
+    show-initials: true;
+    text: bind template.data as <$AvatarData>.display-name;
+  };
+}
