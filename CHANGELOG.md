@@ -18,6 +18,9 @@
 ### Decks
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 
+### Infrastructure
+- Lifafa, the email client, is now built and tested in CI (in a Fedora 43 container, since it needs libadwaita 1.7 and WebKitGTK 6.0), and its lockfile has its own RustSec gate, which also runs daily. Its lock moves to patched rustls-webpki, webpki-roots, event-listener and pulldown-cmark, and off two yanked crates (#1986).
+
 ## v1.0 (post-release) — 2026-06-24
 
 Features added after the v1.0 tag and GitHub release.
