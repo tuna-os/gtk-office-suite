@@ -25,6 +25,8 @@
 - PowerPoint groups that are rotated or flipped open where PowerPoint draws them, instead of upright and unflipped. Decks has no group object yet, so saving a deck that had groups now warns that its shapes will be saved ungrouped.
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 
+### Infrastructure
+- Fuzzing now covers the collaboration byte paths as well as the document importers: the sidecar protocol codec, dcp-core's update ingest and its package check, each in the nightly smoke run.
 ### Decks
 - A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
 
