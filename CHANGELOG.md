@@ -9,11 +9,15 @@
 - Typing quickly in a long document no longer queues a whole-document spell check and word count for every keystroke: each runs once when typing pauses (#1990).
 
 ### Tables
-- Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written two columns to the right as one undo step. Its results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
+- Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written where Place At says, two columns to the right by default, as one undo step. Refresh Pivot Tables (cell menu and command palette) rewrites the sheet's pivot tables from their sources after the data changes, as one undo step. Results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
 - A cell reference past the last column (XFD) or row, or long enough to overflow, is now rejected instead of crashing or wrapping to a wrong cell, whether typed in the name box or read from a chart or conditional-format range in a file (#1988).
 - Print scale and fit-to-page are read from XLSX and kept on save. They used to be dropped, so a sheet set to print at 46% or one page wide saved back at 100%.
 - Export to PDF prints at the sheet's print scale, or shrinks it to fit the pages its fit-to-page asks for, as Calc does. It also prints the used range or print area with each column at its own width, where it used to put every cell in one column, and leaves hidden rows and columns out.
 - Opening an ODS reads each sheet's page setup from its page style: paper size, orientation, margins, print scale and fit to pages wide and tall.
+- Sorting moves each cell's lock and hidden-formula setting with its row, as it already moved formats, styles, borders, validation and notes. They used to stay put, so a sort on a sheet with unlocked cells locked the wrong ones.
+
+### Decks
+- Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 
 ## v1.0 (post-release) — 2026-06-24
 

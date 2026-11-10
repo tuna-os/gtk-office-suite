@@ -721,6 +721,42 @@
     }
 
     #[test]
+    fn sort_moves_cell_locks_with_their_rows_and_undo_puts_them_back() {
+        // #1987: every other per-cell attribute followed its row through a
+        // sort, but locked and hidden-formula flags stayed where they were.
+        use crate::sheet::CellProtection;
+        let unlocked = CellProtection { locked: false, hidden_formula: false };
+        let hidden = CellProtection { locked: true, hidden_formula: true };
+        let mut controller = WorkbookController::new(3, 2).unwrap();
+        for (row, value) in ["3", "1", "2"].into_iter().enumerate() {
+            controller.edit_cell(row, 0, value);
+        }
+        controller.mutate_sheet("Mark Locks", |sheet| {
+            sheet.cell_protections[1][0] = unlocked.clone();
+            sheet.cell_protections[2][1] = hidden.clone();
+        });
+
+        controller.toggle_sort(0);
+        {
+            let state = controller.state.borrow();
+            let sheet = state.sheet();
+            assert_eq!((sheet.cell(0, 0), sheet.cell(1, 0), sheet.cell(2, 0)), ("1", "2", "3"));
+            assert_eq!(sheet.cell_protections[0][0], unlocked, "the unlocked cell moved with its row");
+            assert_eq!(sheet.cell_protections[1][1], hidden, "the hidden formula flag moved with its row");
+            assert_eq!(sheet.cell_protections[2][0], CellProtection::default());
+            assert_eq!(sheet.cell_protections[2][1], CellProtection::default());
+        }
+
+        assert!(controller.undo());
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert_eq!(sheet.cell(0, 0), "3");
+        assert_eq!(sheet.cell_protections[1][0], unlocked);
+        assert_eq!(sheet.cell_protections[2][1], hidden);
+        assert_eq!(sheet.cell_protections[0][0], CellProtection::default());
+    }
+
+    #[test]
     fn sort_reorders_a_text_column_alphabetically() {
         // Regression test: the sort compare previously parsed every cell
         // as f64 with a 0.0 fallback, so a text column's rows all
