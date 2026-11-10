@@ -84,6 +84,26 @@
         "async-imap"
       ],
       "allowedVersions": "<0.11"
+    },
+    {
+      "description": "Lifafa's mail reader, PGP path and attachment renderer use mail-parser 0.9's part offsets and charset decoders, which 0.11 changed (u32 offsets, private decoders); hold until that port lands as its own change (#2066).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "mail-parser"
+      ],
+      "allowedVersions": "<0.10"
+    },
+    {
+      "description": "Never automerge in lifafa/. Its build job is path-filtered, so it is not a required check, and an automerged bump can land red: #2060, #2066 and #2067 did. A person merges Lifafa updates once that job is green.",
+      "matchFileNames": [
+        "lifafa/**"
+      ],
+      "automerge": false
     }
   ]
 }

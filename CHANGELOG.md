@@ -9,6 +9,7 @@
 - Export as PDF With Typst (Approximate) works in the Flatpak: it typesets in process instead of running a `typst` program the app never shipped, does it without freezing the window, leaves no `.typ` file beside the PDF, and typesets the document itself on its own page size rather than the screen's list markers and table pipes. Text holding `#`, `$` or `//` no longer fails the export (#1985).
 - Save As Markdown now warns before it drops a document's tables and footnotes: Markdown here writes table cells as plain paragraphs and leaves footnote text out (#1981).
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
+- The status bar's zoom readout and slider start at the zoom the pages open at, and follow Ctrl+scroll zooming. They used to read 100% after a restart with any other stored zoom (#1895).
 - Misspelled words get their red wavy underline in the page view again. The spell checker found them, but only the old editor drew the underline; it still leaves print and PDF alone (#1894).
 - Typing quickly in a long document no longer queues a whole-document spell check and word count for every keystroke: each runs once when typing pauses (#1990).
 - A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
@@ -30,7 +31,7 @@
 
 ### Infrastructure
 - Lifafa, the email client, is now built and tested in CI (in a Fedora 43 container, since it needs libadwaita 1.7 and WebKitGTK 6.0), and its lockfile has its own RustSec gate, which also runs daily. Its lock moves to patched rustls-webpki, webpki-roots, event-listener and pulldown-cmark, and off two yanked crates (#1986).
-- Lifafa builds again: its html5ever goes back to 0.39, the release its markup5ever_rcdom parses with, and Renovate now proposes the two together and stops proposing lone bumps of Lifafa's toolkit (gtk4, libadwaita, relm4, webkit6, pangocairo, cairo-rs) and async-imap, which do not build on their own (#2060).
+- Lifafa builds again after three automerged dependency bumps broke it: html5ever and markup5ever_rcdom are both on 0.40 (two name comparisons made unambiguous for it), mail-parser goes back to 0.9 until its 0.11 port, and Renovate no longer automerges anything in lifafa/, groups html5ever with markup5ever_rcdom, and stops proposing lone bumps of Lifafa's toolkit (gtk4, libadwaita, relm4, webkit6, pangocairo, cairo-rs), async-imap or mail-parser (#2060, #2066, #2067).
 - Fuzzing now covers the collaboration byte paths as well as the document importers: the sidecar protocol codec, dcp-core's update ingest and its package check, each in the nightly smoke run.
 ### Decks
 - A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
