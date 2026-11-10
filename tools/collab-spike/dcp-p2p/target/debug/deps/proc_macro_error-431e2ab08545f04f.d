@@ -1,0 +1,11 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/proc_macro_error-431e2ab08545f04f.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/dummy.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/diagnostic.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/macros.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/imp/fallback.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libproc_macro_error-431e2ab08545f04f.rlib: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/dummy.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/diagnostic.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/macros.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/imp/fallback.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libproc_macro_error-431e2ab08545f04f.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/dummy.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/diagnostic.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/macros.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/imp/fallback.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/dummy.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/diagnostic.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/macros.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/proc-macro-error-0.4.12/src/imp/fallback.rs:

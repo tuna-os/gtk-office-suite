@@ -1,0 +1,1 @@
+SqliteStore: p2panda_store::logs::LogStore<p2panda_core::Operation<DcpExt>, VerifyingKey, std::string::String, u32, p2panda_core::Hash>

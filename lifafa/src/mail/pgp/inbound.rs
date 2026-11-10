@@ -78,7 +78,7 @@ pub(crate) fn detect(raw: &[u8]) -> Option<Shape> {
             let first = parsed.part(*first)?;
             let sig = parsed.part(*second)?;
             let boundary = boundary?;
-            let data = signed_bytes(raw, first.offset_header, &boundary)?;
+            let data = signed_bytes(raw, first.offset_header as usize, &boundary)?;
             let signature = part_text(sig).into_bytes();
             if !signature.contains_str("-----BEGIN PGP SIGNATURE-----") {
                 return None;
@@ -314,7 +314,7 @@ pub(super) fn protected_subject(entity: &[u8]) -> Option<String> {
 /// the headers inside. This one does, so the part is hidden, never shown in
 /// the body or listed as a file. `None` unless the entity is flagged as
 /// carrying protected headers, so ordinary mail is never touched.
-pub(crate) fn legacy_display_part(parsed: &mail_parser::Message) -> Option<usize> {
+pub(crate) fn legacy_display_part(parsed: &mail_parser::Message) -> Option<u32> {
     use mail_parser::MimeHeaders;
     let root = parsed.root_part();
     let ct = root.content_type()?;

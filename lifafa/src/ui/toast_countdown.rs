@@ -61,7 +61,8 @@ mod imp {
 
 glib::wrapper! {
     pub(crate) struct ToastCountdown(ObjectSubclass<imp::ToastCountdown>)
-        @extends gtk::Widget;
+        @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl ToastCountdown {

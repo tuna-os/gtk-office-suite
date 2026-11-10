@@ -164,13 +164,13 @@ where
     let mut out = Vec::new();
     loop {
         let reply = match session.read_response().await {
-            Some(Ok(reply)) => reply,
-            Some(Err(e)) => {
+            Ok(Some(reply)) => reply,
+            Err(e) => {
                 let e = async_imap::error::Error::Io(e);
                 wired_err(&cmd, &e);
                 return Err(e);
             }
-            None => {
+            Ok(None) => {
                 wired::<()>(&cmd, &Err(async_imap::error::Error::ConnectionLost));
                 return Err(async_imap::error::Error::ConnectionLost);
             }
@@ -185,10 +185,10 @@ where
             Response::Done {
                 tag,
                 status,
-                information,
+                outcome,
                 ..
             } if *tag == id => {
-                let why = information.as_deref().unwrap_or("");
+                let why = outcome.information.as_deref().unwrap_or("");
                 return match status {
                     Status::Ok => {
                         tracing::debug!(target: "hylki::imap", "< OK ({})", cmd_head(&cmd));
@@ -302,8 +302,8 @@ where
     let mut out = std::collections::HashMap::new();
     loop {
         let reply = match session.read_response().await {
-            Some(Ok(reply)) => reply,
-            Some(Err(e)) => {
+            Ok(Some(reply)) => reply,
+            Err(e) => {
                 let e = async_imap::error::Error::Io(e);
                 wired_err(&cmd, &e);
                 if !is_parse_error(&e) {
@@ -314,7 +314,7 @@ where
                     "unreadable X-GM-LABELS reply",
                 )));
             }
-            None => {
+            Ok(None) => {
                 wired::<()>(&cmd, &Err(async_imap::error::Error::ConnectionLost));
                 return Err(async_imap::error::Error::ConnectionLost);
             }
@@ -323,15 +323,27 @@ where
             Response::Fetch(_, attrs) => {
                 if let Some((uid, labels)) = gmail_labels_of(attrs, path) {
                     out.insert(uid, labels);
+                } else if attrs
+                    .iter()
+                    .any(|a| matches!(a, async_imap::imap_proto::AttributeValue::Unknown))
+                {
+                    // imap-proto 0.17 skips an item it cannot read (a label
+                    // sent as a literal) instead of failing the whole reply.
+                    // Without labels in it, that reply is as unreadable as
+                    // it used to be: do not ask again.
+                    refuse_gmail_labels(account_id);
+                    return Err(async_imap::error::Error::Io(std::io::Error::other(
+                        "unreadable X-GM-LABELS reply",
+                    )));
                 }
             }
             Response::Done {
                 tag,
                 status,
-                information,
+                outcome,
                 ..
             } if *tag == id => {
-                let why = information.as_deref().unwrap_or("");
+                let why = outcome.information.as_deref().unwrap_or("");
                 return Ok(match status {
                     Status::Ok => {
                         tracing::debug!(target: "hylki::imap", "< OK ({})", cmd_head(&cmd));
@@ -668,7 +680,7 @@ mod gmail_label_tests {
     }
 
     fn fetch_attrs(raw: &[u8]) -> Vec<async_imap::imap_proto::AttributeValue<'_>> {
-        match async_imap::imap_proto::parser::parse_response(raw) {
+        match async_imap::imap_proto::Response::parse(raw) {
             Ok((_, async_imap::imap_proto::Response::Fetch(_, attrs))) => attrs,
             other => panic!("not a FETCH reply: {other:?}"),
         }

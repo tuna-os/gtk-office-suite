@@ -100,7 +100,7 @@ pub(crate) fn open_link(uri: &str, parent: Option<&gtk::Window>) {
         return;
     }
     if web && !choice.is_empty() {
-        match gio::DesktopAppInfo::new(&choice) {
+        match gio_unix::DesktopAppInfo::new(&choice) {
             Some(info) => match info.launch_uris(&[uri], gio::AppLaunchContext::NONE) {
                 Ok(()) => return,
                 Err(e) => tracing::warn!(

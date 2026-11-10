@@ -729,6 +729,41 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         });
     }
     {
+        // Ctrl+click on linked text opens its link (#1998): the gesture
+        // PowerPoint and Impress use while editing, so a plain click still
+        // selects. Only a click that lands on a link is claimed.
+        let weak = weak.clone();
+        let slides = h.slides.clone();
+        let masters = h.masters.clone();
+        let follow = gtk::GestureClick::new();
+        follow.set_button(1);
+        follow.connect_pressed(move |gesture, n, x, y| {
+            let ctrl = gesture.current_event_state().contains(gdk::ModifierType::CONTROL_MASK);
+            let Some(ed) = weak.upgrade().filter(|ed| ctrl && n == 1 && !ed.ctl.has_text_session()) else { return };
+            let Some(canvas) = ed.canvas.upgrade() else { return };
+            let (cw, ch) = (canvas.width() as f64, canvas.height() as f64);
+            let (hx, hy) = canvas_to_slide(x, y, cw, ch);
+            let Some(idx) = ed.ctl.selected_slide_index() else { return };
+            let link = {
+                let slides = slides.borrow();
+                slides.get(idx).and_then(|slide| {
+                    let oi = hit_test_object(&slide.objects, hx, hy)?;
+                    let obj = &slide.objects[oi];
+                    let SlideObject::TextBox { runs, .. } = obj else { return None };
+                    let masters = masters.borrow();
+                    let master = crate::canvas::master_for(&slides, idx, &masters);
+                    let at = crate::canvas::text_offset_at(obj, crate::canvas::slide_geometry(cw, ch), master.as_deref(), (x, y))?;
+                    decks_core::rich_text::link_at(runs, at).map(str::to_owned)
+                })
+            };
+            let Some(uri) = link.filter(|u| decks_core::rich_text::is_followable(u)) else { return };
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            let parent = canvas.root().and_downcast::<gtk::Window>();
+            gtk::UriLauncher::new(&uri).launch(parent.as_ref(), gtk::gio::Cancellable::NONE, |_| {});
+        });
+        h.canvas.add_controller(follow);
+    }
+    {
         // The double-click gesture owns the editor: it lives as long as the
         // canvas, and every other handler holds it weakly.
         let slides = h.slides.clone();

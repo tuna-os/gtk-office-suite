@@ -84,7 +84,7 @@ pub(crate) fn detect(parsed: &mail_parser::Message) -> Option<SensitivityLabel> 
             .headers()
             .iter()
             .find(|h| h.name().eq_ignore_ascii_case(name))
-            .and_then(|h| raw.get(h.offset_start()..h.offset_end()))
+            .and_then(|h| raw.get(h.offset_start() as usize..h.offset_end() as usize))
             .map(|b| unfold(&String::from_utf8_lossy(b)))
             .filter(|v| !v.is_empty())
     };

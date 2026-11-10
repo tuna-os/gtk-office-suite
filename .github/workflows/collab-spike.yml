@@ -294,7 +294,10 @@ jobs:
         env:
           DCP_SKIP_COLLABORA: '1'
         run: |
-          cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          # One test thread: with several, a test's SKIPPED line (stderr) and
+          # libtest's "test … ok" (stdout) can land on one line, and the
+          # count below came out 3 on a run where all four skipped (#2086).
+          cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/skip.log"
           test "$(grep -c 'SKIPPED collabora_e2e' "$RUNNER_TEMP/skip.log")" -eq 4
 
   interop:
