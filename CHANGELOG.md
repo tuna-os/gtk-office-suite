@@ -29,6 +29,7 @@
 - Links on slide text to a web or mail address survive opening and saving, in PowerPoint and ODF files and in table cells. They used to be dropped on save, with a warning. Jumps to another slide, click actions and links on a whole shape still warn before a save drops them (#1998).
 
 ### Infrastructure
+- Lifafa, the email client, is now built and tested in CI (in a Fedora 43 container, since it needs libadwaita 1.7 and WebKitGTK 6.0), and its lockfile has its own RustSec gate, which also runs daily. Its lock moves to patched rustls-webpki, webpki-roots, event-listener and pulldown-cmark, and off two yanked crates (#1986).
 - Fuzzing now covers the collaboration byte paths as well as the document importers: the sidecar protocol codec, dcp-core's update ingest and its package check, each in the nightly smoke run.
 ### Decks
 - A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
