@@ -92,7 +92,7 @@ dirs = "5"
 # OAuth: PKCE S256 (RFC 7636) needs SHA-256 + base64url, and every token and
 # CSP nonce comes from the OS CSPRNG. All three are already in the dependency
 # graph (keyring, the mail stack, ring), so naming them here adds no new downloads.
-sha2 = "0.10"
+sha2 = "0.11"
 base64 = "0.23"
 getrandom = "0.2"
 
