@@ -34,6 +34,57 @@ pub fn pixel_size(b: &[u8]) -> Option<(u32, u32)> {
     None
 }
 
+/// The extension and media type a saved picture part gets, for the file
+/// at `path`: from its extension, and for an extension nobody recognises
+/// (or none) from the first bytes of the file. A file that says nothing
+/// either way is labelled PNG rather than refusing the save, since the
+/// alternative is losing the deck. Both writers name parts with this, so
+/// a JPEG is never stored as a `.png` part (#1984).
+pub fn media_type(path: &str) -> (&'static str, &'static str) {
+    media_type_for_extension(path)
+        .or_else(|| {
+            use std::io::Read;
+            let mut head = [0u8; 16];
+            let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).ok()?;
+            media_type_for_bytes(&head[..n])
+        })
+        .unwrap_or(("png", "image/png"))
+}
+
+fn media_type_for_extension(path: &str) -> Option<(&'static str, &'static str)> {
+    let ext = std::path::Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => ("png", "image/png"),
+        "jpg" | "jpeg" => ("jpg", "image/jpeg"),
+        "gif" => ("gif", "image/gif"),
+        "svg" => ("svg", "image/svg+xml"),
+        "webp" => ("webp", "image/webp"),
+        "bmp" => ("bmp", "image/bmp"),
+        "tif" | "tiff" => ("tiff", "image/tiff"),
+        _ => return None,
+    })
+}
+
+/// The format a file's first bytes announce, for the formats above
+/// whose files start with a signature (SVG, being text, does not).
+fn media_type_for_bytes(b: &[u8]) -> Option<(&'static str, &'static str)> {
+    Some(if b.starts_with(b"\x89PNG\r\n\x1a\n") {
+        ("png", "image/png")
+    } else if b.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        ("jpg", "image/jpeg")
+    } else if b.starts_with(b"GIF87a") || b.starts_with(b"GIF89a") {
+        ("gif", "image/gif")
+    } else if b.starts_with(b"RIFF") && b.get(8..12) == Some(b"WEBP") {
+        ("webp", "image/webp")
+    } else if b.starts_with(b"BM") {
+        ("bmp", "image/bmp")
+    } else if b.starts_with(b"II*\0") || b.starts_with(b"MM\0*") {
+        ("tiff", "image/tiff")
+    } else {
+        return None;
+    })
+}
+
 /// The natural size of the picture at `path`, in points at 96 dpi.
 pub fn natural_size_pt(path: &str) -> Option<(f64, f64)> {
     let mut head = vec![0u8; 64 * 1024];
