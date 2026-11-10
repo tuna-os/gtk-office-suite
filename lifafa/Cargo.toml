@@ -63,7 +63,7 @@ zeroize = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "io-std"] }
 futures = "0.3"
 # Held at 0.10: 0.12 reshaped imap-proto's types the IMAP worker uses (#1986).
-async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
+async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
 async-native-tls = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
 mail-parser = "0.11"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
