@@ -50,3 +50,23 @@ fn the_command_parses_and_plans_with_the_placeholders_filled() {
     assert_eq!((args.size, args.page), (128, 1));
     assert_eq!(key("TryExec"), "suite-convert");
 }
+
+/// Flatpak exports `share/thumbnailers` from the app that ships it, so exactly
+/// one manifest installs the binary and the entry: Letters. Three apps
+/// installing the same file would clash on the host.
+#[test]
+fn exactly_the_letters_manifest_ships_the_binary_and_the_entry() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../flatpak");
+    let mut shippers = Vec::new();
+    for app in ["letters", "tables", "decks"] {
+        let text = std::fs::read_to_string(root.join(format!("org.tunaos.{app}.json"))).unwrap();
+        let _: serde_json::Value = serde_json::from_str(&text).expect("valid json");
+        let ships_entry = text.contains("share/thumbnailers/org.tunaos.suite.thumbnailer");
+        let ships_binary = text.contains("/app/bin/suite-convert") && text.contains("-p suite-convert");
+        assert_eq!(ships_entry, ships_binary, "{app} ships the entry without the binary or the reverse");
+        if ships_entry {
+            shippers.push(app);
+        }
+    }
+    assert_eq!(shippers, ["letters"]);
+}
