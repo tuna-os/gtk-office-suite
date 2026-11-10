@@ -251,6 +251,21 @@ mod imp {
                         }
                     })
                     .build(),
+                // `share-file(path, room)`: show the composer's confirmation for
+                // sending a file in a room, for "Share to Room…" in the other suite
+                // apps. An empty `room` means the room that is open.
+                gio::ActionEntry::builder("share-file")
+                    .parameter_type(Some(&<(String, String)>::static_variant_type()))
+                    .activate(|obj: &super::Application, _, variant| {
+                        let Some((path, room)) = variant.and_then(glib::Variant::get::<(String, String)>)
+                        else {
+                            error!("Activated `app.share-file` without a (path, room) pair");
+                            return;
+                        };
+
+                        obj.imp().share_file(&path, &room);
+                    })
+                    .build(),
                 // `start-call(target)`: show the call view of a room, for "call from a
                 // document" in the other suite apps.
                 gio::ActionEntry::builder("start-call")
@@ -387,6 +402,50 @@ mod imp {
             ));
 
             dialog.present(Some(&self.present_main_window()));
+        }
+
+        /// Share the file at `path` in `room` (the open room when empty): the
+        /// room is shown and the composer asks the person to confirm sending it.
+        fn share_file(&self, path: &str, room: &str) {
+            let window = self.present_main_window();
+
+            let request = match crate::hand_off::ShareRequest::parse(path, room) {
+                Ok(request) => request,
+                Err(error) => {
+                    warn!("Cannot share `{path}`: {error}");
+                    toast!(window, gettext("Cannot share this file"));
+                    return;
+                }
+            };
+
+            if !request.path.is_file() {
+                warn!("Cannot share `{path}`: it is not a file");
+                toast!(window, gettext("Cannot share this file"));
+                return;
+            }
+
+            let session_view = window.session_view().clone();
+
+            if let Some(room) = &request.room {
+                let Ok(identifier) = ruma::RoomOrAliasId::parse(room.as_str()) else {
+                    warn!("Cannot share in `{room}`: not a room ID or alias");
+                    toast!(window, gettext("Not a Matrix room"));
+                    return;
+                };
+
+                if !session_view.select_room_if_exists(&identifier) {
+                    warn!("Cannot share in `{room}`: the room is not in this account");
+                    toast!(window, gettext("Room not found"));
+                    return;
+                }
+            }
+
+            let file = gio::File::for_path(&request.path);
+            spawn!(async move {
+                if !session_view.send_file(file).await {
+                    toast!(window, gettext("Open a room to share the file in"));
+                }
+            });
         }
 
         /// Process the given URI.

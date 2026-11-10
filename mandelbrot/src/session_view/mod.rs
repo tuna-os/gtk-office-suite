@@ -1,5 +1,5 @@
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gdk, glib, glib::clone};
+use gtk::{gdk, gio, glib, glib::clone};
 use ruma::{OwnedEventId, OwnedUserId, RoomId, RoomOrAliasId};
 use tracing::{error, warn};
 
@@ -618,6 +618,11 @@ mod imp {
             self.content.handle_paste_action();
         }
 
+        /// Send the given file in the room being shown, if a room is.
+        pub(super) async fn send_file(&self, file: gio::File) -> bool {
+            self.content.send_file(file).await
+        }
+
         /// Show the given media event in the media viewer.
         pub(super) fn show_media_viewer(
             &self,
@@ -729,6 +734,13 @@ impl SessionView {
     /// Handle when the paste action was activated.
     pub(crate) fn handle_paste_action(&self) {
         self.imp().handle_paste_action();
+    }
+
+    /// Send the given file in the room being shown, if a room is.
+    ///
+    /// Returns `false` if no room is shown.
+    pub(crate) async fn send_file(&self, file: gio::File) -> bool {
+        self.imp().send_file(file).await
     }
 
     /// Show the given media event in the media viewer.
