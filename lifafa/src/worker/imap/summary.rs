@@ -250,7 +250,7 @@ fn header_fields(raw: &[u8]) -> Vec<(String, String)> {
 
 /// The headers a fetch that asked for [`REFS_FETCH_ITEM`] brought back.
 pub(super) fn fetched_fields(fetch: &Fetch) -> Vec<(String, String)> {
-    use async_imap::imap_proto::types::{MessageSection, SectionPath};
+    use async_imap::imap_proto::{MessageSection, SectionPath};
     fetch
         .section(&SectionPath::Full(MessageSection::Header))
         .map(header_fields)
@@ -282,7 +282,7 @@ fn importance_of(fetch: &Fetch) -> crate::models::Importance {
 /// `HEADER.FIELDS (MESSAGE-ID)`, normalized like the ENVELOPE ids so it
 /// compares equal to the ids the app stores.
 pub(super) fn message_id_of(fetch: &Fetch) -> String {
-    use async_imap::imap_proto::types::{MessageSection, SectionPath};
+    use async_imap::imap_proto::{MessageSection, SectionPath};
     let Some(raw) = fetch.section(&SectionPath::Full(MessageSection::Header)) else {
         return String::new();
     };
@@ -297,7 +297,7 @@ pub(super) fn message_id_of(fetch: &Fetch) -> String {
 }
 
 /// Join an envelope address list into "a@x.com, b@y.com" (emails only).
-fn address_list(addrs: Option<&Vec<async_imap::imap_proto::types::Address>>) -> String {
+fn address_list(addrs: Option<&Vec<async_imap::imap_proto::Address>>) -> String {
     addrs
         .map(|v| {
             v.iter()
@@ -309,7 +309,7 @@ fn address_list(addrs: Option<&Vec<async_imap::imap_proto::types::Address>>) -> 
         .unwrap_or_default()
 }
 
-fn address_parts(addr: &async_imap::imap_proto::types::Address) -> (String, String) {
+fn address_parts(addr: &async_imap::imap_proto::Address) -> (String, String) {
     let mailbox = addr
         .mailbox
         .as_deref()
@@ -358,7 +358,7 @@ mod tests {
         use async_imap::imap_proto::{AttributeValue, Response};
         let line = b"* 1 FETCH (ENVELOPE (NIL \"S\" ((\"\\\"Sender Name\\\"\" NIL \"some\" \"mail.tld\")) \
     NIL NIL NIL NIL NIL NIL NIL))\r\n";
-        let (_, resp) = async_imap::imap_proto::parser::parse_response(line).unwrap();
+        let (_, resp) = async_imap::imap_proto::Response::parse(line).unwrap();
         let Response::Fetch(_, attrs) = resp else {
             panic!("not a FETCH")
         };

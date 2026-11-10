@@ -10,18 +10,18 @@ use crate::worker::render::attachments::{mime_extension, INLINE_ATTACHMENT_MIN};
 /// misses them. Any non-text part therefore counts, except a small one carrying a
 /// Content-ID — see [`INLINE_ATTACHMENT_MIN`].
 pub(in crate::worker) fn structure_has_attachment(
-    bs: &async_imap::imap_proto::types::BodyStructure,
+    bs: &async_imap::imap_proto::BodyStructure,
 ) -> bool {
-    use async_imap::imap_proto::types::{BodyStructure as Bs, ContentEncoding};
+    use async_imap::imap_proto::{BodyStructure as Bs, ContentEncoding};
 
-    let is_attachment = |common: &async_imap::imap_proto::types::BodyContentCommon| {
+    let is_attachment = |common: &async_imap::imap_proto::BodyContentCommon| {
         common
             .disposition
             .as_ref()
             .is_some_and(|d| d.ty.eq_ignore_ascii_case("attachment"))
     };
     // BODYSTRUCTURE reports the *encoded* size; base64 inflates by 4/3.
-    let decoded_size = |other: &async_imap::imap_proto::types::BodyContentSinglePart| {
+    let decoded_size = |other: &async_imap::imap_proto::BodyContentSinglePart| {
         let octets = other.octets as usize;
         match other.transfer_encoding {
             ContentEncoding::Base64 => octets / 4 * 3,
@@ -47,7 +47,7 @@ pub(in crate::worker) fn structure_has_attachment(
 
 /// Whether a BODYSTRUCTURE part is a read receipt's report (#520), which
 /// the reader keeps out of the attachments.
-fn is_receipt_report(common: &async_imap::imap_proto::types::BodyContentCommon) -> bool {
+fn is_receipt_report(common: &async_imap::imap_proto::BodyContentCommon) -> bool {
     common.ty.ty.eq_ignore_ascii_case("message")
         && common
             .ty
@@ -56,7 +56,7 @@ fn is_receipt_report(common: &async_imap::imap_proto::types::BodyContentCommon) 
 }
 
 /// Whether a BODYSTRUCTURE part is a `text/calendar` one (#223).
-fn is_calendar(common: &async_imap::imap_proto::types::BodyContentCommon) -> bool {
+fn is_calendar(common: &async_imap::imap_proto::BodyContentCommon) -> bool {
     common.ty.ty.eq_ignore_ascii_case("text") && common.ty.subtype.eq_ignore_ascii_case("calendar")
 }
 
@@ -69,12 +69,12 @@ fn is_calendar(common: &async_imap::imap_proto::types::BodyContentCommon) -> boo
 /// deliberately identical so a message the list gives a paperclip to is a
 /// message the gallery lists parts for.
 pub(super) fn structure_attachments(
-    bs: &async_imap::imap_proto::types::BodyStructure,
+    bs: &async_imap::imap_proto::BodyStructure,
 ) -> Vec<crate::models::AttachmentMeta> {
-    use async_imap::imap_proto::types::{BodyStructure as Bs, ContentEncoding};
+    use async_imap::imap_proto::{BodyStructure as Bs, ContentEncoding};
 
     /// A parameter's value, matched case-insensitively as RFC 2045 requires.
-    fn param(params: &async_imap::imap_proto::types::BodyParams, key: &str) -> Option<String> {
+    fn param(params: &async_imap::imap_proto::BodyParams, key: &str) -> Option<String> {
         params.as_ref()?.iter().find_map(|(k, v)| {
             k.eq_ignore_ascii_case(key)
                 .then(|| decode_header(v.as_bytes()))
@@ -165,7 +165,7 @@ pub(super) fn structure_attachments(
 mod attachment_scan_tests {
     use std::borrow::Cow;
 
-    use async_imap::imap_proto::types::{
+    use async_imap::imap_proto::{
         BodyContentCommon, BodyContentSinglePart, BodyStructure, ContentDisposition,
         ContentEncoding, ContentType,
     };
@@ -462,9 +462,9 @@ mod attachment_scan_tests {
 
     /// Parse a real server BODYSTRUCTURE response into the structure our IMAP
     /// summary path sees.
-    fn bodystructure(raw: &str) -> async_imap::imap_proto::types::BodyStructure<'_> {
-        use async_imap::imap_proto::{parser::parse_response, AttributeValue, Response};
-        let (_, resp) = parse_response(raw.as_bytes()).expect("parses");
+    fn bodystructure(raw: &str) -> async_imap::imap_proto::BodyStructure<'_> {
+        use async_imap::imap_proto::{AttributeValue, Response};
+        let (_, resp) = Response::parse(raw.as_bytes()).expect("parses");
         match resp {
             Response::Fetch(_, attrs) => attrs
                 .into_iter()

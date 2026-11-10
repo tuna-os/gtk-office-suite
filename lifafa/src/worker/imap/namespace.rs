@@ -208,7 +208,7 @@ async fn ask_namespace<T: Wire>(session: &mut Over<T>) -> Option<Option<(String,
     let answered = match session.run_command(cmd).await {
         Ok(id) => loop {
             match session.read_response().await {
-                Some(Ok(reply)) => match reply.parsed() {
+                Ok(Some(reply)) => match reply.parsed() {
                     Response::Done { tag, status, .. } if *tag == id => {
                         let ok = matches!(status, Status::Ok);
                         wired::<()>(
@@ -223,11 +223,11 @@ async fn ask_namespace<T: Wire>(session: &mut Over<T>) -> Option<Option<(String,
                     }
                     _ => {}
                 },
-                Some(Err(e)) => {
+                Err(e) => {
                     wired_err(cmd, &async_imap::error::Error::Io(e));
                     break false;
                 }
-                None => {
+                Ok(None) => {
                     wired_err(cmd, &async_imap::error::Error::ConnectionLost);
                     break false;
                 }

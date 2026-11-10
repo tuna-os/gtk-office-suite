@@ -27,7 +27,7 @@ type RetriedPreviews = std::collections::HashMap<(u32, u32, u32), String>;
 /// The preview snippet from a fetch that asked for `BODY.PEEK[1]` together with
 /// `BODY.PEEK[1.MIME]`, the part's own headers, which say what the bytes are.
 pub(super) fn preview_of(fetch: &Fetch) -> String {
-    use async_imap::imap_proto::types::SectionPath;
+    use async_imap::imap_proto::SectionPath;
     let ctype = section_content_type(fetch);
     // An image or a document as the first part — photo mail, a forwarded
     // file — has no text to show. An empty preview here lets the BODY[TEXT]
@@ -64,7 +64,7 @@ pub(super) fn preview_of(fetch: &Fetch) -> String {
 /// `BODY[1.MIME]` header block that rides along with the preview fetch (#159).
 /// `None` when the server sent no MIME headers.
 fn section_content_type(fetch: &Fetch) -> Option<String> {
-    use async_imap::imap_proto::types::{MessageSection, SectionPath};
+    use async_imap::imap_proto::{MessageSection, SectionPath};
     let mime = fetch.section(&SectionPath::Part(vec![1], Some(MessageSection::Mime)))?;
     mime_header(&String::from_utf8_lossy(mime), "content-type")
 }
@@ -81,7 +81,7 @@ fn section_charset(fetch: &Fetch) -> Option<String> {
 /// block the charset comes from. Reading it beats guessing: a part can be
 /// quoted-printable and still be spelled entirely in base64's alphabet.
 fn section_encoding(fetch: &Fetch) -> Option<String> {
-    use async_imap::imap_proto::types::{MessageSection, SectionPath};
+    use async_imap::imap_proto::{MessageSection, SectionPath};
     let mime = fetch.section(&SectionPath::Part(vec![1], Some(MessageSection::Mime)))?;
     mime_header(&String::from_utf8_lossy(mime), "content-transfer-encoding")
 }
@@ -251,7 +251,7 @@ async fn retry_missing_previews_now(
     match refetched {
         Err(e) => tracing::warn!("previews: BODY[TEXT] retry failed: {e}"),
         Ok(fetches) => {
-            use async_imap::imap_proto::types::{MessageSection, SectionPath};
+            use async_imap::imap_proto::{MessageSection, SectionPath};
             for f in &fetches {
                 // For a multipart, `text_in_multipart` reads each part's own
                 // headers and these go unused; for a single-part message,
