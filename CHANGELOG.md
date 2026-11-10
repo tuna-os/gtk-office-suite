@@ -19,6 +19,7 @@
 
 ### Decks
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
+- Links on slide text to a web or mail address survive opening and saving, in PowerPoint and ODF files and in table cells. They used to be dropped on save, with a warning. Jumps to another slide, click actions and links on a whole shape still warn before a save drops them (#1998).
 
 ### Decks
 - A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).

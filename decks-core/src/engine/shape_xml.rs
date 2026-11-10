@@ -626,7 +626,9 @@ pub(crate) struct FrameTable {
     pub table: super::table::TableData,
 }
 
-fn runs_of(tx_body: &Node) -> Vec<suite_common_core::document::Run> {
+/// A table cell's runs. `links` are the part's external hyperlink
+/// relationships, for an `a:hlinkClick` on a run (#1998).
+fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>) -> Vec<suite_common_core::document::Run> {
     use suite_common_core::document::{Run, RunStyle};
     let mut runs = Vec::new();
     for (pi, p) in tx_body.children_named("a:p").enumerate() {
@@ -650,6 +652,13 @@ fn runs_of(tx_body: &Node) -> Vec<suite_common_core::document::Run> {
                 if let Some(sz) = rpr.attr("sz").and_then(|v| v.parse::<u32>().ok()) {
                     style.font_size_hp = Some((sz / 50) as u16);
                 }
+                style.link = rpr
+                    .child("a:hlinkClick")
+                    .filter(|h| h.attr("action").is_none_or(str::is_empty))
+                    .and_then(|h| h.attr("r:id"))
+                    .and_then(|id| links.get(id))
+                    .filter(|t| !t.is_empty())
+                    .cloned();
             }
             let text: String = r.children_named("a:t").map(|t| t.text.as_str()).collect();
             if !text.is_empty() {
@@ -661,7 +670,8 @@ fn runs_of(tx_body: &Node) -> Vec<suite_common_core::document::Run> {
 }
 
 /// Every table in a part's graphic frames.
-pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
+/// `links` are the part's external hyperlink relationships, by id.
+pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::HashMap<String, String>) -> Vec<FrameTable> {
     use super::table::{TableCell, TableData};
     let root = parse_tree(xml);
     let mut frames = Vec::new();
@@ -692,7 +702,7 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
                             let span = |k: &str| tc.attr(k).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1000);
                             let set = |k: &str| matches!(tc.attr(k), Some("1" | "true"));
                             TableCell {
-                                runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
+                                runs: tc.child("a:txBody").map(|b| runs_of(b, links)).unwrap_or_default(),
                                 fill: tc
                                     .child("a:tcPr")
                                     .and_then(|p| p.child("a:solidFill"))
@@ -878,7 +888,7 @@ mod tests {
             <a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{616DA210-FB5B-4158-B5E0-FEB733F419BA}</a:tableStyleId></a:tblPr>
             <a:tblGrid><a:gridCol w="100"/></a:tblGrid><a:tr h="50"><a:tc><a:txBody><a:p><a:r><a:t>Year</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
             </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let tables = frame_tables(xml, &Theme::default());
+        let tables = frame_tables(xml, &Theme::default(), &Default::default());
         let t = &tables[0].table;
         assert_eq!(t.style_id.as_deref(), Some("{616DA210-FB5B-4158-B5E0-FEB733F419BA}"));
         assert_eq!(t.family(), super::super::table::StyleFamily::LightStyle3);
@@ -930,7 +940,7 @@ mod tests {
           <a:tr h="914400"><a:tc><a:txBody><a:p><a:r><a:rPr b="1"/><a:t>Head </a:t></a:r><a:r><a:t>one</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>
             <a:tc><a:txBody><a:p><a:r><a:t>R1C2</a:t></a:r></a:p></a:txBody><a:tcPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:tcPr></a:tc></a:tr>
           </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let t = frame_tables(xml, &theme(THEME_2007));
+        let t = frame_tables(xml, &theme(THEME_2007), &Default::default());
         assert_eq!(t.len(), 1);
         let f = &t[0];
         assert_eq!((f.index, f.x, f.w), (0, 914400.0, 7315200.0));
