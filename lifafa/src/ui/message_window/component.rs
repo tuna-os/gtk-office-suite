@@ -14,47 +14,61 @@ use crate::ui::reader_swap::ReaderSwap;
 use adw::prelude::*;
 use relm4::prelude::*;
 
-#[relm4::component(pub(crate))]
+/// The widgets `init` hands back: the two it needs again after the window
+/// is built (the toolbar's header bar and the overlay the reader sits in).
+/// Nothing in the window follows the model after it is built, so there is no
+/// `update_view`; this is what `#[relm4::component]`'s `view!` block used to
+/// generate.
+pub(crate) struct MessageWindowWidgets {
+    header: adw::HeaderBar,
+    content: gtk::Overlay,
+}
+
+fn build_widgets(
+    root: &adw::Window,
+    sender: &ComponentSender<MessageWindow>,
+    model: &MessageWindow,
+) -> MessageWindowWidgets {
+    root.set_title(Some(&title_text(&model.msg)));
+    root.set_default_width(720);
+    root.set_default_height(820);
+    let closed = sender.clone();
+    root.connect_close_request(move |_| {
+        let _ = closed.output(MessageWindowOutput::Closed);
+        gtk::glib::Propagation::Proceed
+    });
+
+    // The main window's reader toolbar: its buttons are packed in `init`,
+    // in the order Settings gives them.
+    let header = adw::HeaderBar::new();
+    header.add_css_class("flat");
+    header.add_css_class("reader-toolbar");
+    header.set_title_widget(Some(&gtk::Label::new(Some(""))));
+
+    // The drawer holds the reader above its own footer; the lightbox covers
+    // both.
+    let content = gtk::Overlay::new();
+    content.set_child(Some(model.swap.host()));
+    content.add_overlay(model.lightbox.widget());
+
+    let toolbar = adw::ToolbarView::new();
+    toolbar.add_top_bar(&header);
+    toolbar.set_content(Some(&content));
+    root.set_content(Some(&toolbar));
+
+    MessageWindowWidgets { header, content }
+}
+
 impl Component for MessageWindow {
     type Init = MessageWindowInit;
     type Input = MessageWindowInput;
     type Output = MessageWindowOutput;
     type CommandOutput = ();
+    type Root = adw::Window;
+    type Widgets = MessageWindowWidgets;
 
-    view! {
-        adw::Window {
-            set_title: Some(&title_text(&model.msg)),
-            set_default_width: 720,
-            set_default_height: 820,
-
-            connect_close_request[sender] => move |_| {
-                let _ = sender.output(MessageWindowOutput::Closed);
-                gtk::glib::Propagation::Proceed
-            },
-
-            #[wrap(Some)]
-            set_content = &adw::ToolbarView {
-                // The main window's reader toolbar: its buttons are packed
-                // in `init`, in the order Settings gives them.
-                #[name = "header"]
-                add_top_bar = &adw::HeaderBar {
-                    add_css_class: "flat",
-                    add_css_class: "reader-toolbar",
-                    #[wrap(Some)]
-                    set_title_widget = &gtk::Label {
-                        set_label: "",
-                    },
-                },
-                // The drawer holds the reader above its own footer; the
-                // lightbox covers both.
-                #[wrap(Some)]
-                #[name = "content"]
-                set_content = &gtk::Overlay {
-                    set_child: Some(model.swap.host()),
-                    add_overlay: model.lightbox.widget(),
-                },
-            },
-        }
+    fn init_root() -> Self::Root {
+        adw::Window::new()
     }
 
     fn init(
@@ -142,7 +156,7 @@ impl Component for MessageWindow {
             gmail_keys: init.gmail_keys.clone(),
         };
 
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model);
         model.bar = build_toolbar(&widgets.header, &sender);
         model.content = widgets.content.clone();
         {
