@@ -1,12 +1,12 @@
 //! The settings window's category pages, one builder each.
 //!
-//! Each page is a standalone `relm4::view!` run from `Preferences::init`
+//! Each page is built by plain gtk-rs calls from `Preferences::init`
 //! before the window's own view, which places the page in its stack with
-//! `#[local_ref]`; the rows the window reaches later are kept in the page's
+//! `set_child`; the rows the window reaches later are kept in the page's
 //! struct (`widgets.general.fetch_row`). A standalone view has no update
 //! step, so a property the window's view once marked `#[watch]` is set here
 //! when the page is built and again by the page's `update_view`, which the
-//! component's `pre_view` calls on every update, in the order the single
+//! component's `update_view` calls on every update, in the order the single
 //! view had them.
 
 mod appearance;

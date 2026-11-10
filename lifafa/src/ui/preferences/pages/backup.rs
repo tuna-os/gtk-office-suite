@@ -13,35 +13,36 @@ pub(in crate::ui::preferences) struct BackupPage {
 
 impl BackupPage {
     pub(in crate::ui::preferences) fn build(sender: &ViewSender) -> Self {
-        crate::relm::view! {
-            page = adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Backup"),
-                    set_description: Some(
+        let page = adw::PreferencesPage::default();
+        let preferences_group_1 = adw::PreferencesGroup::default();
+        preferences_group_1.set_title(&i18n("Backup"));
+        preferences_group_1.set_description(Some(
                         i18n("Accounts, preferences, filters, tags and layout, in one file. Passwords and OpenPGP keys are not included.").as_str()
-                    ),
-
-                    adw::ActionRow {
-                        set_title: &i18n("Export settings"),
-                        set_activatable: true,
-                        connect_activated => PrefInput::ExportSettings,
-                        add_suffix = &gtk::Image {
-                            set_icon_name: Some("go-next-symbolic"),
-                        },
-                    },
-
-                    adw::ActionRow {
-                        set_title: &i18n("Import settings"),
-                        set_subtitle: &i18n("Replaces everything in place. Don't remove accounts first: that deletes their passwords."),
-                        set_activatable: true,
-                        connect_activated => PrefInput::ImportSettings,
-                        add_suffix = &gtk::Image {
-                            set_icon_name: Some("go-next-symbolic"),
-                        },
-                    },
-                },
-            }
+                    ));
+        let action_row_2 = adw::ActionRow::default();
+        action_row_2.set_title(&i18n("Export settings"));
+        action_row_2.set_activatable(true);
+        {
+            let sender = sender.clone();
+            action_row_2.connect_activated(move |_| sender.input(PrefInput::ExportSettings));
         }
+        let image_3 = gtk::Image::default();
+        image_3.set_icon_name(Some("go-next-symbolic"));
+        action_row_2.add_suffix(&image_3);
+        preferences_group_1.add(&action_row_2);
+        let action_row_4 = adw::ActionRow::default();
+        action_row_4.set_title(&i18n("Import settings"));
+        action_row_4.set_subtitle(&i18n("Replaces everything in place. Don't remove accounts first: that deletes their passwords."));
+        action_row_4.set_activatable(true);
+        {
+            let sender = sender.clone();
+            action_row_4.connect_activated(move |_| sender.input(PrefInput::ImportSettings));
+        }
+        let image_5 = gtk::Image::default();
+        image_5.set_icon_name(Some("go-next-symbolic"));
+        action_row_4.add_suffix(&image_5);
+        preferences_group_1.add(&action_row_4);
+        page.add(&preferences_group_1);
         Self { page }
     }
 }
