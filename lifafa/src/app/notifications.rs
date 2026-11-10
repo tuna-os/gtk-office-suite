@@ -1,7 +1,7 @@
 //! Desktop notifications for new mail and what their buttons do.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::{Folder, FolderKind, Message};
 use crate::ui::message_list::MessageListInput;
@@ -352,7 +352,7 @@ impl AppModel {
     /// Present (a click on an alert) and the "message ready" alerts'
     /// own present, which raises the composer too.
     fn install_present_actions(&self, sender: &ComponentSender<Self>) {
-        let app = relm4::main_application();
+        let app = crate::relm::main_application();
         let present = gtk::gio::SimpleAction::new(crate::desktop::notify::PRESENT_ACTION, None);
         let win = self.window.clone();
         present.connect_activate(move |_, _| {
@@ -388,7 +388,7 @@ impl AppModel {
         sender: &ComponentSender<Self>,
         ty: &gtk::glib::VariantTy,
     ) {
-        let app = relm4::main_application();
+        let app = crate::relm::main_application();
         let open =
             gtk::gio::SimpleAction::new(crate::desktop::notify::OPEN_MESSAGE_ACTION, Some(ty));
         let win = self.window.clone();
@@ -414,7 +414,7 @@ impl AppModel {
         sender: &ComponentSender<Self>,
         ty: &gtk::glib::VariantTy,
     ) {
-        let app = relm4::main_application();
+        let app = crate::relm::main_application();
         // Reply and Forward (#244) need the window: the message opens
         // as a click on the notification would open it, and the
         // composer follows once its body is in.
@@ -468,7 +468,7 @@ impl AppModel {
 
 /// The alert buttons that act on the message where it lies.
 fn install_quiet_message_actions(sender: &ComponentSender<AppModel>, ty: &gtk::glib::VariantTy) {
-    let app = relm4::main_application();
+    let app = crate::relm::main_application();
     // Notification buttons (#38): act on the message where it lies,
     // without presenting the window — that's their point.
     for (name, mk) in [

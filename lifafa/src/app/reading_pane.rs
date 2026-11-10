@@ -4,7 +4,7 @@
 use std::cell::Cell;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::Message;
@@ -33,25 +33,25 @@ pub(crate) struct ListFold {
 }
 
 impl ListFold {
-    pub(super) fn resized(&self, width: i32, sender: &relm4::Sender<AppMsg>) {
+    pub(super) fn resized(&self, width: i32, sender: &crate::relm::Sender<AppMsg>) {
         self.width.set(width);
         self.check(sender);
     }
 
-    pub(super) fn set_needs(&self, full: i32, compact: i32, sender: &relm4::Sender<AppMsg>) {
+    pub(super) fn set_needs(&self, full: i32, compact: i32, sender: &crate::relm::Sender<AppMsg>) {
         self.full.set(full);
         self.compact.set(compact);
         self.check(sender);
     }
 
-    pub(super) fn set_active(&self, on: bool, sender: &relm4::Sender<AppMsg>) {
+    pub(super) fn set_active(&self, on: bool, sender: &crate::relm::Sender<AppMsg>) {
         self.active.set(on);
         self.told.set(None);
         self.check(sender);
     }
 
     /// As the reader's breakpoints do: the compact one applies alone.
-    fn check(&self, sender: &relm4::Sender<AppMsg>) {
+    fn check(&self, sender: &crate::relm::Sender<AppMsg>) {
         let width = self.width.get();
         if !self.active.get() || width <= 0 {
             return;

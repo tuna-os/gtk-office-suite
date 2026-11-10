@@ -9,7 +9,7 @@ use crate::models::Message;
 use crate::ui::column_bin::ColumnBin;
 use crate::ui::context_menu::MenuEntry;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;

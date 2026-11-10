@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::{ContactDetails, Labeled, Member};
 use crate::i18n::i18n;
@@ -353,7 +353,7 @@ pub(super) fn is_member(g: &ContactDetails, m: &Member, p: &ContactDetails) -> b
 /// line scrolled to.
 pub(super) fn row_factory(
     rows: &Rc<RefCell<HashMap<usize, Rc<ListRow>>>>,
-    input: &relm4::Sender<ContactsPageInput>,
+    input: &crate::relm::Sender<ContactsPageInput>,
     drag: &Rc<RefCell<DragKeys>>,
 ) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();

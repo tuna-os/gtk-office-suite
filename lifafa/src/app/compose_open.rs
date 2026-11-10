@@ -1,7 +1,7 @@
 //! Opening a composer on a draft, a reply, a forward or an edited copy,
 //! fetching the original's body first when it is not cached.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::{FolderKind, Message};

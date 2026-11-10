@@ -3,7 +3,7 @@
 //! calendar application as an `.ics` file where EDS has none.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::calendar::{Item, ItemKind, Source};
 use crate::i18n::i18n_f;
@@ -146,7 +146,7 @@ impl AppModel {
             last_alarms: crate::config::load_event_alarms(),
         };
         // A pop-out's menu opens the dialog over the pop-out.
-        let parent = relm4::main_application()
+        let parent = crate::relm::main_application()
             .active_window()
             .unwrap_or_else(|| self.window.clone().upcast());
         let input = sender.input_sender().clone();

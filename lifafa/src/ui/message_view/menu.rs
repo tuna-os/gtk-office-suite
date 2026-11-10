@@ -5,7 +5,7 @@ use super::links::{decode_data_uri, default_image_name, remote_image_name};
 use super::types::MessageViewInput;
 use crate::i18n::i18n;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// What a right-click in the reader landed on besides the message: a link,
 /// a picture, selected text. Each adds its own entries at the top of the
@@ -23,10 +23,10 @@ pub(crate) struct MenuHit {
     pub(crate) translate: Option<TranslateEntry>,
     /// Expand All and Collapse All (#326), in a conversation: whether any
     /// message is folded, whether any is open, and the reader to tell.
-    pub(crate) folds: Option<(bool, bool, relm4::Sender<MessageViewInput>)>,
+    pub(crate) folds: Option<(bool, bool, crate::relm::Sender<MessageViewInput>)>,
     /// The sender's own fonts and colors (#56), while the reader's are on:
     /// whether this message shows the sender's, and the reader to tell.
-    pub(crate) sender_style: Option<(bool, relm4::Sender<MessageViewInput>)>,
+    pub(crate) sender_style: Option<(bool, crate::relm::Sender<MessageViewInput>)>,
 }
 
 /// Translate, Show Original or Show Translation in a message's menu, sent
@@ -34,7 +34,7 @@ pub(crate) struct MenuHit {
 #[derive(Clone)]
 pub(crate) struct TranslateEntry {
     pub(crate) label: String,
-    pub(crate) reader: relm4::Sender<MessageViewInput>,
+    pub(crate) reader: crate::relm::Sender<MessageViewInput>,
 }
 
 impl std::fmt::Debug for TranslateEntry {

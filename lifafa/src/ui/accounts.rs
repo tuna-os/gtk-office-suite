@@ -6,7 +6,7 @@
 //! to set the sidebar order) and a reusable editor form pushed on top.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{
     split_identity, AccountConfig, AliasConfig, NamedSignature, OAuthSettings, Protocol,
@@ -70,9 +70,9 @@ pub(crate) struct AccountsWindow {
     /// Special Folders combos — pushed by the app, keyed by account email.
     folders_by_email: std::collections::HashMap<String, Vec<(String, String)>>,
     /// Allowed-senders and blocklist rows (moved here from Settings).
-    senders: relm4::factory::FactoryVecDeque<SenderRow>,
+    senders: crate::relm::factory::FactoryVecDeque<SenderRow>,
     sender_addrs: Vec<String>,
-    blacklist: relm4::factory::FactoryVecDeque<SenderRow>,
+    blacklist: crate::relm::factory::FactoryVecDeque<SenderRow>,
     blacklist_addrs: Vec<String>,
     /// Filter rules (#47), managed on this tab.
     filter_rules: Vec<crate::config::FilterRule>,

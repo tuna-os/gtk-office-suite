@@ -5,7 +5,7 @@ use super::types::MessageViewInput;
 use super::MessageView;
 use crate::i18n::{i18n, i18n_f};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Ask before vouching for a signing key: the fingerprint to compare, and
 /// Trust or Cancel.

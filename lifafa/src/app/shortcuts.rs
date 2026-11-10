@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;
@@ -506,7 +506,7 @@ impl AppModel {
                     Some((r, input)) => r.controller.emit(input),
                     // Activated without a value, the stateful action toggles.
                     None if keyval == gtk::gdk::Key::a => {
-                        relm4::main_application().activate_action("show-accounts", None)
+                        crate::relm::main_application().activate_action("show-accounts", None)
                     }
                     None => sender.input(AppMsg::OpenConsole),
                 }

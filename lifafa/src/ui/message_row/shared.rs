@@ -8,7 +8,7 @@ use crate::ui::message_list::MessageListInput;
 use adw::prelude::*;
 use gtk::glib;
 use gtk::subclass::prelude::ObjectSubclassIsExt;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -120,7 +120,7 @@ pub(crate) struct RowShared {
     pub(crate) swipe_enabled: Cell<bool>,
     /// How sensitive a trackpad's two-finger swipe is.
     pub(crate) swipe_sensitivity: Cell<f64>,
-    pub(crate) input: relm4::Sender<MessageListInput>,
+    pub(crate) input: crate::relm::Sender<MessageListInput>,
     pub(crate) model: MessageModel,
     pub(crate) selection: gtk::MultiSelection,
     pub(crate) view: glib::WeakRef<gtk::ListView>,
@@ -149,7 +149,7 @@ pub(crate) struct RowShared {
 }
 
 impl RowShared {
-    pub(crate) fn new(input: relm4::Sender<MessageListInput>) -> Rc<Self> {
+    pub(crate) fn new(input: crate::relm::Sender<MessageListInput>) -> Rc<Self> {
         let model = MessageModel::default();
         let selection = gtk::MultiSelection::new(Some(model.clone()));
         let privacy = crate::config::load_privacy();

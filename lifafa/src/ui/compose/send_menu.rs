@@ -2,7 +2,7 @@
 //! receipt (#520) and the message's importance (#563).
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::messages::ComposeInput;
 use super::Compose;

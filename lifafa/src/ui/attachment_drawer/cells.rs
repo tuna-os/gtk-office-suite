@@ -10,7 +10,7 @@ use crate::ui::thumbnails::{
 };
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// Whether an attachment can be shown in the drawer's lightbox: a decodable
 /// image, or a PDF (whose first page renders on demand).

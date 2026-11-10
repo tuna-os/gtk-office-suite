@@ -6,7 +6,7 @@ use super::types::{MessageViewInput, MessageViewOutput};
 use super::MessageView;
 use crate::models::Message;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use webkit6::prelude::WebViewExt;
 
 /// How long a message still being fetched leaves the last one on screen

@@ -1,7 +1,7 @@
 //! Accounts as the interface shows them: names, colors, faces and the
 //! addresses they send from.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{self, AccountConfig};
 use crate::ui::message_list::MessageListInput;

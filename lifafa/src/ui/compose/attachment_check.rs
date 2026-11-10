@@ -12,7 +12,7 @@ use crate::i18n::{i18n, i18n_f};
 use crate::mail::attachment_reminder::{keywords, mentioned, without_signature};
 use crate::ui::rich_editor::SourceKind;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl Compose {
     /// The word of the message's own text (quotes left out) that mentions

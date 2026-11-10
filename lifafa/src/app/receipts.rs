@@ -1,7 +1,7 @@
 //! Read receipts (#520): which requests a reader asks about, sending the
 //! receipt, and remembering the answer.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{self, ReceiptPolicy};
 use crate::i18n::{i18n, i18n_f};

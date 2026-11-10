@@ -2,7 +2,7 @@
 //! them, and deleting.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::{GroupEdit, GroupFormat};
 use crate::i18n::{i18n, i18n_f};
@@ -126,7 +126,7 @@ impl ContactsPage {
     }
 
     pub(super) fn on_import_contacts(&mut self, sender: ComponentSender<Self>) -> Flow {
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let s = sender.clone();
         choose_vcf_files(parent.as_ref(), move |paths| {
             let _ = s.output(ContactsPageOutput::ImportContacts(paths));

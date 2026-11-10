@@ -5,7 +5,7 @@ use super::types::MessageWindowOutput;
 use super::MessageWindow;
 use crate::models::{Attachment, Message};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::ToolbarItem;
 use crate::ui::attachment_io::save_attachment_as;

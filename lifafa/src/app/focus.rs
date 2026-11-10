@@ -1,7 +1,7 @@
 //! Focus Mode: the chrome that slides away, and back.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::ui::message_view::MessageViewInput;

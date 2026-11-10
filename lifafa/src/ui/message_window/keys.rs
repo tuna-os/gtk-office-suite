@@ -6,7 +6,7 @@ use super::MessageWindow;
 use crate::ui::keymap::Shortcut;
 use crate::ui::message_view::MessageViewInput;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 

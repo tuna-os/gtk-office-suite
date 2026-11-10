@@ -13,7 +13,7 @@ use crate::models::DraftOrigin;
 use crate::ui::dialog::alert;
 use crate::worker::OutgoingMessage;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// How often an edited message is saved to Drafts on its own (#340).
 const AUTOSAVE_SECS: u32 = 30;
@@ -84,7 +84,7 @@ fn pgp_send_check(
 pub(super) fn pick_send_time(
     parent: Option<&gtk::Window>,
     current: Option<i64>,
-    sender: relm4::Sender<ComposeInput>,
+    sender: crate::relm::Sender<ComposeInput>,
 ) {
     crate::ui::later::pick_later_time(
         parent,

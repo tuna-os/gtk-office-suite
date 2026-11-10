@@ -9,7 +9,7 @@ use super::types::{MessageListInput, MessageListOutput};
 use super::MessageList;
 use crate::models::Message;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 /// How long typing pauses before the servers are asked (#509): each ask

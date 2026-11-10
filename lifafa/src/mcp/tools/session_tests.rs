@@ -148,7 +148,7 @@ impl Session {
     async fn start(policy: AssistantPolicy, raw: Result<Vec<u8>, String>) -> Session {
         use rmcp::ServiceExt;
         let (ours, theirs) = tokio::net::UnixStream::pair().unwrap();
-        let (app, calls) = relm4::channel::<AppMsg>();
+        let (app, calls) = crate::relm::channel::<AppMsg>();
         let policy = Arc::new(RwLock::new(policy));
         let shared = Arc::new(Shared {
             policy: policy.clone(),

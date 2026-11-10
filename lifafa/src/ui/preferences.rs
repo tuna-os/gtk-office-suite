@@ -4,7 +4,7 @@
 //! own hosted in the stack.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{
     AppTheme, ClockStyle, DateStyle, LauncherBadge, MessageTheme, ReaderToolbar, ToolbarItem,
@@ -131,7 +131,7 @@ pub(crate) struct Preferences {
     /// The split view, to bring the content forward when collapsed.
     split: Option<adw::NavigationSplitView>,
     /// The accounts component, told which of its pages the sidebar chose.
-    accounts_sender: relm4::Sender<crate::ui::accounts::AccountsInput>,
+    accounts_sender: crate::relm::Sender<crate::ui::accounts::AccountsInput>,
     /// The content header bar; hidden while the accounts editor subpage is
     /// open, whose own header takes over.
     host_header: Option<adw::HeaderBar>,

@@ -7,7 +7,7 @@ use crate::models::{Attachment, Message};
 use crate::ui::attachment_drawer::AttachmentDrawerInput;
 use crate::ui::message_list::RowAction;
 use crate::ui::message_view::MessageViewInput;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageWindow {
     pub(super) fn emit_action(&self, action: RowAction, sender: &ComponentSender<Self>) {

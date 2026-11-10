@@ -8,7 +8,7 @@
 
 use self::toolbar::Toolbar;
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{ReaderToolbar, Tag};
 use crate::models::{Attachment, Message};

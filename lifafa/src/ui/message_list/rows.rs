@@ -12,7 +12,7 @@ use crate::models::Message;
 use crate::ui::message_row::{DaySection, RowData, RowMeta, RowShared};
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 /// How many rows a large list puts on screen at once, and adds each time it
@@ -793,7 +793,7 @@ impl MessageList {
     pub(super) fn wire_list(
         list: &gtk::ListView,
         shared: &Rc<RowShared>,
-        input: &relm4::Sender<MessageListInput>,
+        input: &crate::relm::Sender<MessageListInput>,
     ) {
         // Multiple selection: plain click selects one (shown in the reader),
         // Ctrl/Shift extend the selection for bulk actions; double click (or

@@ -202,7 +202,7 @@ pub(crate) struct PrefInit {
     /// The persisted "this window opens to" choice (true = Accounts).
     pub(crate) settings_open_accounts: bool,
     /// The accounts component's inbox, for the sidebar to pick its pages.
-    pub(crate) accounts_sender: relm4::Sender<crate::ui::accounts::AccountsInput>,
+    pub(crate) accounts_sender: crate::relm::Sender<crate::ui::accounts::AccountsInput>,
     /// (name, address) per account and alias, for the OpenPGP page's
     /// key generator.
     pub(crate) identities: Vec<(String, String)>,
@@ -372,7 +372,7 @@ pub(crate) enum PrefInput {
     /// opens; the panel is rebuilt over the current accounts).
     SetAccountsPanel {
         panel: gtk::Widget,
-        sender: relm4::Sender<crate::ui::accounts::AccountsInput>,
+        sender: crate::relm::Sender<crate::ui::accounts::AccountsInput>,
     },
     /// A sidebar category was chosen (#141).
     SelectPage(String),

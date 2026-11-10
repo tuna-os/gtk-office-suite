@@ -2,7 +2,7 @@
 //! tree's actions, and the bulk actions on several contacts.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::{ContactDetails, GroupEdit, Member};
 use crate::i18n::{i18n, ni18n_f};

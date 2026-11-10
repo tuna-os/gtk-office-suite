@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{self, AccountConfig};
 use crate::models::{

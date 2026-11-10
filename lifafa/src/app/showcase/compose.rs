@@ -2,7 +2,7 @@
 //! folders, replies, new messages and forwards, the composer's menus and
 //! formats, handed-in files, the light/dark flip and themes.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::app::{AppModel, AppMsg};
 use crate::config;

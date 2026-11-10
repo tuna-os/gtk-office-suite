@@ -2,7 +2,7 @@
 //! conversation, and the card standing in until the Sent copy arrives.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::models::{Attachment, FolderKind, Message};
 use crate::ui::message_view::{CardAttachment, MessageViewInput};

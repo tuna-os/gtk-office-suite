@@ -10,7 +10,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use tokio::sync::oneshot;
 
 use crate::config::AssistantPolicy;

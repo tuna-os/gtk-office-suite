@@ -12,7 +12,7 @@ use super::MessageList;
 use crate::i18n::i18n;
 use crate::ui::message_row::RowShared;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The list's widgets: the ones `init` and the other modules read back by
 /// field, and the ones that follow the model, which `apply` sets from it at

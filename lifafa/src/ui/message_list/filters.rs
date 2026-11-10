@@ -4,7 +4,7 @@
 use crate::i18n::i18n;
 use crate::models::Message;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// One of the message list's quick filters (#97, #441): with it on, the
 /// list shows only the mail that has the property. Together they narrow.

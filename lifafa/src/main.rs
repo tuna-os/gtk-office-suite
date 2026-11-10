@@ -1,4 +1,4 @@
-//! Hylki — a clean, fast, GNOME-native email client built with Rust + relm4.
+//! Hylki — a clean, fast, GNOME-native email client built with Rust, GTK 4 and libadwaita.
 
 // A binary crate exports nothing, so a bare `pub` only hides how far an item
 // really reaches; `pub(crate)` or narrower says it.
@@ -20,12 +20,16 @@ mod mail;
 mod mcp;
 mod models;
 mod ram_cache;
+// The component runtime, vendored from relm4 0.11 (MIT OR Apache-2.0); see
+// src/relm/LICENSE-NOTICE.md. Third-party code: not held to this crate's lints.
+#[allow(warnings, clippy::all, clippy::pedantic, clippy::cargo)]
+mod relm;
 mod rng;
 mod services;
 mod ui;
 mod worker;
 
-use relm4::RelmApp;
+use crate::relm::RelmApp;
 
 use crate::app::AppModel;
 pub(crate) use crate::desktop::single_instance::primary_instance_running;

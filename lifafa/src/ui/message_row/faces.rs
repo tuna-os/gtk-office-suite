@@ -6,7 +6,7 @@ use super::shared::RowLook;
 use super::RowData;
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 /// A background face lookup's answer, correlated by sender address (a recycled
@@ -256,7 +256,7 @@ impl Row {
     /// this row, which by then may show someone else.
     fn look_up(&self, fut: impl std::future::Future<Output = FaceCmd> + Send + 'static) {
         let weak = self.me.clone();
-        let handle = relm4::spawn(fut);
+        let handle = crate::relm::spawn(fut);
         glib::MainContext::default().spawn_local(async move {
             if let Ok(cmd) = handle.await {
                 if let Some(row) = weak.upgrade() {

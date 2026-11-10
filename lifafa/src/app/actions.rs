@@ -1,7 +1,7 @@
 //! Message actions from the toolbar, the cards and the list rows: star,
 //! archive, delete, spam and bulk actions.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::{FolderKind, Message};

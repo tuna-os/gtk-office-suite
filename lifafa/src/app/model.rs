@@ -2,8 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use relm4::actions::RelmAction;
-use relm4::prelude::*;
+use crate::relm::actions::RelmAction;
+use crate::relm::prelude::*;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::{self, AccountConfig};
@@ -83,7 +83,7 @@ pub(crate) struct AppModel {
     /// the stage.
     pub(super) morph_pending: Option<MorphPending>,
     /// The app's own input, for the morph's steps that answer later.
-    pub(super) self_sender: relm4::Sender<AppMsg>,
+    pub(super) self_sender: crate::relm::Sender<AppMsg>,
     /// The cards standing in for replies sent from here until their copies
     /// are read back from Sent, by (account, id).
     pub(super) provisionals: HashMap<(u32, u32), Provisional>,

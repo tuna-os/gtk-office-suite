@@ -7,7 +7,7 @@ use super::webview::new_webview;
 use super::MessageView;
 use crate::i18n::{i18n, i18n_f};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The reader's widgets: the ones `init` reads back by field, and the ones
 /// that follow the model, which `apply` sets from it at build and after

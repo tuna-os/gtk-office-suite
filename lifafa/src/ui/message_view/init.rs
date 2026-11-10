@@ -11,7 +11,7 @@ use super::menu::{menu_lookup, menu_skipped, MenuHit};
 use super::types::MessageViewInput;
 use super::MessageView;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use webkit6::prelude::WebViewExt;
 
 /// Browser-style link preview: a small plaque in the bottom-left corner of

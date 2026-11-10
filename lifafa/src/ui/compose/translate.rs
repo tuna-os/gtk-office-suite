@@ -1,7 +1,7 @@
 //! Translating the body (#327): the scripts that take the text out of the
 //! editor and put the translation back.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::messages::ComposeInput;
 use super::{Compose, ComposeWidgets};

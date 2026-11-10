@@ -11,7 +11,7 @@ use crate::i18n::{i18n, i18n_f};
 use crate::models::{Importance, Message};
 use crate::ui::column_bin::ColumnBin;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl Row {
     /// Fill the widgets from the bound message and the list's look.

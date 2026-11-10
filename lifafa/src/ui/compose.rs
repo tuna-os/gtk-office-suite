@@ -1,7 +1,7 @@
 //! Compose window: write a new message, reply, or forward.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::{ComposeFormat, SignaturePosition};
 use crate::i18n::{i18n, i18n_f};

@@ -7,7 +7,7 @@ use super::types::{MessageListInput, MessageListOutput, SelectionProbe};
 use super::MessageList;
 use crate::ui::message_row::Slot;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     pub(crate) fn selection_probe(&self) -> SelectionProbe {

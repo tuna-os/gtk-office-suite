@@ -3,7 +3,7 @@
 //! Filled and read by `form`, wired by `setup`.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::form::{REPLY_COPIES_HINT, SENT_COPY_HINT};
 use super::super::{AccountsInput, AccountsWindow};

@@ -11,7 +11,7 @@ use super::ComposeWidgets;
 use crate::i18n::i18n;
 use crate::ui::context_menu::{show_context_menu, MenuEntry};
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The narrowest the compose pane goes (its `adw::BreakpointBin` floor).
 pub(super) const COMPOSE_MIN_WIDTH: i32 = 360;
@@ -96,7 +96,7 @@ pub(super) fn set_toggle_icon(btn: &gtk::Button, windowed: bool) {
 fn confirm_discard_dialog(
     parent: Option<&gtk::Window>,
     template: bool,
-    sender: relm4::Sender<ComposeInput>,
+    sender: crate::relm::Sender<ComposeInput>,
 ) {
     let (heading, body, save) = if template {
         (

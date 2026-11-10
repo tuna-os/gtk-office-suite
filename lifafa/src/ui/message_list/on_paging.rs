@@ -8,7 +8,7 @@ use super::types::{MessageListInput, MessageListOutput};
 use super::views::KEEP_AT_MOST;
 use super::MessageList;
 use crate::models::Message;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::rc::Rc;
 
 impl MessageList {

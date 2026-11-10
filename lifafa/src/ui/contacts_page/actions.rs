@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::contacts::{ContactDetails, GroupEdit, GroupFormat, Member};
 use crate::i18n::{i18n, i18n_f, ni18n_f};

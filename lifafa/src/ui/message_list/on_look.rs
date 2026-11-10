@@ -7,7 +7,7 @@ use super::types::{MessageListInput, MessageListOutput};
 use super::MessageList;
 use adw::prelude::*;
 use gtk::glib;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     pub(super) fn on_set_sender_logos(&mut self, on: bool) {

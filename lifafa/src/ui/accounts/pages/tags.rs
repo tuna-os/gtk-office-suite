@@ -1,7 +1,7 @@
 //! Settings → Tags: the tag list, Add Tag and the tag finder.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;

@@ -1,6 +1,6 @@
 //! The Outbox: queued and scheduled mail, shown as a folder of its own.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::ui::compose::ComposePrefill;
 use crate::ui::message_list::{MessageListInput, SearchScope};

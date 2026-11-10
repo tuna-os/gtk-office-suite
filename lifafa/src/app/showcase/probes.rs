@@ -3,7 +3,7 @@
 //! messages, switching to an Inbox, list search and the new-mail
 //! notification.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::app::model::AppModel;
 use crate::app::msg::AppMsg;

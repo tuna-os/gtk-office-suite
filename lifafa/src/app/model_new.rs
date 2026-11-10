@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;

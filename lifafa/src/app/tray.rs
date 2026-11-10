@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;
@@ -348,7 +348,7 @@ impl AppModel {
             }
 
             AppMsg::RestartNow => match crate::desktop::app_icon::launch_restart_helper() {
-                Ok(()) => relm4::main_application().activate_action("quit", None),
+                Ok(()) => crate::relm::main_application().activate_action("quit", None),
                 Err(e) => {
                     tracing::warn!("restart helper failed: {e}");
                     self.restart_pending = false;
@@ -361,7 +361,7 @@ impl AppModel {
 
             AppMsg::QuitFromTray => {
                 // The same teardown as Ctrl+Q: geometry saved, then exit.
-                relm4::main_application().activate_action("quit", None);
+                crate::relm::main_application().activate_action("quit", None);
             }
 
             AppMsg::TrayViewUnread => {

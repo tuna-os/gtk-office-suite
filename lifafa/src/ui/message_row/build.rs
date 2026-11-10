@@ -5,7 +5,7 @@ use super::{SwipeSurface, ACCOUNT_COLUMN_PX, PEOPLE_COLUMN_PX, SENDER_COLUMN_PX,
 use crate::i18n::i18n;
 use crate::ui::column_bin::ColumnBin;
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// The row's widget tree. The host is what the view wraps in its item
 /// widget; everything else hangs off it.

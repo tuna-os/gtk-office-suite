@@ -2,7 +2,7 @@
 //! popover, and the wide/narrow switch.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -84,7 +84,7 @@ fn end_index(end: DateBound) -> usize {
 }
 
 impl DateRange {
-    fn new(sender: &relm4::Sender<AppMsg>) -> Rc<Self> {
+    fn new(sender: &crate::relm::Sender<AppMsg>) -> Rc<Self> {
         let width = widest_day_label();
         let toggle = |end: DateBound| {
             // As wide as the longest date it can name, so the popover
@@ -281,7 +281,7 @@ impl SortFilterPopover {
     pub(super) fn new(
         button: gtk::MenuButton,
         sort: &gtk::gio::SimpleAction,
-        sender: &relm4::Sender<AppMsg>,
+        sender: &crate::relm::Sender<AppMsg>,
     ) -> Self {
         let column = |title: &str| {
             let col = gtk::Box::new(gtk::Orientation::Vertical, 0);

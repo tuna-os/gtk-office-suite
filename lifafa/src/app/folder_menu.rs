@@ -1,7 +1,7 @@
 //! The folder context menu's dialogs: new, rename, delete, empty.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::i18n::{i18n, i18n_f};
 use crate::models::FolderKind;

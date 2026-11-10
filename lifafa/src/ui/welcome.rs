@@ -9,7 +9,7 @@
 //! pipelines ([`WelcomeOutput`]), so the wizard owns no persistence of its own.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config::Protocol;
 use crate::config::{blank_account, AccountConfig};

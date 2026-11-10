@@ -2,7 +2,7 @@
 //! the factories' own boxes, handed in.
 
 use adw::prelude::*;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use super::super::{AccountsInput, AccountsWindow};
 use crate::i18n::i18n;

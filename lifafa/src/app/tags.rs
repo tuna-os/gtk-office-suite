@@ -1,6 +1,6 @@
 //! Tags: their colors, the tag views, and the tag finder.
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::{FolderKind, KeywordFinding, Message};

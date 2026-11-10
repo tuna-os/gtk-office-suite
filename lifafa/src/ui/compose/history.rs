@@ -7,7 +7,7 @@ use super::Compose;
 use super::ComposeWidgets;
 use crate::i18n::i18n;
 use crate::ui::rich_editor::RichEditor;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 /// A marker for the body's own text history, named the way the user would
 /// name what it takes back.

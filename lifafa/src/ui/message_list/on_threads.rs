@@ -5,7 +5,7 @@ use super::threading::{unasked_threads, SourceThreads};
 use super::types::MessageListOutput;
 use super::MessageList;
 use crate::models::ThreadSummary;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 
 impl MessageList {
     pub(super) fn on_threads_ready(&mut self, gen: u64, threads: SourceThreads) {

@@ -178,7 +178,7 @@ impl Preferences {
     /// or stay. Staying puts the selection back on Mail Accounts.
     #[allow(deprecated)] // adw::MessageDialog: AlertDialog would change how it looks
     pub(super) fn ask_to_leave_editor(&self, id: &str, sender: &ComponentSender<Self>) {
-        let parent = relm4::main_application().active_window();
+        let parent = crate::relm::main_application().active_window();
         let (heading, body) = match self.editor_page {
             "filters" => (
                 i18n("Save the filter?"),
@@ -297,7 +297,7 @@ impl Preferences {
     pub(super) fn on_set_accounts_panel(
         &mut self,
         panel: gtk::Widget,
-        accounts: relm4::Sender<crate::ui::accounts::AccountsInput>,
+        accounts: crate::relm::Sender<crate::ui::accounts::AccountsInput>,
     ) {
         self.accounts_sender = accounts;
         if let Some(slot) = &self.accounts_slot {

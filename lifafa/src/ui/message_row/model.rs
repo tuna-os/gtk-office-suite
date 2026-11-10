@@ -8,7 +8,7 @@ use super::{RowData, Slot};
 use adw::prelude::*;
 use gtk::glib;
 use gtk::subclass::prelude::ObjectSubclassIsExt;
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::collections::HashMap;
 use std::rc::Rc;
 

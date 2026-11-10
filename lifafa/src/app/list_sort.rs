@@ -2,7 +2,7 @@
 //! a smart folder keeps the sort chosen while it was open, and any other view
 //! uses the one default (#574).
 
-use relm4::prelude::*;
+use crate::relm::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::config::ListSort;
