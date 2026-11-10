@@ -1,0 +1,8 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/rustls_cert_reloadable_resolver-896cf57df1b99eae.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/loader.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/resolver.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/key_provider.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/librustls_cert_reloadable_resolver-896cf57df1b99eae.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/loader.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/resolver.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/key_provider.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/loader.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/resolver.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-cert-reloadable-resolver-0.7.1/src/key_provider.rs:
