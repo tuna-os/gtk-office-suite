@@ -457,7 +457,7 @@ What the repository does today, read from the manifests:
 
 * `flatpak/org.tunaos.{tables,decks,letters}.json` finish-args: `--share=ipc
   --socket=fallback-x11 --socket=wayland --device=dri --filesystem=xdg-documents
-  --own-name=org.tunaos.<app>` (Letters adds `--filesystem=/run/user`). **No `--share=network`.**
+  --own-name=org.tunaos.<app>` (Letters adds `--filesystem=xdg-run/gvfs`, the GVfs FUSE mounts only; it granted all of `/run/user` until #1996). **No `--share=network`.**
   `build-options.build-args: ["--share=network"]` is the build sandbox only; it is how
   crates are fetched in CI (`cargo clean && cargo build --locked --release -p tables`, no
   vendoring).

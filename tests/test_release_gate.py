@@ -339,3 +339,16 @@ def test_the_built_flatpaks_grant_what_flathub_grants():
         built = json.loads((root / "flatpak" / f"org.tunaos.{app}.json").read_text())["finish-args"]
         flathub = json.loads((root / "flathub" / f"org.tunaos.{app}.json").read_text())["finish-args"]
         assert sorted(built) == sorted(flathub), f"{app}: {sorted(set(built) ^ set(flathub))}"
+
+
+def test_no_flatpak_grants_the_whole_session_runtime_dir():
+    # /run/user/<uid> holds the session bus socket and every other session
+    # service's socket. Letters granted all of it to reach one subtree, the
+    # GVfs FUSE mounts at /run/user/<uid>/gvfs, from an app that opens
+    # untrusted documents (#1996). Grant the subtree, never the directory.
+    root = Path(__file__).resolve().parent.parent
+    broad = {"--filesystem=/run/user", "--filesystem=xdg-run", "--filesystem=host", "--filesystem=host-os"}
+    for manifest in sorted((root / "flatpak").glob("org.tunaos.*.json")) + sorted((root / "flathub").glob("org.tunaos.*.json")):
+        args = json.loads(manifest.read_text())["finish-args"]
+        too_broad = [a for a in args if a.split(":")[0].rstrip("/") in broad or a.startswith("--filesystem=/run/user/")]
+        assert not too_broad, f"{manifest.relative_to(root)}: {too_broad}"
