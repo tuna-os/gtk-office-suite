@@ -389,6 +389,10 @@ pub fn compatibility_report(doc: &Document, format: SaveFormat) -> Compatibility
             lost(&mut report, present.page_layout, "page-layout", "Page size, margins and paragraph spacing", "Markdown has no page geometry or point-precise spacing");
             lost(&mut report, present.header_footer, "header-footer", "Page header and footer", "Markdown has no running header or footer");
             lost(&mut report, present.run_style && doc.paragraphs.iter().flat_map(|p| &p.runs).any(|r| r.style.font_family.is_some() || r.style.font_size_hp.is_some() || r.style.color.is_some()), "character-appearance", "Font family, size and colour", "Markdown carries emphasis but not typeface, size or colour");
+            // markdown::serialize writes neither (#1981): a table's cells
+            // come out as one paragraph each, and footnote text is dropped.
+            lost(&mut report, present.table, "tables", "Tables", "cells are written as consecutive paragraphs");
+            lost(&mut report, present.footnote, "footnotes", "Footnotes", "footnote text is not written back");
         }
         SaveFormat::Html => {
             lost(&mut report, present.page_layout, "page-layout", "Page size, margins and paragraph spacing", "the HTML written here has no page geometry or point-precise spacing");
@@ -1109,6 +1113,24 @@ mod tests {
             assert!(ids.iter().any(|id| id == "page-layout"), "{format:?}: {ids:?}");
             assert!(ids.iter().any(|id| id == "header-footer"), "{format:?}: {ids:?}");
         }
+    }
+
+    /// Markdown has no table or footnote writer here (#1981), so a Save As
+    /// `.md` names both, as the plain-text one does; HTML keeps both.
+    #[test]
+    fn markdown_names_the_tables_and_footnotes_it_drops() {
+        let mut doc = formatted();
+        doc.insert_table_at(1, 2, 2);
+        doc.footnotes.push("the note".into());
+        doc.paragraphs[0].runs.push(crate::model::Run { text: String::new(), style: crate::model::RunStyle { footnote: Some(0), ..Default::default() } });
+        let ids = |format| -> Vec<String> { compatibility_report(&doc, format).features.iter().map(|f| f.id.clone()).collect() };
+        for format in [SaveFormat::Markdown, SaveFormat::PlainText] {
+            let ids = ids(format);
+            assert!(ids.iter().any(|id| id == "tables"), "{format:?}: {ids:?}");
+            assert!(ids.iter().any(|id| id == "footnotes"), "{format:?}: {ids:?}");
+        }
+        let html = ids(SaveFormat::Html);
+        assert!(!html.iter().any(|id| id == "tables" || id == "footnotes"), "{html:?}");
     }
 
     /// A document of several sections saved as text says so once, in the

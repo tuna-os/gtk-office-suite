@@ -41,6 +41,7 @@
 //! | 10 | Slides on differently-sized pages (DCK-006) | not applicable: one `p:sldSz` per deck | explicit-loss (`mixed-page-sizes`): the first slide page's size is kept | loss unit test below | `mixed_page_sizes` in `odp_drops` |
 //! | 11 | Slides the presentation names but the package does not contain (#1977) | explicit-loss (`unreadable-slides`): the reader skipped the slide, a save drops it | not applicable: slides live in `content.xml`, which either reads or fails the open | loss unit tests (a missing slide part cannot ship in `interop/corpus.json` for the same reason as row 7) | `pptx_drops` below; the reader-side record is `Deck.skipped_slides` |
 //! | 12 | Text hyperlinks (#1998): links on slide text to web or mail addresses are kept | explicit-loss (`text-hyperlinks`): a click action or slide jump, a link on a whole shape, a hover link, or any link in a layout or master; a run's `hlinkClick` with an external `hyperlink` relationship is kept | explicit-loss (`text-hyperlinks`): an `a` in `styles.xml`, or one whose `xlink:href` has no scheme (`#Slide 2`); `https:`/`mailto:` links in `content.xml` are kept | loss unit tests below, `tests/text_links.rs` | `pptx_drops`, `odp_drops` below |
+//! | 13 | Groups (#1989): the reader places a group's shapes, rotation and flips included, but the model has no group | explicit-loss (`groups`): `grpSp` elements in slides | explicit-loss (`groups`): `g` elements in `content.xml`/`styles.xml` | loss unit tests below | `pptx_drops`, `odp_drops` below |
 //!
 //! Detection is namespace/relationship-aware bounded parsing, not
 //! prefix-sensitive substring search: element and attribute names compare by
@@ -83,6 +84,11 @@ const MIXED_SIZES: (&str, &str) = ("mixed-page-sizes", "Slides on differently-si
 /// slide, a program), a link on a whole shape or picture, a link inside
 /// the deck or to a file beside it, and links on layouts and masters.
 const HYPERLINKS: (&str, &str) = ("text-hyperlinks", "Text hyperlinks");
+/// Groups (#1989): the readers place a group's shapes where the group
+/// draws them, but the deck model has no group, so a save writes them one
+/// by one and the grouping is gone. A full group object is a separate
+/// decision; until then, say so before the save.
+const GROUPS: (&str, &str) = ("groups", "Grouped shapes");
 
 fn record(report: &mut CompatibilityReport, (id, label): (&str, &str), location: &str, detail: &str) {
     // Deduplicate on the full triple, not just id and location: one slide
@@ -213,6 +219,9 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
                 record(report, HYPERLINKS, slide, "links that jump to a slide, run an action, or sit on a whole shape are not kept");
             }
         }
+        if tags.iter().any(|t| t.local == "grpSp") {
+            record(report, GROUPS, slide, "groups are not kept; their shapes are saved one by one");
+        }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "presetClass"), Some("emph" | "path"))) {
             record(report, ANIMATION, slide, "only entrance and exit builds are kept");
         }
@@ -316,6 +325,9 @@ fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTre
             t.local == "a" && (part == "styles.xml" || !attr_value(t.attrs, "href").is_some_and(crate::odp::external_href))
         }) {
             record(report, HYPERLINKS, part, "links that jump inside the deck or to a file, and links on masters, are not kept");
+        }
+        if tags.iter().any(|t| t.local == "g") {
+            record(report, GROUPS, part, "groups are not kept; their shapes are saved one by one");
         }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "preset-class"), Some("emphasis" | "motion-path"))) {
             record(report, ANIMATION, part, "only entrance and exit builds are kept");
@@ -761,6 +773,29 @@ mod tests {
         let path = dir.path().join("no-relationships.pptx");
         package(&path, &[("ppt/slides/slide1.xml", "<p:sld/>")]);
         assert!(content_a_save_drops(path.to_str().unwrap()).validate_save(false).is_ok());
+    }
+
+    #[test]
+    fn groups_warn_before_save_in_both_formats() {
+        let dir = tempfile::tempdir().unwrap();
+        let pptx = dir.path().join("grouped.pptx");
+        package(&pptx, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/><p:grpSp><p:nvGrpSpPr/><p:grpSpPr/><p:sp/><p:sp/></p:grpSp></p:spTree></p:cSld></p:sld>")]);
+        let report = content_a_save_drops(pptx.to_str().unwrap());
+        assert!(ids(&report).contains(&"groups"), "{:?}", ids(&report));
+        assert!(report.validate_save(false).is_err(), "an unconfirmed save must not proceed");
+        let odp = dir.path().join("grouped.odp");
+        package(&odp, &[
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("content.xml",
+             "<office:document-content><office:body><office:presentation><draw:page><draw:g><draw:rect/><draw:ellipse/></draw:g></draw:page></office:presentation></office:body></office:document-content>"),
+        ]);
+        assert!(ids(&content_a_save_drops(odp.to_str().unwrap())).contains(&"groups"));
+        // The slide's own shape tree (p:spTree, with its p:grpSpPr) is not a group.
+        let flat = dir.path().join("flat.pptx");
+        package(&flat, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/><p:sp/></p:spTree></p:cSld></p:sld>")]);
+        assert!(!ids(&content_a_save_drops(flat.to_str().unwrap())).contains(&"groups"));
     }
 
     #[test]

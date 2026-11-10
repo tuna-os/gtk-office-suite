@@ -3,8 +3,10 @@
 ## Unreleased
 
 ### Letters
+- Spell check follows your language: it loads the hunspell dictionary for your locale (from LANGUAGE, LC_ALL, LC_MESSAGES or LANG) and falls back to US English only when none is installed. Words with accented or non-Latin letters, such as "café" and "naïve", are checked whole instead of being split at the accent, and a curly apostrophe counts as one.
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
+- Save As Markdown now warns before it drops a document's tables and footnotes: Markdown here writes table cells as plain paragraphs and leaves footnote text out (#1981).
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
 - A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
 
@@ -18,6 +20,7 @@
 - Sorting moves each cell's lock and hidden-formula setting with its row, as it already moved formats, styles, borders, validation and notes. They used to stay put, so a sort on a sheet with unlocked cells locked the wrong ones.
 
 ### Decks
+- PowerPoint groups that are rotated or flipped open where PowerPoint draws them, instead of upright and unflipped. Decks has no group object yet, so saving a deck that had groups now warns that its shapes will be saved ungrouped.
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 - Links on slide text to a web or mail address survive opening and saving, in PowerPoint and ODF files and in table cells. They used to be dropped on save, with a warning. Jumps to another slide, click actions and links on a whole shape still warn before a save drops them (#1998).
 
