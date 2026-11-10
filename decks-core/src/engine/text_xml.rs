@@ -28,7 +28,7 @@ use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
 use super::text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
 use super::SlideScale;
-use letters_core::model::RunStyle;
+use suite_common_core::document::RunStyle;
 
 /// Spacing as the file states it.
 #[derive(Clone, Copy, Debug, PartialEq)]

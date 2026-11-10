@@ -1776,7 +1776,7 @@ mod tests {
         }
     }
 
-    fn styled_text_controller(runs: Vec<letters_core::model::Run>, body: crate::engine::TextBody) -> DecksController {
+    fn styled_text_controller(runs: Vec<suite_common_core::document::Run>, body: crate::engine::TextBody) -> DecksController {
         let mut s = slide("Styled");
         s.objects.push(SlideObject::TextBox {
             text: runs.iter().map(|r| r.text.as_str()).collect(),
@@ -1785,7 +1785,7 @@ mod tests {
         DecksController::new(vec![s], vec![])
     }
 
-    fn text_state(c: &DecksController) -> (String, Vec<letters_core::model::Run>, crate::engine::TextBody) {
+    fn text_state(c: &DecksController) -> (String, Vec<suite_common_core::document::Run>, crate::engine::TextBody) {
         match &c.slides.borrow()[0].objects[0] {
             SlideObject::TextBox { text, runs, body, .. } => (text.clone(), runs.clone(), body.clone()),
             _ => panic!("expected TextBox"),
@@ -1794,7 +1794,7 @@ mod tests {
 
     #[test]
     fn change_text_preserves_styled_spans_and_exact_undo_redo() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let italic = RunStyle { italic: true, ..Default::default() };
         let c = styled_text_controller(vec![
@@ -1825,7 +1825,7 @@ mod tests {
 
     #[test]
     fn change_text_unicode_insert_delete_and_replace_across_run_boundaries() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let italic = RunStyle { italic: true, ..Default::default() };
         let original = vec![
@@ -1875,7 +1875,7 @@ mod tests {
 
     #[test]
     fn change_text_empty_box_keeps_typing_style_and_noop_keeps_history() {
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let style = RunStyle { bold: true, font_size_hp: Some(48), ..Default::default() };
         let c = styled_text_controller(vec![Run { text: "Hi".into(), style: style.clone() }], Default::default());
         let before = text_state(&c);
@@ -1901,7 +1901,7 @@ mod tests {
     #[test]
     fn change_text_remaps_paragraph_styles_with_newlines_and_undo() {
         use crate::engine::text_body::{Anchor, ParaStyle, TextBody};
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let first = ParaStyle { margin_left: 10.0, ..Default::default() };
         let second = ParaStyle { margin_left: 20.0, ..Default::default() };
         let third = ParaStyle { margin_left: 30.0, ..Default::default() };
@@ -2538,7 +2538,7 @@ mod tests {
     #[test]
     fn a_text_session_commits_one_step_and_cancels_without_trace() {
         use crate::format::FormatEdit;
-        use letters_core::model::{Run, RunStyle};
+        use suite_common_core::document::{Run, RunStyle};
         let bold = RunStyle { bold: true, ..Default::default() };
         let c = styled_text_controller(vec![Run { text: "Alpha ".into(), style: bold.clone() }, Run { text: "Beta".into(), style: RunStyle::default() }], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
@@ -2588,7 +2588,7 @@ mod tests {
 
     #[test]
     fn a_text_session_whose_box_vanished_or_changed_stays_open_with_an_error() {
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let c = styled_text_controller(vec![Run::plain("one")], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         assert!(c.begin_text_session(s, o));
@@ -2614,7 +2614,7 @@ mod tests {
     #[test]
     fn range_commands_are_one_step_each_and_reject_bad_ranges() {
         use crate::format::FormatEdit;
-        use letters_core::model::Run;
+        use suite_common_core::document::Run;
         let c = styled_text_controller(vec![Run::plain("héllo wörld")], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         assert!(!c.format_text_range(s, o, 2, 3, &FormatEdit::Bold(true)), "mid-character");

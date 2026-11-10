@@ -197,7 +197,7 @@ fn scenarios() -> Vec<Scenario> {
     v.push(Scenario {
         name: "styled-runs",
         deck: {
-            use letters_core::model::{Run, RunStyle};
+            use suite_common_core::document::{Run, RunStyle};
             let mut d = Deck::new();
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "plain bold italic".into(),

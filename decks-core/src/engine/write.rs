@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 use zip::write::SimpleFileOptions;
 use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Writer;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use super::text_body::{Anchor, Bullet, MarkerSize, ParaAlign, ParaStyle, Spacing, TextBody};
 
 /// Where a shape sits and how far it is turned — the bounding box in points

@@ -225,6 +225,28 @@ classified here: `upright` is Tier 1 (the italic counterpart of `regular`),
   `tests/test_core_shell_split.py` drops that edge; `decks-core` to
   `letters-core` is left for the Decks slice (#1662).
 
+**Slice 4 (#1662), Decks.** `decks-core` no longer depends on `letters-core`.
+Its slides, notes, tables, PPTX and ODP readers and writers, templates,
+undo and tests use `suite_common_core::document::{Run, RunStyle}` (re-exported
+as `decks_core::engine::{Run, RunStyle}` as before), and its clipboard is
+`Fragment<ClipParagraph>`.
+
+- A slide's runs only ever used the Tier 1 fields, so the persisted JSON
+  (recovery snapshots, collaboration ops) keeps its field names. Older
+  payloads still carrying Letters' defaulted fields read, the extras
+  ignored; the Letters fields Decks no longer writes (`image`,
+  `image_extent_emu`, `footnote`, `html`, `chip`, `revision`) were all
+  optional to read, so an older build reads the new payloads too.
+- Pasting from Letters still names what a slide cannot hold and leaves out
+  pictures and deleted tracked text. `ClipParagraph` reads those markers
+  (`decks_core::fragment::Foreign`) from the clipboard JSON beside the
+  neutral style and never writes them, so what Decks copies is plain
+  neutral JSON.
+- `KNOWN_SIBLING_EDGES` is now empty: no core crate depends on a sibling.
+- Letters still keeps its own extended `RunStyle` and `ParaStyle` with
+  conversions at its boundary (slice 2); folding their Tier 1 fields into
+  the shared structs is the remaining work.
+
 ## Consequences
 
 ### Positive
