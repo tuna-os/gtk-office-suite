@@ -30,7 +30,7 @@ Building the trace found one path writing around the boundary: **the Decks close
 | letters | Open from the command line, a file manager or a drop (`GApplication::open`, a new tab) | `letters/src/window.rs` | `load_file_to_buffer` | 1 | read | `tests/gui/test_smoke.py::test_a_drop_opens_a_new_tab_and_leaves_the_edited_one_alone` |
 | letters | Open… dialog | `letters/src/window.rs` | `load_file_to_buffer` | 2 | read | `tests/gui/test_smoke.py::LettersOpenPathsSmoke` |
 | letters | Autosave snapshot | `letters/src/window.rs` | `autosave_slot.write` | 1 | snapshot | `tests/gui/test_smoke.py::LettersAutosaveSmoke` |
-| letters | Export as PDF with Typst | `letters/src/window.rs` | `engine::export_pdf` | 1 | export | `letters/src/engine.rs::test_export_pdf_success_writes_pdf_and_cleans_temp_source` |
+| letters | Export as PDF with Typst | `letters/src/window.rs` | `engine::export_pdf` | 1 | export | `letters/src/engine.rs::export_writes_a_pdf_with_no_typst_binary_and_leaves_no_source_behind` |
 | letters | Render lab capture (test mode only) | `letters/src/window.rs` | `write_pdf` | 1 | export | `tools/render-lab/capture.py::tier_a` |
 | letters | Headless `--export-pdf` (test mode only) | `letters/src/window.rs` | `write_pdf` | 2 | export | `tools/render-lab/export_render.py::export_one` |
 | letters | Save, Save As and the close guard's Save, when nothing would be lost | `letters/src/window/saving.rs` | `save_page_to_path` | 1 | asks | `tests/gui/test_smoke.py::LettersSaveFormatSmoke` |

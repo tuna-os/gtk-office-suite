@@ -225,10 +225,33 @@ fn esc_breaks(text: &str) -> String {
 
 fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
     let text = esc_breaks(&run.text);
-    if run.style == RunStyle::default() {
+    let look = RunStyle { link: None, ..run.style.clone() };
+    let span = if look == RunStyle::default() {
         text
     } else {
         format!("<text:span text:style-name=\"{prefix}{style_idx}\">{text}</text:span>")
+    };
+    // A linked run is a `text:a` around its span, as Impress writes it (#1998).
+    match run.style.link.as_deref().filter(|l| !l.is_empty()) {
+        Some(href) => format!("<text:a xlink:type=\"simple\" xlink:href=\"{}\">{span}</text:a>", esc(href)),
+        None => span,
+    }
+}
+
+/// Whether a `text:a`'s `xlink:href` is an address the deck keeps as a
+/// link: one with a scheme (`https:`, `mailto:`). A jump inside the deck
+/// (`#Slide 2`) or to a file beside it is not kept, and the save warning
+/// says so.
+pub(crate) fn external_href(href: &str) -> bool {
+    match href.split_once(':') {
+        Some((scheme, rest)) => {
+            !rest.is_empty()
+                && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+                // A drive letter is a path, not a scheme.
+                && scheme.len() > 1
+        }
+        None => false,
     }
 }
 
@@ -1600,6 +1623,9 @@ fn parse_pages(
     let mut frame_has_chart = false;
     let mut textbox: Option<(Vec<String>, Vec<Run>)> = None; // (lines, runs)
     let mut span_style: Option<RunStyle> = None;
+    // The open `text:a`'s address, which the runs inside it link to (#1998).
+    let mut link: Option<String> = None;
+    let run_style = |span: &Option<RunStyle>, link: &Option<String>| RunStyle { link: link.clone(), ..span.clone().unwrap_or_default() };
     let mut in_text = false;
     let mut shape_type: Option<String> = None;
     // A custom shape's own paths, when its geometry is not a preset
@@ -1789,6 +1815,7 @@ fn parse_pages(
                     span_style = attr(e, "text:style-name")
                         .and_then(|n| text_styles.get(&n).cloned());
                 }
+                "text:a" => link = attr(e, "xlink:href").filter(|h| external_href(h)),
                 "draw:rect" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
@@ -1819,7 +1846,7 @@ fn parse_pages(
                         if let Some(last) = lines.last_mut() {
                             last.push(crate::engine::LINE_BREAK);
                         }
-                        runs.push(Run { text: crate::engine::LINE_BREAK.to_string(), style: span_style.clone().unwrap_or_default() });
+                        runs.push(Run { text: crate::engine::LINE_BREAK.to_string(), style: run_style(&span_style, &link) });
                     }
                 }
                 // An empty paragraph, `<text:p/>`: how Impress writes a
@@ -1890,7 +1917,7 @@ fn parse_pages(
                         if !txt.is_empty() {
                             runs.push(Run {
                                 text: txt,
-                                style: span_style.clone().unwrap_or_default(),
+                                style: run_style(&span_style, &link),
                             });
                         }
                     }
@@ -1906,7 +1933,7 @@ fn parse_pages(
                         if !txt.is_empty() {
                             runs.push(Run {
                                 text: txt,
-                                style: span_style.clone().unwrap_or_default(),
+                                style: run_style(&span_style, &link),
                             });
                         }
                     }
@@ -1918,6 +1945,7 @@ fn parse_pages(
                     lists.pop();
                 }
                 "text:span" => span_style = None,
+                "text:a" => link = None,
                 "draw:text-box" => {
                     if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
                         (textbox.take(), frame)
