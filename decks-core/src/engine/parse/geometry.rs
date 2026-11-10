@@ -178,16 +178,23 @@ pub fn parse_slide_size(xml: &str) -> Option<(f64, f64)> {
     }
     None
 }
+/// A group's transform (`p:grpSpPr/a:xfrm`): where its child frame lands on
+/// the slide, and the rotation and flips applied to everything in it.
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct GroupFrame {
     off: Option<(f64, f64)>,
     ext: Option<(f64, f64)>,
     ch_off: Option<(f64, f64)>,
     ch_ext: Option<(f64, f64)>,
+    /// Clockwise degrees, from the group's `rot` (#1989).
+    rot: f64,
+    flip_h: bool,
+    flip_v: bool,
 }
 
 impl GroupFrame {
-    /// Take an `a:off`, `a:ext`, `a:chOff` or `a:chExt` of the group's own.
+    /// Take an `a:xfrm` (rotation and flips), `a:off`, `a:ext`, `a:chOff`
+    /// or `a:chExt` of the group's own.
     pub(super) fn note(&mut self, e: &BytesStart) {
         let pair = |a: &str, b: &str| match parse_coords(e, a, b) {
             (Some(x), Some(y)) => Some((x, y)),
@@ -198,19 +205,55 @@ impl GroupFrame {
             "a:ext" => self.ext = pair("cx", "cy"),
             "a:chOff" => self.ch_off = pair("x", "y"),
             "a:chExt" => self.ch_ext = pair("cx", "cy"),
+            "a:xfrm" => {
+                self.rot = parse_rotation(e).unwrap_or(0.0);
+                let on = |key: &str| {
+                    e.attributes().flatten().any(|a| {
+                        a.key.as_ref() == key && matches!(a.value.as_ref(), "1" | "true")
+                    })
+                };
+                self.flip_h = on("flipH");
+                self.flip_v = on("flipV");
+            }
             _ => {}
         }
     }
 
-    /// A rectangle in the group's child frame, on the slide (or in the
-    /// frame of the group around it).
-    pub(super) fn place(&self, (x, y, w, h): (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
-        let (Some(off), Some(ext)) = (self.off, self.ext) else { return (x, y, w, h) };
+    /// A rectangle in the group's child frame, and its clockwise rotation,
+    /// on the slide (or in the frame of the group around it).
+    ///
+    /// DrawingML scales the child frame onto the group's, then flips and
+    /// rotates the whole group about its centre. The model has no group and
+    /// no flip, so each child keeps its size and takes the group's turn: its
+    /// centre moves with the group and its rotation adds the group's
+    /// (mirrored first when the group flips once). The child's own flip,
+    /// which the model cannot hold, is not drawn either way.
+    pub(super) fn place(&self, (x, y, w, h): (f64, f64, f64, f64), rotation: f64) -> ((f64, f64, f64, f64), f64) {
+        let (Some(off), Some(ext)) = (self.off, self.ext) else { return ((x, y, w, h), rotation) };
         let ch_off = self.ch_off.unwrap_or(off);
         let ch_ext = self.ch_ext.unwrap_or(ext);
         let sx = if ch_ext.0 > 0.0 { ext.0 / ch_ext.0 } else { 1.0 };
         let sy = if ch_ext.1 > 0.0 { ext.1 / ch_ext.1 } else { 1.0 };
-        (off.0 + (x - ch_off.0) * sx, off.1 + (y - ch_off.1) * sy, w * sx, h * sy)
+        let (x, y, w, h) = (off.0 + (x - ch_off.0) * sx, off.1 + (y - ch_off.1) * sy, w * sx, h * sy);
+        if self.rot == 0.0 && !self.flip_h && !self.flip_v {
+            return ((x, y, w, h), rotation);
+        }
+        let (gcx, gcy) = (off.0 + ext.0 / 2.0, off.1 + ext.1 / 2.0);
+        let (mut dx, mut dy) = (x + w / 2.0 - gcx, y + h / 2.0 - gcy);
+        let mut rotation = rotation;
+        if self.flip_h {
+            dx = -dx;
+        }
+        if self.flip_v {
+            dy = -dy;
+        }
+        if self.flip_h != self.flip_v {
+            rotation = -rotation;
+        }
+        // y grows downward, so this turns clockwise on the slide, as `rot` does.
+        let (sin, cos) = self.rot.to_radians().sin_cos();
+        let (cx, cy) = (gcx + dx * cos - dy * sin, gcy + dx * sin + dy * cos);
+        ((cx - w / 2.0, cy - h / 2.0, w, h), (rotation + self.rot).rem_euclid(360.0))
     }
 }
 
@@ -223,7 +266,7 @@ pub(super) fn slide_is_hidden(slide_xml: &str) -> bool {
     tag.contains(" show=\"0\"") || tag.contains(" show=\"false\"")
 }
 
-/// A rectangle given in the innermost of `groups`, on the slide.
-pub(super) fn in_groups(groups: &[GroupFrame], rect: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
-    groups.iter().rev().fold(rect, |r, g| g.place(r))
+/// A rectangle and rotation given in the innermost of `groups`, on the slide.
+pub(super) fn in_groups(groups: &[GroupFrame], rect: (f64, f64, f64, f64), rotation: f64) -> ((f64, f64, f64, f64), f64) {
+    groups.iter().rev().fold((rect, rotation), |(r, rot), g| g.place(r, rot))
 }

@@ -20,6 +20,7 @@
 - Sorting moves each cell's lock and hidden-formula setting with its row, as it already moved formats, styles, borders, validation and notes. They used to stay put, so a sort on a sheet with unlocked cells locked the wrong ones.
 
 ### Decks
+- PowerPoint groups that are rotated or flipped open where PowerPoint draws them, instead of upright and unflipped. Decks has no group object yet, so saving a deck that had groups now warns that its shapes will be saved ungrouped.
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 
 ### Decks
