@@ -150,7 +150,9 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         {
             Engine::Text
         }
-        Some(Category::Spreadsheet) if matches!(plan.to, Format::Xlsx | Format::Csv) => {
+        Some(Category::Spreadsheet)
+            if matches!(plan.to, Format::Xlsx | Format::Csv | Format::Pdf) =>
+        {
             Engine::Sheet
         }
         _ => {
@@ -216,11 +218,11 @@ fn sheet(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> 
             )
             .map_err(|e| Failure::new(Exit::Convert, e))?;
         }
-        Format::Csv => {
+        Format::Csv | Format::Pdf => {
             // One table: the first sheet, as the values it displays.
             if sheets.len() > 1 {
                 found.push(Loss {
-                    id: "csv-single-sheet".into(),
+                    id: "single-sheet-output".into(),
                     label: "Other sheets".into(),
                     location: sheets[1..]
                         .iter()
@@ -228,16 +230,24 @@ fn sheet(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> 
                         .collect::<Vec<_>>()
                         .join(", "),
                     level: LossLevel::Major,
-                    detail: "CSV holds one table; only the first sheet was written.".into(),
+                    detail: format!(
+                        "{} holds one sheet here; only the first was written.",
+                        to.name().to_uppercase()
+                    ),
                 });
             }
             let first = sheets
                 .first()
                 .ok_or_else(|| Failure::new(Exit::Parse, "the workbook has no sheets"))?;
-            std::fs::write(staged, csv(first))
-                .map_err(|e| Failure::new(Exit::Convert, format!("writing csv: {e}")))?;
+            if to == Format::Pdf {
+                tables_core::export::to_pdf_for_sheet(&engine, first, &staged.to_string_lossy())
+                    .map_err(|e| Failure::new(Exit::Convert, e))?;
+            } else {
+                std::fs::write(staged, csv(first))
+                    .map_err(|e| Failure::new(Exit::Convert, format!("writing csv: {e}")))?;
+            }
         }
-        _ => unreachable!("convert() routes only xlsx and csv here"),
+        _ => unreachable!("convert() routes only xlsx, csv and pdf here"),
     }
     Ok(found)
 }

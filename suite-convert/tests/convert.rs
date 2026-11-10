@@ -96,3 +96,13 @@ fn report_loss_prints_json_and_the_budget_gates_the_exit() {
     assert_eq!(v["to"], "odt");
     assert!(v["losses"].is_array());
 }
+
+#[test]
+fn a_spreadsheet_converts_to_pdf() {
+    let dir = tempfile::tempdir().unwrap();
+    let csv = write(dir.path(), "a.csv", "a,b\n1,2\n");
+    let pdf = dir.path().join("a.pdf").to_string_lossy().into_owned();
+    let o = run(&[&csv, &pdf]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
+}
