@@ -46,7 +46,9 @@ poppler-rs = { version = "0.26", features = ["v20_9"] }
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
 # Kept at the cairo-rs that gtk4 0.11 and pangocairo 0.22 use: a different one
 # is a second cairo whose surfaces the toolkit cannot draw (#1986).
-cairo-rs = { version = "0.22", features = ["png", "pdf"] }
+# "v1_16": PdfSurface::set_metadata (the print preview's PDF title); relm4 used to
+# switch it on through its gtk4 features.
+cairo-rs = { version = "0.22", features = ["png", "pdf", "v1_16"] }
 # The printed page footer's text, laid out by Pango so any script prints (#359).
 pangocairo = "0.22"
 # The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
