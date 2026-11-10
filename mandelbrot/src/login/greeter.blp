@@ -1,0 +1,144 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Greeter: Adw.NavigationPage {
+  tag: "greeter";
+  // Translators: Mandelbrot is the application name.
+  title: _("Welcome to Mandelbrot");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [start]
+      Gtk.Button back_button {
+        action-name: "win.show-session";
+        visible: bind back_button.sensitive;
+        icon-name: "go-previous-symbolic";
+        tooltip-text: _("Back");
+
+        accessibility {
+          label: _("Back");
+        }
+      }
+
+      [start]
+      Gtk.Button {
+        visible: bind back_button.visible inverted;
+        action-name: "app.about";
+        tooltip-text: _("About Mandelbrot");
+        icon-name: "about-symbolic";
+
+        accessibility {
+          label: _("About Mandelbrot");
+        }
+      }
+
+      [end]
+      Gtk.Button {
+        visible: bind back_button.visible;
+        action-name: "app.about";
+        tooltip-text: _("About Mandelbrot");
+        icon-name: "about-symbolic";
+
+        accessibility {
+          label: _("About Mandelbrot");
+        }
+      }
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {}
+
+      Gtk.ScrolledWindow {
+        hscrollbar-policy: never;
+        propagate-natural-height: true;
+        vexpand: true;
+
+        child: Gtk.Box {
+          orientation: vertical;
+          valign: center;
+          spacing: 24;
+          margin-top: 18;
+          margin-bottom: 18;
+
+          Adw.Clamp {
+            maximum-size: 360;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              valign: center;
+              spacing: 24;
+
+              Gtk.Picture {
+                file: "resource:///org/tunaos/mandelbrot/assets/welcome.svg";
+                height-request: 120;
+              }
+
+              Gtk.Label title {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+                // Translators: Mandelbrot is the application name.
+                label: _("Welcome to Mandelbrot");
+
+                styles [
+                  "title-1",
+                ]
+              }
+            };
+          }
+
+          Adw.Clamp {
+            maximum-size: 260;
+            margin-top: 10;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              valign: center;
+              spacing: 16;
+
+              Gtk.Button login_button {
+                can-shrink: true;
+                label: _("_Log In");
+                use-underline: true;
+                action-name: "navigation.push";
+                action-target: "'homeserver'";
+
+                styles [
+                  "pill",
+                  "suggested-action",
+                ]
+              }
+
+              Gtk.Button qr_login_button {
+                can-shrink: true;
+                label: _("Sign in with _QR Code");
+                use-underline: true;
+                action-name: "navigation.push";
+                action-target: "'qr-code'";
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              Gtk.Button {
+                visible: false;
+                can-shrink: true;
+                label: _("_Create Account");
+                use-underline: true;
+                action-name: "app.create-account";
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          }
+        };
+      }
+    };
+  };
+}

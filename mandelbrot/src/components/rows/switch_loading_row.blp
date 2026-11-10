@@ -1,0 +1,24 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SwitchLoadingRow: Adw.ActionRow {
+  selectable: false;
+  activatable: bind template.read-only inverted;
+  activatable-widget: switch;
+
+  [suffix]
+  Gtk.Box {
+    valign: center;
+    spacing: 6;
+
+    Adw.Spinner spinner {
+      visible: false;
+      accessible-role: status;
+    }
+
+    Gtk.Switch switch {
+      sensitive: bind template.read-only inverted;
+      focusable: false;
+    }
+  }
+}

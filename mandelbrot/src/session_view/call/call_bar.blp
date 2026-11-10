@@ -1,0 +1,81 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CallBar: Adw.Bin {
+  styles [
+    "call-bar",
+  ]
+
+  child: Gtk.Box {
+    spacing: 12;
+    margin-top: 6;
+    margin-bottom: 6;
+    margin-start: 12;
+    margin-end: 12;
+
+    accessibility {
+      label: _("Ongoing call");
+    }
+
+    Gtk.Image {
+      icon-name: "call-start-symbolic";
+
+      styles [
+        "accent",
+      ]
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      valign: center;
+      hexpand: true;
+
+      Gtk.Label title_label {
+        halign: start;
+        ellipsize: end;
+        label: _("Ongoing call");
+
+        styles [
+          "caption-heading",
+        ]
+      }
+
+      Gtk.Label subtitle_label {
+        halign: start;
+        ellipsize: end;
+
+        styles [
+          "caption",
+          "dimmed",
+        ]
+      }
+    }
+
+    Gtk.Button return_button {
+      valign: center;
+      label: _("Return to Call");
+      clicked => $return_clicked() swapped;
+
+      styles [
+        "pill",
+        "suggested-action",
+      ]
+    }
+
+    Gtk.Button hang_up_button {
+      valign: center;
+      icon-name: "call-stop-symbolic";
+      tooltip-text: _("Leave Call");
+      clicked => $hang_up_clicked() swapped;
+
+      styles [
+        "circular",
+        "destructive-action",
+      ]
+
+      accessibility {
+        label: _("Leave Call");
+      }
+    }
+  };
+}

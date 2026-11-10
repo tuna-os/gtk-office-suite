@@ -1,0 +1,59 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationRoomLeftPage: Adw.Bin {
+  Gtk.ScrolledWindow {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+
+        Gtk.Label {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          label: _("Verification Cancelled");
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          label: _("You are no longer in the room where the verification was taking place");
+
+          styles [
+            "body",
+          ]
+        }
+
+        Gtk.Button dismiss_btn {
+          halign: center;
+          can-shrink: true;
+          label: _("_Done");
+          use-underline: true;
+          clicked => $dismiss() swapped;
+
+          styles [
+            "pill",
+          ]
+        }
+      };
+    };
+  }
+}

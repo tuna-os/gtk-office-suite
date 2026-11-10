@@ -1,0 +1,173 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $CreateRoomDialog: $ToastableDialog {
+  default-widget: create_button;
+  content-width: 380;
+
+  child-content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      vexpand: true;
+
+      child: Adw.Clamp {
+        maximum-size: 444;
+
+        child: Gtk.Box {
+          orientation: vertical;
+          spacing: 24;
+          margin-bottom: 24;
+          margin-start: 24;
+          margin-end: 24;
+
+          [top]
+          Gtk.Label heading {
+            wrap: true;
+            wrap-mode: word_char;
+            max-width-chars: 20;
+            justify: center;
+            xalign: 0.5;
+            label: _("New Room");
+
+            styles [
+              "title-2",
+            ]
+          }
+
+          Gtk.Box content {
+            orientation: vertical;
+            spacing: 18;
+
+            Adw.PreferencesGroup {
+              title: _("Name");
+
+              Adw.EntryRow room_name {
+                title: _("Name");
+                changed => $validate_form() swapped;
+                entry-activated => $create_room() swapped;
+              }
+            }
+
+            Adw.PreferencesGroup topic_group {
+              title: _("Description (Optional)");
+
+              Gtk.ScrolledWindow {
+                height-request: 120;
+
+                styles [
+                  "card",
+                ]
+
+                Gtk.TextView topic_text_view {
+                  hexpand: true;
+                  wrap-mode: word_char;
+
+                  styles [
+                    "inline",
+                  ]
+
+                  accessibility {
+                    labelled-by: [
+                      topic_group,
+                    ];
+                  }
+                }
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: _("Room Visibility");
+
+              Adw.ActionRow {
+                title: _("Private");
+                subtitle: _("Only invited people can join this room");
+                activatable-widget: visibility_private;
+
+                [prefix]
+                Gtk.CheckButton visibility_private {
+                  valign: center;
+                  active: true;
+                  toggled => $validate_form() swapped;
+                }
+              }
+
+              Adw.ActionRow {
+                title: _("Public");
+                subtitle: _("Anyone can find and join this room");
+                activatable-widget: visibility_public;
+
+                [prefix]
+                Gtk.CheckButton visibility_public {
+                  valign: center;
+                  group: visibility_private;
+                }
+              }
+            }
+
+            Adw.PreferencesGroup {
+              visible: bind visibility_private.active;
+              margin-top: 12;
+
+              Adw.SwitchRow encryption {
+                title: _("End-to-End Encryption");
+                subtitle: _("Cannot be disabled later");
+              }
+            }
+
+            Adw.PreferencesGroup {
+              visible: bind visibility_public.active;
+              margin-top: 12;
+
+              $SubstringEntryRow room_address {
+                title: _("Main Address");
+                // Translators: This is the placeholder for the first part of a room address,
+                // as in '@my-room:example.org'.
+                placeholder-text: _("my-room");
+                accessible-description: _("First part of the address, for example “my-room”");
+                prefix-text: "#";
+                hide-add-button: true;
+                changed => $validate_form() swapped;
+              }
+
+              Gtk.Revealer room_address_error_revealer {
+                child: Gtk.Label room_address_error {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  xalign: 0.0;
+                  margin-top: 6;
+
+                  styles [
+                    "error",
+                    "caption",
+                  ]
+                };
+              }
+            }
+          }
+
+          $LoadingButton create_button {
+            content-label: _("_Create Room");
+            use-underline: true;
+            sensitive: false;
+            halign: center;
+            valign: end;
+            vexpand: true;
+            clicked => $create_room() swapped;
+
+            styles [
+              "suggested-action",
+              "standalone-button",
+              "pill",
+            ]
+          }
+        };
+      };
+    };
+  };
+}

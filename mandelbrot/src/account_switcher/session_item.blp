@@ -1,0 +1,81 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SessionItemRow: Gtk.ListBoxRow {
+  selectable: false;
+
+  styles [
+    "account-switcher-row",
+  ]
+
+  Gtk.Box {
+    spacing: 10;
+
+    $AvatarWithSelection avatar {
+      size: 40;
+    }
+
+    Gtk.Box {
+      spacing: 3;
+      orientation: vertical;
+
+      Gtk.Label display_name {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+      }
+
+      Gtk.Label user_id {
+        xalign: 0.0;
+        hexpand: true;
+        ellipsize: end;
+
+        styles [
+          "dimmed",
+          "caption",
+        ]
+      }
+    }
+
+    Gtk.Stack state_stack {
+      Gtk.StackPage {
+        name: "loading";
+
+        child: Adw.Spinner {
+          valign: center;
+          halign: center;
+          height-request: 24;
+        };
+      }
+
+      Gtk.StackPage {
+        name: "settings";
+
+        child: Gtk.Button {
+          icon-name: "settings-symbolic";
+          valign: center;
+          halign: center;
+          tooltip-text: _("Account Settings");
+          clicked => $show_account_settings() swapped;
+
+          styles [
+            "circular",
+            "raised",
+          ]
+        };
+      }
+
+      Gtk.StackPage {
+        name: "error";
+
+        child: Gtk.Image error_image {
+          icon-name: "error-symbolic";
+
+          styles [
+            "error",
+          ]
+        };
+      }
+    }
+  }
+}

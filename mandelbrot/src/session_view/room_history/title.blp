@@ -1,0 +1,48 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomHistoryTitle: Adw.Bin {
+  Gtk.Button button {
+    valign: center;
+    tooltip-text: _("Open Room Details");
+    action-name: "room-history.details";
+
+    styles [
+      "flat",
+    ]
+
+    child: Gtk.Box {
+      orientation: vertical;
+      halign: center;
+      valign: center;
+      accessible-role: group;
+
+      Gtk.Label {
+        focusable: true;
+        ellipsize: end;
+        halign: center;
+        wrap: false;
+        single-line-mode: true;
+        width-chars: 5;
+        label: bind template.title;
+
+        styles [
+          "title",
+        ]
+      }
+
+      Gtk.Label subtitle_label {
+        visible: false;
+        ellipsize: end;
+        halign: center;
+        wrap: false;
+        single-line-mode: true;
+        label: bind template.subtitle;
+
+        styles [
+          "subtitle",
+        ]
+      }
+    };
+  }
+}

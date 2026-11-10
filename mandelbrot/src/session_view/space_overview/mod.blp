@@ -1,0 +1,17 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentSpaceOverview: Adw.Bin {
+  vexpand: true;
+  hexpand: true;
+  width-request: 360;
+  height-request: 294;
+
+  styles [
+    "view",
+  ]
+
+  child: Adw.NavigationView nav_view {
+    $SpaceOverviewSubpage root_page {}
+  };
+}

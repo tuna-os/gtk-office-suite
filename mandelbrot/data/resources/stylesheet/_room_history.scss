@@ -1,0 +1,536 @@
+// Room history.
+
+@use 'vendor';
+
+%nested-effect {
+  border-left: 2px solid var(--accent-bg-color);
+  padding-left: 6px;
+
+  @media not (prefers-contrast: more) {
+    opacity: 70%;
+  }
+
+  @media (prefers-contrast: more) {
+    opacity: 90%;
+  }
+}
+
+room-title {
+  margin-top: -6px;
+  margin-bottom: -6px;
+  min-height: 12px;
+  padding: 3px 0;
+
+  .title {
+    padding: 0;
+    font-weight: bold;
+  }
+
+  .subtitle {
+    padding: 0;
+    font-weight: normal;
+  }
+
+  &.with-subtitle {
+    button {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    .title, .subtitle {
+      margin-top: -0.2rem;
+    }
+  }
+}
+
+.room-history .room-history-list {
+  padding-bottom: 0;
+
+  > row {
+    min-height: 0;
+    padding: 0;
+    border-radius: 0;
+  }
+}
+
+.room-history-row {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 8px;
+  padding-right: 8px;
+  border-radius: vendor.$menu_radius;
+
+  @include vendor.focus-ring();
+
+  &.has-avatar {
+    margin-top: 6px;
+  }
+
+  &:not(.has-avatar):not(.has-icon) {
+    .event-content {
+      &:dir(ltr) {
+        margin-left: 54px;
+      }
+
+      &:dir(rtl) {
+        margin-right: 54px;
+      }
+    }
+  }
+
+  &.has-open-popup  {
+    background-color: vendor.$hover_color;
+  }
+
+  &.selected {
+    background-color: vendor.$selected_color;
+
+    &.has-open-popup {
+      background-color: vendor.$selected_hover_color;
+    }
+  }
+
+  &.highlight {
+    background-color: color-mix(in srgb, var(--accent-bg-color) 20%, transparent);
+
+    &.has-open-popup {
+      background-color: color-mix(in srgb, var(--accent-bg-color) 25%, transparent);
+    }
+
+    &.selected {
+      background-color: color-mix(in srgb, var(--accent-bg-color) 30%, transparent);
+
+      &.has-open-popup {
+        background-color: color-mix(in srgb, var(--accent-bg-color) 33%, transparent);
+      }
+    }
+  }
+
+  button.sender-avatar {
+    padding: 5px;
+
+    /* @include vendor.focus-ring(); */
+
+    &:hover {
+      image {
+        filter: brightness(1.07) ;
+      }
+    }
+
+    &:active {
+      image {
+        filter: brightness(1.16) ;
+      }
+    }
+
+    &:checked {
+      image {
+        filter: brightness(1.1) ;
+      }
+    }
+  }
+
+  &.has-icon image.icon {
+    -gtk-icon-size: 20px;
+
+    &:dir(ltr) {
+      padding: 0 5px 0 21px;
+    }
+
+    &:dir(rtl) {
+      padding: 0 21px 0 5px;
+    }
+  }
+}
+
+message-sender {
+  @include vendor.focus-ring($offset: -1px, $focus-state: ':focus-within');
+
+  border-radius: 3px;
+
+  &.activatable {
+    &:hover, &:focus {
+      label {
+        text-decoration-line: underline;
+      }
+    }
+  }
+}
+
+.event-content {
+  .h1 {
+    font-weight: 800;
+    font-size: 15pt;
+  }
+
+  .h2 {
+    font-weight: 800;
+    font-size: 14pt;
+  }
+
+  .h3  {
+    font-weight: 700;
+    font-size: 14pt;
+  }
+
+  .h4  {
+    font-weight: 700;
+    font-size: 13pt;
+  }
+
+  .h5  {
+    font-weight: 700;
+    font-size: 12pt;
+  }
+
+  .h6  {
+    font-weight: 700;
+    font-size: 11pt;
+  }
+
+  .emoji-message {
+    font-size: 3em;
+  }
+
+  .emote {
+    color: var(--accent-color);
+  }
+
+  .quote {
+    @extend %nested-effect;
+  }
+
+  expander-widget > box > {
+    title {
+      border-spacing: 6px;
+    }
+
+    :not(title) {
+      padding: 12px;
+    }
+  }
+
+  .codeview {
+    border-radius: vendor.$menu_radius;
+    padding: 6px;
+    background-color: var(--text-view-bg);
+    color: var(--view-fg-color);
+  }
+
+  .timestamp {
+    min-width: 36px;
+    font-weight: normal;
+  }
+}
+
+state-group-row.room-history-row {
+  &:not(.has-avatar) {
+    .event-content {
+      &:dir(ltr) {
+        margin-left: 42px;
+      }
+
+      &:dir(rtl) {
+        margin-right: 42px;
+      }
+    }
+  }
+
+  .expander-title {
+    padding: 6px 12px;
+    border-radius: vendor.$menu_radius;
+
+    &:hover {
+      background-color: vendor.$button_hover_color;
+    }
+
+    &:active {
+      background-color: vendor.$button_active_color;
+    }
+  }
+
+  image.arrow {
+    transition: 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  &:not(:checked) image.arrow {
+    &:dir(ltr) {
+      transform: rotate(-0.5turn);
+    }
+
+    &:dir(rtl) {
+      transform: rotate(0.5turn);
+    }
+  }
+
+  .expander-content {
+    padding: 3px 6px;
+    background-color: color-mix(in srgb, var(--view-fg-color) 4%, transparent);
+    border-radius: vendor.$menu_radius;
+  }
+
+  state-group-item-row {
+    padding: 6px 12px;
+    margin: 2px 0;
+    border-radius: vendor.$menu_radius;
+
+    @include vendor.focus-ring();
+
+    &.has-open-popup  {
+      background-color: vendor.$hover_color;
+    }
+  }
+}
+
+message-location, message-visual-media {
+  border-radius: vendor.$menu_radius;
+
+  @include vendor.focus-ring();
+}
+
+message-poll {
+  padding-top: 3px;
+  padding-bottom: 3px;
+
+  progressbar {
+    trough,
+    progress {
+      min-height: 6px;
+    }
+  }
+}
+
+.visual-content {
+  &.opaque-bg {
+    background-color: var(--border-color);
+  }
+
+  > .overlaid {
+    margin: 6px;
+  }
+
+  > .instructions {
+    padding: 12px;
+    border-radius: vendor.$menu_radius;
+  }
+
+  &.compact {
+    > .instructions {
+      padding: 6px;
+    }
+  }
+
+  // Copied from .osd button style in https://gitlab.gnome.org/GNOME/libadwaita/-/blob/main/src/stylesheet/widgets/_buttons.scss
+  &.has-placeholder {
+    > .instructions {
+      color: vendor.$osd_fg_color;
+      background-color: rgb(0 0 0 / 65%);
+
+      @media (prefers-contrast: more) {
+        box-shadow: 0 0 0 1px currentColor;
+      }
+    }
+
+    &:not(.compact) {
+      &:hover {
+        > .instructions {
+          color: white;
+          background-color: color-mix(in srgb, black calc(0.85 * 65%), currentColor calc(0.15 * 65%));
+        }
+      }
+
+      &:active {
+        > .instructions {
+          color: white;
+          background-color: color-mix(in srgb, black calc(0.75 * 65%), currentColor calc(0.25 * 65%));
+        }
+      }
+    }
+  }
+
+  > .spinner {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  > button {
+    // Leave enough space at the start to click to be able to view small images.
+    &:dir(ltr) {
+      margin-left: 64px;
+    }
+    &:dir(rtl) {
+      margin-right: 64px;
+    }
+  }
+
+  > image.osd.circular {
+    min-width: 64px;
+    min-height: 64px;
+    border-radius: 32px;
+    -gtk-icon-size: 32px;
+  }
+
+  .timestamp {
+    border-radius: 4px;
+    padding: 2px 5px;
+  }
+
+  &.compact {
+    > .spinner {
+      min-width: 16px;
+      min-height: 16px;
+    }
+
+    > image.osd.circular {
+      min-width: 32px;
+      min-height: 32px;
+      -gtk-icon-size: 16px;
+    }
+  }
+}
+
+message-reactions {
+  flowboxchild {
+    &:hover, &:active {
+      // Cancel effect under .navigation-sidebar from libadwaita
+      background-color: transparent;
+    }
+  }
+
+  &:dir(ltr) .toggle {
+    padding: 1px 0 1px 6px;
+  }
+
+  &:dir(rtl) .toggle {
+    padding: 1px 6px 1px 0;
+  }
+
+  .reaction-key-text {
+    font-size: 0.8em;
+  }
+
+  .reaction-key-emoji {
+    font-size: 1.1em;
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+
+  .reaction-count {
+    font-size: 0.8em;
+  }
+}
+
+.message-thread-indicator {
+  margin-top: 3px;
+  padding: 2px 8px;
+  font-size: 0.9em;
+  color: var(--accent-color);
+}
+
+.reaction-chooser {
+  margin: 6px;
+
+  button {
+    font-size: 1.3em;
+    -gtk-icon-size: 1.3em;
+    padding: 2px;
+  }
+}
+
+read-receipts-list {
+  min-height: 20px;
+  min-width: 20px;
+  padding: 6px;
+  border-radius: 9999px;
+
+  @include vendor.focus-ring();
+
+  &:hover {
+    background-color: vendor.$hover_color;
+  }
+
+  &:active {
+    background-color: vendor.$active_color;
+  }
+
+  &:checked {
+    background-color: vendor.$selected_color;
+  }
+}
+
+divider-row {
+  font-size: 0.9em;
+  font-weight: bold;
+
+  label {
+    opacity: var(--dim-opacity);
+  }
+
+  &.new-messages {
+    color: var(--accent-color);
+
+    label {
+      opacity: 1;
+    }
+
+    separator {
+      min-height: 2px;
+      background-color: var(--accent-color);
+    }
+  }
+}
+
+typing-row {
+  padding: 0 6px;
+  min-height: 30px;
+}
+
+.related-event-toolbar {
+  padding: 0 6px 0 12px;
+
+  button {
+    margin: 12px 6px;
+    min-height: 24px;
+    min-width: 24px;
+  }
+
+  .event-content {
+    @extend %nested-effect;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+}
+
+button.send-text-message-button image {
+  transform: translateX(2px);
+}
+
+.voice-recording-toolbar {
+  .recording-indicator {
+    color: var(--error-color);
+    animation: recording-indicator-pulse 2s ease-in-out infinite;
+  }
+
+  levelbar {
+    margin-left: 6px;
+    margin-right: 6px;
+  }
+}
+
+@keyframes recording-indicator-pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.composer-replacement {
+  margin: 12px;
+}

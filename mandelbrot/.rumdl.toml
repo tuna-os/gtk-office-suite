@@ -1,0 +1,40 @@
+cache = false
+exclude = ["data/resources/mapstyle/osm-liberty/*.md"]
+
+[per-file-ignores]
+".gitlab/issue_templates/*.md" = ["first-line-heading", "line-length"]
+"README.md" = ["first-line-heading"]
+
+[code-block-style]
+style = "fenced"
+
+[code-fence-style]
+style = "backtick"
+
+[emphasis-style]
+style = "underscore"
+
+[heading-style]
+style = "atx"
+
+[line-length]
+line-length = 100
+code-blocks = false
+tables = false
+
+[no-inline-html]
+allowed-elements = ["a", "div", "img", "kbd"]
+
+[ol-prefix]
+style = "ordered"
+
+[strong-style]
+style = "asterisk"
+
+[toc-validation]
+enabled = true
+min-level = 2
+max-level = 2
+
+[ul-style]
+style = "asterisk"

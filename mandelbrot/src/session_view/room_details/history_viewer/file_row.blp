@@ -1,0 +1,44 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentFileHistoryViewerRow: Adw.Bin {
+  Gtk.Box {
+    spacing: 12;
+
+    Gtk.Button button {
+      clicked => $button_clicked() swapped;
+      icon-name: "save-symbolic";
+      valign: center;
+      tooltip-text: _("Save File");
+
+      styles [
+        "circular",
+        "suggested-action",
+      ]
+    }
+
+    Gtk.Box {
+      orientation: vertical;
+      homogeneous: true;
+
+      Gtk.Label title_label {
+        ellipsize: end;
+        xalign: 0;
+
+        styles [
+          "heading",
+        ]
+      }
+
+      Gtk.Label size_label {
+        ellipsize: end;
+        xalign: 0;
+
+        styles [
+          "dimmed",
+          "numeric",
+        ]
+      }
+    }
+  }
+}

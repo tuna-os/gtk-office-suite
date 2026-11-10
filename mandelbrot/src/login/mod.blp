@@ -1,0 +1,104 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $Login: Adw.Bin {
+  child: Adw.NavigationView navigation {
+    $Greeter greeter {}
+
+    $LoginHomeserverPage homeserver_page {
+      login: template;
+    }
+
+    $LoginMethodPage method_page {
+      login: template;
+    }
+
+    $LoginInBrowserPage in_browser_page {
+      login: template;
+    }
+
+    $LoginQrCodePage qr_code_page {
+      login: template;
+    }
+
+    Adw.NavigationPage {
+      tag: "completed";
+      title: _("Login Complete");
+      can-pop: false;
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          show-title: false;
+        }
+
+        content: Gtk.Box {
+          orientation: vertical;
+
+          $OfflineBanner {}
+
+          Gtk.ScrolledWindow {
+            hscrollbar-policy: never;
+            propagate-natural-height: true;
+            vexpand: true;
+
+            child: Adw.Clamp {
+              maximum-size: 400;
+              tightening-threshold: 300;
+
+              child: Gtk.Box {
+                orientation: vertical;
+                spacing: 18;
+                valign: center;
+
+                Gtk.Label {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+                  label: _("Login Complete");
+                  accessible-role: heading;
+
+                  styles [
+                    "title-1",
+                  ]
+
+                  accessibility {
+                    level: 1;
+                  }
+                }
+
+                Gtk.Picture {
+                  file: "resource:///org/tunaos/mandelbrot/assets/setup-complete.svg";
+                  accessible-role: presentation;
+                }
+
+                Gtk.Label {
+                  wrap: true;
+                  wrap-mode: word_char;
+                  justify: center;
+                  label: _("This session is ready to send and receive secure messages");
+
+                  styles [
+                    "body",
+                  ]
+                }
+
+                Gtk.Button done_button {
+                  can-shrink: true;
+                  label: _("Start Chatting");
+                  halign: center;
+                  clicked => $finish_login() swapped;
+
+                  styles [
+                    "suggested-action",
+                    "pill",
+                  ]
+                }
+              };
+            };
+          }
+        };
+      };
+    }
+  };
+}

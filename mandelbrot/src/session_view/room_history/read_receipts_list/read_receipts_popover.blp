@@ -1,0 +1,32 @@
+using Gtk 4.0;
+
+template $ContentReadReceiptsPopover: Gtk.Popover {
+  autohide: true;
+  width-request: 220;
+  has-arrow: false;
+  halign: start;
+
+  styles [
+    "avatar-row-list",
+  ]
+
+  child: Gtk.ScrolledWindow scrolled_window {
+    propagate-natural-height: true;
+    hscrollbar-policy: never;
+    max-content-height: 280;
+
+    child: Gtk.ListView list {
+      single-click-activate: true;
+
+      factory: Gtk.BuilderListItemFactory {
+        template Gtk.ListItem {
+          selectable: false;
+
+          child: $ContentMemberTimestampRow {
+            data: bind template.item;
+          };
+        }
+      };
+    };
+  };
+}

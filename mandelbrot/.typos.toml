@@ -1,0 +1,24 @@
+[default.extend-identifiers]
+ae7ede32 = "ae7ede32" # an Element Call git revision quoted in CONFORMANCE.md
+e210ba3b = "e210ba3b" # an upstream Fractal commit quoted in docs/UPSTREAM.md
+
+[default.extend-words]
+gir = "gir"
+inout = "inout"
+numer = "numer" # Short for numerator in GStreamer
+ue = "ue" # End of word after mnemonic
+reate = "reate" # End of word after mnemonic
+hread = "hread" # End of word after mnemonic
+Commet = "Commet" # Matrix client name
+
+[type.po]
+extend-glob = ["*.po"]
+check-file = false
+
+[type.json]
+extend-glob = ["*.json"]
+check-file = false
+
+[type.png]
+extend-glob = ["*.png"]
+check-file = false

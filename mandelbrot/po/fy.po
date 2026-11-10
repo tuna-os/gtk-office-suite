@@ -1,0 +1,1075 @@
+# Frisian translation for fractal.
+# Copyright (C) 2021 fractal's COPYRIGHT HOLDER
+# This file is distributed under the same license as the fractal package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# Tjipke van der Heide <tjipke@tutanota.com>, 2021.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fractal master\n"
+"Report-Msgid-Bugs-To: https://gitlab.gnome.org/GNOME/fractal/issues\n"
+"POT-Creation-Date: 2021-08-24 16:52+0000\n"
+"PO-Revision-Date: 2021-09-01 11:51+0200\n"
+"Last-Translator: Tjipke van der Heide <tjipke@tutanota.com>\n"
+"Language-Team: Western Frisian <tjipke@tutanota.com>\n"
+"Language: fy\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1)\n"
+"X-DL-Team: fy\n"
+"X-DL-Module: fractal\n"
+"X-DL-Branch: master\n"
+"X-DL-Domain: po\n"
+"X-DL-State: Translating\n"
+"X-Generator: Gtranslator 40.0\n"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:13
+msgctxt "shortcut window"
+msgid "General"
+msgstr "Algemien"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:18
+msgctxt "shortcut window"
+msgid "Close the active room"
+msgstr "De aktive keamer slute"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:25
+msgctxt "shortcut window"
+msgid "Open main menu"
+msgstr "Haadmenu iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:32
+msgctxt "shortcut window"
+msgid "Open / close the room sidebar search"
+msgstr "De sykfunksje yn de sydbalke fan de keamer iepenje of slute"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:39
+msgctxt "shortcut window"
+msgid "Open the previous room in the list"
+msgstr "De foariche keamer yn'e list iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:46
+msgctxt "shortcut window"
+msgid "Open the next room in the list"
+msgstr "De folgjende keamer yn'e list iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:53
+msgctxt "shortcut window"
+msgid "Open the previous room with unread messages in the list"
+msgstr ""
+"De foariche keamer yn'e list mei berjochten dy noch net lêzen binne iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:60
+msgctxt "shortcut window"
+msgid "Open the next room with unread messages in the list"
+msgstr ""
+"De folgjende keamer yn'e list mei berjochten dy noch net lêzen binne iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:67
+msgctxt "shortcut window"
+msgid "Open the first room of the list"
+msgstr "De earste keamer yn'e list iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:74
+msgctxt "shortcut window"
+msgid "Open the last room of the list"
+msgstr "De lêste keamer yn'e list iepenje"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:81
+msgctxt "shortcut window"
+msgid "View older messages"
+msgstr "Âldere berjochten besjen"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:88
+msgctxt "shortcut window"
+msgid "View newer messages"
+msgstr "Nijere berjochten besjen"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:94
+msgctxt "shortcut window"
+msgid "Keyboard Shortcuts"
+msgstr "Toetseboerd Fluchtoetsen"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:101
+msgctxt "shortcut window"
+msgid "Quit"
+msgstr "Ôfslute"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:110
+msgctxt "shortcut message"
+msgid "Composing a new message"
+msgstr "Nij berjocht gearstelle"
+
+#: fractal-gtk/res/gtk/help-overlay.ui:115
+msgctxt "shortcut message"
+msgid "Write on a new line"
+msgstr "Op in nije rigel skriuwe"
+
+#: fractal-gtk/res/org.gnome.Fractal.desktop.in.in:3
+#: fractal-gtk/res/org.gnome.Fractal.metainfo.xml.in.in:5
+#: fractal-gtk/res/ui/login_flow.ui:19 fractal-gtk/src/appop/mod.rs:170
+msgid "Fractal"
+msgstr "Fractal"
+
+#: fractal-gtk/res/org.gnome.Fractal.desktop.in.in:4
+msgid ""
+"Fractal is a decentralized, secure messaging client for collaborative group "
+"communication."
+msgstr "Fractal is in desintralisearre, feilige kliïnt foar groepspetearen"
+
+#: fractal-gtk/res/org.gnome.Fractal.desktop.in.in:5
+msgid "Fractal group messaging"
+msgstr "Fractal groepspetearen"
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
+#: fractal-gtk/res/org.gnome.Fractal.desktop.in.in:14
+msgid "Matrix;matrix.org;chat;irc;communications;talk;riot;element;"
+msgstr ""
+"Matrix;matrix.org;chat;petear;irc;communications;kommunikaasje;talk;prate;"
+"riot;element;"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:13
+msgid "Type of password and token storage"
+msgstr "Soart wachtwurd en token opslach"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:14
+msgid "Type of password and token storage, default value is: Secret Service"
+msgstr "Soart wachtwurd en token opslach, standert wearde is: Secret Service"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:21
+msgid "If markdown sending is active"
+msgstr "As it ferstjoeren mei markdown ynskeakele is"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:22
+msgid "Whether support for sending markdown messages is on"
+msgstr "As it ferstjoeren fan berjochten mei markdown ynskeakele is"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:29
+msgid "X position of the main window on startup"
+msgstr "X posysje fan it haadfinster by it opstarten"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:34
+msgid "Y position of the main window on startup"
+msgstr "Y posysje fan it haadfinster by it opstarten"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:39
+msgid "Width of the main window on startup"
+msgstr "Breedte fan it haadfinster by it opstarten"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:44
+msgid "Height of the main window on startup"
+msgstr "Hichte fan it haadfinster by it opstarten"
+
+#: fractal-gtk/res/org.gnome.Fractal.gschema.xml:49
+msgid "Whether the main window is maximized on startup"
+msgstr "As it haadfinster by it opstarten maksimalisearre wurde moat"
+
+#: fractal-gtk/res/org.gnome.Fractal.metainfo.xml.in.in:8
+msgid "Daniel García Moreno"
+msgstr "Daniel García Moreno"
+
+#: fractal-gtk/res/org.gnome.Fractal.metainfo.xml.in.in:9
+msgid "Matrix group messaging app"
+msgstr "Matrix groepspetear applikaasje"
+
+#: fractal-gtk/res/org.gnome.Fractal.metainfo.xml.in.in:11
+msgid ""
+"Fractal is a Matrix messaging app for GNOME written in Rust. Its interface "
+"is optimized for collaboration in large groups, such as free software "
+"projects."
+msgstr ""
+"Fractal is in Matrix petear applikaasje foar GNOME skreaun yn Rust. Syn "
+"inteface is optimalisearre foar gearwurking yn grutte groepen, sa as frije "
+"software projekten."
+
+#: fractal-gtk/res/ui/account_settings.ui:14 fractal-gtk/res/ui/main_menu.ui:94
+msgid "Account Settings"
+msgstr "Account Ynstellings"
+
+#: fractal-gtk/res/ui/account_settings.ui:30
+#: fractal-gtk/res/ui/main_window.ui:217 fractal-gtk/res/ui/main_window.ui:454
+#: fractal-gtk/res/ui/media_viewer.ui:36 fractal-gtk/res/ui/room_settings.ui:30
+msgid "Back"
+msgstr "Werom"
+
+#: fractal-gtk/res/ui/account_settings.ui:92
+msgid "Other people can find you by searching for any of these identifiers."
+msgstr "Oare minsken kinne jo fine troch om dizze wurden te sykjen."
+
+#: fractal-gtk/res/ui/account_settings.ui:115
+msgid "Name"
+msgstr "Namme"
+
+#: fractal-gtk/res/ui/account_settings.ui:138
+msgid "Type in your name"
+msgstr "Fier jo namme yn"
+
+#: fractal-gtk/res/ui/account_settings.ui:167
+msgid "Email"
+msgstr "E-mail"
+
+#: fractal-gtk/res/ui/account_settings.ui:196
+msgid "Phone"
+msgstr "Telefoan"
+
+#: fractal-gtk/res/ui/account_settings.ui:225
+msgid "Password"
+msgstr "Wachtwurd"
+
+#: fractal-gtk/res/ui/account_settings.ui:287
+msgid "Advanced Information"
+msgstr "Avansearre ynformaasje"
+
+#: fractal-gtk/res/ui/account_settings.ui:312
+msgid "Homeserver"
+msgstr "Thústsjinner"
+
+#: fractal-gtk/res/ui/account_settings.ui:341
+msgid "Matrix ID"
+msgstr "Matrix ID"
+
+#: fractal-gtk/res/ui/account_settings.ui:370
+msgid "Device ID"
+msgstr "Apparaat ID"
+
+#: fractal-gtk/res/ui/account_settings.ui:410
+#: fractal-gtk/res/ui/account_settings.ui:466
+msgid "Deactivate Account"
+msgstr "Account Deaktivearje"
+
+#: fractal-gtk/res/ui/account_settings.ui:431
+msgid ""
+"Deactivating your account means that you will lose all your messages, "
+"contacts, and files."
+msgstr ""
+"It deaktivearjen fan jo account betsjut dat jo al jo berjochten, kontakten "
+"en triemen kwiet reitsje sille."
+
+#: fractal-gtk/res/ui/account_settings.ui:441
+msgid ""
+"To confirm that you really want to deactivate this account type in your "
+"password:"
+msgstr ""
+"Om it fuortsmiten fan jo account fêst te setten fiere jo hjir jo wachtwurd "
+"yn:"
+
+#: fractal-gtk/res/ui/account_settings.ui:456
+msgid "Also erase all messages"
+msgstr "Ek alle berjochten fuortsmite"
+
+#: fractal-gtk/res/ui/account_settings.ui:523
+msgid "Check your email"
+msgstr "Kontrolearje jo e-mail"
+
+#: fractal-gtk/res/ui/account_settings.ui:526
+#: fractal-gtk/res/ui/direct_chat.ui:83 fractal-gtk/res/ui/invite_user.ui:84
+#: fractal-gtk/res/ui/join_room.ui:71 fractal-gtk/res/ui/leave_room.ui:31
+#: fractal-gtk/res/ui/new_room.ui:24 fractal-gtk/src/appop/account.rs:87
+#: fractal-gtk/src/appop/account.rs:143 fractal-gtk/src/ui/attach.rs:41
+msgid "Cancel"
+msgstr "Ôfbrekke"
+
+#: fractal-gtk/res/ui/account_settings.ui:534
+msgid "Apply"
+msgstr "Tapasse"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:8
+msgid "Room Directory"
+msgstr "Keamer oersjoch"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:12
+msgid "Join Room"
+msgstr "Keamer Binnen Gean"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:18
+msgid "New Room"
+msgstr "Nije keamer"
+
+#: fractal-gtk/res/ui/add_room_menu.ui:22
+msgid "New Direct Chat"
+msgstr "Nij Direkt Petear"
+
+#: fractal-gtk/res/ui/audio_player.ui:34 fractal-gtk/res/ui/audio_player.ui:45
+msgid "Play"
+msgstr "Ôfspylje"
+
+#: fractal-gtk/res/ui/direct_chat.ui:80
+msgid "New direct chat"
+msgstr "Nij petear begjinne"
+
+#: fractal-gtk/res/ui/direct_chat.ui:91
+msgid "Start chat"
+msgstr "Petear begjinne"
+
+#: fractal-gtk/res/ui/invite.ui:18
+msgid "Invitation"
+msgstr "Útnûging"
+
+#: fractal-gtk/res/ui/invite.ui:32
+msgid "Reject"
+msgstr "Net akseptearje"
+
+#: fractal-gtk/res/ui/invite.ui:40
+msgid "Accept"
+msgstr "Akseptearje"
+
+#: fractal-gtk/res/ui/invite_user.ui:81 fractal-gtk/res/ui/invite_user.ui:92
+#: fractal-gtk/src/ui/invite.rs:133
+msgid "Invite"
+msgstr "Útnûgje"
+
+#: fractal-gtk/res/ui/join_room.ui:34
+msgid "ID or Alias"
+msgstr "ID of Alias"
+
+#: fractal-gtk/res/ui/join_room.ui:68
+msgid "Join room"
+msgstr "Keamer binnen gean"
+
+#: fractal-gtk/res/ui/join_room.ui:79 fractal-gtk/src/ui/directory.rs:245
+msgid "Join"
+msgstr "Binnen gean"
+
+#: fractal-gtk/res/ui/kicked_room.ui:29 fractal-gtk/res/ui/msg_src_window.ui:32
+msgid "Close"
+msgstr "Slute"
+
+#: fractal-gtk/res/ui/leave_room.ui:18
+msgid "Leave?"
+msgstr "Ferlitte?"
+
+#: fractal-gtk/res/ui/leave_room.ui:19
+msgid ""
+"Once you leave, you won’t be able to interact with people in the room "
+"anymore."
+msgstr ""
+"As jo de keamer ferlitte, sille jo net mear mei de minsken yn dizze keamer "
+"prate kinne."
+
+#: fractal-gtk/res/ui/leave_room.ui:39
+msgid "Leave room"
+msgstr "Keamer ferlitte"
+
+#: fractal-gtk/res/ui/login_flow.ui:29
+msgid "Welcome to Fractal"
+msgstr "Wolkom by Fractal"
+
+#: fractal-gtk/res/ui/login_flow.ui:42 fractal-gtk/res/ui/login_flow.ui:211
+msgid "_Log In"
+msgstr "_Log yn"
+
+#: fractal-gtk/res/ui/login_flow.ui:55
+msgid "_Create Account"
+msgstr "A_Ccount Oanmeitsje"
+
+#: fractal-gtk/res/ui/login_flow.ui:84
+msgid "Choose Provider"
+msgstr "Oanbieder Selektearje"
+
+#: fractal-gtk/res/ui/login_flow.ui:107
+msgid "_Next"
+msgstr "_Folgjende"
+
+#: fractal-gtk/res/ui/login_flow.ui:125
+msgid "What is your Provider?"
+msgstr "Wat is jo Provider?"
+
+#: fractal-gtk/res/ui/login_flow.ui:146
+msgid "Matrix provider domain, e.g. myserver.co"
+msgstr "Matrix oanbieder domein, bygelyks myntsjinner.co"
+
+#: fractal-gtk/res/ui/login_flow.ui:161
+msgid "The domain may not be empty."
+msgstr "It domein mei net leech wêze."
+
+#: fractal-gtk/res/ui/login_flow.ui:188
+msgid "Log In"
+msgstr "Ynlogge"
+
+#: fractal-gtk/res/ui/login_flow.ui:236
+msgid "_User ID"
+msgstr "_Brûkers ID"
+
+#: fractal-gtk/res/ui/login_flow.ui:252
+msgid "_Password"
+msgstr "_Wachtwurd"
+
+#: fractal-gtk/res/ui/login_flow.ui:284
+msgid "User name, email, or phone number"
+msgstr "Brûkersnamme, e-mail of telefoannûmer"
+
+#: fractal-gtk/res/ui/login_flow.ui:317
+msgid "_Forgot Password?"
+msgstr "Wachtwurd _Fergetten?"
+
+#: fractal-gtk/res/ui/login_flow.ui:335
+msgid "Invalid username or password"
+msgstr "Ûnjildiche brûkersnamme of wachtwurd"
+
+#: fractal-gtk/res/ui/main_menu.ui:103
+msgid "Log Out"
+msgstr "Útlogge"
+
+#: fractal-gtk/res/ui/main_menu.ui:120
+msgid "Keyboard _Shortcuts"
+msgstr "Toetseboerd _Koartkaaien"
+
+#: fractal-gtk/res/ui/main_menu.ui:129
+msgid "_About Fractal"
+msgstr "_Oer Fractal"
+
+#: fractal-gtk/res/ui/main_window.ui:56
+msgid "User"
+msgstr "Brûker"
+
+#: fractal-gtk/res/ui/main_window.ui:82
+msgid "Add"
+msgstr "Tafoegje"
+
+#: fractal-gtk/res/ui/main_window.ui:111
+msgid "Room search"
+msgstr "Troch keamer sykje"
+
+#: fractal-gtk/res/ui/main_window.ui:282
+msgid "Room Menu"
+msgstr "Keamer Menu"
+
+#: fractal-gtk/res/ui/main_window.ui:349
+msgid "No Room Selected"
+msgstr "Gjin Keamer Selektearre"
+
+#: fractal-gtk/res/ui/main_window.ui:350
+msgid "Join a room to start chatting."
+msgstr "Gean in keamer binnen om mei guon yn petear te gean."
+
+#: fractal-gtk/res/ui/main_window.ui:354
+msgid "No room"
+msgstr "Gjin keamer"
+
+#: fractal-gtk/res/ui/main_window.ui:494
+#: fractal-gtk/res/ui/server_chooser_menu.ui:51
+#: fractal-gtk/src/ui/connect/directory.rs:117
+msgid "Default Matrix Server"
+msgstr "Standert Matrix Tsjinner"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:23
+msgid "Markdown"
+msgstr "Markdown"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:52
+msgid "> quote"
+msgstr "> sitaat"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:63
+msgid "**bold**"
+msgstr "**tsjokdrukt**"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:78
+msgid "`code`"
+msgstr "`koade`"
+
+#: fractal-gtk/res/ui/markdown_popover.ui:90
+msgid "*italic*"
+msgstr "*skeandrukt*"
+
+#: fractal-gtk/res/ui/media_viewer.ui:63
+msgid "Toggle fullscreen"
+msgstr "Skeakelje tusken folslein skerm"
+
+#: fractal-gtk/res/ui/media_viewer.ui:226
+msgid "Loading more media"
+msgstr "Mear media lade"
+
+#: fractal-gtk/res/ui/message_menu.ui:22
+msgid "Reply"
+msgstr "Beäntwurdzje"
+
+#: fractal-gtk/res/ui/message_menu.ui:29
+msgid "Open With…"
+msgstr "Iepenje Mei…"
+
+#: fractal-gtk/res/ui/message_menu.ui:37
+msgid "Save Image As…"
+msgstr "Ôfbylding Bewarje As…"
+
+#: fractal-gtk/res/ui/message_menu.ui:45
+msgid "Save Video As…"
+msgstr "Fideo Bewarje As…"
+
+#: fractal-gtk/res/ui/message_menu.ui:53
+msgid "Copy Image"
+msgstr "Ôfbylding Kopiearje"
+
+#: fractal-gtk/res/ui/message_menu.ui:61
+msgid "Copy Selection"
+msgstr "Seleksje Kopiearje"
+
+#: fractal-gtk/res/ui/message_menu.ui:69
+msgid "Copy Text"
+msgstr "Tekst Kopiearje"
+
+#: fractal-gtk/res/ui/message_menu.ui:79
+msgid "View Source"
+msgstr "Boarne Besjen"
+
+#: fractal-gtk/res/ui/message_menu.ui:94
+msgid "Delete Message"
+msgstr "Berjochten Fuortsmite"
+
+#: fractal-gtk/res/ui/msg_src_window.ui:21
+msgid "Message Source"
+msgstr "Berjochtsboarne"
+
+#: fractal-gtk/res/ui/msg_src_window.ui:24
+msgid "Copy To Clipboard"
+msgstr "Nei Klemboerd Kopiearje"
+
+#: fractal-gtk/res/ui/new_room.ui:21
+msgid "Create new room"
+msgstr "Nije keamer oanmeitsje"
+
+#: fractal-gtk/res/ui/new_room.ui:32
+msgid "Create"
+msgstr "Oanmeitsje"
+
+#: fractal-gtk/res/ui/new_room.ui:71
+msgid "Room name"
+msgstr "Keamernamme"
+
+#: fractal-gtk/res/ui/new_room.ui:100
+msgid "Visibility"
+msgstr "Sichtberhyd"
+
+#: fractal-gtk/res/ui/new_room.ui:114
+msgid "Private"
+msgstr "Privee"
+
+#: fractal-gtk/res/ui/new_room.ui:125
+msgid "Public"
+msgstr "Publyk"
+
+#: fractal-gtk/res/ui/password_dialog.ui:22
+#: fractal-gtk/src/widgets/file_dialog.rs:12
+#: fractal-gtk/src/widgets/file_dialog.rs:33
+msgid "_Cancel"
+msgstr "_Ofbrekke"
+
+#: fractal-gtk/res/ui/password_dialog.ui:35
+msgid "Ch_ange"
+msgstr "Fero_arje"
+
+#: fractal-gtk/res/ui/password_dialog.ui:125
+msgid "The passwords do not match."
+msgstr "De wachtwurden komme net oerien."
+
+#: fractal-gtk/res/ui/password_dialog.ui:143
+msgid "_Verify New Password"
+msgstr "Nij Wachtwurd _Ferifiearje"
+
+#: fractal-gtk/res/ui/password_dialog.ui:160
+msgid "_New Password"
+msgstr "_Nij Wachtwurd"
+
+#: fractal-gtk/res/ui/password_dialog.ui:204
+msgid "Current _Password"
+msgstr "Hjoeddeistich _Wachtwurd"
+
+#: fractal-gtk/res/ui/room_menu.ui:8
+msgid "Room Details"
+msgstr "Keamer Details"
+
+#: fractal-gtk/res/ui/room_menu.ui:12
+msgid "Invite to This Room"
+msgstr "Ta dizze Keamer Útnûgje"
+
+#: fractal-gtk/res/ui/room_menu.ui:18
+msgid "Leave Room"
+msgstr "Keamer Ferlitte"
+
+#: fractal-gtk/res/ui/room_settings.ui:14
+msgid "Details"
+msgstr "Details"
+
+#: fractal-gtk/res/ui/room_settings.ui:112
+msgid "Unknown"
+msgstr "Ûnbekend"
+
+#: fractal-gtk/res/ui/room_settings.ui:133
+msgid "Add name"
+msgstr "Namme tafoegje"
+
+#: fractal-gtk/res/ui/room_settings.ui:160
+msgid "Add topic"
+msgstr "Ûnderwerp tafoegje"
+
+#: fractal-gtk/res/ui/room_settings.ui:179
+msgid "Type in your room topic"
+msgstr "Fier jo keamer ûnderwerp yn"
+
+#: fractal-gtk/res/ui/room_settings.ui:202
+msgid "No room description"
+msgstr "Gjin keamer beskriuwing"
+
+#: fractal-gtk/res/ui/room_settings.ui:230
+msgid "Notifications"
+msgstr "Notifikaasjes"
+
+#: fractal-gtk/res/ui/room_settings.ui:258
+msgid "Notification sounds"
+msgstr "Notifikaasje lûden"
+
+#: fractal-gtk/res/ui/room_settings.ui:290
+msgid "For all messages"
+msgstr "Foar alle berjochten"
+
+#: fractal-gtk/res/ui/room_settings.ui:322
+msgid "Only for mentions"
+msgstr "Allinich as jo neamd wurde"
+
+#: fractal-gtk/res/ui/room_settings.ui:352
+msgid "Shared Media"
+msgstr "Dielde Media"
+
+#: fractal-gtk/res/ui/room_settings.ui:394
+msgid "photos"
+msgstr "Foto's"
+
+#: fractal-gtk/res/ui/room_settings.ui:424
+msgid "videos"
+msgstr "fideo's"
+
+#: fractal-gtk/res/ui/room_settings.ui:454
+msgid "documents"
+msgstr "dokuminten"
+
+#: fractal-gtk/res/ui/room_settings.ui:475
+msgid "New members can see"
+msgstr "Nije leden kinne dit sjen"
+
+#: fractal-gtk/res/ui/room_settings.ui:507
+msgid "All room history"
+msgstr "Folsleine keamer skiednis"
+
+#: fractal-gtk/res/ui/room_settings.ui:539
+msgid "History after they were invited"
+msgstr "Sichtbere skiednis nei dat se útnûge binne"
+
+#: fractal-gtk/res/ui/room_settings.ui:569
+msgid "Room Visibility"
+msgstr "Keamer Sichtberens"
+
+#: fractal-gtk/res/ui/room_settings.ui:604
+msgid "Allow guests"
+msgstr "Gasten tastean"
+
+#: fractal-gtk/res/ui/room_settings.ui:635
+msgid "Allow joining without invite"
+msgstr "Binnen gean sûnder útnûging tastean"
+
+#: fractal-gtk/res/ui/room_settings.ui:666
+msgid "Publish in room directory"
+msgstr "Sichtber meitsje yn keamer oersjoch"
+
+#: fractal-gtk/res/ui/room_settings.ui:695
+msgid "Join addresses"
+msgstr "Keamer adressen binnen gean"
+
+#: fractal-gtk/res/ui/room_settings.ui:749
+msgid "members"
+msgstr "leden"
+
+#: fractal-gtk/res/ui/room_settings.ui:761
+msgid "Invite New Member"
+msgstr "Nije Leden Útnûgje"
+
+#: fractal-gtk/res/ui/room_settings.ui:786
+msgid "Search for room members"
+msgstr "Sykje om keamer leden"
+
+#: fractal-gtk/res/ui/scroll_widget.ui:63
+msgid "Scroll to bottom"
+msgstr "Rolje nei ûnderen"
+
+#: fractal-gtk/res/ui/server_chooser_menu.ui:30
+msgid "Show rooms from:"
+msgstr "Keamers besjen fan:"
+
+#: fractal-gtk/res/ui/server_chooser_menu.ui:65
+msgid "Your homeserver"
+msgstr "Jo thústsjinner"
+
+#: fractal-gtk/res/ui/server_chooser_menu.ui:93
+msgid "Other Protocol"
+msgstr "Oar Protokol"
+
+#: fractal-gtk/res/ui/server_chooser_menu.ui:139
+msgid "Other Homeserver"
+msgstr "Oare Thústsjinner"
+
+#: fractal-gtk/res/ui/server_chooser_menu.ui:156
+msgid "Homeserver URL"
+msgstr "Thústsjinner URL"
+
+#: fractal-gtk/src/actions/account_settings.rs:31
+#: fractal-gtk/src/actions/room_settings.rs:37
+msgid "Images"
+msgstr "Ôfbyldingen"
+
+#: fractal-gtk/src/actions/account_settings.rs:32
+#: fractal-gtk/src/actions/room_settings.rs:39
+msgid "Select a new avatar"
+msgstr "Nije profylôfbylding selektearje"
+
+#: fractal-gtk/src/actions/global.rs:320
+msgid "Select a file"
+msgstr "In triem selektearje"
+
+#: fractal-gtk/src/actions/message.rs:57
+msgid "This message has no source."
+msgstr "Dit berjocht hat gjin boarne."
+
+#: fractal-gtk/src/actions/message.rs:131
+#: fractal-gtk/src/actions/message.rs:162
+msgid "Could not download the file"
+msgstr "Koe triem net delhelje"
+
+#: fractal-gtk/src/actions/message.rs:138
+msgid "Couldn’t save file"
+msgstr "Koe triem net bewarje"
+
+#: fractal-gtk/src/actions/room_settings.rs:53
+msgid "Couldn’t open file"
+msgstr "Koe triem net iepenje"
+
+#: fractal-gtk/src/appop/account.rs:65
+msgid "The validation code is not correct."
+msgstr "De validaasje koade is net korrekt."
+
+#: fractal-gtk/src/appop/account.rs:73
+msgid "Enter the code received via SMS"
+msgstr "Fier de koade yn dy jo middels SMS krigen ha"
+
+#: fractal-gtk/src/appop/account.rs:88 fractal-gtk/src/appop/account.rs:144
+msgid "Continue"
+msgstr "Trochgean"
+
+#: fractal-gtk/src/appop/account.rs:134
+msgid ""
+"In order to add this email address, go to your inbox and follow the link you "
+"received. Once you’ve done that, click Continue."
+msgstr ""
+"Om dit e-mailadres ta te foegjen, moatte jo nei jo postfak en de keppeling "
+"folgje yn it mailtsje dy't jo krigen hawwe. As jo der mei klear binne, druk "
+"dan op Trochgean"
+
+#: fractal-gtk/src/appop/account.rs:348
+msgid "Are you sure you want to delete your account?"
+msgstr "Binne jo wis fan it fuortsmiten fan jo account?"
+
+#: fractal-gtk/src/appop/mod.rs:176
+msgid "Fractal [{}]"
+msgstr "Fractal [{}]"
+
+#: fractal-gtk/src/appop/notify.rs:18
+msgid "An audio file has been added to the conversation."
+msgstr "Der is in lûdstriem tafoegt oan it petear."
+
+#: fractal-gtk/src/appop/notify.rs:19
+msgid "An image has been added to the conversation."
+msgstr "Der is in ôfbylding tafoegt oan it petear."
+
+#: fractal-gtk/src/appop/notify.rs:20
+msgid "A video has been added to the conversation."
+msgstr "Der is in fideo tafoegt oan it petear."
+
+#: fractal-gtk/src/appop/notify.rs:21
+msgid "A file has been added to the conversation."
+msgstr "Der is in triem tafoegt oan it petear."
+
+#: fractal-gtk/src/appop/notify.rs:26
+msgid " (direct message)"
+msgstr "(direkt berjocht)"
+
+#: fractal-gtk/src/appop/room.rs:351
+msgid "Leave {room_name}?"
+msgstr "{room_name} ferlitte?"
+
+#: fractal-gtk/src/appop/room.rs:540
+msgid "The room ID is malformed"
+msgstr "It ID fan de keamer is misfoarme"
+
+#: fractal-gtk/src/appop/room.rs:608
+msgid "EMPTY ROOM"
+msgstr "LEGE KEAMER"
+
+#: fractal-gtk/src/appop/room.rs:610
+msgid "{m1} and {m2}"
+msgstr "{m1} en {m2}"
+
+#: fractal-gtk/src/appop/room.rs:611
+msgid "{m1} and Others"
+msgstr "{m1} en Oaren"
+
+#: fractal-gtk/src/appop/room.rs:711
+msgid "Several users are typing…"
+msgstr "In pear brûkers binne oan it typen…"
+
+#: fractal-gtk/src/appop/room.rs:714
+msgid "<b>{}</b> is typing…"
+msgid_plural "<b>{}</b> and <b>{}</b> are typing…"
+msgstr[0] "<b>{}</b> is oan it typen…"
+msgstr[1] "<b>{}</b> en <b>{}</b> binne oan it typen…"
+
+#: fractal-gtk/src/appop/sync.rs:24
+msgid "Syncing, this could take a while"
+msgstr "Oan it syngronisearjen, dit kin efkes duorje"
+
+#: fractal-gtk/src/backend/directory.rs:35
+#: fractal-gtk/src/backend/directory.rs:81
+msgid "Error searching for rooms"
+msgstr "Flater by it sykjen om keamers"
+
+#: fractal-gtk/src/backend/register.rs:42
+msgid "Can’t login, try again"
+msgstr "Kin net ynlogge, probearje it noch ris"
+
+#: fractal-gtk/src/backend/room.rs:402
+msgid "Error deleting message"
+msgstr "Flater by it fuortsmiten fan berjocht"
+
+#: fractal-gtk/src/backend/room.rs:442
+msgid "Can’t join the room, try again."
+msgstr "Koe de keamer net binnen gean, probearje it noch ris."
+
+#: fractal-gtk/src/backend/room.rs:680 fractal-gtk/src/backend/room.rs:732
+msgid "Can’t create the room, try again"
+msgstr "Kin de keamer net oanmeitsje, probearje it noch ris"
+
+#: fractal-gtk/src/backend/user.rs:112
+msgid "Sorry, account settings can’t be loaded."
+msgstr "Sorry, de account ynstellings kinne net laden wurde."
+
+#: fractal-gtk/src/backend/user.rs:140
+msgid "Email is already in use"
+msgstr "E-mail wurd al brûkt"
+
+#: fractal-gtk/src/backend/user.rs:143
+msgid "Please enter a valid email address."
+msgstr "Graach in jildich e-mailadres ynfiere."
+
+#: fractal-gtk/src/backend/user.rs:146
+msgid "Couldn’t add the email address."
+msgstr "Koe it e-mailadres net tafoegje."
+
+#: fractal-gtk/src/backend/user.rs:183
+msgid "Phone number is already in use"
+msgstr "Telefoannûmer wurd al brûkt"
+
+#: fractal-gtk/src/backend/user.rs:187
+msgid ""
+"Please enter your phone number in the format: \n"
+" + your country code and your phone number."
+msgstr ""
+"Jo telefoannûmer graach sa ynfiere:\n"
+"+ lânkoade en jo telefoannûmer."
+
+#: fractal-gtk/src/backend/user.rs:191
+msgid "Couldn’t add the phone number."
+msgstr "Koe it telefoannûmer net tafoegje."
+
+#: fractal-gtk/src/backend/user.rs:329
+msgid "Couldn’t change the password"
+msgstr "Koe it wachtwurd net feroarje"
+
+#: fractal-gtk/src/backend/user.rs:382
+msgid "Couldn’t delete the account"
+msgstr "Koe it account net fuortsmite"
+
+#: fractal-gtk/src/ui/about.rs:12
+msgid "A Matrix.org client for GNOME"
+msgstr "In Matrix.org kliïnt foar GNOME"
+
+#: fractal-gtk/src/ui/about.rs:14
+msgid "© 2017–2020 Daniel García Moreno, et al."
+msgstr "© 2017–2020 Daniel García Moreno, et al."
+
+#: fractal-gtk/src/ui/about.rs:21
+msgid "Learn more about Fractal"
+msgstr "Lear mear oer Fractal"
+
+#: fractal-gtk/src/ui/about.rs:22
+msgid "translator-credits"
+msgstr "Tjipke van der Heide"
+
+#: fractal-gtk/src/ui/about.rs:37
+msgid "Name by"
+msgstr "Neamd troch"
+
+#: fractal-gtk/src/ui/attach.rs:26
+msgid "Image from Clipboard"
+msgstr "Ôfbylding fan Klemboerd"
+
+#: fractal-gtk/src/ui/attach.rs:42
+msgid "Send"
+msgstr "Ferstjoere"
+
+#. Filename for the attached image
+#: fractal-gtk/src/ui/attach.rs:90
+msgid "image"
+msgstr "ôfbylding"
+
+#: fractal-gtk/src/ui/invite.rs:131
+msgid "Invite to {name}"
+msgstr "Útnûgje foar {name}"
+
+#: fractal-gtk/src/ui/invite.rs:183
+msgid "Join {room_name}?"
+msgstr "Wolle jo {room_name} binnen gean?"
+
+#: fractal-gtk/src/ui/invite.rs:187
+msgid ""
+"You’ve been invited to join <b>{room_name}</b> room by <b>{sender_name}</b>"
+msgstr ""
+"Jo binne troch <b>{sender_name}</b> útnûge om de <b>{room_name}</b> keamer "
+"binnen te gean"
+
+#: fractal-gtk/src/ui/invite.rs:192
+msgid "You’ve been invited to join <b>{room_name}</b>"
+msgstr "Jo binne útnûge om <b>{room_name}</b> binnen te gean"
+
+#: fractal-gtk/src/ui/mod.rs:77
+msgid "You don’t have permission to post to this room"
+msgstr ""
+"Jo hawwe net de nediche rjochten om berjochten yn dizze keamer te setten"
+
+#: fractal-gtk/src/ui/mod.rs:159
+msgid "OK"
+msgstr "OK"
+
+#: fractal-gtk/src/ui/room_settings.rs:264
+msgid "Room · {} member"
+msgid_plural "Room · {} members"
+msgstr[0] "Room · {} lid"
+msgstr[1] "Room · {} leden"
+
+#: fractal-gtk/src/ui/room_settings.rs:699
+msgid "{} member"
+msgid_plural "{} members"
+msgstr[0] "{} lid"
+msgstr[1] "{} leden"
+
+#: fractal-gtk/src/widgets/file_dialog.rs:8
+msgid "Save media as"
+msgstr "Media bewarje as"
+
+#: fractal-gtk/src/widgets/file_dialog.rs:11
+msgid "_Save"
+msgstr "_Bewarje"
+
+#: fractal-gtk/src/widgets/file_dialog.rs:32
+msgid "_Select"
+msgstr "_Selektearje"
+
+#: fractal-gtk/src/widgets/inline_player.rs:513
+msgid "Could not retrieve file URI"
+msgstr "Koe triem URI net ophelje"
+
+#: fractal-gtk/src/widgets/kicked_dialog.rs:46
+msgid "You have been kicked from {}"
+msgstr "Jo binne út {} wei skopt"
+
+#: fractal-gtk/src/widgets/kicked_dialog.rs:50
+msgid ""
+"Kicked by: {}\n"
+" “{}”"
+msgstr ""
+"Der út skopt troch: {}\n"
+" “{}”"
+
+#: fractal-gtk/src/widgets/login.rs:95
+msgid "Malformed server URL"
+msgstr "Misfoarme tsjinner URL"
+
+#: fractal-gtk/src/widgets/media_viewer.rs:1026
+msgid "Error while loading previous media"
+msgstr "Flater by it laden fan foariche media"
+
+#: fractal-gtk/src/widgets/members_list.rs:50
+msgid "No matching members found"
+msgstr "Gjin oerienkomstige leden fûn"
+
+#: fractal-gtk/src/widgets/members_list.rs:146
+msgid "Admin"
+msgstr "Behearder"
+
+#: fractal-gtk/src/widgets/members_list.rs:147
+msgid "Moderator"
+msgstr "Opsichter"
+
+#: fractal-gtk/src/widgets/members_list.rs:148
+msgid "Privileged"
+msgstr "Oanfoljende Rjochten"
+
+#: fractal-gtk/src/widgets/message.rs:471
+#, c-format
+msgid "Last edited %c"
+msgstr "Foar it lêst oanpast op %c"
+
+#: fractal-gtk/src/widgets/message.rs:665
+#: fractal-gtk/src/widgets/message.rs:831
+msgid "Save"
+msgstr "Bewarje"
+
+#: fractal-gtk/src/widgets/message.rs:846
+msgid "Open"
+msgstr "Iepenje"
+
+#. Use 12h time format (AM/PM)
+#: fractal-gtk/src/widgets/message.rs:989
+msgid "%l∶%M %p"
+msgstr "%l∶%M %p"
+
+#. Use 24 time format
+#: fractal-gtk/src/widgets/message.rs:992
+msgid "%R"
+msgstr "%R"
+
+#: fractal-gtk/src/widgets/room_history.rs:108
+msgid "New Messages"
+msgstr "Nije Berjochten"
+
+#. Translators: This is a date format in the day divider without the year
+#: fractal-gtk/src/widgets/room_history.rs:799
+msgid "%B %e"
+msgstr "%e %B"
+
+#. Translators: This is a date format in the day divider with the year
+#: fractal-gtk/src/widgets/room_history.rs:802
+msgid "%B %e, %Y"
+msgstr "%e %B, %Y"
+
+#: fractal-gtk/src/widgets/roomlist.rs:480
+msgid "Invites"
+msgstr "Útnûgingen"
+
+#: fractal-gtk/src/widgets/roomlist.rs:481
+msgid "You don’t have any invitations"
+msgstr "Jo hawwe gjin útnûgings"
+
+#: fractal-gtk/src/widgets/roomlist.rs:485
+msgid "Favorites"
+msgstr "Favoriten"
+
+#: fractal-gtk/src/widgets/roomlist.rs:486
+msgid "Drag and drop rooms here to add them to your favorites"
+msgstr ""
+"Sleep hjir keamers hinne en lit se los om se oan jo favoriten ta te foegjen"
+
+#: fractal-gtk/src/widgets/roomlist.rs:490
+msgid "Rooms"
+msgstr "Keamers"
+
+#: fractal-gtk/src/widgets/roomlist.rs:491
+msgid "You don’t have any rooms yet"
+msgstr "Jo hawwe noch gjin keamers"

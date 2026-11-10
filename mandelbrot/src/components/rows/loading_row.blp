@@ -1,0 +1,31 @@
+using Gtk 4.0;
+
+template $LoadingRow {
+  activatable: false;
+  selectable: false;
+
+  child: $LoadingBin loading_bin {
+    is-loading: true;
+    vhomogeneous: false;
+
+    child: Gtk.Box error {
+      orientation: vertical;
+      spacing: 12;
+      margin-top: 12;
+      margin-bottom: 12;
+      margin-start: 12;
+      margin-end: 12;
+
+      Gtk.Label error_label {
+        wrap: true;
+        wrap-mode: word_char;
+      }
+
+      Gtk.Button retry_button {
+        can-shrink: true;
+        label: _("Try Again");
+        halign: center;
+      }
+    };
+  };
+}

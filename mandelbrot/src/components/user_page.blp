@@ -1,0 +1,235 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $UserPage: Adw.NavigationPage {
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.ScrolledWindow scrolled_window {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+      vexpand: true;
+
+      child: Adw.Clamp {
+        maximum-size: 444;
+
+        child: Gtk.Box box {
+          orientation: vertical;
+
+          $Avatar avatar {
+            size: 128;
+            accessible-role: presentation;
+          }
+
+          Gtk.Box {
+            orientation: vertical;
+            spacing: 6;
+
+            Gtk.Label {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+              label: bind template.user as <$User>.display-name;
+
+              styles [
+                "title-1",
+              ]
+            }
+
+            Gtk.CenterBox {
+              [center]
+              Gtk.Label user_id {
+                ellipsize: end;
+                justify: center;
+                label: bind template.user as <$User>.user-id-string;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              [end]
+              Gtk.Button {
+                icon-name: "copy-symbolic";
+                tooltip-text: _("Copy Matrix User ID");
+                valign: center;
+                hexpand: true;
+                halign: start;
+                margin-start: 6;
+                clicked => $copy_user_id() swapped;
+
+                styles [
+                  "flat",
+                ]
+              }
+            }
+          }
+
+          Gtk.ListBox direct_chat_box {
+            visible: false;
+            accessible-role: group;
+
+            styles [
+              "boxed-list",
+            ]
+
+            $LoadingButtonRow direct_chat_button {
+              is-loading: true;
+              activated => $open_direct_chat() swapped;
+            }
+          }
+
+          Gtk.Box room_box {
+            visible: false;
+            orientation: vertical;
+            spacing: 12;
+
+            Gtk.Label room_title {
+              ellipsize: end;
+              xalign: 0.0;
+
+              styles [
+                "heading",
+                "h4",
+              ]
+            }
+
+            Gtk.ListBox {
+              styles [
+                "boxed-list-separate",
+              ]
+
+              Adw.ActionRow membership_row {
+                selectable: false;
+                title: _("Role");
+
+                accessibility {
+                  described-by: [
+                    membership_label,
+                  ];
+                }
+
+                Gtk.Label membership_label {
+                  ellipsize: end;
+                }
+              }
+
+              $PowerLevelSelectionRow power_level_row {
+                // Translators: value used to assign room member roles.
+                title: _("Power Level");
+                selected-power-level-changed => $set_power_level() swapped;
+              }
+
+              $LoadingButtonRow invite_button {
+                // Translators: In this string, 'Invite' is a verb.
+                title: _("Invite");
+                activated => $invite_user() swapped;
+              }
+
+              $LoadingButtonRow kick_button {
+                activated => $kick_user() swapped;
+
+                styles [
+                  "destructive-action",
+                ]
+              }
+
+              $LoadingButtonRow ban_button {
+                // Translators: As in, 'Ban room member'.
+                title: _("Ban");
+                activated => $ban_user() swapped;
+
+                styles [
+                  "destructive-action",
+                ]
+              }
+
+              $LoadingButtonRow unban_button {
+                // Translators: As in, 'Unban room member'.
+                title: _("Unban");
+                activated => $unban_user() swapped;
+              }
+
+              $LoadingButtonRow remove_messages_button {
+                title: _("Remove Messages");
+                activated => $remove_messages() swapped;
+
+                styles [
+                  "destructive-action",
+                ]
+              }
+            }
+          }
+
+          Gtk.Box {
+            orientation: vertical;
+            spacing: 12;
+
+            Gtk.Label {
+              label: _("Security");
+              ellipsize: end;
+              xalign: 0.0;
+
+              styles [
+                "heading",
+                "h4",
+              ]
+            }
+
+            Gtk.ListBox {
+              styles [
+                "boxed-list",
+              ]
+
+              Adw.ActionRow verified_row {
+                selectable: false;
+
+                Gtk.Stack verified_stack {
+                  transition-type: crossfade;
+                  valign: center;
+
+                  Gtk.StackPage {
+                    name: "button";
+
+                    child: $LoadingButton verify_button {
+                      sensitive: false;
+                      content-label: _("Verify");
+                      clicked => $verify_user() swapped;
+                    };
+                  }
+
+                  Gtk.StackPage {
+                    name: "icon";
+
+                    child: Gtk.Image {
+                      icon-name: "verified-symbolic";
+                      accessible-role: presentation;
+                      halign: end;
+                      margin-end: 6;
+
+                      styles [
+                        "success",
+                      ]
+                    };
+                  }
+                }
+              }
+
+              Adw.ActionRow ignored_row {
+                selectable: false;
+
+                $LoadingButton ignored_button {
+                  valign: center;
+                  clicked => $toggle_ignored() swapped;
+                }
+              }
+            }
+          }
+        };
+      };
+    };
+  };
+}

@@ -1,0 +1,198 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomPreviewDialog: $ToastableDialog {
+  title: _("Join a Room");
+  content-width: 480;
+  content-height: 500;
+
+  child-content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+
+      [start]
+      Gtk.Button go_back_btn {
+        visible: false;
+        icon-name: "go-previous-symbolic";
+        clicked => $go_back() swapped;
+        tooltip-text: _("Back");
+      }
+    }
+
+    [top]
+    Adw.Clamp {
+      hexpand: true;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-start: 24;
+        margin-end: 24;
+
+        Gtk.Label heading {
+          wrap: true;
+          wrap-mode: word_char;
+          max-width-chars: 20;
+          justify: center;
+          xalign: 0.5;
+          label: _("Join a Room");
+
+          styles [
+            "title-2",
+          ]
+        }
+      };
+    }
+
+    content: Gtk.Stack stack {
+      Gtk.StackPage {
+        name: "entry";
+
+        child: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+
+          child: Adw.Clamp {
+            margin-start: 24;
+            margin-end: 24;
+
+            child: Gtk.Box entry_page {
+              orientation: vertical;
+              valign: center;
+              spacing: 24;
+
+              Gtk.Label look_up_instructions {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+                use-markup: true;
+                label: _("Enter an address or link to look up a room");
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.SearchEntry search_entry {
+                accessibility {
+                  described-by: [
+                    look_up_instructions,
+                  ];
+                }
+
+                search-changed => $update_entry_page() swapped;
+                activate => $look_up_room() swapped;
+              }
+
+              $LoadingButton look_up_btn {
+                // Translators: This is a verb, as in 'Look up Room'.
+                content-label: _("Look Up");
+                halign: center;
+                clicked => $look_up_room() swapped;
+
+                styles [
+                  "suggested-action",
+                  "standalone-button",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      }
+
+      Gtk.StackPage {
+        name: "loading";
+
+        child: Adw.Spinner {};
+      }
+
+      Gtk.StackPage {
+        name: "details";
+
+        child: Gtk.ScrolledWindow {
+          child: Adw.Clamp {
+            margin-start: 24;
+            margin-end: 24;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              valign: center;
+              spacing: 12;
+
+              $Avatar room_avatar {
+                size: 128;
+                accessible-role: presentation;
+              }
+
+              Gtk.Label room_name {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "title-3",
+                ]
+              }
+
+              Gtk.Label room_alias {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              Gtk.Label room_topic {
+                wrap: true;
+                wrap-mode: word_char;
+                justify: center;
+                use-markup: true;
+                selectable: true;
+
+                styles [
+                  "body",
+                ]
+              }
+
+              Gtk.Box room_members_box {
+                halign: center;
+                spacing: 6;
+
+                Gtk.Image {
+                  icon-name: "users-symbolic";
+                  accessible-role: presentation;
+
+                  styles [
+                    "dimmed",
+                  ]
+                }
+
+                Gtk.Label room_members_count {
+                  styles [
+                    "dimmed",
+                  ]
+                }
+              }
+
+              $LoadingButton view_or_join_btn {
+                margin-top: 12;
+                halign: center;
+                clicked => $view_or_join_room() swapped;
+
+                styles [
+                  "suggested-action",
+                  "standalone-button",
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      }
+    };
+  };
+}

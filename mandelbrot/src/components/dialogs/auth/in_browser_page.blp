@@ -1,0 +1,120 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $AuthDialogInBrowserPage: Adw.Bin {
+  child: Gtk.WindowHandle {
+    child: Gtk.Box {
+      orientation: vertical;
+
+      Gtk.ScrolledWindow {
+        propagate-natural-width: true;
+        propagate-natural-height: true;
+        hscrollbar-policy: never;
+
+        styles [
+          "body-scrolled-window",
+          "undershoot-bottom",
+        ]
+
+        child: Gtk.Box {
+          orientation: vertical;
+
+          styles [
+            "message-area",
+            "has-heading",
+            "has-body",
+          ]
+
+          Adw.Bin {
+            styles [
+              "heading-bin",
+            ]
+
+            Gtk.Label {
+              justify: center;
+              xalign: 0.5;
+              label: _("Authentication");
+
+              styles [
+                "title-2",
+              ]
+            }
+          }
+
+          Gtk.Label {
+            vexpand: true;
+            wrap: true;
+            wrap-mode: word_char;
+            justify: center;
+            xalign: 0.5;
+            label: _("Please authenticate the operation via the browser and, once completed, press confirm");
+
+            styles [
+              "body",
+            ]
+          }
+
+          Gtk.Button launch_url_btn {
+            margin-top: 6;
+            can-shrink: true;
+            halign: center;
+            clicked => $launch_url() swapped;
+
+            styles [
+              "suggested-action",
+              "pill",
+              "large",
+              "image-text-button",
+            ]
+
+            child: Gtk.Box {
+              halign: center;
+
+              Gtk.Label {
+                label: _("Contin_ue");
+                use-underline: true;
+                ellipsize: end;
+                mnemonic-widget: launch_url_btn;
+              }
+
+              Gtk.Image {
+                icon-name: "external-link-symbolic";
+                accessible-role: presentation;
+                valign: center;
+              }
+            };
+          }
+        };
+      }
+
+      Adw.WrapBox {
+        child-spacing: 12;
+        line-spacing: 12;
+        justify: fill;
+        justify-last-line: true;
+
+        styles [
+          "response-area",
+        ]
+
+        Gtk.Button {
+          can-shrink: true;
+          use-underline: true;
+          label: _("_Cancel");
+          action-name: "auth-dialog.close";
+        }
+
+        $LoadingButton confirm_button {
+          sensitive: false;
+          can-shrink: true;
+          content-label: _("C_onfirm");
+          clicked => $proceed() swapped;
+
+          styles [
+            "suggested-action",
+          ]
+        }
+      }
+    };
+  };
+}

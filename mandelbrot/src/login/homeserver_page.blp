@@ -1,0 +1,126 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoginHomeserverPage: Adw.NavigationPage {
+  tag: "homeserver";
+  title: _("Homeserver");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {}
+
+      Gtk.ScrolledWindow scrolled_window {
+        hscrollbar-policy: never;
+        propagate-natural-height: true;
+        vexpand: true;
+
+        child: Adw.Clamp {
+          maximum-size: 360;
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+
+          child: Gtk.Box {
+            orientation: vertical;
+            valign: center;
+            spacing: 24;
+            accessible-role: form;
+
+            accessibility {
+              labelled-by: [
+                title,
+              ];
+            }
+
+            Gtk.Label title {
+              label: _("Homeserver");
+              wrap: true;
+              justify: center;
+              accessible-role: heading;
+
+              styles [
+                "title-1",
+              ]
+
+              accessibility {
+                level: 1;
+              }
+            }
+
+            Gtk.Picture {
+              file: "resource:///org/tunaos/mandelbrot/assets/homeserver.svg";
+              accessible-role: presentation;
+            }
+
+            Gtk.Box {
+              orientation: vertical;
+              spacing: 6;
+
+              Gtk.ListBox {
+                accessible-role: group;
+
+                styles [
+                  "boxed-list",
+                ]
+
+                Adw.EntryRow homeserver_entry {
+                  selectable: false;
+                  changed => $update_next_state() swapped;
+                  entry-activated => $check_homeserver() swapped;
+
+                  accessibility {
+                    described-by: [
+                      homeserver_help,
+                    ];
+                  }
+                }
+              }
+
+              Gtk.Label homeserver_help {
+                justify: left;
+                xalign: 0.0;
+                margin-start: 6;
+                margin-end: 6;
+                wrap: true;
+                use-markup: true;
+
+                styles [
+                  "caption",
+                  "dimmed",
+                ]
+              }
+            }
+
+            $LoadingButton next_button {
+              content-label: _("Next");
+              halign: center;
+              clicked => $check_homeserver() swapped;
+
+              styles [
+                "suggested-action",
+                "standalone-button",
+                "pill",
+              ]
+            }
+
+            Gtk.Button {
+              can-shrink: true;
+              halign: center;
+              // Translators: As in 'Advanced Settings'.
+              label: _("Advanced…");
+              action-name: "login.open-advanced";
+            }
+          };
+        };
+      }
+    };
+  };
+}

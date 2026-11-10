@@ -1,0 +1,84 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomHistoryThreadPanel: Adw.Bin {
+  styles [
+    "view",
+    "thread-panel",
+  ]
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [title]
+      Gtk.Label {
+        label: _("Thread");
+
+        styles [
+          "title",
+        ]
+      }
+
+      [end]
+      Gtk.Button {
+        icon-name: "close-symbolic";
+        tooltip-text: _("Close Thread");
+        clicked => $close() swapped;
+      }
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      Gtk.Stack stack {
+        transition-type: crossfade;
+        vexpand: true;
+
+        Gtk.StackPage {
+          name: "loading";
+          title: _("Loading");
+
+          child: Adw.Spinner {};
+        }
+
+        Gtk.StackPage {
+          name: "content";
+          title: _("Thread");
+
+          child: Gtk.ScrolledWindow scrolled_window {
+            vexpand: true;
+            hscrollbar-policy: never;
+
+            styles [
+              "room-history",
+              "undershoot-bottom",
+            ]
+
+            child: Gtk.ListView listview {
+              styles [
+                "navigation-sidebar",
+                "room-history-list",
+              ]
+
+              tab-behavior: item;
+              accessible-role: log;
+            };
+          };
+        }
+      }
+
+      Adw.Clamp {
+        vexpand: false;
+        maximum-size: 750;
+        tightening-threshold: 550;
+
+        $MessageToolbar message_toolbar {
+          timeline: bind template.timeline;
+        }
+      }
+    };
+  }
+}

@@ -1,0 +1,202 @@
+using Gtk 4.0;
+using Adw 1;
+using GtkSource 5;
+
+template $EventPropertiesDialog: $ToastableDialog {
+  title: _("Event Properties");
+  content-width: 500;
+  content-height: 400;
+
+  child-content: Adw.NavigationView navigation_view {
+    Adw.NavigationPage {
+      title: _("Event Properties");
+      tag: "properties";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: Gtk.ScrolledWindow {
+          hscrollbar-policy: never;
+          vexpand: true;
+
+          child: Adw.Clamp {
+            vexpand: true;
+            margin-top: 12;
+            margin-bottom: 12;
+            margin-start: 12;
+            margin-end: 12;
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 24;
+
+              Gtk.Box {
+                orientation: vertical;
+                spacing: 12;
+
+                Label {
+                  visible: bind template.event as <$RoomEvent>.is-edited;
+                  label: _("Original Event");
+                  ellipsize: end;
+                  xalign: 0;
+
+                  styles [
+                    "heading",
+                  ]
+                }
+
+                Gtk.ListBox {
+                  styles [
+                    "boxed-list",
+                  ]
+
+                  $CopyableRow original_event_id_row {
+                    main-title: "subtitle";
+                    title: _("Event ID");
+                    subtitle: bind template.event as <$RoomEvent>.event-id-string;
+                    copy-button-tooltip-text: _("Copy Event ID");
+                    toast-text: _("Event ID copied to clipboard");
+                  }
+
+                  $CopyableRow room_id_row {
+                    main-title: "subtitle";
+                    title: _("Room ID");
+                    subtitle: bind template
+                      .event as <$RoomEvent>
+                      .timeline as <$Timeline>
+                      .room as <$Room>
+                      .room-id-string;
+                    copy-button-tooltip-text: _("Copy Room ID");
+                    toast-text: _("Room ID copied to clipboard");
+                  }
+
+                  Adw.ActionRow sender_id_row {
+                    title: _("Sender ID");
+                    subtitle: bind template.event as <$RoomEvent>.sender-id-string;
+
+                    styles [
+                      "property",
+                    ]
+
+                    Gtk.Button {
+                      valign: center;
+                      icon-name: "user-info-symbolic";
+                      tooltip-text: _("Show Profile");
+                      clicked => $open_sender_profile() swapped;
+
+                      styles [
+                        "flat",
+                      ]
+                    }
+                  }
+
+                  $CopyableRow original_timestamp_row {
+                    main-title: "subtitle";
+                    title: _("Timestamp");
+                    subtitle: bind template.event as <$RoomEvent>.formatted-timestamp;
+                    copy-button-tooltip-text: _("Copy Timestamp");
+                    toast-text: _("Timestamp copied to clipboard");
+                  }
+
+                  Adw.ButtonRow {
+                    visible: bind template.event as <$RoomEvent>.has-source;
+                    selectable: false;
+                    title: _("View Source");
+                    end-icon-name: "go-next-symbolic";
+                    activated => $show_original_source() swapped;
+                  }
+                }
+              }
+
+              Gtk.Box {
+                visible: bind $string_not_empty(template.event as <$RoomEvent>.latest-edit-source) as <bool>;
+                orientation: vertical;
+                spacing: 12;
+
+                Gtk.Label {
+                  label: _("Latest Edit");
+                  ellipsize: end;
+                  xalign: 0;
+
+                  styles [
+                    "heading",
+                  ]
+                }
+
+                Gtk.ListBox {
+                  styles [
+                    "boxed-list",
+                  ]
+
+                  $CopyableRow edit_event_id_row {
+                    main-title: "subtitle";
+                    title: _("Event ID");
+                    subtitle: bind template.event as <$RoomEvent>.latest-edit-event-id-string;
+                    copy-button-tooltip-text: _("Copy Event ID");
+                    toast-text: _("Event ID copied to clipboard");
+                  }
+
+                  $CopyableRow edit_timestamp_row {
+                    main-title: "subtitle";
+                    title: _("Timestamp");
+                    subtitle: bind template.event as <$RoomEvent>.latest-edit-formatted-timestamp;
+                    copy-button-tooltip-text: _("Copy Timestamp");
+                    toast-text: _("Timestamp copied to clipboard");
+                  }
+
+                  Adw.ButtonRow {
+                    selectable: false;
+                    title: _("View Source");
+                    end-icon-name: "go-next-symbolic";
+                    activated => $show_edit_source() swapped;
+                  }
+                }
+              }
+            };
+          };
+        };
+      };
+    }
+
+    Adw.NavigationPage source_page {
+      tag: "source";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          [end]
+          Gtk.Button {
+            icon-name: "copy-symbolic";
+            focus-on-click: false;
+            tooltip-text: _("Copy Source");
+            valign: center;
+            clicked => $copy_source() swapped;
+
+            styles [
+              "flat",
+            ]
+          }
+        }
+
+        content: Gtk.ScrolledWindow {
+          child: GtkSource.View source_view {
+            can-focus: false;
+            editable: false;
+            hexpand: true;
+            vexpand: true;
+            wrap-mode: word_char;
+            left-margin: 12;
+            right-margin: 12;
+            top-margin: 12;
+            bottom-margin: 12;
+
+            styles [
+              "monospace",
+            ]
+          };
+        };
+      };
+    }
+  };
+}

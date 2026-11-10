@@ -1,0 +1,144 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LoginMethodPage: Adw.NavigationPage {
+  tag: "method";
+  title: _("Log In");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: Gtk.Box {
+      orientation: vertical;
+
+      $OfflineBanner {}
+
+      Gtk.ScrolledWindow scrolled_window {
+        hscrollbar-policy: never;
+        propagate-natural-height: true;
+        vexpand: true;
+
+        child: Adw.Clamp {
+          maximum-size: 360;
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+
+          child: Gtk.Box {
+            orientation: vertical;
+            valign: center;
+            spacing: 30;
+            accessible-role: form;
+
+            accessibility {
+              labelled-by: [
+                title,
+              ];
+
+              described-by: [
+                homeserver_url,
+              ];
+            }
+
+            Gtk.Box {
+              orientation: vertical;
+              spacing: 12;
+              halign: center;
+
+              Gtk.Label title {
+                wrap: true;
+                justify: center;
+                accessible-role: heading;
+
+                styles [
+                  "title-1",
+                ]
+
+                accessibility {
+                  level: 1;
+                }
+              }
+
+              Gtk.Box {
+                spacing: 6;
+                halign: center;
+                tooltip-text: _("Homeserver URL");
+
+                Gtk.Image {
+                  icon-name: "home-symbolic";
+                  accessible-role: presentation;
+                }
+
+                Gtk.Label homeserver_url {
+                  ellipsize: end;
+
+                  styles [
+                    "body",
+                  ]
+                }
+              }
+            }
+
+            Gtk.ListBox {
+              accessible-role: group;
+
+              styles [
+                "boxed-list",
+              ]
+
+              Adw.EntryRow username_entry {
+                title: _("Matrix Username");
+                selectable: false;
+                changed => $update_next_state() swapped;
+                entry-activated => $login_with_password() swapped;
+              }
+            }
+
+            Gtk.ListBox {
+              accessible-role: group;
+
+              styles [
+                "boxed-list",
+              ]
+
+              Adw.PasswordEntryRow password_entry {
+                title: _("Password");
+                selectable: false;
+                changed => $update_next_state() swapped;
+                entry-activated => $login_with_password() swapped;
+              }
+            }
+
+            Gtk.Button sso_button {
+              styles [
+                "standalone-button",
+                "pill",
+              ]
+
+              label: _("Login via SSO");
+              can-shrink: true;
+              halign: center;
+              action-name: "login.sso";
+            }
+
+            $LoadingButton next_button {
+              content-label: _("Next");
+              halign: center;
+              clicked => $login_with_password() swapped;
+
+              styles [
+                "suggested-action",
+                "standalone-button",
+                "pill",
+              ]
+            }
+          };
+        };
+      }
+    };
+  };
+}

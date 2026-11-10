@@ -1,0 +1,35 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ContentMessagePoll: Adw.Bin {
+  Gtk.Box {
+    orientation: vertical;
+    spacing: 6;
+
+    Gtk.Label question_label {
+      xalign: 0;
+      wrap: true;
+      wrap-mode: word_char;
+
+      styles [
+        "heading",
+      ]
+    }
+
+    Gtk.Box answers_box {
+      orientation: vertical;
+      spacing: 8;
+    }
+
+    Gtk.Label votes_label {
+      xalign: 0;
+      wrap: true;
+      wrap-mode: word_char;
+
+      styles [
+        "caption",
+        "dim-label",
+      ]
+    }
+  }
+}

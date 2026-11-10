@@ -1,0 +1,92 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $RoomDetailsAddressesSubpage: Adw.NavigationPage {
+  title: _("Edit Room Addresses");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup public_addresses_group {
+        title: _("Public Addresses");
+        description: _(
+          "Public addresses are advertised for all users in the room and the main address is used to identify a room publicly. Before adding an address to this list, it must be registered as a local address."
+        );
+
+        Gtk.ListBox public_addresses_list {
+          styles [
+            "boxed-list",
+          ]
+        }
+
+        Gtk.Revealer public_addresses_error_revealer {
+          styles [
+            "entry-row-error-revealer",
+          ]
+
+          child: Gtk.Label public_addresses_error {
+            accessible-role: status;
+            wrap: true;
+            wrap-mode: word_char;
+            xalign: 0.0;
+
+            styles [
+              "caption",
+              "error",
+            ]
+          };
+        }
+      }
+
+      Adw.PreferencesGroup local_addresses_group {
+        description: _(
+          "Local addresses can only be registered with your own homeserver. If they are not made public, only people on your homeserver can discover them."
+        );
+
+        Gtk.ListBox local_addresses_list {
+          styles [
+            "boxed-list",
+          ]
+        }
+
+        Gtk.Revealer local_addresses_error_revealer {
+          styles [
+            "entry-row-error-revealer",
+          ]
+
+          child: Gtk.Label local_addresses_error {
+            accessible-role: status;
+            wrap: true;
+            wrap-mode: word_char;
+            xalign: 0.0;
+
+            styles [
+              "caption",
+              "error",
+            ]
+          };
+        }
+      }
+    };
+  };
+}
+
+$EntryAddRow public_addresses_add_row {
+  title: _("Add Public Address");
+  add-button-tooltip-text: _("Add Public Address");
+  add => $add_public_address() swapped;
+  entry-activated => $handle_public_addresses_add_row_activated() swapped;
+}
+
+$SubstringEntryRow local_addresses_add_row {
+  title: _("Register Local Address");
+  // Translators: This is the placeholder for the first part of a room address,
+  // as in '@my-room:example.org'.
+  placeholder-text: _("my-room");
+  accessible-description: _("First part of the address, for example “my-room”");
+  prefix-text: "#";
+  add-button-tooltip-text: _("Register Local Address");
+  add => $register_local_address() swapped;
+}

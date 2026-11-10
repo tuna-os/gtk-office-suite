@@ -5,9 +5,11 @@ resolver = "2"
 # the product lockfile.
 # `lifafa` is the email client (AGPL-3.0-or-later; gtk4 0.9, which cannot share
 # a lockfile with the suite's gtk4 0.11: gtk4-sys declares `links = "gtk-4"`).
+# `mandelbrot` is the Matrix client (GPL-3.0-or-later): matrix-sdk, LiveKit and
+# their dependency tree stay out of the suite's lockfile.
 # `collab` is the collabd sidecar (RFC-0005 option B): its own workspace and
 # lockfile, so matrix-sdk, rustls and tokio never reach this lockfile.
-exclude = ["tools/crdt-spike", "tools/collab-spike", "collab", "lifafa"]
+exclude = ["tools/crdt-spike", "tools/collab-spike", "collab", "lifafa", "mandelbrot"]
 
 [workspace.dependencies]
 gettext-rs = { version = "0.8", features = ["gettext-system"] }

@@ -1,0 +1,84 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $IdentityVerificationWaitForOtherPage: Adw.Bin {
+  Gtk.ScrolledWindow scrolled_window {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+
+    child: Adw.Clamp {
+      maximum-size: 400;
+      tightening-threshold: 300;
+
+      child: Gtk.Box {
+        orientation: vertical;
+        spacing: 18;
+        valign: center;
+        halign: center;
+
+        Gtk.Label title {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+          accessible-role: heading;
+
+          styles [
+            "title-1",
+          ]
+
+          accessibility {
+            level: 1;
+          }
+        }
+
+        Gtk.Label instructions {
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Gtk.Label trust {
+          label: _("To be secure, the verification should happen in person or use a trusted way of communication.");
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        Gtk.Picture {
+          file: "resource:///org/tunaos/mandelbrot/icons/scalable/status/other-device.svg";
+          accessible-role: presentation;
+        }
+
+        Gtk.Label {
+          label: _("The request is not showing up on the other device?");
+          wrap: true;
+          wrap-mode: word_char;
+          justify: center;
+
+          styles [
+            "body",
+          ]
+        }
+
+        $LoadingButton cancel_btn {
+          halign: center;
+          content-label: _("Cancel Verification Request");
+          clicked => $cancel() swapped;
+
+          styles [
+            "destructive-action",
+            "pill",
+          ]
+        }
+      };
+    };
+  }
+}

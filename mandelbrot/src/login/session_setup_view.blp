@@ -1,0 +1,58 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $SessionSetupView: Adw.NavigationPage {
+  tag: "session-setup";
+  title: _("Session Setup");
+  shown => $focus_default_widget() swapped;
+
+  child: Gtk.Stack stack {
+    transition-type: slide_left;
+    vexpand: true;
+    notify::transition-running => $focus_default_widget() swapped;
+
+    Gtk.StackPage {
+      name: "loading";
+      title: _("Loading");
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {
+          title-widget: Adw.WindowTitle {
+            title: _("Mandelbrot");
+          };
+        }
+
+        content: Gtk.Box {
+          orientation: vertical;
+
+          $OfflineBanner {}
+
+          Gtk.Box {
+            orientation: vertical;
+            valign: center;
+            vexpand: true;
+            spacing: 24;
+
+            Adw.Spinner {
+              height-request: 64;
+              width-request: 64;
+            }
+
+            Gtk.Label {
+              halign: center;
+              justify: center;
+              wrap: true;
+              wrap-mode: word_char;
+              label: _("Fetching Account Data…");
+
+              styles [
+                "title-2",
+              ]
+            }
+          }
+        };
+      };
+    }
+  };
+}

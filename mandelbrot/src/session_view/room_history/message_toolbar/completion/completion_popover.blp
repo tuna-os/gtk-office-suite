@@ -1,0 +1,22 @@
+using Gtk 4.0;
+
+template $ContentCompletionPopover: Gtk.Popover {
+  autohide: false;
+  has-arrow: false;
+  position: top;
+  halign: start;
+  valign: center;
+  width-request: 260;
+
+  styles [
+    "avatar-row-list",
+  ]
+
+  child: Gtk.ScrolledWindow scrolled_window {
+    propagate-natural-height: true;
+    hscrollbar-policy: never;
+    max-content-height: 280;
+
+    child: Gtk.ListBox list {};
+  };
+}
