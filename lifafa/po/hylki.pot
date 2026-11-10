@@ -42,7 +42,10 @@ msgstr ""
 msgid "Source Code"
 msgstr ""
 
-msgid "License (GNU AGPL v3)"
+msgid "Based on Hylki by Hyprlab"
+msgstr ""
+
+msgid "License (GNU AGPL v3 or later)"
 msgstr ""
 
 msgid "Buy Me a Coffee"
