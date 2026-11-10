@@ -62,10 +62,20 @@ fn bad_arguments_are_exit_one_and_an_unreadable_docx_is_exit_two() {
 
 #[test]
 fn an_engine_that_is_not_there_yet_is_exit_three() {
+    // A supported conversion with no engine wired in: presentations to PDF.
+    let dir = tempfile::tempdir().unwrap();
+    let pptx = dir.path().join("a.pptx");
+    decks_core::write_deck(&pptx.to_string_lossy(), &decks_core::Deck::new()).unwrap();
+    let pdf = dir.path().join("a.pdf").to_string_lossy().into_owned();
+    assert_eq!(code(&run(&[&pptx.to_string_lossy(), &pdf])), 3);
+}
+
+#[test]
+fn spreadsheet_to_ods_is_refused_as_unsupported_because_tables_cannot_write_it() {
     let dir = tempfile::tempdir().unwrap();
     let csv = write(dir.path(), "a.csv", "a,b\n1,2\n");
     let ods = dir.path().join("a.ods").to_string_lossy().into_owned();
-    assert_eq!(code(&run(&[&csv, &ods])), 3);
+    assert_eq!(code(&run(&[&csv, &ods])), 1);
 }
 
 #[test]

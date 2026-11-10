@@ -110,6 +110,10 @@ impl Format {
 }
 
 /// Whether `from` converts to `to`, from the table in HEADLESS-CONVERSION-SPEC.
+///
+/// Spreadsheets do not convert *to* ODS: Tables has exactly one writer (XLSX,
+/// `tables_core::io::format`), so there is no engine to route it to, and
+/// promising it would only fail later. It returns when Tables writes ODS.
 pub fn supported(from: Format, to: Format) -> bool {
     use Format::*;
     let Some(category) = from.category() else {
@@ -119,7 +123,7 @@ pub fn supported(from: Format, to: Format) -> bool {
         Category::Text => {
             matches!(from, Md | Odt | Docx) && matches!(to, Odt | Docx | Md | Html | Pdf | Png)
         }
-        Category::Spreadsheet => matches!(to, Ods | Xlsx | Csv | Html | Pdf | Png),
+        Category::Spreadsheet => matches!(to, Xlsx | Csv | Html | Pdf | Png),
         Category::Presentation => matches!(to, Odp | Pptx | Pdf | Png),
     }
 }

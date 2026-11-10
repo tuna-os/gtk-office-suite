@@ -41,7 +41,7 @@ Three reasons the drafts agree on, in the order they actually matter:
 | Category | In | Out |
 |---|---|---|
 | Text | `.md` (CommonMark), `.odt`, `.docx` | `.odt`, `.docx`, `.md`, `.html`, `.pdf` |
-| Spreadsheets | `.csv`, `.ods`, `.xlsx` | `.ods`, `.csv`, `.html`, `.pdf` |
+| Spreadsheets | `.csv`, `.ods`, `.xlsx` | `.xlsx`, `.csv`, `.html`, `.pdf`, `.png` (`.ods` output waits for Tables to gain an ODS writer: it has exactly one writer, XLSX) |
 | Presentations | `.odp`, `.pptx` | `.odp`, `.pptx`, `.pdf`, `.png` (slide snapshots) |
 
 Every conversion goes through the same engine the GUI export path uses. If the
