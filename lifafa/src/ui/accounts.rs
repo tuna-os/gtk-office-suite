@@ -210,104 +210,111 @@ pub(crate) struct AccountsWindow {
     alias_dialog: Option<AliasDialog>,
 }
 
-#[relm4::component(pub(crate))]
+/// The panel's frame and the pages the rest of the module reads back by
+/// field: the navigation view, the sections' stack, the editor page and its
+/// Remove button, and the pages and the editor's form built by `pages`.
+/// This is what `#[relm4::component]`'s `view!` block and its
+/// `additional_fields!` used to generate.
+pub(crate) struct AccountsWindowWidgets {
+    nav: adw::NavigationView,
+    list_stack: gtk::Stack,
+    editor_page: adw::NavigationPage,
+    remove_btn: gtk::Button,
+    accounts: AccountsPage,
+    tags: TagsPage,
+    smart: SmartPage,
+    filters: FiltersPage,
+    senders: SendersPage,
+    form: EditorForm,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_widgets(
+    root: &adw::Bin,
+    sender: &ComponentSender<AccountsWindow>,
+    accounts: AccountsPage,
+    tags: TagsPage,
+    smart: SmartPage,
+    filters: FiltersPage,
+    senders: SendersPage,
+    form: EditorForm,
+) -> AccountsWindowWidgets {
+    // ---- list page ----
+    // No header of its own: the combined settings window's shared header
+    // (with the view switcher) sits above.
+    // Sections switch outright, and only the shown one is measured.
+    let list_stack = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::None)
+        .hhomogeneous(false)
+        .vhomogeneous(false)
+        .build();
+    list_stack.add_named(&accounts.page, Some("accounts"));
+    list_stack.add_named(&tags.page, Some("tags"));
+    list_stack.add_named(&smart.page, Some("smart"));
+    list_stack.add_named(&filters.page, Some("filters"));
+    list_stack.add_named(&senders.page, Some("senders"));
+    let list_toolbar = adw::ToolbarView::new();
+    list_toolbar.set_content(Some(&list_stack));
+    let list_page = adw::NavigationPage::builder()
+        .title(i18n("Accounts"))
+        .tag("list")
+        .child(&list_toolbar)
+        .build();
+
+    // ---- editor page ---- (taken out of the view until an editor opens:
+    // see `mount_editor`)
+    // The window's close button lives in this header while the editor is up
+    // (the shared header hides), so it is never out of reach.
+    let header = adw::HeaderBar::new();
+    header.set_show_end_title_buttons(true);
+    let save = gtk::Button::builder()
+        .label(i18n("Save"))
+        .css_classes(["suggested-action"])
+        .build();
+    {
+        let sender = sender.clone();
+        save.connect_clicked(move |_| sender.input(AccountsInput::Save));
+    }
+    header.pack_end(&save);
+    // Left of Save, only while editing an existing account; asks before
+    // removing.
+    let remove_btn = gtk::Button::builder()
+        .label(i18n("Remove"))
+        .css_classes(["destructive-action"])
+        .visible(false)
+        .build();
+    {
+        let sender = sender.clone();
+        remove_btn.connect_clicked(move |_| sender.input(AccountsInput::RemoveCurrent));
+    }
+    header.pack_end(&remove_btn);
+    let editor_toolbar = adw::ToolbarView::new();
+    editor_toolbar.add_top_bar(&header);
+    editor_toolbar.set_content(Some(&form.page));
+    let editor_page = adw::NavigationPage::builder()
+        .title(i18n("Account"))
+        .tag("editor")
+        .child(&editor_toolbar)
+        .build();
+
+    let nav = adw::NavigationView::new();
+    nav.add(&list_page);
+    nav.add(&editor_page);
+    root.set_child(Some(&nav));
+
+    AccountsWindowWidgets { nav, list_stack, editor_page, remove_btn, accounts, tags, smart, filters, senders, form }
+}
+
 impl Component for AccountsWindow {
     type Init = AccountsInit;
     type Input = AccountsInput;
     type Output = AccountsOutput;
     type CommandOutput = AccountsCmd;
+    type Root = adw::Bin;
+    type Widgets = AccountsWindowWidgets;
 
-    // The panel's pages and the editor's form, built by `pages` before the
-    // view and placed below with `#[local_ref]`.
-    additional_fields! {
-        accounts: AccountsPage,
-        tags: TagsPage,
-        smart: SmartPage,
-        filters: FiltersPage,
-        senders: SendersPage,
-        form: EditorForm,
-    }
-
-    view! {
-        adw::Bin {
-            #[wrap(Some)]
-            #[name = "nav"]
-            set_child = &adw::NavigationView {
-
-                // ---- list page ----
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Accounts"),
-                    set_tag: Some("list"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        // No header of its own: the combined settings window's
-                        // shared header (with the view switcher) sits above.
-
-                        #[wrap(Some)]
-                        #[name = "list_stack"]
-                        set_content = &gtk::Stack {
-                            // Sections switch outright, and only the shown
-                            // one is measured.
-                            set_transition_type: gtk::StackTransitionType::None,
-                            set_hhomogeneous: false,
-                            set_vhomogeneous: false,
-
-                            #[local_ref]
-                            add_named[Some("accounts")] = accounts_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("tags")] = tags_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("smart")] = smart_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("filters")] = filters_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("senders")] = senders_page -> adw::PreferencesPage {},
-                        },
-                    },
-                },
-
-                // ---- editor page ---- (taken out of the view until an
-                // editor opens: see `mount_editor`)
-                #[name = "editor_page"]
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Account"),
-                    set_tag: Some("editor"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        add_top_bar = &adw::HeaderBar {
-                            // The window's close button lives here while the
-                            // editor is up (the shared header hides), so it
-                            // is never out of reach.
-                            set_show_end_title_buttons: true,
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Save"),
-                                add_css_class: "suggested-action",
-                                connect_clicked => AccountsInput::Save,
-                            },
-                            // Left of Save, only while editing an existing
-                            // account; asks before removing.
-                            #[name = "remove_btn"]
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Remove"),
-                                add_css_class: "destructive-action",
-                                set_visible: false,
-                                connect_clicked => AccountsInput::RemoveCurrent,
-                            },
-                        },
-
-                        #[wrap(Some)]
-                        #[local_ref]
-                        set_content = editor_form -> adw::PreferencesPage {},
-                    },
-                },
-            },
-        }
+    fn init_root() -> Self::Root {
+        adw::Bin::new()
     }
 
     fn init(
@@ -325,18 +332,12 @@ impl Component for AccountsWindow {
         senders_box.set_visible(!model.sender_addrs.is_empty());
         blacklist_box.set_visible(!model.blacklist_addrs.is_empty());
         let accounts = AccountsPage::build(&sender);
-        let accounts_page = &accounts.page;
         let tags = TagsPage::build(&sender);
-        let tags_page = &tags.page;
         let smart = SmartPage::build(&sender);
-        let smart_page = &smart.page;
         let filters = FiltersPage::build(&sender);
-        let filters_page = &filters.page;
         let senders = SendersPage::build(&sender, senders_box, blacklist_box);
-        let senders_page = &senders.page;
         let form = EditorForm::build(&sender);
-        let editor_form = &form.page;
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, accounts, tags, smart, filters, senders, form);
         prepare_editor_page(&widgets, &sender);
         tracing::debug!(
             "settings window: accounts view built in {:?}",
