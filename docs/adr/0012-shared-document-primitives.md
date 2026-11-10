@@ -189,6 +189,29 @@ To avoid risky monolithic code refactors across all three applications simultane
    - Clear `KNOWN_SIBLING_EDGES` in `tests/test_core_shell_split.py`.
    - All three cores are completely independent peers.
 
+## Implementation record
+
+**Slice 2 (#1675), done.** `suite_common_core::document` defines `Run`,
+`RunStyle`, `Paragraph`, `ParaStyle`, `Alignment`, `ListKind` and `VertAlign`
+with the Tier 1 fields above. Two fields Letters gained after this ADR are
+classified here: `upright` is Tier 1 (the italic counterpart of `regular`),
+`kerned` is Tier 2 (Letters typography).
+
+- `Alignment`, `ListKind` and `VertAlign` are defined once, in the shared
+  module; `letters_core::model` re-exports them, so existing paths keep
+  working.
+- Letters keeps its own `RunStyle` and `ParaStyle`, which carry the Tier 1
+  fields plus its Tier 2 extensions, and converts at its boundary
+  (`letters_core::neutral`, `From` both ways). Going neutral drops only the
+  Tier 2 fields; coming back gives them their defaults. Folding the
+  Tier 1 fields into a shared struct that Letters embeds would rewrite some
+  460 struct literals across Letters and Decks, and is left to a later
+  slice rather than done while those files are under active edit.
+- Every shared type reads with `#[serde(default)]`, and Letters' styles now
+  do too, so each side reads the other's JSON: Letters' extra fields are
+  ignored by the shared types, and a shared payload reads in Letters with
+  the Tier 2 fields at their defaults (`letters-core/tests/neutral_document.rs`).
+
 ## Consequences
 
 ### Positive
