@@ -104,6 +104,17 @@
         "lifafa/**"
       ],
       "automerge": false
+    },
+    {
+      "description": "The p2panda crates move as one: tools/collab-spike/dcp-p2p pins all six at one version, so a lone bump never resolves. 0.8 reshapes the store, spaces and signing APIs the binding uses; hold below it until the port (#2084).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "/^p2panda-/"
+      ],
+      "groupName": "p2panda",
+      "allowedVersions": "<0.8"
     }
   ]
 }

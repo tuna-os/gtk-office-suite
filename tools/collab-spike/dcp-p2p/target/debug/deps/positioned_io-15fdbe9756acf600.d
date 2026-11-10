@@ -1,0 +1,12 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/positioned_io-15fdbe9756acf600.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/cursor.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/slice.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/unix.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/raf.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/array.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/refs.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/vec.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libpositioned_io-15fdbe9756acf600.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/cursor.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/slice.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/unix.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/raf.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/array.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/refs.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/vec.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/cursor.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/slice.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/unix.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/raf.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/array.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/refs.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/positioned-io-0.3.5/src/vec.rs:
