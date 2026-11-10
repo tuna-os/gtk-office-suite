@@ -1,10 +1,9 @@
-// suite-convert — the command line (ADR 0015). Phase 1: arguments and routing,
-// no engines yet, so a valid request exits 3 and says so.
+// suite-convert — the command line (ADR 0015).
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::process::ExitCode;
 
-use suite_convert::{parse, plan, Command, Exit, HELP};
+use suite_convert::{engine, parse, plan, Command, Exit, HELP};
 
 fn main() -> ExitCode {
     let command = match parse(std::env::args().skip(1)) {
@@ -23,19 +22,33 @@ fn main() -> ExitCode {
             println!("suite-convert {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
-        Command::Convert(args) => match plan(&args) {
-            Ok(plan) => {
-                eprintln!(
-                    "suite-convert: {} to {} is a supported conversion, but no engine is wired in yet (phase 2 of HEADLESS-CONVERSION-SPEC).",
-                    plan.from.name(),
-                    plan.to.name()
-                );
-                ExitCode::from(Exit::Convert.code())
+        Command::Convert(args) => {
+            let plan = match plan(&args) {
+                Ok(plan) => plan,
+                Err(error) => {
+                    eprintln!("suite-convert: {error}");
+                    return ExitCode::from(Exit::Usage.code());
+                }
+            };
+            match engine::convert(&args, &plan) {
+                Ok(outcome) => {
+                    if args.report_loss {
+                        // JSON to stderr so `-o -` keeps stdout for the document.
+                        eprintln!("{}", outcome.report_json(&plan));
+                    }
+                    match args.fail_on_loss {
+                        Some(budget) if outcome.over(budget) => {
+                            eprintln!("suite-convert: the conversion lost {} content, over the --fail-on-loss budget", outcome.worst().name());
+                            ExitCode::from(Exit::Loss.code())
+                        }
+                        _ => ExitCode::SUCCESS,
+                    }
+                }
+                Err(failure) => {
+                    eprintln!("suite-convert: {}", failure.message);
+                    ExitCode::from(failure.exit.code())
+                }
             }
-            Err(error) => {
-                eprintln!("suite-convert: {error}");
-                ExitCode::from(Exit::Usage.code())
-            }
-        },
+        }
     }
 }

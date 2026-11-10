@@ -4,6 +4,8 @@
 // Phase 1 of HEADLESS-CONVERSION-SPEC: the command line, the formats and what
 // converts to what, and the exit codes. No conversion happens here yet.
 
+pub mod engine;
+
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -132,6 +134,15 @@ pub enum LossLevel {
 }
 
 impl LossLevel {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Minor => "minor",
+            Self::Major => "major",
+            Self::Critical => "critical",
+        }
+    }
+
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s.to_ascii_lowercase().as_str() {
             "none" => Self::None,

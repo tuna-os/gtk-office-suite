@@ -4849,6 +4849,12 @@ dependencies = [
 [[package]]
 name = "suite-convert"
 version = "0.1.0"
+dependencies = [
+ "letters-core",
+ "serde_json",
+ "suite-common-core",
+ "tempfile",
+]
 
 [[package]]
 name = "suite-export"
