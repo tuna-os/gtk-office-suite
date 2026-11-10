@@ -9,6 +9,7 @@ repository = "https://github.com/tuna-os/gtk-office-suite"
 # Links the GTK-free core crates only; tests/no_gtk.rs keeps GTK out of the tree.
 [dependencies]
 letters-core = { path = "../letters-core", version = "0.1.0" }
+tables-core = { path = "../tables-core", version = "0.1.0" }
 suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
 serde_json = "1"
 tempfile = "3"

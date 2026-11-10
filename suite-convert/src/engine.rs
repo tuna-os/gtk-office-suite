@@ -141,8 +141,18 @@ fn source(args: &Args, from: Format) -> Result<Source, Failure> {
 /// Convert one document. For a text input the format a reader uses follows the
 /// extension, so a stdin copy keeps the one `--from` named.
 pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
-    match plan.from.category() {
-        Some(Category::Text) => {}
+    let engine = match plan.from.category() {
+        Some(Category::Text)
+            if matches!(
+                plan.to,
+                Format::Md | Format::Odt | Format::Docx | Format::Html
+            ) =>
+        {
+            Engine::Text
+        }
+        Some(Category::Spreadsheet) if matches!(plan.to, Format::Xlsx | Format::Csv) => {
+            Engine::Sheet
+        }
         _ => {
             return Err(Failure::new(
                 Exit::Convert,
@@ -153,27 +163,18 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
                 ),
             ))
         }
-    }
-    if !matches!(
-        plan.to,
-        Format::Md | Format::Odt | Format::Docx | Format::Html
-    ) {
-        return Err(Failure::new(
-            Exit::Convert,
-            format!("{} output has no engine wired in yet", plan.to.name()),
-        ));
-    }
+    };
 
     let input = source(args, plan.from)?;
-    let doc = letters_core::save::read(&input.path).map_err(|e| Failure::new(Exit::Parse, e))?;
-
-    // Write beside nothing the caller owns: to a temporary file named for the
-    // target format, then move it, so stdout and a bad path behave alike.
+    // Write to a temporary file named for the target format, then deliver it,
+    // so stdout and a bad path behave alike.
     let scratch = tempfile::tempdir()
         .map_err(|e| Failure::new(Exit::Convert, format!("temporary directory: {e}")))?;
     let staged = scratch.path().join(format!("out.{}", plan.to.name()));
-    let report =
-        letters_core::save::write(&doc, &staged).map_err(|e| Failure::new(Exit::Convert, e))?;
+    let found = match engine {
+        Engine::Text => text(&input.path, &staged)?,
+        Engine::Sheet => sheet(&input.path, &staged, plan.to)?,
+    };
 
     match &args.output {
         Some(Output::Path(p)) => deliver(&staged, p)?,
@@ -186,9 +187,84 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         }
         None => return Err(Failure::new(Exit::Usage, "no output given")),
     }
-    Ok(Outcome {
-        losses: losses(&report),
-    })
+    Ok(Outcome { losses: found })
+}
+
+enum Engine {
+    Text,
+    Sheet,
+}
+
+fn text(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
+    let doc = letters_core::save::read(input).map_err(|e| Failure::new(Exit::Parse, e))?;
+    let report =
+        letters_core::save::write(&doc, staged).map_err(|e| Failure::new(Exit::Convert, e))?;
+    Ok(losses(&report))
+}
+
+fn sheet(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> {
+    let path = input.to_string_lossy();
+    let (engine, sheets) =
+        tables_core::io::load_workbook(&path).map_err(|e| Failure::new(Exit::Parse, e))?;
+    let mut found = Vec::new();
+    match to {
+        Format::Xlsx => {
+            tables_core::io::save_sheets_to_xlsx_with_engine(
+                &staged.to_string_lossy(),
+                &sheets,
+                Some(&engine),
+            )
+            .map_err(|e| Failure::new(Exit::Convert, e))?;
+        }
+        Format::Csv => {
+            // One table: the first sheet, as the values it displays.
+            if sheets.len() > 1 {
+                found.push(Loss {
+                    id: "csv-single-sheet".into(),
+                    label: "Other sheets".into(),
+                    location: sheets[1..]
+                        .iter()
+                        .map(|s| s.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    level: LossLevel::Major,
+                    detail: "CSV holds one table; only the first sheet was written.".into(),
+                });
+            }
+            let first = sheets
+                .first()
+                .ok_or_else(|| Failure::new(Exit::Parse, "the workbook has no sheets"))?;
+            std::fs::write(staged, csv(first))
+                .map_err(|e| Failure::new(Exit::Convert, format!("writing csv: {e}")))?;
+        }
+        _ => unreachable!("convert() routes only xlsx and csv here"),
+    }
+    Ok(found)
+}
+
+/// RFC 4180 text of a sheet's used range.
+pub fn csv(sheet: &tables_core::sheet::SheetModel) -> String {
+    let Some((last_row, last_col)) = sheet.used_extent() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    for r in 0..=last_row {
+        for c in 0..=last_col {
+            if c > 0 {
+                out.push(',');
+            }
+            let cell = sheet.cell(r, c);
+            if cell.contains([',', '"', '\n', '\r']) {
+                out.push('"');
+                out.push_str(&cell.replace('"', "\"\""));
+                out.push('"');
+            } else {
+                out.push_str(cell);
+            }
+        }
+        out.push_str("\r\n");
+    }
+    out
 }
 
 fn deliver(staged: &Path, to: &Path) -> Result<(), Failure> {

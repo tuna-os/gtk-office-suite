@@ -69,6 +69,22 @@ fn an_engine_that_is_not_there_yet_is_exit_three() {
 }
 
 #[test]
+fn csv_to_xlsx_and_back_keeps_the_values_and_formulas_evaluate() {
+    let dir = tempfile::tempdir().unwrap();
+    let csv = write(
+        dir.path(),
+        "a.csv",
+        "name,qty\n\"Smith, John\",2\nsum,=B2+3\n",
+    );
+    let xlsx = dir.path().join("a.xlsx").to_string_lossy().into_owned();
+    let back = dir.path().join("b.csv").to_string_lossy().into_owned();
+    assert_eq!(code(&run(&[&csv, &xlsx])), 0);
+    assert_eq!(code(&run(&[&xlsx, &back])), 0);
+    let text = std::fs::read_to_string(&back).unwrap();
+    assert_eq!(text, "name,qty\r\n\"Smith, John\",2\r\nsum,5\r\n");
+}
+
+#[test]
 fn report_loss_prints_json_and_the_budget_gates_the_exit() {
     let dir = tempfile::tempdir().unwrap();
     let md = write(dir.path(), "a.md", "plain\n");
