@@ -1,0 +1,13 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/iroh_metrics-09cc3d98a42d6edb.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/base.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/encoding.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/family.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/iterable.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/labels.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/metrics.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/registry.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/service.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libiroh_metrics-09cc3d98a42d6edb.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/base.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/encoding.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/family.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/iterable.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/labels.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/metrics.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/registry.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/service.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/base.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/encoding.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/family.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/iterable.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/labels.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/metrics.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/registry.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/iroh-metrics-1.0.2/src/service.rs:

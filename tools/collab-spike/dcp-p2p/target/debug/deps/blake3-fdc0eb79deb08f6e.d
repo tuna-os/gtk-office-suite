@@ -1,0 +1,15 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/blake3-fdc0eb79deb08f6e.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/guts.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/hazmat.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/platform.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx2.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx512.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/portable.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse2.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse41.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/io.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/join.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libblake3-fdc0eb79deb08f6e.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/guts.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/hazmat.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/platform.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx2.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx512.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/portable.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse2.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse41.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/io.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/join.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/guts.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/hazmat.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/platform.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx2.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_avx512.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/portable.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse2.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/ffi_sse41.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/io.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/blake3-1.8.7/src/join.rs:
