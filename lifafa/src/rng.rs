@@ -8,7 +8,7 @@
 
 /// Fill `buf` with random bytes from the OS entropy source.
 pub(crate) fn fill(buf: &mut [u8]) -> Result<(), getrandom::Error> {
-    getrandom::getrandom(buf)
+    getrandom::fill(buf)
 }
 
 const UNRESERVED: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
