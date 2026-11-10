@@ -1358,6 +1358,12 @@ impl RoomHistory {
         self.imp().message_toolbar.handle_paste_action();
     }
 
+    /// Send the given file in this room, after the person confirms it in the
+    /// composer's preview.
+    pub(crate) async fn send_file(&self, file: gio::File) {
+        self.imp().message_toolbar.send_file(file).await;
+    }
+
     /// The context menu for rows presenting an [`Event`].
     fn event_context_menu(&self) -> &EventActionsContextMenu {
         self.imp().event_context_menu()

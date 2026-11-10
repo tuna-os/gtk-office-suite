@@ -1,5 +1,5 @@
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{glib, glib::clone};
+use gtk::{gio, glib, glib::clone};
 
 use super::{Explore, Invite, InviteRequest, RoomHistory, SpaceOverview};
 use crate::{
@@ -293,6 +293,18 @@ mod imp {
             }
         }
 
+        /// Send the given file in the room being shown, if a room is.
+        ///
+        /// Returns `false` if the content is not a room history.
+        pub(super) async fn send_file(&self, file: gio::File) -> bool {
+            if self.visible_page() != ContentPage::RoomHistory {
+                return false;
+            }
+
+            self.room_history.send_file(file).await;
+            true
+        }
+
         /// All the header bars of the children of the content.
         pub(super) fn header_bars(&self) -> [&adw::HeaderBar; 7] {
             [
@@ -323,6 +335,13 @@ impl Content {
     /// Handle a paste action.
     pub(crate) fn handle_paste_action(&self) {
         self.imp().handle_paste_action();
+    }
+
+    /// Send the given file in the room being shown, if a room is.
+    ///
+    /// Returns `false` if the content is not a room history.
+    pub(crate) async fn send_file(&self, file: gio::File) -> bool {
+        self.imp().send_file(file).await
     }
 
     /// All the header bars of the children of the content.
