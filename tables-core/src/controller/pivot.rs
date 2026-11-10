@@ -9,8 +9,9 @@ use super::ops::{Op, SheetProp};
 impl WorkbookController {
     /// Add `pivot` to the active sheet and write its table at its target
     /// cell, as one undo step (the table's cells are ordinary inputs).
-    pub fn add_pivot_table(&mut self, pivot: crate::sheet::PivotTableSpec) {
+    pub fn add_pivot_table(&mut self, mut pivot: crate::sheet::PivotTableSpec) {
         let evaluated_data = self.evaluate_pivot_table(&pivot);
+        pivot.extent = extent_of(&evaluated_data);
         let (start_r, start_c) = pivot.target_cell;
         let (rows, cols, sheet_id, mut pivots) = {
             let state = self.state.borrow();
@@ -33,6 +34,57 @@ impl WorkbookController {
                 Op::SetCells { sheet: sheet_id, cells },
             ],
         );
+    }
+
+    /// Recompute every pivot table on the active sheet from its source as
+    /// it is now, as one undo step, and return how many were refreshed (0 when
+    /// there are none, or the sheet's protection refuses the change). Each
+    /// table is rewritten at its target; cells of the previous table that
+    /// the new one no longer covers are cleared, so a group that vanished
+    /// from the source leaves no stale row behind. Like Calc's and Excel's
+    /// pivots, a pivot is not rewritten on every edit, only when refreshed.
+    pub fn refresh_pivot_tables(&mut self) -> usize {
+        let (rows, cols, sheet_id, mut pivots) = {
+            let state = self.state.borrow();
+            let sheet = state.sheet();
+            (sheet.rows, sheet.cols, sheet.sheet_id, sheet.pivot_tables.clone())
+        };
+        if pivots.is_empty() {
+            return 0;
+        }
+        let mut written = std::collections::BTreeMap::new();
+        let mut cleared = std::collections::BTreeSet::new();
+        for pivot in &mut pivots {
+            let grid = self.evaluate_pivot_table(pivot);
+            let (start_r, start_c) = pivot.target_cell;
+            for dr in 0..pivot.extent.0 {
+                for dc in 0..pivot.extent.1 {
+                    cleared.insert((start_r + dr, start_c + dc));
+                }
+            }
+            pivot.extent = extent_of(&grid);
+            for (dr, row) in grid.into_iter().enumerate() {
+                for (dc, val) in row.into_iter().enumerate() {
+                    written.insert((start_r + dr, start_c + dc), val);
+                }
+            }
+        }
+        let count = pivots.len();
+        let mut cells: Vec<(usize, usize, String)> = cleared
+            .into_iter()
+            .filter(|at| !written.contains_key(at))
+            .map(|(r, c)| (r, c, String::new()))
+            .collect();
+        cells.extend(written.into_iter().map(|((r, c), v)| (r, c, v)));
+        cells.retain(|(r, c, _)| *r < rows && *c < cols);
+        let applied = self.apply_ops(
+            "Refresh Pivot Tables",
+            vec![
+                Op::SetProp { sheet: sheet_id, prop: SheetProp::Pivots(pivots) },
+                Op::SetCells { sheet: sheet_id, cells },
+            ],
+        );
+        if applied { count } else { 0 }
     }
 
     pub fn evaluate_pivot_table(&self, pivot: &crate::sheet::PivotTableSpec) -> Vec<Vec<String>> {
@@ -137,4 +189,9 @@ impl WorkbookController {
 
         grid
     }
+}
+
+/// The rows and columns a written pivot table covers.
+fn extent_of(grid: &[Vec<String>]) -> (usize, usize) {
+    (grid.len(), grid.iter().map(Vec::len).max().unwrap_or(0))
 }

@@ -570,6 +570,7 @@ mod tests {
             row_fields: vec![],
             col_fields: vec![],
             data_fields: vec![],
+            extent: (0, 0),
         });
         assert_eq!(ids(&content_a_save_drops(None, &[p])), ["pivot-tables"]);
     }

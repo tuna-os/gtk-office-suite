@@ -8,7 +8,7 @@
 //
 // Extracted from tables/src/window.rs so it is unit-testable without GTK.
 
-use crate::engine::TablesEngine;
+use crate::engine::{TablesEngine, TypedValue};
 use crate::sheet::SheetModel;
 
 /// Save sheet data to an XLSX file. Numbers are written as numbers,
@@ -161,26 +161,71 @@ pub fn save_sheets_to_xlsx_bytes(
                     continue;
                 }
                 let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh, &wb_font), &sh.borders[r][c], &sh.cell_protections[r][c]);
-                // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
-                // (any case, optionally signed) as valid floats — but a
-                // user typing that text almost certainly means literal
-                // text, not IEEE-754 infinity/NaN, and no spreadsheet
-                // app treats it as numeric by default. Writing it as a
-                // number here round-trips as "INF" (calamine's own
-                // float formatting) on reopen, silently corrupting the
-                // cell — caught by tables-core/tests/property.rs.
-                if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
-                    match &format {
-                        Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
-                        None => sheet.write_number(r as u32, c as u16, n),
+                // Write the value with the type the engine holds, not a
+                // type re-guessed from its text (#1980): a text cell
+                // holding "00123" used to come back as the number 123,
+                // "2024-01-15" as a date serial, and a boolean was never
+                // written as one. The engine-less path has no types to
+                // consult — the projection is all it has — so it keeps
+                // the text inference below.
+                match engine.map(|eng| eng.typed_value_at(si, r, c)) {
+                    Some(TypedValue::Number(n)) => {
+                        match &format {
+                            Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
+                            None => sheet.write_number(r as u32, c as u16, n),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
                     }
-                    .map_err(|e| format!("Write error: {}", e))?;
-                } else {
-                    match &format {
-                        Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
-                        None => sheet.write_string(r as u32, c as u16, val),
+                    Some(TypedValue::Boolean(b)) => {
+                        match &format {
+                            Some(f) => sheet.write_boolean_with_format(r as u32, c as u16, b, f),
+                            None => sheet.write_boolean(r as u32, c as u16, b),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
                     }
-                    .map_err(|e| format!("Write error: {}", e))?;
+                    Some(TypedValue::Text(text)) => {
+                        // The typed string itself, not the editable
+                        // input: for text that looks like a number the
+                        // input carries Excel's "'" text marker
+                        // ("'00123"), which is an editing convention,
+                        // not part of the value — writing it would put
+                        // the apostrophe in the saved cell.
+                        match &format {
+                            Some(f) => sheet.write_string_with_format(r as u32, c as u16, &text, f),
+                            None => sheet.write_string(r as u32, c as u16, &text),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
+                    }
+                    Some(TypedValue::Empty) => {
+                        match &format {
+                            Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
+                            None => sheet.write_string(r as u32, c as u16, val),
+                        }
+                        .map_err(|e| format!("Write error: {}", e))?;
+                    }
+                    None => {
+                        // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
+                        // (any case, optionally signed) as valid floats — but a
+                        // user typing that text almost certainly means literal
+                        // text, not IEEE-754 infinity/NaN, and no spreadsheet
+                        // app treats it as numeric by default. Writing it as a
+                        // number here round-trips as "INF" (calamine's own
+                        // float formatting) on reopen, silently corrupting the
+                        // cell — caught by tables-core/tests/property.rs.
+                        if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
+                            match &format {
+                                Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
+                                None => sheet.write_number(r as u32, c as u16, n),
+                            }
+                            .map_err(|e| format!("Write error: {}", e))?;
+                        } else {
+                            match &format {
+                                Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
+                                None => sheet.write_string(r as u32, c as u16, val),
+                            }
+                            .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                    }
                 }
             }
         }
@@ -209,6 +254,23 @@ pub fn save_sheets_to_xlsx_bytes(
                         Formula::new(&formula).set_result(eng.cell_at(si, *mr, *mc)),
                         &format,
                     ).map_err(|e| format!("Write error: {}", e))?;
+                } else {
+                    // merge_range writes its value as a string, always:
+                    // an anchor whose engine value is a number or a
+                    // boolean needs the typed write over it, or the
+                    // merged total reopens as text (#1980). A text
+                    // anchor is already what merge_range wrote.
+                    match eng.typed_value_at(si, *mr, *mc) {
+                        TypedValue::Number(n) => {
+                            sheet.write_number_with_format(*mr as u32, *mc as u16, n, &format)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                        TypedValue::Boolean(b) => {
+                            sheet.write_boolean_with_format(*mr as u32, *mc as u16, b, &format)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                        _ => {}
+                    }
                 }
             }
             // merge_range applies the anchor's format to every covered blank.
@@ -333,6 +395,17 @@ pub fn save_sheets_to_xlsx_bytes(
                 -1.0, // header/footer margins: leave at Excel's own default
                 -1.0,
             );
+            // Fit-to-page wins over a scale: Excel ignores `scale` while
+            // `fitToPage` is set. 100% is the default, so it is not written.
+            if let Some((wide, tall)) = sh.page_setup.fit_to_pages {
+                let pages = |n: u32| u16::try_from(n).unwrap_or(u16::MAX);
+                sheet.set_print_fit_to_pages(pages(wide), pages(tall));
+            } else {
+                let pct = (sh.page_setup.scale * 100.0).round();
+                if (10.0..=400.0).contains(&pct) && pct != 100.0 {
+                    sheet.set_print_scale(pct as u16);
+                }
+            }
         }
 
         // Priority order (TBL-003): the writer numbers rules in the order
@@ -707,6 +780,20 @@ mod tests {
     }
 
     #[test]
+    fn csv_import_quoted_fields_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_temp(&dir, "t.csv", "\"Smith, John\",42,\"line1\nline2\"\n\"say \"\"hi\"\"\",7,x\n");
+        let mut e = engine();
+        let (rows, cols) = load_file_into_engine(&path, &mut e).unwrap();
+        assert_eq!((rows, cols), (2, 3), "the quoted newline must not split the record");
+        assert_eq!(e.cell(0, 0), "Smith, John");
+        assert_eq!(e.cell(0, 1), "42");
+        assert_eq!(e.cell(0, 2), "line1\nline2");
+        assert_eq!(e.cell(1, 0), "say \"hi\"");
+        assert_eq!(e.cell(1, 1), "7");
+    }
+
+    #[test]
     fn csv_formulas_evaluate_on_import() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_temp(&dir, "t.csv", "1,2,=A1+B1\n");
@@ -1011,6 +1098,30 @@ mod tests {
         assert_eq!(loaded_s2.print_area, None, "Sheet2 must not inherit Sheet1's print area");
         assert!(!loaded_s2.is_row_hidden(3));
         assert!(!loaded_s2.is_col_hidden(4));
+    }
+
+    /// Print scale and fit-to-page survive a save and reload; they used to
+    /// be dropped, so a sheet set to 46% or one page wide came back at 100%.
+    #[test]
+    fn print_scale_and_fit_to_page_round_trip_through_xlsx() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scale.xlsx");
+        let setups = [(0.46, None), (1.0, Some((1, 0))), (1.0, Some((2, 3))), (1.0, None)];
+        let sheets: Vec<_> = setups
+            .iter()
+            .enumerate()
+            .map(|(i, &(scale, fit))| {
+                let mut s = SheetModel::new(&format!("Sheet{}", i + 1), 3, 3, i as u32);
+                s.page_setup.scale = scale;
+                s.page_setup.fit_to_pages = fit;
+                s
+            })
+            .collect();
+        save_sheets_to_xlsx(path.to_str().unwrap(), &sheets).unwrap();
+
+        let (_engine, loaded) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        let got: Vec<_> = loaded.iter().map(|s| (s.page_setup.scale, s.page_setup.fit_to_pages)).collect();
+        assert_eq!(got, setups.to_vec());
     }
 
     #[test]

@@ -148,6 +148,12 @@ jobs:
           # A debug build's core is a few hundred MB; it is reduced to a
           # backtrace below, not uploaded.
           GUI_TEST_CORE_MAX_MB: '4096'
+          # Sample the focused text after each typed string and keep the
+          # observation in the journey's input trace, so the runner can
+          # file undelivered stimulus as input-not-delivered instead of
+          # assertion-mismatch (#442, #1951). Read-only evidence: it never
+          # changes verdicts, only labels them.
+          GUI_TEST_VERIFY_TYPING: '1'
           REPEAT: ${{ github.event.inputs.repeat || '10' }}
           SEED: ${{ github.event.inputs.seed }}
           MATRIX: ${{ github.event.inputs.matrix || 'none' }}

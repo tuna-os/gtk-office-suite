@@ -12,6 +12,41 @@ pub const DEFAULT_COLS: usize = 26;
 /// reader that loops over it hangs instead of refusing (#442).
 pub const SHEET_MAX_ROWS: usize = 1_048_576;
 pub const SHEET_MAX_COLS: usize = 16_384;
+
+/// The most cells one opened sheet may span, counted over its whole grid
+/// (rows × columns, from A1, with the default floor). A [`SheetModel`] keeps
+/// eight dense per-cell matrices, about 210 bytes a cell before any text,
+/// so this is roughly 2 GB of model: a 380,000-row sheet at the default 26
+/// columns. A file whose content or styling reaches further is refused with
+/// a message instead of hanging or running out of memory while it opens
+/// (#1983). A sparse model would let this go.
+pub const MAX_SHEET_CELLS: usize = 10_000_000;
+/// The most cells a whole opened workbook may span, its sheets together.
+pub const MAX_WORKBOOK_CELLS: usize = 20_000_000;
+
+/// Refuse a workbook whose sheets, at the sizes they would open at, span
+/// more cells than [`MAX_SHEET_CELLS`] each or [`MAX_WORKBOOK_CELLS`]
+/// together. Checked before anything is allocated for them.
+pub fn check_cell_budget<'a>(sheets: impl IntoIterator<Item = (&'a str, usize, usize)>) -> Result<(), String> {
+    let mut total = 0usize;
+    for (name, rows, cols) in sheets {
+        let cells = rows.saturating_mul(cols);
+        if cells > MAX_SHEET_CELLS {
+            return Err(format!(
+                "Sheet \"{name}\" is too large to open: it reaches {rows} rows by {cols} columns \
+                 ({cells} cells), and Tables opens sheets of up to {MAX_SHEET_CELLS} cells."
+            ));
+        }
+        total = total.saturating_add(cells);
+    }
+    if total > MAX_WORKBOOK_CELLS {
+        return Err(format!(
+            "This workbook is too large to open: its sheets span {total} cells together, \
+             and Tables opens workbooks of up to {MAX_WORKBOOK_CELLS} cells."
+        ));
+    }
+    Ok(())
+}
 /// Grid metrics at 100% zoom, those of a default Excel/Calc sheet: 15 pt
 /// rows (20 px at 96 DPI) and 8.43-character columns (64 px: Calibri 11's
 /// 7 px maximum digit width, as io/props.rs assumes for xlsx widths). The
@@ -135,6 +170,8 @@ pub fn parse_cell_or_range(s: &str) -> Option<(usize, usize, usize, usize)> {
 }
 
 /// Parse a cell reference like "A1", "b3", "AA10" → (row, col), 0-based.
+/// `None` past the sheet's last column (`XFD`) or last row, so text from
+/// the name box or a file can't overflow or point outside the grid.
 pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     let s = s.trim();
     let letters: String = s.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
@@ -144,10 +181,17 @@ pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     }
     let mut col: usize = 0;
     for ch in letters.chars() {
-        col = col * 26 + (ch.to_ascii_uppercase() as usize - 'A' as usize) + 1;
+        col = col
+            .checked_mul(26)?
+            .checked_add(ch.to_ascii_uppercase() as usize - 'A' as usize + 1)?;
+        if col > SHEET_MAX_COLS {
+            return None;
+        }
     }
     let row: usize = digits.parse().ok()?;
-    if row == 0 { return None; }
+    if row == 0 || row > SHEET_MAX_ROWS {
+        return None;
+    }
     Some((row - 1, col - 1))
 }
 
@@ -777,23 +821,22 @@ impl FilterDef {
     /// with no data anywhere has nothing to filter on and stays visible.
     pub fn derive_hidden(&self, sheet: &SheetModel) -> std::collections::HashSet<usize> {
         let mut out = std::collections::HashSet::new();
-        if self.columns.is_empty() || sheet.rows == 0 {
+        // A column whose hidden set is empty hides nothing: skip it rather
+        // than format its every cell (#1994).
+        let criteria: Vec<&FilterColumn> =
+            self.columns.iter().filter(|c| c.col < sheet.cols && !c.hidden.is_empty()).collect();
+        let Some(rows) = self.data_rows(sheet) else { return out };
+        if criteria.is_empty() {
             return out;
         }
-        let (r0, _, r1, _) = self.range.unwrap_or((0, 0, sheet.rows.saturating_sub(1), sheet.cols.saturating_sub(1)));
-        // A ranged filter's top row is its label header: explicitly
-        // excluded from evaluation, never hidden by the filter.
-        let first_data = if self.range.is_some() { r0.saturating_add(1) } else { r0 };
-        let last = r1.min(sheet.rows.saturating_sub(1));
-        for r in first_data..=last {
-            if (0..sheet.cols).all(|c| sheet.cell(r, c).is_empty()) {
-                continue;
-            }
-            let hide = self.columns.iter().any(|criterion| {
-                criterion.col < sheet.cols
-                    && criterion.hidden.contains(&sheet.formats[r][criterion.col].format(sheet.cell(r, criterion.col)))
-            });
-            if hide {
+        for r in rows {
+            let hide = criteria
+                .iter()
+                .any(|criterion| criterion.hidden.contains(&sheet.formats[r][criterion.col].format(sheet.cell(r, criterion.col))));
+            // Only a row the criteria would hide needs the blank check: a
+            // row with no data anywhere stays visible. Most rows pass the
+            // criteria, so most rows are never scanned across (#1994).
+            if hide && !row_is_blank(sheet, r, criteria[0].col) {
                 out.insert(r);
             }
         }
@@ -805,22 +848,39 @@ impl FilterDef {
     /// through a value list, and what the column menu lists.
     pub fn distinct_values(&self, sheet: &SheetModel, col: usize) -> Vec<String> {
         let mut out = Vec::new();
-        if col >= sheet.cols || sheet.rows == 0 {
+        if col >= sheet.cols {
             return out;
         }
-        let (r0, _, r1, _) = self.range.unwrap_or((0, 0, sheet.rows.saturating_sub(1), sheet.cols.saturating_sub(1)));
-        let first_data = if self.range.is_some() { r0.saturating_add(1) } else { r0 };
-        let last = r1.min(sheet.rows.saturating_sub(1));
-        for r in first_data..=last {
-            if (0..sheet.cols).all(|c| sheet.cell(r, c).is_empty()) {
+        let Some(rows) = self.data_rows(sheet) else { return out };
+        // A set beside the list: a column of 50 000 different values used
+        // to compare each new one against all those before it (#1994).
+        let mut seen = std::collections::HashSet::new();
+        for r in rows {
+            if row_is_blank(sheet, r, col) {
                 continue;
             }
             let text = sheet.formats[r][col].format(sheet.cell(r, col));
-            if !out.contains(&text) {
+            if !seen.contains(&text) {
+                seen.insert(text.clone());
                 out.push(text);
             }
         }
         out
+    }
+
+    /// The rows of the data area on `sheet`: below a ranged filter's
+    /// header, or the whole sheet for a rangeless one; `None` when there
+    /// are none.
+    fn data_rows(&self, sheet: &SheetModel) -> Option<std::ops::RangeInclusive<usize>> {
+        if sheet.rows == 0 {
+            return None;
+        }
+        let (r0, _, r1, _) = self.range.unwrap_or((0, 0, sheet.rows - 1, sheet.cols.saturating_sub(1)));
+        // A ranged filter's top row is its label header: explicitly
+        // excluded from evaluation, never hidden by the filter.
+        let first = if self.range.is_some() { r0.saturating_add(1) } else { r0 };
+        let last = r1.min(sheet.rows - 1);
+        (first <= last).then_some(first..=last)
     }
 
     /// Short human text for the native filter controls: the range in A1
@@ -862,6 +922,14 @@ impl FilterDef {
             .collect();
         FilterDef { range: Some(range), columns }
     }
+}
+
+/// Whether row `r` holds no data in any column. `first` is checked
+/// before the rest: a filter asks about its criterion column, which is
+/// usually filled, so a data row is told apart in one probe. The answer
+/// is the same as scanning the row from the left.
+fn row_is_blank(sheet: &SheetModel, r: usize, first: usize) -> bool {
+    sheet.cell(r, first).is_empty() && (0..sheet.cols).all(|c| sheet.cell(r, c).is_empty())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1108,6 +1176,94 @@ pub struct PivotTableSpec {
     pub row_fields: Vec<PivotField>,
     pub col_fields: Vec<PivotField>,
     pub data_fields: Vec<PivotDataField>,
+    /// Rows and columns of the table last written at `target_cell`, so a
+    /// refresh can clear what the new table no longer covers. (0, 0)
+    /// before the pivot is first written.
+    #[cfg_attr(feature = "collab", serde(default))]
+    pub extent: (usize, usize),
+}
+
+impl PivotAggFunc {
+    /// Every summary, in the order Calc's and Excel's pivot dialogs list them.
+    pub const ALL: [PivotAggFunc; 5] =
+        [PivotAggFunc::Sum, PivotAggFunc::Count, PivotAggFunc::Average, PivotAggFunc::Min, PivotAggFunc::Max];
+
+    /// The name a dialog shows for it.
+    pub fn label(self) -> &'static str {
+        match self {
+            PivotAggFunc::Sum => "Sum",
+            PivotAggFunc::Count => "Count",
+            PivotAggFunc::Average => "Average",
+            PivotAggFunc::Min => "Min",
+            PivotAggFunc::Max => "Max",
+        }
+    }
+}
+
+impl PivotTableSpec {
+    /// The fields a pivot over `range` can group or summarize by: one per
+    /// column of the range, named by its first (header) row, or by its
+    /// column letter where that cell is empty. Empty when the range has no
+    /// row under the header, since a pivot needs data to summarize.
+    pub fn source_fields(sheet: &SheetModel, range: (usize, usize, usize, usize)) -> Vec<String> {
+        let (r0, c0, r1, c1) = range;
+        if r1 <= r0 || c1 < c0 {
+            return Vec::new();
+        }
+        (c0..=c1)
+            .map(|c| {
+                let text = sheet.data.get(r0).and_then(|row| row.get(c)).map(|s| s.trim()).unwrap_or("");
+                if text.is_empty() { format!("Column {}", col_label(c)) } else { text.to_string() }
+            })
+            .collect()
+    }
+
+    /// A pivot over `range` with rows grouped by field `row`, optionally
+    /// split into columns by field `column`, summarizing field `value` with
+    /// `func`. Fields are offsets into the range's columns, as
+    /// [`Self::source_fields`] lists them. It is placed at `target`, or
+    /// by default ([`Self::default_target`]) two columns right of the range,
+    /// level with its header. `None` when a field is out of range, the range
+    /// has no data rows, or `target` lies inside the range, which the pivot
+    /// would overwrite.
+    pub fn from_choice(
+        sheet: &SheetModel,
+        range: (usize, usize, usize, usize),
+        row: usize,
+        column: Option<usize>,
+        value: usize,
+        func: PivotAggFunc,
+        target: Option<(usize, usize)>,
+    ) -> Option<Self> {
+        let target = target.unwrap_or_else(|| Self::default_target(range));
+        let (r0, c0, r1, c1) = range;
+        if (r0..=r1).contains(&target.0) && (c0..=c1).contains(&target.1) {
+            return None;
+        }
+        let fields = Self::source_fields(sheet, range);
+        let field = |i: usize| fields.get(i).map(|name| PivotField { col_index: range.1 + i, name: name.clone() });
+        let row_field = field(row)?;
+        let col_fields = match column {
+            Some(i) => vec![field(i)?],
+            None => Vec::new(),
+        };
+        let value_field = field(value)?;
+        Some(PivotTableSpec {
+            name: format!("Pivot{}", sheet.pivot_tables.len() + 1),
+            source_range: range,
+            target_cell: target,
+            row_fields: vec![row_field],
+            col_fields,
+            data_fields: vec![PivotDataField { col_index: value_field.col_index, name: value_field.name, func }],
+            extent: (0, 0),
+        })
+    }
+
+    /// Where a pivot over `range` goes unless placed elsewhere: two columns
+    /// to its right, level with its header row.
+    pub fn default_target(range: (usize, usize, usize, usize)) -> (usize, usize) {
+        (range.0, range.3 + 2)
+    }
 }
 
 /// Cell protection settings.
@@ -1801,6 +1957,56 @@ impl SheetModel {
 }
 
 #[cfg(test)]
+mod filter_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn col(col: usize, hidden: &[&str]) -> FilterColumn {
+        FilterColumn { col, hidden: hidden.iter().map(|s| s.to_string()).collect() }
+    }
+
+    /// #1994 made the blank-row check lazy; what it decides must not move.
+    #[test]
+    fn a_filter_hides_matching_rows_and_never_a_blank_one() {
+        let mut s = SheetModel::new("t", 6, 4, 0);
+        // Row 0 header; row 1 "a"; row 2 blank everywhere; row 3 data only
+        // past the criterion column; row 4 "b"; row 5 "a" with a lead blank.
+        s.data[0][1] = "Kind".into();
+        s.data[1][1] = "a".into();
+        s.data[3][3] = "x".into();
+        s.data[4][1] = "b".into();
+        s.data[5][1] = "a".into();
+        s.data[5][3] = "y".into();
+        let ranged = FilterDef { range: Some((0, 0, 5, 3)), columns: vec![col(1, &["a", ""])] };
+        let hidden = ranged.derive_hidden(&s);
+        // Row 3 has data, its criterion cell is blank and blanks are hidden;
+        // row 2 is blank everywhere and stays; the header is never hidden.
+        assert_eq!(hidden, HashSet::from([1, 3, 5]));
+        let rangeless = FilterDef { range: None, columns: vec![col(1, &["Kind"])] };
+        assert_eq!(rangeless.derive_hidden(&s), HashSet::from([0]));
+        // A criterion with nothing hidden, or past the last column, hides nothing.
+        let idle = FilterDef { range: Some((0, 0, 5, 3)), columns: vec![col(1, &[]), col(9, &["a"])] };
+        assert!(idle.derive_hidden(&s).is_empty());
+    }
+
+    #[test]
+    fn distinct_values_keep_first_seen_order_and_skip_blank_rows() {
+        let mut s = SheetModel::new("t", 7, 3, 0);
+        for (r, v) in [(0, "Head"), (1, "b"), (2, "a"), (3, "b"), (5, ""), (6, "c")] {
+            s.data[r][0] = v.into();
+        }
+        // Row 5 has data elsewhere, so its blank value is listed; row 4 is
+        // blank everywhere and is not.
+        s.data[5][2] = "z".into();
+        let def = FilterDef { range: Some((0, 0, 6, 2)), columns: Vec::new() };
+        assert_eq!(def.distinct_values(&s, 0), vec!["b", "a", "", "c"]);
+        assert!(def.distinct_values(&s, 7).is_empty());
+        let header_only = FilterDef { range: Some((0, 0, 0, 2)), columns: Vec::new() };
+        assert!(header_only.distinct_values(&s, 0).is_empty());
+    }
+}
+
+#[cfg(test)]
 mod used_extent_tests {
     use super::*;
 
@@ -2349,6 +2555,14 @@ mod selection_tests {
         assert_eq!(parse_cell_ref("A1"), Some((0, 0)));
         assert_eq!(parse_cell_ref("b3"), Some((2, 1)));
         assert_eq!(parse_cell_ref("AA10"), Some((9, 26)));
+        // The grid's last cell parses; one past it in either direction,
+        // or enough letters to overflow usize, does not (#1988).
+        assert_eq!(parse_cell_ref("XFD1048576"), Some((SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1)));
+        assert_eq!(parse_cell_ref("XFE1"), None);
+        assert_eq!(parse_cell_ref("A1048577"), None);
+        assert_eq!(parse_cell_ref("ZZZZZZZZZZZZZZ1"), None);
+        assert_eq!(parse_cell_ref(&format!("{}1", "Z".repeat(64))), None);
+        assert_eq!(parse_cell_or_range("A1:ZZZZZZZZZZZZZZ1"), None);
         assert_eq!(parse_cell_ref(" C7 "), Some((6, 2)));
         assert_eq!(parse_cell_ref("A0"), None);
         assert_eq!(parse_cell_ref("1A"), None);

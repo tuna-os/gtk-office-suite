@@ -8,7 +8,7 @@
 // circles, speaker notes, slide backgrounds, multi-slide order.
 // Fidelity is measured against the Impress oracle, never ported.
 
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Write;
@@ -225,10 +225,33 @@ fn esc_breaks(text: &str) -> String {
 
 fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
     let text = esc_breaks(&run.text);
-    if run.style == RunStyle::default() {
+    let look = RunStyle { link: None, ..run.style.clone() };
+    let span = if look == RunStyle::default() {
         text
     } else {
         format!("<text:span text:style-name=\"{prefix}{style_idx}\">{text}</text:span>")
+    };
+    // A linked run is a `text:a` around its span, as Impress writes it (#1998).
+    match run.style.link.as_deref().filter(|l| !l.is_empty()) {
+        Some(href) => format!("<text:a xlink:type=\"simple\" xlink:href=\"{}\">{span}</text:a>", esc(href)),
+        None => span,
+    }
+}
+
+/// Whether a `text:a`'s `xlink:href` is an address the deck keeps as a
+/// link: one with a scheme (`https:`, `mailto:`). A jump inside the deck
+/// (`#Slide 2`) or to a file beside it is not kept, and the save warning
+/// says so.
+pub(crate) fn external_href(href: &str) -> bool {
+    match href.split_once(':') {
+        Some((scheme, rest)) => {
+            !rest.is_empty()
+                && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+                // A drive letter is a path, not a scheme.
+                && scheme.len() > 1
+        }
+        None => false,
     }
 }
 
@@ -355,28 +378,12 @@ struct Media {
     bytes: Vec<u8>,
 }
 
-/// The extension and media type for a picture, from its current extension.
-///
-/// ODF names the type in the manifest, so guessing wrong here is a
-/// mislabelled part rather than a missing one. The pptx writer sidesteps
-/// the question by naming every part `.png` whatever it actually is; this
-/// keeps the real extension and labels it to match, and falls back to PNG
-/// for an extension nobody recognises rather than refusing the save.
+/// The extension and media type for a picture: from its extension, or
+/// its first bytes when the extension says nothing (see
+/// [`crate::image_px::media_type`]). ODF names the type in the manifest,
+/// so guessing wrong here is a mislabelled part rather than a missing one.
 fn media_type_for(path: &str) -> (&'static str, &'static str) {
-    let ext = std::path::Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    match ext.as_str() {
-        "jpg" | "jpeg" => ("jpg", "image/jpeg"),
-        "gif" => ("gif", "image/gif"),
-        "svg" => ("svg", "image/svg+xml"),
-        "webp" => ("webp", "image/webp"),
-        "bmp" => ("bmp", "image/bmp"),
-        "tif" | "tiff" => ("tiff", "image/tiff"),
-        _ => ("png", "image/png"),
-    }
+    crate::image_px::media_type(path)
 }
 
 /// The xml:id of object `i` on slide `si`.
@@ -1616,6 +1623,9 @@ fn parse_pages(
     let mut frame_has_chart = false;
     let mut textbox: Option<(Vec<String>, Vec<Run>)> = None; // (lines, runs)
     let mut span_style: Option<RunStyle> = None;
+    // The open `text:a`'s address, which the runs inside it link to (#1998).
+    let mut link: Option<String> = None;
+    let run_style = |span: &Option<RunStyle>, link: &Option<String>| RunStyle { link: link.clone(), ..span.clone().unwrap_or_default() };
     let mut in_text = false;
     let mut shape_type: Option<String> = None;
     // A custom shape's own paths, when its geometry is not a preset
@@ -1805,6 +1815,7 @@ fn parse_pages(
                     span_style = attr(e, "text:style-name")
                         .and_then(|n| text_styles.get(&n).cloned());
                 }
+                "text:a" => link = attr(e, "xlink:href").filter(|h| external_href(h)),
                 "draw:rect" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
@@ -1835,7 +1846,7 @@ fn parse_pages(
                         if let Some(last) = lines.last_mut() {
                             last.push(crate::engine::LINE_BREAK);
                         }
-                        runs.push(Run { text: crate::engine::LINE_BREAK.to_string(), style: span_style.clone().unwrap_or_default() });
+                        runs.push(Run { text: crate::engine::LINE_BREAK.to_string(), style: run_style(&span_style, &link) });
                     }
                 }
                 // An empty paragraph, `<text:p/>`: how Impress writes a
@@ -1906,7 +1917,7 @@ fn parse_pages(
                         if !txt.is_empty() {
                             runs.push(Run {
                                 text: txt,
-                                style: span_style.clone().unwrap_or_default(),
+                                style: run_style(&span_style, &link),
                             });
                         }
                     }
@@ -1922,7 +1933,7 @@ fn parse_pages(
                         if !txt.is_empty() {
                             runs.push(Run {
                                 text: txt,
-                                style: span_style.clone().unwrap_or_default(),
+                                style: run_style(&span_style, &link),
                             });
                         }
                     }
@@ -1934,6 +1945,7 @@ fn parse_pages(
                     lists.pop();
                 }
                 "text:span" => span_style = None,
+                "text:a" => link = None,
                 "draw:text-box" => {
                     if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
                         (textbox.take(), frame)
@@ -2224,7 +2236,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         });
     }
 
-    let mut deck = Deck { slides: Vec::new(), masters, page_size, themes: Vec::new() };
+    let mut deck = Deck { slides: Vec::new(), masters, page_size, themes: Vec::new(), skipped_slides: Vec::new() };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
         parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts, &mut fresh)?
@@ -2561,6 +2573,7 @@ mod tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(styles.contains("draw:fill-color=\"#204060\""), "{styles}");
@@ -2620,6 +2633,7 @@ mod tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         }
     }
 
@@ -2657,7 +2671,7 @@ mod tests {
 
     /// The extension and the declared type have to agree, or the package
     /// says PNG about a JPEG. The writer keeps the source's extension
-    /// rather than calling everything `.png` the way the pptx writer does.
+    /// rather than calling everything `.png`, as the pptx writer once did.
     #[test]
     fn a_pictures_declared_type_matches_its_extension() {
         for (name, ext, media_type) in [
@@ -3089,6 +3103,7 @@ mod default_font_tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(
@@ -3122,6 +3137,7 @@ mod default_font_tests {
             }],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(!xml.contains("style:font-name=\"\""), "no empty font name: {xml}");

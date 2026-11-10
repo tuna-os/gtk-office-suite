@@ -68,7 +68,7 @@ fn build_deck(slides: &[Vec<String>]) -> Deck {
             layout_id: None,
         })
         .collect();
-    Deck { slides, masters: vec![], page_size: None, themes: Vec::new() }
+    Deck { slides, masters: vec![], page_size: None, themes: Vec::new(), skipped_slides: Vec::new() }
 }
 
 proptest! {

@@ -11,8 +11,13 @@ use std::io::{Read, Write};
 use zip::write::SimpleFileOptions;
 use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Writer;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use super::text_body::{Anchor, Bullet, MarkerSize, ParaAlign, ParaStyle, Spacing, TextBody};
+
+/// A slide's text hyperlinks: each link target's relationship id
+/// (#1998). A run whose target is missing here (a master's or layout's,
+/// which keep no links) is written unlinked.
+type LinkRels = std::collections::HashMap<String, String>;
 
 /// Where a shape sits and how far it is turned — the bounding box in points
 /// plus a rotation in degrees.
@@ -258,6 +263,7 @@ fn write_paragraphs<W: std::io::Write>(
     text: &str,
     runs: &[Run],
     body: &TextBody,
+    links: &LinkRels,
 ) -> Result<(), quick_xml::Error> {
     // Emit styled runs when present (shared Run/RunStyle with Letters);
     // otherwise a single default-styled run with the plain text.
@@ -300,7 +306,7 @@ fn write_paragraphs<W: std::io::Write>(
                 writer.write_event(Event::Empty(BytesStart::new("a:br")))?;
             }
             if !line.is_empty() {
-                write_run(writer, &run.style, line)?;
+                write_run(writer, &run.style, line, links)?;
             }
         }
     }
@@ -309,7 +315,7 @@ fn write_paragraphs<W: std::io::Write>(
 }
 
 /// One `a:r`: `text` in the look `style` gives it.
-fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: &str) -> Result<(), quick_xml::Error> {
+fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: &str, links: &LinkRels) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("a:r")))?;
     let mut r_pr = BytesStart::new("a:rPr");
     r_pr.push_attribute(("lang", "en-US"));
@@ -320,7 +326,8 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
     let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
-    if style.color.is_some() || family.is_some() {
+    let link = style.link.as_ref().and_then(|target| links.get(target));
+    if style.color.is_some() || family.is_some() || link.is_some() {
         writer.write_event(Event::Start(r_pr))?;
         // CT_TextCharacterProperties order: the fill, then a:latin.
         if let Some(color) = &style.color {
@@ -334,6 +341,12 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
             let mut latin = BytesStart::new("a:latin");
             latin.push_attribute(("typeface", family));
             writer.write_event(Event::Empty(latin))?;
+        }
+        // ... then the click's hyperlink, after the fonts.
+        if let Some(rel) = link {
+            let mut click = BytesStart::new("a:hlinkClick");
+            click.push_attribute(("r:id", rel.as_str()));
+            writer.write_event(Event::Empty(click))?;
         }
         writer.write_event(Event::End(BytesEnd::new("a:rPr")))?;
     } else {
@@ -392,6 +405,7 @@ fn write_text_box<W: std::io::Write>(
     runs: &[Run],
     body: &TextBody,
     ph_idx: Option<u32>,
+    links: &LinkRels,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
 
@@ -449,7 +463,7 @@ fn write_text_box<W: std::io::Write>(
     write_body_pr(writer, body)?;
     writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
 
-    write_paragraphs(writer, text, runs, body)?;
+    write_paragraphs(writer, text, runs, body, links)?;
     writer.write_event(Event::End(BytesEnd::new("p:txBody")))?;
 
     writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
@@ -689,6 +703,7 @@ fn write_table<W: std::io::Write>(
     name_idx: usize,
     at: Placement,
     table: &super::table::TableData,
+    links: &LinkRels,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:graphicFrame")))?;
     writer.write_event(Event::Start(BytesStart::new("p:nvGraphicFramePr")))?;
@@ -773,7 +788,7 @@ fn write_table<W: std::io::Write>(
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
-            write_paragraphs(writer, &cell.text(), &cell.runs, &TextBody::default())?;
+            write_paragraphs(writer, &cell.text(), &cell.runs, &TextBody::default(), links)?;
             writer.write_event(Event::End(BytesEnd::new("a:txBody")))?;
             match cell.fill {
                 Some(fill) => {
@@ -998,20 +1013,45 @@ fn background_picture_xml(rel_id: &str, fill: &crate::engine::FillRect) -> Strin
 /// be a part nothing reads. Text, rects and circles are what it reads, and
 /// they are what this writes.
 /// A master's or layout's pictures as they are written: each is the part's
-/// relationship `rId{first_rel + k}` to `../media/imageN.png`, its file
-/// added to the package's media (`images`).
+/// relationship `rId{first_rel + k}` to its media part (`images`).
 struct PartPictures<'a> {
     first_rel: usize,
     targets: Vec<String>,
-    images: &'a mut Vec<String>,
+    images: &'a mut PptxMedia,
 }
 
 impl PartPictures<'_> {
     /// The relationship id for a picture of the file at `path`.
     fn add(&mut self, path: &str) -> String {
-        self.images.push(path.to_string());
-        self.targets.push(format!("../media/image{}.png", self.images.len()));
+        self.targets.push(self.images.target(path));
         format!("rId{}", self.first_rel + self.targets.len() - 1)
+    }
+}
+
+/// The package's `ppt/media` parts. A file is stored once however many
+/// slides, layouts and masters show it, and each part is named with the
+/// picture's real extension, so a JPEG is not a `.png` part (#1984).
+#[derive(Default)]
+struct PptxMedia {
+    /// Source path and part name (`image3.jpg`), in first-use order.
+    parts: Vec<(String, String)>,
+    by_path: std::collections::HashMap<String, usize>,
+}
+
+impl PptxMedia {
+    /// The relationship target (`../media/imageN.ext`) for the picture at
+    /// `path`, adding its part the first time the file is seen.
+    fn target(&mut self, path: &str) -> String {
+        let i = match self.by_path.get(path) {
+            Some(&i) => i,
+            None => {
+                let (ext, _) = crate::image_px::media_type(path);
+                self.parts.push((path.to_string(), format!("image{}.{ext}", self.parts.len() + 1)));
+                self.by_path.insert(path.to_string(), self.parts.len() - 1);
+                self.parts.len() - 1
+            }
+        };
+        format!("../media/{}", self.parts[i].1)
     }
 }
 
@@ -1032,6 +1072,7 @@ fn write_master_shapes<W: std::io::Write>(
                 runs,
                 body,
                 None,
+                &LinkRels::new(),
             )?,
             SlideObject::Rect { x, y, w, h, rotation } => write_rect(
                 writer,
@@ -1056,6 +1097,7 @@ fn write_master_shapes<W: std::io::Write>(
                 j + 1,
                 Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
                 table,
+                &LinkRels::new(),
             )?,
             SlideObject::Image { path, x, y, w, h, rotation, crop } => {
                 let rel = pictures.add(path);
@@ -1388,6 +1430,7 @@ fn transition_xml(t: Transition) -> Option<String> {
 /// as `rId1` in fixed text, so the layout has to come first and the theme
 /// after it.
 const IMAGE_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const HYPERLINK_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
 fn rels_part(rels: &[(&str, &str)]) -> String {
     let mut out = String::from(
@@ -1426,7 +1469,7 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         .unix_permissions(0o755);
 
     // Track images to add to ppt/media/
-    let mut images_to_add = Vec::new();
+    let mut images_to_add = PptxMedia::default();
     // Chart parts, numbered through the deck in slide and object order.
     let mut charts: Vec<String> = Vec::new();
     let chart_total = deck
@@ -1445,6 +1488,11 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
            <Default Extension=\"png\" ContentType=\"image/png\"/>\n\
            <Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/>\n\
            <Default Extension=\"jpg\" ContentType=\"image/jpeg\"/>\n\
+           <Default Extension=\"gif\" ContentType=\"image/gif\"/>\n\
+           <Default Extension=\"svg\" ContentType=\"image/svg+xml\"/>\n\
+           <Default Extension=\"webp\" ContentType=\"image/webp\"/>\n\
+           <Default Extension=\"bmp\" ContentType=\"image/bmp\"/>\n\
+           <Default Extension=\"tiff\" ContentType=\"image/tiff\"/>\n\
            <Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/>\n"
     );
     for i in 0..deck.slides.len() {
@@ -1595,10 +1643,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             // with its `a:fillRect`, the picture a media part of its own.
             let bg = slide.background.trim_start_matches('#');
             if let Some(pic) = &slide.background_picture {
-                let img_idx = images_to_add.len() + 1;
-                images_to_add.push(pic.path.clone());
                 let rel_id = format!("rId{}", slide_rels.len() + 1);
-                slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{img_idx}.png")));
+                slide_rels.push((rel_id.clone(), IMAGE_REL, images_to_add.target(&pic.path)));
                 writer.get_mut().write_all(background_picture_xml(&rel_id, &pic.fill).as_bytes()).map_err(|e| e.to_string())?;
             } else if bg.len() == 6 {
                 writer.write_event(Event::Start(BytesStart::new("p:bg"))).map_err(|e| e.to_string())?;
@@ -1651,6 +1697,24 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             writer.write_event(Event::End(BytesEnd::new("a:xfrm"))).map_err(|e| e.to_string())?;
             writer.write_event(Event::End(BytesEnd::new("p:grpSpPr"))).map_err(|e| e.to_string())?;
 
+            // The slide's text hyperlinks, one external relationship per
+            // target (#1998), numbered after the background picture's.
+            let mut links = LinkRels::new();
+            for obj in &slide.objects {
+                let runs: Vec<&Run> = match obj {
+                    SlideObject::TextBox { runs, .. } => runs.iter().collect(),
+                    SlideObject::Table { table, .. } => table.rows.iter().flatten().flat_map(|c| c.runs.iter()).collect(),
+                    _ => Vec::new(),
+                };
+                for target in runs.into_iter().filter_map(|r| r.style.link.as_ref()) {
+                    if !target.is_empty() && !links.contains_key(target) {
+                        let rel_id = format!("rId{}", slide_rels.len() + 1);
+                        slide_rels.push((rel_id.clone(), HYPERLINK_REL, target.clone()));
+                        links.insert(target.clone(), rel_id);
+                    }
+                }
+            }
+
             let mut bodies = 0u32;
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
@@ -1660,7 +1724,7 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         if body.placeholder == Some(crate::layouts::Placeholder::Body) {
                             bodies += 1;
                         }
-                        write_text_box(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, text, runs, body, ph_idx).map_err(|e| e.to_string())?;
+                        write_text_box(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, text, runs, body, ph_idx, &links).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Rect { x, y, w, h, rotation } => {
                         write_rect(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
@@ -1672,14 +1736,11 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         write_shape(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, kind, style).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Table { x, y, w, h, rotation, table } => {
-                        write_table(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, table).map_err(|e| e.to_string())?;
+                        write_table(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, table, &links).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Image { path, x, y, w, h, rotation, crop } => {
-                        let img_idx = images_to_add.len() + 1;
-                        images_to_add.push(path.clone());
-
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
-                        slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{}.png", img_idx)));
+                        slide_rels.push((rel_id.clone(), IMAGE_REL, images_to_add.target(path)));
 
                         write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop).map_err(|e| e.to_string())?;
                     }
@@ -1739,9 +1800,15 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                 if let Some(n) = rel_id.strip_prefix("rId").and_then(|n| n.parse::<usize>().ok()) {
                     max_rel = max_rel.max(n);
                 }
+                // A link's target is an address, outside the package.
+                let (target, mode) = if *kind == HYPERLINK_REL {
+                    (quick_xml::escape::escape(target.as_str()).into_owned(), " TargetMode=\"External\"")
+                } else {
+                    (target.clone(), "")
+                };
                 rels_str.push_str(&format!(
-                    "  <Relationship Id=\"{}\" Type=\"{}\" Target=\"{}\"/>\n",
-                    rel_id, kind, target
+                    "  <Relationship Id=\"{}\" Type=\"{}\" Target=\"{}\"{}/>\n",
+                    rel_id, kind, target, mode
                 ));
             }
             if has_notes {
@@ -1816,8 +1883,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     }
 
     // 8. Write image media files in ppt/media/
-    for (idx, img_path) in images_to_add.iter().enumerate() {
-        let zip_img_path = format!("ppt/media/image{}.png", idx + 1);
+    for (img_path, name) in &images_to_add.parts {
+        let zip_img_path = format!("ppt/media/{name}");
         let mut img_file = File::open(img_path)
             .map_err(|e| format!("Cannot open image {}: {}", img_path, e))?;
         let mut buffer = Vec::new();

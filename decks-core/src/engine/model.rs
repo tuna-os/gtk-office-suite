@@ -1,5 +1,5 @@
 // model.rs — the deck presentation data model.
-use letters_core::model::Run;
+use suite_common_core::document::Run;
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Split out of engine.rs (issue #247).
@@ -28,6 +28,24 @@ pub struct Deck {
     /// and for new documents.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub themes: Vec<super::theme::Theme>,
+    /// Slide parts the PPTX reader could not read — missing from the
+    /// package, corrupt, or past the zip budget — in presentation order
+    /// (#1977). Those slides are absent from `slides`; this record is the
+    /// only trace they existed, so the open report
+    /// (`read_deck_with_report`) and the save-time loss check can name
+    /// them instead of letting a save silently make the loss permanent.
+    /// Empty for ODP (its slides live in parts that either read or fail
+    /// the open as a whole) and for new documents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_slides: Vec<SkippedSlide>,
+}
+
+/// A slide the PPTX reader skipped because its part could not be read
+/// (#1977): which part, and why the read failed, in the zip layer's words.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SkippedSlide {
+    pub part: String,
+    pub reason: String,
 }
 
 /// Model units per inch: the model slide is 960x540 units for the sheet our
@@ -436,6 +454,7 @@ impl Deck {
             masters: vec![default_master],
             page_size: None,
             themes: Vec::new(),
+            skipped_slides: Vec::new(),
         }
     }
 

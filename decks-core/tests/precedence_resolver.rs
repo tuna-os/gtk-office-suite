@@ -68,7 +68,7 @@ fn slide(master_id: u64, layout_id: Option<u64>, background: &str, objects: Vec<
 }
 
 fn deck(themes: Vec<Theme>, masters: Vec<MasterSlide>, slides: Vec<Slide>) -> Deck {
-    Deck { slides, masters, page_size: None, themes }
+    Deck { slides, masters, page_size: None, themes, skipped_slides: Vec::new() }
 }
 
 fn token(slot: &str) -> ColorRef {

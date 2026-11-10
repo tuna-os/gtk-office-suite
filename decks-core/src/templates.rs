@@ -12,7 +12,7 @@ use crate::engine::theme::{ColorRef, FillSrc, StrokeSrc};
 use crate::engine::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, TextBody};
 use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::layouts::Placeholder;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 
 /// A theme as the chooser lists it.
 #[derive(Clone, Debug, PartialEq)]
@@ -249,7 +249,7 @@ mod tests {
             let (slides, masters) = deck(i).unwrap();
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.pptx");
-            let d = crate::engine::Deck { slides, masters, page_size: None, themes: Vec::new() };
+            let d = crate::engine::Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
             crate::engine::write_pptx(path.to_str().unwrap(), &d).unwrap();
             let back = crate::engine::read_pptx(path.to_str().unwrap()).unwrap();
             assert_eq!(back.slides.len(), 2, "template {i}");

@@ -339,7 +339,7 @@ fn empty_slide_survives_impress_rewrite() {
 
 #[test]
 fn bold_run_survives_impress_rewrite() {
-    use letters_core::model::{Run, RunStyle};
+    use suite_common_core::document::{Run, RunStyle};
     let mut deck = Deck::new();
     deck.slides = vec![Slide { hidden: false,
         title: "styled".into(),
@@ -424,7 +424,7 @@ fn background_color_survives_impress_rewrite() {
 
 // ── Oracle wave 3: run styling, images, notes mapping ────────────────
 
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 
 fn styled_run_slide(runs: Vec<Run>) -> Slide {
     let text = runs.iter().map(|r| r.text.as_str()).collect::<String>();
@@ -680,7 +680,7 @@ fn odp_slide_order_survives_impress_rewrite() {
 
 #[test]
 fn odp_bold_run_survives_impress_rewrite() {
-    use letters_core::model::{Run as LRun, RunStyle as LRunStyle};
+    use suite_common_core::document::{Run as LRun, RunStyle as LRunStyle};
     let mut deck = Deck::new();
     deck.slides = vec![Slide { hidden: false,
         title: "styled".into(),
@@ -1647,7 +1647,7 @@ fn impress_keeps_a_themes_decorations_in_both_formats() {
     };
     for (i, t) in decks_core::templates::templates().iter().enumerate() {
         let (slides, masters) = decks_core::templates::deck(i).unwrap();
-        let deck = Deck { slides, masters, page_size: None, themes: Vec::new() };
+        let deck = Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
         let want: Vec<String> = deck.masters[0].shapes.iter().map(look).collect();
         for ext in ["pptx", "odp"] {
             let dir = tempfile::tempdir().unwrap();
@@ -2035,7 +2035,7 @@ fn a_merged_table_cell_survives_impress() {
         return;
     }
     use decks_core::engine::table::{TableCell, TableData};
-    let cell = |t: &str| TableCell { runs: vec![letters_core::model::Run::plain(t)], ..Default::default() };
+    let cell = |t: &str| TableCell { runs: vec![suite_common_core::document::Run::plain(t)], ..Default::default() };
     let rows = vec![
         vec![TableCell { col_span: 2, ..cell("Title") }, TableCell { covered: true, ..Default::default() }],
         vec![cell("a"), cell("b")],
