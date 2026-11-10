@@ -262,9 +262,10 @@ jobs:
   # ran it, so the configured policy was documentation rather than a gate
   # (#269, #330).
   #
-  # Only `check advisories` — `deny.toml` configures the [advisories] section
-  # and nothing else, so a bare `cargo deny check` would apply default
-  # bans/licenses/sources policy that this project has never agreed to.
+  # `check advisories licenses`: `deny.toml` configures those two sections
+  # (the licence policy since #1975) and nothing else, so a bare `cargo deny
+  # check` would apply default bans/sources policy that this project has never
+  # agreed to.
   #
   # Expect this job to be the one that goes red without a code change: the
   # advisory database updates independently of this repository, so a newly
@@ -278,7 +279,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
-          command: check advisories
+          command: check advisories licenses
 
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:
