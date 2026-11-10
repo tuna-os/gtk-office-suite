@@ -73,15 +73,39 @@ pub struct History<O> {
     merge: bool,
     /// The top undo step is typed word characters (it may take more).
     word: bool,
+    /// The most undo steps kept; past it the oldest go. `None` keeps all.
+    limit: Option<usize>,
 }
 
 impl<O> Default for History<O> {
     fn default() -> Self {
-        Self { undo: Vec::new(), redo: Vec::new(), open: None, merge: false, word: false }
+        Self { undo: Vec::new(), redo: Vec::new(), open: None, merge: false, word: false, limit: None }
     }
 }
 
 impl<O: Op> History<O> {
+    /// A history that keeps at most `limit` undo steps: once a new step
+    /// would pass it, the oldest step is forgotten, so memory stays bounded
+    /// however long the session runs. Redo needs no limit of its own: it
+    /// only ever holds steps taken off the undo stack.
+    pub fn with_limit(limit: usize) -> Self {
+        Self { limit: Some(limit), ..Self::default() }
+    }
+
+    /// The number of steps undo can take back.
+    pub fn undo_len(&self) -> usize {
+        self.undo.len()
+    }
+
+    fn trim(&mut self) {
+        if let Some(limit) = self.limit {
+            let excess = self.undo.len().saturating_sub(limit);
+            if excess > 0 {
+                self.undo.drain(..excess);
+            }
+        }
+    }
+
     /// Start grouping changes into one undo step.
     pub fn begin(&mut self) {
         if self.open.is_none() {
@@ -114,6 +138,7 @@ impl<O: Op> History<O> {
             }
         }
         self.undo.push(ops);
+        self.trim();
     }
 
     /// Mark the next recorded step as one typed word character; any step
@@ -159,6 +184,7 @@ impl<O: Op> History<O> {
         match apply_all(doc, &ops) {
             Ok(inverse) => {
                 if redo { &mut self.undo } else { &mut self.redo }.push(inverse);
+                self.trim();
                 Some(ops)
             }
             // `apply_all` rolled the step back, so `doc` is as it was: no
@@ -197,9 +223,10 @@ impl<O: Op> History<O> {
         self.redo = rebase_chain(std::mem::take(&mut self.redo), &mut state, &mut step);
     }
 
-    /// Forget everything (a document was replaced wholesale).
+    /// Forget everything (a document was replaced wholesale). The limit,
+    /// if any, stays.
     pub fn clear(&mut self) {
-        *self = Self::default();
+        *self = Self { limit: self.limit, ..Self::default() };
     }
 }
 
