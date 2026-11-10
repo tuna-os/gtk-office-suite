@@ -210,160 +210,201 @@ pub(super) struct ContactSourcesInit {
     pub(super) contact_names: bool,
 }
 
-#[relm4::component(pub(crate))]
+/// The widgets `init` reads back out of the page it builds. Nothing in the
+/// page follows the model on its own, so there is no `update_view`; this is
+/// what `#[relm4::component]`'s `view!` block used to generate.
+pub(crate) struct ContactSourcesWidgets {
+    nav: adw::NavigationView,
+    toasts: adw::ToastOverlay,
+    list: gtk::ListBox,
+    add_btn: gtk::Button,
+    no_eds: gtk::Label,
+    book_row: adw::ComboRow,
+    placement_row: adw::ComboRow,
+    editor_page: adw::NavigationPage,
+    save_btn: gtk::Button,
+    remove_btn: gtk::Button,
+    editor_slot: adw::Bin,
+}
+
+fn build_widgets(root: &adw::Bin, sender: &ComponentSender<ContactSources>, init: &ContactSourcesInit) -> ContactSourcesWidgets {
+    // ---- list page ----
+    // One just added in GNOME Settings, without leaving the page.
+    let refresh = gtk::Button::builder()
+        .icon_name("view-refresh-symbolic")
+        .tooltip_text(i18n("Look again for address books"))
+        .build();
+    {
+        let sender = sender.clone();
+        refresh.connect_clicked(move |_| sender.input(ContactSourcesInput::Load));
+    }
+    let add_btn = gtk::Button::builder().label(i18n("Add Address Book…")).build();
+    {
+        let sender = sender.clone();
+        add_btn.connect_clicked(move |_| sender.input(ContactSourcesInput::Add));
+    }
+    let suffix = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(6)
+        .valign(gtk::Align::Start)
+        .halign(gtk::Align::End)
+        .margin_start(24)
+        .build();
+    suffix.append(&refresh);
+    suffix.append(&add_btn);
+
+    let list = gtk::ListBox::builder()
+        .css_classes(["boxed-list"])
+        .selection_mode(gtk::SelectionMode::None)
+        .build();
+    {
+        let sender = sender.clone();
+        list.connect_row_activated(move |_, row| {
+            sender.input(ContactSourcesInput::Open(row.index() as usize));
+        });
+    }
+    let no_eds = gtk::Label::builder()
+        .label(i18n("Address books need Evolution Data Server, which is not installed. Install the evolution-data-server package (it runs without GNOME) and reopen this page."))
+        .css_classes(["dim-label"])
+        .wrap(true)
+        .xalign(0.0)
+        .margin_top(12)
+        .visible(false)
+        .build();
+    let books = adw::PreferencesGroup::builder()
+        .title(i18n("Address Books"))
+        .description(i18n("Where contacts come from for Contacts, suggestions, sender pictures and filters. Switching one off leaves it out of Hylki."))
+        .header_suffix(&suffix)
+        .build();
+    books.add(&list);
+    books.add(&no_eds);
+
+    let book_row = adw::ComboRow::builder()
+        .title(i18n("Save new contacts in"))
+        .subtitle(i18n("Unless another is picked when the contact is made."))
+        .build();
+    {
+        let sender = sender.clone();
+        book_row.connect_selected_notify(move |row| sender.input(ContactSourcesInput::ChangeBook(row.selected())));
+    }
+    let new_contacts = adw::PreferencesGroup::builder().title(i18n("New Contacts")).build();
+    new_contacts.add(&book_row);
+
+    // Thunderbird's "Show only the display name for people in my address
+    // book".
+    let names = adw::SwitchRow::builder()
+        .title(i18n("Show names from Contacts"))
+        .subtitle(i18n("Saved addresses show the contact's name, not the mail's."))
+        .active(init.contact_names)
+        .build();
+    {
+        let sender = sender.clone();
+        names.connect_active_notify(move |row| {
+            let _ = sender.output(ContactSourcesOutput::SetContactNames(row.is_active()));
+        });
+    }
+    let in_mail = adw::PreferencesGroup::builder().title(i18n("In Mail")).build();
+    in_mail.add(&names);
+
+    // The same row as Settings → Sidebar's.
+    let placement_row = adw::ComboRow::builder()
+        .title(i18n("Contacts placement"))
+        .subtitle(i18n("'In the footer' disables expand/collapse."))
+        .model(&crate::ui::preferences::contacts_placement_model())
+        .selected(crate::ui::preferences::contacts_placement_index(init.placement))
+        .build();
+    let search = adw::SwitchRow::builder()
+        .title(i18n("Keep the search field open"))
+        .active(init.search_open)
+        .build();
+    {
+        let sender = sender.clone();
+        search.connect_active_notify(move |row| {
+            let _ = sender.output(ContactSourcesOutput::SetSearchOpen(row.is_active()));
+        });
+    }
+    let layout = adw::PreferencesGroup::builder().title(i18n("Layout")).build();
+    layout.add(&placement_row);
+    layout.add(&search);
+
+    let prefs = adw::PreferencesPage::new();
+    prefs.add(&books);
+    prefs.add(&new_contacts);
+    prefs.add(&in_mail);
+    prefs.add(&layout);
+    let toasts = adw::ToastOverlay::new();
+    toasts.set_child(Some(&prefs));
+    let list_toolbar = adw::ToolbarView::new();
+    list_toolbar.set_content(Some(&toasts));
+    let list_page = adw::NavigationPage::builder()
+        .title(i18n("Contacts"))
+        .tag("list")
+        .child(&list_toolbar)
+        .build();
+
+    // ---- editor page ----
+    let header = adw::HeaderBar::new();
+    header.set_show_end_title_buttons(true);
+    let save_btn = gtk::Button::builder()
+        .label(i18n("Save"))
+        .css_classes(["suggested-action"])
+        .build();
+    {
+        let sender = sender.clone();
+        save_btn.connect_clicked(move |_| sender.input(ContactSourcesInput::SaveClicked));
+    }
+    header.pack_end(&save_btn);
+    let remove_btn = gtk::Button::builder()
+        .label(i18n("Remove"))
+        .css_classes(["destructive-action"])
+        .visible(false)
+        .build();
+    {
+        let sender = sender.clone();
+        remove_btn.connect_clicked(move |_| sender.input(ContactSourcesInput::RemoveCurrent));
+    }
+    header.pack_end(&remove_btn);
+
+    let editor_slot = adw::Bin::new();
+    let clamp = adw::Clamp::builder()
+        .maximum_size(640)
+        .tightening_threshold(480)
+        .margin_top(24)
+        .margin_bottom(24)
+        .margin_start(24)
+        .margin_end(24)
+        .child(&editor_slot)
+        .build();
+    let scrolled = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&clamp)
+        .build();
+    let editor_toolbar = adw::ToolbarView::new();
+    editor_toolbar.add_top_bar(&header);
+    editor_toolbar.set_content(Some(&scrolled));
+    let editor_page = adw::NavigationPage::builder()
+        .title(i18n("Address Book"))
+        .tag("editor")
+        .child(&editor_toolbar)
+        .build();
+
+    let nav = adw::NavigationView::new();
+    nav.add(&list_page);
+    nav.add(&editor_page);
+    root.set_child(Some(&nav));
+
+    ContactSourcesWidgets { nav, toasts, list, add_btn, no_eds, book_row, placement_row, editor_page, save_btn, remove_btn, editor_slot }
+}
+
 impl SimpleComponent for ContactSources {
     type Init = ContactSourcesInit;
     type Input = ContactSourcesInput;
     type Output = ContactSourcesOutput;
+    type Root = adw::Bin;
+    type Widgets = ContactSourcesWidgets;
 
-    view! {
-        adw::Bin {
-            #[wrap(Some)]
-            #[name = "nav"]
-            set_child = &adw::NavigationView {
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Contacts"),
-                    set_tag: Some("list"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        #[wrap(Some)]
-                        #[name = "toasts"]
-                        set_content = &adw::ToastOverlay {
-                            #[wrap(Some)]
-                            set_child = &adw::PreferencesPage {
-                                add = &adw::PreferencesGroup {
-                                    set_title: &i18n("Address Books"),
-                                    set_description: Some(&i18n("Where contacts come from for Contacts, suggestions, sender pictures and filters. Switching one off leaves it out of Hylki.")),
-                                    #[wrap(Some)]
-                                    set_header_suffix = &gtk::Box {
-                                        set_orientation: gtk::Orientation::Horizontal,
-                                        set_spacing: 6,
-                                        set_valign: gtk::Align::Start,
-                                        set_halign: gtk::Align::End,
-                                        set_margin_start: 24,
-                                        // One just added in GNOME Settings,
-                                        // without leaving the page.
-                                        gtk::Button {
-                                            set_icon_name: "view-refresh-symbolic",
-                                            set_tooltip_text: Some(&i18n("Look again for address books")),
-                                            connect_clicked => ContactSourcesInput::Load,
-                                        },
-                                        #[name = "add_btn"]
-                                        gtk::Button {
-                                            set_label: &i18n("Add Address Book…"),
-                                            connect_clicked => ContactSourcesInput::Add,
-                                        },
-                                    },
-                                    #[name = "list"]
-                                    gtk::ListBox {
-                                        add_css_class: "boxed-list",
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                        connect_row_activated[sender] => move |_, row| {
-                                            sender.input(ContactSourcesInput::Open(row.index() as usize));
-                                        },
-                                    },
-                                    #[name = "no_eds"]
-                                    gtk::Label {
-                                        set_label: &i18n("Address books need Evolution Data Server, which is not installed. Install the evolution-data-server package (it runs without GNOME) and reopen this page."),
-                                        add_css_class: "dim-label",
-                                        set_wrap: true,
-                                        set_xalign: 0.0,
-                                        set_margin_top: 12,
-                                        set_visible: false,
-                                    },
-                                },
-                                add = &adw::PreferencesGroup {
-                                    set_title: &i18n("New Contacts"),
-                                    #[name = "book_row"]
-                                    adw::ComboRow {
-                                        set_title: &i18n("Save new contacts in"),
-                                        set_subtitle: &i18n("Unless another is picked when the contact is made."),
-                                        connect_selected_notify[sender] => move |row| {
-                                            sender.input(ContactSourcesInput::ChangeBook(row.selected()));
-                                        },
-                                    },
-                                },
-                                add = &adw::PreferencesGroup {
-                                    set_title: &i18n("In Mail"),
-                                    // Thunderbird's "Show only the display
-                                    // name for people in my address book".
-                                    adw::SwitchRow {
-                                        set_title: &i18n("Show names from Contacts"),
-                                        set_subtitle: &i18n("Saved addresses show the contact's name, not the mail's."),
-                                        set_active: init.contact_names,
-                                        connect_active_notify[sender] => move |row| {
-                                            let _ = sender.output(ContactSourcesOutput::SetContactNames(row.is_active()));
-                                        },
-                                    },
-                                },
-                                add = &adw::PreferencesGroup {
-                                    set_title: &i18n("Layout"),
-                                    // The same row as Settings → Sidebar's.
-                                    #[name = "placement_row"]
-                                    adw::ComboRow {
-                                        set_title: &i18n("Contacts placement"),
-                                        set_subtitle: &i18n("'In the footer' disables expand/collapse."),
-                                        set_model: Some(&crate::ui::preferences::contacts_placement_model()),
-                                        set_selected: crate::ui::preferences::contacts_placement_index(init.placement),
-                                    },
-                                    adw::SwitchRow {
-                                        set_title: &i18n("Keep the search field open"),
-                                        set_active: init.search_open,
-                                        connect_active_notify[sender] => move |row| {
-                                            let _ = sender.output(ContactSourcesOutput::SetSearchOpen(row.is_active()));
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-
-                #[name = "editor_page"]
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Address Book"),
-                    set_tag: Some("editor"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        add_top_bar = &adw::HeaderBar {
-                            set_show_end_title_buttons: true,
-                            #[name = "save_btn"]
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Save"),
-                                add_css_class: "suggested-action",
-                                connect_clicked => ContactSourcesInput::SaveClicked,
-                            },
-                            #[name = "remove_btn"]
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Remove"),
-                                add_css_class: "destructive-action",
-                                set_visible: false,
-                                connect_clicked => ContactSourcesInput::RemoveCurrent,
-                            },
-                        },
-
-                        #[wrap(Some)]
-                        set_content = &gtk::ScrolledWindow {
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-                            #[wrap(Some)]
-                            set_child = &adw::Clamp {
-                                set_maximum_size: 640,
-                                set_tightening_threshold: 480,
-                                set_margin_top: 24,
-                                set_margin_bottom: 24,
-                                set_margin_start: 24,
-                                set_margin_end: 24,
-                                #[wrap(Some)]
-                                #[name = "editor_slot"]
-                                set_child = &adw::Bin {},
-                            },
-                        },
-                    },
-                },
-            },
-        }
+    fn init_root() -> Self::Root {
+        adw::Bin::new()
     }
 
     fn init(
@@ -371,7 +412,7 @@ impl SimpleComponent for ContactSources {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &init);
         // Connected once its choice is set, and quiet while the Sidebar
         // page's row sets it.
         let placement_guard = Rc::new(std::cell::Cell::new(false));

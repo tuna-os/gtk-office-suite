@@ -88,127 +88,154 @@ pub(super) enum CloudAccountsOutput {
     EditorOpen(bool),
 }
 
-#[relm4::component(pub(crate))]
+/// The widgets `init` reads back out of the page it builds. Nothing in the
+/// page follows the model on its own (the list is rebuilt by `rebuild`), so
+/// there is no `update_view`; this is what `#[relm4::component]`'s `view!`
+/// block used to generate.
+pub(crate) struct CloudAccountsWidgets {
+    nav: adw::NavigationView,
+    toasts: adw::ToastOverlay,
+    brands: gtk::Box,
+    list: gtk::ListBox,
+    empty: gtk::Label,
+    editor_page: adw::NavigationPage,
+    remove_btn: gtk::Button,
+    editor_slot: adw::Bin,
+}
+
+fn build_widgets(root: &adw::Bin, sender: &ComponentSender<CloudAccounts>) -> CloudAccountsWidgets {
+    // ---- list page ----
+    // Across from the heading: the services' marks (picker order), with Add
+    // Account under them.
+    let brands = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .halign(gtk::Align::End)
+        .build();
+    let add = gtk::Button::builder().label(i18n("Add Account…")).halign(gtk::Align::End).build();
+    {
+        let sender = sender.clone();
+        add.connect_clicked(move |_| sender.input(CloudAccountsInput::Add));
+    }
+    let suffix = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(20)
+        .valign(gtk::Align::Start)
+        .margin_start(24)
+        .build();
+    suffix.append(&brands);
+    suffix.append(&add);
+
+    // A row opens its editor, as the Mail Accounts list does.
+    let list = gtk::ListBox::builder()
+        .css_classes(["boxed-list"])
+        .selection_mode(gtk::SelectionMode::None)
+        .margin_top(16)
+        .build();
+    {
+        let sender = sender.clone();
+        list.connect_row_activated(move |_, row| {
+            sender.input(CloudAccountsInput::Edit(row.index() as usize));
+        });
+    }
+    let empty = gtk::Label::builder()
+        .label(i18n("No cloud accounts yet."))
+        .css_classes(["dim-label"])
+        .margin_top(12)
+        .build();
+
+    let group = adw::PreferencesGroup::builder()
+        .title(i18n("Cloud storage"))
+        .description(i18n(
+            "Upload large files and send a link instead of attaching them.\n\nSupported providers: Nextcloud, ownCloud, OpenCloud, OneDrive, Dropbox and Seafile.",
+        ))
+        .header_suffix(&suffix)
+        .build();
+    group.add(&list);
+    group.add(&empty);
+    let prefs = adw::PreferencesPage::new();
+    prefs.add(&group);
+    let toasts = adw::ToastOverlay::new();
+    toasts.set_child(Some(&prefs));
+    let list_toolbar = adw::ToolbarView::new();
+    list_toolbar.set_content(Some(&toasts));
+    let list_page = adw::NavigationPage::builder()
+        .title(i18n("Cloud Storage"))
+        .tag("list")
+        .child(&list_toolbar)
+        .build();
+
+    // ---- editor page ----
+    // The window's close button lives in this header while the editor is up
+    // (the shared header hides).
+    let header = adw::HeaderBar::new();
+    header.set_show_end_title_buttons(true);
+    let save = gtk::Button::builder()
+        .label(i18n("Save"))
+        .css_classes(["suggested-action"])
+        .build();
+    {
+        let sender = sender.clone();
+        save.connect_clicked(move |_| sender.input(CloudAccountsInput::SaveClicked));
+    }
+    header.pack_end(&save);
+    // Left of Save, only while editing an existing account; asks before
+    // removing.
+    let remove_btn = gtk::Button::builder()
+        .label(i18n("Remove"))
+        .css_classes(["destructive-action"])
+        .visible(false)
+        .build();
+    {
+        let sender = sender.clone();
+        remove_btn.connect_clicked(move |_| sender.input(CloudAccountsInput::RemoveCurrent));
+    }
+    header.pack_end(&remove_btn);
+
+    let editor_slot = adw::Bin::new();
+    let clamp = adw::Clamp::builder()
+        .maximum_size(640)
+        .tightening_threshold(480)
+        .margin_top(24)
+        .margin_bottom(24)
+        .margin_start(24)
+        .margin_end(24)
+        .child(&editor_slot)
+        .build();
+    let scrolled = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&clamp)
+        .build();
+    let editor_toolbar = adw::ToolbarView::new();
+    editor_toolbar.add_top_bar(&header);
+    editor_toolbar.set_content(Some(&scrolled));
+    let editor_page = adw::NavigationPage::builder()
+        .title(i18n("Cloud Account"))
+        .tag("editor")
+        .child(&editor_toolbar)
+        .build();
+
+    let nav = adw::NavigationView::new();
+    nav.add(&list_page);
+    nav.add(&editor_page);
+    root.set_child(Some(&nav));
+
+    CloudAccountsWidgets { nav, toasts, brands, list, empty, editor_page, remove_btn, editor_slot }
+}
+
 impl SimpleComponent for CloudAccounts {
     type Init = ();
     type Input = CloudAccountsInput;
     type Output = CloudAccountsOutput;
+    type Root = adw::Bin;
+    type Widgets = CloudAccountsWidgets;
 
-    view! {
-        adw::Bin {
-            #[wrap(Some)]
-            #[name = "nav"]
-            set_child = &adw::NavigationView {
-                // ---- list page ----
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Cloud Storage"),
-                    set_tag: Some("list"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        #[wrap(Some)]
-                        #[name = "toasts"]
-                        set_content = &adw::ToastOverlay {
-                            #[wrap(Some)]
-                            set_child = &adw::PreferencesPage {
-                                add = &adw::PreferencesGroup {
-                                    set_title: &i18n("Cloud storage"),
-                                    set_description: Some(&i18n("Upload large files and send a link instead of attaching them.\n\nSupported providers: Nextcloud, ownCloud, OpenCloud, OneDrive, Dropbox and Seafile.")),
-                                    // Across from the heading: the services' marks
-                                    // (picker order), with Add Account under them.
-                                    #[wrap(Some)]
-                                    set_header_suffix = &gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
-                                        set_spacing: 20,
-                                        set_valign: gtk::Align::Start,
-                                        set_margin_start: 24,
-                                        #[name = "brands"]
-                                        gtk::Box {
-                                            set_orientation: gtk::Orientation::Horizontal,
-                                            set_spacing: 12,
-                                            set_halign: gtk::Align::End,
-                                        },
-                                        gtk::Button {
-                                            set_label: &i18n("Add Account…"),
-                                            set_halign: gtk::Align::End,
-                                            connect_clicked => CloudAccountsInput::Add,
-                                        },
-                                    },
-                                    #[name = "list"]
-                                    gtk::ListBox {
-                                        add_css_class: "boxed-list",
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                        set_margin_top: 16,
-                                        // A row opens its editor, as the Mail
-                                        // Accounts list does.
-                                        connect_row_activated[sender] => move |_, row| {
-                                            sender.input(CloudAccountsInput::Edit(row.index() as usize));
-                                        },
-                                    },
-                                    #[name = "empty"]
-                                    gtk::Label {
-                                        set_label: &i18n("No cloud accounts yet."),
-                                        add_css_class: "dim-label",
-                                        set_margin_top: 12,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-
-                // ---- editor page ----
-                #[name = "editor_page"]
-                add = &adw::NavigationPage {
-                    set_title: &i18n("Cloud Account"),
-                    set_tag: Some("editor"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        add_top_bar = &adw::HeaderBar {
-                            // The window's close button lives here while the
-                            // editor is up (the shared header hides).
-                            set_show_end_title_buttons: true,
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Save"),
-                                add_css_class: "suggested-action",
-                                connect_clicked => CloudAccountsInput::SaveClicked,
-                            },
-                            // Left of Save, only while editing an existing
-                            // account; asks before removing.
-                            #[name = "remove_btn"]
-                            pack_end = &gtk::Button {
-                                set_label: &i18n("Remove"),
-                                add_css_class: "destructive-action",
-                                set_visible: false,
-                                connect_clicked => CloudAccountsInput::RemoveCurrent,
-                            },
-                        },
-
-                        #[wrap(Some)]
-                        set_content = &gtk::ScrolledWindow {
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-                            #[wrap(Some)]
-                            set_child = &adw::Clamp {
-                                set_maximum_size: 640,
-                                set_tightening_threshold: 480,
-                                set_margin_top: 24,
-                                set_margin_bottom: 24,
-                                set_margin_start: 24,
-                                set_margin_end: 24,
-                                #[wrap(Some)]
-                                #[name = "editor_slot"]
-                                set_child = &adw::Bin {},
-                            },
-                        },
-                    },
-                },
-            },
-        }
+    fn init_root() -> Self::Root {
+        adw::Bin::new()
     }
 
     fn init(_init: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender);
         for service in cloud::SERVICES.iter() {
             let mark = crate::desktop::brand::image(service.brand(), 22);
             mark.set_tooltip_text(Some(service.name));
