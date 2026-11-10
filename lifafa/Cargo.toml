@@ -99,6 +99,8 @@ ammonia = "4.1.4"
 ksni = { version = "0.3.6", default-features = false, features = ["tokio", "blocking"] }
 gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+# html5ever and markup5ever_rcdom move together: RcDom implements the TreeSink
+# of its own html5ever release only (#2060). renovate.json groups them.
 markup5ever_rcdom = "0.40.0"
 html5ever = "0.40"
 css-inline = { version = "0.23.0", default-features = false }
