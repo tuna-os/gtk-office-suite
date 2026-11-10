@@ -42,7 +42,7 @@ impl RelmRemoveExt for adw::ExpanderRow {
 macro_rules! remove_impl {
     ($($type:ty),+) => {
         $(
-            impl $crate::relm::relm::extensions::RelmRemoveExt for $type {
+            impl $crate::relm::extensions::RelmRemoveExt for $type {
                 fn container_remove(&self, widget: &impl AsRef<Self::Child>) {
                     self.remove(widget.as_ref());
                 }
@@ -55,7 +55,7 @@ macro_rules! remove_child_impl {
     ($($type:ty),+) => {
         $(
             #[allow(deprecated)]
-            impl $crate::relm::relm::extensions::RelmRemoveExt for $type {
+            impl $crate::relm::extensions::RelmRemoveExt for $type {
                 fn container_remove(&self, widget: &impl AsRef<Self::Child>) {
                     self.remove_child(widget.as_ref());
                 }
