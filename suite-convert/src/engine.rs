@@ -145,7 +145,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         Some(Category::Text)
             if matches!(
                 plan.to,
-                Format::Md | Format::Odt | Format::Docx | Format::Html | Format::Pdf
+                Format::Md | Format::Odt | Format::Docx | Format::Html | Format::Pdf | Format::Png
             ) =>
         {
             Engine::Text
@@ -153,7 +153,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         Some(Category::Spreadsheet)
             if matches!(
                 plan.to,
-                Format::Xlsx | Format::Csv | Format::Pdf | Format::Html
+                Format::Xlsx | Format::Csv | Format::Pdf | Format::Html | Format::Png
             ) =>
         {
             Engine::Sheet
@@ -179,12 +179,30 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
     let scratch = tempfile::tempdir()
         .map_err(|e| Failure::new(Exit::Convert, format!("temporary directory: {e}")))?;
     let staged = scratch.path().join(format!("out.{}", plan.to.name()));
+    // PNG is the PDF drawn: stage the PDF through the same engine, then raster it.
+    let target = if plan.to == Format::Png {
+        Format::Pdf
+    } else {
+        plan.to
+    };
+    let pdf_stage = scratch.path().join("out.pdf");
+    let engine_out = if plan.to == Format::Png {
+        &pdf_stage
+    } else {
+        &staged
+    };
     let found = match engine {
-        Engine::Text => text(&input.path, &staged, plan.to)?,
-        Engine::Sheet => sheet(&input.path, &staged, plan.to)?,
+        Engine::Text => text(&input.path, engine_out, target)?,
+        Engine::Sheet => sheet(&input.path, engine_out, target)?,
         Engine::Deck => deck(&input.path, &staged)?,
     };
-
+    if plan.to == Format::Png {
+        let pdf = std::fs::read(&pdf_stage)
+            .map_err(|e| Failure::new(Exit::Convert, format!("reading the staged pdf: {e}")))?;
+        let png = rasterise(pdf, args.page, args.size)?;
+        std::fs::write(&staged, png)
+            .map_err(|e| Failure::new(Exit::Convert, format!("writing png: {e}")))?;
+    }
     match &args.output {
         Some(Output::Path(p)) => deliver(&staged, p)?,
         Some(Output::Stdout) => {
@@ -203,6 +221,44 @@ enum Engine {
     Text,
     Sheet,
     Deck,
+}
+
+/// Page `page` (from 1) of a PDF as a PNG `width` pixels wide.
+pub fn rasterise(pdf: Vec<u8>, page: u32, width: u32) -> Result<Vec<u8>, Failure> {
+    use hayro::hayro_interpret::InterpreterSettings;
+    use hayro::hayro_syntax::Pdf;
+    use hayro::vello_cpu::color::palette::css::WHITE;
+    use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
+
+    let pdf = Pdf::new(pdf)
+        .map_err(|e| Failure::new(Exit::Convert, format!("reading the pdf: {e:?}")))?;
+    let pages = pdf.pages();
+    let index = (page as usize).saturating_sub(1);
+    let Some(page_ref) = pages.get(index) else {
+        return Err(Failure::new(
+            Exit::Usage,
+            format!(
+                "--page {page} is out of range: the document has {} page(s)",
+                pages.len()
+            ),
+        ));
+    };
+    let (natural_width, _) = page_ref.render_dimensions();
+    let scale = width as f32 / natural_width;
+    let pixmap = render(
+        page_ref,
+        &RenderCache::new(),
+        &InterpreterSettings::default(),
+        &RenderSettings::default(),
+        &PixmapSettings {
+            x_scale: scale,
+            y_scale: scale,
+            bg_color: WHITE,
+        },
+    );
+    pixmap
+        .into_png()
+        .map_err(|e| Failure::new(Exit::Convert, format!("encoding png: {e:?}")))
 }
 
 fn deck(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {

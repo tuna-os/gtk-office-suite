@@ -147,3 +147,27 @@ fn a_text_document_converts_to_an_approximate_pdf() {
     assert!(String::from_utf8_lossy(&o.stderr).contains("typst-approximate"));
     assert_eq!(code(&run(&[&md, &pdf, "--fail-on-loss", "none"])), 4);
 }
+
+#[test]
+fn a_document_and_a_spreadsheet_convert_to_a_png_of_the_asked_width() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = write(dir.path(), "a.md", "# Title\n\nBody text.\n");
+    let csv = write(dir.path(), "a.csv", "a,b\n1,2\n");
+    for (input, name) in [(md, "a.png"), (csv, "b.png")] {
+        let out = dir.path().join(name).to_string_lossy().into_owned();
+        let o = run(&[&input, &out, "--size", "200"]);
+        assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+        let bytes = std::fs::read(&out).unwrap();
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+        // The IHDR width is bytes 16..20, big endian.
+        assert_eq!(u32::from_be_bytes(bytes[16..20].try_into().unwrap()), 200);
+    }
+}
+
+#[test]
+fn a_page_past_the_end_is_a_usage_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = write(dir.path(), "a.md", "one page\n");
+    let out = dir.path().join("a.png").to_string_lossy().into_owned();
+    assert_eq!(code(&run(&[&md, &out, "--page", "9"])), 1);
+}
