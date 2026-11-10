@@ -322,6 +322,7 @@ impl EditorForm {
         let ms_scopes_row = adw::EntryRow::default();
         ms_scopes_row.set_title(&i18n("Scopes (space-separated)"));
         ms_advanced.add_row(&ms_scopes_row);
+        let oauth_signin_btn = gtk::Button::default();
         let ms_redirect_row = adw::EntryRow::default();
         ms_redirect_row.set_title(&i18n("Redirect URI"));
         // A redirect of its own signs in in
@@ -338,7 +339,6 @@ impl EditorForm {
         }
         ms_advanced.add_row(&ms_redirect_row);
         preferences_group_5.add(&ms_advanced);
-        let oauth_signin_btn = gtk::Button::default();
         oauth_signin_btn.set_label(&i18n("Sign In with Browser"));
         oauth_signin_btn.set_halign(gtk::Align::Start);
         oauth_signin_btn.set_margin_top(16);

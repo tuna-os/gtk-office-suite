@@ -80,7 +80,7 @@ impl FiltersPage {
         let apply_filters_label = gtk::Label::default();
         apply_filters_label.set_label(&i18n("Apply Now"));
         box_5.append(&apply_filters_label);
-        apply_filters_btn.set_child(&box_5);
+        apply_filters_btn.set_child(Some(&box_5));
         box_3.append(&apply_filters_btn);
         preferences_group_2.set_header_suffix(Some(&box_3));
         let filters_list = gtk::ListBox::default();

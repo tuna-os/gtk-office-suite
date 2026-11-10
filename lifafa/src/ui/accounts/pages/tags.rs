@@ -66,7 +66,7 @@ impl TagsPage {
         let find_tags_label = gtk::Label::default();
         find_tags_label.set_label(&i18n("Find Tags…"));
         box_4.append(&find_tags_label);
-        find_tags_btn.set_child(&box_4);
+        find_tags_btn.set_child(Some(&box_4));
         box_2.append(&find_tags_btn);
         preferences_group_1.set_header_suffix(Some(&box_2));
         let tags_list = gtk::ListBox::default();

@@ -78,7 +78,7 @@ impl SendersPage {
         senders_box.add_css_class("boxed-list");
         senders_box.add_css_class("sender-list");
         senders_box.set_selection_mode(gtk::SelectionMode::None);
-        preferences_group_2.add(&senders_box);
+        preferences_group_2.add(senders_box);
         page.add(&preferences_group_2);
         let preferences_group_4 = adw::PreferencesGroup::default();
         preferences_group_4.set_title(&i18n("Blocked Senders"));
@@ -117,7 +117,7 @@ impl SendersPage {
         blacklist_box.add_css_class("boxed-list");
         blacklist_box.add_css_class("sender-list");
         blacklist_box.set_selection_mode(gtk::SelectionMode::None);
-        preferences_group_4.add(&blacklist_box);
+        preferences_group_4.add(blacklist_box);
         page.add(&preferences_group_4);
         Self { page }
     }
