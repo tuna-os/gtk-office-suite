@@ -237,15 +237,33 @@ jobs:
           set -o pipefail
           for target in letters_docx letters_odt letters_markdown \
                         tables_xlsx tables_xlsx_parts tables_ods \
-                        decks_pptx decks_odp decks_master_shapes; do
+                        decks_pptx decks_odp decks_master_shapes \
+                        collab_codec; do
             cargo fuzz run "$target" --sanitizer address -- \
               -runs=1000 -max_len=1048576 -timeout=10 -rss_limit_mb=2048
+          done
+
+      # The collaboration byte paths (#1995): bytes another collaborator
+      # published, which arrive over the network rather than from a file the
+      # user chose to open. collab_codec above is the sidecar protocol the
+      # apps read; these are dcp-core's update ingest and package check,
+      # which live in the collab/ workspace and so in a fuzz crate of its own.
+      # They need no seeds: their input is JSON and a ZIP directory walk, and
+      # they run far faster than the package readers, so they get more runs.
+      - name: Run bounded collaboration fuzz smoke
+        run: |
+          set -o pipefail
+          for target in dcp_update_ingest dcp_check_package; do
+            cargo fuzz run --fuzz-dir collab/fuzz "$target" --sanitizer address -- \
+              -runs=20000 -max_len=65536 -timeout=10 -rss_limit_mb=2048
           done
       - name: Upload minimized fuzz artifacts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: fuzz-artifacts
-          path: fuzz/artifacts/
+          path: |
+            fuzz/artifacts/
+            collab/fuzz/artifacts/
           if-no-files-found: ignore
           retention-days: 30

@@ -40,7 +40,8 @@
 //! | 9 | Anything in a package Decks itself wrote | clean: no warning in either format | clean | `package_consistency.rs`, `a_deck_decks_wrote_loses_nothing` below | — |
 //! | 10 | Slides on differently-sized pages (DCK-006) | not applicable: one `p:sldSz` per deck | explicit-loss (`mixed-page-sizes`): the first slide page's size is kept | loss unit test below | `mixed_page_sizes` in `odp_drops` |
 //! | 11 | Slides the presentation names but the package does not contain (#1977) | explicit-loss (`unreadable-slides`): the reader skipped the slide, a save drops it | not applicable: slides live in `content.xml`, which either reads or fails the open | loss unit tests (a missing slide part cannot ship in `interop/corpus.json` for the same reason as row 7) | `pptx_drops` below; the reader-side record is `Deck.skipped_slides` |
-//! | 12 | Text hyperlinks (stopgap warning until full support, #1998) | explicit-loss (`text-hyperlinks`): `hlinkClick` elements in slides, layouts and masters | explicit-loss (`text-hyperlinks`): `a` elements in `content.xml`/`styles.xml` | loss unit tests below | `pptx_drops`, `odp_drops` below |
+//! | 12 | Text hyperlinks (#1998): links on slide text to web or mail addresses are kept | explicit-loss (`text-hyperlinks`): a click action or slide jump, a link on a whole shape, a hover link, or any link in a layout or master; a run's `hlinkClick` with an external `hyperlink` relationship is kept | explicit-loss (`text-hyperlinks`): an `a` in `styles.xml`, or one whose `xlink:href` has no scheme (`#Slide 2`); `https:`/`mailto:` links in `content.xml` are kept | loss unit tests below, `tests/text_links.rs` | `pptx_drops`, `odp_drops` below |
+//! | 13 | Groups (#1989): the reader places a group's shapes, rotation and flips included, but the model has no group | explicit-loss (`groups`): `grpSp` elements in slides | explicit-loss (`groups`): `g` elements in `content.xml`/`styles.xml` | loss unit tests below | `pptx_drops`, `odp_drops` below |
 //!
 //! Detection is namespace/relationship-aware bounded parsing, not
 //! prefix-sensitive substring search: element and attribute names compare by
@@ -76,11 +77,18 @@ const UNREADABLE: (&str, &str) = ("unreadable-slides", "Slides that could not be
 /// size — the reader normalises to the first slide page's. A save must warn
 /// rather than silently keep that choice.
 const MIXED_SIZES: (&str, &str) = ("mixed-page-sizes", "Slides on differently-sized pages");
-/// Text hyperlinks (#1982): neither reader models them yet — the PPTX
-/// reader ignores `hlinkClick`, the ODP reader `text:a` — so the link
-/// never enters the deck and a save silently unlinks the text. Warn until
-/// full support (#1998) makes this row editable and the warning retires.
+/// Hyperlinks a save drops (#1982). A slide's text linked to an address
+/// is kept (#1998): an `hlinkClick` on a run's properties through an
+/// external relationship, a `text:a` whose `xlink:href` has a scheme. What
+/// is still dropped is warned about: a click action (a jump to another
+/// slide, a program), a link on a whole shape or picture, a link inside
+/// the deck or to a file beside it, and links on layouts and masters.
 const HYPERLINKS: (&str, &str) = ("text-hyperlinks", "Text hyperlinks");
+/// Groups (#1989): the readers place a group's shapes where the group
+/// draws them, but the deck model has no group, so a save writes them one
+/// by one and the grouping is gone. A full group object is a separate
+/// decision; until then, say so before the save.
+const GROUPS: (&str, &str) = ("groups", "Grouped shapes");
 
 fn record(report: &mut CompatibilityReport, (id, label): (&str, &str), location: &str, detail: &str) {
     // Deduplicate on the full triple, not just id and location: one slide
@@ -204,13 +212,19 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
         if tags.iter().any(|t| t.local == "oleObj" || t.local.eq_ignore_ascii_case("oleobject")) {
             record(report, OLE, slide, "embedded objects are not kept");
         }
-        if tags.iter().any(|t| t.local == "hlinkClick") {
-            record(report, HYPERLINKS, slide, "text hyperlinks are not kept");
+        let rels = slide.replacen("ppt/slides/", "ppt/slides/_rels/", 1) + ".rels";
+        if tags.iter().any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver")) {
+            let rels_xml = if names.contains(&rels) { scan_part(zip, &rels, budget)? } else { String::new() };
+            if dropped_pptx_link(&tags, &rels_xml) {
+                record(report, HYPERLINKS, slide, "links that jump to a slide, run an action, or sit on a whole shape are not kept");
+            }
+        }
+        if tags.iter().any(|t| t.local == "grpSp") {
+            record(report, GROUPS, slide, "groups are not kept; their shapes are saved one by one");
         }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "presetClass"), Some("emph" | "path"))) {
             record(report, ANIMATION, slide, "only entrance and exit builds are kept");
         }
-        let rels = slide.replacen("ppt/slides/", "ppt/slides/_rels/", 1) + ".rels";
         // A slide need not have relationships. If the part exists, failure
         // to inspect it is not evidence that all its pictures are present.
         if !names.contains(&rels) {
@@ -228,8 +242,8 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
     // are clean can still lose links from its masters on save.
     for part in names.iter().filter(|n| (n.starts_with("ppt/slideLayouts/") || n.starts_with("ppt/slideMasters/")) && n.ends_with(".xml")) {
         let xml = scan_part(zip, part, budget)?;
-        if start_tags(&xml).iter().any(|t| t.local == "hlinkClick") {
-            record(report, HYPERLINKS, part, "text hyperlinks are not kept");
+        if start_tags(&xml).iter().any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver")) {
+            record(report, HYPERLINKS, part, "links on layouts and masters are not kept");
         }
     }
     for chart in chart_parts(zip, names, budget, report)? {
@@ -304,8 +318,16 @@ fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTre
         if tags.iter().any(|t| t.local == "object-ole") {
             record(report, OLE, part, "embedded objects are not kept");
         }
-        if tags.iter().any(|t| t.local == "a") {
-            record(report, HYPERLINKS, part, "text hyperlinks are not kept");
+        // Kept: a slide's text linked to an address. Dropped: a jump
+        // inside the deck or to a file, and any link in styles.xml (the
+        // masters, which keep none).
+        if tags.iter().any(|t| {
+            t.local == "a" && (part == "styles.xml" || !attr_value(t.attrs, "href").is_some_and(crate::odp::external_href))
+        }) {
+            record(report, HYPERLINKS, part, "links that jump inside the deck or to a file, and links on masters, are not kept");
+        }
+        if tags.iter().any(|t| t.local == "g") {
+            record(report, GROUPS, part, "groups are not kept; their shapes are saved one by one");
         }
         if tags.iter().any(|t| matches!(attr_value(t.attrs, "preset-class"), Some("emphasis" | "motion-path"))) {
             record(report, ANIMATION, part, "only entrance and exit builds are kept");
@@ -577,6 +599,38 @@ fn attr_value<'a>(attrs: &'a str, want: &str) -> Option<&'a str> {
     None
 }
 
+/// Whether a slide part (`tags`, its relationships `rels`) has a
+/// hyperlink the reader drops: anything but an `hlinkClick` on a run's
+/// properties, with no action, through an external hyperlink relationship
+/// (#1998). Each link is judged by the properties element it is in, the
+/// nearest of those before it.
+fn dropped_pptx_link(tags: &[StartTag<'_>], rels: &str) -> bool {
+    let external: BTreeSet<&str> = start_tags(rels)
+        .into_iter()
+        .filter(|t| t.local == "Relationship")
+        .filter(|t| attr_value(t.attrs, "TargetMode").is_some_and(|m| m.eq_ignore_ascii_case("external")))
+        .filter(|t| attr_value(t.attrs, "Type").is_some_and(|ty| ty.ends_with("/hyperlink")))
+        .filter_map(|t| attr_value(t.attrs, "Id"))
+        .collect();
+    let mut holder = "";
+    for t in tags {
+        match t.local {
+            "rPr" | "endParaRPr" | "defRPr" | "cNvPr" => holder = t.local,
+            "hlinkMouseOver" => return true,
+            "hlinkClick" => {
+                let on_run = matches!(holder, "rPr" | "endParaRPr");
+                let action = attr_value(t.attrs, "action").is_some_and(|a| !a.is_empty());
+                let resolves = attr_value(t.attrs, "id").is_some_and(|id| external.contains(id));
+                if !on_run || action || !resolves {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The targets of the relationships in `rels` whose type ends with
 /// `type_suffix`, leaving out external ones (a linked picture is a URL,
 /// not a part). Relationship elements and their attributes match by local
@@ -722,9 +776,33 @@ mod tests {
     }
 
     #[test]
+    fn groups_warn_before_save_in_both_formats() {
+        let dir = tempfile::tempdir().unwrap();
+        let pptx = dir.path().join("grouped.pptx");
+        package(&pptx, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/><p:grpSp><p:nvGrpSpPr/><p:grpSpPr/><p:sp/><p:sp/></p:grpSp></p:spTree></p:cSld></p:sld>")]);
+        let report = content_a_save_drops(pptx.to_str().unwrap());
+        assert!(ids(&report).contains(&"groups"), "{:?}", ids(&report));
+        assert!(report.validate_save(false).is_err(), "an unconfirmed save must not proceed");
+        let odp = dir.path().join("grouped.odp");
+        package(&odp, &[
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("content.xml",
+             "<office:document-content><office:body><office:presentation><draw:page><draw:g><draw:rect/><draw:ellipse/></draw:g></draw:page></office:presentation></office:body></office:document-content>"),
+        ]);
+        assert!(ids(&content_a_save_drops(odp.to_str().unwrap())).contains(&"groups"));
+        // The slide's own shape tree (p:spTree, with its p:grpSpPr) is not a group.
+        let flat = dir.path().join("flat.pptx");
+        package(&flat, &[("ppt/slides/slide1.xml",
+            "<p:sld><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/><p:sp/></p:spTree></p:cSld></p:sld>")]);
+        assert!(!ids(&content_a_save_drops(flat.to_str().unwrap())).contains(&"groups"));
+    }
+
+    #[test]
     fn text_hyperlinks_warn_before_save_in_both_formats() {
         let dir = tempfile::tempdir().unwrap();
-        // PPTX: a hyperlink on a run in a slide...
+        // PPTX: a hyperlink on a run in a slide whose relationship is not
+        // there to say where it goes...
         let slide = dir.path().join("linked.pptx");
         package(&slide, &[("ppt/slides/slide1.xml",
             "<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr><a:hlinkClick r:id=\"rId2\"/></a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>")]);
@@ -739,12 +817,12 @@ mod tests {
              "<p:sldMaster><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr><a:hlinkClick r:id=\"rId9\"/></a:rPr><a:t>home</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sldMaster>"),
         ]);
         assert!(ids(&content_a_save_drops(master.to_str().unwrap())).contains(&"text-hyperlinks"));
-        // ODP: a text:a span in content...
+        // ODP: a jump to another slide...
         let odp = dir.path().join("linked.odp");
         package(&odp, &[
             ("mimetype", "application/vnd.oasis.opendocument.presentation"),
             ("content.xml",
-             "<office:document-content><office:body><office:presentation><draw:page><draw:frame><draw:text-box><text:p>see <text:a xlink:href=\"https://example.org\">the site</text:a></text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>"),
+             "<office:document-content><office:body><office:presentation><draw:page><draw:frame><draw:text-box><text:p>see <text:a xlink:href=\"#Slide 2\">the end</text:a></text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>"),
         ]);
         assert!(ids(&content_a_save_drops(odp.to_str().unwrap())).contains(&"text-hyperlinks"));
         // ...and no false positive on plain text in either format.
@@ -752,6 +830,39 @@ mod tests {
         package(&plain, &[("ppt/slides/slide1.xml",
             "<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>no links here</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>")]);
         assert!(!ids(&content_a_save_drops(plain.to_str().unwrap())).contains(&"text-hyperlinks"));
+    }
+
+    /// A slide's text linked to a web or mail address is kept (#1998), so
+    /// it is no loss; a click action, a link on a whole shape and a jump
+    /// inside the deck still are.
+    #[test]
+    fn links_to_addresses_on_slide_text_are_kept_and_others_warn() {
+        let dir = tempfile::tempdir().unwrap();
+        let rels = "<Relationships><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink\" Target=\"https://example.org/\" TargetMode=\"External\"/>\
+                    <Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slide2.xml\"/></Relationships>";
+        let pptx = |name: &str, body: &str| {
+            let path = dir.path().join(name);
+            package(&path, &[
+                ("ppt/slides/slide1.xml", &format!("<p:sld><p:cSld><p:spTree>{body}</p:spTree></p:cSld></p:sld>")),
+                ("ppt/slides/_rels/slide1.xml.rels", rels),
+            ]);
+            ids(&content_a_save_drops(path.to_str().unwrap())).contains(&"text-hyperlinks")
+        };
+        let run = |click: &str| format!("<p:sp><p:txBody><a:p><a:r><a:rPr b=\"1\"><a:latin typeface=\"Inter\"/>{click}</a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp>");
+        assert!(!pptx("kept.pptx", &run("<a:hlinkClick r:id=\"rId2\"/>")), "a run linked to an address is kept");
+        assert!(pptx("jump.pptx", &run("<a:hlinkClick r:id=\"rId3\" action=\"ppaction://hlinksldjump\"/>")), "a jump to a slide is not");
+        assert!(pptx("action.pptx", &run("<a:hlinkClick r:id=\"\" action=\"ppaction://hlinkshowjump?jump=nextslide\"/>")), "nor a click action");
+        assert!(
+            pptx("shape.pptx", "<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"B\"><a:hlinkClick r:id=\"rId2\"/></p:cNvPr></p:nvSpPr><p:txBody><a:p><a:r><a:rPr/><a:t>x</a:t></a:r></a:p></p:txBody></p:sp>"),
+            "nor a link on the whole shape",
+        );
+        let odp = dir.path().join("kept.odp");
+        package(&odp, &[
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("content.xml",
+             "<office:document-content><office:body><office:presentation><draw:page><draw:frame><draw:text-box><text:p>see <text:a xlink:href=\"https://example.org\">the site</text:a> or <text:a xlink:href=\"mailto:a@example.org\">write</text:a></text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>"),
+        ]);
+        assert!(!ids(&content_a_save_drops(odp.to_str().unwrap())).contains(&"text-hyperlinks"));
     }
 
     #[test]

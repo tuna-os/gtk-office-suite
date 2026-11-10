@@ -1,128 +1,49 @@
 // fragment.rs — the cross-app clipboard fragment format.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// One serializable type carries content between Letters, Tables, and
+// One serializable type (now suite_common_core::document::Fragment)
+// carries content between Letters, Tables, and
 // Decks with styling and data intact (DESIGN-UI.md "Cross-app clipboard").
 // MIME: application/x-tunaos-suite+json. Every conversion here is a pure
 // function: the paste-mapping matrix is unit-tested without a clipboard.
 
-use serde::{Deserialize, Serialize};
-
 use crate::model::{Paragraph, ParaStyle, Run, RunStyle, TableCell};
 
-pub const MIME: &str = "application/x-tunaos-suite+json";
+/// The suite clipboard's contract lives in `suite_common_core::document`
+/// (ADR 0012); Letters carries its own paragraphs in it, so a copy within
+/// Letters keeps its footnotes, chips and tables while every other app reads
+/// the same JSON as neutral text.
+pub use suite_common_core::document::{GridCell, ToNeutral, MIME};
 
-/// A copied piece of content.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Fragment {
-    /// Styled text: shared Run/RunStyle, so Letters ⇄ Decks is lossless
-    /// by construction.
-    Text(Vec<Paragraph>),
-    /// A cell grid with everything Tables knows about each cell.
-    Grid(Vec<Vec<GridCell>>),
+/// A copied piece of content, carrying Letters' paragraphs.
+pub type Fragment = suite_common_core::document::Fragment<Paragraph>;
+
+impl ToNeutral for Paragraph {
+    fn to_neutral(&self) -> suite_common_core::document::Paragraph {
+        self.into()
+    }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct GridCell {
-    /// Displayed value.
-    pub value: String,
-    /// Formula without leading '=' when the cell has one.
-    pub formula: Option<String>,
-    /// Number-format descriptor (xlsx-style code), if non-default.
-    pub num_format: Option<String>,
-}
-
-impl Fragment {
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).expect("fragment serialization is infallible")
-    }
-
-    pub fn from_json(s: &str) -> Option<Fragment> {
-        serde_json::from_str(s).ok()
-    }
-
-    /// Plain-text form: paragraphs joined by newlines; grids as TSV.
-    pub fn to_plain(&self) -> String {
-        match self {
-            Fragment::Text(paras) => paras
-                .iter()
-                .map(|p| p.text())
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Fragment::Grid(rows) => rows
-                .iter()
-                .map(|r| r.iter().map(|c| c.value.as_str()).collect::<Vec<_>>().join("\t"))
-                .collect::<Vec<_>>()
-                .join("\n"),
+/// Paste a grid into a document: a real cell-tagged table. A Letters
+/// conversion (ADR 0012, Tier 3), not part of the shared contract.
+pub fn grid_to_paragraphs(rows: &[Vec<GridCell>], table_id: u32) -> Vec<Paragraph> {
+    let mut out = Vec::new();
+    for (ri, row) in rows.iter().enumerate() {
+        for (ci, cell) in row.iter().enumerate() {
+            out.push(Paragraph {
+                style: ParaStyle {
+                    table_cell: Some(TableCell { table: table_id, row: ri as u32, col: ci as u32 }),
+                    ..Default::default()
+                },
+                runs: if cell.value.is_empty() {
+                    vec![]
+                } else {
+                    vec![Run { text: cell.value.clone(), style: RunStyle::default() }]
+                },
+            });
         }
     }
-
-    /// HTML form for interchange with external apps.
-    pub fn to_html(&self) -> String {
-        fn esc(s: &str) -> String {
-            s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-        }
-        fn run_html(r: &Run) -> String {
-            let mut s = esc(&r.text);
-            if r.style.code { s = format!("<code>{s}</code>"); }
-            if r.style.bold { s = format!("<b>{s}</b>"); }
-            if r.style.italic { s = format!("<i>{s}</i>"); }
-            if r.style.underline { s = format!("<u>{s}</u>"); }
-            if r.style.strikethrough { s = format!("<s>{s}</s>"); }
-            if let Some(url) = &r.style.link {
-                s = format!("<a href=\"{}\">{s}</a>", esc(url));
-            }
-            s
-        }
-        match self {
-            Fragment::Text(paras) => paras
-                .iter()
-                .map(|p| {
-                    let inner: String = p.runs.iter().map(run_html).collect();
-                    match p.style.heading {
-                        Some(l) => format!("<h{l}>{inner}</h{l}>"),
-                        None => format!("<p>{inner}</p>"),
-                    }
-                })
-                .collect(),
-            Fragment::Grid(rows) => {
-                let body: String = rows
-                    .iter()
-                    .map(|r| {
-                        let cells: String =
-                            r.iter().map(|c| format!("<td>{}</td>", esc(&c.value))).collect();
-                        format!("<tr>{cells}</tr>")
-                    })
-                    .collect();
-                format!("<table>{body}</table>")
-            }
-        }
-    }
-
-    /// Paste a grid into a document: a real cell-tagged table.
-    pub fn grid_to_paragraphs(rows: &[Vec<GridCell>], table_id: u32) -> Vec<Paragraph> {
-        let mut out = Vec::new();
-        for (ri, row) in rows.iter().enumerate() {
-            for (ci, cell) in row.iter().enumerate() {
-                out.push(Paragraph {
-                    style: ParaStyle {
-                        table_cell: Some(TableCell {
-                            table: table_id,
-                            row: ri as u32,
-                            col: ci as u32,
-                        }),
-                        ..Default::default()
-                    },
-                    runs: if cell.value.is_empty() {
-                        vec![]
-                    } else {
-                        vec![Run { text: cell.value.clone(), style: RunStyle::default() }]
-                    },
-                });
-            }
-        }
-        out
-    }
+    out
 }
 
 #[cfg(test)]
@@ -165,7 +86,7 @@ mod tests {
             vec![GridCell { value: "c".into(), ..Default::default() },
                  GridCell { value: "d".into(), ..Default::default() }],
         ];
-        let paras = Fragment::grid_to_paragraphs(&rows, 0);
+        let paras = grid_to_paragraphs(&rows, 0);
         assert_eq!(paras.len(), 4);
         let tc = paras[3].style.table_cell.expect("cell tag");
         assert_eq!((tc.row, tc.col), (1, 1));

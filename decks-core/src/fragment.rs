@@ -1,19 +1,114 @@
 // fragment.rs — Decks side of the cross-app clipboard.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub use letters_core::fragment::{Fragment, MIME};
-use letters_core::model::Paragraph;
+pub use suite_common_core::document::{GridCell, MIME};
+use serde::{Deserialize, Serialize};
+use suite_common_core::document::{ParaStyle, Paragraph, Run, RunStyle, ToNeutral};
 
 use crate::engine::SlideObject;
+
+/// The suite clipboard as Decks reads and writes it (ADR 0012): the shared
+/// fragment, with each paragraph read as a [`ClipParagraph`].
+pub type Fragment = suite_common_core::document::Fragment<ClipParagraph>;
+
+/// A paragraph from the suite clipboard: neutral text, plus markers of what
+/// the copying app had that a slide cannot hold, read only so a paste can
+/// name what it flattened and leave out pictures and deleted tracked text.
+/// Decks never writes the markers, so what it copies is plain neutral JSON.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClipParagraph {
+    pub style: ParaStyle,
+    pub runs: Vec<ClipRun>,
+}
+
+/// A run from the suite clipboard: see [`ClipParagraph`].
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClipRun {
+    pub text: String,
+    pub style: ClipStyle,
+}
+
+/// A run's neutral style and what else the copying app marked on it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ClipStyle {
+    #[serde(flatten)]
+    pub style: RunStyle,
+    #[serde(flatten)]
+    pub foreign: Foreign,
+}
+
+/// Run markers another app writes that a slide has no place for. Read,
+/// never written; only whether each is present matters here.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Foreign {
+    /// An inline picture (Letters): the run's text is its alt text.
+    #[serde(skip_serializing)]
+    pub image: Option<serde_json::Value>,
+    /// Raw inline HTML (Letters' Markdown): text here, never markup.
+    #[serde(skip_serializing)]
+    pub html: bool,
+    #[serde(skip_serializing)]
+    pub chip: Option<serde_json::Value>,
+    #[serde(skip_serializing)]
+    pub comments: Vec<serde_json::Value>,
+    #[serde(skip_serializing)]
+    pub footnote: Option<serde_json::Value>,
+    #[serde(skip_serializing)]
+    pub revision: Option<ClipRevision>,
+}
+
+/// A tracked change on a copied run; only its kind matters to a paste.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClipRevision {
+    pub kind: String,
+}
+
+impl From<Run> for ClipRun {
+    fn from(r: Run) -> Self {
+        ClipRun { text: r.text, style: ClipStyle { style: r.style, foreign: Foreign::default() } }
+    }
+}
+
+impl From<Paragraph> for ClipParagraph {
+    fn from(p: Paragraph) -> Self {
+        ClipParagraph { style: p.style, runs: p.runs.into_iter().map(Into::into).collect() }
+    }
+}
+
+impl ClipParagraph {
+    pub fn text(&self) -> String {
+        self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+
+    /// The paragraph's runs with only their neutral style.
+    pub fn neutral_runs(&self) -> Vec<Run> {
+        self.runs.iter().map(|r| Run { text: r.text.clone(), style: r.style.style.clone() }).collect()
+    }
+}
+
+impl ToNeutral for ClipParagraph {
+    fn to_neutral(&self) -> Paragraph {
+        Paragraph { style: self.style.clone(), runs: self.neutral_runs() }
+    }
+}
+
+/// One paragraph per line of `text`, like a plain-text paste.
+fn plain_paragraphs(text: &str) -> Vec<ClipParagraph> {
+    text.split('\n').map(|line| Paragraph::plain(line).into()).collect()
+}
 
 /// Copy a text box as a styled-text fragment (runs carried verbatim).
 pub fn copy_object(obj: &SlideObject) -> Option<Fragment> {
     match obj {
         SlideObject::TextBox { text, runs, .. } => {
             let paras = if runs.is_empty() {
-                letters_core::model::Document::from_plain_text(text).paragraphs
+                plain_paragraphs(text)
             } else {
-                vec![Paragraph { style: Default::default(), runs: runs.clone() }]
+                vec![Paragraph { style: Default::default(), runs: runs.clone() }.into()]
             };
             Some(Fragment::Text(paras))
         }
@@ -26,7 +121,7 @@ pub fn paste_as_text_box(frag: &Fragment, x: f64, y: f64) -> SlideObject {
     let (text, runs) = match frag {
         Fragment::Text(paras) => {
             let text = paras.iter().map(|p| p.text()).collect::<Vec<_>>().join("\n");
-            let runs = if paras.len() == 1 { paras[0].runs.clone() } else { vec![] };
+            let runs = if paras.len() == 1 { paras[0].neutral_runs() } else { vec![] };
             (text, runs)
         }
         Fragment::Grid(_) => (frag.to_plain(), vec![]),
@@ -35,12 +130,12 @@ pub fn paste_as_text_box(frag: &Fragment, x: f64, y: f64) -> SlideObject {
 }
 
 /// Copy bytes `start..end` of a text box's text (DCK-007) as a styled
-/// fragment: one Letters paragraph per paragraph of the range, runs
+/// fragment: one paragraph per paragraph of the range, runs
 /// verbatim, each with its paragraph's alignment and list kind and level.
 /// The caller has validated the range.
 pub fn copy_range(text: &crate::rich_text::RichText, start: usize, end: usize) -> Fragment {
     use crate::engine::{Bullet, ParaAlign};
-    use letters_core::model::{Alignment, ListKind, ParaStyle, Run};
+    use suite_common_core::document::{Alignment, ListKind};
     let mut runs: Vec<Run> = Vec::new();
     if text.runs.is_empty() {
         runs.push(Run::plain(&text.text[start..end]));
@@ -77,7 +172,7 @@ pub fn copy_range(text: &crate::rich_text::RichText, start: usize, end: usize) -
                 list_level: p.level,
                 ..Default::default()
             };
-            Paragraph { style, runs }
+            Paragraph { style, runs }.into()
         })
         .collect();
     Fragment::Text(paras)
@@ -90,7 +185,7 @@ pub fn copy_range(text: &crate::rich_text::RichText, start: usize, end: usize) -
 /// to plain text, to tell the user.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Pasted {
-    pub runs: Vec<letters_core::model::Run>,
+    pub runs: Vec<Run>,
     pub paras: Vec<Vec<crate::format::FormatEdit>>,
     pub flattened: Vec<&'static str>,
 }
@@ -104,7 +199,7 @@ pub struct Pasted {
 /// markup. A cell grid pastes as tab-separated text.
 pub fn paste_runs(frag: &Fragment) -> Pasted {
     use crate::format::{FormatEdit, ListKind as DeckList};
-    use letters_core::model::{Alignment, ListKind, RevisionKind, Run, RunStyle};
+    use suite_common_core::document::{Alignment, ListKind};
     let mut out = Pasted::default();
     fn note(what: &'static str, out: &mut Vec<&'static str>) {
         if !out.contains(&what) {
@@ -125,22 +220,22 @@ pub fn paste_runs(frag: &Fragment) -> Pasted {
             out.runs.push(Run { text: "\n".into(), style });
         }
         for r in &p.runs {
-            let s = &r.style;
-            if s.image.is_some() {
+            let (s, f) = (&r.style.style, &r.style.foreign);
+            if f.image.is_some() {
                 note("pictures", &mut out.flattened);
                 continue;
             }
-            if s.revision.as_ref().is_some_and(|rev| matches!(rev.kind, RevisionKind::Delete)) {
+            if f.revision.as_ref().is_some_and(|rev| rev.kind == "Delete") {
                 note("tracked changes", &mut out.flattened);
                 continue;
             }
             for (lost, what) in [
                 (s.link.is_some(), "links"),
-                (s.html, "raw HTML"),
-                (s.chip.is_some(), "smart chips"),
-                (!s.comments.is_empty(), "comments"),
-                (s.revision.is_some(), "tracked changes"),
-                (s.footnote.is_some(), "footnotes"),
+                (f.html, "raw HTML"),
+                (f.chip.is_some(), "smart chips"),
+                (!f.comments.is_empty(), "comments"),
+                (f.revision.is_some(), "tracked changes"),
+                (f.footnote.is_some(), "footnotes"),
                 (s.highlight, "highlighting"),
                 (s.code, "code formatting"),
                 (s.vert_align.is_some(), "superscript and subscript"),
@@ -193,7 +288,6 @@ pub fn paste_runs(frag: &Fragment) -> Pasted {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use letters_core::model::{Run, RunStyle};
 
     #[test]
     fn styled_text_survives_decks_round_trip() {
@@ -221,7 +315,6 @@ mod tests {
 
     #[test]
     fn grid_pastes_as_tsv_text_box() {
-        use letters_core::fragment::GridCell;
         let frag = Fragment::Grid(vec![vec![
             GridCell { value: "a".into(), ..Default::default() },
             GridCell { value: "b".into(), ..Default::default() },
@@ -265,7 +358,7 @@ mod tests {
         match frag {
             Fragment::Text(paras) => {
                 assert_eq!(paras.len(), 1);
-                assert_eq!(paras[0].runs, runs);
+                assert_eq!(paras[0].neutral_runs(), runs);
             }
             _ => panic!("expected text fragment"),
         }
@@ -275,8 +368,7 @@ mod tests {
 
     #[test]
     fn paste_multiparagraph_text_drops_runs() {
-        let d = letters_core::model::Document::from_plain_text("l1\nl2");
-        let frag = Fragment::Text(d.paragraphs);
+        let frag = Fragment::Text(plain_paragraphs("l1\nl2"));
         let back = paste_as_text_box(&frag, 1.0, 2.0);
         match back {
             SlideObject::TextBox { text, runs, x, y, .. } => {
@@ -290,9 +382,8 @@ mod tests {
 
     #[test]
     fn paste_single_paragraph_keeps_runs() {
-        let mut d = letters_core::model::Document::from_plain_text("styled");
-        d.paragraphs[0].runs = vec![Run { text: "styled".into(), style: RunStyle { italic: true, ..Default::default() } }];
-        let frag = Fragment::Text(d.paragraphs);
+        let para = Paragraph { style: Default::default(), runs: vec![Run { text: "styled".into(), style: RunStyle { italic: true, ..Default::default() } }] };
+        let frag = Fragment::Text(vec![para.into()]);
         let back = paste_as_text_box(&frag, 0.0, 0.0);
         match back {
             SlideObject::TextBox { runs, .. } => {
@@ -305,7 +396,6 @@ mod tests {
 
     #[test]
     fn grid_pastes_as_tsv_with_default_geometry() {
-        use letters_core::fragment::GridCell;
         let frag = Fragment::Grid(vec![
             vec![GridCell { value: "a".into(), ..Default::default() }],
             vec![GridCell { value: "b".into(), ..Default::default() }],
@@ -332,10 +422,10 @@ mod tests {
         };
         let rt = RichText { text: "Head bold\nitem".into(), runs: vec![Run::plain("Head "), Run { text: "bold\nitem".into(), style: bold.clone() }], body };
         let Fragment::Text(paras) = copy_range(&rt, 5, rt.text.len()) else { panic!("text") };
-        assert_eq!(paras.len(), 2, "one Letters paragraph per paragraph, no line break inside");
-        assert_eq!(paras[0].runs, vec![Run { text: "bold".into(), style: bold.clone() }]);
-        assert_eq!(paras[0].style.alignment, letters_core::model::Alignment::Center);
-        assert_eq!(paras[1].style.list, letters_core::model::ListKind::Bullet);
+        assert_eq!(paras.len(), 2, "one clipboard paragraph per paragraph, no line break inside");
+        assert_eq!(paras[0].neutral_runs(), vec![Run { text: "bold".into(), style: bold.clone() }]);
+        assert_eq!(paras[0].style.alignment, suite_common_core::document::Alignment::Center);
+        assert_eq!(paras[1].style.list, suite_common_core::document::ListKind::Bullet);
         assert_eq!(paras[1].style.list_level, 1);
         let pasted = paste_runs(&Fragment::Text(paras));
         assert!(pasted.flattened.is_empty(), "{:?}", pasted.flattened);
@@ -351,28 +441,33 @@ mod tests {
     }
 
     #[test]
+    fn decks_copies_plain_neutral_json() {
+        let bold = RunStyle { bold: true, ..Default::default() };
+        let frag = copy_object(&textbox("b", vec![Run { text: "b".into(), style: bold.clone() }])).expect("fragment");
+        let json = frag.to_json();
+        for marker in ["\"image\"", "\"html\"", "\"chip\"", "\"comments\"", "\"footnote\"", "\"revision\""] {
+            assert!(!json.contains(marker), "{marker} written: {json}");
+        }
+        let neutral = suite_common_core::document::Fragment::<Paragraph>::from_json(&json).expect("neutral read");
+        let suite_common_core::document::Fragment::Text(paras) = neutral else { panic!("text") };
+        assert_eq!(paras[0].runs, vec![Run { text: "b".into(), style: bold }]);
+    }
+
+    #[test]
     fn pasting_flattens_what_a_slide_cannot_hold_and_never_parses_html() {
-        use letters_core::model::{Paragraph, Revision, RevisionKind};
-        let html = RunStyle { html: true, ..Default::default() };
-        let link = RunStyle { link: Some("https://example.org".into()), bold: true, ..Default::default() };
-        let picture = RunStyle { image: Some("/tmp/x.png".into()), ..Default::default() };
-        let deleted = RunStyle {
-            revision: Some(Revision { kind: RevisionKind::Delete, author: "a".into(), date: "2026-01-01T00:00:00Z".into(), under: None }),
-            ..Default::default()
-        };
-        let frag = Fragment::Text(vec![Paragraph {
-            style: Default::default(),
-            runs: vec![
-                Run { text: "<script>alert(1)</script>".into(), style: html },
-                Run { text: "site".into(), style: link },
-                Run { text: "alt".into(), style: picture },
-                Run { text: "gone".into(), style: deleted },
-            ],
-        }]);
+        // As Letters puts it on the clipboard: its own run fields beside
+        // the shared ones.
+        let json = r#"{"Text":[{"style":{},"runs":[
+            {"text":"<script>alert(1)</script>","style":{"html":true}},
+            {"text":"site","style":{"link":"https://example.org","bold":true}},
+            {"text":"alt","style":{"image":"/tmp/x.png"}},
+            {"text":"gone","style":{"revision":{"kind":"Delete","author":"a","date":"2026-01-01T00:00:00Z","under":null}}}
+        ]}]}"#;
+        let frag = Fragment::from_json(json).expect("a Letters fragment reads in Decks");
         let p = paste_runs(&frag);
         let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
         assert_eq!(text, "<script>alert(1)</script>site", "HTML stays literal text; pictures and deletions are not pasted");
-        assert!(p.runs.iter().all(|r| !r.style.html && r.style.link.is_none()));
+        assert!(p.runs.iter().all(|r| r.style.link.is_none()));
         assert!(p.runs.iter().any(|r| r.text == "site" && r.style.bold), "the supported style survives");
         for what in ["raw HTML", "links", "pictures", "tracked changes"] {
             assert!(p.flattened.contains(&what), "{what} not disclosed: {:?}", p.flattened);

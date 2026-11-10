@@ -101,6 +101,34 @@ fn typing_after_an_undo_or_elsewhere_starts_a_new_step() {
 }
 
 #[test]
+fn a_limited_history_forgets_its_oldest_steps() {
+    let mut doc = Vec::new();
+    let mut h = History::with_limit(3);
+    // Five steps: a space between letters keeps each its own step.
+    type_chars(&mut doc, &mut h, "a b c");
+    assert_eq!(h.undo_len(), 3, "only the newest three are kept");
+    while h.undo(&mut doc).is_some() {}
+    assert_eq!(text(&doc), "a ", "the two oldest steps can no longer be undone");
+    // Redo brings all three back, and the stack never passes the limit.
+    while h.redo(&mut doc).is_some() {}
+    assert_eq!(text(&doc), "a b c");
+    assert_eq!(h.undo_len(), 3);
+    h.clear();
+    type_chars(&mut doc, &mut h, " d e");
+    assert_eq!(h.undo_len(), 3, "clear keeps the limit");
+}
+
+#[test]
+fn typing_that_coalesces_counts_once_against_the_limit() {
+    let mut doc = Vec::new();
+    let mut h = History::with_limit(2);
+    type_chars(&mut doc, &mut h, "abcdef");
+    assert_eq!(h.undo_len(), 1, "one word is one step");
+    h.undo(&mut doc).unwrap();
+    assert_eq!(text(&doc), "");
+}
+
+#[test]
 fn a_group_is_one_step_undone_in_reverse() {
     let mut doc: Vec<char> = "hello".chars().collect();
     let mut h = History::default();

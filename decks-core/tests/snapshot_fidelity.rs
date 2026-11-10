@@ -16,7 +16,7 @@
 // before it can open.
 
 use decks_core::engine::{Deck, MasterSlide, Slide, SlideObject};
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 
 /// Both snapshot formats, so a feature preserved by one and dropped by the
 /// other cannot hide behind the other's pass. A deck that was never saved
