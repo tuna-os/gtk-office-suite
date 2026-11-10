@@ -14,303 +14,297 @@ use crate::ui::message_row::RowShared;
 use adw::prelude::*;
 use relm4::prelude::*;
 
-#[relm4::component(pub(crate))]
+/// The list's widgets: the ones `init` and the other modules read back by
+/// field, and the ones that follow the model, which `apply` sets from it at
+/// build and after every message. This is what `#[relm4::component]`'s
+/// `view!` block and its `#[watch]` attributes used to generate.
+pub(crate) struct MessageListWidgets {
+    bars_top: gtk::Box,
+    headings_area: gtk::Box,
+    headings_scroller: gtk::ScrolledWindow,
+    scroller: gtk::ScrolledWindow,
+    loading: gtk::Box,
+    loading_spinner: gtk::Spinner,
+    empty: adw::StatusPage,
+    bars_bottom: gtk::Box,
+    bulk_revealer: gtk::Revealer,
+    bulk_count: gtk::Label,
+    read_btn: gtk::Button,
+    star_btn: gtk::Button,
+    tag_btn: gtk::Button,
+    junk_btn: gtk::Button,
+    search_revealer: gtk::Revealer,
+    search_entry: gtk::SearchEntry,
+    search_spinner: gtk::Spinner,
+    scope_button: gtk::MenuButton,
+}
+
+impl MessageListWidgets {
+    /// Everything that was `#[watch]`ed: set from the model.
+    fn apply(&self, model: &MessageList) {
+        self.headings_area.set_visible(model.single_line && model.headings);
+        // External, not Never: with Never the widest row's minimum
+        // propagates all the way up and becomes part of the window's
+        // minimum width, which pushed it past half of a 1920px screen, at
+        // which point GNOME refuses to tile the window to the left/right
+        // edge. Rows ellipsize, so a narrow pane clips gracefully instead.
+        // Automatic does not propagate it either: a single line too wide for
+        // the pane scrolls to its columns past the edge (#443), with a bar
+        // that says so.
+        self.scroller.set_hscrollbar_policy(if model.single_line && model.column_scroll {
+            gtk::PolicyType::Automatic
+        } else {
+            gtk::PolicyType::External
+        });
+        self.loading.set_visible(model.is_loading_more());
+        // Spun only while shown: a spinning spinner redraws every frame for
+        // as long as it is mapped (#275).
+        self.loading_spinner.set_spinning(model.is_loading_more());
+        self.empty.set_title(&(if model.quick.is_empty() { i18n("No Messages") } else { i18n("No Matching Messages") }));
+        self.empty.set_description(Some(
+            &if model.quick.is_empty() {
+                i18n("There's nothing here right now.")
+            } else {
+                i18n("No message here passes the filters.")
+            },
+        ));
+        self.empty.set_visible(model.is_empty_state());
+        self.bulk_revealer.set_reveal_child(model.selection_count > 1 || (model.checking && model.selection_count > 0));
+        self.bulk_count.set_label(&format!("{} selected", model.selection_count));
+        // One toggle, like the star: it shows what a click will do. Drafts
+        // are neither read nor unread: it goes when the list shows them.
+        let unread = model.selection_any_unread();
+        self.read_btn.set_icon_name(if unread { "hylki-mail-read-symbolic" } else { "mail-unread-symbolic" });
+        self.read_btn.set_tooltip_text(Some(&if unread { i18n("Mark as Read") } else { i18n("Mark as Unread") }));
+        self.read_btn.set_visible(!model.in_drafts);
+        // Mapped to Unflag by the Bulk handler once every selected message is
+        // starred (#313).
+        let starred = model.selection_all_starred();
+        self.star_btn.set_icon_name(if starred { "hylki-non-starred-symbolic" } else { "starred-symbolic" });
+        self.star_btn.set_tooltip_text(Some(&if starred { i18n("Remove Star") } else { i18n("Star") }));
+        // Only once a tag exists, like the row menu's Tags.
+        self.tag_btn.set_visible(!model.shared.tags.borrow().is_empty());
+        self.junk_btn.set_icon_name(if model.in_junk { "mail-mark-notjunk-symbolic" } else { "mail-mark-junk-symbolic" });
+        self.junk_btn.set_tooltip_text(Some(&if model.in_junk { i18n("Not Spam") } else { i18n("Mark as Spam") }));
+        self.search_revealer.set_reveal_child(model.search_open || model.search_pinned);
+        self.search_spinner.set_visible(model.server_searching);
+        self.search_spinner.set_spinning(model.server_searching);
+    }
+}
+
+/// A flat icon button in the bulk bar that sends one message. The buttons
+/// never take focus from the list: the selection keeps its focused highlight
+/// and the single-key shortcuts keep working after a click.
+fn bulk_button(sender: &ComponentSender<MessageList>, icon: &str, tooltip: Option<String>, message: fn() -> MessageListInput) -> gtk::Button {
+    let button = gtk::Button::builder().icon_name(icon).css_classes(["flat"]).focus_on_click(false).build();
+    if let Some(tip) = tooltip {
+        button.set_tooltip_text(Some(&tip));
+    }
+    let sender = sender.clone();
+    button.connect_clicked(move |_| sender.input(message()));
+    button
+}
+
+fn build_widgets(
+    root: &gtk::Box,
+    sender: &ComponentSender<MessageList>,
+    model: &MessageList,
+    list_view: &gtk::ListView,
+    headings_bar: &gtk::Box,
+    bulk_tag_btn: &gtk::Button,
+) -> MessageListWidgets {
+    root.set_orientation(gtk::Orientation::Vertical);
+    root.add_css_class("message-list-pane");
+
+    // The bars set to open above the rows (#496): `place_bars` moves the
+    // search field and the bulk bar between this and the foot.
+    let bars_top = gtk::Box::builder().css_classes(["list-toolbar"]).orientation(gtk::Orientation::Vertical).build();
+
+    // The single line's column headings (#334), filled by `sync_headings`; a
+    // click on one sorts by its column. Scrolled sideways with the rows,
+    // never by itself: no bar of its own, its place set from the list's
+    // (#443).
+    headings_bar.set_hexpand(true);
+    let headings_scroller = gtk::ScrolledWindow::builder()
+        .hexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .child(headings_bar)
+        .build();
+    let headings_area = gtk::Box::builder().css_classes(["list-headings-bar"]).build();
+    headings_area.append(&headings_scroller);
+
+    // The pane's own floor, now that rows no longer set one: the
+    // narrow-window breakpoint rails the sidebar in time to afford this even
+    // in a half-screen tile. (Grows by the thread indent while a
+    // conversation is expanded: see the rebuild.) The view must be the
+    // scroller's own child to build only the rows on screen.
+    let scroller = gtk::ScrolledWindow::builder().vexpand(true).child(list_view).build();
+    scroller.set_size_request(LIST_MIN_WIDTH, -1);
+
+    // At the bottom while the rest of the folder streams in.
+    let loading_spinner = gtk::Spinner::builder().width_request(18).height_request(18).build();
+    let loading = gtk::Box::builder()
+        .css_classes(["list-loading"])
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::End)
+        .spacing(8)
+        .margin_bottom(14)
+        .can_target(false)
+        .build();
+    loading.append(&loading_spinner);
+    loading.append(&gtk::Label::builder().label(i18n("Loading more…")).css_classes(["dim-label"]).build());
+
+    // Placeholder when the folder has loaded and holds nothing. Same
+    // full-size AdwStatusPage styling as the reader's "No message selected",
+    // so the two placeholders match.
+    let empty = adw::StatusPage::builder().icon_name("mail-inbox-symbolic").build();
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&scroller));
+    overlay.add_overlay(&loading);
+    overlay.add_overlay(&empty);
+
+    // The bars set to open below the rows (#496): one coming up shrinks the
+    // list from its foot and never moves the rows being read or clicked, as
+    // the status bar does (#433). The view builds both bars here;
+    // `place_bars` puts them where the settings say.
+    let bars_bottom = gtk::Box::builder().css_classes(["list-footer"]).orientation(gtk::Orientation::Vertical).build();
+
+    // Bulk-action bar, revealed while more than one message is selected.
+    let bulk_count = gtk::Label::builder()
+        .hexpand(true)
+        .halign(gtk::Align::Start)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .css_classes(["bulk-count"])
+        .build();
+    let read_btn = bulk_button(sender, "mail-unread-symbolic", None, || MessageListInput::BulkToggleRead);
+    let star_btn = bulk_button(sender, "starred-symbolic", None, || MessageListInput::Bulk(BulkAction::Flag));
+    bulk_tag_btn.set_icon_name("tag-outline-symbolic");
+    bulk_tag_btn.set_tooltip_text(Some(&i18n("Tags")));
+    bulk_tag_btn.add_css_class("flat");
+    bulk_tag_btn.set_focus_on_click(false);
+    {
+        let sender = sender.clone();
+        bulk_tag_btn.connect_clicked(move |_| sender.input(MessageListInput::BulkTagMenu));
+    }
+    let archive_btn = bulk_button(sender, "mail-archive-symbolic", Some(i18n("Archive")), || MessageListInput::Bulk(BulkAction::Archive));
+    // Mapped to NotSpam in Junk by the Bulk handler.
+    let junk_btn = bulk_button(sender, "mail-mark-junk-symbolic", None, || MessageListInput::Bulk(BulkAction::Spam));
+    let delete_btn = bulk_button(sender, "user-trash-symbolic", Some(i18n("Delete")), || MessageListInput::Bulk(BulkAction::Delete));
+    let clear_btn = bulk_button(sender, "edit-clear-symbolic", Some(i18n("Clear selection")), || MessageListInput::ClearSelection);
+    let bulk_bar = gtk::Box::builder().css_classes(["bulk-bar"]).spacing(2).build();
+    bulk_bar.append(&bulk_count);
+    bulk_bar.append(&read_btn);
+    bulk_bar.append(&star_btn);
+    bulk_bar.append(bulk_tag_btn);
+    bulk_bar.append(&archive_btn);
+    bulk_bar.append(&junk_btn);
+    bulk_bar.append(&delete_btn);
+    bulk_bar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
+    bulk_bar.append(&clear_btn);
+    // A collapsed revealer still reserves its child's width, so this bar of
+    // seven buttons was setting the whole pane's minimum width, 340px,
+    // however narrow the rows became (#29). Scrolled, its minimum is nothing
+    // and its natural size is unchanged, so it only clips when the list is
+    // genuinely too narrow to hold it.
+    let bulk_scroll = gtk::ScrolledWindow::builder()
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .propagate_natural_width(true)
+        .propagate_natural_height(true)
+        .child(&bulk_bar)
+        .build();
+    let bulk_revealer = gtk::Revealer::builder().child(&bulk_scroll).build();
+    bars_bottom.append(&bulk_revealer);
+
+    // Search stays hidden until asked for (#102). Its own default minimum is
+    // wider than the rows need; the scope button beside it says where it
+    // looks.
+    let search_entry = gtk::SearchEntry::builder()
+        .hexpand(true)
+        .width_chars(3)
+        .placeholder_text(i18n("Search…"))
+        .build();
+    {
+        let sender = sender.clone();
+        search_entry.connect_search_changed(move |entry| sender.input(MessageListInput::Search(entry.text().to_string())));
+    }
+    // Esc closes (SearchEntry's own stop signal).
+    {
+        let sender = sender.clone();
+        search_entry.connect_stop_search(move |_| sender.input(MessageListInput::CloseSearch));
+    }
+    // Leaving an empty entry closes too.
+    let focus = gtk::EventControllerFocus::new();
+    {
+        let sender = sender.clone();
+        focus.connect_leave(move |ctl| {
+            let Some(entry) = ctl.widget().and_downcast::<gtk::SearchEntry>() else { return };
+            let sender = sender.clone();
+            crate::ui::close_if_focus_left_row(&entry, move || sender.input(MessageListInput::CloseSearch));
+        });
+    }
+    search_entry.add_controller(focus);
+    // The servers are still being asked (#509).
+    let search_spinner = gtk::Spinner::builder()
+        .valign(gtk::Align::Center)
+        .tooltip_text(i18n("Searching the server…"))
+        .build();
+    // The scope picker; its popover is built in `init` (`ScopePicker`).
+    let scope_button = gtk::MenuButton::builder()
+        .valign(gtk::Align::Center)
+        .tooltip_text(i18n("Choose which folders to search"))
+        .build();
+    let search_row = gtk::Box::builder().spacing(6).css_classes(["list-search-row"]).build();
+    search_row.append(&search_entry);
+    search_row.append(&search_spinner);
+    search_row.append(&scope_button);
+    let search_revealer = gtk::Revealer::builder().child(&search_row).build();
+    bars_bottom.append(&search_revealer);
+
+    root.append(&bars_top);
+    root.append(&headings_area);
+    root.append(&overlay);
+    root.append(&bars_bottom);
+
+    let widgets = MessageListWidgets {
+        bars_top,
+        headings_area,
+        headings_scroller,
+        scroller,
+        loading,
+        loading_spinner,
+        empty,
+        bars_bottom,
+        bulk_revealer,
+        bulk_count,
+        read_btn,
+        star_btn,
+        tag_btn: bulk_tag_btn.clone(),
+        junk_btn,
+        search_revealer,
+        search_entry,
+        search_spinner,
+        scope_button,
+    };
+    widgets.apply(model);
+    widgets
+}
+
 impl SimpleComponent for MessageList {
     type Init = ();
     type Input = MessageListInput;
     type Output = MessageListOutput;
+    type Root = gtk::Box;
+    type Widgets = MessageListWidgets;
 
-    view! {
-        gtk::Box {
-            set_orientation: gtk::Orientation::Vertical,
-            add_css_class: "message-list-pane",
+    fn init_root() -> Self::Root {
+        gtk::Box::new(gtk::Orientation::Vertical, 0)
+    }
 
-            // The bars set to open above the rows (#496): `place_bars`
-            // moves the search field and the bulk bar between this and
-            // the foot.
-            #[name = "bars_top"]
-            gtk::Box {
-                add_css_class: "list-toolbar",
-                set_orientation: gtk::Orientation::Vertical,
-            },
-
-            // The single line's column headings (#334), filled by
-            // `sync_headings`; a click on one sorts by its column.
-            #[name = "headings_area"]
-            gtk::Box {
-                add_css_class: "list-headings-bar",
-                #[watch]
-                set_visible: model.single_line && model.headings,
-                // Scrolled sideways with the rows, never by itself: no bar
-                // of its own, its place set from the list's (#443).
-                #[name = "headings_scroller"]
-                gtk::ScrolledWindow {
-                    set_hexpand: true,
-                    set_hscrollbar_policy: gtk::PolicyType::External,
-                    set_vscrollbar_policy: gtk::PolicyType::Never,
-                    set_propagate_natural_height: true,
-                    #[local_ref]
-                    headings_bar -> gtk::Box {
-                        set_hexpand: true,
-                    },
-                },
-            },
-
-            gtk::Overlay {
-                #[wrap(Some)]
-                #[name = "scroller"]
-                set_child = &gtk::ScrolledWindow {
-                    set_vexpand: true,
-                    // External, not Never: with Never the widest row's minimum
-                    // propagates
-                    // all the way up and becomes part of the window's minimum width,
-                    // which pushed it past half of a 1920px screen — at which point
-                    // GNOME refuses to tile the window to the left/right edge. Rows
-                    // ellipsize, so a narrow pane clips gracefully instead.
-                    // Automatic does not propagate it either: a single line
-                    // too wide for the pane scrolls to its columns past the
-                    // edge (#443), with a bar that says so.
-                    #[watch]
-                    set_hscrollbar_policy: if model.single_line && model.column_scroll { gtk::PolicyType::Automatic } else { gtk::PolicyType::External },
-                    // The pane's own floor, now that rows no longer set one: the
-                    // narrow-window breakpoint rails the sidebar in time to afford
-                    // this even in a half-screen tile. (Grows by the thread indent
-                    // while a conversation is expanded — see the rebuild.)
-                    set_size_request: (LIST_MIN_WIDTH, -1),
-
-                    // The view must be the scroller's own child to build only
-                    // the rows on screen.
-                    #[local_ref]
-                    list_view -> gtk::ListView {},
-                },
-
-                // At the bottom while the rest of the folder streams in.
-                add_overlay = &gtk::Box {
-                    add_css_class: "list-loading",
-                    set_halign: gtk::Align::Center,
-                    set_valign: gtk::Align::End,
-                    set_spacing: 8,
-                    set_margin_bottom: 14,
-                    set_can_target: false,
-                    #[watch]
-                    set_visible: model.is_loading_more(),
-
-                    // Spun only while shown: a spinning spinner redraws every
-                    // frame for as long as it is mapped (#275).
-                    gtk::Spinner {
-                        set_width_request: 18,
-                        set_height_request: 18,
-                        #[watch]
-                        set_spinning: model.is_loading_more(),
-                    },
-                    gtk::Label {
-                        set_label: &i18n("Loading more…"),
-                        add_css_class: "dim-label",
-                    },
-                },
-
-                // Placeholder when the folder has loaded and holds nothing.
-                // Same full-size AdwStatusPage styling as the reader's
-                // "No message selected", so the two placeholders match.
-                add_overlay = &adw::StatusPage {
-                    set_icon_name: Some("mail-inbox-symbolic"),
-                    #[watch]
-                    set_title: &(if model.quick.is_empty() { i18n("No Messages") } else { i18n("No Matching Messages") }),
-                    #[watch]
-                    set_description: Some(if model.quick.is_empty() {
-                        i18n("There's nothing here right now.")
-                    } else {
-                        i18n("No message here passes the filters.")
-                    }.as_str()),
-                    #[watch]
-                    set_visible: model.is_empty_state(),
-                },
-            },
-
-            // The bars set to open below the rows (#496): one coming up
-            // shrinks the list from its foot and never moves the rows being
-            // read or clicked, as the status bar does (#433). The view
-            // builds both bars here; `place_bars` puts them where the
-            // settings say.
-            #[name = "bars_bottom"]
-            gtk::Box {
-                add_css_class: "list-footer",
-                set_orientation: gtk::Orientation::Vertical,
-
-                // Bulk-action bar, revealed while more than one message is selected.
-                #[name = "bulk_revealer"]
-                gtk::Revealer {
-                    #[watch]
-                    set_reveal_child: model.selection_count > 1 || (model.checking && model.selection_count > 0),
-
-                    // A collapsed revealer still reserves its child's width,
-                    // so this bar of seven buttons was setting the whole
-                    // pane's minimum width — 340px — however narrow the rows
-                    // became (#29). Scrolled, its minimum is nothing and its
-                    // natural size is unchanged, so it only clips when the
-                    // list is genuinely too narrow to hold it.
-                    gtk::ScrolledWindow {
-                        set_vscrollbar_policy: gtk::PolicyType::Never,
-                        set_hscrollbar_policy: gtk::PolicyType::External,
-                        set_propagate_natural_width: true,
-                        set_propagate_natural_height: true,
-
-                    gtk::Box {
-                        add_css_class: "bulk-bar",
-                        set_spacing: 2,
-                        // The buttons never take focus from the list: the
-                        // selection keeps its focused highlight and the
-                        // single-key shortcuts keep working after a click.
-
-                        gtk::Label {
-                            #[watch]
-                            set_label: &format!("{} selected", model.selection_count),
-                            set_hexpand: true,
-                            set_halign: gtk::Align::Start,
-                            set_ellipsize: gtk::pango::EllipsizeMode::End,
-                            add_css_class: "bulk-count",
-                        },
-                        // One toggle, like the star: it shows what a click will
-                        // do. Drafts are neither read nor unread: it goes when
-                        // the list shows them.
-                        gtk::Button {
-                            #[watch]
-                            set_icon_name: if model.selection_any_unread() {
-                                "hylki-mail-read-symbolic"
-                            } else {
-                                "mail-unread-symbolic"
-                            },
-                            #[watch]
-                            set_tooltip_text: Some(if model.selection_any_unread() { i18n("Mark as Read") } else { i18n("Mark as Unread") }.as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            #[watch]
-                            set_visible: !model.in_drafts,
-                            connect_clicked => MessageListInput::BulkToggleRead,
-                        },
-                        // Mapped to Unflag by the Bulk handler once every
-                        // selected message is starred (#313).
-                        gtk::Button {
-                            #[watch]
-                            set_icon_name: if model.selection_all_starred() {
-                                "hylki-non-starred-symbolic"
-                            } else {
-                                "starred-symbolic"
-                            },
-                            #[watch]
-                            set_tooltip_text: Some(if model.selection_all_starred() { i18n("Remove Star") } else { i18n("Star") }.as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            connect_clicked => MessageListInput::Bulk(BulkAction::Flag),
-                        },
-                        // Only once a tag exists, like the row menu's Tags.
-                        #[local_ref]
-                        bulk_tag_btn -> gtk::Button {
-                            set_icon_name: "tag-outline-symbolic",
-                            set_tooltip_text: Some(i18n("Tags").as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            #[watch]
-                            set_visible: !model.shared.tags.borrow().is_empty(),
-                            connect_clicked => MessageListInput::BulkTagMenu,
-                        },
-                        gtk::Button {
-                            set_icon_name: "mail-archive-symbolic",
-                            set_tooltip_text: Some(i18n("Archive").as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            connect_clicked => MessageListInput::Bulk(BulkAction::Archive),
-                        },
-                        gtk::Button {
-                            #[watch]
-                            set_icon_name: if model.in_junk {
-                                "mail-mark-notjunk-symbolic"
-                            } else {
-                                "mail-mark-junk-symbolic"
-                            },
-                            #[watch]
-                            set_tooltip_text: Some(if model.in_junk { i18n("Not Spam") } else { i18n("Mark as Spam") }.as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            // Mapped to NotSpam in Junk by the Bulk handler.
-                            connect_clicked => MessageListInput::Bulk(BulkAction::Spam),
-                        },
-                        gtk::Button {
-                            set_icon_name: "user-trash-symbolic",
-                            set_tooltip_text: Some(i18n("Delete").as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            connect_clicked => MessageListInput::Bulk(BulkAction::Delete),
-                        },
-                        gtk::Separator {
-                            set_orientation: gtk::Orientation::Vertical,
-                        },
-                        gtk::Button {
-                            set_icon_name: "edit-clear-symbolic",
-                            set_tooltip_text: Some(i18n("Clear selection").as_str()),
-                            add_css_class: "flat",
-                            set_focus_on_click: false,
-                            connect_clicked => MessageListInput::ClearSelection,
-                        },
-                    },
-                    },
-                },
-
-                // Search stays hidden until asked for (#102).
-                #[name = "search_revealer"]
-                gtk::Revealer {
-                    #[watch]
-                    set_reveal_child: model.search_open || model.search_pinned,
-
-                gtk::Box {
-                    set_spacing: 6,
-                    add_css_class: "list-search-row",
-
-                    #[name = "search_entry"]
-                    gtk::SearchEntry {
-                        set_hexpand: true,
-                        // Its own default minimum is wider than the rows need.
-                        set_width_chars: 3,
-                        // The scope button beside it says where it looks.
-                        set_placeholder_text: Some(i18n("Search…").as_str()),
-                        connect_search_changed[sender] => move |entry| {
-                            sender.input(MessageListInput::Search(entry.text().to_string()));
-                        },
-                        // Esc closes (SearchEntry's own stop signal).
-                        connect_stop_search[sender] => move |_| {
-                            sender.input(MessageListInput::CloseSearch);
-                        },
-                        // Leaving an empty entry closes too.
-                        add_controller = gtk::EventControllerFocus {
-                            connect_leave[sender] => move |ctl| {
-                                let Some(entry) = ctl.widget().and_downcast::<gtk::SearchEntry>() else { return };
-                                let sender = sender.clone();
-                                crate::ui::close_if_focus_left_row(&entry, move || sender.input(MessageListInput::CloseSearch));
-                            },
-                        },
-                    },
-
-                    // The servers are still being asked (#509).
-                    gtk::Spinner {
-                        set_valign: gtk::Align::Center,
-                        set_tooltip_text: Some(i18n("Searching the server…").as_str()),
-                        #[watch]
-                        set_visible: model.server_searching,
-                        #[watch]
-                        set_spinning: model.server_searching,
-                    },
-
-                    // The scope picker; its popover is built in `init`
-                    // (`ScopePicker`).
-                    #[name = "scope_button"]
-                    gtk::MenuButton {
-                        set_valign: gtk::Align::Center,
-                        set_tooltip_text: Some(i18n("Choose which folders to search").as_str()),
-                    },
-                },
-                },
-            },
-        }
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+        widgets.apply(self);
     }
 
     fn init(
@@ -338,7 +332,7 @@ impl SimpleComponent for MessageList {
 
         let bulk_tag_btn = model.bulk_tag_btn.clone();
         let headings_bar = model.headings_bar.clone();
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model, &list_view, &headings_bar, &bulk_tag_btn);
         model.scroller = Some(widgets.scroller.clone());
         link_heading_scroll(&widgets.scroller, &widgets.headings_scroller);
         watch_heading_menu(widgets.headings_area.upcast_ref(), &sender);
