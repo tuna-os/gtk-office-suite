@@ -507,12 +507,17 @@ by hand:
 | `Flatpak bundle (decks)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Flatpak bundle (letters)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Flatpak bundle (tables)` | `render-parity.yml` → `flatpak` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
+| `Post the export parity report` | `render-parity.yml` → `export-report-post` | optional | Only posts what `export-report` found with the write token `export-report` does not get (#1678); it judges nothing, and a fork's pull request skips it. |
+| `Post the render parity report` | `render-parity.yml` → `report-post` | optional | Only posts what `report` found (the sticky comment, and on main the scoreboard and issue sync) with the write token `report` does not get (#1678); it judges nothing, and a fork's pull request skips it. |
 | `Prior-release bundle (decks)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Prior-release bundle (letters)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Prior-release bundle (tables)` | `render-parity.yml` → `flatpak-prior` | optional | Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests. |
 | `Tier C (Flatpak in a GNOME VM)` | `render-parity.yml` → `vm` | optional | Tier C needs the bundles above and is continue-on-error; it never runs on an ordinary pull request. |
 | `export-lab (name not derivable)` | `render-parity.yml` → `export-lab` | optional | Started only for the apps a pull request reaches, like `lab`. `export-report` is the required verdict: it runs on every pull request and fails when an export lab in scope did not succeed. |
 | `lab (name not derivable)` | `render-parity.yml` → `lab` | optional | Started only for the apps a pull request reaches (tools/render-lab/real_scope.py), so its check names are not known before the run. `report` is the required verdict: it runs on every pull request and fails when a lab in scope did not succeed. |
+| `Publish real-document results (decks)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
+| `Publish real-document results (letters)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
+| `Publish real-document results (tables)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
 
 <!-- required-checks:end -->
 <!-- required-checks:end -->

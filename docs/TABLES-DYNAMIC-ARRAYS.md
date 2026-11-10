@@ -66,6 +66,14 @@ functions that return arrays are not admitted until they have a row here.
   Excel yields the whole spill.
 - **Only the anchor is saved.** See below.
 
+## In the window
+
+Two AT-SPI journeys (`TablesDynamicArraySmoke`) drive the visible grid with
+no spill logic in the widget code: a spill, `#SPILL!` when a cell blocks it,
+its clearing, and undo and redo; and a `FILTER` that shows `#CALC!` while
+nothing matches, spills once its source matches, and shows `#CALC!` again
+when those entries are undone.
+
 ## XLSX
 
 | | Excel and Calc ≥ 24.8 | Calc 24.2 (the CI runner's) |
@@ -87,9 +95,5 @@ is now always written as a dynamic array formula.
 - **Calc 24.8 and later.** The Calc test fails on a Calc that may evaluate
   these functions, so the table above is revisited when the runner's
   LibreOffice moves.
-- **A GUI journey for `#CALC!`.** One AT-SPI journey
-  (`TablesDynamicArraySmoke`) drives the visible grid through a spill,
-  `#SPILL!` when a cell blocks it, its clearing, and undo and redo. The
-  `#CALC!` presentation for an empty result has no journey yet.
 - **Dynamic-array functions the engine does not implement**, such as `SORTBY`,
   `XLOOKUP` spills and `LET`-built arrays.

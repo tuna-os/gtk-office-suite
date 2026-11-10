@@ -71,7 +71,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
   | file | lines | ceiling |
   |---|---|---|
-  | `tables/src/window.rs` | 2085 | 2300 |
+  | `tables/src/window.rs` | 2091 | 2300 |
   | `decks/src/window.rs` | 1611 | 1800 |
   | `letters/src/window.rs` | 1215 | 1300 |
 
