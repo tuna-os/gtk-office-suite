@@ -94,108 +94,115 @@ const EXPIRIES: &[(&str, &str)] = &[
     (crate::i18n::i18n_noop("Never"), "never"),
 ];
 
-#[relm4::component(pub(crate))]
+/// The widgets `init` reads back out of the page it builds. Nothing in the
+/// page follows the model on its own (the lists are rebuilt as keys load),
+/// so there is no `update_view`; this is what `#[relm4::component]`'s
+/// `view!` block used to generate.
+pub(crate) struct PgpKeysWidgets {
+    toasts: adw::ToastOverlay,
+    status_row: adw::ActionRow,
+    own_group: adw::PreferencesGroup,
+    others_group: adw::PreferencesGroup,
+}
+
+/// A button in a group's header: the same 130 pixels wide as its neighbours.
+fn action_button(sender: &ComponentSender<PgpKeys>, label: String, message: fn() -> PgpKeysInput) -> gtk::Button {
+    let button = gtk::Button::builder().label(label).width_request(130).build();
+    let sender = sender.clone();
+    button.connect_clicked(move |_| sender.input(message()));
+    button
+}
+
+/// The column of buttons across from a group's heading.
+fn header_buttons(top: gtk::Button, bottom: gtk::Button) -> gtk::Box {
+    let column = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(12)
+        .valign(gtk::Align::Start)
+        .halign(gtk::Align::End)
+        .margin_start(24)
+        .build();
+    column.append(&top);
+    column.append(&bottom);
+    column
+}
+
+fn build_widgets(
+    root: &adw::ToastOverlay,
+    sender: &ComponentSender<PgpKeys>,
+    own_list: &gtk::ListBox,
+    others_list: &gtk::ListBox,
+) -> PgpKeysWidgets {
+    let status_row = adw::ActionRow::builder()
+        .title(i18n("GnuPG"))
+        .subtitle(i18n("The same keyring the gpg command and other mail apps use."))
+        .build();
+    let status_group = adw::PreferencesGroup::builder().title(i18n("GnuPG")).build();
+    status_group.add(&status_row);
+
+    own_list.add_css_class("boxed-list");
+    own_list.set_selection_mode(gtk::SelectionMode::None);
+    let own_group = adw::PreferencesGroup::builder()
+        .title(i18n("Your keys"))
+        .description(i18n("Your key signs what you send and opens what is encrypted to you. Share its public half with people who write to you."))
+        .header_suffix(&header_buttons(
+            action_button(sender, i18n("Import…"), || PgpKeysInput::Import),
+            action_button(sender, i18n("Generate…"), || PgpKeysInput::Generate),
+        ))
+        .build();
+    own_group.add(own_list);
+
+    let search = gtk::SearchEntry::builder()
+        .hexpand(true)
+        .placeholder_text(i18n("Search by name, address or key ID"))
+        .build();
+    {
+        let sender = sender.clone();
+        search.connect_search_changed(move |e| sender.input(PgpKeysInput::SearchOthers(e.text().to_string())));
+    }
+    let show = gtk::DropDown::builder()
+        .valign(gtk::Align::Center)
+        .model(&KeyShow::choices())
+        .build();
+    {
+        let sender = sender.clone();
+        show.connect_selected_notify(move |d| sender.input(PgpKeysInput::ShowOthers(d.selected())));
+    }
+    let filters = gtk::Box::builder().spacing(6).margin_bottom(12).build();
+    filters.append(&search);
+    filters.append(&show);
+    others_list.add_css_class("boxed-list");
+    others_list.set_selection_mode(gtk::SelectionMode::None);
+    let others_group = adw::PreferencesGroup::builder()
+        .title(i18n("Other people's keys"))
+        .description(i18n("Keys you encrypt to and check signatures with. Check a fingerprint with its owner before trusting it."))
+        .header_suffix(&header_buttons(
+            action_button(sender, i18n("Import…"), || PgpKeysInput::Import),
+            action_button(sender, i18n("Fetch by address…"), || PgpKeysInput::Fetch),
+        ))
+        .build();
+    others_group.add(&filters);
+    others_group.add(others_list);
+
+    let page = adw::PreferencesPage::new();
+    page.add(&status_group);
+    page.add(&own_group);
+    page.add(&others_group);
+    root.set_child(Some(&page));
+
+    PgpKeysWidgets { toasts: root.clone(), status_row, own_group, others_group }
+}
+
 impl Component for PgpKeys {
     type Init = PgpKeysInit;
     type Input = PgpKeysInput;
     type Output = ();
     type CommandOutput = PgpKeysCmd;
+    type Root = adw::ToastOverlay;
+    type Widgets = PgpKeysWidgets;
 
-    view! {
-        #[name = "toasts"]
-        adw::ToastOverlay {
-            #[wrap(Some)]
-            set_child = &adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("GnuPG"),
-                    #[name = "status_row"]
-                    adw::ActionRow {
-                        set_title: &i18n("GnuPG"),
-                        set_subtitle: &i18n("The same keyring the gpg command and other mail apps use."),
-                    },
-                },
-
-                #[name = "own_group"]
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Your keys"),
-                    set_description: Some(
-                        i18n("Your key signs what you send and opens what is encrypted to you. Share its public half with people who write to you.").as_str()
-                    ),
-                    #[wrap(Some)]
-                    set_header_suffix = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-                        set_valign: gtk::Align::Start,
-                        set_halign: gtk::Align::End,
-                        set_margin_start: 24,
-                        gtk::Button {
-                            set_label: &i18n("Import…"),
-                            set_size_request: (130, -1),
-                            connect_clicked => PgpKeysInput::Import,
-                        },
-                        gtk::Button {
-                            set_label: &i18n("Generate…"),
-                            set_size_request: (130, -1),
-                            connect_clicked => PgpKeysInput::Generate,
-                        },
-                    },
-                    #[local_ref]
-                    own_list -> gtk::ListBox {
-                        add_css_class: "boxed-list",
-                        set_selection_mode: gtk::SelectionMode::None,
-                    },
-                },
-
-                #[name = "others_group"]
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Other people's keys"),
-                    set_description: Some(
-                        i18n("Keys you encrypt to and check signatures with. Check a fingerprint with its owner before trusting it.").as_str()
-                    ),
-                    #[wrap(Some)]
-                    set_header_suffix = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-                        set_valign: gtk::Align::Start,
-                        set_halign: gtk::Align::End,
-                        set_margin_start: 24,
-                        gtk::Button {
-                            set_label: &i18n("Import…"),
-                            set_size_request: (130, -1),
-                            connect_clicked => PgpKeysInput::Import,
-                        },
-                        gtk::Button {
-                            set_label: &i18n("Fetch by address…"),
-                            set_size_request: (130, -1),
-                            connect_clicked => PgpKeysInput::Fetch,
-                        },
-                    },
-                    gtk::Box {
-                        set_spacing: 6,
-                        set_margin_bottom: 12,
-                        gtk::SearchEntry {
-                            set_hexpand: true,
-                            set_placeholder_text: Some(i18n("Search by name, address or key ID").as_str()),
-                            connect_search_changed[sender] => move |e| {
-                                sender.input(PgpKeysInput::SearchOthers(e.text().to_string()));
-                            },
-                        },
-                        gtk::DropDown {
-                            set_valign: gtk::Align::Center,
-                            set_model: Some(&KeyShow::choices()),
-                            connect_selected_notify[sender] => move |d| {
-                                sender.input(PgpKeysInput::ShowOthers(d.selected()));
-                            },
-                        },
-                    },
-                    #[local_ref]
-                    others_list -> gtk::ListBox {
-                        add_css_class: "boxed-list",
-                        set_selection_mode: gtk::SelectionMode::None,
-                    },
-                },
-            },
-        }
+    fn init_root() -> Self::Root {
+        adw::ToastOverlay::new()
     }
 
     fn init(
@@ -219,7 +226,7 @@ impl Component for PgpKeys {
             busy: false,
             reload_generation: 0,
         };
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &own_list, &others_list);
         model.toasts = Some(widgets.toasts.clone());
 
         // Probing gpg runs it; done a moment after the Settings window is
