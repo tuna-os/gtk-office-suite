@@ -17,30 +17,44 @@ pub(super) enum SenderRowOutput {
     Remove(String),
 }
 
-#[relm4::factory(pub(crate))]
+/// The row's widgets are all set once, from the address, so nothing is kept
+/// to update; this is what `#[relm4::factory]`'s `view!` block used to
+/// generate.
 impl FactoryComponent for SenderRow {
     type Init = String;
     type Input = ();
     type Output = SenderRowOutput;
     type CommandOutput = ();
     type ParentWidget = gtk::ListBox;
-
-    view! {
-        adw::ActionRow {
-            set_title: &self.addr,
-            add_suffix = &gtk::Button {
-                set_icon_name: "user-trash-symbolic",
-                set_valign: gtk::Align::Center,
-                set_tooltip_text: Some(i18n("Remove").as_str()),
-                add_css_class: "flat",
-                connect_clicked[sender, addr = self.addr.clone()] => move |_| {
-                    let _ = sender.output(SenderRowOutput::Remove(addr.clone()));
-                },
-            },
-        }
-    }
+    type Root = adw::ActionRow;
+    type Widgets = ();
+    type Index = DynamicIndex;
 
     fn init_model(addr: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self { addr }
+    }
+
+    fn init_root(&self) -> Self::Root {
+        adw::ActionRow::builder().title(self.addr.as_str()).build()
+    }
+
+    fn init_widgets(
+        &mut self,
+        _index: &DynamicIndex,
+        root: Self::Root,
+        _returned_widget: &gtk::Widget,
+        sender: FactorySender<Self>,
+    ) -> Self::Widgets {
+        let remove = gtk::Button::builder()
+            .icon_name("user-trash-symbolic")
+            .valign(gtk::Align::Center)
+            .tooltip_text(i18n("Remove").as_str())
+            .css_classes(["flat"])
+            .build();
+        let addr = self.addr.clone();
+        remove.connect_clicked(move |_| {
+            let _ = sender.output(SenderRowOutput::Remove(addr.clone()));
+        });
+        root.add_suffix(&remove);
     }
 }
