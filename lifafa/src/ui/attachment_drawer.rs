@@ -199,230 +199,245 @@ pub(crate) enum AttachmentDrawerInput {
     SettleEmpty(u64),
 }
 
-#[relm4::component(pub(crate))]
+/// The drawer's widgets: the ones `init` wires afterwards (`drawer_body`,
+/// `drawer_edge`, `count_btn`) and the ones that follow the model, which
+/// `apply` sets from it at build and after every message. This is what
+/// `#[relm4::component]`'s `view!` block and its `#[watch]` attributes used
+/// to generate.
+pub(crate) struct AttachmentDrawerWidgets {
+    drawer_body: gtk::Box,
+    drawer_edge: gtk::Box,
+    count_btn: gtk::Button,
+    count_label: gtk::Label,
+    chevron: gtk::Image,
+    small_icon: gtk::Image,
+    scale: gtk::Scale,
+    large_icon: gtk::Image,
+    sort_btn: gtk::Button,
+    view_btn: gtk::Button,
+    scroller: gtk::ScrolledWindow,
+    flow: gtk::FlowBox,
+}
+
+impl AttachmentDrawerWidgets {
+    /// Everything that was `#[watch]`ed: set from the model.
+    fn apply(&self, model: &AttachmentDrawer) {
+        // Hidden (and the divider disappears) when there's nothing to show.
+        self.drawer_body.set_visible(!model.items.is_empty());
+        self.count_btn.set_tooltip_text(Some(
+            &if model.collapsed { i18n("Show the attachments") } else { i18n("Hide the attachments") },
+        ));
+        self.count_label.set_label(&ni18n_f(
+            "{n} attachment",
+            "{n} attachments",
+            model.items.len() as u32,
+            &[("n", &model.items.len().to_string())],
+        ));
+        self.chevron.set_icon_name(Some(if model.collapsed { "pan-up-symbolic" } else { "pan-down-symbolic" }));
+        // The size slider is meaningless with the grid hidden (and sizes
+        // thumbnails only, so also in the list view).
+        let sizing = !model.collapsed && !model.list_view;
+        self.small_icon.set_visible(sizing);
+        self.scale.set_visible(sizing);
+        self.large_icon.set_visible(sizing);
+        // Only the list has an order to flip.
+        self.sort_btn.set_visible(!model.collapsed && model.list_view);
+        self.sort_btn.set_icon_name(if model.sort_desc { "view-sort-descending-symbolic" } else { "view-sort-ascending-symbolic" });
+        self.sort_btn.set_tooltip_text(Some(&if model.sort_desc {
+            i18n("Sorted Z to A — switch to A to Z")
+        } else {
+            i18n("Sorted A to Z — switch to Z to A")
+        }));
+        self.view_btn.set_visible(!model.collapsed);
+        self.view_btn.set_icon_name(if model.list_view { "view-grid-symbolic" } else { "view-list-bullet-symbolic" });
+        self.view_btn.set_tooltip_text(Some(&if model.list_view { i18n("Show as thumbnails") } else { i18n("Show as a list") }));
+        self.scroller.set_visible(!model.collapsed);
+        self.flow.set_max_children_per_line(if model.list_view { 1 } else { 40 });
+    }
+}
+
+/// An icon-only flat button in the drawer's header.
+fn header_icon_button(sender: &ComponentSender<AttachmentDrawer>, message: fn() -> AttachmentDrawerInput) -> gtk::Button {
+    let button = gtk::Button::builder().css_classes(["flat"]).valign(gtk::Align::Center).build();
+    let sender = sender.clone();
+    button.connect_clicked(move |_| sender.input_sender().emit(message()));
+    button
+}
+
+fn build_widgets(
+    root: &gtk::Paned,
+    sender: &ComponentSender<AttachmentDrawer>,
+    model: &AttachmentDrawer,
+    flow: &gtk::FlowBox,
+    scroller: &gtk::ScrolledWindow,
+) -> AttachmentDrawerWidgets {
+    root.set_orientation(gtk::Orientation::Vertical);
+    // No wide handle: its stock chrome is a bordered band with a grip. The
+    // plain separator is a permanently inert hairline (see `.drawer-split`
+    // and set_divider_draggable): the grab pill floated over the reader's
+    // bottom edge and the drawer's own edge strip carry every click and
+    // drag.
+    root.add_css_class("drawer-split");
+    // The reader (start child) shrinks to make room; the drawer keeps its
+    // set size. This is what prevents the window from growing.
+    root.set_resize_start_child(true);
+    root.set_shrink_start_child(true);
+    root.set_resize_end_child(false);
+    root.set_shrink_end_child(false);
+    {
+        let sender = sender.clone();
+        root.connect_position_notify(move |_| sender.input_sender().emit(AttachmentDrawerInput::PositionChanged));
+    }
+
+    // The drawer's own top edge as a real widget: it clicks (toggle), drags
+    // (resize), and carries the same ns-resize cursor as the pill zone
+    // above, so the seam feels like one continuous handle. The native Paned
+    // separator is shrunk to a hairline: its drag gesture claims every
+    // press, which made it a click-dead band with its own cursor.
+    let drawer_edge = gtk::Box::builder().height_request(8).build();
+    drawer_edge.set_cursor_from_name(Some("ns-resize"));
+
+    // The count is the drawer's other handle: clicking it expands or
+    // collapses exactly like a click on the seam, with the chevron showing
+    // which way it goes next. GTK hands a button with a plain label the
+    // `text-button` padding and one with an icon the `image-button` padding;
+    // a button with a child of its own (this one: clip, count, chevron) gets
+    // neither and ends up tighter than "Save All…" beside it. Ask for the
+    // text one by hand so the two pills match. A hair off the header's own
+    // inset at each end (Jason, 2026-09-17): the count and "Save All…" are
+    // the row's two pills, so they sit the same distance from the edge they
+    // face.
+    let clip = gtk::Image::builder().icon_name("mail-attachment-symbolic").css_classes(["dim-label"]).build();
+    let count_label = gtk::Label::builder().css_classes(["heading"]).build();
+    let chevron = gtk::Image::builder().css_classes(["dim-label"]).pixel_size(12).build();
+    let count_content = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(8).build();
+    count_content.append(&clip);
+    count_content.append(&count_label);
+    count_content.append(&chevron);
+    let count_btn = gtk::Button::builder()
+        .css_classes(["flat", "text-button"])
+        .valign(gtk::Align::Center)
+        .margin_start(3)
+        .child(&count_content)
+        .build();
+    {
+        let sender = sender.clone();
+        count_btn.connect_clicked(move |_| sender.input_sender().emit(AttachmentDrawerInput::CountClicked));
+    }
+
+    let small_icon = gtk::Image::builder()
+        .icon_name("image-x-generic-symbolic")
+        .css_classes(["dim-label"])
+        .pixel_size(12)
+        .build();
+    let scale = gtk::Scale::new(gtk::Orientation::Horizontal, None::<&gtk::Adjustment>);
+    scale.set_width_request(130);
+    scale.set_range(MIN_THUMB, MAX_THUMB);
+    scale.set_value(model.thumb as f64);
+    scale.set_round_digits(0);
+    scale.set_draw_value(false);
+    scale.set_tooltip_text(Some(&i18n("Thumbnail size")));
+    scale.set_valign(gtk::Align::Center);
+    {
+        let sender = sender.clone();
+        scale.connect_value_changed(move |s| sender.input_sender().emit(AttachmentDrawerInput::SetThumbSize(s.value() as i32)));
+    }
+    let large_icon = gtk::Image::builder()
+        .icon_name("image-x-generic-symbolic")
+        .css_classes(["dim-label"])
+        .pixel_size(22)
+        .build();
+    let sort_btn = header_icon_button(sender, || AttachmentDrawerInput::ToggleSortOrder);
+    let view_btn = header_icon_button(sender, || AttachmentDrawerInput::ToggleListView);
+    // Rightmost by design: the header's one real action, with the view
+    // controls (slider, sort, list/grid) to its left. A standing button, not
+    // a flat hover-reveal; its margin matches the count's inset at the other
+    // end.
+    let save_all = gtk::Button::builder()
+        .label(i18n("Save All…"))
+        .valign(gtk::Align::Center)
+        .margin_end(3)
+        .tooltip_text(i18n("Save every attachment to a folder"))
+        .build();
+    {
+        let sender = sender.clone();
+        save_all.connect_clicked(move |_| sender.input_sender().emit(AttachmentDrawerInput::SaveAll));
+    }
+
+    let header = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(8)
+        .css_classes(["attachment-drawer-header"])
+        .build();
+    header.append(&count_btn);
+    header.append(&gtk::Box::builder().hexpand(true).build());
+    header.append(&small_icon);
+    header.append(&scale);
+    header.append(&large_icon);
+    header.append(&sort_btn);
+    header.append(&view_btn);
+    header.append(&save_all);
+
+    scroller.set_vexpand(true);
+    scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Automatic);
+    // Single-click highlights an attachment; Space or Enter then previews
+    // it, Nautilus-style (issue #37).
+    flow.set_orientation(gtk::Orientation::Horizontal);
+    flow.set_selection_mode(gtk::SelectionMode::Single);
+    flow.set_activate_on_single_click(true);
+    flow.set_homogeneous(false);
+    flow.set_valign(gtk::Align::Start);
+    flow.set_row_spacing(6);
+    flow.set_column_spacing(6);
+    flow.set_margin_top(8);
+    flow.set_margin_bottom(8);
+    flow.set_margin_start(8);
+    flow.set_margin_end(8);
+    flow.set_min_children_per_line(1);
+    flow.add_css_class("attachment-drawer-flow");
+    scroller.set_child(Some(flow));
+
+    let drawer_body = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .css_classes(["attachment-drawer"])
+        .build();
+    drawer_body.append(&drawer_edge);
+    drawer_body.append(&header);
+    drawer_body.append(scroller);
+    root.set_end_child(Some(&drawer_body));
+
+    let widgets = AttachmentDrawerWidgets {
+        drawer_body,
+        drawer_edge,
+        count_btn,
+        count_label,
+        chevron,
+        small_icon,
+        scale,
+        large_icon,
+        sort_btn,
+        view_btn,
+        scroller: scroller.clone(),
+        flow: flow.clone(),
+    };
+    widgets.apply(model);
+    widgets
+}
+
 impl SimpleComponent for AttachmentDrawer {
     type Init = DrawerInit;
     type Input = AttachmentDrawerInput;
     type Output = DrawerOutput;
+    type Root = gtk::Paned;
+    type Widgets = AttachmentDrawerWidgets;
 
-    view! {
-        #[root]
-        gtk::Paned {
-            set_orientation: gtk::Orientation::Vertical,
-            // No wide handle: its stock chrome is a bordered band with a
-            // grip. The plain separator is a permanently inert hairline (see
-            // `.drawer-split` and set_divider_draggable) — the grab pill
-            // floated over the reader's bottom edge and the drawer's own
-            // edge strip carry every click and drag.
-            add_css_class: "drawer-split",
-            // The reader (start child) shrinks to make room; the drawer keeps its
-            // set size. This is what prevents the window from growing.
-            set_resize_start_child: true,
-            set_shrink_start_child: true,
-            set_resize_end_child: false,
-            set_shrink_end_child: false,
-            connect_position_notify[sender] => move |_| {
-                sender.input_sender().emit(AttachmentDrawerInput::PositionChanged);
-            },
+    fn init_root() -> Self::Root {
+        gtk::Paned::new(gtk::Orientation::Vertical)
+    }
 
-            #[wrap(Some)]
-            #[name = "drawer_body"]
-            set_end_child = &gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-                add_css_class: "attachment-drawer",
-                // Hidden (and the divider disappears) when there's nothing to show.
-                #[watch]
-                set_visible: !model.items.is_empty(),
-
-                // The drawer's own top edge as a real widget: it clicks
-                // (toggle), drags (resize), and carries the same ns-resize
-                // cursor as the pill zone above, so the seam feels like one
-                // continuous handle. The native Paned separator is shrunk to
-                // a hairline — its drag gesture claims every press, which
-                // made it a click-dead band with its own cursor.
-                #[name = "drawer_edge"]
-                gtk::Box {
-                    set_height_request: 8,
-                    set_cursor_from_name: Some("ns-resize"),
-                },
-
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Horizontal,
-                    set_spacing: 8,
-                    add_css_class: "attachment-drawer-header",
-                    // The count is the drawer's other handle: clicking it
-                    // expands or collapses exactly like a click on the seam,
-                    // with the chevron showing which way it goes next.
-                    #[name = "count_btn"]
-                    gtk::Button {
-                        add_css_class: "flat",
-                        // GTK hands a button with a plain label the
-                        // `text-button` padding and one with an icon the
-                        // `image-button` padding; a button with a child of its
-                        // own (this one: clip, count, chevron) gets neither and
-                        // ends up tighter than "Save All…" beside it. Ask for
-                        // the text one by hand so the two pills match.
-                        add_css_class: "text-button",
-                        set_valign: gtk::Align::Center,
-                        // A hair off the header's own inset at each end
-                        // (Jason, 2026-09-17): the count and "Save All…" are
-                        // the row's two pills, so they sit the same distance
-                        // from the edge they face.
-                        set_margin_start: 3,
-                        #[watch]
-                        set_tooltip_text: Some(if model.collapsed {
-                            i18n("Show the attachments")
-                        } else {
-                            i18n("Hide the attachments")
-                        }.as_str()),
-                        connect_clicked[sender] => move |_| {
-                            sender.input_sender().emit(AttachmentDrawerInput::CountClicked);
-                        },
-
-                        #[wrap(Some)]
-                        set_child = &gtk::Box {
-                            set_orientation: gtk::Orientation::Horizontal,
-                            set_spacing: 8,
-                            gtk::Image {
-                                set_icon_name: Some("mail-attachment-symbolic"),
-                                add_css_class: "dim-label",
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &ni18n_f(
-                                    "{n} attachment",
-                                    "{n} attachments",
-                                    model.items.len() as u32,
-                                    &[("n", &model.items.len().to_string())],
-                                ),
-                                add_css_class: "heading",
-                            },
-                            gtk::Image {
-                                #[watch]
-                                set_icon_name: Some(if model.collapsed {
-                                    "pan-up-symbolic"
-                                } else {
-                                    "pan-down-symbolic"
-                                }),
-                                add_css_class: "dim-label",
-                                set_pixel_size: 12,
-                            },
-                        },
-                    },
-                    gtk::Box { set_hexpand: true },
-                    gtk::Image {
-                        set_icon_name: Some("image-x-generic-symbolic"),
-                        add_css_class: "dim-label",
-                        set_pixel_size: 12,
-                        // The size slider is meaningless with the grid hidden
-                        // (and sizes thumbnails only, so also in the list view).
-                        #[watch]
-                        set_visible: !model.collapsed && !model.list_view,
-                    },
-                    gtk::Scale {
-                        set_orientation: gtk::Orientation::Horizontal,
-                        set_width_request: 130,
-                        set_range: (MIN_THUMB, MAX_THUMB),
-                        set_value: model.thumb as f64,
-                        set_round_digits: 0,
-                        set_draw_value: false,
-                        set_tooltip_text: Some(i18n("Thumbnail size").as_str()),
-                        set_valign: gtk::Align::Center,
-                        #[watch]
-                        set_visible: !model.collapsed && !model.list_view,
-                        connect_value_changed[sender] => move |s| {
-                            sender.input_sender().emit(AttachmentDrawerInput::SetThumbSize(s.value() as i32));
-                        },
-                    },
-                    gtk::Image {
-                        set_icon_name: Some("image-x-generic-symbolic"),
-                        add_css_class: "dim-label",
-                        set_pixel_size: 22,
-                        #[watch]
-                        set_visible: !model.collapsed && !model.list_view,
-                    },
-                    gtk::Button {
-                        add_css_class: "flat",
-                        set_valign: gtk::Align::Center,
-                        // Only the list has an order to flip.
-                        #[watch]
-                        set_visible: !model.collapsed && model.list_view,
-                        #[watch]
-                        set_icon_name: if model.sort_desc {
-                            "view-sort-descending-symbolic"
-                        } else {
-                            "view-sort-ascending-symbolic"
-                        },
-                        #[watch]
-                        set_tooltip_text: Some(if model.sort_desc { i18n("Sorted Z to A — switch to A to Z") } else { i18n("Sorted A to Z — switch to Z to A") }.as_str()),
-                        connect_clicked[sender] => move |_| {
-                            sender.input_sender().emit(AttachmentDrawerInput::ToggleSortOrder);
-                        },
-                    },
-                    gtk::Button {
-                        add_css_class: "flat",
-                        set_valign: gtk::Align::Center,
-                        #[watch]
-                        set_visible: !model.collapsed,
-                        #[watch]
-                        set_icon_name: if model.list_view {
-                            "view-grid-symbolic"
-                        } else {
-                            "view-list-bullet-symbolic"
-                        },
-                        #[watch]
-                        set_tooltip_text: Some(if model.list_view { i18n("Show as thumbnails") } else { i18n("Show as a list") }.as_str()),
-                        connect_clicked[sender] => move |_| {
-                            sender.input_sender().emit(AttachmentDrawerInput::ToggleListView);
-                        },
-                    },
-                    // Rightmost by design: the header's one real action, with
-                    // the view controls (slider, sort, list/grid) to its left.
-                    gtk::Button {
-                        set_label: &i18n("Save All…"),
-                        // A standing button, not a flat hover-reveal.
-                        set_valign: gtk::Align::Center,
-                        // Matching the count's inset at the other end.
-                        set_margin_end: 3,
-                        set_tooltip_text: Some(i18n("Save every attachment to a folder").as_str()),
-                        connect_clicked[sender] => move |_| {
-                            sender.input_sender().emit(AttachmentDrawerInput::SaveAll);
-                        },
-                    },
-                },
-
-                #[local_ref]
-                scroller -> gtk::ScrolledWindow {
-                    set_vexpand: true,
-                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                    set_vscrollbar_policy: gtk::PolicyType::Automatic,
-                    #[watch]
-                    set_visible: !model.collapsed,
-
-                    #[local_ref]
-                    flow -> gtk::FlowBox {
-                        set_orientation: gtk::Orientation::Horizontal,
-                        // Single-click highlights an attachment; Space or Enter
-                        // then previews it, Nautilus-style (issue #37).
-                        set_selection_mode: gtk::SelectionMode::Single,
-                        set_activate_on_single_click: true,
-                        set_homogeneous: false,
-                        set_valign: gtk::Align::Start,
-                        set_row_spacing: 6,
-                        set_column_spacing: 6,
-                        set_margin_top: 8,
-                        set_margin_bottom: 8,
-                        set_margin_start: 8,
-                        set_margin_end: 8,
-                        set_min_children_per_line: 1,
-                        #[watch]
-                        set_max_children_per_line: if model.list_view { 1 } else { 40 },
-                        add_css_class: "attachment-drawer-flow",
-
-                    },
-                },
-            },
-        }
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+        widgets.apply(self);
     }
 
     fn init(
@@ -462,7 +477,7 @@ impl SimpleComponent for AttachmentDrawer {
             empty_gen: 0,
         };
 
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model, &flow, &scroller);
         model.drawer_body = Some(widgets.drawer_body.clone());
         // The body moves into an overlay of its own (`header_height` reads
         // it there). The overlay comes and goes with the body, so the split
