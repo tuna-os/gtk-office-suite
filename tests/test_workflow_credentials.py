@@ -64,13 +64,13 @@ class PublishFlatpakCredentials(unittest.TestCase):
         self.assertTrue(
             FULL_SHA.search(uses),
             f"{uses!r} is a branch or tag; a job holding write scopes and the "
-            "index token must run a reviewed commit",
+            "index deploy key must run a reviewed commit",
         )
 
     def test_secrets_are_named_not_inherited(self):
         secrets = self.publish.get("secrets")
         self.assertNotEqual(secrets, "inherit")
-        self.assertEqual(set(secrets or {}), {"FLATPAK_INDEX_TOKEN"})
+        self.assertEqual(set(secrets or {}), {"FLATPAK_INDEX_DEPLOY_KEY"})
 
 
 class FeatureVerificationCredentials(unittest.TestCase):
