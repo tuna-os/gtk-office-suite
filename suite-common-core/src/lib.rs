@@ -27,3 +27,4 @@ pub mod session;
 pub mod peak_heap;
 pub mod report;
 pub mod mail;
+pub mod people;
