@@ -30,6 +30,29 @@ impl MailDraft {
         }
     }
 
+    /// A draft that sends several documents at once (INTEGRATION-PLAN A1):
+    /// `files` are `(display name, path)` pairs. One document reads exactly as
+    /// [`MailDraft::for_document`]; several are named in the subject (the first
+    /// and a count) and listed in the body, one per line.
+    pub fn for_documents(app_label: &str, files: &[(String, PathBuf)]) -> Self {
+        match files {
+            [] => MailDraft::default(),
+            [(name, path)] => MailDraft::for_document(app_label, name, path.clone()),
+            [(first, _), rest @ ..] => {
+                let mut body = format!("Attached are {} documents, sent from {app_label}:\n\n", files.len());
+                for (name, _) in files {
+                    body.push_str(&format!("- {name}\n"));
+                }
+                MailDraft {
+                    to: Vec::new(),
+                    subject: format!("{first} and {} more", rest.len()),
+                    body,
+                    attachments: files.iter().map(|(_, path)| path.clone()).collect(),
+                }
+            }
+        }
+    }
+
     /// The `mailto:` URI for this draft (RFC 6068). A `mailto:` URI cannot
     /// carry an attachment, so this is the fallback where the portal is not
     /// there; the body then names the file instead.
@@ -135,6 +158,46 @@ mod tests {
         assert_eq!(draft.subject, "Budget.xlsx");
         assert_eq!(draft.attachments, vec![PathBuf::from("/x/Budget.xlsx")]);
         assert!(draft.body.contains("sent from Tables"));
+    }
+
+    #[test]
+    fn for_documents_with_one_file_is_for_document() {
+        let one = [("Budget.xlsx".to_string(), PathBuf::from("/x/Budget.xlsx"))];
+        assert_eq!(
+            MailDraft::for_documents("Tables", &one),
+            MailDraft::for_document("Tables", "Budget.xlsx", PathBuf::from("/x/Budget.xlsx"))
+        );
+    }
+
+    #[test]
+    fn for_documents_names_the_first_and_counts_the_rest() {
+        let files = [
+            ("Report.docx".to_string(), PathBuf::from("/x/Report.docx")),
+            ("Budget.xlsx".to_string(), PathBuf::from("/x/Budget.xlsx")),
+            ("Deck.pptx".to_string(), PathBuf::from("/x/Deck.pptx")),
+        ];
+        let draft = MailDraft::for_documents("Letters", &files);
+        assert_eq!(draft.subject, "Report.docx and 2 more");
+        assert_eq!(draft.attachments.len(), 3);
+        assert_eq!(draft.attachments[2], PathBuf::from("/x/Deck.pptx"));
+        assert!(draft.body.contains("Attached are 3 documents, sent from Letters"));
+        assert!(draft.body.contains("- Budget.xlsx\n"));
+    }
+
+    #[test]
+    fn for_documents_with_none_is_empty() {
+        assert_eq!(MailDraft::for_documents("Decks", &[]), MailDraft::default());
+    }
+
+    #[test]
+    fn several_attachments_are_each_named_in_the_mailto_fallback() {
+        let files = [
+            ("A.docx".to_string(), PathBuf::from("/x/A.docx")),
+            ("B.docx".to_string(), PathBuf::from("/x/B.docx")),
+        ];
+        let uri = MailDraft::for_documents("Letters", &files).mailto_uri();
+        assert!(uri.contains("Attach%20A.docx%20before%20sending"));
+        assert!(uri.contains("Attach%20B.docx%20before%20sending"));
     }
 
     #[test]
