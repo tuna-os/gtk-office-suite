@@ -11,7 +11,7 @@
 //! All lengths are model units: the 960-wide slide, 96 per inch, so one
 //! point is 4/3 of a unit.
 
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 
 /// Horizontal alignment of a paragraph.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

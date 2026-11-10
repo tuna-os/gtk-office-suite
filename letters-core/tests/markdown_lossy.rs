@@ -123,3 +123,21 @@ fn single_lossy_run_in_long_document_is_reported() {
     d.apply_run_style(5, 8, &StylePatch::set_highlight(true));
     assert_eq!(markdown::lossy_features(&d), vec!["highlight"]);
 }
+
+// #1981: `serialize` writes a table's cells as plain paragraphs and drops
+// footnote text, so both have to be named before a Markdown save.
+
+#[test]
+fn tables_are_reported_lost() {
+    let mut d = Document::from_plain_text("before");
+    d.insert_table_at(1, 2, 2);
+    assert_eq!(markdown::lossy_features(&d), vec!["tables"]);
+}
+
+#[test]
+fn footnotes_are_reported_lost() {
+    let mut d = Document::from_plain_text("see note");
+    d.footnotes.push("the note".into());
+    d.paragraphs[0].runs.push(styled_run("", RunStyle { footnote: Some(0), ..Default::default() }));
+    assert_eq!(markdown::lossy_features(&d), vec!["footnotes"]);
+}

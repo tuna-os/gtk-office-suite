@@ -16,6 +16,7 @@ mod insert;
 mod live;
 mod ruler;
 mod spell;
+mod idle;
 mod printing;
 mod style_picker;
 mod outline;

@@ -12,6 +12,41 @@ pub const DEFAULT_COLS: usize = 26;
 /// reader that loops over it hangs instead of refusing (#442).
 pub const SHEET_MAX_ROWS: usize = 1_048_576;
 pub const SHEET_MAX_COLS: usize = 16_384;
+
+/// The most cells one opened sheet may span, counted over its whole grid
+/// (rows × columns, from A1, with the default floor). A [`SheetModel`] keeps
+/// eight dense per-cell matrices, about 210 bytes a cell before any text,
+/// so this is roughly 2 GB of model: a 380,000-row sheet at the default 26
+/// columns. A file whose content or styling reaches further is refused with
+/// a message instead of hanging or running out of memory while it opens
+/// (#1983). A sparse model would let this go.
+pub const MAX_SHEET_CELLS: usize = 10_000_000;
+/// The most cells a whole opened workbook may span, its sheets together.
+pub const MAX_WORKBOOK_CELLS: usize = 20_000_000;
+
+/// Refuse a workbook whose sheets, at the sizes they would open at, span
+/// more cells than [`MAX_SHEET_CELLS`] each or [`MAX_WORKBOOK_CELLS`]
+/// together. Checked before anything is allocated for them.
+pub fn check_cell_budget<'a>(sheets: impl IntoIterator<Item = (&'a str, usize, usize)>) -> Result<(), String> {
+    let mut total = 0usize;
+    for (name, rows, cols) in sheets {
+        let cells = rows.saturating_mul(cols);
+        if cells > MAX_SHEET_CELLS {
+            return Err(format!(
+                "Sheet \"{name}\" is too large to open: it reaches {rows} rows by {cols} columns \
+                 ({cells} cells), and Tables opens sheets of up to {MAX_SHEET_CELLS} cells."
+            ));
+        }
+        total = total.saturating_add(cells);
+    }
+    if total > MAX_WORKBOOK_CELLS {
+        return Err(format!(
+            "This workbook is too large to open: its sheets span {total} cells together, \
+             and Tables opens workbooks of up to {MAX_WORKBOOK_CELLS} cells."
+        ));
+    }
+    Ok(())
+}
 /// Grid metrics at 100% zoom, those of a default Excel/Calc sheet: 15 pt
 /// rows (20 px at 96 DPI) and 8.43-character columns (64 px: Calibri 11's
 /// 7 px maximum digit width, as io/props.rs assumes for xlsx widths). The

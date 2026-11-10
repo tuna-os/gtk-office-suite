@@ -12,7 +12,7 @@ use crate::engine::theme::{ColorRef, FillSrc, StrokeSrc};
 use crate::engine::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, TextBody};
 use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::layouts::Placeholder;
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 
 /// A theme as the chooser lists it.
 #[derive(Clone, Debug, PartialEq)]
