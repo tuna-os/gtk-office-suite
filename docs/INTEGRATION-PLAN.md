@@ -125,16 +125,13 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 
 ## Open decisions
 
-- **Where do shared services run?** A single user-level D-Bus service the apps
-  call, or a library each app links? A library is licence-compatible (AGPL and
-  GPL may be combined) but couples release cycles and toolkit versions. A
-  service means a new process to ship, update and keep private.
+- **Where do shared services run?** Decided in [ADR 0014](adr/0014-suite-shared-services-and-search.md):
+  libraries first; a daemon only for state that must be shared across running
+  apps, and then as an optional sidecar.
 - **Matrix sign-in**: decided in ADR 0013 (the sidecar signs in as a second
   device of the same account; nothing is shared). Whether GNOME Online Accounts
   ever gets a Matrix entry is still open (none exists today).
-- **Search index ownership**: each app indexes its own data and answers
-  queries, or one indexer (Tracker/LocalSearch) holds everything. The first is
-  private by default and simpler to ship; the second finds more.
-- **What "fully featured" means per app**, against which reference, and where
-  it is tracked. The office apps use the LibreOffice parity tables and the
-  ledger; Lifafa and Mandelbrot need the equivalents.
+- **Search index ownership**: decided in ADR 0014: each app answers from its own data.
+- **What "fully featured" means per app**: decided in ADR 0014 (LibreOffice for the
+  office apps, Thunderbird and Evolution for Lifafa, Element and upstream Fractal for
+  Mandelbrot), each tracked in the ledger (C4).
