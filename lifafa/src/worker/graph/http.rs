@@ -14,9 +14,9 @@ pub(super) use crate::services::graph_api::GRAPH_BASE;
 const GRAPH_THROTTLE_TRIES: u32 = 4;
 
 /// Read a ureq error into something a user can act on (status + body snippet).
-pub(super) fn graph_err(e: ureq::Error) -> String {
+pub(super) fn graph_err(e: crate::http::Error) -> String {
     match e {
-        ureq::Error::Status(code, resp) => {
+        crate::http::Error::Status(code, resp) => {
             let body = resp.into_string().unwrap_or_default();
             // Graph errors are JSON with a nested message; surface just that.
             let msg = serde_json::from_str::<serde_json::Value>(&body)
@@ -45,9 +45,9 @@ fn graph_wired<T>(method: &str, url: &str, r: &Result<T, String>) {
 
 /// How long Microsoft asks a throttled client to wait: `Retry-After`, in
 /// seconds, on a 429 or a 503, within reason. `None` for any other answer.
-pub(super) fn graph_throttle_wait(e: &ureq::Error) -> Option<Duration> {
+pub(super) fn graph_throttle_wait(e: &crate::http::Error) -> Option<Duration> {
     match e {
-        ureq::Error::Status(429 | 503, resp) => {
+        crate::http::Error::Status(429 | 503, resp) => {
             let secs = resp
                 .header("Retry-After")
                 .and_then(|v| v.trim().parse::<u64>().ok())
@@ -62,10 +62,10 @@ pub(super) fn graph_throttle_wait(e: &ureq::Error) -> Option<Duration> {
 /// server asks and tries again, a few times, before it counts as failed.
 /// The background index (#429) is what makes this matter: it is the first
 /// thing here to send many requests in a row.
-fn graph_get(token: &str, url: &str) -> Result<ureq::Response, String> {
+fn graph_get(token: &str, url: &str) -> Result<crate::http::Response, String> {
     let mut tries = 0;
     loop {
-        match ureq::get(url).set("Authorization", &bearer(token)).call() {
+        match crate::http::get(url).set("Authorization", &bearer(token)).call() {
             Err(e) if tries < GRAPH_THROTTLE_TRIES => {
                 let Some(wait) = graph_throttle_wait(&e) else {
                     return Err(graph_err(e));
@@ -122,7 +122,7 @@ pub(super) fn graph_send_json(
     body: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     graph_wire(method, url);
-    let resp = ureq::request(method, url)
+    let resp = crate::http::request(method, url)
         .set("Authorization", &bearer(token))
         .send_json(body.clone())
         .map_err(graph_err);
@@ -143,7 +143,7 @@ pub(super) fn graph_post_mime(
 ) -> Result<serde_json::Value, String> {
     let b64 = crate::encoding::base64_encode(raw);
     graph_wire("POST(mime)", url);
-    let resp = ureq::post(url)
+    let resp = crate::http::post(url)
         .set("Authorization", &bearer(token))
         .set("Content-Type", "text/plain")
         .send_string(&b64)
@@ -158,7 +158,7 @@ pub(super) fn graph_post_mime(
 
 pub(super) fn graph_delete_req(token: &str, url: &str) -> Result<(), String> {
     graph_wire("DELETE", url);
-    let r = ureq::delete(url)
+    let r = crate::http::delete(url)
         .set("Authorization", &bearer(token))
         .call()
         .map_err(graph_err)

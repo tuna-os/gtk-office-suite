@@ -82,12 +82,12 @@ pub(super) fn jmap_auth(account: &AccountConfig) -> String {
 }
 
 /// Read a ureq error into something a user can act on.
-pub(super) fn jmap_err(e: ureq::Error) -> String {
+pub(super) fn jmap_err(e: crate::http::Error) -> String {
     match e {
-        ureq::Error::Status(401, _) => {
+        crate::http::Error::Status(401, _) => {
             "the server refused the sign-in (401): check the username and password, or the API token".to_string()
         }
-        ureq::Error::Status(code, resp) => {
+        crate::http::Error::Status(code, resp) => {
             let body = resp.into_string().unwrap_or_default();
             // JMAP problem details (RFC 7807) carry a `detail`; surface that.
             let msg = serde_json::from_str::<serde_json::Value>(&body)
@@ -115,8 +115,8 @@ pub(super) fn jmap_wired<T>(what: &str, r: &Result<T, String>) {
     }
 }
 
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+fn agent() -> crate::http::Agent {
+    crate::http::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(20))
         .timeout_read(Duration::from_secs(60))
         .build()
@@ -234,7 +234,7 @@ pub(super) fn jmap_connect(account: &AccountConfig) -> Result<JmapSession, Strin
 /// included: ureq drops the Authorization header when it follows one
 /// itself, and the session then comes back for nobody.
 fn fetch_session(url: &str, origin: &str, auth: &str) -> Result<serde_json::Value, String> {
-    let no_follow = ureq::AgentBuilder::new()
+    let no_follow = crate::http::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(20))
         .timeout_read(Duration::from_secs(60))
         .redirects(0)

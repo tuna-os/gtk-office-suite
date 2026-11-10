@@ -544,12 +544,12 @@ fn gravatar_image(email: &str) -> Result<Option<DecodedImage>, ()> {
         return Err(());
     }
     let _slot = GravatarSlot::acquire();
-    let response = match ureq::get(&gravatar_url(email))
+    let response = match crate::http::get(&gravatar_url(email))
         .timeout(std::time::Duration::from_secs(10))
         .call()
     {
         Ok(response) => response,
-        Err(ureq::Error::Status(404, _)) => {
+        Err(crate::http::Error::Status(404, _)) => {
             gravatar_bytes().insert(key, RawGravatar::Missing);
             return Ok(None);
         }

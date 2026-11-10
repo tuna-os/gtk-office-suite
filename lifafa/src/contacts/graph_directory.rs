@@ -242,20 +242,20 @@ enum Failure {
     Failed(String),
 }
 
-fn agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().timeout(TIMEOUT).build())
+fn agent() -> &'static crate::http::Agent {
+    static AGENT: OnceLock<crate::http::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| crate::http::AgentBuilder::new().timeout(TIMEOUT).build())
 }
 
-fn failure(e: ureq::Error) -> Failure {
+fn failure(e: crate::http::Error) -> Failure {
     match e {
-        ureq::Error::Status(401, _) => Failure::Unauthorized,
-        ureq::Error::Status(429, resp) => Failure::Throttled(
+        crate::http::Error::Status(401, _) => Failure::Unauthorized,
+        crate::http::Error::Status(429, resp) => Failure::Throttled(
             resp.header("Retry-After")
                 .and_then(|v| v.trim().parse().ok())
                 .unwrap_or(DEFAULT_RETRY_AFTER),
         ),
-        ureq::Error::Status(code, resp) => {
+        crate::http::Error::Status(code, resp) => {
             status_failure(code, &resp.into_string().unwrap_or_default())
         }
         other => Failure::Failed(other.to_string()),

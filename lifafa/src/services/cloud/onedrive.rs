@@ -15,7 +15,7 @@ use super::{expiry, local_file, share_password, CloudAccount, LinkTerms, ShareRe
 pub(super) fn link_terms(account: &CloudAccount) -> Result<LinkTerms, String> {
     let token = goa_token(account)?;
     let v = graph_json(
-        ureq::get(&format!("{GRAPH_BASE}/me/drive?$select=driveType,quota"))
+        crate::http::get(&format!("{GRAPH_BASE}/me/drive?$select=driveType,quota"))
             .set("Authorization", &bearer(&token))
             .timeout(Duration::from_secs(60)),
         None,
@@ -70,7 +70,7 @@ const WORDING: Wording = Wording {
 };
 
 /// An error from a JSON API: the message inside, with the status.
-pub(super) fn api_err(what: &str, e: ureq::Error) -> String {
+pub(super) fn api_err(what: &str, e: crate::http::Error) -> String {
     status_error(what, e, &WORDING)
 }
 
@@ -95,14 +95,14 @@ const ONEDRIVE_CHUNK: usize = 32 * 320 * 1024;
 // request, so its size costs nothing worth boxing it for.
 #[allow(clippy::result_large_err)]
 fn graph_json(
-    req: ureq::Request,
+    req: crate::http::Request,
     body: Option<&serde_json::Value>,
-) -> Result<serde_json::Value, ureq::Error> {
+) -> Result<serde_json::Value, crate::http::Error> {
     let resp = match body {
         Some(b) => req.send_json(b)?,
         None => req.call()?,
     };
-    resp.into_json().map_err(ureq::Error::from)
+    resp.into_json().map_err(crate::http::Error::from)
 }
 
 /// `/me/drive/root:/a/b` for a folder path, `/me/drive/root` for none.
@@ -120,7 +120,7 @@ pub(super) fn onedrive_item(path: &str) -> String {
 /// The signed-in Microsoft account's display name.
 pub(super) fn onedrive_whoami(token: &str) -> Result<String, String> {
     let v = graph_json(
-        ureq::get(&format!("{GRAPH_BASE}/me/drive?$select=id,owner"))
+        crate::http::get(&format!("{GRAPH_BASE}/me/drive?$select=id,owner"))
             .set("Authorization", &bearer(token))
             .timeout(Duration::from_secs(60)),
         None,
@@ -146,20 +146,20 @@ fn onedrive_folder(token: &str, folder: &str) -> Result<String, String> {
         } else {
             format!("{dir}/{part}")
         };
-        let there = ureq::get(&format!("{}?$select=id", onedrive_item(&next)))
+        let there = crate::http::get(&format!("{}?$select=id", onedrive_item(&next)))
             .set("Authorization", &bearer(token))
             .timeout(Duration::from_secs(60))
             .call();
         match there {
             Ok(_) => {}
-            Err(ureq::Error::Status(404, _)) => {
+            Err(crate::http::Error::Status(404, _)) => {
                 let url = if dir.is_empty() {
                     format!("{GRAPH_BASE}/me/drive/root/children")
                 } else {
                     format!("{}:/children", onedrive_item(&dir))
                 };
                 graph_json(
-                    ureq::post(&url).set("Authorization", &bearer(token)).timeout(Duration::from_secs(60)),
+                    crate::http::post(&url).set("Authorization", &bearer(token)).timeout(Duration::from_secs(60)),
                     Some(&serde_json::json!({"name": part, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"})),
                 )
                 .map_err(|e| api_err("Could not create the folder", e))?;
@@ -193,7 +193,7 @@ pub(super) fn onedrive_upload_and_share(
             "{}:/content?@microsoft.graph.conflictBehavior=rename",
             onedrive_item(&remote_path)
         );
-        ureq::put(&url)
+        crate::http::put(&url)
             .set("Authorization", &bearer(&token))
             .set("Content-Length", &size.to_string())
             .set("Content-Type", "application/octet-stream")
@@ -204,7 +204,7 @@ pub(super) fn onedrive_upload_and_share(
             .map_err(|e| format!("Upload failed: could not read the answer: {e}"))?
     } else {
         let open = graph_json(
-            ureq::post(&format!("{}:/createUploadSession", onedrive_item(&remote_path)))
+            crate::http::post(&format!("{}:/createUploadSession", onedrive_item(&remote_path)))
                 .set("Authorization", &bearer(&token))
                 .timeout(Duration::from_secs(60)),
             Some(&serde_json::json!({"item": {"@microsoft.graph.conflictBehavior": "rename", "name": name}})),
@@ -222,7 +222,7 @@ pub(super) fn onedrive_upload_and_share(
                 return Err("Upload failed: the file ended early.".to_string());
             }
             let end = offset + n as u64 - 1;
-            let resp = ureq::put(&session)
+            let resp = crate::http::put(&session)
                 .set("Content-Length", &n.to_string())
                 .set("Content-Range", &format!("bytes {offset}-{end}/{size}"))
                 .timeout(Duration::from_secs(60 * 60))
@@ -254,13 +254,13 @@ pub(super) fn onedrive_upload_and_share(
         body["password"] = p.as_str().into();
     }
     let v = graph_json(
-        ureq::post(&format!("{GRAPH_BASE}/me/drive/items/{id}/createLink"))
+        crate::http::post(&format!("{GRAPH_BASE}/me/drive/items/{id}/createLink"))
             .set("Authorization", &bearer(&token))
             .timeout(Duration::from_secs(60)),
         Some(&body),
     )
     .map_err(|e| match e {
-        ureq::Error::Status(code, resp) if (expires.is_some() || pw.is_some()) && (code == 400 || code == 403) => {
+        crate::http::Error::Status(code, resp) if (expires.is_some() || pw.is_some()) && (code == 400 || code == 403) => {
             let text = resp.into_string().unwrap_or_default();
             format!(
                 "Uploaded, but OneDrive would not make the link: {}. Link expiry and download passwords need a Microsoft 365 subscription or OneDrive for Business; on a free personal OneDrive set Links expire after to 0 and turn the password off, under Settings, Cloud Storage.",

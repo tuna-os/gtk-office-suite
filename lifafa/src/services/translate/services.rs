@@ -73,12 +73,12 @@ type Answer = (Vec<String>, Option<String>);
 
 /// A request's result as JSON, with the service's own explanation when it
 /// refused.
-fn send(req: ureq::Request, body: Value) -> Result<Value, String> {
+fn send(req: crate::http::Request, body: Value) -> Result<Value, String> {
     match req.send_json(body) {
         Ok(resp) => resp
             .into_json::<Value>()
             .map_err(|_| i18n("The service's answer could not be read.")),
-        Err(ureq::Error::Status(code, resp)) => {
+        Err(crate::http::Error::Status(code, resp)) => {
             let text = resp.into_string().unwrap_or_default();
             Err(refusal(code, &text))
         }
@@ -123,7 +123,7 @@ pub(super) fn refusal(code: u16, body: &str) -> String {
 }
 
 pub(super) fn deepl(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     key: &str,
     texts: &[String],
     to: &str,
@@ -154,7 +154,7 @@ pub(super) fn deepl(
 }
 
 pub(super) fn google(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     key: &str,
     texts: &[String],
     to: &str,
@@ -180,7 +180,7 @@ pub(super) fn google(
 }
 
 pub(super) fn microsoft(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     key: &str,
     region: &str,
     texts: &[String],
@@ -216,7 +216,7 @@ pub(super) fn microsoft(
 }
 
 pub(super) fn libre(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     key: &str,
     url: &str,
     texts: &[String],

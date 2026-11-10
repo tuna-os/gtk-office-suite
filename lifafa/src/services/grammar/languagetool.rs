@@ -32,8 +32,8 @@ pub(super) fn endpoint(url: &str) -> Option<String> {
     Some(format!("{base}/v2"))
 }
 
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
+fn agent() -> crate::http::Agent {
+    crate::http::AgentBuilder::new()
         .timeout(Duration::from_secs(30))
         .build()
 }
@@ -124,7 +124,7 @@ pub(super) fn check_server(base: &str, account: &Account) -> Result<String, Stri
 }
 
 fn request(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     base: &str,
     account: &Account,
     text: &str,
@@ -166,7 +166,7 @@ fn preferred_split(codes: &[String]) -> (String, String) {
 }
 
 fn post<T: serde::de::DeserializeOwned>(
-    agent: &ureq::Agent,
+    agent: &crate::http::Agent,
     base: &str,
     form: &[(&str, &str)],
 ) -> Result<T, String> {
@@ -174,22 +174,22 @@ fn post<T: serde::de::DeserializeOwned>(
         Ok(resp) => resp
             .into_json::<T>()
             .map_err(|_| i18n("The server's answer could not be read.")),
-        Err(ureq::Error::Status(code, resp)) => {
+        Err(crate::http::Error::Status(code, resp)) => {
             Err(refusal(code, &resp.into_string().unwrap_or_default()))
         }
-        Err(ureq::Error::Transport(t)) => Err(unreachable(t.kind(), &t.to_string())),
+        Err(crate::http::Error::Transport(t)) => Err(unreachable(t.kind(), &t.to_string())),
     }
 }
 
 /// Why nothing answered, in words: the cause of a refused connection is
 /// the server not running, and the user can do something about that.
-fn unreachable(kind: ureq::ErrorKind, detail: &str) -> String {
+fn unreachable(kind: crate::http::ErrorKind, detail: &str) -> String {
     match kind {
-        ureq::ErrorKind::ConnectionFailed => {
+        crate::http::ErrorKind::ConnectionFailed => {
             i18n("Nothing answers at that address. Check that the server is running.")
         }
-        ureq::ErrorKind::Dns => i18n("The server's name could not be found."),
-        ureq::ErrorKind::InvalidUrl | ureq::ErrorKind::UnknownScheme => {
+        crate::http::ErrorKind::Dns => i18n("The server's name could not be found."),
+        crate::http::ErrorKind::InvalidUrl | crate::http::ErrorKind::UnknownScheme => {
             i18n("The server's address is not valid.")
         }
         _ => i18n_f("The server could not be reached: {e}", &[("e", detail)]),
@@ -228,7 +228,7 @@ fn refusal(code: u16, body: &str) -> String {
 /// The languages a server checks, by the codes it takes ("fr", "en-US"),
 /// asked for once per server a session. Empty when it would not say,
 /// and then the spelling languages go as they are.
-fn supported_languages(agent: &ureq::Agent, base: &str) -> Vec<String> {
+fn supported_languages(agent: &crate::http::Agent, base: &str) -> Vec<String> {
     static KNOWN: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(None);
     if let Some(list) = KNOWN
         .lock()

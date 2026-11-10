@@ -71,15 +71,15 @@ pub(super) struct Wording {
 }
 
 /// A failed request as a sentence, in a service's own [`Wording`].
-pub(super) fn status_error(what: &str, e: ureq::Error, wording: &Wording) -> String {
+pub(super) fn status_error(what: &str, e: crate::http::Error, wording: &Wording) -> String {
     match e {
-        ureq::Error::Status(code, _) if wording.refused.contains(&code) => {
+        crate::http::Error::Status(code, _) if wording.refused.contains(&code) => {
             format!("{what}: {}", wording.refused_text)
         }
-        ureq::Error::Status(404, _) if wording.not_found => {
+        crate::http::Error::Status(404, _) if wording.not_found => {
             format!("{what}: not found. Check the server URL.")
         }
-        ureq::Error::Status(code, resp) => {
+        crate::http::Error::Status(code, resp) => {
             let text = resp.into_string().unwrap_or_default();
             let message = (wording.message)(&text);
             if wording.code_first {
@@ -88,7 +88,7 @@ pub(super) fn status_error(what: &str, e: ureq::Error, wording: &Wording) -> Str
                 format!("{what}: {} (HTTP {code})", message.trim())
             }
         }
-        ureq::Error::Transport(t) => format!("{what}: {t}"),
+        crate::http::Error::Transport(t) => format!("{what}: {t}"),
     }
 }
 
@@ -101,7 +101,7 @@ const WEBDAV: Wording = Wording {
     code_first: true,
 };
 
-pub(super) fn http_err(what: &str, e: ureq::Error) -> String {
+pub(super) fn http_err(what: &str, e: crate::http::Error) -> String {
     status_error(what, e, &WEBDAV)
 }
 
@@ -115,17 +115,17 @@ pub(super) fn cloudflare_error(
     what: &str,
     name: &str,
     size: u64,
-    e: &ureq::Error,
+    e: &crate::http::Error,
 ) -> Option<String> {
     let (status, via_cloudflare) = match e {
-        ureq::Error::Status(code, resp) => {
+        crate::http::Error::Status(code, resp) => {
             let server = resp.header("server").unwrap_or("").to_ascii_lowercase();
             (
                 Some(*code),
                 server.contains("cloudflare") || resp.header("cf-ray").is_some(),
             )
         }
-        ureq::Error::Transport(_) => (None, false),
+        crate::http::Error::Transport(_) => (None, false),
     };
     cloudflare_hint(account, what, name, size, status, via_cloudflare)
 }
@@ -244,15 +244,15 @@ mod tests {
         assert!(cloudflare_hint(&a, "Upload failed", "big.iso", big, Some(413), true).is_none());
     }
 
-    fn status(code: u16, body: &str) -> ureq::Error {
-        ureq::Error::Status(code, ureq::Response::new(code, "Status", body).unwrap())
+    fn status(code: u16, body: &str) -> crate::http::Error {
+        crate::http::Error::Status(code, crate::http::Response::new(code, "Status", body).unwrap())
     }
 
-    fn transport() -> ureq::Error {
-        ureq::get("not a url").call().unwrap_err()
+    fn transport() -> crate::http::Error {
+        crate::http::get("not a url").call().unwrap_err()
     }
 
-    /// The four `ureq::Error` mappers, pinned before they are merged: each
+    /// The four `crate::http::Error` mappers, pinned before they are merged: each
     /// has its own refusal wording, its own set of codes and its own order
     /// of message and status.
     #[test]
@@ -317,7 +317,7 @@ mod tests {
 
         // A transport failure reads the same from all four.
         let t = match transport() {
-            ureq::Error::Transport(t) => t.to_string(),
+            crate::http::Error::Transport(t) => t.to_string(),
             other => panic!("expected a transport error, got {other}"),
         };
         let expected = format!("Upload: {t}");

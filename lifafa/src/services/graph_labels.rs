@@ -135,16 +135,16 @@ enum Failure {
     Failed(String),
 }
 
-fn agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().timeout(TIMEOUT).build())
+fn agent() -> &'static crate::http::Agent {
+    static AGENT: OnceLock<crate::http::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| crate::http::AgentBuilder::new().timeout(TIMEOUT).build())
 }
 
 fn get(token: &str, url: &str) -> Result<serde_json::Value, (Option<u16>, String)> {
     tracing::debug!(target: "hylki::graph", "> GET {}", url.strip_prefix("https://graph.microsoft.com").unwrap_or(url));
     match agent().get(url).set("Authorization", &bearer(token)).call() {
         Ok(resp) => resp.into_json().map_err(|e| (None, e.to_string())),
-        Err(ureq::Error::Status(code, resp)) => {
+        Err(crate::http::Error::Status(code, resp)) => {
             let v = resp.into_json::<serde_json::Value>().unwrap_or_default();
             let what = v["error"]["code"].as_str().unwrap_or_default();
             Err((

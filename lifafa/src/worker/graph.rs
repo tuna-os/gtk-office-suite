@@ -427,8 +427,8 @@ mod characterization_tests {
 
     use crate::worker::graph::http::{graph_err, graph_throttle_wait};
 
-    fn status(code: u16, body: &str) -> ureq::Error {
-        ureq::Error::Status(code, ureq::Response::new(code, "x", body).unwrap())
+    fn status(code: u16, body: &str) -> crate::http::Error {
+        crate::http::Error::Status(code, crate::http::Response::new(code, "x", body).unwrap())
     }
 
     #[test]

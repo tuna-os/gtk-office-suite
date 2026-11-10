@@ -113,7 +113,7 @@ fn parse_bimi_record(txt: &str) -> Option<String> {
 /// The BIMI SVG at `url`: small, served as an image or XML, and an SVG.
 fn bimi_fetch(url: &str) -> Option<String> {
     use std::io::Read;
-    let resp = match ureq::get(url)
+    let resp = match crate::http::get(url)
         .set("User-Agent", USER_AGENT)
         .set("Accept", "image/svg+xml,*/*;q=0.5")
         .timeout(std::time::Duration::from_secs(5))

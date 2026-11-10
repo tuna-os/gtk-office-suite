@@ -183,10 +183,10 @@ fn work() {
     }
 }
 
-fn agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+fn agent() -> &'static crate::http::Agent {
+    static AGENT: OnceLock<crate::http::Agent> = OnceLock::new();
     AGENT.get_or_init(|| {
-        ureq::AgentBuilder::new()
+        crate::http::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
             .build()
