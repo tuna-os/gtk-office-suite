@@ -536,7 +536,7 @@ fn the_run_invariant_rejects_a_text_box_that_disagrees_with_itself() {
     {
         let mut slides = controller.slides.borrow_mut();
         if let Some(SlideObject::TextBox { runs, .. }) = slides[0].objects.get_mut(0) {
-            runs.push(letters_core::model::Run::plain("goodbye"));
+            runs.push(suite_common_core::document::Run::plain("goodbye"));
         }
     }
 
@@ -572,4 +572,47 @@ fn seed_campaign() {
         failures.len(),
         failures.join("\n\n")
     );
+}
+
+/// #1993: the history keeps the newest `UNDO_LIMIT` steps. Undo past the
+/// boundary stops where the forgotten steps begin, every kept step still
+/// restores the selection it saw, and redo brings them all back.
+#[test]
+fn undo_stops_at_the_history_limit_and_keeps_selections_in_step() {
+    use decks_core::controller::UNDO_LIMIT;
+    let controller = fresh();
+    let extra = 50;
+    let mut seen = Vec::new();
+    for i in 0..UNDO_LIMIT + extra {
+        seen.push(controller.selection());
+        let id = controller.add_slide(i + 1, blank_slide()).expect("slide added");
+        assert!(controller.select_slide(id));
+    }
+    let total = 1 + UNDO_LIMIT + extra;
+    assert_eq!(controller.slides.borrow().len(), total);
+
+    let mut undone = 0;
+    while controller.undo() {
+        undone += 1;
+        // The step just undone was the add at this position: the selection
+        // comes back to what it was before that add.
+        let step = UNDO_LIMIT + extra - undone;
+        assert_eq!(controller.selection(), seen[step], "undo {undone} restores the selection before add {step}");
+    }
+    assert_eq!(undone, UNDO_LIMIT, "the oldest steps are gone, the newest are all kept");
+    assert_eq!(controller.slides.borrow().len(), 1 + extra, "the forgotten adds stay done");
+    assert!(!controller.can_undo());
+
+    let mut redone = 0;
+    while controller.redo() {
+        redone += 1;
+    }
+    assert_eq!(redone, UNDO_LIMIT);
+    assert_eq!(controller.slides.borrow().len(), total);
+    // Redo put every step back on the undo stack without passing the limit.
+    let mut again = 0;
+    while controller.undo() {
+        again += 1;
+    }
+    assert_eq!(again, UNDO_LIMIT);
 }

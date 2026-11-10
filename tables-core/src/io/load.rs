@@ -53,6 +53,53 @@ fn range_extent<T: calamine::CellType>(range: &calamine::Range<T>) -> (usize, us
     }
 }
 
+/// One xlsx worksheet's values and formulas, refused before calamine builds
+/// its ranges when they would reach further than a sheet may open at.
+/// calamine's `worksheet_range` and `worksheet_formula` allocate every cell
+/// of the bounding box (`Range::from_sparse`), so a file holding A1 and
+/// XFD1048576 alone would ask for 17 billion cells (#1983). The cells are
+/// streamed here instead, their extent checked, and only then made ranges.
+fn read_xlsx_sheet<RS: std::io::Read + std::io::Seek>(
+    book: &mut calamine::Xlsx<RS>,
+    name: &str,
+) -> Result<(calamine::Range<Data>, calamine::Range<String>), String> {
+    use calamine::{Cell, DataRef, XlsxError};
+    let sheet_err = |e: XlsxError| format!("Cannot read sheet: {e}");
+    let mut values: Vec<Cell<Data>> = Vec::new();
+    match book.worksheet_cells_reader(name) {
+        Ok(mut reader) => {
+            while let Some(cell) = reader.next_cell().map_err(sheet_err)? {
+                if !matches!(cell.get_value(), DataRef::Empty) {
+                    values.push(Cell::new(cell.get_position(), Data::from(cell.get_value().clone())));
+                }
+            }
+        }
+        // A chartsheet or dialog sheet: no cells, as calamine treats it.
+        Err(XlsxError::NotAWorksheet(_)) => return Ok((calamine::Range::default(), calamine::Range::default())),
+        Err(e) => return Err(sheet_err(e)),
+    }
+    let mut formulas: Vec<Cell<String>> = Vec::new();
+    {
+        let mut reader = book.worksheet_cells_reader(name).map_err(|e| format!("Cannot read formulas: {e}"))?;
+        while let Some(cell) = reader.next_formula().map_err(|e| format!("Cannot read formulas: {e}"))? {
+            if !cell.get_value().is_empty() {
+                formulas.push(cell);
+            }
+        }
+    }
+    let reach = values
+        .iter()
+        .map(Cell::get_position)
+        .chain(formulas.iter().map(Cell::get_position))
+        .fold((0usize, 0usize), |(rows, cols), (r, c)| (rows.max(r as usize + 1), cols.max(c as usize + 1)));
+    crate::sheet::check_cell_budget([(
+        name,
+        reach.0.max(crate::sheet::DEFAULT_ROWS),
+        reach.1.max(crate::sheet::DEFAULT_COLS),
+    )])?;
+    Ok((calamine::Range::from_sparse(values), calamine::Range::from_sparse(formulas)))
+}
+
 /// Import a value-only range (xls, or an xlsx without formulas) into the
 /// engine at its own coordinates. A cell the engine rejects fails the
 /// import with its coordinates rather than landing a workbook that is
@@ -64,12 +111,12 @@ fn load_range_into_engine(
     // `rows()` yields the range's own rows, so its indices are relative to
     // `start()`. Writing them straight to the engine would shift a sheet whose
     // content begins at B2 up and left into A1.
+    // Only the cells that hold something: the engine starts empty, so
+    // writing "" to every blank in the bounding box was all cost (#1983).
     let (row0, col0) = range.start().unwrap_or((0, 0));
-    for (r, row) in range.rows().enumerate() {
-        for (c, cell) in row.iter().enumerate() {
-            put_data(engine, row0 as usize + r, col0 as usize + c, cell)
-                .map_err(|e| format!("import {e}"))?;
-        }
+    for (r, c, cell) in range.used_cells() {
+        put_data(engine, row0 as usize + r, col0 as usize + c, cell)
+            .map_err(|e| format!("import {e}"))?;
     }
     engine.evaluate();
     let (rows, cols) = range_extent(range);
@@ -85,34 +132,34 @@ fn load_xlsx_ranges_into_engine(
     formulas: &calamine::Range<String>,
     engine: &mut TablesEngine,
 ) -> Result<(usize, usize), String> {
-    // Absolute extents, not range sizes — `get_value` below is addressed in
+    // Absolute extents, not range sizes: the ranges are addressed in
     // absolute sheet coordinates, so the bounds must be too.
     let (value_rows, value_cols) = range_extent(values);
     let (formula_rows, formula_cols) = range_extent(formulas);
     let rows = value_rows.max(formula_rows);
     let cols = value_cols.max(formula_cols);
-    for row in 0..rows {
-        for col in 0..cols {
-            let formula = formulas
-                .get_value((row as u32, col as u32))
-                .map(String::as_str)
-                .unwrap_or("");
-            if formula.is_empty() {
-                match values.get_value((row as u32, col as u32)) {
-                    Some(cell) => put_data(engine, row, col, cell),
-                    None => engine.put_cell_text(row, col, ""),
-                }
-                .map_err(|e| format!("import {e}"))?;
-            } else {
-                let input = if formula.starts_with('=') {
-                    formula.to_string()
-                } else {
-                    format!("={formula}")
-                };
-                engine.put_cell_text(row, col, &input)
-                    .map_err(|e| format!("import {e}"))?;
-            }
+    // Only the cells that hold something. This used to visit every cell of
+    // the rectangle from A1 to the farthest one, writing "" into the blanks:
+    // a file whose one cell sits near XFD1048576 meant billions of engine
+    // writes (#1983). A cell with a formula loads as the formula, any other
+    // as its value.
+    let (vr0, vc0) = values.start().unwrap_or((0, 0));
+    for (r, c, cell) in values.used_cells() {
+        let (row, col) = (vr0 + r as u32, vc0 + c as u32);
+        if formulas.get_value((row, col)).is_some_and(|f| !f.is_empty()) {
+            continue;
         }
+        put_data(engine, row as usize, col as usize, cell).map_err(|e| format!("import {e}"))?;
+    }
+    let (fr0, fc0) = formulas.start().unwrap_or((0, 0));
+    for (r, c, formula) in formulas.used_cells() {
+        let input = if formula.starts_with('=') {
+            formula.to_string()
+        } else {
+            format!("={formula}")
+        };
+        engine.put_cell_text(fr0 as usize + r, fc0 as usize + c, &input)
+            .map_err(|e| format!("import {e}"))?;
     }
     engine.evaluate();
     Ok((rows.max(1), cols.max(1)))
@@ -158,12 +205,7 @@ pub fn load_file_into_engine(
             if sheet_names.is_empty() {
                 return Err("No sheets found".into());
             }
-            let formulas = wb
-                .worksheet_formula(&sheet_names[0])
-                .map_err(|e| format!("Cannot read formulas: {}", e))?;
-            let range = wb
-                .worksheet_range(&sheet_names[0])
-                .map_err(|e| format!("Cannot read sheet: {}", e))?;
+            let (range, formulas) = read_xlsx_sheet(&mut wb, &sheet_names[0])?;
             load_xlsx_ranges_into_engine(&range, &formulas, engine)
         }
         "ods" => {
@@ -351,29 +393,33 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
     let mut source = Vec::with_capacity(names.len());
     let mut max_rows = 1usize;
     let mut max_cols = 1usize;
+    let mut extents = Vec::with_capacity(names.len());
     for name in &names {
-        let formulas = book
-            .worksheet_formula(name)
-            .map_err(|e| format!("Cannot read formulas: {e}"))?;
-        let values = book
-            .worksheet_range(name)
-            .map_err(|e| format!("Cannot read sheet: {e}"))?;
+        let (values, formulas) = read_xlsx_sheet(&mut book, name)?;
         let (value_rows, value_cols) = range_extent(&values);
         let (formula_rows, formula_cols) = range_extent(&formulas);
-        max_rows = max_rows.max(value_rows).max(formula_rows);
-        max_cols = max_cols.max(value_cols).max(formula_cols);
+        extents.push((value_rows.max(formula_rows), value_cols.max(formula_cols)));
         source.push((values, formulas));
     }
 
     let sheet_props = read_sheet_props_from_xlsx(path, &names);
     // Calamine's value/formula ranges omit blank styled cells. Protection
     // on those cells still needs a model slot and an editable engine cell.
-    for props in sheet_props.values() {
-        for (r, c, _) in &props.cell_styles {
-            max_rows = max_rows.max(r + 1);
-            max_cols = max_cols.max(c + 1);
+    for (name, extent) in names.iter().zip(extents.iter_mut()) {
+        if let Some(props) = sheet_props.get(name) {
+            for (r, c, _) in &props.cell_styles {
+                *extent = (extent.0.max(r + 1), extent.1.max(c + 1));
+            }
         }
+        max_rows = max_rows.max(extent.0);
+        max_cols = max_cols.max(extent.1);
     }
+    // Every sheet at the size it opens at, before the engine or any model
+    // is sized from them (#1983): styling alone can reach far past the
+    // values.
+    crate::sheet::check_cell_budget(names.iter().zip(&extents).map(|(name, &(rows, cols))| {
+        (name.as_str(), rows.max(crate::sheet::DEFAULT_ROWS), cols.max(crate::sheet::DEFAULT_COLS))
+    }))?;
 
     // Same floor as every other load path: a small workbook must still open
     // onto a usable grid rather than one sized exactly to its content (#447).
@@ -558,6 +604,7 @@ fn load_single_sheet(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
     // wider than the default grid would otherwise be silently truncated.
     engine.rows = engine.rows.max(rows);
     engine.cols = engine.cols.max(cols);
+    crate::sheet::check_cell_budget([("Sheet1", engine.rows, engine.cols)])?;
     let sheet_id = engine.sheet_id_at(0).unwrap_or(0);
     let mut sheet = SheetModel::new("Sheet1", engine.rows, engine.cols, sheet_id);
     sheet.sync_from_engine(&engine);
@@ -595,6 +642,10 @@ fn build_named_workbook_with_formulas(source: Vec<(String, calamine::Range<Data>
     let max_cols = source.iter().map(|(_, range, f)| extent(range, f).1).max()
         .unwrap_or(0).max(DEFAULT_COLS);
     let names: Vec<String> = source.iter().map(|(name, _, _)| name.clone()).collect();
+    crate::sheet::check_cell_budget(source.iter().map(|(name, range, f)| {
+        let (rows, cols) = extent(range, f);
+        (name.as_str(), rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS))
+    }))?;
     let mut engine = TablesEngine::new(max_rows.max(1), max_cols.max(1))?;
     engine.rename_sheet(0, &names[0])?;
     for name in names.iter().skip(1) {
@@ -841,6 +892,58 @@ mod tests {
         assert_eq!(engine.input_at(1, 0, 1), "=1+1");
         engine.set_cell_text(blank_row - 1, 1, "blank input").unwrap();
         assert_eq!(engine.cell(blank_row - 1, 1), "blank input");
+    }
+
+    const PLAIN_STYLES: &str = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="2"><xf/><xf applyProtection="1"><protection locked="0"/></xf></cellXfs></styleSheet>"#;
+
+    #[test]
+    fn a_cell_in_the_far_corner_is_refused_before_anything_dense_is_built() {
+        // A1 and XFD1048576: calamine's own ranges would span 17 billion
+        // cells, and the old loop wrote "" into every one (#1983).
+        let path = protection_fixture(PLAIN_STYLES, &[(
+            "Far",
+            r#"<sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="1048576"><c r="XFD1048576"><v>2</v></c></row></sheetData>"#,
+        )]);
+        let err = load_workbook(path.to_str().unwrap()).err().expect("refused");
+        assert!(err.contains("Sheet \"Far\" is too large to open"), "{err}");
+        assert!(err.contains("1048576 rows by 16384 columns"), "{err}");
+        let mut engine = TablesEngine::new(1, 1).unwrap();
+        assert!(load_file_into_engine(path.to_str().unwrap(), &mut engine).unwrap_err().contains("too large"));
+    }
+
+    #[test]
+    fn styling_alone_in_the_far_corner_is_refused_too() {
+        let path = protection_fixture(PLAIN_STYLES, &[(
+            "Styled",
+            r#"<sheetData><row r="1"><c r="A1"><v>1</v></c></row><row r="1048576"><c r="XFD1048576" s="1"/></row></sheetData>"#,
+        )]);
+        let err = load_workbook(path.to_str().unwrap()).err().expect("refused");
+        assert!(err.contains("Sheet \"Styled\" is too large to open"), "{err}");
+    }
+
+    #[test]
+    fn a_lone_distant_cell_within_the_budget_loads_in_its_place() {
+        let path = protection_fixture(PLAIN_STYLES, &[(
+            "Tall",
+            r#"<sheetData><row r="2"><c r="B2"><f>1+1</f><v>2</v></c></row><row r="50000"><c r="C50000" t="inlineStr"><is><t>last</t></is></c></row></sheetData>"#,
+        )]);
+        let (engine, sheets) = load_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!((sheets[0].rows, sheets[0].cols), (50_000, crate::sheet::DEFAULT_COLS));
+        assert_eq!(sheets[0].cell(49_999, 2), "last");
+        assert_eq!(sheets[0].cell(1, 1), "2");
+        assert_eq!(engine.input_at(0, 1, 1), "=1+1");
+        assert_eq!(sheets[0].cell(0, 0), "");
+    }
+
+    #[test]
+    fn sheets_that_fit_alone_can_still_be_too_many_together() {
+        use crate::sheet::{check_cell_budget, MAX_SHEET_CELLS, MAX_WORKBOOK_CELLS};
+        assert!(check_cell_budget([("A", MAX_SHEET_CELLS / 10, 10)]).is_ok());
+        assert!(check_cell_budget([("A", MAX_SHEET_CELLS / 10 + 1, 10)]).unwrap_err().contains("Sheet \"A\""));
+        let fits = MAX_WORKBOOK_CELLS / MAX_SHEET_CELLS;
+        let sheets: Vec<_> = (0..=fits).map(|_| ("S", MAX_SHEET_CELLS / 10, 10)).collect();
+        assert!(check_cell_budget(sheets).unwrap_err().contains("This workbook is too large to open"));
+        assert!(check_cell_budget([("A", usize::MAX, usize::MAX)]).is_err(), "no overflow");
     }
 
     #[test]

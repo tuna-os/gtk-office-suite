@@ -56,9 +56,11 @@ Where it stands:
   own lockfile: it needs libadwaita 1.7 or later and WebKitGTK 6, which the
   Ubuntu runner behind the root `test` job does not have, so joining the root
   workspace would break that job.
-- **CI.** `.github/workflows/lifafa.yml` compiles it (`cargo check`, every
-  target) inside the GNOME 50 SDK with poppler, using `lifafa/ci/check.yml`.
-  It runs only for changes under `lifafa/`.
+- **CI.** `.github/workflows/lifafa.yml` (added in #2062) builds it with
+  `cargo check --all-targets --locked` and `cargo test --locked` in a Fedora 43
+  container, and checks its lockfile against RustSec. It runs only for changes
+  under `lifafa/`, so a Renovate bump of one of its dependencies is compiled and
+  tested before it merges.
 - **Upstream sync has ended.** `fork/MAINTAINING.md`'s daily merge from
   hyprlab/hylki does not apply to a vendored copy; the fork workflows were not
   imported. Changes to Lifafa are made here.

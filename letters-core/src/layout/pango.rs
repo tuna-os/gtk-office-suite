@@ -529,12 +529,30 @@ pub struct Typeset {
     /// Layouts made for drawing that the shaper did not keep (a paragraph's
     /// lines came from the shape cache), by request key.
     cache: RefCell<HashMap<u64, pango::Layout>>,
-    images: RefCell<HashMap<String, Option<cairo::ImageSurface>>>,
+    /// Decoded pictures by path. `update` keeps only the ones the new
+    /// layout still shows, so the cache is bounded by the document rather
+    /// than by the session (#1992).
+    images: RefCell<HashMap<String, CachedImage>>,
     loader: Box<ImageLoader>,
     /// The `LiveModel` revision this was laid out from (0 = unpinned, as in
     /// tests that build documents by hand). Print, thumbnails, PDF and
     /// headless export carry the revision they drew.
     revision: u64,
+}
+
+/// A decoded picture and the file it was decoded from, as it was then: a
+/// file replaced or repaired at the same path is decoded again.
+struct CachedImage {
+    stamp: Option<FileStamp>,
+    surface: Option<cairo::ImageSurface>,
+}
+
+/// A file's length and modification time: what tells a cached picture
+/// it is out of date.
+type FileStamp = (u64, Option<std::time::SystemTime>);
+
+fn file_stamp(path: &str) -> Option<FileStamp> {
+    std::fs::metadata(path).ok().map(|m| (m.len(), m.modified().ok()))
 }
 
 /// Decodes the image at a path for drawing.
@@ -589,6 +607,7 @@ struct LineRef {
     box_w: f64,
     x: f64,
     top: f64,
+    baseline: f64,
     height: f64,
     start: usize,
     end: usize,
@@ -763,6 +782,18 @@ impl Typeset {
         let keep: std::collections::HashSet<u64> = self.shapes.keys().copied().collect();
         self.shaper.layouts.retain(|k, _| keep.contains(k));
         self.cache.borrow_mut().clear();
+        // Pictures the document no longer shows go; the rest stay decoded.
+        let shown: std::collections::HashSet<&str> = self
+            .tree
+            .pages
+            .iter()
+            .flat_map(|p| &p.items)
+            .filter_map(|i| match i {
+                Item::Image { src, .. } => Some(src.as_str()),
+                _ => None,
+            })
+            .collect();
+        self.images.borrow_mut().retain(|src, _| shown.contains(src.as_str()));
         shaped
     }
 
@@ -899,8 +930,29 @@ impl Typeset {
         let _ = cr.restore();
     }
 
+    /// The decoded picture at `src`, from the cache while its file is
+    /// unchanged. A failure is kept only while the file it failed on is
+    /// there unchanged, so a picture that was missing, or is fixed in
+    /// place, shows on the next draw (#1992).
+    fn image(&self, src: &str) -> Option<cairo::ImageSurface> {
+        let stamp = file_stamp(src);
+        let mut images = self.images.borrow_mut();
+        if let Some(hit) = images.get(src) {
+            if hit.stamp == stamp && (hit.surface.is_some() || stamp.is_some()) {
+                return hit.surface.clone();
+            }
+        }
+        let surface = (self.loader)(src);
+        if surface.is_some() || stamp.is_some() {
+            images.insert(src.to_string(), CachedImage { stamp, surface: surface.clone() });
+        } else {
+            images.remove(src);
+        }
+        surface
+    }
+
     fn draw_image(&self, cr: &cairo::Context, src: &str, x: f64, y: f64, w: f64, h: f64) {
-        let surface = self.images.borrow_mut().entry(src.to_string()).or_insert_with(|| (self.loader)(src)).clone();
+        let surface = self.image(src);
         let _ = cr.save();
         match surface {
             Some(img) if img.width() > 0 && img.height() > 0 => {
@@ -972,7 +1024,7 @@ impl Typeset {
         page.items
             .iter()
             .filter_map(|i| match i {
-                Item::Line { source: Source::Paragraph(p), line, box_x_pt, box_width_pt, x_pt, top_pt, height_pt, start, end, .. } => {
+                Item::Line { source: Source::Paragraph(p), line, box_x_pt, box_width_pt, x_pt, top_pt, baseline_pt, height_pt, start, end, .. } => {
                     Some(LineRef {
                         para: *p,
                         line: *line,
@@ -980,6 +1032,7 @@ impl Typeset {
                         box_w: *box_width_pt,
                         x: *x_pt,
                         top: *top_pt,
+                        baseline: *baseline_pt,
                         height: *height_pt,
                         start: *start,
                         end: *end,
@@ -1044,6 +1097,30 @@ impl Typeset {
     /// Rectangles covering the text from `from` to `to` (in document order),
     /// one per line piece: (page, x, top, width, height) in points.
     pub fn selection_rects(&self, from: TextPos, to: TextPos) -> Vec<SelectionRect> {
+        self.line_pieces(from, to, true)
+            .into_iter()
+            .map(|(page, l, x, w)| (page, x, l.top, w, l.height))
+            .collect()
+    }
+
+    /// Where a misspelling's wavy underline goes under the text from
+    /// `from` to `to`: (page, x, baseline, width) in points, one for each
+    /// line the text is on. The underline hangs below the baseline, as
+    /// GtkTextView's error underline does; it is not document content, so
+    /// the page view draws it and print and PDF do not.
+    pub fn error_underlines(&self, from: TextPos, to: TextPos) -> Vec<(usize, f64, f64, f64)> {
+        self.line_pieces(from, to, false)
+            .into_iter()
+            .filter(|(_, _, _, w)| *w > 0.0)
+            .map(|(page, l, x, w)| (page, x, l.baseline, w))
+            .collect()
+    }
+
+    /// Each laid-out line's piece of the text from `from` to `to`: its
+    /// page, its line, and the piece's x and width in points. With
+    /// `newlines`, a piece running past its paragraph's end includes the
+    /// newline, a space's width, as a selection shows it.
+    fn line_pieces(&self, from: TextPos, to: TextPos, newlines: bool) -> Vec<(usize, LineRef, f64, f64)> {
         let (a, b) = if (to.para, to.offset) < (from.para, from.offset) { (to, from) } else { (from, to) };
         let mut out = Vec::new();
         for index in 0..self.tree.pages.len() {
@@ -1053,7 +1130,7 @@ impl Typeset {
                 }
                 let s = if l.para == a.para { a.offset.max(l.start) } else { l.start };
                 let e = if l.para == b.para { b.offset.min(l.end) } else { l.end };
-                let whole_rest = l.para < b.para && l.end >= self.layout_len(l.para);
+                let whole_rest = newlines && l.para < b.para && l.end >= self.layout_len(l.para);
                 if s > e || (s == e && !whole_rest) {
                     continue;
                 }
@@ -1068,7 +1145,9 @@ impl Typeset {
                 if whole_rest {
                     x1 += 4.0;
                 }
-                out.push((index, l.x + x0.min(x1), l.top, (x1 - x0).abs(), l.height));
+                let x = l.x + x0.min(x1);
+                let w = (x1 - x0).abs();
+                out.push((index, l, x, w));
             }
         }
         out
@@ -1584,6 +1663,59 @@ mod tests {
         assert!(dark > 20, "a leader across the gap: {dark} dark columns");
     }
 
+    /// #1992: the picture cache holds what the document shows, decodes a
+    /// file once while it is unchanged, retries a picture that was missing,
+    /// and decodes again a file replaced at the same path.
+    #[test]
+    fn the_picture_cache_follows_the_document_and_its_files() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pic.png");
+        let src = path.to_str().unwrap().to_string();
+        let with_picture = |src: &str| {
+            let mut d = doc(1, "x");
+            d.paragraphs[0].runs.push(Run {
+                text: "\u{FFFC}".into(),
+                style: crate::model::RunStyle { image: Some(src.into()), image_extent_emu: Some((914_400, 914_400)), ..Default::default() },
+            });
+            d
+        };
+        let loads = Rc::new(Cell::new(0));
+        let mut t = Typeset::new(with_picture(&src), LayoutOptions::default());
+        let counted = loads.clone();
+        t.set_image_loader(move |p| {
+            counted.set(counted.get() + 1);
+            std::fs::read(p).ok().map(|_| cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap())
+        });
+        let draw = |t: &Typeset| {
+            let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, 10, 10).unwrap();
+            t.draw_page(&cairo::Context::new(&surface).unwrap(), 0);
+        };
+        // Missing: tried on every draw, so it shows once it arrives.
+        draw(&t);
+        draw(&t);
+        assert_eq!(loads.get(), 2);
+        assert!(t.images.borrow().is_empty(), "a failure on a missing file is not kept");
+        std::fs::write(&path, b"one").unwrap();
+        draw(&t);
+        draw(&t);
+        assert_eq!(loads.get(), 3, "decoded once while the file is unchanged");
+        assert!(t.images.borrow()[&src].surface.is_some());
+        // Replaced at the same path: decoded again.
+        std::fs::write(&path, b"second").unwrap();
+        draw(&t);
+        assert_eq!(loads.get(), 4);
+        // An edit that keeps the picture keeps it decoded; one that drops
+        // it drops it from the cache.
+        t.update(with_picture(&src), LayoutOptions::default());
+        assert_eq!(t.images.borrow().len(), 1);
+        draw(&t);
+        assert_eq!(loads.get(), 4);
+        t.update(doc(1, "x"), LayoutOptions::default());
+        assert!(t.images.borrow().is_empty(), "a picture the document no longer shows is let go");
+    }
+
     /// A bullet is a disc and nothing else: its path starts at the disc,
     /// not with a line from wherever the text before it left the current
     /// point. The UK NSC form's bullets each trailed a hairline back to the
@@ -1954,6 +2086,27 @@ mod tests {
         assert!(rects.iter().all(|r| r.3 > 0.0));
         // Reversed ends select the same text.
         assert_eq!(rects, t.selection_rects(TextPos { para: 1, offset: 9 }, TextPos { para: 0, offset: 4 }));
+    }
+
+    /// A misspelling's underline sits under its word, on its line's
+    /// baseline, as wide as the word: one span per line it is on (#1894).
+    #[test]
+    fn an_error_underline_spans_its_word_on_the_baseline() {
+        let t = Typeset::new(doc(1, "teh quik brown fox"), LayoutOptions::default());
+        let word = t.selection_rects(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 8 });
+        let spans = t.error_underlines(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 8 });
+        assert_eq!(spans.len(), 1, "one line: {spans:?}");
+        let (page, x, baseline, w) = spans[0];
+        let (rpage, rx, top, rw, h) = word[0];
+        assert_eq!((page, x, w), (rpage, rx, rw), "under exactly the word 'quik'");
+        assert!(baseline > top && baseline < top + h, "on the line's baseline: {top} {baseline} {h}");
+        assert!(t.error_underlines(TextPos { para: 0, offset: 4 }, TextPos { para: 0, offset: 4 }).is_empty(), "an empty range has no underline");
+        // A word broken across lines gets a span on each.
+        let long = "word ".repeat(40) + "misspeled";
+        let t = Typeset::new(doc(2, &long), LayoutOptions::default());
+        let spans = t.error_underlines(TextPos { para: 0, offset: 0 }, TextPos { para: 1, offset: 3 });
+        assert!(spans.len() >= 3, "every line of the first paragraph and one of the second: {}", spans.len());
+        assert!(spans.iter().all(|s| s.3 > 0.0));
     }
 
     #[test]
