@@ -99,14 +99,37 @@ the office apps and chat, a shared contact picker in the office apps.
 7. **One product**: C1 to C5 land as each app reaches the shared chrome; B10
    sandbox tightening runs alongside, one permission per change.
 
+## Status
+
+As of 2026-11-10, checked against the tree (not against what was intended).
+
+| Item | State | Evidence or what is missing |
+|---|---|---|
+| Foundations | done | Lifafa on the shared toolkit (#1960), Mandelbrot built in CI (#1961); Lifafa builds without the `relm4` crate (#2101-#2110: no macro views left, the runtime is vendored under `lifafa/src/relm`). `lifafa-core` extraction and the shared chrome (C1) are still open (#2025). |
+| A3, A4 | partial | Mandelbrot has `open-room(target)` and `start-call(target)` actions and a GTK-free `hand_off` contract (#2111). `share-file(path, room?)`, a GTK-free `ShareRequest`, and the callers in the office apps are missing. |
+| A8 | partial | The `matrix:` handler and `x-scheme-handler/mailto` / `mid` registrations exist (`mandelbrot/data/*.desktop.in.in`, `lifafa/data/co.hyprlab.Hylki.desktop`). The office apps register no URI schemes, and Letters has no Matrix chips. |
+| B3 | partial | Lifafa has `Actions=new-message`. The office apps and Mandelbrot have no desktop actions, and there are no `xdg-templates`. |
+| B4 | partial | `GNotification` in `lifafa/src/desktop/notify.rs` and Mandelbrot's `session/notifications`. No shared notification module, no Do Not Disturb handling across the suite. |
+| B5 | partial | Lifafa has a "Run in background" setting (`lifafa/src/ui/preferences`). No Background portal request in any app. |
+| B6 | partial | `suite-common` follows the colour scheme through `adw::StyleManager`; text scale and reduced motion are followed by Lifafa only. |
+| B8 | partial | The office apps declare their file types, Lifafa `mailto:` and `message/rfc822`, Mandelbrot `x-scheme-handler/matrix`. Nothing offers the default through the standard prompts. |
+| B9 | partial | Lifafa has a Nautilus extension (`lifafa/src/desktop/nautilus_ext.rs`); it is not generalised to the suite. |
+| B11 | partial | `GtkPrintDialog` in Letters (`letters/src/printing.rs`) and Lifafa's print preview. Tables and Decks do not print through it. |
+| B1, B2, B7, B10, B12 | not started | No `SearchProvider2` or `.thumbnailer` in the tree; the Matrix account decision is made (ADR 0013), the shared account model is not; the office apps still request `--filesystem=xdg-documents`. |
+| A1, A2, A5, A6, A7, A9, A10 | not started | |
+| C1-C5 | not started | C1 waits on the shared chrome in `suite-common`. |
+| #1975 (licences) | done | Notices, SPDX rule, `deny.toml` for both nested workspaces, About dialogs (#2112). |
+| #1973 (one Matrix account) | decided | ADR 0013 and `tests/test_matrix_sdk_pin.py` (#2114); the sign-in plumbing is not built. |
+
 ## Open decisions
 
 - **Where do shared services run?** A single user-level D-Bus service the apps
   call, or a library each app links? A library is licence-compatible (AGPL and
   GPL may be combined) but couples release cycles and toolkit versions. A
   service means a new process to ship, update and keep private.
-- **Matrix sign-in**: the OIDC flow Mandelbrot already has, shared with
-  `collab/`, versus a Matrix entry in GNOME Online Accounts (none exists today).
+- **Matrix sign-in**: decided in ADR 0013 (the sidecar signs in as a second
+  device of the same account; nothing is shared). Whether GNOME Online Accounts
+  ever gets a Matrix entry is still open (none exists today).
 - **Search index ownership**: each app indexes its own data and answers
   queries, or one indexer (Tracker/LocalSearch) holds everything. The first is
   private by default and simpler to ship; the second finds more.
