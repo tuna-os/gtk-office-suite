@@ -356,7 +356,7 @@ mod imp {
             // other suite apps do (the suite's `THIRD-PARTY-NOTICES.md`).
             dialog.add_legal_section(
                 &gettext("Fractal"),
-                Some(&gettext("© The Fractal Team")),
+                Some(gettext("© The Fractal Team").as_str()),
                 gtk::License::Gpl30,
                 None,
             );
