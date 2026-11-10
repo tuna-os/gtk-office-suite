@@ -6,6 +6,7 @@
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
+- Misspelled words get their red wavy underline in the page view again. The spell checker found them, but only the old editor drew the underline; it still leaves print and PDF alone (#1894).
 - A picture that was missing when the page was first drawn, or is replaced at the same path, now shows without reopening the document, and pictures removed from a document no longer stay in memory until the tab closes (#1992).
 
 ### Tables
