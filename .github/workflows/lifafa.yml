@@ -10,7 +10,10 @@ name: lifafa
 #   build       `cargo check --all-targets --locked` and `cargo test --locked` in
 #               lifafa/. It needs libadwaita 1.7 and WebKitGTK 6.0 at 2.44 or
 #               later, which Ubuntu 24.04 does not ship, so it runs in a Fedora 43
-#               container. Its few widget tests need a display: Xvfb.
+#               container. Its few widget tests need a display: Xvfb. Its
+#               keyring tests (#2024) need a Secret Service: they are ignored in
+#               plain `cargo test` and run in their own step, under their own
+#               session bus with an unlocked gnome-keyring.
 #   advisories  `cargo deny check advisories licenses` on lifafa/Cargo.lock,
 #               against deny.toml (its ignores for this lock are the ones that
 #               name lifafa/; its licence policy is shared, with an exception
@@ -63,7 +66,8 @@ jobs:
             gcc gcc-c++ make git pkgconf-pkg-config glib2-devel \
             gtk4-devel libadwaita-devel webkitgtk6.0-devel poppler-glib-devel \
             cairo-devel pango-devel openssl-devel dbus-devel gettext \
-            xorg-x11-server-Xvfb mesa-dri-drivers
+            xorg-x11-server-Xvfb mesa-dri-drivers \
+            dbus-daemon gnome-keyring libsecret
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
@@ -94,6 +98,19 @@ jobs:
           Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
           for _ in $(seq 50); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
           cargo test --locked --no-fail-fast -- --test-threads=2
+      # Items stored the way keyring 3 stores them (account passwords, OAuth
+      # tokens, EDS sources, the predecessors' services) must keep being found,
+      # and not be written a second time, by whatever keyring crate Lifafa
+      # builds with (#2024). The tests seed those items with secret-tool.
+      - name: keyring migration tests (gnome-keyring)
+        working-directory: lifafa
+        run: |
+          dbus-run-session -- sh -ec '
+            export XDG_DATA_HOME="$(mktemp -d)" XDG_RUNTIME_DIR="$(mktemp -d)"
+            printf test | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+            sleep 1
+            cargo test --locked keyring_migration -- --ignored --test-threads=1
+          '
 
   advisories:
     name: Lifafa RustSec advisory gate
