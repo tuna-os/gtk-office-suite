@@ -1631,7 +1631,7 @@ dependencies = [
  "gettext-rs",
  "glib-build-tools",
  "gtk4",
- "html5ever 0.39.0",
+ "html5ever 0.40.1",
  "keyring",
  "ksni",
  "lettre",

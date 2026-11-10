@@ -97,7 +97,7 @@ ksni = { version = "0.3.6", default-features = false, features = ["tokio", "bloc
 gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
 markup5ever_rcdom = "0.39.0"
-html5ever = "0.39"
+html5ever = "0.40"
 css-inline = { version = "0.23.0", default-features = false }
 # A notification button that shows no window has to tell GNOME Shell its
 # launch is over (see src/desktop/startup.rs). On Wayland that takes
