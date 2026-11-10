@@ -529,12 +529,30 @@ pub struct Typeset {
     /// Layouts made for drawing that the shaper did not keep (a paragraph's
     /// lines came from the shape cache), by request key.
     cache: RefCell<HashMap<u64, pango::Layout>>,
-    images: RefCell<HashMap<String, Option<cairo::ImageSurface>>>,
+    /// Decoded pictures by path. `update` keeps only the ones the new
+    /// layout still shows, so the cache is bounded by the document rather
+    /// than by the session (#1992).
+    images: RefCell<HashMap<String, CachedImage>>,
     loader: Box<ImageLoader>,
     /// The `LiveModel` revision this was laid out from (0 = unpinned, as in
     /// tests that build documents by hand). Print, thumbnails, PDF and
     /// headless export carry the revision they drew.
     revision: u64,
+}
+
+/// A decoded picture and the file it was decoded from, as it was then: a
+/// file replaced or repaired at the same path is decoded again.
+struct CachedImage {
+    stamp: Option<FileStamp>,
+    surface: Option<cairo::ImageSurface>,
+}
+
+/// A file's length and modification time: what tells a cached picture
+/// it is out of date.
+type FileStamp = (u64, Option<std::time::SystemTime>);
+
+fn file_stamp(path: &str) -> Option<FileStamp> {
+    std::fs::metadata(path).ok().map(|m| (m.len(), m.modified().ok()))
 }
 
 /// Decodes the image at a path for drawing.
@@ -763,6 +781,18 @@ impl Typeset {
         let keep: std::collections::HashSet<u64> = self.shapes.keys().copied().collect();
         self.shaper.layouts.retain(|k, _| keep.contains(k));
         self.cache.borrow_mut().clear();
+        // Pictures the document no longer shows go; the rest stay decoded.
+        let shown: std::collections::HashSet<&str> = self
+            .tree
+            .pages
+            .iter()
+            .flat_map(|p| &p.items)
+            .filter_map(|i| match i {
+                Item::Image { src, .. } => Some(src.as_str()),
+                _ => None,
+            })
+            .collect();
+        self.images.borrow_mut().retain(|src, _| shown.contains(src.as_str()));
         shaped
     }
 
@@ -899,8 +929,29 @@ impl Typeset {
         let _ = cr.restore();
     }
 
+    /// The decoded picture at `src`, from the cache while its file is
+    /// unchanged. A failure is kept only while the file it failed on is
+    /// there unchanged, so a picture that was missing, or is fixed in
+    /// place, shows on the next draw (#1992).
+    fn image(&self, src: &str) -> Option<cairo::ImageSurface> {
+        let stamp = file_stamp(src);
+        let mut images = self.images.borrow_mut();
+        if let Some(hit) = images.get(src) {
+            if hit.stamp == stamp && (hit.surface.is_some() || stamp.is_some()) {
+                return hit.surface.clone();
+            }
+        }
+        let surface = (self.loader)(src);
+        if surface.is_some() || stamp.is_some() {
+            images.insert(src.to_string(), CachedImage { stamp, surface: surface.clone() });
+        } else {
+            images.remove(src);
+        }
+        surface
+    }
+
     fn draw_image(&self, cr: &cairo::Context, src: &str, x: f64, y: f64, w: f64, h: f64) {
-        let surface = self.images.borrow_mut().entry(src.to_string()).or_insert_with(|| (self.loader)(src)).clone();
+        let surface = self.image(src);
         let _ = cr.save();
         match surface {
             Some(img) if img.width() > 0 && img.height() > 0 => {
@@ -1582,6 +1633,59 @@ mod tests {
             .filter(|&x| (start.top_pt as usize..(start.top_pt + start.height_pt) as usize).any(|y| data[y * stride + x * 4] < 128))
             .count();
         assert!(dark > 20, "a leader across the gap: {dark} dark columns");
+    }
+
+    /// #1992: the picture cache holds what the document shows, decodes a
+    /// file once while it is unchanged, retries a picture that was missing,
+    /// and decodes again a file replaced at the same path.
+    #[test]
+    fn the_picture_cache_follows_the_document_and_its_files() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pic.png");
+        let src = path.to_str().unwrap().to_string();
+        let with_picture = |src: &str| {
+            let mut d = doc(1, "x");
+            d.paragraphs[0].runs.push(Run {
+                text: "\u{FFFC}".into(),
+                style: crate::model::RunStyle { image: Some(src.into()), image_extent_emu: Some((914_400, 914_400)), ..Default::default() },
+            });
+            d
+        };
+        let loads = Rc::new(Cell::new(0));
+        let mut t = Typeset::new(with_picture(&src), LayoutOptions::default());
+        let counted = loads.clone();
+        t.set_image_loader(move |p| {
+            counted.set(counted.get() + 1);
+            std::fs::read(p).ok().map(|_| cairo::ImageSurface::create(cairo::Format::ARgb32, 2, 2).unwrap())
+        });
+        let draw = |t: &Typeset| {
+            let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, 10, 10).unwrap();
+            t.draw_page(&cairo::Context::new(&surface).unwrap(), 0);
+        };
+        // Missing: tried on every draw, so it shows once it arrives.
+        draw(&t);
+        draw(&t);
+        assert_eq!(loads.get(), 2);
+        assert!(t.images.borrow().is_empty(), "a failure on a missing file is not kept");
+        std::fs::write(&path, b"one").unwrap();
+        draw(&t);
+        draw(&t);
+        assert_eq!(loads.get(), 3, "decoded once while the file is unchanged");
+        assert!(t.images.borrow()[&src].surface.is_some());
+        // Replaced at the same path: decoded again.
+        std::fs::write(&path, b"second").unwrap();
+        draw(&t);
+        assert_eq!(loads.get(), 4);
+        // An edit that keeps the picture keeps it decoded; one that drops
+        // it drops it from the cache.
+        t.update(with_picture(&src), LayoutOptions::default());
+        assert_eq!(t.images.borrow().len(), 1);
+        draw(&t);
+        assert_eq!(loads.get(), 4);
+        t.update(doc(1, "x"), LayoutOptions::default());
+        assert!(t.images.borrow().is_empty(), "a picture the document no longer shows is let go");
     }
 
     /// A bullet is a disc and nothing else: its path starts at the disc,

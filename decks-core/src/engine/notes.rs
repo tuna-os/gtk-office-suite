@@ -5,7 +5,7 @@
 
 use quick_xml::events::{Event, BytesStart};
 use quick_xml::Reader;
-use letters_core::model::RunStyle;
+use suite_common_core::document::RunStyle;
 
 use super::parse::{resolve_general_ref, unescape_text};
 

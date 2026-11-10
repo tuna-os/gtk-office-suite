@@ -8,7 +8,7 @@
 // circles, speaker notes, slide backgrounds, multi-slide order.
 // Fidelity is measured against the Impress oracle, never ported.
 
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Write;
@@ -355,28 +355,12 @@ struct Media {
     bytes: Vec<u8>,
 }
 
-/// The extension and media type for a picture, from its current extension.
-///
-/// ODF names the type in the manifest, so guessing wrong here is a
-/// mislabelled part rather than a missing one. The pptx writer sidesteps
-/// the question by naming every part `.png` whatever it actually is; this
-/// keeps the real extension and labels it to match, and falls back to PNG
-/// for an extension nobody recognises rather than refusing the save.
+/// The extension and media type for a picture: from its extension, or
+/// its first bytes when the extension says nothing (see
+/// [`crate::image_px::media_type`]). ODF names the type in the manifest,
+/// so guessing wrong here is a mislabelled part rather than a missing one.
 fn media_type_for(path: &str) -> (&'static str, &'static str) {
-    let ext = std::path::Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    match ext.as_str() {
-        "jpg" | "jpeg" => ("jpg", "image/jpeg"),
-        "gif" => ("gif", "image/gif"),
-        "svg" => ("svg", "image/svg+xml"),
-        "webp" => ("webp", "image/webp"),
-        "bmp" => ("bmp", "image/bmp"),
-        "tif" | "tiff" => ("tiff", "image/tiff"),
-        _ => ("png", "image/png"),
-    }
+    crate::image_px::media_type(path)
 }
 
 /// The xml:id of object `i` on slide `si`.
@@ -2659,7 +2643,7 @@ mod tests {
 
     /// The extension and the declared type have to agree, or the package
     /// says PNG about a JPEG. The writer keeps the source's extension
-    /// rather than calling everything `.png` the way the pptx writer does.
+    /// rather than calling everything `.png`, as the pptx writer once did.
     #[test]
     fn a_pictures_declared_type_matches_its_extension() {
         for (name, ext, media_type) in [
