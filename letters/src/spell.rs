@@ -74,25 +74,29 @@ impl SpellChecker {
     }
 
     fn is_correct(&self, word: &str) -> bool {
-        let w = word.to_lowercase();
+        // Hunspell dictionaries spell "don't" with the ASCII apostrophe.
+        let w = word.to_lowercase().replace('\u{2019}', "'");
         if w.len() < 2 || w.chars().all(|c| c.is_ascii_digit()) { return true; }
         if self.user_words.borrow().contains(&w) { return true; }
         self.dict.borrow().as_ref().map(|d| d.check(&w)).unwrap_or(true)
     }
 
+    /// The hunspell dictionary for the user's language (#1991): the
+    /// locales GLib reads from LANGUAGE, LC_ALL, LC_MESSAGES and LANG, in
+    /// order, each looked up in the usual dictionary folders, then en_US.
     fn load_dictionary() -> Option<zspell::Dictionary> {
-        let candidates = &[
-            "/usr/share/hunspell/en_US",
-            "/usr/share/myspell/en_US",
-            "/usr/local/share/hunspell/en_US",
-            "/app/share/hunspell/en_US",
-        ];
-        for prefix in candidates {
-            let dic_path = format!("{}.dic", prefix);
-            if std::path::Path::new(&dic_path).exists() {
-                match Self::load_dict(prefix) {
-                    Ok(d) => { eprintln!("SpellChecker: loaded {}", prefix); return Some(d); }
-                    Err(e) => { eprintln!("SpellChecker: failed {}: {:?}", prefix, e); }
+        let languages: Vec<String> = glib::language_names()
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
+        for prefix in dictionary_prefixes(&dictionary_names(&languages), DICTIONARY_DIRS) {
+            match Self::load_dict(&prefix) {
+                Ok(d) => {
+                    eprintln!("SpellChecker: loaded {}", prefix);
+                    return Some(d);
+                }
+                Err(e) => {
+                    eprintln!("SpellChecker: failed {}: {:?}", prefix, e);
                 }
             }
         }
@@ -308,14 +312,90 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[m]
 }
 
-fn is_word_byte(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'\''
+/// One word definition for buffer and model iteration alike: any letter,
+/// in any script, and the apostrophe, straight or curly. It used to be
+/// ASCII letters only, so "café" was checked as "caf" and "naïve" as two
+/// fragments (#1991).
+fn is_word_char(c: char) -> bool {
+    c.is_alphabetic() || c == '\'' || c == '\u{2019}'
 }
 
-/// The char version of `is_word_byte`: one word definition for buffer and
-/// model iteration alike (ASCII letters and apostrophe, as hunspell sees).
-fn is_word_char(c: char) -> bool {
-    c.is_ascii() && is_word_byte(c as u8)
+/// Where distributions and the Flatpak runtime keep hunspell dictionaries.
+const DICTIONARY_DIRS: &[&str] = &[
+    "/app/share/hunspell",
+    "/usr/share/hunspell",
+    "/usr/share/myspell",
+    "/usr/share/myspell/dicts",
+    "/usr/local/share/hunspell",
+];
+
+/// Dictionary names to try for `languages` (GLib's list, most preferred
+/// first, such as "fr_FR.UTF-8", "fr_FR", "fr", "C"): each locale without
+/// its encoding or modifier, then en_US as the last resort. A bare
+/// language ("de") stands for any of its regions.
+fn dictionary_names(languages: &[String]) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for language in languages {
+        let name = language.split(['.', '@']).next().unwrap_or("");
+        if name.is_empty() || name == "C" || name == "POSIX" {
+            continue;
+        }
+        if !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    if !names.iter().any(|n| n == "en_US") {
+        names.push("en_US".to_string());
+    }
+    names
+}
+
+/// The `<dir>/<name>` prefixes, in preference order, whose `.dic` and `.aff`
+/// both exist. A bare language name matches its regional dictionaries too
+/// ("pt" finds "pt_BR"), after an exact match.
+fn dictionary_prefixes(names: &[String], dirs: &[&str]) -> Vec<String> {
+    let complete = |prefix: &std::path::Path| {
+        prefix.with_extension("dic").is_file() && prefix.with_extension("aff").is_file()
+    };
+    let mut found: Vec<String> = Vec::new();
+    let push = |prefix: std::path::PathBuf, found: &mut Vec<String>| {
+        let prefix = prefix.to_string_lossy().into_owned();
+        if !found.contains(&prefix) {
+            found.push(prefix);
+        }
+    };
+    for name in names {
+        for dir in dirs {
+            let prefix = std::path::Path::new(dir).join(name);
+            if complete(&prefix) {
+                push(prefix, &mut found);
+            }
+        }
+        if name.contains('_') {
+            continue;
+        }
+        for dir in dirs {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            let mut regional: Vec<std::path::PathBuf> = entries
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "dic"))
+                .filter(|p| {
+                    p.file_stem()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|s| s.starts_with(&format!("{name}_")))
+                })
+                .map(|p| p.with_extension(""))
+                .filter(|p| complete(p))
+                .collect();
+            regional.sort();
+            for prefix in regional {
+                push(prefix, &mut found);
+            }
+        }
+    }
+    found
 }
 
 
@@ -343,22 +423,76 @@ pub fn make_spell_menu(word: &str, suggestions: &[String]) -> gio::Menu {
 }
 #[cfg(test)]
 mod tests {
-    use super::{generate_candidates, is_word_byte, levenshtein};
+    use super::{
+        dictionary_names, dictionary_prefixes, generate_candidates, is_word_char, levenshtein,
+    };
 
     #[test]
-    fn is_word_byte_accepts_letters_and_apostrophe() {
-        assert!(is_word_byte(b'a'));
-        assert!(is_word_byte(b'Z'));
-        assert!(is_word_byte(b'\''));
+    fn word_chars_are_letters_in_any_script_and_apostrophes() {
+        for c in ['a', 'Z', '\'', '\u{2019}', 'é', 'ï', 'ß', 'Ж', 'ü', '中'] {
+            assert!(is_word_char(c), "{c:?}");
+        }
+        for c in [' ', '0', '-', '.', ',', '"', '!'] {
+            assert!(!is_word_char(c), "{c:?}");
+        }
+    }
+
+    /// "café" and "naïve" are one word each, not "caf" and "na" + "ve".
+    #[test]
+    fn accented_words_are_not_split() {
+        let words: Vec<String> = "café naïve Straße"
+            .split(|c: char| !is_word_char(c))
+            .filter(|w| !w.is_empty())
+            .map(String::from)
+            .collect();
+        assert_eq!(words, ["café", "naïve", "Straße"]);
     }
 
     #[test]
-    fn is_word_byte_rejects_punctuation_digits_and_non_ascii() {
-        assert!(!is_word_byte(b' '));
-        assert!(!is_word_byte(b'0'));
-        assert!(!is_word_byte(b'-'));
-        assert!(!is_word_byte(b'.'));
-        assert!(!is_word_byte(0xE9)); // é is not ASCII
+    fn dictionary_names_follow_the_locale_then_fall_back_to_english() {
+        let langs = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            dictionary_names(&langs(&["fr_FR.UTF-8", "fr_FR", "fr", "C"])),
+            ["fr_FR", "fr", "en_US"]
+        );
+        assert_eq!(
+            dictionary_names(&langs(&["de_DE@euro", "de"])),
+            ["de_DE", "de", "en_US"]
+        );
+        assert_eq!(dictionary_names(&langs(&["C"])), ["en_US"]);
+        assert_eq!(
+            dictionary_names(&langs(&["en_US.UTF-8", "en_US", "en"])),
+            ["en_US", "en"]
+        );
+    }
+
+    #[test]
+    fn dictionaries_are_found_by_locale_and_by_language() {
+        let dir = std::env::temp_dir().join(format!("letters-spell-dicts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["fr_FR", "pt_BR", "en_US"] {
+            std::fs::write(dir.join(format!("{name}.dic")), "1\nx\n").unwrap();
+            std::fs::write(dir.join(format!("{name}.aff")), "SET UTF-8\n").unwrap();
+        }
+        // A .dic with no .aff is not a dictionary.
+        std::fs::write(dir.join("de_DE.dic"), "1\nx\n").unwrap();
+        let d = dir.to_str().unwrap();
+        let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let at = |n: &str| format!("{d}/{n}");
+        assert_eq!(
+            dictionary_prefixes(&names(&["fr_FR", "fr", "en_US"]), &[d]),
+            [at("fr_FR"), at("en_US")]
+        );
+        assert_eq!(
+            dictionary_prefixes(&names(&["pt", "en_US"]), &[d]),
+            [at("pt_BR"), at("en_US")]
+        );
+        assert_eq!(
+            dictionary_prefixes(&names(&["de_DE", "de", "en_US"]), &[d]),
+            [at("en_US")]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

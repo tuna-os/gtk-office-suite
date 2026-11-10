@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Letters
+- Spell check follows your language: it loads the hunspell dictionary for your locale (from LANGUAGE, LC_ALL, LC_MESSAGES or LANG) and falls back to US English only when none is installed. Words with accented or non-Latin letters, such as "café" and "naïve", are checked whole instead of being split at the accent, and a curly apostrophe counts as one.
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 - Save As Markdown now warns before it drops a document's tables and footnotes: Markdown here writes table cells as plain paragraphs and leaves footnote text out (#1981).
