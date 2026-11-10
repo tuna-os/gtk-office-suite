@@ -35,234 +35,287 @@ pub(in crate::ui::preferences) struct AppearancePage {
 
 impl AppearancePage {
     pub(in crate::ui::preferences) fn build(model: &Preferences, sender: &ViewSender) -> Self {
-        relm4::view! {
-            page = adw::PreferencesPage {
-                add = &adw::PreferencesGroup {
-                    // Rendered as Pango markup — a bare "&" breaks it.
-                    set_title: &i18n("Appearance"),
-
-                    #[name = "app_theme_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Style"),
-                        set_subtitle: &i18n("Messages have their own setting under Reading."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeAppTheme(row.selected()));
-                        },
-                    },
-
-                    #[name = "text_scale_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("Text size"),
-                        set_subtitle: &i18n("Adjusts the interface and message text size."),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeTextScale(row.selected()));
-                        },
-                    },
-
-                    // The theme gallery; its content is built
-                    // in init (a grid the view! macro can't
-                    // declare), like the app-icon strip below.
-                    #[name = "theme_row"]
-                    adw::PreferencesRow {
-                        set_title: &i18n("Theme"),
-                        set_activatable: false,
-                        set_focusable: false,
-                    },
-
-                    // The app-icon gallery; its content is built in init
-                    // (a grid of textures the view! macro can't declare).
-                    #[name = "app_icon_row"]
-                    adw::PreferencesRow {
-                        set_title: &i18n("App icon"),
-                        set_activatable: false,
-                        set_focusable: false,
-                    },
-
-                    #[name = "desktop_icons_row"]
-                    adw::SwitchRow {
-                        set_title: &i18n("Use your desktop environment's icon set"),
-                        connect_active_notify[sender] => move |row| {
-                            let _ = sender.output(PrefOutput::SetDesktopIcons(row.is_active()));
-                        },
-                    },
-
-                    #[name = "settings_open_row"]
-                    adw::ComboRow {
-                        set_title: &i18n("This window opens to"),
-                        connect_selected_notify[sender] => move |row| {
-                            sender.input(PrefInput::ChangeSettingsOpen(row.selected()));
-                        },
-                    },
-
-                },
-
-                // The reader toolbar's buttons: three drop zones
-                // (left group, right group, not shown) of
-                // draggable chips, filled in init from the saved
-                // layout. Every drop is applied and saved at once.
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Toolbar"),
-                    set_description: Some(
-                        &i18n("Drag buttons between the groups. The right group folds into ⋯ when the pane is narrow."),
-                    ),
-                    #[name = "toolbar_editor_box"]
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 12,
-
-                        gtk::Button {
-                            set_label: &i18n("Restore Defaults"),
-                            set_halign: gtk::Align::End,
-                            set_valign: gtk::Align::Center,
-                            connect_clicked => PrefInput::ToolbarRestore,
-                        },
-
-                        // Moved under the zones once they are built.
-                        #[name = "toolbar_fold_list"]
-                        gtk::ListBox {
-                            add_css_class: "boxed-list",
-                            set_selection_mode: gtk::SelectionMode::None,
-
-                            #[name = "toolbar_fold_row"]
-                            adw::SwitchRow {
-                                set_title: &i18n("Always fold the right group into ⋯"),
-                                connect_active_notify[sender] => move |row| {
-                                    let _ = sender.output(PrefOutput::SetToolbarFoldRight(row.is_active()));
-                                },
-                            },
-                        },
-                    },
-                },
-
-                // Focus Mode: the master switch and its parts.
-                // Every row applies at once, animated.
-                add = &adw::PreferencesGroup {
-                    set_title: &i18n("Focus Mode"),
-                    set_description: Some(
-                        &i18n("The parts switched on below hide while Focus Mode is on. Activated by Ctrl+Shift+F or the main menu."),
-                    ),
-
-                    #[name = "focus_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.enabled,
-                        set_title: &i18n("Focus Mode"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::Enabled, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_start_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.start_focused,
-                        set_title: &i18n("Start in Focus Mode"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::StartFocused, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_toolbar_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.reader_toolbar,
-                        set_title: &i18n("Fold the reading pane's toolbar"),
-                        set_subtitle: &i18n("Every button goes into its ⋯ menu."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::ReaderToolbar, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_list_header_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.list_header,
-                        set_title: &i18n("Fold the message list's header"),
-                        set_subtitle: &i18n("Everything but the sidebar toggle goes into ⋯."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::ListHeader, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_accounts_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.hide_accounts,
-                        set_title: &i18n("Hide the accounts in the sidebar"),
-                        set_subtitle: &i18n("Only the unified section stays."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::HideAccounts, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_unified_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.fold_unified,
-                        set_title: &i18n("Fold up the unified rows"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::FoldUnified, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_avatars_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.hide_avatars,
-                        set_title: &i18n("Hide sender avatars"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::HideAvatars, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_hide_preview_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.hide_preview,
-                        set_title: &i18n("Hide the preview text"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::HidePreview, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_preview_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.one_preview_line,
-                        // Nothing left to cap once the preview
-                        // text is hidden altogether.
-                        // Kept current by update_view.
-                        set_sensitive: !model.focus.hide_preview,
-                        set_title: &i18n("One line of preview text"),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::OnePreviewLine, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_subject_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.hide_subject,
-                        set_title: &i18n("Hide the subject"),
-                        set_subtitle: &i18n("Tag chips hide with it."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::HideSubject, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_rail_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.rail_sidebar,
-                        set_title: &i18n("Fold the sidebar to the icon rail"),
-                        set_subtitle: &i18n("Hovering it slides the full sidebar out."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::RailSidebar, row.is_active()));
-                        },
-                    },
-                    #[name = "focus_reader_row"]
-                    adw::SwitchRow {
-                        // Kept current by update_view.
-                        set_active: model.focus.reader_view,
-                        set_title: &i18n("Reader View"),
-                        set_subtitle: &i18n("Open messages in Reader View."),
-                        connect_active_notify[sender] => move |row| {
-                            sender.input(PrefInput::ToggleFocus(crate::config::FocusPart::ReaderView, row.is_active()));
-                        },
-                    },
-                },
-            }
+        let page = adw::PreferencesPage::default();
+        let preferences_group_1 = adw::PreferencesGroup::default();
+        // Rendered as Pango markup — a bare "&" breaks it.
+        preferences_group_1.set_title(&i18n("Appearance"));
+        let app_theme_row = adw::ComboRow::default();
+        app_theme_row.set_title(&i18n("Style"));
+        app_theme_row.set_subtitle(&i18n("Messages have their own setting under Reading."));
+        {
+            let sender = sender.clone();
+            app_theme_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeAppTheme(row.selected()));
+            });
         }
+        preferences_group_1.add(&app_theme_row);
+        let text_scale_row = adw::ComboRow::default();
+        text_scale_row.set_title(&i18n("Text size"));
+        text_scale_row.set_subtitle(&i18n("Adjusts the interface and message text size."));
+        {
+            let sender = sender.clone();
+            text_scale_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeTextScale(row.selected()));
+            });
+        }
+        preferences_group_1.add(&text_scale_row);
+        // The theme gallery; its content is built
+        // in init (a grid the view! macro can't
+        // declare), like the app-icon strip below.
+        let theme_row = adw::PreferencesRow::default();
+        theme_row.set_title(&i18n("Theme"));
+        theme_row.set_activatable(false);
+        theme_row.set_focusable(false);
+        preferences_group_1.add(&theme_row);
+        // The app-icon gallery; its content is built in init
+        // (a grid of textures the view! macro can't declare).
+        let app_icon_row = adw::PreferencesRow::default();
+        app_icon_row.set_title(&i18n("App icon"));
+        app_icon_row.set_activatable(false);
+        app_icon_row.set_focusable(false);
+        preferences_group_1.add(&app_icon_row);
+        let desktop_icons_row = adw::SwitchRow::default();
+        desktop_icons_row.set_title(&i18n("Use your desktop environment's icon set"));
+        {
+            let sender = sender.clone();
+            desktop_icons_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetDesktopIcons(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&desktop_icons_row);
+        let settings_open_row = adw::ComboRow::default();
+        settings_open_row.set_title(&i18n("This window opens to"));
+        {
+            let sender = sender.clone();
+            settings_open_row.connect_selected_notify(move |row| {
+                sender.input(PrefInput::ChangeSettingsOpen(row.selected()));
+            });
+        }
+        preferences_group_1.add(&settings_open_row);
+        page.add(&preferences_group_1);
+        // The reader toolbar's buttons: three drop zones
+        // (left group, right group, not shown) of
+        // draggable chips, filled in init from the saved
+        // layout. Every drop is applied and saved at once.
+        let preferences_group_2 = adw::PreferencesGroup::default();
+        preferences_group_2.set_title(&i18n("Toolbar"));
+        preferences_group_2.set_description(Some(
+                        &i18n("Drag buttons between the groups. The right group folds into ⋯ when the pane is narrow."),
+                    ));
+        let toolbar_editor_box = gtk::Box::default();
+        toolbar_editor_box.set_orientation(gtk::Orientation::Vertical);
+        toolbar_editor_box.set_spacing(12);
+        let button_3 = gtk::Button::default();
+        button_3.set_label(&i18n("Restore Defaults"));
+        button_3.set_halign(gtk::Align::End);
+        button_3.set_valign(gtk::Align::Center);
+        {
+            let sender = sender.clone();
+            button_3.connect_clicked(move |_| sender.input(PrefInput::ToolbarRestore));
+        }
+        toolbar_editor_box.append(&button_3);
+        // Moved under the zones once they are built.
+        let toolbar_fold_list = gtk::ListBox::default();
+        toolbar_fold_list.add_css_class("boxed-list");
+        toolbar_fold_list.set_selection_mode(gtk::SelectionMode::None);
+        let toolbar_fold_row = adw::SwitchRow::default();
+        toolbar_fold_row.set_title(&i18n("Always fold the right group into ⋯"));
+        {
+            let sender = sender.clone();
+            toolbar_fold_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetToolbarFoldRight(row.is_active()));
+            });
+        }
+        toolbar_fold_list.append(&toolbar_fold_row);
+        toolbar_editor_box.append(&toolbar_fold_list);
+        preferences_group_2.add(&toolbar_editor_box);
+        page.add(&preferences_group_2);
+        // Focus Mode: the master switch and its parts.
+        // Every row applies at once, animated.
+        let preferences_group_4 = adw::PreferencesGroup::default();
+        preferences_group_4.set_title(&i18n("Focus Mode"));
+        preferences_group_4.set_description(Some(
+                        &i18n("The parts switched on below hide while Focus Mode is on. Activated by Ctrl+Shift+F or the main menu."),
+                    ));
+        let focus_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_row.set_active(model.focus.enabled);
+        focus_row.set_title(&i18n("Focus Mode"));
+        {
+            let sender = sender.clone();
+            focus_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::Enabled,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_row);
+        let focus_start_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_start_row.set_active(model.focus.start_focused);
+        focus_start_row.set_title(&i18n("Start in Focus Mode"));
+        {
+            let sender = sender.clone();
+            focus_start_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::StartFocused,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_start_row);
+        let focus_toolbar_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_toolbar_row.set_active(model.focus.reader_toolbar);
+        focus_toolbar_row.set_title(&i18n("Fold the reading pane's toolbar"));
+        focus_toolbar_row.set_subtitle(&i18n("Every button goes into its ⋯ menu."));
+        {
+            let sender = sender.clone();
+            focus_toolbar_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::ReaderToolbar,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_toolbar_row);
+        let focus_list_header_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_list_header_row.set_active(model.focus.list_header);
+        focus_list_header_row.set_title(&i18n("Fold the message list's header"));
+        focus_list_header_row.set_subtitle(&i18n("Everything but the sidebar toggle goes into ⋯."));
+        {
+            let sender = sender.clone();
+            focus_list_header_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::ListHeader,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_list_header_row);
+        let focus_accounts_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_accounts_row.set_active(model.focus.hide_accounts);
+        focus_accounts_row.set_title(&i18n("Hide the accounts in the sidebar"));
+        focus_accounts_row.set_subtitle(&i18n("Only the unified section stays."));
+        {
+            let sender = sender.clone();
+            focus_accounts_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::HideAccounts,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_accounts_row);
+        let focus_unified_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_unified_row.set_active(model.focus.fold_unified);
+        focus_unified_row.set_title(&i18n("Fold up the unified rows"));
+        {
+            let sender = sender.clone();
+            focus_unified_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::FoldUnified,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_unified_row);
+        let focus_avatars_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_avatars_row.set_active(model.focus.hide_avatars);
+        focus_avatars_row.set_title(&i18n("Hide sender avatars"));
+        {
+            let sender = sender.clone();
+            focus_avatars_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::HideAvatars,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_avatars_row);
+        let focus_hide_preview_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_hide_preview_row.set_active(model.focus.hide_preview);
+        focus_hide_preview_row.set_title(&i18n("Hide the preview text"));
+        {
+            let sender = sender.clone();
+            focus_hide_preview_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::HidePreview,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_hide_preview_row);
+        let focus_preview_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_preview_row.set_active(model.focus.one_preview_line);
+        // Nothing left to cap once the preview
+        // text is hidden altogether.
+        // Kept current by update_view.
+        focus_preview_row.set_sensitive(!model.focus.hide_preview);
+        focus_preview_row.set_title(&i18n("One line of preview text"));
+        {
+            let sender = sender.clone();
+            focus_preview_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::OnePreviewLine,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_preview_row);
+        let focus_subject_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_subject_row.set_active(model.focus.hide_subject);
+        focus_subject_row.set_title(&i18n("Hide the subject"));
+        focus_subject_row.set_subtitle(&i18n("Tag chips hide with it."));
+        {
+            let sender = sender.clone();
+            focus_subject_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::HideSubject,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_subject_row);
+        let focus_rail_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_rail_row.set_active(model.focus.rail_sidebar);
+        focus_rail_row.set_title(&i18n("Fold the sidebar to the icon rail"));
+        focus_rail_row.set_subtitle(&i18n("Hovering it slides the full sidebar out."));
+        {
+            let sender = sender.clone();
+            focus_rail_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::RailSidebar,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_rail_row);
+        let focus_reader_row = adw::SwitchRow::default();
+        // Kept current by update_view.
+        focus_reader_row.set_active(model.focus.reader_view);
+        focus_reader_row.set_title(&i18n("Reader View"));
+        focus_reader_row.set_subtitle(&i18n("Open messages in Reader View."));
+        {
+            let sender = sender.clone();
+            focus_reader_row.connect_active_notify(move |row| {
+                sender.input(PrefInput::ToggleFocus(
+                    crate::config::FocusPart::ReaderView,
+                    row.is_active(),
+                ));
+            });
+        }
+        preferences_group_4.add(&focus_reader_row);
+        page.add(&preferences_group_4);
         Self {
             page,
             app_theme_row,
