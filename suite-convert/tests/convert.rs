@@ -134,3 +134,16 @@ fn a_spreadsheet_converts_to_escaped_html() {
         "{text}"
     );
 }
+
+#[test]
+fn a_text_document_converts_to_an_approximate_pdf() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = write(dir.path(), "a.md", "# Title\n\nSome text with $5 and #1.\n");
+    let pdf = dir.path().join("a.pdf").to_string_lossy().into_owned();
+    let o = run(&[&md, &pdf, "--report-loss"]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
+    // The report says it is approximate, so a zero loss budget refuses it.
+    assert!(String::from_utf8_lossy(&o.stderr).contains("typst-approximate"));
+    assert_eq!(code(&run(&[&md, &pdf, "--fail-on-loss", "none"])), 4);
+}

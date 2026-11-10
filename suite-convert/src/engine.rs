@@ -145,7 +145,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         Some(Category::Text)
             if matches!(
                 plan.to,
-                Format::Md | Format::Odt | Format::Docx | Format::Html
+                Format::Md | Format::Odt | Format::Docx | Format::Html | Format::Pdf
             ) =>
         {
             Engine::Text
@@ -180,7 +180,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         .map_err(|e| Failure::new(Exit::Convert, format!("temporary directory: {e}")))?;
     let staged = scratch.path().join(format!("out.{}", plan.to.name()));
     let found = match engine {
-        Engine::Text => text(&input.path, &staged)?,
+        Engine::Text => text(&input.path, &staged, plan.to)?,
         Engine::Sheet => sheet(&input.path, &staged, plan.to)?,
         Engine::Deck => deck(&input.path, &staged)?,
     };
@@ -213,8 +213,24 @@ fn deck(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
     Ok(losses(&report))
 }
 
-fn text(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
+fn text(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> {
     let doc = letters_core::save::read(input).map_err(|e| Failure::new(Exit::Parse, e))?;
+    if to == Format::Pdf {
+        // The in-process Typst export: approximate by design (ADR 0010), so
+        // the report says so rather than implying print fidelity.
+        let source = letters_core::typst_export::typst_source(&doc);
+        suite_export::compile_pdf_to_file(&source, &staged.to_string_lossy())
+            .map_err(|e| Failure::new(Exit::Convert, e))?;
+        return Ok(vec![Loss {
+            id: "typst-approximate".into(),
+            label: "Approximate PDF".into(),
+            location: "whole document".into(),
+            level: LossLevel::Minor,
+            detail:
+                "PDF is the Typst re-typesetting of the document's Markdown, not the print layout."
+                    .into(),
+        }]);
+    }
     let report =
         letters_core::save::write(&doc, staged).map_err(|e| Failure::new(Exit::Convert, e))?;
     Ok(losses(&report))

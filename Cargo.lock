@@ -2667,6 +2667,7 @@ dependencies = [
  "serde_json",
  "suite-collab",
  "suite-common-core",
+ "suite-export",
  "tempfile",
  "zip",
 ]
@@ -4854,6 +4855,7 @@ dependencies = [
  "letters-core",
  "serde_json",
  "suite-common-core",
+ "suite-export",
  "tables-core",
  "tempfile",
 ]

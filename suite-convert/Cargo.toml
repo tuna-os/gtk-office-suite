@@ -11,6 +11,7 @@ repository = "https://github.com/tuna-os/gtk-office-suite"
 letters-core = { path = "../letters-core", version = "0.1.0" }
 decks-core = { path = "../decks-core", version = "0.1.0" }
 tables-core = { path = "../tables-core", version = "0.1.0" }
+suite-export = { path = "../suite-export", version = "0.1.0" }
 suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
 serde_json = "1"
 tempfile = "3"
