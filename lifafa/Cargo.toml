@@ -114,7 +114,7 @@ cfb = "0.16.0"
 # Whether an X server can attach this process's shared memory, before GTK
 # picks a renderer (#547): libxcb is opened at run time, and the segment made
 # with shmget. Both crates are already in the graph.
-libloading = "0.8"
+libloading = "0.9"
 libc = "0.2"
 # Grammar checking (#452): unpacking Harper, LanguageTool and the Java
 # runtime LanguageTool runs on, which a user can download from Settings.
