@@ -6,6 +6,7 @@
 - Live collaboration over Durable Streams, behind the off-by-default `collab` feature (RFC-0005 P5): Share This Document… and Join a Shared Document… in the main menu, a status button, and a banner with Keep Mine, Keep Theirs and Open Both when two versions exist. Tables, footnotes, headers and footers, sections and comments are refused with a message, not shared in part. A peer's edit moves your caret over it instead of to the end of the change, and Undo takes back only your own steps.
 - Screen readers now get bold, italic, underline and strikethrough from the page view as text attributes.
 - Underlines (on underlined text, links and tracked insertions) are drawn where LibreOffice Writer draws them: lower and thicker than before, so a bold underline no longer runs into the letters.
+- Typing quickly in a long document no longer queues a whole-document spell check and word count for every keystroke: each runs once when typing pauses (#1990).
 
 ### Tables
 - Insert Pivot Table… (cell menu and command palette) makes a pivot table from the selected table: rows by one field, optionally columns by another, and a value summarized by sum, count, average, min or max. It is written two columns to the right as one undo step. Its results save as values; the pivot itself is not kept on save, and the save warning says so (#1657).
