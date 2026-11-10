@@ -1,0 +1,13 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/polyval-bea17913951d9841.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/hazmat.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mulx.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/../README.md /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics/x86.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mul64.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libpolyval-bea17913951d9841.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/hazmat.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mulx.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/../README.md /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics/x86.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mul64.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/hazmat.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mulx.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/../README.md:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/backend/intrinsics/x86.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/polyval-0.7.3/src/field_element/mul64.rs:
