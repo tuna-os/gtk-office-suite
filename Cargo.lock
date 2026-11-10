@@ -4847,6 +4847,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "suite-convert"
+version = "0.1.0"
+
+[[package]]
 name = "suite-export"
 version = "0.1.0"
 dependencies = [

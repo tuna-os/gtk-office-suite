@@ -1,0 +1,12 @@
+[package]
+name = "suite-convert"
+version = "0.1.0"
+edition = "2021"
+description = "Headless document conversion for the suite (ADR 0015): the command line, format routing and exit codes. No GTK."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+
+# Phase 1 of HEADLESS-CONVERSION-SPEC: the argument surface and routing, with
+# nothing behind them yet. It depends on nothing; the engines arrive with the
+# core crates in phase 2, and tests/no_gtk.rs keeps GTK out of the tree.
+[dependencies]
