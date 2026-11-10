@@ -23,7 +23,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt", "net", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
 
 # p2panda 0.7.1 (crates.io, 2026-08-21): the pieces the binding really uses.
-p2panda-core = "=0.7.1"
+p2panda-core = "=0.8.0"
 p2panda-store = { version = "=0.7.1", default-features = false, features = ["sqlite", "spaces"] }
 p2panda-sync = "=0.7.1"
 p2panda-auth = { version = "=0.7.1", default-features = false, features = ["serde"] }
