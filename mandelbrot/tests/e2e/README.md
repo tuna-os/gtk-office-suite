@@ -26,6 +26,7 @@ sessions (MSC4143 memberships, MSC4140 delayed leave, MSC4195 SFU auth,
 | `run-restricted-sfu.sh` | TEST 4: EC's `restricted-sfu.spec.ts` — JWT-vs-membership ordering, SFU auth unavailable |
 | `run-huddle.sh`         | TEST 5: EC's `widget/huddle-call.test.ts` — a five-participant call  |
 | `run-federation.sh`     | TEST 6: EC's `widget/federation-oldest-membership-bug.spec.ts` and `widget/federated-call.test.ts`, across two homeservers |
+| `run-gui-call.sh`       | Real Flatpak app in a call, driven through AT-SPI and checked by a native bot |
 
 The configs are adapted from element-call's `docker-compose-dev.yml` +
 `backend/` dev fixtures, minimized to a single site.
@@ -59,11 +60,18 @@ use a distrobox).
 # Optionally prebuild the client:
 (cd ../../matrixrtc && cargo build --features livekit --example join_call)
 
-JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-interop.sh
+JOIN_CALL_BIN=../../target/debug/examples/join_call ./run-interop.sh
 ```
 
 `KEEP_STACK=1` keeps the containers running afterwards for debugging.
 Client and state logs land in `logs/<timestamp>/`.
+
+The GUI call test takes a built Flatpak bundle and needs `mutter`, AT-SPI,
+GNOME Keyring with the Secret portal, and PulseAudio on the host:
+
+```sh
+JOIN_CALL_BIN=... ./run-gui-call.sh /path/to/Mandelbrot.flatpak
+```
 
 ### What TEST 1 asserts
 
@@ -92,20 +100,30 @@ Client and state logs land in `logs/<timestamp>/`.
 
 ## CI
 
-`.github/workflows/matrixrtc-e2e.yml` runs this suite on **manual dispatch
-and nightly**, never on the PR merge gate:
+`.github/workflows/matrixrtc-e2e.yml` runs this suite nightly, on manual
+dispatch, and on pull requests that touch what a call depends on (its
+`paths:` filter: `Cargo.toml`, `Cargo.lock`, `matrixrtc/**`,
+`src/session/call/**`, `src/session_view/call/**`, `tests/e2e/**`, the
+Flatpak manifest, the workflow). With a warm cargo cache the whole job takes
+about ten minutes. Every TEST step runs even when an earlier one failed, and
+each script saves the stack's container logs (`containers.log`) into its
+evidence bundle before tearing the stack down.
 
 * it pulls ~1.5 GB of container images and builds libwebrtc (~10 min cold),
 * it needs UDP 50100-50200 (and 50300-50400 for the federated stack) plus
   host networking for LiveKit,
-* media timing makes it inherently flakier than the unit suite
-  (`matrixrtc/tests/`), which stays the merge gate as the
-  `matrixrtc-conformance` job in `ci.yml`.
+* being path-filtered, it cannot be a required check; Renovate merges the
+  updates it covers only once it is green (see `renovate.json`).
 
 A GitHub-hosted `ubuntu-latest` runner is sufficient: the job owns the VM's
 network namespace, so host networking and arbitrary UDP ranges work, and
 Docker is preinstalled so `docker compose` satisfies the compose-provider
 probe. The evidence bundles in `logs/` are uploaded as an artifact.
+The main CI workflow also runs `run-gui-call.sh` against the same local stack
+after building the app bundle. It registers isolated test accounts and checks
+that the app joins, publishes a media track, and leaves through the UI. This
+does not assert Olm key exchange: the native-client TEST 1 is the harness
+scenario that proves key exchange and decrypted frames.
 
 The one part that stays manual is `run-interop-ec.sh` (Element Call in a
 headless Chromium): a further ~1 GB image plus Playwright browsers, and its
@@ -114,7 +132,7 @@ value is a conformance report rather than a gate.
 ### Running one script
 
 ```sh
-JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call ./run-resilience.sh
+JOIN_CALL_BIN=../../target/debug/examples/join_call ./run-resilience.sh
 JOIN_CALL_BIN=... ./run-restricted-sfu.sh
 JOIN_CALL_BIN=... ./run-huddle.sh 5
 JOIN_CALL_BIN=... ./run-federation.sh remote-first   # needs compose-federated.yml

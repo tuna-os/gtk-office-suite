@@ -17,12 +17,9 @@
 #      JWT failure must surface as an error instead of a half-joined call,
 #      and a retryable one (429) must be retried.
 #
-# Property 1 is the interesting one for Mandelbrot, because our join path is
-# ordered the other way round (see the report in CONFORMANCE.md): the
-# membership manager publishes the state event, and only then does the media
-# task resolve the focus and fetch the JWT. This script measures it rather
-# than asserting a behaviour we do not have, so the recorded RESULT lines are
-# the evidence.
+# Both Mandelbrot's media task (src/session/call/media.rs) and the join_call
+# example fetch the JWT and connect to the SFU before calling
+# `join_rtc_session`, so property 1 is asserted, not merely measured.
 #
 # Usage: JOIN_CALL_BIN=... ./run-restricted-sfu.sh
 # Env:   KEEP_STACK=1  keep the containers afterwards.
@@ -61,51 +58,56 @@ USER_DEV=$(jq -r .device_id <<<"$USER_JSON")
 # ===========================================================================
 # SCENARIO 1 — ordering: JWT fetch vs. membership state event
 # ===========================================================================
-# We cannot instrument the client's internals from here, so we time both
-# observable events:
-#   - the SFU token arriving, which the client logs as "got SFU config"
-#     immediately after the MSC4195 `/sfu/get` response,
-#   - the `m.call.member` state event appearing in room state.
-# Both are polled at 500 ms, which is far finer than the seconds-scale gap
-# the ordering question is about. The polling must stay cheap: a
-# `docker logs`/`podman logs` call per iteration reads the whole container
-# log and will melt the host, so the client's own log file is used instead.
+# We cannot instrument the client's internals from here, so we compare two
+# timestamps taken on the same host clock (the containers share the kernel's):
+#   - when the client's "got SFU config" line — printed right after the
+#     MSC4195 `/sfu/get` response — reached us, stamped as it is read. Rust
+#     line-buffers stdout and the stamping only ever runs late, so this is an
+#     upper bound on when the JWT arrived;
+#   - the `origin_server_ts` synapse gave the `m.call.member` state event,
+#     i.e. the moment the membership became visible to anyone.
+# Polling both and comparing the poll times instead cannot answer the
+# question: the JWT fetch, the SFU connect and the state event all land
+# within a few hundred milliseconds, so they routinely fall into one 500 ms
+# poll tick, which reads as a 0.00 s tie and was reported as a FAIL.
 log "SCENARIO 1: is the JWT fetched before the membership is advertised?"
 ROOM=$(create_room "$USER_TOKEN")
 [ -n "$ROOM" ] && [ "$ROOM" != null ] || die "creating the room"
 
+# Prefix every line with the wall-clock time it was read at.
+stamp_lines() {
+    local line
+    while IFS= read -r line; do printf '%s %s\n' "${EPOCHREALTIME/,/.}" "$line"; done
+}
+
 CLIENT_LOG=$LOG_DIR/ordering.log
 : >"$CLIENT_LOG"
 "$JOIN_CALL_BIN" "$HS" "$USER_ID" "$USER_DEV" "$ROOM" \
-    --focus "$JWT" <<<"$USER_TOKEN" >"$CLIENT_LOG" 2>&1 &
+    --focus "$JWT" <<<"$USER_TOKEN" > >(stamp_lines >"$CLIENT_LOG") 2>&1 &
 CLIENT_PID=$!
 
-MEMBER_AT="" JWT_AT=""
-for _ in $(seq 1 240); do
-    NOW=$(date +%s.%N)
-    if [ -z "$MEMBER_AT" ] &&
-        [ "$(active_memberships "$USER_TOKEN" "$ROOM")" = 1 ]; then
-        MEMBER_AT=$NOW
-    fi
-    if [ -z "$JWT_AT" ] && grep -q "got SFU config" "$CLIENT_LOG"; then
-        JWT_AT=$NOW
-    fi
-    [ -n "$MEMBER_AT" ] && [ -n "$JWT_AT" ] && break
+MEMBER_TS=""
+for _ in $(seq 1 120); do
+    MEMBER_TS=$(member_events "$USER_TOKEN" "$ROOM" |
+        jq -r '[.[] | select(.content != {}) | .origin_server_ts] | min // empty')
+    [ -n "$MEMBER_TS" ] && break
     kill -0 "$CLIENT_PID" 2>/dev/null || break
     sleep 0.5
 done
+JWT_AT=$(awk '/got SFU config/ { print $1; exit }' "$CLIENT_LOG")
 
-if [ -z "$MEMBER_AT" ] || [ -z "$JWT_AT" ]; then
-    result FAIL ordering-observable "member_at=${MEMBER_AT:-never} jwt_at=${JWT_AT:-never}"
+if [ -z "$MEMBER_TS" ] || [ -z "$JWT_AT" ]; then
+    result FAIL ordering-observable "member_ts=${MEMBER_TS:-never} jwt_at=${JWT_AT:-never}"
 else
-    DELTA=$(awk -v a="$JWT_AT" -v b="$MEMBER_AT" 'BEGIN { printf "%.2f", a - b }')
+    MEMBER_AT=$(awk -v ms="$MEMBER_TS" 'BEGIN { printf "%.3f", ms / 1000 }')
+    DELTA=$(awk -v a="$JWT_AT" -v b="$MEMBER_AT" 'BEGIN { printf "%.3f", b - a }')
     if awk -v a="$JWT_AT" -v b="$MEMBER_AT" 'BEGIN { exit !(a < b) }'; then
         result PASS jwt-before-membership \
-            "the SFU JWT was fetched ${DELTA}s before the membership event (matches Element Call)"
+            "the SFU JWT was in hand ${DELTA}s before the membership event (matches Element Call)"
     else
         result FAIL jwt-before-membership \
-            "the membership event was published ${DELTA}s BEFORE the SFU JWT was fetched \
-(Element Call gates the opposite order in restricted-sfu.spec.ts)"
+            "the membership event was published $(awk -v d="$DELTA" 'BEGIN { printf "%.3f", -d }')s \
+BEFORE the SFU JWT was fetched (Element Call gates the opposite order in restricted-sfu.spec.ts)"
     fi
 fi
 

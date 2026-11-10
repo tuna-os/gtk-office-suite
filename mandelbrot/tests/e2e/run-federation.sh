@@ -51,6 +51,7 @@ cleanup() {
     for pid in "${PIDS[@]:-}"; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null
     done
+    save_container_logs -f compose.yml -f compose-federated.yml
     if [ "${KEEP_STACK:-0}" != 1 ]; then
         $COMPOSE -f compose.yml -f compose-federated.yml down -v >/dev/null 2>&1
     else

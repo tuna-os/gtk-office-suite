@@ -93,7 +93,7 @@ detect_compose
 if [ -z "${JOIN_CALL_BIN:-}" ]; then
     log "building join_call example (this may take a while)"
     (cd ../../matrixrtc && cargo build --features livekit --example join_call)
-    JOIN_CALL_BIN=../../matrixrtc/target/debug/examples/join_call
+    JOIN_CALL_BIN=../../target/debug/examples/join_call
 fi
 [ -x "$JOIN_CALL_BIN" ] || fail "join_call binary not found at $JOIN_CALL_BIN"
 

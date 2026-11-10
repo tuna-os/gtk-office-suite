@@ -7,8 +7,11 @@ one citizen of the desktop, in the order to build them.
 
 ## Rules for every feature
 
-- **Process boundaries only.** Lifafa is AGPL and the office apps are GPL, so
-  apps talk through portals, D-Bus and `GApplication` actions, never by linking.
+- **Process boundaries.** Apps talk through portals, D-Bus and `GApplication`
+  actions, not by linking each other. That is a design choice (independent
+  updates, a failure in one app does not take down another, a smaller attack
+  surface), not a licence requirement: AGPLv3 section 13 and GPLv3 section 13
+  allow combining the two licences in one work.
 - **Portals first.** Anything that crosses the Flatpak sandbox uses an XDG
   portal, so it works for Flatpak and for a native install, and needs no new
   `finish-args`. A feature that needs a new permission says so and why.
@@ -99,8 +102,9 @@ the office apps and chat, a shared contact picker in the office apps.
 ## Open decisions
 
 - **Where do shared services run?** A single user-level D-Bus service the apps
-  call, or a library each app links (not possible across the AGPL boundary)?
-  A service means a new process to ship, update and keep private.
+  call, or a library each app links? A library is licence-compatible (AGPL and
+  GPL may be combined) but couples release cycles and toolkit versions. A
+  service means a new process to ship, update and keep private.
 - **Matrix sign-in**: the OIDC flow Mandelbrot already has, shared with
   `collab/`, versus a Matrix entry in GNOME Online Accounts (none exists today).
 - **Search index ownership**: each app indexes its own data and answers
