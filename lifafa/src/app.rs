@@ -881,6 +881,7 @@ fn build_widgets(
         tb_spam,
         spam_btn,
         tb_read,
+        read_btn,
         tb_tags,
         tb_spinner,
         reader_content_box,
