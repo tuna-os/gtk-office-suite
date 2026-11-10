@@ -130,544 +130,635 @@ pub(crate) struct AttachmentsGallery {
     deleting: Vec<FileKey>,
 }
 
-#[relm4::component(pub(crate))]
+/// The gallery's widgets: the ones other code reaches by field, and the ones
+/// that follow the model, which `apply` sets from it at build and after every
+/// message. This is what `#[relm4::component]`'s `view!` block and its
+/// `#[watch]` attributes used to generate.
+pub(crate) struct AttachmentsGalleryWidgets {
+    toolbar: gtk::Box,
+    search_entry: gtk::SearchEntry,
+    stack: gtk::Stack,
+    name_header: gtk::Label,
+    sender_header: gtk::Label,
+    type_header: gtk::Label,
+    date_header: gtk::Label,
+    size_header: gtk::Label,
+    footer: gtk::ActionBar,
+    grid_toggle: gtk::ToggleButton,
+    grid_handler: glib::SignalHandlerId,
+    table_toggle: gtk::ToggleButton,
+    table_handler: glib::SignalHandlerId,
+    account_dropdown: gtk::DropDown,
+    folders_button: gtk::MenuButton,
+    folders_box: gtk::Box,
+    archive_row: adw::SwitchRow,
+    archive_handler: glib::SignalHandlerId,
+    other_row: adw::SwitchRow,
+    other_handler: glib::SignalHandlerId,
+    sort_dropdown: gtk::DropDown,
+    count_label: gtk::Label,
+    status_box: gtk::Box,
+    status_spinner: gtk::Spinner,
+    status_label: gtk::Label,
+    scale: gtk::Scale,
+    lightbox: gtk::Box,
+    lightbox_title: gtk::Label,
+    prev_button: gtk::Button,
+    next_button: gtk::Button,
+    preview_stack: gtk::Stack,
+    preview_picture: gtk::Picture,
+    file_icon: gtk::Image,
+    file_name: gtk::Label,
+    no_preview: gtk::Label,
+    caption_label: gtk::Label,
+    open_button: gtk::Button,
+}
+
+impl AttachmentsGalleryWidgets {
+    /// Everything that was `#[watch]`ed: set from the model.
+    fn apply(&self, model: &AttachmentsGallery) {
+        let show_chrome = model.show_chrome();
+        self.toolbar.set_visible(show_chrome);
+        self.stack.set_visible_child_name(model.page());
+        self.name_header.set_label(&column_header(
+            &i18n("Name"),
+            model.sort,
+            GallerySort::Name,
+            GallerySort::NameDesc,
+        ));
+        self.sender_header.set_label(&column_header(
+            &i18n("Sender"),
+            model.sort,
+            GallerySort::Sender,
+            GallerySort::SenderDesc,
+        ));
+        self.type_header.set_label(&column_header(
+            &i18n("Type"),
+            model.sort,
+            GallerySort::Type,
+            GallerySort::TypeDesc,
+        ));
+        self.date_header.set_label(&column_header(
+            &i18n("Date"),
+            model.sort,
+            GallerySort::Oldest,
+            GallerySort::Newest,
+        ));
+        self.size_header.set_label(&column_header(
+            &i18n("Size"),
+            model.sort,
+            GallerySort::Smallest,
+            GallerySort::Largest,
+        ));
+        self.footer.set_revealed(show_chrome);
+
+        self.grid_toggle.block_signal(&self.grid_handler);
+        self.grid_toggle.set_active(!model.view_table);
+        self.grid_toggle.unblock_signal(&self.grid_handler);
+        self.table_toggle.block_signal(&self.table_handler);
+        self.table_toggle.set_active(model.view_table);
+        self.table_toggle.unblock_signal(&self.table_handler);
+
+        // Pointless with one account, and it would be the only control there
+        // that could never change anything.
+        self.account_dropdown.set_visible(model.accounts.len() > 1);
+        self.archive_row.block_signal(&self.archive_handler);
+        self.archive_row.set_active(model.include_archive);
+        self.archive_row.unblock_signal(&self.archive_handler);
+        self.other_row.block_signal(&self.other_handler);
+        self.other_row.set_active(model.include_other);
+        self.other_row.unblock_signal(&self.other_handler);
+
+        self.count_label
+            .set_label(&count_text(model.all_items.len(), model.total as usize));
+        let busy = model.loading_more || model.scan_remaining > 0;
+        self.status_box.set_visible(busy);
+        self.status_spinner.set_spinning(busy);
+        self.status_label
+            .set_label(&scan_text(model.loading_more, model.scan_remaining));
+        self.scale.set_visible(!model.view_table);
+
+        // The lightbox.
+        let current = model.current();
+        self.lightbox.set_visible(model.preview.is_some());
+        let name = current.map(|i| i.name.clone()).unwrap_or_default();
+        self.lightbox_title.set_label(&name);
+        let several = model.all_items.len() > 1;
+        self.prev_button.set_sensitive(several);
+        self.next_button.set_sensitive(several);
+        self.preview_stack
+            .set_visible_child_name(if model.preview_texture.is_some() {
+                "image"
+            } else if !model.preview_failed
+                && current.is_some_and(|i| is_pdf_name(&i.name) && i.data.is_some())
+            {
+                // A PDF whose full-size render is still on its way.
+                "rendering"
+            } else {
+                "file"
+            });
+        self.preview_picture
+            .set_paintable(model.preview_texture.as_ref());
+        self.file_icon
+            .set_icon_name(current.map(|i| icon_for(&i.name)));
+        self.file_icon.set_css_classes(&[
+            "gallery-file-icon",
+            current
+                .map(|i| icon_color_class(&i.name))
+                .unwrap_or("ftype-generic"),
+        ]);
+        self.file_name.set_label(&name);
+        self.no_preview.set_visible(model.preview_failed);
+        self.caption_label
+            .set_label(&current.map(caption).unwrap_or_default());
+        self.open_button
+            .set_sensitive(current.is_some_and(|i| i.data.is_some()));
+    }
+}
+
+/// A scroller over `child` that asks for the next page near its end.
+fn paging_scroller(
+    sender: &ComponentSender<AttachmentsGallery>,
+    child: &impl IsA<gtk::Widget>,
+) -> gtk::ScrolledWindow {
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_vexpand(true);
+    scroller.set_child(Some(child));
+    let tx = sender.input_sender().clone();
+    scroller.connect_edge_reached(move |_, pos| {
+        if pos == gtk::PositionType::Bottom {
+            tx.emit(GalleryInput::LoadMore);
+        }
+    });
+    let tx = sender.input_sender().clone();
+    scroller.vadjustment().connect_value_changed(move |a| {
+        if near_end(a) {
+            tx.emit(GalleryInput::LoadMore);
+        }
+    });
+    scroller
+}
+
+/// A flat, sortable column header button around `label`.
+fn header_button(
+    sender: &ComponentSender<AttachmentsGallery>,
+    label: &gtk::Label,
+    column: u8,
+    width: Option<i32>,
+) -> gtk::Button {
+    let button = gtk::Button::new();
+    button.add_css_class("flat");
+    match width {
+        Some(w) => {
+            button.set_width_request(w);
+            button.set_hexpand(false);
+        }
+        None => button.set_hexpand(true),
+    }
+    button.set_child(Some(label));
+    let tx = sender.input_sender().clone();
+    button.connect_clicked(move |_| tx.emit(GalleryInput::SortColumn(column)));
+    button
+}
+
+fn dropdown(tooltip: &str, labels: &[String]) -> gtk::DropDown {
+    let d = gtk::DropDown::new(
+        Some(gtk::StringList::new(
+            &labels.iter().map(String::as_str).collect::<Vec<_>>(),
+        )),
+        gtk::Expression::NONE,
+    );
+    d.set_tooltip_text(Some(tooltip));
+    d
+}
+
+fn text_button(label: &str) -> gtk::Button {
+    let b = gtk::Button::new();
+    b.set_label(label);
+    b
+}
+
+/// Builds the widget tree under `root` (the overlay).
+fn build_widgets(
+    root: &gtk::Overlay,
+    sender: &ComponentSender<AttachmentsGallery>,
+    model: &AttachmentsGallery,
+) -> AttachmentsGalleryWidgets {
+    root.add_css_class("attachments-gallery");
+    let tx = sender.input_sender().clone();
+
+    // Base layer: a search/sort toolbar above the scrolling grid.
+    let base = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    root.set_child(Some(&base));
+
+    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    toolbar.add_css_class("gallery-toolbar");
+    let search_entry = gtk::SearchEntry::new();
+    search_entry.set_hexpand(true);
+    search_entry.set_placeholder_text(Some(&i18n("Search by sender, subject, type, filename…")));
+    let t = tx.clone();
+    search_entry.connect_search_changed(move |e| {
+        t.emit(GalleryInput::SetQuery(e.text().to_string()));
+    });
+    toolbar.append(&search_entry);
+    base.append(&toolbar);
+
+    let stack = gtk::Stack::new();
+    stack.set_vexpand(true);
+    base.append(&stack);
+
+    let loading = gtk::Box::new(gtk::Orientation::Vertical, 14);
+    loading.set_halign(gtk::Align::Center);
+    loading.set_valign(gtk::Align::Center);
+    let spinner = gtk::Spinner::new();
+    spinner.set_spinning(true);
+    spinner.set_width_request(36);
+    spinner.set_height_request(36);
+    loading.append(&spinner);
+    let loading_label = gtk::Label::new(Some(&i18n("Loading attachments…")));
+    loading_label.add_css_class("dim-label");
+    loading.append(&loading_label);
+    stack.add_named(&loading, Some("loading"));
+
+    let empty = adw::StatusPage::new();
+    empty.set_icon_name(Some("mail-attachment-symbolic"));
+    empty.set_title(&i18n("No attachments"));
+    empty.set_description(Some(&i18n(
+        "Attachments from your inboxes will appear here.",
+    )));
+    stack.add_named(&empty, Some("empty"));
+
+    let noresults = adw::StatusPage::new();
+    noresults.set_icon_name(Some("system-search-symbolic"));
+    noresults.set_title(&i18n("No matching attachments"));
+    noresults.set_description(Some(&i18n(
+        "Try a different search, or check which accounts and folders the footer is pulling from.",
+    )));
+    stack.add_named(&noresults, Some("noresults"));
+
+    let flow = &model.flow;
+    flow.set_valign(gtk::Align::Start);
+    flow.set_max_children_per_line(8);
+    flow.set_min_children_per_line(3);
+    flow.set_row_spacing(14);
+    flow.set_column_spacing(14);
+    flow.set_homogeneous(true);
+    flow.set_selection_mode(gtk::SelectionMode::None);
+    flow.set_activate_on_single_click(true);
+    flow.add_css_class("gallery-flow");
+    let t = tx.clone();
+    flow.connect_child_activated(move |_, child| {
+        t.emit(GalleryInput::Activate(child.index() as u32));
+    });
+    stack.add_named(&paging_scroller(sender, flow), Some("grid"));
+
+    // Table view: fixed sortable column headers over the rows.
+    let table_page = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    header.add_css_class("gallery-table-header");
+    // Aligns the headers with the rows' leading thumbnail.
+    let lead = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    lead.set_width_request(28);
+    header.append(&lead);
+    let header_label = |xalign: f32| {
+        let l = gtk::Label::new(None);
+        l.set_xalign(xalign);
+        l
+    };
+    let name_header = header_label(0.0);
+    let sender_header = header_label(0.0);
+    let type_header = header_label(0.0);
+    let date_header = header_label(0.0);
+    let size_header = header_label(1.0);
+    // Only Name expands, as in the rows: a header that also took spare width
+    // (a child's hexpand propagates to its button) would shift every column
+    // between them off its cells.
+    header.append(&header_button(sender, &name_header, 0, None));
+    header.append(&header_button(sender, &sender_header, 1, Some(170)));
+    header.append(&header_button(sender, &type_header, 4, Some(90)));
+    header.append(&header_button(sender, &date_header, 2, Some(110)));
+    header.append(&header_button(sender, &size_header, 3, Some(90)));
+    // Aligns with the rows' trailing actions column.
+    let trail = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    trail.set_width_request(TABLE_ACTIONS_WIDTH);
+    header.append(&trail);
+    table_page.append(&header);
+
+    let table = &model.table;
+    table.set_selection_mode(gtk::SelectionMode::None);
+    table.set_activate_on_single_click(true);
+    table.add_css_class("gallery-table");
+    let t = tx.clone();
+    table.connect_row_activated(move |_, row| {
+        t.emit(GalleryInput::Activate(row.index() as u32));
+    });
+    table_page.append(&paging_scroller(sender, table));
+    stack.add_named(&table_page, Some("table"));
+
+    // Footer: view toggle, filtering/ordering, size, count — the gallery's
+    // controls in one place, out of the content's way.
+    let footer = gtk::ActionBar::new();
+    footer.add_css_class("gallery-footer");
+    let toggles = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    toggles.add_css_class("linked");
+    let grid_toggle = gtk::ToggleButton::new();
+    grid_toggle.set_icon_name("view-grid-symbolic");
+    grid_toggle.set_tooltip_text(Some(&i18n("Thumbnail grid")));
+    let t = tx.clone();
+    let grid_handler = grid_toggle.connect_clicked(move |_| {
+        t.emit(GalleryInput::SetViewTable(false));
+    });
+    let table_toggle = gtk::ToggleButton::new();
+    table_toggle.set_icon_name("view-list-bullet-symbolic");
+    table_toggle.set_tooltip_text(Some(&i18n("Table")));
+    let t = tx.clone();
+    let table_handler = table_toggle.connect_clicked(move |_| {
+        t.emit(GalleryInput::SetViewTable(true));
+    });
+    toggles.append(&grid_toggle);
+    toggles.append(&table_toggle);
+    footer.pack_start(&toggles);
+
+    // Scope: which account and which folders feed the gallery.
+    let account_dropdown =
+        gtk::DropDown::new(Some(model.account_names.clone()), gtk::Expression::NONE);
+    account_dropdown.set_tooltip_text(Some(&i18n("Show only this account")));
+    let t = tx.clone();
+    account_dropdown.connect_selected_notify(move |d| {
+        t.emit(GalleryInput::SetAccountFilter(d.selected()));
+    });
+    footer.pack_start(&account_dropdown);
+
+    let folders_button = gtk::MenuButton::new();
+    folders_button.set_icon_name("folder-symbolic");
+    folders_button.set_tooltip_text(Some(&i18n("Folders to pull from")));
+    let popover = gtk::Popover::new();
+    popover.add_css_class("gallery-folders-popover");
+    let folders_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    folders_box.set_width_request(320);
+    let switches = gtk::ListBox::new();
+    switches.add_css_class("boxed-list");
+    switches.set_selection_mode(gtk::SelectionMode::None);
+    let archive_row = adw::SwitchRow::new();
+    archive_row.set_title(&i18n("Include Archive"));
+    let t = tx.clone();
+    let archive_handler = archive_row.connect_active_notify(move |r| {
+        t.emit(GalleryInput::SetIncludeArchive(r.is_active()));
+    });
+    let other_row = adw::SwitchRow::new();
+    other_row.set_title(&i18n("Include other folders"));
+    other_row.set_subtitle(&i18n("Everything that is not an inbox or an archive"));
+    let t = tx.clone();
+    let other_handler = other_row.connect_active_notify(move |r| {
+        t.emit(GalleryInput::SetIncludeOther(r.is_active()));
+    });
+    switches.append(&archive_row);
+    switches.append(&other_row);
+    folders_box.append(&switches);
+    let pulling = gtk::Label::new(Some(&i18n("Pulling attachments from")));
+    pulling.set_xalign(0.0);
+    pulling.add_css_class("heading");
+    folders_box.append(&pulling);
+    let folder_scroll = gtk::ScrolledWindow::new();
+    folder_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
+    folder_scroll.set_propagate_natural_height(true);
+    folder_scroll.set_max_content_height(380);
+    let folder_list = &model.folder_list;
+    folder_list.add_css_class("boxed-list");
+    folder_list.set_selection_mode(gtk::SelectionMode::None);
+    folder_scroll.set_child(Some(folder_list));
+    folders_box.append(&folder_scroll);
+    popover.set_child(Some(&folders_box));
+    folders_button.set_popover(Some(&popover));
+    footer.pack_start(&folders_button);
+
+    let type_dropdown = dropdown(
+        &i18n("Show only this type"),
+        &[
+            i18n("All types"),
+            i18n("Images"),
+            i18n("PDFs"),
+            i18n("Documents"),
+            i18n("Archives"),
+            i18n("Audio & Video"),
+            i18n("Other"),
+        ],
+    );
+    let t = tx.clone();
+    type_dropdown.connect_selected_notify(move |d| {
+        t.emit(GalleryInput::SetTypeFilter(d.selected()));
+    });
+    footer.pack_start(&type_dropdown);
+
+    let sort_dropdown = dropdown(
+        &i18n("Sort"),
+        &[
+            i18n("Newest first"),
+            i18n("Oldest first"),
+            i18n("Name (A–Z)"),
+            i18n("Name (Z–A)"),
+            i18n("Sender (A–Z)"),
+            i18n("Sender (Z–A)"),
+            i18n("Largest first"),
+            i18n("Smallest first"),
+            i18n("Type (A–Z)"),
+            i18n("Type (Z–A)"),
+        ],
+    );
+    sort_dropdown.set_selected(model.sort.index());
+    let t = tx.clone();
+    sort_dropdown.connect_selected_notify(move |d| {
+        t.emit(GalleryInput::SetSort(d.selected()));
+    });
+    footer.pack_start(&sort_dropdown);
+
+    let count_label = gtk::Label::new(None);
+    count_label.add_css_class("dim-label");
+    footer.pack_end(&count_label);
+
+    // What the network is doing, in the one place the gallery keeps its
+    // status: a page on its way, or the scan still working back through the
+    // archive.
+    let status_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    status_box.set_valign(gtk::Align::Center);
+    let status_spinner = gtk::Spinner::new();
+    status_spinner.set_width_request(16);
+    status_spinner.set_height_request(16);
+    let status_label = gtk::Label::new(None);
+    status_label.add_css_class("dim-label");
+    status_box.append(&status_spinner);
+    status_box.append(&status_label);
+    footer.pack_end(&status_box);
+
+    let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 140.0, 380.0, 10.0);
+    scale.set_increments(10.0, 40.0);
+    scale.set_value(model.thumb_width as f64);
+    scale.set_width_request(140);
+    scale.set_draw_value(false);
+    scale.set_tooltip_text(Some(&i18n("Thumbnail size")));
+    let t = tx.clone();
+    scale.connect_value_changed(move |s| {
+        t.emit(GalleryInput::SetThumbWidth(s.value()));
+    });
+    footer.pack_end(&scale);
+    base.append(&footer);
+
+    // Lightbox overlay, shown while previewing an item.
+    let lightbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    lightbox.add_css_class("gallery-lightbox");
+    root.add_overlay(&lightbox);
+
+    // Top bar: title + close.
+    let top = gtk::CenterBox::new();
+    top.add_css_class("gallery-lightbox-bar");
+    let lightbox_title = gtk::Label::new(None);
+    lightbox_title.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    lightbox_title.set_halign(gtk::Align::Start);
+    lightbox_title.add_css_class("gallery-lightbox-title");
+    top.set_start_widget(Some(&lightbox_title));
+    let close = gtk::Button::from_icon_name("window-close-symbolic");
+    close.set_tooltip_text(Some(&i18n("Close")));
+    close.add_css_class("circular");
+    close.add_css_class("flat");
+    let t = tx.clone();
+    close.connect_clicked(move |_| t.emit(GalleryInput::ClosePreview));
+    top.set_end_widget(Some(&close));
+    lightbox.append(&top);
+
+    // Middle: prev  |  image/icon  |  next.
+    let middle = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    middle.set_vexpand(true);
+    let nav = |icon: &str, tooltip: &str, input: fn() -> GalleryInput| {
+        let b = gtk::Button::from_icon_name(icon);
+        b.set_tooltip_text(Some(tooltip));
+        b.set_valign(gtk::Align::Center);
+        b.add_css_class("circular");
+        b.add_css_class("osd");
+        let t = tx.clone();
+        b.connect_clicked(move |_| t.emit(input()));
+        b
+    };
+    let prev_button = nav("go-previous-symbolic", &i18n("Previous"), || {
+        GalleryInput::Prev
+    });
+    let next_button = nav("go-next-symbolic", &i18n("Next"), || GalleryInput::Next);
+    middle.append(&prev_button);
+
+    let preview_stack = gtk::Stack::new();
+    preview_stack.set_hexpand(true);
+    preview_stack.set_vexpand(true);
+    let preview_picture = gtk::Picture::new();
+    preview_picture.set_can_shrink(true);
+    preview_picture.set_content_fit(gtk::ContentFit::Contain);
+    preview_stack.add_named(&preview_picture, Some("image"));
+    let rendering = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    rendering.set_halign(gtk::Align::Center);
+    rendering.set_valign(gtk::Align::Center);
+    let render_spinner = gtk::Spinner::new();
+    render_spinner.set_spinning(true);
+    render_spinner.set_width_request(36);
+    render_spinner.set_height_request(36);
+    rendering.append(&render_spinner);
+    preview_stack.add_named(&rendering, Some("rendering"));
+    let file_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    file_page.add_css_class("gallery-lightbox-file");
+    file_page.set_halign(gtk::Align::Center);
+    file_page.set_valign(gtk::Align::Center);
+    let file_icon = gtk::Image::new();
+    file_icon.set_pixel_size(96);
+    let file_name = gtk::Label::new(None);
+    file_name.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    file_name.add_css_class("title-3");
+    let no_preview = gtk::Label::new(Some(&i18n("No preview available")));
+    no_preview.add_css_class("dim-label");
+    file_page.append(&file_icon);
+    file_page.append(&file_name);
+    file_page.append(&no_preview);
+    preview_stack.add_named(&file_page, Some("file"));
+    middle.append(&preview_stack);
+    middle.append(&next_button);
+    lightbox.append(&middle);
+
+    // Bottom bar: caption + actions.
+    let bottom = gtk::CenterBox::new();
+    bottom.add_css_class("gallery-lightbox-bar");
+    let caption_label = gtk::Label::new(None);
+    caption_label.set_halign(gtk::Align::Start);
+    caption_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    caption_label.add_css_class("dim-label");
+    bottom.set_start_widget(Some(&caption_label));
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let open_button = text_button(&i18n("Open"));
+    open_button.set_tooltip_text(Some(&i18n("Open in the default app")));
+    let t = tx.clone();
+    open_button.connect_clicked(move |_| t.emit(GalleryInput::OpenCurrent));
+    let goto_button = text_button(&i18n("Go to Message"));
+    goto_button.add_css_class("suggested-action");
+    let t = tx.clone();
+    goto_button.connect_clicked(move |_| t.emit(GalleryInput::GoToCurrent));
+    actions.append(&open_button);
+    actions.append(&goto_button);
+    bottom.set_end_widget(Some(&actions));
+    lightbox.append(&bottom);
+
+    let widgets = AttachmentsGalleryWidgets {
+        toolbar,
+        search_entry,
+        stack,
+        name_header,
+        sender_header,
+        type_header,
+        date_header,
+        size_header,
+        footer,
+        grid_toggle,
+        grid_handler,
+        table_toggle,
+        table_handler,
+        account_dropdown,
+        folders_button,
+        folders_box,
+        archive_row,
+        archive_handler,
+        other_row,
+        other_handler,
+        sort_dropdown,
+        count_label,
+        status_box,
+        status_spinner,
+        status_label,
+        scale,
+        lightbox,
+        lightbox_title,
+        prev_button,
+        next_button,
+        preview_stack,
+        preview_picture,
+        file_icon,
+        file_name,
+        no_preview,
+        caption_label,
+        open_button,
+    };
+    widgets.apply(model);
+    widgets
+}
+
 impl Component for AttachmentsGallery {
     type Init = ();
     type Input = GalleryInput;
     type Output = GalleryOutput;
     type CommandOutput = ();
+    type Root = gtk::Overlay;
+    type Widgets = AttachmentsGalleryWidgets;
 
-    view! {
-        gtk::Overlay {
-            add_css_class: "attachments-gallery",
+    fn init_root() -> Self::Root {
+        gtk::Overlay::new()
+    }
 
-            // Base layer: a search/sort toolbar above the scrolling grid.
-            #[wrap(Some)]
-            set_child = &gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-
-                gtk::Box {
-                    add_css_class: "gallery-toolbar",
-                    set_spacing: 8,
-                    #[watch]
-                    set_visible: model.show_chrome(),
-
-                    #[name = "search_entry"]
-                    gtk::SearchEntry {
-                        set_hexpand: true,
-                        set_placeholder_text: Some(i18n("Search by sender, subject, type, filename…").as_str()),
-                        connect_search_changed[sender] => move |e| {
-                            sender.input(GalleryInput::SetQuery(e.text().to_string()));
-                        },
-                    },
-                },
-
-                gtk::Stack {
-                    set_vexpand: true,
-                    #[watch]
-                    set_visible_child_name: model.page(),
-
-                    add_named[Some("loading")] = &gtk::Box {
-                        set_halign: gtk::Align::Center,
-                        set_valign: gtk::Align::Center,
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 14,
-                        gtk::Spinner { set_spinning: true, set_width_request: 36, set_height_request: 36 },
-                        gtk::Label { set_label: &i18n("Loading attachments…"), add_css_class: "dim-label" },
-                    },
-
-                    add_named[Some("empty")] = &adw::StatusPage {
-                        set_icon_name: Some("mail-attachment-symbolic"),
-                        set_title: &i18n("No attachments"),
-                        set_description: Some(i18n("Attachments from your inboxes will appear here.").as_str()),
-                    },
-
-                    add_named[Some("noresults")] = &adw::StatusPage {
-                        set_icon_name: Some("system-search-symbolic"),
-                        set_title: &i18n("No matching attachments"),
-                        set_description: Some(i18n("Try a different search, or check which accounts and folders the footer is pulling from.").as_str()),
-                    },
-
-                    add_named[Some("grid")] = &gtk::ScrolledWindow {
-                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                    set_vexpand: true,
-                    connect_edge_reached[sender] => move |_, pos| {
-                        if pos == gtk::PositionType::Bottom {
-                            sender.input(GalleryInput::LoadMore);
-                        }
-                    },
-                    #[wrap(Some)]
-                    set_vadjustment = &gtk::Adjustment {
-                        connect_value_changed[sender] => move |a| {
-                            if near_end(a) {
-                                sender.input(GalleryInput::LoadMore);
-                            }
-                        },
-                    },
-
-                    #[local_ref]
-                    flow -> gtk::FlowBox {
-                        set_valign: gtk::Align::Start,
-                        set_max_children_per_line: 8,
-                        set_min_children_per_line: 3,
-                        set_row_spacing: 14,
-                        set_column_spacing: 14,
-                        set_homogeneous: true,
-                        set_selection_mode: gtk::SelectionMode::None,
-                        set_activate_on_single_click: true,
-                        add_css_class: "gallery-flow",
-                        connect_child_activated[sender] => move |_, child| {
-                            sender.input(GalleryInput::Activate(child.index() as u32));
-                        },
-                    },
-                    },
-
-                    // Table view: fixed sortable column headers over the rows.
-                    add_named[Some("table")] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-
-                        gtk::Box {
-                            add_css_class: "gallery-table-header",
-                            set_spacing: 10,
-
-                            // Aligns the headers with the rows' leading thumbnail.
-                            gtk::Box { set_width_request: 28 },
-                            gtk::Button {
-                                add_css_class: "flat",
-                                set_hexpand: true,
-                                connect_clicked => GalleryInput::SortColumn(0),
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &column_header(&i18n("Name"), model.sort, GallerySort::Name, GallerySort::NameDesc),
-                                    set_xalign: 0.0,
-                                },
-                            },
-                            gtk::Button {
-                                add_css_class: "flat",
-                                set_width_request: 170,
-                                set_hexpand: false,
-                                connect_clicked => GalleryInput::SortColumn(1),
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &column_header(&i18n("Sender"), model.sort, GallerySort::Sender, GallerySort::SenderDesc),
-                                    set_xalign: 0.0,
-                                },
-                            },
-                            gtk::Button {
-                                add_css_class: "flat",
-                                set_width_request: 90,
-                                set_hexpand: false,
-                                connect_clicked => GalleryInput::SortColumn(4),
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &column_header(&i18n("Type"), model.sort, GallerySort::Type, GallerySort::TypeDesc),
-                                    set_xalign: 0.0,
-                                },
-                            },
-                            gtk::Button {
-                                add_css_class: "flat",
-                                set_width_request: 110,
-                                set_hexpand: false,
-                                connect_clicked => GalleryInput::SortColumn(2),
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &column_header(&i18n("Date"), model.sort, GallerySort::Oldest, GallerySort::Newest),
-                                    set_xalign: 0.0,
-                                },
-                            },
-                            // Only Name expands, as in the rows: a header
-                            // that also took spare width (a child's hexpand
-                            // propagates to its button) would shift every
-                            // column between them off its cells.
-                            gtk::Button {
-                                add_css_class: "flat",
-                                set_width_request: 90,
-                                set_hexpand: false,
-                                connect_clicked => GalleryInput::SortColumn(3),
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &column_header(&i18n("Size"), model.sort, GallerySort::Smallest, GallerySort::Largest),
-                                    set_xalign: 1.0,
-                                },
-                            },
-                            // Aligns with the rows' trailing actions column.
-                            gtk::Box { set_width_request: TABLE_ACTIONS_WIDTH },
-                        },
-
-                        gtk::ScrolledWindow {
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-                            set_vexpand: true,
-                            connect_edge_reached[sender] => move |_, pos| {
-                                if pos == gtk::PositionType::Bottom {
-                                    sender.input(GalleryInput::LoadMore);
-                                }
-                            },
-                            #[wrap(Some)]
-                            set_vadjustment = &gtk::Adjustment {
-                                connect_value_changed[sender] => move |a| {
-                                    if near_end(a) {
-                                        sender.input(GalleryInput::LoadMore);
-                                    }
-                                },
-                            },
-
-                            #[local_ref]
-                            table -> gtk::ListBox {
-                                set_selection_mode: gtk::SelectionMode::None,
-                                set_activate_on_single_click: true,
-                                add_css_class: "gallery-table",
-                                connect_row_activated[sender] => move |_, row| {
-                                    sender.input(GalleryInput::Activate(row.index() as u32));
-                                },
-                            },
-                        },
-                    },
-                },
-
-                // Footer: view toggle, filtering/ordering, size, count — the
-                // gallery's controls in one place, out of the content's way.
-                gtk::ActionBar {
-                    add_css_class: "gallery-footer",
-                    #[watch]
-                    set_revealed: model.show_chrome(),
-
-                    pack_start = &gtk::Box {
-                        add_css_class: "linked",
-
-                        gtk::ToggleButton {
-                            set_icon_name: "view-grid-symbolic",
-                            set_tooltip_text: Some(i18n("Thumbnail grid").as_str()),
-                            #[watch]
-                            #[block_signal(grid_toggle)]
-                            set_active: !model.view_table,
-                            connect_clicked[sender] => move |_| {
-                                sender.input(GalleryInput::SetViewTable(false));
-                            } @grid_toggle,
-                        },
-                        gtk::ToggleButton {
-                            set_icon_name: "view-list-bullet-symbolic",
-                            set_tooltip_text: Some(i18n("Table").as_str()),
-                            #[watch]
-                            #[block_signal(table_toggle)]
-                            set_active: model.view_table,
-                            connect_clicked[sender] => move |_| {
-                                sender.input(GalleryInput::SetViewTable(true));
-                            } @table_toggle,
-                        },
-                    },
-
-                    // Scope: which account and which folders feed the gallery.
-                    #[name = "account_dropdown"]
-                    pack_start = &gtk::DropDown {
-                        set_tooltip_text: Some(i18n("Show only this account").as_str()),
-                        // Pointless with one account, and it would be the only
-                        // control there that could never change anything.
-                        #[watch]
-                        set_visible: model.accounts.len() > 1,
-                        set_model: Some(&model.account_names),
-                        connect_selected_notify[sender] => move |d| {
-                            sender.input(GalleryInput::SetAccountFilter(d.selected()));
-                        },
-                    },
-
-                    #[name = "folders_button"]
-                    pack_start = &gtk::MenuButton {
-                        set_icon_name: "folder-symbolic",
-                        set_tooltip_text: Some(i18n("Folders to pull from").as_str()),
-
-                        #[wrap(Some)]
-                        set_popover = &gtk::Popover {
-                            add_css_class: "gallery-folders-popover",
-
-                            #[name = "folders_box"]
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_spacing: 10,
-                                set_width_request: 320,
-
-                                gtk::ListBox {
-                                    add_css_class: "boxed-list",
-                                    set_selection_mode: gtk::SelectionMode::None,
-
-                                    #[name = "archive_row"]
-                                    adw::SwitchRow {
-                                        set_title: &i18n("Include Archive"),
-                                        #[watch]
-                                        #[block_signal(archive_toggle)]
-                                        set_active: model.include_archive,
-                                        connect_active_notify[sender] => move |r| {
-                                            sender.input(GalleryInput::SetIncludeArchive(r.is_active()));
-                                        } @archive_toggle,
-                                    },
-                                    #[name = "other_row"]
-                                    adw::SwitchRow {
-                                        set_title: &i18n("Include other folders"),
-                                        set_subtitle: &i18n("Everything that is not an inbox or an archive"),
-                                        #[watch]
-                                        #[block_signal(other_toggle)]
-                                        set_active: model.include_other,
-                                        connect_active_notify[sender] => move |r| {
-                                            sender.input(GalleryInput::SetIncludeOther(r.is_active()));
-                                        } @other_toggle,
-                                    },
-                                },
-
-                                gtk::Label {
-                                    set_label: &i18n("Pulling attachments from"),
-                                    set_xalign: 0.0,
-                                    add_css_class: "heading",
-                                },
-
-                                gtk::ScrolledWindow {
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                                    set_propagate_natural_height: true,
-                                    set_max_content_height: 380,
-
-                                    #[local_ref]
-                                    folder_list -> gtk::ListBox {
-                                        add_css_class: "boxed-list",
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                    },
-                                },
-                            },
-                        },
-                    },
-
-                    pack_start = &gtk::DropDown {
-                        set_tooltip_text: Some(i18n("Show only this type").as_str()),
-                        #[wrap(Some)]
-                        set_model = &gtk::StringList::new(&[
-                            i18n("All types").as_str(),
-                            i18n("Images").as_str(),
-                            i18n("PDFs").as_str(),
-                            i18n("Documents").as_str(),
-                            i18n("Archives").as_str(),
-                            i18n("Audio & Video").as_str(),
-                            i18n("Other").as_str(),
-                        ]),
-                        connect_selected_notify[sender] => move |d| {
-                            sender.input(GalleryInput::SetTypeFilter(d.selected()));
-                        },
-                    },
-
-                    #[name = "sort_dropdown"]
-                    pack_start = &gtk::DropDown {
-                        set_tooltip_text: Some(i18n("Sort").as_str()),
-                        set_selected: model.sort.index(),
-                        #[wrap(Some)]
-                        set_model = &gtk::StringList::new(&[
-                            i18n("Newest first").as_str(),
-                            i18n("Oldest first").as_str(),
-                            i18n("Name (A–Z)").as_str(),
-                            i18n("Name (Z–A)").as_str(),
-                            i18n("Sender (A–Z)").as_str(),
-                            i18n("Sender (Z–A)").as_str(),
-                            i18n("Largest first").as_str(),
-                            i18n("Smallest first").as_str(),
-                            i18n("Type (A–Z)").as_str(),
-                            i18n("Type (Z–A)").as_str(),
-                        ]),
-                        connect_selected_notify[sender] => move |d| {
-                            sender.input(GalleryInput::SetSort(d.selected()));
-                        },
-                    },
-
-                    pack_end = &gtk::Label {
-                        add_css_class: "dim-label",
-                        #[watch]
-                        set_label: &count_text(model.all_items.len(), model.total as usize),
-                    },
-
-                    // What the network is doing, in the one place the gallery
-                    // keeps its status: a page on its way, or the scan still
-                    // working back through the archive.
-                    pack_end = &gtk::Box {
-                        set_spacing: 6,
-                        set_valign: gtk::Align::Center,
-                        #[watch]
-                        set_visible: model.loading_more || model.scan_remaining > 0,
-
-                        gtk::Spinner {
-                            #[watch]
-                            set_spinning: model.loading_more || model.scan_remaining > 0,
-                            set_width_request: 16,
-                            set_height_request: 16,
-                        },
-                        gtk::Label {
-                            add_css_class: "dim-label",
-                            #[watch]
-                            set_label: &scan_text(model.loading_more, model.scan_remaining),
-                        },
-                    },
-
-                    pack_end = &gtk::Scale {
-                        set_range: (140.0, 380.0),
-                        set_value: model.thumb_width as f64,
-                        set_increments: (10.0, 40.0),
-                        set_width_request: 140,
-                        set_draw_value: false,
-                        set_tooltip_text: Some(i18n("Thumbnail size").as_str()),
-                        #[watch]
-                        set_visible: !model.view_table,
-                        connect_value_changed[sender] => move |s| {
-                            sender.input(GalleryInput::SetThumbWidth(s.value()));
-                        },
-                    },
-                },
-            },
-
-            // Lightbox overlay, shown while previewing an item.
-            add_overlay = &gtk::Box {
-                add_css_class: "gallery-lightbox",
-                set_orientation: gtk::Orientation::Vertical,
-                #[watch]
-                set_visible: model.preview.is_some(),
-
-                // Top bar: title + close.
-                gtk::CenterBox {
-                    add_css_class: "gallery-lightbox-bar",
-                    #[wrap(Some)]
-                    set_start_widget = &gtk::Label {
-                        #[watch]
-                        set_label: &model.current().map(|i| i.name.clone()).unwrap_or_default(),
-                        set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                        set_halign: gtk::Align::Start,
-                        add_css_class: "gallery-lightbox-title",
-                    },
-                    #[wrap(Some)]
-                    set_end_widget = &gtk::Button {
-                        set_icon_name: "window-close-symbolic",
-                        set_tooltip_text: Some(i18n("Close").as_str()),
-                        add_css_class: "circular",
-                        add_css_class: "flat",
-                        connect_clicked => GalleryInput::ClosePreview,
-                    },
-                },
-
-                // Middle: prev  |  image/icon  |  next.
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Horizontal,
-                    set_vexpand: true,
-                    set_spacing: 8,
-
-                    gtk::Button {
-                        set_icon_name: "go-previous-symbolic",
-                        set_tooltip_text: Some(i18n("Previous").as_str()),
-                        set_valign: gtk::Align::Center,
-                        add_css_class: "circular",
-                        add_css_class: "osd",
-                        #[watch]
-                        set_sensitive: model.all_items.len() > 1,
-                        connect_clicked => GalleryInput::Prev,
-                    },
-
-                    #[name = "preview_stack"]
-                    gtk::Stack {
-                        set_hexpand: true,
-                        set_vexpand: true,
-                        #[watch]
-                        set_visible_child_name: if model.preview_texture.is_some() {
-                            "image"
-                        } else if !model.preview_failed
-                            && model.current().is_some_and(|i| is_pdf_name(&i.name) && i.data.is_some())
-                        {
-                            // A PDF whose full-size render is still on its way.
-                            "rendering"
-                        } else {
-                            "file"
-                        },
-
-                        #[name = "preview_picture"]
-                        add_named[Some("image")] = &gtk::Picture {
-                            set_can_shrink: true,
-                            set_content_fit: gtk::ContentFit::Contain,
-                            #[watch]
-                            set_paintable: model.preview_texture.as_ref(),
-                        },
-
-                        add_named[Some("rendering")] = &gtk::Box {
-                            set_halign: gtk::Align::Center,
-                            set_valign: gtk::Align::Center,
-                            gtk::Spinner {
-                                set_spinning: true,
-                                set_width_request: 36,
-                                set_height_request: 36,
-                            },
-                        },
-
-                        add_named[Some("file")] = &gtk::Box {
-                            add_css_class: "gallery-lightbox-file",
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_halign: gtk::Align::Center,
-                            set_valign: gtk::Align::Center,
-                            set_spacing: 12,
-                            gtk::Image {
-                                #[watch]
-                                set_icon_name: model.current().map(|i| icon_for(&i.name)),
-                                set_pixel_size: 96,
-                                #[watch]
-                                set_css_classes: &[
-                                    "gallery-file-icon",
-                                    model.current().map(|i| icon_color_class(&i.name)).unwrap_or("ftype-generic"),
-                                ],
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.current().map(|i| i.name.clone()).unwrap_or_default(),
-                                set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                                add_css_class: "title-3",
-                            },
-                            gtk::Label {
-                                set_label: &i18n("No preview available"),
-                                add_css_class: "dim-label",
-                                #[watch]
-                                set_visible: model.preview_failed,
-                            },
-                        },
-                    },
-
-                    gtk::Button {
-                        set_icon_name: "go-next-symbolic",
-                        set_tooltip_text: Some(i18n("Next").as_str()),
-                        set_valign: gtk::Align::Center,
-                        add_css_class: "circular",
-                        add_css_class: "osd",
-                        #[watch]
-                        set_sensitive: model.all_items.len() > 1,
-                        connect_clicked => GalleryInput::Next,
-                    },
-                },
-
-                // Bottom bar: caption + actions.
-                gtk::CenterBox {
-                    add_css_class: "gallery-lightbox-bar",
-                    #[wrap(Some)]
-                    set_start_widget = &gtk::Label {
-                        #[watch]
-                        set_label: &model.current().map(caption).unwrap_or_default(),
-                        set_halign: gtk::Align::Start,
-                        set_ellipsize: gtk::pango::EllipsizeMode::End,
-                        add_css_class: "dim-label",
-                    },
-                    #[wrap(Some)]
-                    set_end_widget = &gtk::Box {
-                        set_spacing: 8,
-                        gtk::Button {
-                            set_label: &i18n("Open"),
-                            set_tooltip_text: Some(i18n("Open in the default app").as_str()),
-                            #[watch]
-                            set_sensitive: model.current().is_some_and(|i| i.data.is_some()),
-                            connect_clicked => GalleryInput::OpenCurrent,
-                        },
-                        gtk::Button {
-                            set_label: &i18n("Go to Message"),
-                            add_css_class: "suggested-action",
-                            connect_clicked => GalleryInput::GoToCurrent,
-                        },
-                    },
-                },
-            },
-        }
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+        widgets.apply(self);
     }
 
     fn init(
@@ -711,10 +802,7 @@ impl Component for AttachmentsGallery {
             root: root.clone().upcast(),
             deleting: Vec::new(),
         };
-        let flow = &model.flow;
-        let table = &model.table;
-        let folder_list = &model.folder_list;
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model);
 
         // Double-clicking the preview opens the document in its external app.
         let dbl = gtk::GestureClick::new();
