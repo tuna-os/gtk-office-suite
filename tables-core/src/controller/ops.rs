@@ -154,6 +154,7 @@ pub enum SheetProp {
     /// setup: each set whole, undo restores the previous list or value.
     CondRules(Vec<crate::sheet::CondRule>),
     Charts(Vec<crate::sheet::ChartSpec>),
+    Pictures(Vec<crate::sheet::PictureSpec>),
     Pivots(Vec<crate::sheet::PivotTableSpec>),
     Protection(crate::sheet::SheetProtection),
     PrintArea(Option<(usize, usize, usize, usize)>),
@@ -172,6 +173,7 @@ impl SheetProp {
             SheetProp::HiddenCols(v) => SheetProp::HiddenCols(replace(&mut sheet.hidden_cols, v.clone())),
             SheetProp::CondRules(v) => SheetProp::CondRules(replace(&mut sheet.cond_rules, v.clone())),
             SheetProp::Charts(v) => SheetProp::Charts(replace(&mut sheet.charts, v.clone())),
+            SheetProp::Pictures(v) => SheetProp::Pictures(replace(&mut sheet.pictures, v.clone())),
             SheetProp::Pivots(v) => SheetProp::Pivots(replace(&mut sheet.pivot_tables, v.clone())),
             SheetProp::Protection(v) => SheetProp::Protection(replace(&mut sheet.protection, v.clone())),
             SheetProp::PrintArea(v) => SheetProp::PrintArea(replace(&mut sheet.print_area, *v)),
@@ -189,6 +191,7 @@ impl SheetProp {
             SheetProp::HiddenCols((*sheet.hidden_cols).clone()),
             SheetProp::CondRules(sheet.cond_rules.clone()),
             SheetProp::Charts(sheet.charts.clone()),
+            SheetProp::Pictures(sheet.pictures.clone()),
             SheetProp::Pivots(sheet.pivot_tables.clone()),
             SheetProp::Protection(sheet.protection.clone()),
             SheetProp::PrintArea(sheet.print_area),

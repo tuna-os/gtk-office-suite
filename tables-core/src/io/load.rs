@@ -559,6 +559,15 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             sheet.charts.push(spec);
         }
     }
+    // Anchored pictures land on the same owning sheet through the same
+    // relationship chain: each picture's own image relationship ID resolves
+    // its media part, so a later sheet's pictures never land on the wrong
+    // sheet.
+    for (owner, spec) in super::read_pictures_detailed(path, &sheets).0 {
+        if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
+            sheet.pictures.push(spec);
+        }
+    }
     for (owner, rule) in super::read_cond_rules_detailed(path).0 {
         if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
             sheet.cond_rules.push(rule);

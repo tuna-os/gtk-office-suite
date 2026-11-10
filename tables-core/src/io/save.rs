@@ -546,6 +546,25 @@ pub fn save_sheets_to_xlsx_bytes(
                 .map_err(|e| format!("Chart error: {}", e))?;
         }
 
+        // Anchored pictures: the reader admits exactly the raster formats
+        // the writer round-trips, so the bytes go back verbatim at the same
+        // anchor and logical size. A picture is decorative: if the writer
+        // ever rejects one, the save still succeeds without it rather than
+        // failing the user's whole workbook over a floating image.
+        for pic in &sh.pictures {
+            use rust_xlsxwriter::Image;
+            let Ok(mut image) = Image::new_from_buffer(&pic.bytes) else {
+                continue;
+            };
+            if pic.width_px.is_finite() && pic.width_px > 0.0 {
+                image = image.set_width(pic.width_px.round().clamp(1.0, 20_000.0) as u32);
+            }
+            if pic.height_px.is_finite() && pic.height_px > 0.0 {
+                image = image.set_height(pic.height_px.round().clamp(1.0, 20_000.0) as u32);
+            }
+            let _ = sheet.insert_image(pic.anchor.0 as u32, pic.anchor.1 as u16, &image);
+        }
+
         // The writer places the element; a sheet it cannot describe (an
         // unprotected sheet still holding permissions) is patched below.
         if super::sheet_protection::needs_element(&sh.protection) {

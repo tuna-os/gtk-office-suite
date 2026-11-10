@@ -6,6 +6,7 @@
 // - `load.rs` — xlsx/ods/csv/tsv import into the engine
 // - `save.rs` — xlsx export (sheets -> xlsx bytes/file)
 // - `charts.rs` — read embedded charts back from xlsx
+// - `pictures.rs` — read anchored worksheet pictures back from xlsx
 // - `condrules.rs` — read conditional-formatting rules back from xlsx
 // - `props.rs` — per-sheet properties (hidden rows/cols, page setup)
 // - `format.rs` — which formats we can write, as opposed to read
@@ -21,6 +22,7 @@ mod format;
 pub mod loss;
 mod load;
 mod numfmt;
+mod pictures;
 mod odf_formula;
 mod ods_numfmt;
 mod ods_styles;
@@ -30,6 +32,7 @@ mod save;
 pub(crate) mod sheet_protection;
 
 pub use charts::{read_charts_detailed, read_charts_from_xlsx, ChartReadIssue};
+pub use pictures::{read_pictures_detailed, read_pictures_from_xlsx, PictureReadIssue};
 pub use format::{is_writable_format, xlsx_save_as_name, FORMATS};
 pub use numfmt::{code_for_kind, kind_for_code};
 pub use xlsx_styles::{parse_cell_styles, XfStyle};

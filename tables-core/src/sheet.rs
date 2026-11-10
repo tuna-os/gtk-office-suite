@@ -1134,6 +1134,35 @@ impl ChartSpec {
     }
 }
 
+/// An anchored worksheet picture's image format: exactly the raster formats
+/// the xlsx writer round-trips, so anything the reader admits, the writer
+/// keeps. Anything else never reaches the model (the package scan reports
+/// it instead).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
+pub enum PictureFormat {
+    Png,
+    Jpeg,
+    Gif,
+    Bmp,
+}
+
+/// One anchored worksheet picture: the image bytes plus where they float.
+/// The anchor is the top-left cell and the size is logical pixels, exactly
+/// like [`ChartSpec`], so the grid draws both from the same geometry and a
+/// save lays both out the same way.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
+pub struct PictureSpec {
+    /// Anchor cell (row, col) of the top-left corner.
+    pub anchor: (usize, usize),
+    pub width_px: f64,
+    pub height_px: f64,
+    pub format: PictureFormat,
+    /// The image file's bytes, carried verbatim for the round trip.
+    pub bytes: Vec<u8>,
+}
+
 // The chart kinds and their value axis are shared with Decks' charts
 // (suite_common_core::charts); re-exported here where Tables has always
 // named them.
@@ -1377,6 +1406,8 @@ pub struct SheetModel {
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
+    /// Anchored pictures, read from xl/drawings and written back.
+    pub pictures: Vec<PictureSpec>,
     /// Pivot tables defined on this sheet.
     pub pivot_tables: Vec<PivotTableSpec>,
     /// Sheet protection status.
@@ -1468,6 +1499,7 @@ impl SheetModel {
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
+            pictures: Vec::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],
@@ -1576,6 +1608,10 @@ impl SheetModel {
                 shift(&mut series.val.0); shift(&mut series.val.2);
             }
         }
+        // Pictures float with their anchor row, like charts.
+        for picture in &mut self.pictures {
+            shift(&mut picture.anchor.0);
+        }
         for pivot in &mut self.pivot_tables {
             shift(&mut pivot.source_range.0); shift(&mut pivot.source_range.2);
             shift(&mut pivot.target_cell.0);
@@ -1601,6 +1637,9 @@ impl SheetModel {
         for chart in &mut self.charts {
             shift(&mut chart.anchor.1); shift(&mut chart.cat.1); shift(&mut chart.val.1);
             for series in &mut chart.series { shift(&mut series.cat.1); shift(&mut series.val.1); }
+        }
+        for picture in &mut self.pictures {
+            shift(&mut picture.anchor.1);
         }
         for pivot in &mut self.pivot_tables {
             shift(&mut pivot.source_range.1); shift(&mut pivot.source_range.3);
@@ -1782,6 +1821,11 @@ impl SheetModel {
             let (r, c) = self.chart_extent(chart);
             grow(r, c);
         }
+        // And a picture, over the cells it floats above.
+        for picture in &self.pictures {
+            let (r, c) = self.picture_extent(picture);
+            grow(r, c);
+        }
         extent
     }
 
@@ -1798,6 +1842,26 @@ impl SheetModel {
         let mut r = ar;
         let mut h = self.row_height(r);
         while h < chart.height_px && r + 1 < self.rows {
+            r += 1;
+            h += self.row_height(r);
+        }
+        (r, c)
+    }
+
+    /// The last row and column a picture covers, from its anchor and pixel
+    /// size over this sheet's row heights and column widths — the same walk
+    /// as [`SheetModel::chart_extent`].
+    pub fn picture_extent(&self, picture: &PictureSpec) -> (usize, usize) {
+        let (ar, ac) = picture.anchor;
+        let mut c = ac;
+        let mut w = self.col_width(c);
+        while w < picture.width_px && c + 1 < self.cols {
+            c += 1;
+            w += self.col_width(c);
+        }
+        let mut r = ar;
+        let mut h = self.row_height(r);
+        while h < picture.height_px && r + 1 < self.rows {
             r += 1;
             h += self.row_height(r);
         }
@@ -2185,6 +2249,21 @@ mod selection_tests {
         assert_eq!(s.charts[0].val.1, 4);
         s.delete_cols(2, 2);
         assert_eq!(s.charts[0].anchor.1, 1);
+    }
+
+    #[test]
+    fn structural_edits_carry_picture_anchors() {
+        let mut s = sheet();
+        s.pictures.push(PictureSpec {
+            anchor: (1, 1), width_px: 64.0, height_px: 40.0,
+            format: PictureFormat::Png, bytes: Vec::new(),
+        });
+        s.insert_rows(1, 2);
+        assert_eq!(s.pictures[0].anchor, (3, 1), "the anchor row moves with its rows");
+        s.delete_rows(1, 2);
+        assert_eq!(s.pictures[0].anchor, (1, 1));
+        s.insert_cols(0, 1);
+        assert_eq!(s.pictures[0].anchor, (1, 2), "the anchor column moves with its columns");
     }
 
     #[test]

@@ -498,8 +498,8 @@
     "B": "red"
   },
   "tables/worksheet-image": {
-    "A": "red",
-    "B": "red"
+    "A": "green",
+    "B": "green"
   },
   "tables/wrap-merged": {
     "A": "amber",
