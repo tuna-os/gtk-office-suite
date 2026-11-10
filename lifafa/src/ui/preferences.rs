@@ -211,179 +211,207 @@ impl ViewSender {
     }
 }
 
-#[relm4::component(pub(crate))]
+/// The category pages, built by `pages` before the window and placed in
+/// the stack by `build_widgets`.
+struct Pages {
+    general: GeneralPage,
+    appearance: AppearancePage,
+    sidebar: SidebarPage,
+    list: ListPage,
+    conversations: ConversationsPage,
+    reading: ReadingPage,
+    composing: ComposingPage,
+    privacy: PrivacyPage,
+    assistants: AssistantsPage,
+    datetime: DateTimePage,
+    system: SystemPage,
+    backup: BackupPage,
+}
+
+/// The window's frame and the pages the rest of the module reads back by
+/// field. This is what `#[relm4::component]`'s `view!` block and its
+/// `additional_fields!` used to generate.
+pub(crate) struct PreferencesWidgets {
+    split: adw::NavigationSplitView,
+    side_toolbar: adw::ToolbarView,
+    side_header: adw::HeaderBar,
+    side_scroller: gtk::ScrolledWindow,
+    side_list: gtk::ListBox,
+    content_page: adw::NavigationPage,
+    host_header: adw::HeaderBar,
+    panels_stack: gtk::Stack,
+    accounts_slot: adw::Bin,
+    pgp_slot: adw::Bin,
+    cloud_slot: adw::Bin,
+    translation_slot: adw::Bin,
+    contacts_slot: adw::Bin,
+    appearance_page: adw::PreferencesPage,
+    general: GeneralPage,
+    appearance: AppearancePage,
+    sidebar: SidebarPage,
+    list: ListPage,
+    conversations: ConversationsPage,
+    reading: ReadingPage,
+    composing: ComposingPage,
+    privacy: PrivacyPage,
+    assistants: AssistantsPage,
+    datetime: DateTimePage,
+    system: SystemPage,
+    backup: BackupPage,
+}
+
+fn build_widgets(root: &adw::Window, sender: &ViewSender, pages: Pages) -> PreferencesWidgets {
+    root.set_modal(false);
+    root.set_default_width(920);
+    // The same size every time: the two-pane layout (#141) fits its sidebar
+    // at this height, and nothing is remembered from a resize.
+    root.set_default_height(848);
+    root.set_title(Some(i18n("Settings").as_str()));
+    // Closing hides: the window is kept and shown again next time.
+    root.set_hide_on_close(true);
+    {
+        let sender = sender.clone();
+        root.connect_close_request(move |_| {
+            let _ = sender.output(PrefOutput::Closed);
+            gtk::glib::Propagation::Proceed
+        });
+    }
+
+    // One window, two panes (#141): a sidebar of categories on the left, the
+    // chosen category's groups on the right. The account pages (accounts,
+    // tags, filters, senders) belong to the AccountsWindow component, handed
+    // in via PrefInit with its own sub-navigation for the account editor;
+    // while that editor is open the content header hides, so the editor's own
+    // back/Save header takes over. Narrow, the split collapses to one pane
+    // (breakpoint in init) and the sidebar becomes the first page.
+    let side_header = adw::HeaderBar::builder().show_end_title_buttons(false).build();
+    let side_list = gtk::ListBox::builder()
+        .css_classes(["navigation-sidebar", "settings-side"])
+        .selection_mode(gtk::SelectionMode::Single)
+        .build();
+    {
+        let sender = sender.clone();
+        side_list.connect_row_selected(move |_, row| {
+            if let Some(id) = row
+                .map(|r| r.widget_name().to_string())
+                .and_then(|n| n.strip_prefix("page:").map(str::to_string))
+            {
+                sender.input(PrefInput::SelectPage(id));
+            }
+        });
+    }
+    let side_scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&side_list)
+        .build();
+    let side_toolbar = adw::ToolbarView::new();
+    side_toolbar.add_top_bar(&side_header);
+    side_toolbar.set_content(Some(&side_scroller));
+    let sidebar_page = adw::NavigationPage::builder().title(i18n("Settings")).child(&side_toolbar).build();
+
+    let host_header = adw::HeaderBar::builder().show_start_title_buttons(false).build();
+    // Sections switch outright, no fade. Only the shown page is measured:
+    // homogeneous, the stack measured every page's rows on every layout
+    // pass, which was most of the window's first paint.
+    let panels_stack = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::None)
+        .hhomogeneous(false)
+        .vhomogeneous(false)
+        .build();
+    let accounts_slot = adw::Bin::new();
+    panels_stack.add_named(&accounts_slot, Some("accounts"));
+    // The OpenPGP key manager (#133), its own component.
+    let pgp_slot = adw::Bin::new();
+    panels_stack.add_named(&pgp_slot, Some("openpgp"));
+    // Cloud attachment accounts (#144), its own component.
+    let cloud_slot = adw::Bin::new();
+    panels_stack.add_named(&cloud_slot, Some("cloud"));
+    // Message translation (#327), built by its own module.
+    let translation_slot = adw::Bin::new();
+    panels_stack.add_named(&translation_slot, Some("translation"));
+    // Every address book (#408), its own component.
+    let contacts_slot = adw::Bin::new();
+    panels_stack.add_named(&contacts_slot, Some("contacts"));
+    panels_stack.add_named(&pages.general.page, Some("general"));
+    panels_stack.add_named(&pages.appearance.page, Some("appearance"));
+    panels_stack.add_named(&pages.sidebar.page, Some("sidebar"));
+    panels_stack.add_named(&pages.list.page, Some("list"));
+    panels_stack.add_named(&pages.conversations.page, Some("conversations"));
+    panels_stack.add_named(&pages.reading.page, Some("reading"));
+    panels_stack.add_named(&pages.composing.page, Some("composing"));
+    panels_stack.add_named(&pages.privacy.page, Some("privacy"));
+    panels_stack.add_named(&pages.assistants.page, Some("assistants"));
+    panels_stack.add_named(&pages.datetime.page, Some("datetime"));
+    panels_stack.add_named(&pages.system.page, Some("system"));
+    panels_stack.add_named(&pages.backup.page, Some("backup"));
+    let host_toolbar = adw::ToolbarView::new();
+    host_toolbar.add_top_bar(&host_header);
+    host_toolbar.set_content(Some(&panels_stack));
+    let content_page = adw::NavigationPage::builder().title(i18n("General")).child(&host_toolbar).build();
+
+    let split = adw::NavigationSplitView::builder()
+        .min_sidebar_width(180.0)
+        .max_sidebar_width(250.0)
+        .sidebar_width_fraction(0.27)
+        .sidebar(&sidebar_page)
+        .content(&content_page)
+        .build();
+    root.set_content(Some(&split));
+
+    let appearance_page = pages.appearance.page.clone();
+    let Pages { general, appearance, sidebar, list, conversations, reading, composing, privacy, assistants, datetime, system, backup } = pages;
+    PreferencesWidgets {
+        split,
+        side_toolbar,
+        side_header,
+        side_scroller,
+        side_list,
+        content_page,
+        host_header,
+        panels_stack,
+        accounts_slot,
+        pgp_slot,
+        cloud_slot,
+        translation_slot,
+        contacts_slot,
+        appearance_page,
+        general,
+        appearance,
+        sidebar,
+        list,
+        conversations,
+        reading,
+        composing,
+        privacy,
+        assistants,
+        datetime,
+        system,
+        backup,
+    }
+}
+
 impl Component for Preferences {
     type Init = PrefInit;
     type Input = PrefInput;
     type Output = PrefOutput;
     type CommandOutput = ();
+    type Root = adw::Window;
+    type Widgets = PreferencesWidgets;
 
-    // The category pages, built by `pages` before the view and placed in
-    // the stack below with `#[local_ref]`.
-    additional_fields! {
-        general: GeneralPage,
-        appearance: AppearancePage,
-        sidebar: SidebarPage,
-        list: ListPage,
-        conversations: ConversationsPage,
-        reading: ReadingPage,
-        composing: ComposingPage,
-        privacy: PrivacyPage,
-        assistants: AssistantsPage,
-        datetime: DateTimePage,
-        system: SystemPage,
-        backup: BackupPage,
+    fn init_root() -> Self::Root {
+        adw::Window::new()
     }
 
-    view! {
-        adw::Window {
-            set_modal: false,
-            set_default_width: 920,
-            // The same size every time: the two-pane layout (#141) fits its
-            // sidebar at this height, and nothing is remembered from a resize.
-            set_default_height: 848,
-            set_title: Some(i18n("Settings").as_str()),
-            // Closing hides: the window is kept and shown again next time.
-            set_hide_on_close: true,
-
-            connect_close_request[sender] => move |_| {
-                let _ = sender.output(PrefOutput::Closed);
-                gtk::glib::Propagation::Proceed
-            },
-
-            // One window, two panes (#141): a sidebar of categories on the
-            // left, the chosen category's groups on the right. The account
-            // pages (accounts, tags, filters, senders) belong to the
-            // AccountsWindow component, handed in via PrefInit with its own
-            // sub-navigation for the account editor; while that editor is
-            // open the content header hides, so the editor's own back/Save
-            // header takes over. Narrow, the split collapses to one pane
-            // (breakpoint in init) and the sidebar becomes the first page.
-            #[wrap(Some)]
-            #[name = "split"]
-            set_content = &adw::NavigationSplitView {
-                set_min_sidebar_width: 180.0,
-                set_max_sidebar_width: 250.0,
-                set_sidebar_width_fraction: 0.27,
-
-                #[wrap(Some)]
-                set_sidebar = &adw::NavigationPage {
-                    set_title: &i18n("Settings"),
-
-                    #[wrap(Some)]
-                    #[name = "side_toolbar"]
-                    set_child = &adw::ToolbarView {
-                        #[name = "side_header"]
-                        add_top_bar = &adw::HeaderBar {
-                            set_show_end_title_buttons: false,
-                        },
-
-                        #[wrap(Some)]
-                        #[name = "side_scroller"]
-                        set_content = &gtk::ScrolledWindow {
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                            #[wrap(Some)]
-                            #[name = "side_list"]
-                            set_child = &gtk::ListBox {
-                                add_css_class: "navigation-sidebar",
-                                add_css_class: "settings-side",
-                                set_selection_mode: gtk::SelectionMode::Single,
-                                connect_row_selected[sender] => move |_, row| {
-                                    if let Some(id) = row
-                                        .map(|r| r.widget_name().to_string())
-                                        .and_then(|n| n.strip_prefix("page:").map(str::to_string))
-                                    {
-                                        sender.input(PrefInput::SelectPage(id));
-                                    }
-                                },
-                            },
-                        },
-                    },
-                },
-
-                #[wrap(Some)]
-                #[name = "content_page"]
-                set_content = &adw::NavigationPage {
-                    set_title: &i18n("General"),
-
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                        #[name = "host_header"]
-                        add_top_bar = &adw::HeaderBar {
-                            set_show_start_title_buttons: false,
-                        },
-
-                        #[wrap(Some)]
-                        #[name = "panels_stack"]
-                        set_content = &gtk::Stack {
-                            // Sections switch outright, no fade.
-                            set_transition_type: gtk::StackTransitionType::None,
-                            // Only the shown page is measured: homogeneous, the
-                            // stack measured every page's rows on every layout
-                            // pass, which was most of the window's first paint.
-                            set_hhomogeneous: false,
-                            set_vhomogeneous: false,
-
-                            #[name = "accounts_slot"]
-                            add_named[Some("accounts")] = &adw::Bin {},
-
-                            // The OpenPGP key manager (#133), its own component.
-                            #[name = "pgp_slot"]
-                            add_named[Some("openpgp")] = &adw::Bin {},
-
-                            // Cloud attachment accounts (#144), its own component.
-                            #[name = "cloud_slot"]
-                            add_named[Some("cloud")] = &adw::Bin {},
-
-                            // Message translation (#327), built by its own module.
-                            #[name = "translation_slot"]
-                            add_named[Some("translation")] = &adw::Bin {},
-
-                            // Every address book (#408), its own component.
-                            #[name = "contacts_slot"]
-                            add_named[Some("contacts")] = &adw::Bin {},
-
-                            #[local_ref]
-                            add_named[Some("general")] = general_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("appearance")] = appearance_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("sidebar")] = sidebar_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("list")] = list_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("conversations")] = conversations_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("reading")] = reading_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("composing")] = composing_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("privacy")] = privacy_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("assistants")] = assistants_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("datetime")] = datetime_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("system")] = system_page -> adw::PreferencesPage {},
-
-                            #[local_ref]
-                            add_named[Some("backup")] = backup_page -> adw::PreferencesPage {},
-                        },
-                    },
-                },
-            },
-        }
+    /// The pages' setters that follow the model, in the order the single
+    /// view had them; the window itself has none.
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+        widgets.general.update_view(self);
+        widgets.appearance.update_view(self);
+        widgets.sidebar.update_view(self);
+        widgets.list.update_view(self);
+        widgets.conversations.update_view(self);
+        widgets.assistants.update_view(self);
+        widgets.system.update_view(self);
     }
 
     fn init(
@@ -450,31 +478,21 @@ impl Component for Preferences {
             inner: component_sender.clone(),
             ready: Rc::new(std::cell::Cell::new(false)),
         };
-        let general = GeneralPage::build(&model, &sender);
-        let general_page = &general.page;
-        let appearance = AppearancePage::build(&model, &sender);
-        let appearance_page = &appearance.page;
-        let sidebar = SidebarPage::build(&model, &sender);
-        let sidebar_page = &sidebar.page;
-        let list = ListPage::build(&model, &sender);
-        let list_page = &list.page;
-        let conversations = ConversationsPage::build(&model, &sender);
-        let conversations_page = &conversations.page;
-        let reading = ReadingPage::build(&sender);
-        let reading_page = &reading.page;
-        let composing = ComposingPage::build(&sender);
-        let composing_page = &composing.page;
-        let privacy = PrivacyPage::build(&sender);
-        let privacy_page = &privacy.page;
-        let assistants = AssistantsPage::build(&model, &sender);
-        let assistants_page = &assistants.page;
-        let datetime = DateTimePage::build(&sender);
-        let datetime_page = &datetime.page;
-        let system = SystemPage::build(&model, &sender);
-        let system_page = &system.page;
-        let backup = BackupPage::build(&sender);
-        let backup_page = &backup.page;
-        let widgets = view_output!();
+        let pages = Pages {
+            general: GeneralPage::build(&model, &sender),
+            appearance: AppearancePage::build(&model, &sender),
+            sidebar: SidebarPage::build(&model, &sender),
+            list: ListPage::build(&model, &sender),
+            conversations: ConversationsPage::build(&model, &sender),
+            reading: ReadingPage::build(&sender),
+            composing: ComposingPage::build(&sender),
+            privacy: PrivacyPage::build(&sender),
+            assistants: AssistantsPage::build(&model, &sender),
+            datetime: DateTimePage::build(&sender),
+            system: SystemPage::build(&model, &sender),
+            backup: BackupPage::build(&sender),
+        };
+        let widgets = build_widgets(&root, &sender, pages);
         let ready = sender.ready.clone();
         let sender = component_sender;
         tracing::debug!(
@@ -530,18 +548,6 @@ impl Component for Preferences {
         // From here on a row's signal is the user's doing.
         ready.set(true);
         ComponentParts { model, widgets }
-    }
-
-    /// The pages' `#[watch]` setters, in the order the single view had
-    /// them; the view itself has none left.
-    fn pre_view() {
-        general.update_view(model);
-        appearance.update_view(model);
-        sidebar.update_view(model);
-        list.update_view(model);
-        conversations.update_view(model);
-        assistants.update_view(model);
-        system.update_view(model);
     }
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {

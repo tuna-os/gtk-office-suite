@@ -42,274 +42,283 @@ mod tests;
 /// as the early returns of the original single `match` did.
 type Flow = std::ops::ControlFlow<()>;
 
-#[relm4::component(pub(crate))]
+/// The page's widgets: the ones `init` and the update modules read back by
+/// field, and the two that follow the model, which `apply` sets from it at
+/// build and after every message. This is what `#[relm4::component]`'s
+/// `view!` block and its `#[watch]` attributes used to generate.
+pub(crate) struct ContactsPageWidgets {
+    page_stack: gtk::Stack,
+    status: adw::StatusPage,
+    search_revealer: gtk::Revealer,
+    filter_btn: gtk::MenuButton,
+    count_label: gtk::Label,
+    search: gtk::SearchEntry,
+    book_filter: gtk::DropDown,
+    list: gtk::ListView,
+    detail_overlay: gtk::Overlay,
+    edit_btn: gtk::Button,
+    detail_box: gtk::Box,
+}
+
+impl ContactsPageWidgets {
+    /// Everything that was `#[watch]`ed: set from the model.
+    fn apply(&self, model: &ContactsPage) {
+        self.status.set_title(&if model.loading { i18n("Loading Contacts…") } else { i18n("No Contacts") });
+        self.status.set_description(Some(
+            &if model.loading {
+                String::new()
+            } else {
+                i18n("Add a contact with the + button, or import vCard files. Contacts are kept in Hylki's own address book, and the address books of GNOME Contacts are listed here too.")
+            },
+        ));
+        self.search_revealer.set_reveal_child(model.search_open || model.search_pinned);
+    }
+}
+
+/// A flat icon button in a header, with a tooltip.
+fn header_button(icon: &str, tooltip: String) -> gtk::Button {
+    gtk::Button::builder().icon_name(icon).tooltip_text(tooltip).css_classes(["flat"]).build()
+}
+
+fn build_widgets(root: &gtk::Stack, sender: &ComponentSender<ContactsPage>, model: &ContactsPage) -> ContactsPageWidgets {
+    root.set_transition_type(gtk::StackTransitionType::Crossfade);
+
+    // No contacts at all (or still loading the first read).
+    let none_header = adw::HeaderBar::builder().css_classes(["flat"]).build();
+    none_header.set_title_widget(Some(&gtk::Label::builder().label(i18n("Contacts")).css_classes(["pane-title"]).build()));
+    let toggle = header_button("sidebar-show-symbolic", i18n("Toggle sidebar"));
+    {
+        let sender = sender.clone();
+        toggle.connect_clicked(move |_| {
+            let _ = sender.output(ContactsPageOutput::ToggleSidebar);
+        });
+    }
+    none_header.pack_start(&toggle);
+    let import = header_button("document-open-symbolic", i18n("Import vCard files into the Hylki address book"));
+    {
+        let sender = sender.clone();
+        import.connect_clicked(move |_| sender.input(ContactsPageInput::ImportContacts));
+    }
+    none_header.pack_end(&import);
+    let add = header_button("list-add-symbolic", i18n("New contact or group"));
+    {
+        let sender = sender.clone();
+        add.connect_clicked(move |b| new_menu(b, &sender));
+    }
+    none_header.pack_end(&add);
+    let status = adw::StatusPage::builder().icon_name("x-office-address-book-symbolic").build();
+    let none_page = adw::ToolbarView::new();
+    none_page.add_top_bar(&none_header);
+    none_page.set_content(Some(&status));
+    root.add_named(&none_page, Some("none"));
+
+    // Each pane carries its own header (like the mail view), so the divider
+    // between them runs the full height of the window; the paned handle lets
+    // the list grow, with its launch width as the floor.
+    let browser = gtk::Paned::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .wide_handle(false)
+        .position(crate::config::load_contacts_pane_width())
+        .resize_start_child(false)
+        .shrink_start_child(false)
+        .resize_end_child(true)
+        .shrink_end_child(false)
+        .build();
+    // Remember the width the user drags to. Debounced: one write once the
+    // drag settles (see the mail view's list pane).
+    {
+        let pending = std::rc::Rc::new(std::cell::RefCell::new(None::<gtk::glib::SourceId>));
+        browser.connect_position_notify(move |p| {
+            let pos = p.position();
+            if let Some(id) = pending.borrow_mut().take() {
+                id.remove();
+            }
+            let armed = pending.clone();
+            *pending.borrow_mut() = Some(gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || {
+                *armed.borrow_mut() = None;
+                crate::config::save_contacts_pane_width(pos);
+            }));
+        });
+    }
+
+    // ---- the list pane ----
+    // Left pane: no window controls (the detail pane's header carries the
+    // window's close button).
+    let list_header = adw::HeaderBar::builder()
+        .css_classes(["flat"])
+        .show_start_title_buttons(false)
+        .show_end_title_buttons(false)
+        .build();
+    list_header.set_title_widget(Some(&gtk::Label::new(Some(""))));
+    // Leftmost, mirroring the pane it acts on: same spot as in the message
+    // list's header.
+    let list_toggle = header_button("sidebar-show-symbolic", i18n("Toggle sidebar"));
+    {
+        let sender = sender.clone();
+        list_toggle.connect_clicked(move |_| {
+            let _ = sender.output(ContactsPageOutput::ToggleSidebar);
+        });
+    }
+    list_header.pack_start(&list_toggle);
+    // Beside it, as in the message list's header.
+    let focus_search = header_button("system-search-symbolic", i18n("Search contacts (Ctrl+F)"));
+    {
+        let sender = sender.clone();
+        focus_search.connect_clicked(move |_| sender.input(ContactsPageInput::FocusSearch));
+    }
+    list_header.pack_start(&focus_search);
+    // pack_end packs right-to-left: sort and filter at the far right
+    // (matching the message list), then the count, then import, then "+",
+    // first on the right.
+    let filter_btn = gtk::MenuButton::builder()
+        .icon_name("filter-symbolic")
+        .tooltip_text(i18n("Sort and filter contacts"))
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    list_header.pack_end(&filter_btn);
+    let count_label = gtk::Label::builder().valign(gtk::Align::Center).css_classes(["list-count"]).build();
+    list_header.pack_end(&count_label);
+    let list_import = header_button("document-open-symbolic", i18n("Import vCard files into the Hylki address book"));
+    {
+        let sender = sender.clone();
+        list_import.connect_clicked(move |_| sender.input(ContactsPageInput::ImportContacts));
+    }
+    list_header.pack_end(&list_import);
+    let list_add = header_button("list-add-symbolic", i18n("New contact or group"));
+    {
+        let sender = sender.clone();
+        list_add.connect_clicked(move |b| new_menu(b, &sender));
+    }
+    list_header.pack_end(&list_add);
+
+    // The search, shown by the header's search button: the message list's
+    // search bar.
+    let search = gtk::SearchEntry::builder()
+        .hexpand(true)
+        .width_chars(3)
+        .placeholder_text(i18n("Search contacts"))
+        .build();
+    {
+        let sender = sender.clone();
+        search.connect_search_changed(move |e| sender.input(ContactsPageInput::Query(e.text().to_string())));
+    }
+    {
+        let sender = sender.clone();
+        search.connect_stop_search(move |_| sender.input(ContactsPageInput::CloseSearch));
+    }
+    // Leaving it empty closes it too.
+    let focus = gtk::EventControllerFocus::new();
+    {
+        let sender = sender.clone();
+        focus.connect_leave(move |ctl| {
+            let Some(entry) = ctl.widget().and_downcast::<gtk::SearchEntry>() else { return };
+            let sender = sender.clone();
+            crate::ui::close_if_focus_left_row(&entry, move || {
+                sender.input(ContactsPageInput::CloseSearch);
+            });
+        });
+    }
+    search.add_controller(focus);
+    let search_row = gtk::Box::builder().spacing(6).css_classes(["list-search-row"]).build();
+    search_row.append(&search);
+    let search_revealer = gtk::Revealer::builder()
+        .transition_type(gtk::RevealerTransitionType::SlideDown)
+        .child(&search_row)
+        .build();
+
+    // Which address book the list shows, while the sidebar does not list
+    // them: every one, or one.
+    let book_filter = gtk::DropDown::builder()
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(10)
+        .margin_end(10)
+        .visible(false)
+        .tooltip_text(i18n("Address book"))
+        .build();
+    let list = gtk::ListView::builder().css_classes(["navigation-sidebar", "contacts-listbox"]).build();
+    let list_scroll = gtk::ScrolledWindow::builder()
+        .vexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(&list)
+        .build();
+    let list_column = gtk::Box::builder().orientation(gtk::Orientation::Vertical).width_request(280).build();
+    list_column.append(&search_revealer);
+    list_column.append(&book_filter);
+    list_column.append(&list_scroll);
+    let list_pane = adw::ToolbarView::new();
+    list_pane.add_top_bar(&list_header);
+    list_pane.set_content(Some(&list_column));
+    browser.set_start_child(Some(&list_pane));
+
+    // ---- the detail pane ----
+    let detail_header = adw::HeaderBar::builder().css_classes(["flat"]).show_start_title_buttons(false).build();
+    // Top-left of the card pane: edit the shown contact.
+    let edit_btn = header_button("document-edit-symbolic", i18n("Edit contact"));
+    {
+        let sender = sender.clone();
+        edit_btn.connect_clicked(move |_| sender.input(ContactsPageInput::Edit));
+    }
+    detail_header.pack_start(&edit_btn);
+    detail_header.set_title_widget(Some(&gtk::Label::builder().label(i18n("Contacts")).css_classes(["pane-title"]).build()));
+    let detail_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .margin_top(24)
+        .margin_bottom(32)
+        .margin_start(18)
+        .margin_end(18)
+        .build();
+    let clamp = adw::Clamp::builder().maximum_size(560).tightening_threshold(420).child(&detail_box).build();
+    let detail_scroll = gtk::ScrolledWindow::builder()
+        .hexpand(true)
+        .vexpand(true)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .css_classes(["contact-detail-pane"])
+        .child(&clamp)
+        .build();
+    let detail_pane = adw::ToolbarView::builder().hexpand(true).build();
+    detail_pane.add_top_bar(&detail_header);
+    detail_pane.set_content(Some(&detail_scroll));
+    // The app mounts its contacts compose slot over this in init, so "New
+    // message" slides down right here.
+    let detail_overlay = gtk::Overlay::new();
+    detail_overlay.set_child(Some(&detail_pane));
+    browser.set_end_child(Some(&detail_overlay));
+    root.add_named(&browser, Some("browser"));
+
+    let widgets = ContactsPageWidgets {
+        page_stack: root.clone(),
+        status,
+        search_revealer,
+        filter_btn,
+        count_label,
+        search,
+        book_filter,
+        list,
+        detail_overlay,
+        edit_btn,
+        detail_box,
+    };
+    widgets.apply(model);
+    widgets
+}
+
 impl Component for ContactsPage {
     /// The app's compose revealer, mounted over the detail pane.
     type Init = gtk::Revealer;
     type Input = ContactsPageInput;
     type Output = ContactsPageOutput;
     type CommandOutput = ();
+    type Root = gtk::Stack;
+    type Widgets = ContactsPageWidgets;
 
-    view! {
-        #[name = "page_stack"]
-        gtk::Stack {
-            set_transition_type: gtk::StackTransitionType::Crossfade,
+    fn init_root() -> Self::Root {
+        gtk::Stack::new()
+    }
 
-            // No contacts at all (or still loading the first read).
-            add_named[Some("none")] = &adw::ToolbarView {
-                add_top_bar = &adw::HeaderBar {
-                    add_css_class: "flat",
-                    #[wrap(Some)]
-                    set_title_widget = &gtk::Label {
-                        set_label: &i18n("Contacts"),
-                        add_css_class: "pane-title",
-                    },
-                    pack_start = &gtk::Button {
-                        set_icon_name: "sidebar-show-symbolic",
-                        set_tooltip_text: Some(i18n("Toggle sidebar").as_str()),
-                        add_css_class: "flat",
-                        connect_clicked[sender] => move |_| {
-                            let _ = sender.output(ContactsPageOutput::ToggleSidebar);
-                        },
-                    },
-                    pack_end = &gtk::Button {
-                        set_icon_name: "document-open-symbolic",
-                        set_tooltip_text: Some(i18n("Import vCard files into the Hylki address book").as_str()),
-                        add_css_class: "flat",
-                        connect_clicked => ContactsPageInput::ImportContacts,
-                    },
-                    pack_end = &gtk::Button {
-                        set_icon_name: "list-add-symbolic",
-                        set_tooltip_text: Some(i18n("New contact or group").as_str()),
-                        add_css_class: "flat",
-                        connect_clicked[sender] => move |b| new_menu(b, &sender),
-                    },
-                },
-
-                #[wrap(Some)]
-                set_content = &adw::StatusPage {
-                    set_icon_name: Some("x-office-address-book-symbolic"),
-                    #[watch]
-                    set_title: &if model.loading { i18n("Loading Contacts…") } else { i18n("No Contacts") },
-                    #[watch]
-                    set_description: Some(if model.loading {
-                        String::new()
-                    } else {
-                        i18n("Add a contact with the + button, or import vCard files. Contacts are kept in Hylki's own address book, and the address books of GNOME Contacts are listed here too.")
-                    }.as_str()),
-                },
-            },
-
-            // Each pane carries its own header (like the mail view), so the
-            // divider between them runs the full height of the window; the
-            // paned handle lets the list grow, with its launch width as the
-            // floor.
-            add_named[Some("browser")] = &gtk::Paned {
-                set_orientation: gtk::Orientation::Horizontal,
-                set_wide_handle: false,
-                set_position: crate::config::load_contacts_pane_width(),
-                set_resize_start_child: false,
-                set_shrink_start_child: false,
-                set_resize_end_child: true,
-                set_shrink_end_child: false,
-                // Remember the width the user drags to. Debounced: one write
-                // once the drag settles (see the mail view's list pane).
-                connect_position_notify[
-                    pending = std::rc::Rc::new(std::cell::RefCell::new(
-                        None::<gtk::glib::SourceId>,
-                    ))
-                ] => move |p| {
-                    let pos = p.position();
-                    if let Some(id) = pending.borrow_mut().take() {
-                        id.remove();
-                    }
-                    let armed = pending.clone();
-                    *pending.borrow_mut() = Some(gtk::glib::timeout_add_local_once(
-                        std::time::Duration::from_millis(600),
-                        move || {
-                            *armed.borrow_mut() = None;
-                            crate::config::save_contacts_pane_width(pos);
-                        },
-                    ));
-                },
-
-                #[wrap(Some)]
-                set_start_child = &adw::ToolbarView {
-                    add_top_bar = &adw::HeaderBar {
-                        add_css_class: "flat",
-                        // Left pane: no window controls (the detail pane's
-                        // header carries the window's close button).
-                        set_show_start_title_buttons: false,
-                        set_show_end_title_buttons: false,
-                        #[wrap(Some)]
-                        set_title_widget = &gtk::Label {
-                            set_label: "",
-                        },
-                        // Leftmost, mirroring the pane it acts on — same spot
-                        // as in the message list's header.
-                        pack_start = &gtk::Button {
-                            set_icon_name: "sidebar-show-symbolic",
-                            set_tooltip_text: Some(i18n("Toggle sidebar").as_str()),
-                            add_css_class: "flat",
-                            connect_clicked[sender] => move |_| {
-                                let _ = sender.output(ContactsPageOutput::ToggleSidebar);
-                            },
-                        },
-                        // Beside it, as in the message list's header.
-                        pack_start = &gtk::Button {
-                            set_icon_name: "system-search-symbolic",
-                            set_tooltip_text: Some(i18n("Search contacts (Ctrl+F)").as_str()),
-                            add_css_class: "flat",
-                            connect_clicked => ContactsPageInput::FocusSearch,
-                        },
-                        // pack_end packs right-to-left: sort and filter at the
-                        // far right (matching the message list), then the
-                        // count, then import, then "+", first on the right.
-                        #[name = "filter_btn"]
-                        pack_end = &gtk::MenuButton {
-                            set_icon_name: "filter-symbolic",
-                            set_tooltip_text: Some(i18n("Sort and filter contacts").as_str()),
-                            set_valign: gtk::Align::Center,
-                            add_css_class: "flat",
-                        },
-                        #[name = "count_label"]
-                        pack_end = &gtk::Label {
-                            set_valign: gtk::Align::Center,
-                            add_css_class: "list-count",
-                        },
-                        pack_end = &gtk::Button {
-                            set_icon_name: "document-open-symbolic",
-                            set_tooltip_text: Some(i18n("Import vCard files into the Hylki address book").as_str()),
-                            add_css_class: "flat",
-                            connect_clicked => ContactsPageInput::ImportContacts,
-                        },
-                        pack_end = &gtk::Button {
-                            set_icon_name: "list-add-symbolic",
-                            set_tooltip_text: Some(i18n("New contact or group").as_str()),
-                            add_css_class: "flat",
-                            connect_clicked[sender] => move |b| new_menu(b, &sender),
-                        },
-                    },
-
-                    #[wrap(Some)]
-                    set_content = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_width_request: 280,
-
-                        // The search, shown by the header's search button:
-                        // the message list's search bar.
-                        gtk::Revealer {
-                            set_transition_type: gtk::RevealerTransitionType::SlideDown,
-                            #[watch]
-                            set_reveal_child: model.search_open || model.search_pinned,
-
-                            gtk::Box {
-                                set_spacing: 6,
-                                add_css_class: "list-search-row",
-
-                                #[name = "search"]
-                                gtk::SearchEntry {
-                                    set_hexpand: true,
-                                    set_width_chars: 3,
-                                    set_placeholder_text: Some(i18n("Search contacts").as_str()),
-                                    connect_search_changed[sender] => move |e| {
-                                        sender.input(ContactsPageInput::Query(e.text().to_string()));
-                                    },
-                                    connect_stop_search[sender] => move |_| {
-                                        sender.input(ContactsPageInput::CloseSearch);
-                                    },
-                                    // Leaving it empty closes it too.
-                                    add_controller = gtk::EventControllerFocus {
-                                        connect_leave[sender] => move |ctl| {
-                                            let Some(entry) = ctl.widget().and_downcast::<gtk::SearchEntry>() else { return };
-                                            let sender = sender.clone();
-                                            crate::ui::close_if_focus_left_row(&entry, move || {
-                                                sender.input(ContactsPageInput::CloseSearch);
-                                            });
-                                        },
-                                    },
-                                },
-
-                            },
-                        },
-
-                        // Which address book the list shows, while the
-                        // sidebar does not list them: every one, or one.
-                        #[name = "book_filter"]
-                        gtk::DropDown {
-                            set_margin_top: 6,
-                            set_margin_bottom: 6,
-                            set_margin_start: 10,
-                            set_margin_end: 10,
-                            set_visible: false,
-                            set_tooltip_text: Some(i18n("Address book").as_str()),
-                        },
-
-                        gtk::ScrolledWindow {
-                            set_vexpand: true,
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                            #[name = "list"]
-                            gtk::ListView {
-                                add_css_class: "navigation-sidebar",
-                                add_css_class: "contacts-listbox",
-                            },
-                        },
-                    },
-                },
-
-                #[wrap(Some)]
-                #[name = "detail_overlay"]
-                set_end_child = &gtk::Overlay {
-                    // The app mounts its contacts compose slot over this in
-                    // init, so "New message" slides down right here.
-                    #[wrap(Some)]
-                    set_child = &adw::ToolbarView {
-                    set_hexpand: true,
-
-                    add_top_bar = &adw::HeaderBar {
-                        add_css_class: "flat",
-                        set_show_start_title_buttons: false,
-                        // Top-left of the card pane: edit the shown contact.
-                        #[name = "edit_btn"]
-                        pack_start = &gtk::Button {
-                            set_icon_name: "document-edit-symbolic",
-                            set_tooltip_text: Some(i18n("Edit contact").as_str()),
-                            add_css_class: "flat",
-                            connect_clicked => ContactsPageInput::Edit,
-                        },
-                        #[wrap(Some)]
-                        set_title_widget = &gtk::Label {
-                            set_label: &i18n("Contacts"),
-                            add_css_class: "pane-title",
-                        },
-                    },
-
-                    #[wrap(Some)]
-                    set_content = &gtk::ScrolledWindow {
-                        set_hexpand: true,
-                        set_vexpand: true,
-                        set_hscrollbar_policy: gtk::PolicyType::Never,
-                        add_css_class: "contact-detail-pane",
-
-                        adw::Clamp {
-                            set_maximum_size: 560,
-                            set_tightening_threshold: 420,
-
-                            #[name = "detail_box"]
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_margin_top: 24,
-                                set_margin_bottom: 32,
-                                set_margin_start: 18,
-                                set_margin_end: 18,
-                            },
-                        },
-                    },
-                    },
-                },
-            },
-        }
+    fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
+        widgets.apply(self);
     }
 
     fn init(
@@ -353,7 +362,7 @@ impl Component for ContactsPage {
             pending: None,
             decoding: std::collections::HashSet::new(),
         };
-        let widgets = view_output!();
+        let widgets = build_widgets(&root, &sender, &model);
         widgets.detail_overlay.add_overlay(&compose_slot);
 
         // Delete on the list asks to remove the contact being looked at. The
