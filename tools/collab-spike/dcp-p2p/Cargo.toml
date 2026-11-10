@@ -27,7 +27,7 @@ p2panda-core = "=0.7.1"
 p2panda-store = { version = "=0.7.1", default-features = false, features = ["sqlite", "spaces"] }
 p2panda-sync = "=0.7.1"
 p2panda-auth = { version = "=0.7.1", default-features = false, features = ["serde"] }
-p2panda-encryption = { version = "=0.7.1", default-features = false, features = ["data_scheme"] }
+p2panda-encryption = { version = "=0.8.0", default-features = false, features = ["data_scheme"] }
 p2panda-spaces = "=0.7.1"
 petgraph = "0.8"
 serde_bytes = "0.11"
