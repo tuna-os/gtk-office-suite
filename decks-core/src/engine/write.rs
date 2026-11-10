@@ -998,20 +998,45 @@ fn background_picture_xml(rel_id: &str, fill: &crate::engine::FillRect) -> Strin
 /// be a part nothing reads. Text, rects and circles are what it reads, and
 /// they are what this writes.
 /// A master's or layout's pictures as they are written: each is the part's
-/// relationship `rId{first_rel + k}` to `../media/imageN.png`, its file
-/// added to the package's media (`images`).
+/// relationship `rId{first_rel + k}` to its media part (`images`).
 struct PartPictures<'a> {
     first_rel: usize,
     targets: Vec<String>,
-    images: &'a mut Vec<String>,
+    images: &'a mut PptxMedia,
 }
 
 impl PartPictures<'_> {
     /// The relationship id for a picture of the file at `path`.
     fn add(&mut self, path: &str) -> String {
-        self.images.push(path.to_string());
-        self.targets.push(format!("../media/image{}.png", self.images.len()));
+        self.targets.push(self.images.target(path));
         format!("rId{}", self.first_rel + self.targets.len() - 1)
+    }
+}
+
+/// The package's `ppt/media` parts. A file is stored once however many
+/// slides, layouts and masters show it, and each part is named with the
+/// picture's real extension, so a JPEG is not a `.png` part (#1984).
+#[derive(Default)]
+struct PptxMedia {
+    /// Source path and part name (`image3.jpg`), in first-use order.
+    parts: Vec<(String, String)>,
+    by_path: std::collections::HashMap<String, usize>,
+}
+
+impl PptxMedia {
+    /// The relationship target (`../media/imageN.ext`) for the picture at
+    /// `path`, adding its part the first time the file is seen.
+    fn target(&mut self, path: &str) -> String {
+        let i = match self.by_path.get(path) {
+            Some(&i) => i,
+            None => {
+                let (ext, _) = crate::image_px::media_type(path);
+                self.parts.push((path.to_string(), format!("image{}.{ext}", self.parts.len() + 1)));
+                self.by_path.insert(path.to_string(), self.parts.len() - 1);
+                self.parts.len() - 1
+            }
+        };
+        format!("../media/{}", self.parts[i].1)
     }
 }
 
@@ -1426,7 +1451,7 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         .unix_permissions(0o755);
 
     // Track images to add to ppt/media/
-    let mut images_to_add = Vec::new();
+    let mut images_to_add = PptxMedia::default();
     // Chart parts, numbered through the deck in slide and object order.
     let mut charts: Vec<String> = Vec::new();
     let chart_total = deck
@@ -1445,6 +1470,11 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
            <Default Extension=\"png\" ContentType=\"image/png\"/>\n\
            <Default Extension=\"jpeg\" ContentType=\"image/jpeg\"/>\n\
            <Default Extension=\"jpg\" ContentType=\"image/jpeg\"/>\n\
+           <Default Extension=\"gif\" ContentType=\"image/gif\"/>\n\
+           <Default Extension=\"svg\" ContentType=\"image/svg+xml\"/>\n\
+           <Default Extension=\"webp\" ContentType=\"image/webp\"/>\n\
+           <Default Extension=\"bmp\" ContentType=\"image/bmp\"/>\n\
+           <Default Extension=\"tiff\" ContentType=\"image/tiff\"/>\n\
            <Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/>\n"
     );
     for i in 0..deck.slides.len() {
@@ -1595,10 +1625,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             // with its `a:fillRect`, the picture a media part of its own.
             let bg = slide.background.trim_start_matches('#');
             if let Some(pic) = &slide.background_picture {
-                let img_idx = images_to_add.len() + 1;
-                images_to_add.push(pic.path.clone());
                 let rel_id = format!("rId{}", slide_rels.len() + 1);
-                slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{img_idx}.png")));
+                slide_rels.push((rel_id.clone(), IMAGE_REL, images_to_add.target(&pic.path)));
                 writer.get_mut().write_all(background_picture_xml(&rel_id, &pic.fill).as_bytes()).map_err(|e| e.to_string())?;
             } else if bg.len() == 6 {
                 writer.write_event(Event::Start(BytesStart::new("p:bg"))).map_err(|e| e.to_string())?;
@@ -1675,11 +1703,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         write_table(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, table).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Image { path, x, y, w, h, rotation, crop } => {
-                        let img_idx = images_to_add.len() + 1;
-                        images_to_add.push(path.clone());
-
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
-                        slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{}.png", img_idx)));
+                        slide_rels.push((rel_id.clone(), IMAGE_REL, images_to_add.target(path)));
 
                         write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop).map_err(|e| e.to_string())?;
                     }
@@ -1816,8 +1841,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     }
 
     // 8. Write image media files in ppt/media/
-    for (idx, img_path) in images_to_add.iter().enumerate() {
-        let zip_img_path = format!("ppt/media/image{}.png", idx + 1);
+    for (img_path, name) in &images_to_add.parts {
+        let zip_img_path = format!("ppt/media/{name}");
         let mut img_file = File::open(img_path)
             .map_err(|e| format!("Cannot open image {}: {}", img_path, e))?;
         let mut buffer = Vec::new();
