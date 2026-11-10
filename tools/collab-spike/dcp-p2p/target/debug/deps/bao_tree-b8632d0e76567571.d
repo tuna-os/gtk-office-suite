@@ -1,0 +1,14 @@
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/bao_tree-b8632d0e76567571.d: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/iter.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/rec.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/tree.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/error.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/fsm.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mixed.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/outboard.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/sync.rs
+
+/home/claude/gtk-office-suite/tools/collab-spike/dcp-p2p/target/debug/deps/libbao_tree-b8632d0e76567571.rmeta: /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/lib.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/iter.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/rec.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/tree.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mod.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/error.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/fsm.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mixed.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/outboard.rs /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/sync.rs
+
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/lib.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/iter.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/rec.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/tree.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mod.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/error.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/fsm.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/mixed.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/outboard.rs:
+/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bao-tree-0.17.0/src/io/sync.rs:
