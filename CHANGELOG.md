@@ -18,6 +18,9 @@
 ### Decks
 - Undo keeps the last 200 steps. A long editing session used to keep every step it ever made, whole slides included, so memory grew for as long as the window stayed open (#1993).
 
+### Decks
+- A PowerPoint file saved by Decks stores each picture once, however many slides show it, and names it for what it is: a JPEG photo used to be saved as a `.png` part, and a logo on thirty slides was stored thirty times (#1984).
+
 ## v1.0 (post-release) — 2026-06-24
 
 Features added after the v1.0 tag and GitHub release.
