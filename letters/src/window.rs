@@ -1121,13 +1121,16 @@ fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
 
 fn connect_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
     let wc = wc.clone();
+    // One pending count, not one per keystroke: each clones the document
+    // (#1990).
+    let idle = crate::idle::IdleOnce::default();
     buf.connect_changed(move |b| {
         // Idle, not inline (LET-003): "changed" fires synchronously from the
         // model's own projection while the live model is borrowed, and the
         // count reads the model — reading it here would panic on the
         // outstanding borrow and take the app down on every keystroke.
         let (b, wc) = (b.clone(), wc.clone());
-        glib::idle_add_local_once(move || update_word_count(&b, &wc));
+        idle.schedule(move || update_word_count(&b, &wc));
     });
 }
 

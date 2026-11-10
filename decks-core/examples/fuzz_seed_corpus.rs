@@ -7,7 +7,7 @@
 // suite's own writers rather than committed as binaries.
 
 use decks_core::engine::{Deck, Slide, SlideObject};
-use letters_core::model::{Run, RunStyle};
+use suite_common_core::document::{Run, RunStyle};
 use std::path::{Path, PathBuf};
 
 fn text_box(x: f64, y: f64, text: &str, runs: Vec<Run>) -> SlideObject {

@@ -93,11 +93,9 @@ APPLICATION_CORE_CRATES = ("letters-core", "tables-core", "decks-core")
 
 # ADR 0012 / Issue #284: Known legacy sibling edges awaiting extraction of shared
 # document primitives into suite-common-core. No other sibling core dependency is
-# permitted, and these must be removed as migration phases complete.
-KNOWN_SIBLING_EDGES = {
-    ("tables-core", "letters-core"),
-    ("decks-core", "letters-core"),
-}
+# permitted. The last edges cleared with #1661 (tables-core) and #1662
+# (decks-core); the set stays, empty, so a new edge has to be argued for here.
+KNOWN_SIBLING_EDGES: set[tuple[str, str]] = set()
 
 
 def workspace_members() -> list[str]:
