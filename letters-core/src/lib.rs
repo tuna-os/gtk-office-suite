@@ -22,6 +22,7 @@ pub mod lists;
 pub mod loss;
 pub mod markdown;
 pub mod model;
+pub mod neutral;
 pub mod odt;
 pub mod review;
 pub mod save;

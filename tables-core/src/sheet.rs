@@ -135,6 +135,8 @@ pub fn parse_cell_or_range(s: &str) -> Option<(usize, usize, usize, usize)> {
 }
 
 /// Parse a cell reference like "A1", "b3", "AA10" → (row, col), 0-based.
+/// `None` past the sheet's last column (`XFD`) or last row, so text from
+/// the name box or a file can't overflow or point outside the grid.
 pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     let s = s.trim();
     let letters: String = s.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
@@ -144,10 +146,17 @@ pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     }
     let mut col: usize = 0;
     for ch in letters.chars() {
-        col = col * 26 + (ch.to_ascii_uppercase() as usize - 'A' as usize) + 1;
+        col = col
+            .checked_mul(26)?
+            .checked_add(ch.to_ascii_uppercase() as usize - 'A' as usize + 1)?;
+        if col > SHEET_MAX_COLS {
+            return None;
+        }
     }
     let row: usize = digits.parse().ok()?;
-    if row == 0 { return None; }
+    if row == 0 || row > SHEET_MAX_ROWS {
+        return None;
+    }
     Some((row - 1, col - 1))
 }
 
@@ -1108,6 +1117,94 @@ pub struct PivotTableSpec {
     pub row_fields: Vec<PivotField>,
     pub col_fields: Vec<PivotField>,
     pub data_fields: Vec<PivotDataField>,
+    /// Rows and columns of the table last written at `target_cell`, so a
+    /// refresh can clear what the new table no longer covers. (0, 0)
+    /// before the pivot is first written.
+    #[cfg_attr(feature = "collab", serde(default))]
+    pub extent: (usize, usize),
+}
+
+impl PivotAggFunc {
+    /// Every summary, in the order Calc's and Excel's pivot dialogs list them.
+    pub const ALL: [PivotAggFunc; 5] =
+        [PivotAggFunc::Sum, PivotAggFunc::Count, PivotAggFunc::Average, PivotAggFunc::Min, PivotAggFunc::Max];
+
+    /// The name a dialog shows for it.
+    pub fn label(self) -> &'static str {
+        match self {
+            PivotAggFunc::Sum => "Sum",
+            PivotAggFunc::Count => "Count",
+            PivotAggFunc::Average => "Average",
+            PivotAggFunc::Min => "Min",
+            PivotAggFunc::Max => "Max",
+        }
+    }
+}
+
+impl PivotTableSpec {
+    /// The fields a pivot over `range` can group or summarize by: one per
+    /// column of the range, named by its first (header) row, or by its
+    /// column letter where that cell is empty. Empty when the range has no
+    /// row under the header, since a pivot needs data to summarize.
+    pub fn source_fields(sheet: &SheetModel, range: (usize, usize, usize, usize)) -> Vec<String> {
+        let (r0, c0, r1, c1) = range;
+        if r1 <= r0 || c1 < c0 {
+            return Vec::new();
+        }
+        (c0..=c1)
+            .map(|c| {
+                let text = sheet.data.get(r0).and_then(|row| row.get(c)).map(|s| s.trim()).unwrap_or("");
+                if text.is_empty() { format!("Column {}", col_label(c)) } else { text.to_string() }
+            })
+            .collect()
+    }
+
+    /// A pivot over `range` with rows grouped by field `row`, optionally
+    /// split into columns by field `column`, summarizing field `value` with
+    /// `func`. Fields are offsets into the range's columns, as
+    /// [`Self::source_fields`] lists them. It is placed at `target`, or
+    /// by default ([`Self::default_target`]) two columns right of the range,
+    /// level with its header. `None` when a field is out of range, the range
+    /// has no data rows, or `target` lies inside the range, which the pivot
+    /// would overwrite.
+    pub fn from_choice(
+        sheet: &SheetModel,
+        range: (usize, usize, usize, usize),
+        row: usize,
+        column: Option<usize>,
+        value: usize,
+        func: PivotAggFunc,
+        target: Option<(usize, usize)>,
+    ) -> Option<Self> {
+        let target = target.unwrap_or_else(|| Self::default_target(range));
+        let (r0, c0, r1, c1) = range;
+        if (r0..=r1).contains(&target.0) && (c0..=c1).contains(&target.1) {
+            return None;
+        }
+        let fields = Self::source_fields(sheet, range);
+        let field = |i: usize| fields.get(i).map(|name| PivotField { col_index: range.1 + i, name: name.clone() });
+        let row_field = field(row)?;
+        let col_fields = match column {
+            Some(i) => vec![field(i)?],
+            None => Vec::new(),
+        };
+        let value_field = field(value)?;
+        Some(PivotTableSpec {
+            name: format!("Pivot{}", sheet.pivot_tables.len() + 1),
+            source_range: range,
+            target_cell: target,
+            row_fields: vec![row_field],
+            col_fields,
+            data_fields: vec![PivotDataField { col_index: value_field.col_index, name: value_field.name, func }],
+            extent: (0, 0),
+        })
+    }
+
+    /// Where a pivot over `range` goes unless placed elsewhere: two columns
+    /// to its right, level with its header row.
+    pub fn default_target(range: (usize, usize, usize, usize)) -> (usize, usize) {
+        (range.0, range.3 + 2)
+    }
 }
 
 /// Cell protection settings.
@@ -2349,6 +2446,14 @@ mod selection_tests {
         assert_eq!(parse_cell_ref("A1"), Some((0, 0)));
         assert_eq!(parse_cell_ref("b3"), Some((2, 1)));
         assert_eq!(parse_cell_ref("AA10"), Some((9, 26)));
+        // The grid's last cell parses; one past it in either direction,
+        // or enough letters to overflow usize, does not (#1988).
+        assert_eq!(parse_cell_ref("XFD1048576"), Some((SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1)));
+        assert_eq!(parse_cell_ref("XFE1"), None);
+        assert_eq!(parse_cell_ref("A1048577"), None);
+        assert_eq!(parse_cell_ref("ZZZZZZZZZZZZZZ1"), None);
+        assert_eq!(parse_cell_ref(&format!("{}1", "Z".repeat(64))), None);
+        assert_eq!(parse_cell_or_range("A1:ZZZZZZZZZZZZZZ1"), None);
         assert_eq!(parse_cell_ref(" C7 "), Some((6, 2)));
         assert_eq!(parse_cell_ref("A0"), None);
         assert_eq!(parse_cell_ref("1A"), None);

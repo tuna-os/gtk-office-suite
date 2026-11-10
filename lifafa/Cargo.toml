@@ -61,8 +61,8 @@ zeroize = "1"
 # Async mail stack (runs on a dedicated worker thread + tokio runtime)
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "io-std"] }
 futures = "0.3"
-async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
-async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
+async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
+async-native-tls = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
 mail-parser = "0.9"
 lettre = { version = "0.11", default-features = false, features = ["tokio1-native-tls", "smtp-transport", "builder"] }
 rfc2047-decoder = "1"
@@ -83,7 +83,7 @@ dirs = "5"
 # CSP nonce comes from the OS CSPRNG. All three are already in the dependency
 # graph (keyring, the mail stack, ring), so naming them here adds no new downloads.
 sha2 = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 getrandom = "0.2"
 
 # Gravatar (opt-in): MD5 of the email + a simple blocking HTTPS fetch

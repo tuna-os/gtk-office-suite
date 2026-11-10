@@ -5629,11 +5629,11 @@ class TablesSheetStructureSmoke(TablesCellEntryMixin, BaseGUITestCase):
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("<Shift>F10")
         # GTK 4.14 gives a popover menu's items no accessible names, so the
-        # menu is checked by its twelve items and used as the keyboard does:
+        # menu is checked by its fourteen items and used as the keyboard does:
         # it opens on its first item, Insert Rows Above, and Return runs it.
         self.wait_until(
             lambda: len(self.app.findChildren(lambda n: n.roleName == "menu item" and n.showing)),
-            lambda n: n == 12, description="the cells' context menu and its twelve commands")
+            lambda n: n == 14, description="the cells' context menu and its fourteen commands")
         rawinput.keyCombo("Return")
         self._wait_cells(lambda c: c.get((1, 0), ("",))[0] == "head", "Insert Rows Above to move A1 down a row")
 
@@ -10534,10 +10534,97 @@ class TablesChartEditorSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed editing a chart")
 
 
+class TablesPivotSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A pivot table made in the window (#1657): Insert Pivot Table over a
+    selected table, with the dialog's default fields (rows by the first
+    column, the last summed) and where it goes typed into Place At; a
+    source edit shows only after Refresh Pivot Tables, and one undo takes
+    the refresh back. The grouping, the column field and the sums are
+    tables_core's (tables-core/tests/pivot_and_protection_tests.rs pins
+    them); this proves the dialog's placement and the refresh reach them.
+    GTK 4 implements no AT-SPI grab_focus, so the combo rows are left at
+    their defaults and Place At is set through the editable-text
+    interface, as a screen reader would."""
+
+    app_name = "tables"
+    aid = "org.tunaos.tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-pivot-")
+        super().setUp()
+
+    def _values(self):
+        snap = self.trigger_snapshot(self.aid)
+        return {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+
+    def _pivot(self):
+        values = self._values()
+        return [[values.get((r, c), "") for c in range(3)] for r in range(5, 8)]
+
+    def _showing(self, name, roles):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.name == name and n.roleName in roles and n.showing,
+                                   retry=False, requireResult=False)
+
+    def test_a_pivot_from_the_dialog_follows_a_refresh_and_undo(self):
+        from dogtail import rawinput
+
+        self.gapplication_action(self.aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
+        self._wait_for_a_new_document()
+        for ref, value in [("A1", "Region"), ("B1", "Quarter"), ("C1", "Sales"),
+                           ("A2", "North"), ("B2", "Q1"), ("C2", "100"),
+                           ("A3", "North"), ("B3", "Q2"), ("C3", "50"),
+                           ("A4", "South"), ("B4", "Q1"), ("C4", "200")]:
+            self._put(ref, value)
+
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("A1:C4")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description="the selection of A1:C4 to hand focus back to fx")
+        self.gapplication_action(self.aid, "insert-pivot-table")
+        insert = self.wait_until(lambda: self._showing("Insert", ("push button",)), bool,
+                                 description="the Insert Pivot Table dialog")
+
+        place_at = self.wait_until(lambda: self._showing("Place At", ("text", "entry")), bool,
+                                   description="the dialog's Place At field")
+        place_at.text = "A6"
+        self.wait_until(lambda: place_at.text, lambda t: t == "A6",
+                        description="Place At to read A6")
+        self.take_screenshot("pivot_dialog_choices")
+        insert.do_action(0)
+
+        self.wait_until(self._pivot, lambda p: p[0][0] == "Region",
+                        description="the pivot to be written at A6")
+        self.assertEqual(self._pivot(), [
+            ["Region", "Sum of Sales", ""],
+            ["North", "150", ""],
+            ["South", "200", ""],
+        ])
+
+        # A source edit leaves the pivot as it was until it is refreshed.
+        self._put("C4", "300")
+        self.assertEqual(self._pivot()[2][1], "200", "a pivot is rewritten on refresh, not on every edit")
+        self.gapplication_action(self.aid, "refresh-pivot-tables")
+        self.wait_until(self._pivot, lambda p: p[2][1] == "300",
+                        description="Refresh Pivot Tables to show the edited 300")
+
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._pivot, lambda p: p[2][1] == "200",
+                        description="undo to take the refresh back")
+        self.assertEqual(self._values().get((3, 2)), "300", "undo took the source edit too")
+        self.assertIsNone(self.process.poll(), "tables crashed making a pivot table")
+
+
 class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):
     """A dynamic-array formula spills into the grid, a blocked spill shows
     #SPILL! in its anchor, and the grid recovers when the blocker goes and
-    follows undo and redo (#1659). The spill, its blocking and its clearing
+    follows undo and redo; an empty result shows #CALC! until its source
+    matches (#1659). The spill, its blocking, its clearing and the errors
     are the engine's (tables-core/tests/dynamic_arrays.rs pins them); this
     proves they reach the visible grid, with no spill logic in the widget
     code."""
@@ -10610,6 +10697,44 @@ class TablesDynamicArraySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.wait_until(self._column_a, lambda col: col == ["1", "2", "3", ""],
                         description="redo to clear the blocker and spill again")
         self.assertIsNone(self.process.poll(), "tables crashed spilling an array")
+
+    def _column_d(self, n=4):
+        values = self._values()
+        return [values.get((r, 3), "") for r in range(n)]
+
+    def test_an_empty_result_shows_calc_and_spills_when_its_source_matches(self):
+        """A FILTER that matches nothing shows the engine's #CALC! in its
+        anchor rather than an empty cell; a source value that matches makes
+        it spill, and undoing that entry brings #CALC! back. Every cell is
+        written while empty, so no step depends on how fx treats a cell's
+        existing input."""
+        from dogtail import rawinput
+
+        self.gapplication_action(self.aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
+        self._wait_for_a_new_document()
+
+        self._enter("B1", "1")
+        self._enter("D1", "=FILTER(B1:B3,B1:B3>5)")
+        self.wait_until(self._column_d, lambda col: col[0] == "#CALC!",
+                        description="a FILTER with no match to show #CALC! in D1")
+        self.assertEqual(self._column_d()[1], "", "an empty result spills nothing")
+
+        # B2 and B3 now match: the FILTER spills them.
+        self._enter("B2", "9")
+        self._enter("B3", "7")
+        self.wait_until(self._column_d, lambda col: col == ["9", "7", "", ""],
+                        description="the FILTER to spill 9 and 7 once its source matches")
+
+        # Undo B3 and B2: one match, then none, and #CALC! comes back.
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._column_d, lambda col: col == ["9", "", "", ""],
+                        description="undoing B3 to leave one match")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._column_d, lambda col: col[0] == "#CALC!" and col[1] == "",
+                        description="undoing B2 to bring #CALC! back")
+        self.assertIsNone(self.process.poll(), "tables crashed on an empty array result")
 
 
 class DecksUndoSelectionSmoke(BaseGUITestCase):
