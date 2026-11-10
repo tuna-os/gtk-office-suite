@@ -99,7 +99,23 @@ fn from_ureq(e: ureq::Error) -> Error {
         E::BadUri(_) | E::Http(_) => ErrorKind::InvalidUrl,
         E::HostNotFound => ErrorKind::Dns,
         E::ConnectionFailed => ErrorKind::ConnectionFailed,
-        E::Io(_) => ErrorKind::Io,
+        // ureq 3 reports a refused or dropped connection as the I/O error
+        // itself; ureq 2 named it ConnectionFailed, and the messages shown
+        // to people ("could not be reached") hang on that.
+        E::Io(io) => {
+            use std::io::ErrorKind as K;
+            match io.kind() {
+                K::ConnectionRefused
+                | K::ConnectionReset
+                | K::ConnectionAborted
+                | K::NotConnected
+                | K::AddrNotAvailable
+                | K::TimedOut
+                | K::HostUnreachable
+                | K::NetworkUnreachable => ErrorKind::ConnectionFailed,
+                _ => ErrorKind::Io,
+            }
+        }
         _ => ErrorKind::Other,
     };
     let kind = match (&e, kind) {
@@ -499,6 +515,13 @@ mod tests {
     fn values_are_percent_encoded() {
         assert_eq!(encode("a b&c=d/é"), "a%20b%26c%3Dd%2F%C3%A9");
         assert_eq!(encode("Az09-_.~"), "Az09-_.~");
+    }
+
+    #[test]
+    fn a_refused_connection_is_a_failed_connection() {
+        // Nothing listens on port 1.
+        let e = get("http://127.0.0.1:1/").call().unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::ConnectionFailed, "{e}");
     }
 
     #[test]
