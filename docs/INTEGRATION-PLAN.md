@@ -111,7 +111,7 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | B3 | partial | Lifafa has `Actions=new-message`. The office apps and Mandelbrot have no desktop actions, and there are no `xdg-templates`. |
 | B4 | partial | `GNotification` in `lifafa/src/desktop/notify.rs` and Mandelbrot's `session/notifications`. No shared notification module, no Do Not Disturb handling across the suite. |
 | B5 | partial | Lifafa has a "Run in background" setting (`lifafa/src/ui/preferences`). No Background portal request in any app. |
-| B6 | partial | `suite-common` follows the colour scheme through `adw::StyleManager`; text scale and reduced motion are followed by Lifafa only. |
+| B6 | mostly the toolkit | No app forces a scheme until the person toggles dark mode (`suite-common` only sets `ForceDark`/`ForceLight` then, and restores the saved choice at startup), so `adw::StyleManager` follows the desktop's colour scheme, accent and high contrast; GTK follows the desktop's text scale (`gtk-xft-dpi`) and animation setting itself. Lifafa adds its own size override (`lifafa/src/desktop/text_scale.rs`, off at 100%). Not covered by any journey: no test changes the desktop setting and watches an app follow. |
 | B8 | partial | The office apps declare their file types, Lifafa `mailto:` and `message/rfc822`, Mandelbrot `x-scheme-handler/matrix`. Nothing offers the default through the standard prompts. |
 | B9 | partial | Lifafa has a Nautilus extension (`lifafa/src/desktop/nautilus_ext.rs`); it is not generalised to the suite. |
 | B11 | partial | `GtkPrintDialog` in Letters (`letters/src/printing.rs`) and Lifafa's print preview. Tables and Decks do not print through it. |
