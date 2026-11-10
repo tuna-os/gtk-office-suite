@@ -14,7 +14,13 @@ use serde::{Deserialize, Serialize};
 pub use crate::sections::{DocSection, ParagraphRange};
 
 /// Character-level formatting. `Default` is unstyled text.
+///
+/// The suite's neutral `suite_common_core::document::RunStyle` is the part
+/// of this every app can show; `crate::neutral` converts between them. Any
+/// field missing from a payload reads as its default, so a run another app
+/// put on the suite clipboard reads here.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RunStyle {
     pub bold: bool,
     /// Drawn regular where the paragraph's look is bold (a heading, the
@@ -233,11 +239,8 @@ pub enum AnchorAlign {
     End,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VertAlign {
-    Superscript,
-    Subscript,
-}
+/// The suite's own (ADR 0012): Letters, Tables and Decks share it.
+pub use suite_common_core::document::VertAlign;
 
 /// A partial style change: `None` fields are left untouched.
 #[derive(Clone, Debug, Default)]
@@ -471,22 +474,8 @@ impl ParaBorders {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Alignment {
-    #[default]
-    Left,
-    Center,
-    Right,
-    Justify,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ListKind {
-    #[default]
-    None,
-    Bullet,
-    Numbered,
-}
+/// The suite's own (ADR 0012): Letters, Tables and Decks share them.
+pub use suite_common_core::document::{Alignment, ListKind};
 
 /// How a numbered item shows its number: `prefix`, the number in
 /// `format`, then `suffix`. An item numbered "3.1" under a heading that
@@ -516,7 +505,12 @@ pub enum NumberFormat {
 }
 
 /// Paragraph-level formatting.
+///
+/// As for [`RunStyle`], `suite_common_core::document::ParaStyle` is the
+/// neutral part, converted by `crate::neutral`, and a missing field reads
+/// as its default.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ParaStyle {
     /// Heading level 1..=6, or None for body text.
     pub heading: Option<u8>,

@@ -450,9 +450,9 @@ impl WorkbookController {
         drop(state);
 
         // The sort as ops: every row's inputs in one SetCells (references
-        // moved with their cells), then each cell's format, style, border
-        // and validation where the new order changes them, and the header
-        // arrow. Undo is their inverses.
+        // moved with their cells), then each cell's format, style, border,
+        // validation, note and lock where the new order changes them, and
+        // the header arrow. Undo is their inverses.
         let mut cells = Vec::new();
         {
             let mut state = self.state.borrow_mut();
@@ -479,6 +479,10 @@ impl WorkbookController {
         after_sheet.styles = order.iter().map(|&row| before_sheet.styles[row].clone()).collect();
         after_sheet.validations = order.iter().map(|&row| before_sheet.validations[row].clone()).collect();
         after_sheet.notes = order.iter().map(|&row| before_sheet.notes[row].clone()).collect();
+        // Locks travel with their rows too: left behind, a sort on a
+        // protected sheet locked the cells the author had unlocked and
+        // unlocked the ones they had not (#1987).
+        after_sheet.cell_protections = order.iter().map(|&row| before_sheet.cell_protections[row].clone()).collect();
         let mut ops = vec![Op::SetCells { sheet: sheet_id, cells }];
         ops.extend(super::ops::diff_ops(&before_sheet, &after_sheet));
         self.apply_ops("Sort", ops)

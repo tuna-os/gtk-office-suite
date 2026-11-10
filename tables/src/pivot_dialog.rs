@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The Insert Pivot Table dialog (#1657): pick the row, column and value
-//! fields of the selected table and how to summarize them, and the
-//! controller writes the pivot two columns to its right as one undo step.
+//! fields of the selected table, how to summarize them and where the pivot
+//! goes, and the controller writes it as one undo step. Refresh Pivot Tables
+//! rewrites the sheet's pivots from their sources as they are now.
 //!
-//! Only the picking lives here. The fields, the spec and the summary are
-//! `tables_core` (`PivotTableSpec::source_fields`, `from_choice`,
-//! `WorkbookController::add_pivot_table`), so no grouping or arithmetic is
-//! done in GTK code.
+//! Only the picking lives here. The fields, the spec, the placement check
+//! and the summary are `tables_core` (`PivotTableSpec::source_fields`,
+//! `from_choice`, `WorkbookController::add_pivot_table` and
+//! `refresh_pivot_tables`), so no grouping or arithmetic is done in GTK code.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,7 +17,7 @@ use libadwaita as adw;
 use adw::prelude::*;
 
 use tables_core::controller::{WorkbookController, WorkbookState};
-use tables_core::sheet::{PivotAggFunc, PivotTableSpec};
+use tables_core::sheet::{col_label, parse_cell_ref, PivotAggFunc, PivotTableSpec};
 
 /// Returns the callback the `insert-pivot-table` action runs.
 ///
@@ -60,16 +61,22 @@ pub fn opener(
         let funcs: Vec<String> = PivotAggFunc::ALL.iter().map(|f| suite_common::i18n(f.label())).collect();
         let func_refs: Vec<&str> = funcs.iter().map(String::as_str).collect();
         let func_field = combo("Summarize By", &func_refs, 0);
+        let (tr, tc) = PivotTableSpec::default_target(range);
+        let place_at = adw::EntryRow::builder()
+            .title(suite_common::i18n("Place At"))
+            .text(format!("{}{}", col_label(tc), tr + 1))
+            .build();
 
         let group = adw::PreferencesGroup::builder()
             .title(suite_common::i18n("Fields"))
             .description(suite_common::i18n(
-                "The pivot table is written two columns to the right of the selection. Its results are saved; its layout is not, so it is not kept as a pivot table when the workbook is saved.",
+                "Place At is the pivot table's top-left cell, outside the selection. Refresh Pivot Tables updates it after the selection's data changes. Its results are saved; its layout is not, so it is not kept as a pivot table when the workbook is saved.",
             ))
             .build();
         for row in [&row_field, &column_field, &value_field, &func_field] {
             group.add(row);
         }
+        group.add(&place_at);
 
         let suite_common::dialogs::ActionDialog { dialog, action: insert_btn } = suite_common::dialogs::action_dialog(
             &suite_common::i18n("Insert Pivot Table"),
@@ -85,6 +92,10 @@ pub fn opener(
                     i => Some(i as usize - 1),
                 };
                 let func = PivotAggFunc::ALL[func_field.selected() as usize % PivotAggFunc::ALL.len()];
+                let Some(target) = parse_cell_ref(&place_at.text()) else {
+                    toast(&grid, &suite_common::i18n("Place At needs a cell reference, such as D1"));
+                    return;
+                };
                 let spec = {
                     let st = state.borrow();
                     let sheet = st.sheets[st.active_sheet].borrow();
@@ -95,16 +106,34 @@ pub fn opener(
                         column,
                         value_field.selected() as usize,
                         func,
+                        Some(target),
                     )
                 };
-                if let Some(spec) = spec {
-                    crate::sheet_actions::apply(&ctl, &grid, |c| c.add_pivot_table(spec));
-                }
+                let Some(spec) = spec else {
+                    toast(&grid, &suite_common::i18n("Place the pivot table outside the selection, which it would overwrite"));
+                    return;
+                };
+                crate::sheet_actions::apply(&ctl, &grid, |c| c.add_pivot_table(spec));
                 dlg.close();
             });
         }
         let pw = parent.borrow().clone();
         dialog.present(pw.as_ref());
+    })
+}
+
+/// Returns the callback the `refresh-pivot-tables` action runs: the
+/// controller rewrites the sheet's pivots from their sources, as one undo
+/// step, and a sheet with none says so.
+pub fn refresher(controller: Rc<RefCell<WorkbookController>>, grid: gtk::DrawingArea) -> Box<dyn Fn()> {
+    Box::new(move || {
+        if controller.borrow().state.borrow().sheet().pivot_tables.is_empty() {
+            toast(&grid, &suite_common::i18n("This sheet has no pivot tables to refresh"));
+            return;
+        }
+        crate::sheet_actions::apply(&controller, &grid, |c| {
+            c.refresh_pivot_tables();
+        });
     })
 }
 

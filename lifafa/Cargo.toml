@@ -40,7 +40,7 @@ poppler-rs = { version = "0.24", features = ["v20_9"] }
 # "png": only to enable cairo-rs's `ImageSurface::write_to_png`, used to hand a
 # rendered PDF page to gdk::Texture the same way every other thumbnail loads.
 # "pdf": printing writes the page footer onto WebKit's PDF (#359).
-cairo-rs = { version = "0.20", features = ["png", "pdf"] }
+cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 # The printed page footer's text, laid out by Pango so any script prints (#359).
 pangocairo = "0.20"
 # The zbus-based Secret Service backend, not the dbus one: dbus-secret-service
@@ -110,7 +110,7 @@ wayland-scanner = "0.31"
 # Message translation (#327): which language a message is in is found here,
 # offline, so a Translate offer sends nothing until it is clicked.
 whatlang = "0.18"
-cfb = "0.15.0"
+cfb = "0.16.0"
 # Whether an X server can attach this process's shared memory, before GTK
 # picks a renderer (#547): libxcb is opened at run time, and the segment made
 # with shmget. Both crates are already in the graph.
