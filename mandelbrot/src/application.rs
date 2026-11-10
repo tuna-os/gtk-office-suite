@@ -226,6 +226,58 @@ mod imp {
                         obj.imp().process_session_intent(session_id, intent);
                     })
                     .build(),
+                // `open-room(target)`: show a room, user or event named by an ID, an
+                // alias, a `matrix:` URI or a matrix.to link. This is the entry point
+                // for the other suite apps (see `hand_off`), so it also works as
+                // `gapplication action org.tunaos.mandelbrot open-room "'!id:server'"`.
+                gio::ActionEntry::builder("open-room")
+                    .parameter_type(Some(glib::VariantTy::STRING))
+                    .activate(|obj: &super::Application, _, variant| {
+                        let Some(target) = variant.and_then(glib::Variant::str) else {
+                            error!("Activated `app.open-room` without a target");
+                            return;
+                        };
+
+                        match crate::hand_off::target_to_uri(target) {
+                            Ok(uri) => {
+                                obj.imp().present_main_window();
+                                obj.imp().process_uri(&uri);
+                            }
+                            Err(error) => {
+                                warn!("Cannot open `{target}`: {error}");
+                                let window = obj.imp().present_main_window();
+                                toast!(window, gettext("Not a Matrix room"));
+                            }
+                        }
+                    })
+                    .build(),
+                // `start-call(target)`: show the call view of a room, for "call from a
+                // document" in the other suite apps.
+                gio::ActionEntry::builder("start-call")
+                    .parameter_type(Some(glib::VariantTy::STRING))
+                    .activate(|obj: &super::Application, _, variant| {
+                        let Some(target) = variant.and_then(glib::Variant::str) else {
+                            error!("Activated `app.start-call` without a room");
+                            return;
+                        };
+
+                        let uri = crate::hand_off::target_to_uri(target)
+                            .ok()
+                            .and_then(|uri| MatrixIdUri::parse(&uri).ok());
+                        match uri {
+                            Some(uri @ MatrixIdUri::Room(_)) => {
+                                obj.imp().present_main_window();
+                                obj.imp()
+                                    .select_session_for_intent(SessionIntent::ShowRoomCall(uri));
+                            }
+                            _ => {
+                                warn!("Cannot start a call in `{target}`: not a room");
+                                let window = obj.imp().present_main_window();
+                                toast!(window, gettext("Not a Matrix room"));
+                            }
+                        }
+                    })
+                    .build(),
                 // Withdraw a notification. This is the action triggered by the decline button
                 // of a notification about an incoming call.
                 gio::ActionEntry::builder("withdraw-notification")
