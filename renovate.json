@@ -38,6 +38,72 @@
       "allowedVersions": "<0.16.3",
       "groupName": "rdocx family",
       "groupSlug": "rdocx-family"
+    },
+    {
+      "description": "Lifafa (lifafa/, its own lock): html5ever and markup5ever_rcdom move together, because RcDom implements only its own html5ever release's TreeSink, so a lone html5ever bump does not build (#2060).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "html5ever",
+        "markup5ever_rcdom"
+      ],
+      "groupName": "lifafa html5ever",
+      "groupSlug": "lifafa-html5ever"
+    },
+    {
+      "description": "Lifafa's toolkit moves as one, with its relm4: gtk4 0.9, libadwaita 0.7, webkit6 0.4, pangocairo 0.20 and cairo-rs 0.20 belong together (relm4 0.9 requires gtk4 0.9, and a newer cairo-rs is a second cairo whose surfaces the toolkit cannot draw). A lone bump of any of them does not build. They move in the relm4 replacement (#2025); until then Renovate proposes none of them.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchDepNames": [
+        "gtk",
+        "adw",
+        "relm4",
+        "webkit6",
+        "pangocairo",
+        "cairo-rs"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Lifafa's IMAP worker uses imap-proto types that async-imap 0.12 reshaped; hold at 0.10 until the worker is ported (#1986).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "async-imap"
+      ],
+      "allowedVersions": "<0.11"
+    },
+    {
+      "description": "Lifafa's mail reader, PGP path and attachment renderer use mail-parser 0.9's part offsets and charset decoders, which 0.11 changed (u32 offsets, private decoders); hold until that port lands as its own change (#2066).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "lifafa/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "mail-parser"
+      ],
+      "allowedVersions": "<0.10"
+    },
+    {
+      "description": "Never automerge in lifafa/. Its build job is path-filtered, so it is not a required check, and an automerged bump can land red: #2060, #2066 and #2067 did. A person merges Lifafa updates once that job is green.",
+      "matchFileNames": [
+        "lifafa/**"
+      ],
+      "automerge": false
     }
   ]
 }
