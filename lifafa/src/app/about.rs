@@ -169,12 +169,19 @@ fn about_links(page: &gtk::Box) {
     ));
     links.append(&mk_row("Discord", "https://discord.gg/YfEJ4b6PFW"));
     links.append(&mk_row("hyprlab@proton.me", "mailto:hyprlab@proton.me"));
+    // This copy is the suite's lifafa/ directory, which carries changes of
+    // its own: its source is that directory, and Hylki is where it came from
+    // (#1975). Both are AGPL-3.0-or-later.
     links.append(&mk_row(
         &i18n("Source Code"),
+        "https://github.com/tuna-os/gtk-office-suite/tree/main/lifafa",
+    ));
+    links.append(&mk_row(
+        &i18n("Based on Hylki by Hyprlab"),
         "https://github.com/hyprlab/hylki",
     ));
     links.append(&mk_row(
-        &i18n("License (GNU AGPL v3)"),
+        &i18n("License (GNU AGPL v3 or later)"),
         "https://www.gnu.org/licenses/agpl-3.0.html",
     ));
 

@@ -53,7 +53,15 @@ pangocairo = "0.22"
 # unavailable". zbus waits for the answer. "async-io", not "tokio": keyring's
 # blocking calls are made from inside the worker's tokio runtime, where zbus's
 # tokio block_on would panic; async-io's blocks the thread like dbus did.
-keyring = { version = "3", default-features = false, features = ["async-secret-service", "async-io", "crypto-rust"] }
+# keyring-core with the zbus store, not keyring 4's `v1` Entry over the same
+# two: that Entry connects once and keeps a failed first connection for the
+# life of the process, so a keyring still starting at login (#375) would read
+# as unavailable until Hylki restarted. config::secrets sets the store up
+# itself and connects again after a failure. Items stored by keyring 3 are
+# found and replaced, not duplicated: its keyring_migration tests, run in
+# lifafa.yml against gnome-keyring (#2024).
+keyring-core = "1"
+zbus-secret-service-keyring-store = { version = "1", features = ["rt-async-io-crypto-rust"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Wipes the passwords typed for Tuta recipients outside Tuta from memory
