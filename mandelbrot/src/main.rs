@@ -18,6 +18,7 @@ mod config;
 mod account_settings;
 mod contrib;
 mod error_page;
+mod hand_off;
 mod i18n;
 mod identity_verification_view;
 mod intent;
