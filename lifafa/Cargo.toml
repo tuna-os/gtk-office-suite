@@ -87,7 +87,7 @@ siphasher = "1"
 # Configuration
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
-dirs = "5"
+dirs = "7"
 
 # OAuth: PKCE S256 (RFC 7636) needs SHA-256 + base64url, and every token and
 # CSP nonce comes from the OS CSPRNG. All three are already in the dependency
