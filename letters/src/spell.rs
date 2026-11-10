@@ -42,9 +42,11 @@ impl SpellChecker {
         sc.borrow().check_all();
         let handler = {
             let sc = sc.clone();
+            // One pending check, not one per keystroke (#1990).
+            let idle = crate::idle::IdleOnce::default();
             buf.connect_changed(move |_| {
                 let sc2 = sc.clone();
-                glib::source::idle_add_local_once(move || {
+                idle.schedule(move || {
                     if let Ok(s) = sc2.try_borrow() { s.check_all(); }
                 });
             })
