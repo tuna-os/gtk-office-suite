@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.tunaos.letters
+Exec=letters --gapplication-service

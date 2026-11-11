@@ -106,6 +106,7 @@ jobs:
             tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
             tests/test_suite_schema.py \
+            tests/test_shell_search.py \
             tests/test_collab_defaults.py \
             tests/test_matrix_sdk_pin.py \
             tests/test_ci_test_list.py \
@@ -198,6 +199,7 @@ jobs:
             tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
             tests/test_suite_schema.py \
+            tests/test_shell_search.py \
             tests/test_collab_defaults.py \
             tests/test_matrix_sdk_pin.py \
             tests/test_ci_test_list.py \

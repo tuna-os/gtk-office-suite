@@ -33,6 +33,20 @@ pub fn result_id(item: &RecentItem) -> String {
     item.path.to_string_lossy().into_owned()
 }
 
+/// The recent files an app keeps as plain paths (most recent first) as
+/// searchable items: the title is the file name, which is what a person types.
+/// An app that stores richer records builds `RecentItem`s itself.
+pub fn items_from_paths(paths: &[String]) -> Vec<RecentItem> {
+    paths
+        .iter()
+        .map(|path| {
+            let path = std::path::PathBuf::from(path);
+            let title = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string_lossy().into_owned());
+            RecentItem { path, title, last_opened_secs: 0 }
+        })
+        .collect()
+}
+
 /// The search terms the Shell sent, lower-cased, with empty ones dropped.
 fn normalise(terms: &[String]) -> Vec<String> {
     terms.iter().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect()
@@ -117,6 +131,15 @@ mod tests {
             item("Budget notes", "/home/a/Notes/notes.docx"),
             item("Holiday plan", "/home/a/Finance/holiday.docx"),
         ]
+    }
+
+    #[test]
+    fn plain_paths_become_items_titled_by_file_name() {
+        let items = items_from_paths(&["/home/a/Reports/q3.odt".to_string(), "/tmp/notes.md".to_string()]);
+        assert_eq!(items[0].title, "q3.odt");
+        assert_eq!(items[1].path, PathBuf::from("/tmp/notes.md"));
+        // And the ranking works on them: the name beats a folder match.
+        assert_eq!(initial_result_set(&items, &terms(&["q3"]), 5), ["/home/a/Reports/q3.odt"]);
     }
 
     #[test]
