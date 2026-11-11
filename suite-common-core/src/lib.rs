@@ -29,6 +29,7 @@ pub mod report;
 pub mod mail;
 pub mod people;
 pub mod search_provider;
+pub mod accounts;
 pub mod onboarding;
 pub mod attachment_edit;
 pub mod language;
