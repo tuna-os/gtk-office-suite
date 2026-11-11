@@ -106,7 +106,7 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | Item | State | Evidence or what is missing |
 |---|---|---|
 | Foundations | done | Lifafa on the shared toolkit (#1960), Mandelbrot built in CI (#1961); Lifafa builds without the `relm4` crate (#2101-#2110: no macro views left, the runtime is vendored under `lifafa/src/relm`). `lifafa-core` extraction and the shared chrome (C1) are still open (#2025). |
-| A3, A4 | partial | Mandelbrot has `open-room(target)` and `start-call(target)` actions and a GTK-free `hand_off` contract (#2111). `share-file(path, room?)`, a GTK-free `ShareRequest`, and the callers in the office apps are missing. |
+| A3, A4 | partial | Mandelbrot has `open-room(target)`, `start-call(target)` (#2111) and `share-file(path, room)` (#2124) actions over a GTK-free, tested `hand_off` contract (`ShareRequest` included). `share-file` selects the named room, or uses the open one, and the composer's own preview asks the person to confirm before anything is sent. Missing: a room picker when no room is named and none is open, rooms in another account, the `gapplication` GUI journey, and the callers ("Share to Room…" and a Call button) in the office apps and Lifafa. |
 | A8 | partial | The `matrix:` handler and `x-scheme-handler/mailto` / `mid` registrations exist (`mandelbrot/data/*.desktop.in.in`, `lifafa/data/co.hyprlab.Hylki.desktop`). The office apps register no URI schemes, and Letters has no Matrix chips. |
 | B3 | partial | Lifafa has `Actions=new-message`. The office apps and Mandelbrot have no desktop actions, and there are no `xdg-templates`. |
 | B4 | partial | `GNotification` in `lifafa/src/desktop/notify.rs` and Mandelbrot's `session/notifications`. No shared notification module, no Do Not Disturb handling across the suite. |
@@ -115,7 +115,7 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | B8 | partial | The office apps declare their file types, Lifafa `mailto:` and `message/rfc822`, Mandelbrot `x-scheme-handler/matrix`. Nothing offers the default through the standard prompts. |
 | B9 | partial | Lifafa has a Nautilus extension (`lifafa/src/desktop/nautilus_ext.rs`); it is not generalised to the suite. |
 | B11 | partial | `GtkPrintDialog` in Letters (`letters/src/printing.rs`) and Lifafa's print preview. Tables and Decks do not print through it. |
-| B1, B2, B7, B10, B12 | not started | No `SearchProvider2` or `.thumbnailer` in the tree; the Matrix account decision is made (ADR 0013), the shared account model is not; the office apps still request `--filesystem=xdg-documents`. B10's audit is written up in [`SANDBOX-AUDIT.md`](SANDBOX-AUDIT.md) (no permission changed yet). B7 has its GTK-free model (`suite_common_core::accounts`: GOA providers to capabilities, the one Matrix account, per-capability defaults, first-run); reading GOA and the Secret portal is the shell half. |
+| B1, B2, B7, B10, B12 | B1 model half and B7 model only; the rest not started | B1 has its GTK-free matching and ranking (`suite_common_core::search_provider`, #2122); no `SearchProvider2` D-Bus service, `*.search-provider.ini` or `.thumbnailer` is in the tree; the Matrix account decision is made (ADR 0013); B7 has its GTK-free model (`suite_common_core::accounts`: GOA providers to capabilities, the one Matrix account, per-capability defaults, first-run), and reading GOA and the Secret portal is the shell half; the office apps still request `--filesystem=xdg-documents`. B10's audit is written up in [`SANDBOX-AUDIT.md`](SANDBOX-AUDIT.md) (no permission changed yet). |
 | A10 | partial | A neutral fragment and a suite clipboard MIME exist and Letters, Tables and Decks copy and paste it (ADR 0012); outside HTML is not read. Audit in [`CLIPBOARD-AUDIT.md`](CLIPBOARD-AUDIT.md). |
 | A6 | partial | Lifafa already merges: one message per row of a CSV or contact group, `{{Field}}` filled in, tested apart from GTK (`lifafa/src/mail/merge.rs`, #447). Missing is the cross-app half: Tables rows as the source and a Letters document as the template. Letters has no merge fields today, so that half needs a field model in `letters-core` first. |
 | A1, A2, A5, A7, A9 | not started or model half only | A1 and A7 have their GTK-free halves (`MailDraft::for_documents`, `people::suggest`). |
@@ -125,16 +125,13 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 
 ## Open decisions
 
-- **Where do shared services run?** A single user-level D-Bus service the apps
-  call, or a library each app links? A library is licence-compatible (AGPL and
-  GPL may be combined) but couples release cycles and toolkit versions. A
-  service means a new process to ship, update and keep private.
+- **Where do shared services run?** Decided in [ADR 0014](adr/0014-suite-shared-services-and-search.md):
+  libraries first; a daemon only for state that must be shared across running
+  apps, and then as an optional sidecar.
 - **Matrix sign-in**: decided in ADR 0013 (the sidecar signs in as a second
   device of the same account; nothing is shared). Whether GNOME Online Accounts
   ever gets a Matrix entry is still open (none exists today).
-- **Search index ownership**: each app indexes its own data and answers
-  queries, or one indexer (Tracker/LocalSearch) holds everything. The first is
-  private by default and simpler to ship; the second finds more.
-- **What "fully featured" means per app**, against which reference, and where
-  it is tracked. The office apps use the LibreOffice parity tables and the
-  ledger; Lifafa and Mandelbrot need the equivalents.
+- **Search index ownership**: decided in ADR 0014: each app answers from its own data.
+- **What "fully featured" means per app**: decided in ADR 0014 (LibreOffice for the
+  office apps, Thunderbird and Evolution for Lifafa, Element and upstream Fractal for
+  Mandelbrot), each tracked in the ledger (C4).

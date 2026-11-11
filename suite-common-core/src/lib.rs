@@ -30,3 +30,4 @@ pub mod mail;
 pub mod people;
 pub mod search_provider;
 pub mod accounts;
+pub mod language;
