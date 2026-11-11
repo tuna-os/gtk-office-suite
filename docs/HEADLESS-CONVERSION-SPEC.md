@@ -1,6 +1,6 @@
 # `suite-convert`: headless document conversion CLI
 
-**Status**: specification draft, not accepted · **Tracking**: [#579]
+**Status**: interface accepted by [ADR 0015](adr/0015-suite-convert-interface.md); implementation not started · **Tracking**: [#579]
 
 ## Provenance
 
