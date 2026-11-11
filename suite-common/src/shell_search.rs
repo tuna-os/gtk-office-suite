@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 use gtk4::gio::{self, prelude::*};
-use gtk4::glib::{self, prelude::*};
+use gtk4::glib;
 
 use suite_common_core::search_provider::{
     initial_result_set, items_from_paths, result_metas, subsearch_result_set,
