@@ -26,6 +26,7 @@ pub mod neutral;
 pub mod odt;
 pub mod review;
 pub mod save;
+pub mod typst_export;
 pub mod session;
 pub mod sections;
 pub mod structured;

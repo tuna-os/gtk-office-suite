@@ -43,6 +43,8 @@ path = "src/lib.rs"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 proptest = "1"
+# Compiles the Typst this crate writes, to prove it is valid (typst_export.rs).
+suite-export = { path = "../suite-export" }
 # The headless two-instance test (tests/two_instances.rs, feature `collab`) talks the
 # sidecar protocol of RFC-0005 to real collabd processes.
 suite-collab = { path = "../suite-collab" }

@@ -1,0 +1,7 @@
+[Thumbnailer Entry]
+# File-manager thumbnails for suite documents, drawn by the headless converter
+# (INTEGRATION-PLAN B2, ADR 0015): the first page as a PNG %s pixels wide.
+# Presentations are left out until suite-convert can draw slides.
+TryExec=suite-convert
+Exec=suite-convert --to png --size %s --page 1 %i %o
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;text/markdown;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;text/csv;

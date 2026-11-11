@@ -1,0 +1,20 @@
+[package]
+name = "suite-convert"
+version = "0.1.0"
+edition = "2021"
+description = "Headless document conversion for the suite (ADR 0015): the command line, format routing, exit codes and the text engine. No GTK."
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+
+# Links the GTK-free core crates only; tests/no_gtk.rs keeps GTK out of the tree.
+[dependencies]
+letters-core = { path = "../letters-core", version = "0.1.0" }
+decks-core = { path = "../decks-core", version = "0.1.0" }
+tables-core = { path = "../tables-core", version = "0.1.0" }
+suite-export = { path = "../suite-export", version = "0.1.0" }
+suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
+# Pure-Rust PDF rasteriser (MIT OR Apache-2.0, no unsafe): PNG output is the
+# PDF drawn at --size (ADR 0015).
+hayro = "0.9"
+serde_json = "1"
+tempfile = "3"
