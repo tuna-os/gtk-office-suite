@@ -16,7 +16,7 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "io-util", "time", "sync"] }
-getrandom = "0.3"
+getrandom = "0.4"
 httpdate = "1"
 # rustls with the ring provider and NO built-in trust roots (`rustls-tls-manual-roots`): the
 # client trusts only the CA it is given (`http::Transport::ca_pem`). `http2` adds ALPN `h2`.
