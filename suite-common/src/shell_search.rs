@@ -85,8 +85,14 @@ fn meta_variant(meta: &suite_common_core::search_provider::ResultMeta) -> HashMa
 pub fn export<A: IsA<gio::Application>>(app: &A, settings: gio::Settings, object_path: &'static str, icon: &'static str) {
     let app_for_open = app.as_ref().clone();
     app.connect_startup(move |app| {
-        // Stay up briefly after a Shell call when there is no window.
-        app.set_inactivity_timeout(IDLE_MS);
+        // Stay up briefly after a Shell call when there is no window. Only in
+        // service mode (`--gapplication-service`): on a normal launch an
+        // inactivity timeout would keep the process alive for IDLE_MS after
+        // the last window closes, which a user and the GUI journeys that wait
+        // for the process to exit both notice.
+        if app.flags().contains(gio::ApplicationFlags::IS_SERVICE) {
+            app.set_inactivity_timeout(IDLE_MS);
+        }
         let Some(connection) = app.dbus_connection() else {
             eprintln!("shell search: the application has no D-Bus connection");
             return;
