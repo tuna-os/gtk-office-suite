@@ -33,10 +33,13 @@
     "name": "letters-rust",
     "buildsystem": "simple",
     "build-commands": [
-      "cargo clean && cargo build --locked --release -p letters",
+      "cargo clean && cargo build --locked --release -p letters -p suite-convert",
+      "install -Dm755 target/release/suite-convert /app/bin/suite-convert",
+      "install -Dm644 flatpak/org.tunaos.suite.thumbnailer /app/share/thumbnailers/org.tunaos.suite.thumbnailer",
       "install -Dm755 target/release/letters /app/bin/letters",
       "install -Dm644 flatpak/org.tunaos.letters.desktop /app/share/applications/org.tunaos.letters.desktop",
       "install -Dm644 flatpak/org.tunaos.letters.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.letters.gschema.xml",
+      "install -Dm644 flatpak/org.tunaos.suite.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.suite.gschema.xml",
       "glib-compile-schemas /app/share/glib-2.0/schemas/",
       "install -Dm644 flatpak/icons/org.tunaos.letters.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.letters.svg",
       "install -Dm644 flatpak/org.tunaos.letters.metainfo.xml /app/share/metainfo/org.tunaos.letters.metainfo.xml"
