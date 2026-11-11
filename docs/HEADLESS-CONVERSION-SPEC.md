@@ -42,7 +42,7 @@ Three reasons the drafts agree on, in the order they actually matter:
 |---|---|---|
 | Text | `.md` (CommonMark), `.odt`, `.docx` | `.odt`, `.docx`, `.md`, `.html`, `.pdf` |
 | Spreadsheets | `.csv`, `.ods`, `.xlsx` | `.xlsx`, `.csv`, `.html`, `.pdf`, `.png` (`.ods` output waits for Tables to gain an ODS writer: it has exactly one writer, XLSX) |
-| Presentations | `.odp`, `.pptx` | `.odp`, `.pptx`, `.pdf`, `.png` (slide snapshots) |
+| Presentations | `.odp`, `.pptx` | `.odp`, `.pptx` (`.pdf` and `.png` slide output wait for a GTK-free slide renderer: Decks draws with cairo and pango, which the headless graph may not link) |
 
 Every conversion goes through the same engine the GUI export path uses. If the
 CLI and the GUI can produce different output for the same document, that is a

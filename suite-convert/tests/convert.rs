@@ -61,13 +61,22 @@ fn bad_arguments_are_exit_one_and_an_unreadable_docx_is_exit_two() {
 }
 
 #[test]
-fn an_engine_that_is_not_there_yet_is_exit_three() {
-    // A supported conversion with no engine wired in: presentations to PDF.
+fn a_failure_writing_the_output_is_exit_three() {
+    // Supported conversion, but the output cannot be written: an I/O failure.
+    let dir = tempfile::tempdir().unwrap();
+    let md = write(dir.path(), "a.md", "text\n");
+    assert_eq!(code(&run(&[&md, "/no/such/dir/out.docx"])), 3);
+}
+
+#[test]
+fn presentation_to_pdf_or_png_is_refused_as_unsupported() {
     let dir = tempfile::tempdir().unwrap();
     let pptx = dir.path().join("a.pptx");
     decks_core::write_deck(&pptx.to_string_lossy(), &decks_core::Deck::new()).unwrap();
-    let pdf = dir.path().join("a.pdf").to_string_lossy().into_owned();
-    assert_eq!(code(&run(&[&pptx.to_string_lossy(), &pdf])), 3);
+    for out in ["a.pdf", "a.png"] {
+        let out = dir.path().join(out).to_string_lossy().into_owned();
+        assert_eq!(code(&run(&[&pptx.to_string_lossy(), &out])), 1, "{out}");
+    }
 }
 
 #[test]

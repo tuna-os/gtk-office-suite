@@ -97,8 +97,8 @@ impl Format {
         }
     }
 
-    /// The family this format belongs to. PDF and PNG are outputs of every
-    /// family, so they have none of their own.
+    /// The family this format belongs to. PDF and PNG are outputs of the text and
+    /// spreadsheet families, so they have none of their own.
     pub fn category(self) -> Option<Category> {
         match self {
             Self::Md | Self::Odt | Self::Docx | Self::Html => Some(Category::Text),
@@ -114,6 +114,10 @@ impl Format {
 /// Spreadsheets do not convert *to* ODS: Tables has exactly one writer (XLSX,
 /// `tables_core::io::format`), so there is no engine to route it to, and
 /// promising it would only fail later. It returns when Tables writes ODS.
+///
+/// Presentations do not convert to PDF or PNG either: Decks draws slides with
+/// cairo and pango, which the headless graph may not link, so there is no
+/// GTK-free renderer to call. That needs a Typst slide renderer first.
 pub fn supported(from: Format, to: Format) -> bool {
     use Format::*;
     let Some(category) = from.category() else {
@@ -124,7 +128,7 @@ pub fn supported(from: Format, to: Format) -> bool {
             matches!(from, Md | Odt | Docx) && matches!(to, Odt | Docx | Md | Html | Pdf | Png)
         }
         Category::Spreadsheet => matches!(to, Xlsx | Csv | Html | Pdf | Png),
-        Category::Presentation => matches!(to, Odp | Pptx | Pdf | Png),
+        Category::Presentation => matches!(to, Odp | Pptx),
     }
 }
 
@@ -565,7 +569,7 @@ mod tests {
             (Xlsx, Csv),
             (Ods, Pdf),
             (Pptx, Odp),
-            (Odp, Png),
+            (Odp, Pptx),
         ] {
             assert!(supported(from, to), "{} -> {}", from.name(), to.name());
         }
@@ -576,6 +580,8 @@ mod tests {
             (Png, Pdf),
             (Html, Docx),
             (Pptx, Csv),
+            (Pptx, Pdf),
+            (Odp, Png),
             (Csv, Odp),
         ] {
             assert!(!supported(from, to), "{} -> {}", from.name(), to.name());
