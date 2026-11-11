@@ -28,6 +28,14 @@ pub mod grid_area;
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.tables");
 
+    // Shell search (INTEGRATION-PLAN B1); path matches the ini in flatpak/.
+    suite_common::shell_search::export(
+        &suite.app,
+        gio::Settings::new("org.tunaos.tables"),
+        "/org/tunaos/tables/SearchProvider",
+        "org.tunaos.tables",
+    );
+
     // Headless `--export-pdf <out>` (docs/TABLES-EXPORT-PARITY.md): a real
     // GApplication option, so `--help` documents it. Export implies the
     // test-only actions, the same ones the render lab uses; connect_open

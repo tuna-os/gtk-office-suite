@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FLATPAK = os.path.join(ROOT, "flatpak")
-APPS = {"letters": "letters/src/main.rs"}  # apps that export a provider
+APPS = {"letters": "letters/src/main.rs", "tables": "tables/src/main.rs", "decks": "decks/src/main.rs"}  # apps that export a provider
 EXPECTED_METHODS = {
     "GetInitialResultSet": [("as", "in"), ("as", "out")],
     "GetSubsearchResultSet": [("as", "in"), ("as", "in"), ("as", "out")],
