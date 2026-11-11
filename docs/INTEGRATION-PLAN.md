@@ -119,7 +119,7 @@ As of 2026-11-10, checked against the tree (not against what was intended).
 | A10 | partial | A neutral fragment and a suite clipboard MIME exist and Letters, Tables and Decks copy and paste it (ADR 0012); outside HTML is not read. Audit in [`CLIPBOARD-AUDIT.md`](CLIPBOARD-AUDIT.md). |
 | A6 | partial | Lifafa already merges: one message per row of a CSV or contact group, `{{Field}}` filled in, tested apart from GTK (`lifafa/src/mail/merge.rs`, #447). Missing is the cross-app half: Tables rows as the source and a Letters document as the template. Letters has no merge fields today, so that half needs a field model in `letters-core` first. |
 | A1, A2, A5, A7, A9 | not started or model half only | A1, A2 and A7 have their GTK-free halves (`MailDraft::for_documents`, `attachment_edit::EditSession`, `people::suggest`); A2's file watching and replace dialog are Lifafa's. |
-| C1-C5 | not started | C1 waits on the shared chrome in `suite-common`. |
+| C1-C5 | C2 schema started | C2: `org.tunaos.suite` (default mail account, send format, notification policy) ships with Letters, Tables and Decks; Lifafa and Mandelbrot don't install it yet. C1 waits on the shared chrome in `suite-common`. C3–C5 not started. |
 | #1975 (licences) | done | Notices, SPDX rule, `deny.toml` for both nested workspaces, About dialogs (#2112). |
 | #1973 (one Matrix account) | decided | ADR 0013 and `tests/test_matrix_sdk_pin.py` (#2114); the sign-in plumbing is not built. |
 
