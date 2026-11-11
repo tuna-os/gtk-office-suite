@@ -18,7 +18,7 @@ async-trait.workspace = true
 serde_json = { workspace = true, features = ["raw_value"] }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }
 # The version dcp-wopi uses; plain HTTP is all the raw WOPI client needs.
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 
 # The Collabora-over-Matrix test drives Collabora with the same code as
 # dcp-wopi's collabora_e2e (tests/shared/collabora_driver.rs).
