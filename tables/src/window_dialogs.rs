@@ -93,9 +93,9 @@ pub(crate) fn show_format_cells_dialog(
             };
             crate::sheet_actions::apply(&ctl, &da, |c| { c.mutate_sheet("Format Cells", move |sh| {
                 let (r0, c0, r1, c1) = sh.selection_rect();
-                for r in r0..=r1 {
-                    for c in c0..=c1 {
-                        sh.formats[r][c] = NumberFormat::new(kind.clone());
+                for row in sh.formats.iter_mut().take(r1 + 1).skip(r0) {
+                    for cell in row.iter_mut().take(c1 + 1).skip(c0) {
+                        *cell = NumberFormat::new(kind.clone());
                     }
                 }
             }); });

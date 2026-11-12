@@ -154,7 +154,9 @@ mod tests {
         {
             let state = controller.state.borrow();
             let sheet = state.sheet();
+            #[allow(clippy::needless_range_loop)]
             for r in 0..=1 {
+                #[allow(clippy::needless_range_loop)]
                 for c in 0..=2 {
                     assert!(sheet.styles[r][c].bold, "({r},{c})");
                 }
