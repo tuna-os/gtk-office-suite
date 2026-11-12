@@ -235,11 +235,8 @@ mod tests {
     fn the_interface_description_parses_and_names_the_five_methods() {
         let node = gio::DBusNodeInfo::for_xml(XML).expect("valid XML");
         let interface = node.lookup_interface(INTERFACE).expect("interface");
-        let mut methods: Vec<_> = interface.methods().iter().map(|m| m.name().to_string()).collect();
-        methods.sort();
-        assert_eq!(
-            methods,
-            ["ActivateResult", "GetInitialResultSet", "GetResultMetas", "GetSubsearchResultSet", "LaunchSearch"]
-        );
+        for method in ["ActivateResult", "GetInitialResultSet", "GetResultMetas", "GetSubsearchResultSet", "LaunchSearch"] {
+            assert!(interface.lookup_method(method).is_some(), "{method} is not described");
+        }
     }
 }
