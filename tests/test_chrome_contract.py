@@ -1,0 +1,78 @@
+"""C1 (one chrome): every suite app answers the same standard keys and has
+the same standard items in its main menu (docs/INTEGRATION-PLAN.md).
+
+Lifafa and Mandelbrot are separate workspaces that do not link
+`suite-common`, so the chrome cannot be one code path yet; this checks the
+sources instead, and fails when an app drops one of the standard pieces:
+
+- Ctrl+Q quits,
+- Ctrl+, opens Preferences (Mandelbrot: Account Settings),
+- a Keyboard Shortcuts item, and
+- an About item.
+"""
+
+import os
+import re
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def read(*parts):
+    with open(os.path.join(ROOT, *parts), encoding="utf-8") as f:
+        return f.read()
+
+
+def accel_for(source, action):
+    """The accelerators bound to `action` by set_accels_for_action."""
+    found = []
+    for m in re.finditer(r'set_accels_for_action\(\s*(?:&app,\s*)?"%s",\s*&\[([^\]]*)\]' % re.escape(action), source):
+        found += re.findall(r'"([^"]+)"', m.group(1))
+    return [a.lower().replace("<ctrl>", "<control>") for a in found]
+
+
+class SuiteApps(unittest.TestCase):
+    """Letters, Tables and Decks share suite-common's chrome."""
+
+    def setUp(self):
+        self.src = read("suite-common", "src", "lib.rs")
+
+    def test_quit_is_ctrl_q(self):
+        self.assertIn("<control>q", accel_for(self.src, "app.quit"))
+
+    def test_preferences_is_ctrl_comma(self):
+        self.assertIn("<control>comma", accel_for(self.src, "app.preferences"))
+
+    def test_the_main_menu_has_shortcuts_and_about(self):
+        self.assertIn('Some("app.shortcuts")', self.src)
+        self.assertIn('Some("app.about")', self.src)
+
+
+class Lifafa(unittest.TestCase):
+    def test_quit_is_ctrl_q(self):
+        self.assertIn("<control>q", accel_for(read("lifafa", "src", "app", "window.rs"), "app.quit"))
+
+    def test_preferences_is_ctrl_comma(self):
+        self.assertRegex(read("lifafa", "src", "app", "keymap.rs"), r"Key::comma[^\n]*\n?[^\n]*OpenPreferences")
+
+    def test_it_has_shortcuts_and_about(self):
+        app = read("lifafa", "src", "app.rs")
+        self.assertIn('"shortcuts"', app)
+        self.assertIn('"about"', app)
+
+
+class Mandelbrot(unittest.TestCase):
+    def test_quit_is_ctrl_q(self):
+        self.assertIn("<control>q", accel_for(read("mandelbrot", "src", "application.rs"), "app.quit"))
+
+    def test_account_settings_is_ctrl_comma(self):
+        self.assertIn("<ctrl>comma", read("mandelbrot", "src", "shortcuts-dialog.blp"))
+
+    def test_the_main_menu_has_shortcuts_and_about(self):
+        menu = read("mandelbrot", "src", "session_view", "sidebar", "mod.blp")
+        self.assertIn('action: "app.shortcuts"', menu)
+        self.assertIn('action: "app.about"', menu)
+
+
+if __name__ == "__main__":
+    unittest.main()
