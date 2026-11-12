@@ -26,6 +26,26 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.1.1" date="2026-11-12">
+      <description>
+        <p>Changes in this release:</p>
+        <ul>
+          <li>Autorelease after merges to main</li>
+          <li>Draw charts in the Typst slide renderer</li>
+          <li>Draw tables in the Typst slide renderer</li>
+          <li>Draw pictures in the Typst slide renderer</li>
+          <li>Thumbnails for presentations</li>
+          <li>suite-convert: presentations convert to PDF and PNG through a Typst slide renderer</li>
+          <li>Bump rustix to 1.1.6 (RUSTSEC-2026-0486)</li>
+          <li>Tables and Decks answer GNOME Shell search (B1)</li>
+          <li>B1: Letters answers GNOME Shell search from its recent files</li>
+          <li>suite-convert: presentation to PDF/PNG is unsupported, not unimplemented</li>
+          <li>Integration plan: record the C5 model and the A9 contract</li>
+          <li>suite-common-core: accounts, the model half of B7</li>
+          <li>686 further changes</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-07-27">
       <description>
         <p>Crash fixes: reentrant state access that could close the app while opening files or editing.</p>
