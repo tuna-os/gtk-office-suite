@@ -124,5 +124,48 @@ class LifafaMailProvider(unittest.TestCase):
         self.assertIn("mid:", read(self.CODE))
 
 
+class MandelbrotRoomProvider(unittest.TestCase):
+    """Mandelbrot searches rooms; its provider (mandelbrot/src/search_provider.rs)
+    must still agree with its ini template, service file and meson install."""
+
+    DATA = os.path.join(ROOT, "mandelbrot", "data")
+    CODE = os.path.join(ROOT, "mandelbrot", "src", "search_provider.rs")
+
+    def test_ini_template_service_meson_and_code_agree(self):
+        code = read(self.CODE)
+        text = read(os.path.join(self.DATA, "org.tunaos.mandelbrot.search-provider.ini.in"))
+        ini = configparser.ConfigParser()
+        ini.read_string(text)
+        section = ini["Shell Search Provider"]
+        self.assertEqual(section["BusName"], "@application_id@")
+        self.assertEqual(section["DesktopId"], "@application_id@.desktop")
+        self.assertEqual(section["Version"], "2")
+        m = re.search(r'OBJECT_PATH: &str = "(/[^"]+)"', code)
+        self.assertIsNotNone(m)
+        self.assertEqual(section["ObjectPath"], m.group(1))
+        self.assertNotEqual(section["ObjectPath"], "/org/tunaos/mandelbrot")
+        service = read(os.path.join(self.DATA, "org.tunaos.mandelbrot.service.in"))
+        self.assertIn("--gapplication-service", service)
+        self.assertIn("Name=@application_id@", service)
+        meson = read(os.path.join(self.DATA, "meson.build"))
+        self.assertIn("org.tunaos.mandelbrot.search-provider.ini.in", meson)
+        self.assertIn("gnome-shell/search-providers", meson)
+
+    def test_the_interface_matches_the_one_the_suite_exports(self):
+        source = read(self.CODE)
+        xml = re.search(r'const XML: &str = r#"(.*?)"#;', source, re.S).group(1)
+        interface = ET.fromstring(xml).find("interface")
+        self.assertEqual(interface.get("name"), "org.gnome.Shell.SearchProvider2")
+        found = {m.get("name"): [(a.get("type"), a.get("direction")) for a in m.findall("arg")] for m in interface.findall("method")}
+        self.assertEqual(found, EXPECTED_METHODS)
+        body = source.split("method_call")[1]
+        for method in EXPECTED_METHODS:
+            self.assertIn(f'"{method}"', body, method)
+
+    def test_it_is_started_from_startup_and_opens_results_as_matrix_links(self):
+        self.assertIn("search_provider::export(", read(os.path.join(ROOT, "mandelbrot", "src", "application.rs")))
+        self.assertIn("matrix:roomid/", read(self.CODE))
+
+
 if __name__ == "__main__":
     unittest.main()
