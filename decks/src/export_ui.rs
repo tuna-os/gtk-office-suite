@@ -26,6 +26,7 @@ fn menu_section() -> gio::Menu {
     section.append_submenu(Some("Export _Handouts"), &handouts);
     section.append(Some("Export Slide as P_NG…"), Some("app.export-png"));
     section.append(Some("Send by _Email…"), Some("app.send-by-email"));
+    section.append(Some("Send as _PDF by Email…"), Some("app.send-as-pdf-by-email"));
     section
 }
 
@@ -87,18 +88,23 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
         });
         app.add_action(&act);
     }
-    {
-        // Send by Email: the deck Save would write, attached to a new message
-        // in the desktop's mail client (Lifafa on a suite install).
+    // Send by Email: the deck attached to a new message in the desktop's mail
+    // client (Lifafa on a suite install), as Save would write it or as a PDF
+    // (INTEGRATION-PLAN A1).
+    for (action, extension, pdf) in [("send-by-email", "pptx", false), ("send-as-pdf-by-email", "pdf", true)] {
         let (ctl, win) = (ctl.clone(), window.clone());
-        let act = gio::SimpleAction::new("send-by-email", None);
+        let act = gio::SimpleAction::new(action, None);
         act.connect_activate(move |_, _| {
-            let name = suite_common::mail::attachment_name(&stem(&ctl), "pptx");
+            let name = suite_common::mail::attachment_name(&stem(&ctl), extension);
             let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
             let path = dir.join(&name);
-            let written = std::fs::create_dir_all(&dir)
-                .map_err(|e| e.to_string())
-                .and_then(|()| decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save()));
+            let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| {
+                if pdf {
+                    crate::export::export_pdf(&ctl.deck(), &path, None)
+                } else {
+                    decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save())
+                }
+            });
             match written {
                 Ok(()) => {
                     let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);

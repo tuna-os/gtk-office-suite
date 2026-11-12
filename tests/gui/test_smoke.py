@@ -11647,13 +11647,14 @@ class SendByEmailMixin:
     aid = ""
     extension = ""
     magic = b"PK"
+    action = "send-by-email"
 
     def _prepare_mail(self):
         self._spool = os.path.join(self.temp_dir(prefix=f"{self.app_name}-mail-"), "spool")
         self.launch_env = {**getattr(self, "launch_env", {}), "SUITE_MAIL_SPOOL": self._spool}
 
     def _send_and_read(self):
-        self.gapplication_action(self.aid, "send-by-email")
+        self.gapplication_action(self.aid, self.action)
         draft = os.path.join(self._spool, "draft.txt")
         self.wait_until(lambda: os.path.exists(draft), bool, description="the mail draft to be handed over")
         with open(draft, encoding="utf-8") as f:
@@ -11710,3 +11711,18 @@ class DecksSendByEmailSmoke(SendByEmailMixin, BaseGUITestCase):
     def setUp(self):
         self._prepare_mail()
         super().setUp()
+
+
+class LettersSendAsPdfByEmailSmoke(LettersSendByEmailSmoke):
+    """Send as PDF by Email (INTEGRATION-PLAN A1): the same hand-over with the
+    PDF export attached."""
+
+    action = "send-as-pdf-by-email"
+    extension = "pdf"
+    magic = b"%PDF-"
+
+
+class DecksSendAsPdfByEmailSmoke(DecksSendByEmailSmoke):
+    action = "send-as-pdf-by-email"
+    extension = "pdf"
+    magic = b"%PDF-"
