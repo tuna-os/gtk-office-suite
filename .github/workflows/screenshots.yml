@@ -50,17 +50,17 @@ jobs:
   capture:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1  # zizmor: ignore[artipacked] capture job commits and pushes the refresh branch with the checkout credentials
 
       - name: Install GTK4 + libadwaita dev libraries
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
 
       - name: Build app binaries
         run: cargo build --bin letters --bin tables --bin decks

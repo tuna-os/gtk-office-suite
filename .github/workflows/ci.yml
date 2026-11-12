@@ -38,7 +38,9 @@ jobs:
   interop-corpus:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Validate versioned office corpus
         run: python3 interop/validate_corpus.py
 
@@ -50,8 +52,9 @@ jobs:
     name: Python validators and their tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           # E4 below diffs docs/PARITY.md against the base branch, which needs
           # more than the default single-commit checkout.
           fetch-depth: 0
@@ -282,8 +285,10 @@ jobs:
     name: RustSec advisory gate
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           command: check advisories licenses
 
@@ -291,7 +296,9 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       # Xvfb because the workspace contains GTK widget tests. Without a
       # display `suite_common::gtk_test::run` cannot initialise GTK, and
@@ -305,12 +312,12 @@ jobs:
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
+        uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
 
@@ -318,7 +325,7 @@ jobs:
       # request: it had no cargo cache. Pull requests restore main's cache
       # and never save their own, so a burst of PRs cannot evict main's
       # entry from the repository's 10 GB cache budget.
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3  # zizmor: ignore[cache-poisoning] save-if writes the cache only on main; tag pushes only restore it
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -421,7 +428,7 @@ jobs:
 
       - name: Upload JUnit test results and the skip report
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: junit-results
           path: |
@@ -447,10 +454,12 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
       options: --privileged
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build Flatpak — org.tunaos.${{ matrix.app }}
-        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
@@ -472,7 +481,7 @@ jobs:
         run: python3 tools/flatpak-smoke/letters_page_ink.py letters.flatpak flatpak-smoke
       - name: Upload the Flatpak's screens
         if: always() && matrix.app == 'letters'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: flatpak-smoke-letters
           path: flatpak-smoke/

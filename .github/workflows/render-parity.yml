@@ -54,8 +54,9 @@ jobs:
     outputs:
       apps: ${{ steps.scope.outputs.apps }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           # On a pull request this is its merge commit; the scope diffs it
           # against its first parent, the base branch it merges into.
           fetch-depth: 2
@@ -93,15 +94,17 @@ jobs:
       matrix:
         app: ${{ fromJSON(needs.scope.outputs.apps) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/setup-buildx-action@v4.4.1
 
       # On top of the published GUI test image (gui-container.yml builds,
       # verifies and pushes it from main). A locally built base would be
       # invisible to buildx's docker-container builder.
       - name: Build render-lab image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -112,7 +115,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@v6.1.0  # zizmor: ignore[cache-poisoning] false positive: the build-push-action step only loads the render-lab image into the local docker with load: true and publishes nothing
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -125,11 +128,12 @@ jobs:
       - name: Run render lab
         env:
           CONTAINER_ENGINE: docker
-        run: tools/render-lab/run.sh --app ${{ matrix.app }}
+          APP: ${{ matrix.app }}
+        run: tools/render-lab/run.sh --app "$APP"
 
       - name: Upload captures
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: render-lab-${{ matrix.app }}
           path: |
@@ -188,15 +192,17 @@ jobs:
             } > render-lab-out/summary.md
           fi
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
         if: steps.inscope.outputs.any == 'true'
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/setup-buildx-action@v4.4.1
         if: steps.inscope.outputs.any == 'true'
 
       - name: Build render-lab image
         if: steps.inscope.outputs.any == 'true'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -220,7 +226,7 @@ jobs:
       - name: Download captures (letters)
         if: steps.inscope.outputs.letters == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-lab-letters
           path: render-lab-out/letters
@@ -228,7 +234,7 @@ jobs:
       - name: Download captures (tables)
         if: steps.inscope.outputs.tables == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-lab-tables
           path: render-lab-out/tables
@@ -236,7 +242,7 @@ jobs:
       - name: Download captures (decks)
         if: steps.inscope.outputs.decks == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-lab-decks
           path: render-lab-out/decks
@@ -313,7 +319,7 @@ jobs:
       - name: Upload report
         if: always() && steps.inscope.outputs.any == 'true'
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: render-parity-report
           path: |
@@ -346,7 +352,7 @@ jobs:
 
       - name: Upload PR comment body
         if: always() && github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: render-parity-comment
           path: comment/comment.md
@@ -386,7 +392,7 @@ jobs:
       - name: Download the comment text
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-parity-comment
           path: comment
@@ -407,13 +413,15 @@ jobs:
           fi
           # Rendered nothing and never commented: nothing to say.
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
         if: github.event_name != 'pull_request' && needs.report.outputs.any == 'true'
 
       - name: Download the report
         if: github.event_name != 'pull_request' && needs.report.outputs.any == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-parity-report
           path: render-lab-out
@@ -464,12 +472,14 @@ jobs:
         # the issue sync filed every one of them as "missing" (#1194).
         app: ${{ fromJSON(needs.scope.outputs.apps) }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/setup-buildx-action@v4.4.1
 
       - name: Build render-lab image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -480,7 +490,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@v6.1.0  # zizmor: ignore[cache-poisoning] false positive: the build-push-action step only loads the render-lab image into the local docker with load: true and publishes nothing
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -494,11 +504,12 @@ jobs:
       - name: Run export lab
         env:
           CONTAINER_ENGINE: docker
-        run: tools/render-lab/run-export.sh --app ${{ matrix.app }}
+          APP: ${{ matrix.app }}
+        run: tools/render-lab/run-export.sh --app "$APP"
 
       - name: Upload export captures
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: export-lab-${{ matrix.app }}
           path: |
@@ -551,15 +562,17 @@ jobs:
             } > render-lab-out/summary-export.md
           fi
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
         if: steps.inscope.outputs.any == 'true'
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/setup-buildx-action@v4.4.1
         if: steps.inscope.outputs.any == 'true'
 
       - name: Build render-lab image
         if: steps.inscope.outputs.any == 'true'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -571,7 +584,7 @@ jobs:
       - name: Download export captures (letters)
         if: steps.inscope.outputs.letters == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: export-lab-letters
           path: render-lab-out/letters
@@ -579,7 +592,7 @@ jobs:
       - name: Download export captures (decks)
         if: steps.inscope.outputs.decks == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: export-lab-decks
           path: render-lab-out/decks
@@ -587,7 +600,7 @@ jobs:
       - name: Download export captures (tables)
         if: steps.inscope.outputs.tables == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: export-lab-tables
           path: render-lab-out/tables
@@ -640,7 +653,7 @@ jobs:
       - name: Upload export report
         if: always() && steps.inscope.outputs.any == 'true'
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: export-parity-report
           path: |
@@ -672,7 +685,7 @@ jobs:
 
       - name: Upload PR comment body
         if: always() && github.event_name == 'pull_request' && hashFiles('comment/comment.md') != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: export-parity-comment
           path: comment/comment.md
@@ -699,14 +712,16 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
           upload-artifact: false
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: bundle-${{ matrix.app }}
           path: ${{ matrix.app }}.flatpak
@@ -727,8 +742,9 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - id: tag
         name: The last release's tag
@@ -741,13 +757,13 @@ jobs:
           # latest <release> was 1.1.0), so the report names the tag.
           echo "$tag" > prior-tag.txt
           echo "Prior release: $tag"
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-prior-${{ matrix.app }}-${{ steps.tag.outputs.tag }}
           upload-artifact: false
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: prior-bundle-${{ matrix.app }}
           path: |
@@ -768,7 +784,9 @@ jobs:
     # and its Compare step, since failures here are currently allowed.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Enable KVM
         run: |
@@ -776,7 +794,7 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: bundle-*
           path: bundles
@@ -784,7 +802,7 @@ jobs:
 
       # Not fatal when missing: the upgrade check then reports every app
       # unchecked, and the rest of Tier C still runs.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - uses: actions/download-artifact@v8.0.2
         continue-on-error: true
         with:
           pattern: prior-bundle-*
@@ -792,7 +810,7 @@ jobs:
           merge-multiple: true
 
       - name: Cache prepared guest image
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@v6.1.0
         with:
           path: vm-work
           key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
@@ -852,7 +870,7 @@ jobs:
 
       - name: Upload VM report
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: render-parity-vm-report
           path: |
@@ -887,7 +905,7 @@ jobs:
       - name: Download the comment text
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: export-parity-comment
           path: comment
@@ -908,13 +926,15 @@ jobs:
           fi
           # Rendered nothing and never commented: nothing to say.
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
         if: github.event_name != 'pull_request' && needs.export-report.outputs.any == 'true'
 
       - name: Download the export report
         if: github.event_name != 'pull_request' && needs.export-report.outputs.any == 'true'
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: export-parity-report
           path: render-lab-out

@@ -69,17 +69,19 @@ jobs:
   oracle:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
       - name: Install LibreOffice (headless Writer, Calc, Impress)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             libreoffice-writer libreoffice-calc libreoffice-impress
-      - uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
+      - uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
       # One nextest run over both targets, so the lane leaves one JUnit
@@ -114,7 +116,7 @@ jobs:
 
       - name: Keep the oracle's outcomes
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: oracle-evidence
           path: |
@@ -131,7 +133,7 @@ jobs:
 
       - name: Upload capability-matrix artifact
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: conformance-scorecard
           path: conformance/scorecard-latest.md
@@ -143,7 +145,9 @@ jobs:
     if: github.event_name != 'pull_request' && !inputs.oracle-only
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       # Coverage runs the same workspace as the PR job, GTK widget tests
       # included, so it needs the same display. Measuring coverage of tests
       # that skipped reports a number for code nothing executed (#241).
@@ -153,7 +157,7 @@ jobs:
       # tests/test_workspace_test_lanes.py keeps the two lists in step.
       - name: Install GTK4 deps, Xvfb and poppler
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
       - name: Install llvm-cov
@@ -178,7 +182,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: llvm-cov
           path: coverage/
@@ -193,8 +197,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@2c76c034f9e32a5d6e2c104dc4df23a22476db04 # nightly
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly
       - name: Install cargo-fuzz
@@ -259,7 +265,7 @@ jobs:
           done
       - name: Upload minimized fuzz artifacts
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: fuzz-artifacts
           path: |
