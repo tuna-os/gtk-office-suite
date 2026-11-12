@@ -166,10 +166,11 @@ mod tests {
     fn the_export_section_offers_pdf_handouts_png_and_email() {
         let section = menu_section();
         let m: &gio::MenuModel = section.upcast_ref();
-        assert_eq!(m.n_items(), 4);
+        assert_eq!(m.n_items(), 5);
         assert_eq!(action_of(m, 0), Some(("app.export-pdf".into(), None)));
         assert_eq!(action_of(m, 2), Some(("app.export-png".into(), None)));
         assert_eq!(action_of(m, 3), Some(("app.send-by-email".into(), None)));
+        assert_eq!(action_of(m, 4), Some(("app.send-as-pdf-by-email".into(), None)));
         let handouts = m.item_link(1, "submenu").expect("a handouts submenu");
         let targets: Vec<Option<(String, Option<u32>)>> = (0..handouts.n_items()).map(|i| action_of(&handouts, i)).collect();
         assert_eq!(
