@@ -69,14 +69,31 @@ fn a_failure_writing_the_output_is_exit_three() {
 }
 
 #[test]
-fn presentation_to_pdf_or_png_is_refused_as_unsupported() {
+fn a_presentation_converts_to_an_approximate_pdf_and_a_png() {
     let dir = tempfile::tempdir().unwrap();
     let pptx = dir.path().join("a.pptx");
-    decks_core::write_deck(&pptx.to_string_lossy(), &decks_core::Deck::new()).unwrap();
-    for out in ["a.pdf", "a.png"] {
-        let out = dir.path().join(out).to_string_lossy().into_owned();
-        assert_eq!(code(&run(&[&pptx.to_string_lossy(), &out])), 1, "{out}");
-    }
+    let mut deck = decks_core::Deck::new();
+    deck.slides[0].objects.push(decks_core::SlideObject::Rect {
+        x: 40.0,
+        y: 40.0,
+        w: 200.0,
+        h: 100.0,
+        rotation: 0.0,
+    });
+    decks_core::write_deck(&pptx.to_string_lossy(), &deck).unwrap();
+    let pptx = pptx.to_string_lossy().into_owned();
+
+    let pdf = dir.path().join("a.pdf").to_string_lossy().into_owned();
+    let out = run(&[&pptx, &pdf, "--report-loss"]);
+    assert_eq!(code(&out), 0, "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF-"));
+    // The report says the PDF is a re-drawing, not Decks' own render.
+    assert!(String::from_utf8_lossy(&out.stderr).contains("typst-approximate"));
+
+    let png = dir.path().join("a.png").to_string_lossy().into_owned();
+    let out = run(&[&pptx, &png]);
+    assert_eq!(code(&out), 0, "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(std::fs::read(&png).unwrap().starts_with(b"\x89PNG"));
 }
 
 #[test]
