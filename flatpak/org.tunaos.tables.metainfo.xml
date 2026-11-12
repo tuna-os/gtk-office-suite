@@ -26,6 +26,24 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.1.3" date="2026-11-12">
+      <description>
+        <p>Changes in this release:</p>
+        <ul>
+          <li>Autorelease: fall back to a short note when generated notes are too long</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2.1.2" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.1" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-07-27">
       <description>
         <p>Crash fixes: reentrant state access that could close the app while opening files or editing.</p>
