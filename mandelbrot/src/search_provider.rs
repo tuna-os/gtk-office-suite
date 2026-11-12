@@ -24,6 +24,7 @@ use tracing::warn;
 
 use crate::{
     Application,
+    prelude::*,
     session::{Room, RoomCategory, Session},
 };
 
