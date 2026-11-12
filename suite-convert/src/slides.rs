@@ -265,9 +265,18 @@ fn object(
                 return None;
             }
         },
-        SlideObject::Table { .. } => {
-            left_out.push(("table-omitted", "Table left out", LossLevel::Major));
-            return None;
+        SlideObject::Table { w, h, table, .. } => {
+            *approximated = Some(
+                "A table is drawn with its style's fills and text but not its rules (border lines)."
+                    .into(),
+            );
+            match table_typst(table, *w, *h * page.sy) {
+                Some(t) => t,
+                None => {
+                    left_out.push(("table-omitted", "Table left out", LossLevel::Major));
+                    return None;
+                }
+            }
         }
         SlideObject::Chart { .. } => {
             left_out.push(("chart-omitted", "Chart left out", LossLevel::Major));
@@ -285,6 +294,65 @@ fn object(
         pt(o.x()),
         pt(o.y() * page.sy)
     ))
+}
+
+/// A table as a Typst grid in a `w` x `h` box (points): columns and rows are
+/// scaled so they fill the box in the table's own proportions, each cell takes
+/// its style's fill and text colour, and merged cells span. `None` for a table
+/// with no cells.
+fn table_typst(t: &decks_core::engine::table::TableData, w: f64, h: f64) -> Option<String> {
+    let cols = t.rows.iter().map(Vec::len).max().filter(|&n| n > 0)?;
+    let scaled = |sizes: &[f64], total: f64, n: usize| -> Vec<String> {
+        let sum: f64 = sizes.iter().take(n).filter(|v| **v > 0.0).sum();
+        (0..n)
+            .map(|i| match sizes.get(i) {
+                Some(v) if *v > 0.0 && sum > 0.0 => pt(v / sum * total),
+                _ => pt(total / n as f64),
+            })
+            .collect()
+    };
+    let widths = scaled(&t.col_widths, w, cols);
+    let heights = scaled(&t.row_heights, h, t.rows.len());
+    let mut out = format!(
+        "#table(columns: ({}), rows: ({}), inset: 4pt, stroke: none,\n",
+        widths.join(", "),
+        heights.join(", ")
+    );
+    for (r, row) in t.rows.iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            if cell.covered {
+                continue;
+            }
+            let paint = t.cell_paint(r, c);
+            let mut args = Vec::new();
+            if cell.col_span > 1 {
+                args.push(format!("colspan: {}", cell.col_span));
+            }
+            if cell.row_span > 1 {
+                args.push(format!("rowspan: {}", cell.row_span));
+            }
+            if let Some(f) = paint.fill {
+                args.push(format!("fill: rgb(\"#{}\")", f.to_hex()));
+            }
+            let weight = if paint.bold { ", weight: \"bold\"" } else { "" };
+            let mut body = String::new();
+            for (i, para) in paragraphs(&cell.text(), &cell.runs).iter().enumerate() {
+                if i > 0 {
+                    body.push_str("#linebreak()");
+                }
+                for r in para {
+                    body.push_str(&run(r));
+                }
+            }
+            out.push_str(&format!(
+                "  table.cell({})[#text(fill: rgb(\"#{}\"){weight})[{body}]],\n",
+                args.join(", "),
+                paint.text.to_hex()
+            ));
+        }
+    }
+    out.push_str(")\n");
+    Some(out)
 }
 
 /// The picture files a deck refers to, by the name the Typst source uses.
@@ -614,6 +682,56 @@ mod tests {
         assert!(typst.contains("clip: true"), "{typst}");
         assert!(typst.contains("dx: -100.00pt"), "{typst}");
         assert!(typst.contains("width: 400.00pt"), "{typst}");
+    }
+
+
+    fn table_deck() -> Deck {
+        use decks_core::engine::table::{TableCell, TableData};
+        let cell = |t: &str| TableCell { runs: vec![Run::plain(t)], ..Default::default() };
+        let mut deck = Deck::new();
+        deck.slides[0].objects.push(SlideObject::Table {
+            x: 40.0,
+            y: 40.0,
+            w: 400.0,
+            h: 120.0,
+            rotation: 0.0,
+            table: TableData {
+                col_widths: vec![1.0, 3.0],
+                row_heights: vec![1.0, 1.0],
+                rows: vec![vec![cell("Name"), cell("Qty")], vec![cell("Pens \"#1\""), cell("12")]],
+                first_row: true,
+                ..Default::default()
+            },
+        });
+        deck
+    }
+
+    #[test]
+    fn a_table_is_drawn_to_scale_with_its_text_inert_and_compiles() {
+        let r = render(&table_deck()).unwrap();
+        // Columns 1:3 of 400pt, rows 1:1 of 120pt.
+        assert!(r.source.contains("columns: (100.00pt, 300.00pt), rows: (60.00pt, 60.00pt)"), "{}", r.source);
+        assert!(r.source.contains("#\"Pens \\\"#1\\\"\""), "{}", r.source);
+        assert!(r.losses.iter().all(|l| l.id != "table-omitted"));
+        assert!(r.losses.iter().any(|l| l.id == "shape-approximate" && l.detail.contains("rules")));
+        let pdf = suite_export::compile_pdf_with_files(&r.source, &r.files).expect("compiles");
+        assert!(pdf.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn a_merged_cell_spans_and_the_cell_it_covers_is_skipped() {
+        use decks_core::engine::table::{TableCell, TableData};
+        let mut deck = Deck::new();
+        let wide = TableCell { runs: vec![Run::plain("Wide")], col_span: 2, ..Default::default() };
+        let gone = TableCell { covered: true, ..Default::default() };
+        deck.slides[0].objects.push(SlideObject::Table {
+            x: 0.0, y: 0.0, w: 200.0, h: 50.0, rotation: 0.0,
+            table: TableData { col_widths: vec![1.0, 1.0], row_heights: vec![1.0], rows: vec![vec![wide, gone]], ..Default::default() },
+        });
+        let r = render(&deck).unwrap();
+        assert_eq!(r.source.matches("table.cell(").count(), 1, "{}", r.source);
+        assert!(r.source.contains("colspan: 2"));
+        suite_export::compile_pdf_with_files(&r.source, &r.files).expect("compiles");
     }
 
     #[test]

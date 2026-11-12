@@ -2,7 +2,7 @@
 # File-manager thumbnails for suite documents, drawn by the headless converter
 # (INTEGRATION-PLAN B2, ADR 0015): the first page as a PNG %s pixels wide.
 # Slides are a Typst re-drawing of backgrounds, text, solid shapes and
-# pictures (tables and charts are left out), so a presentation thumbnail is
+# pictures and tables (charts are left out), so a presentation thumbnail is
 # approximate.
 TryExec=suite-convert
 Exec=suite-convert --to png --size %s --page 1 %i %o
