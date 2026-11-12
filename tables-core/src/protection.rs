@@ -148,6 +148,7 @@ mod tests {
     /// A protected 4×4 sheet whose column B is unlocked.
     fn sheet(select_locked: bool, select_unlocked: bool) -> SheetModel {
         let mut s = SheetModel::new("S", 4, 4, 1);
+        #[allow(clippy::needless_range_loop)]
         for row in 0..4 {
             s.cell_protections[row][1].locked = false;
         }

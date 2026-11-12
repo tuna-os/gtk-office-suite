@@ -615,6 +615,7 @@ fn cond_rule_survives_calc_rewrite() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("cf.xlsx");
     let mut sh = SheetModel::new("Sheet1", 10, 5, 0);
+    #[allow(clippy::needless_range_loop)]
     for r in 0..5 {
         sh.data[r][1] = format!("{}", r * 10);
     }
@@ -875,6 +876,7 @@ fn list_validation_survives_calc_both_ways() {
     let ours = dir.path().join("lists.xlsx");
     let mut sheet = SheetModel::new("Sheet1", 5, 3, 0);
     let colours = ValidationRule::List(vec!["Red".into(), "Green".into(), "Blue".into()]);
+    #[allow(clippy::needless_range_loop)]
     for r in 1..4 {
         sheet.validations[r][1] = Some(colours.clone());
     }
@@ -883,6 +885,7 @@ fn list_validation_survives_calc_both_ways() {
 
     let ods = calc_convert(&ours, "ods");
     let (_, from_ods) = load_workbook(ods.to_str().unwrap()).expect("we read Calc's ods");
+    #[allow(clippy::needless_range_loop)]
     for r in 1..4 {
         assert_eq!(from_ods[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's ods", r + 1);
     }
@@ -895,6 +898,7 @@ fn list_validation_survives_calc_both_ways() {
     std::fs::copy(&ods, &copy).unwrap();
     let back = calc_convert(&copy, "xlsx");
     let (_, from_xlsx) = load_workbook(back.to_str().unwrap()).expect("we read Calc's xlsx");
+    #[allow(clippy::needless_range_loop)]
     for r in 1..4 {
         assert_eq!(from_xlsx[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's xlsx", r + 1);
     }

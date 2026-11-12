@@ -355,6 +355,7 @@ pub fn slice(doc: &Document, start: usize, end: usize) -> Option<Vec<Paragraph>>
     let (sp, so) = locate(doc, start)?;
     let (ep, eo) = locate(doc, end)?;
     let mut out = Vec::new();
+    #[allow(clippy::needless_range_loop)]
     for i in sp..=ep {
         let p = &doc.paragraphs[i];
         let from = if i == sp { so } else { 0 };
@@ -523,6 +524,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
     let before = slice(doc, start, end).ok_or(EditError::OutOfRange)?;
     let (sp, so) = locate(doc, start).ok_or(EditError::OutOfRange)?;
     let (ep, eo) = locate(doc, end).ok_or(EditError::OutOfRange)?;
+    #[allow(clippy::needless_range_loop)]
     for i in sp..=ep {
         let p = &mut doc.paragraphs[i];
         let from = if i == sp { so } else { 0 };

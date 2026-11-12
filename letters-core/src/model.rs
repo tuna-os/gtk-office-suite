@@ -1264,6 +1264,7 @@ impl Document {
         let (spi, spo) = self.locate(start);
         let (epi, epo) = self.locate(end);
 
+        #[allow(clippy::needless_range_loop)]
         for pi in spi..=epi {
             let para_len = self.paragraphs[pi].char_len();
             let from = if pi == spi { spo } else { 0 };
