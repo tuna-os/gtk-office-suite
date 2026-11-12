@@ -39,7 +39,7 @@ const COPIES_PER_MESSAGE: usize = 3;
 
 /// `term` as a LIKE pattern matching it anywhere, its wildcards taken as
 /// themselves (with `ESCAPE '\'`).
-fn like_anywhere(term: &str) -> String {
+pub(super) fn like_anywhere(term: &str) -> String {
     let mut out = String::with_capacity(term.len() + 2);
     out.push('%');
     for c in term.chars() {
