@@ -28,5 +28,10 @@
       <summary>Notifications</summary>
       <description>Which messages notify: all of them, only those that mention you or are direct, or none.</description>
     </key>
+    <key name="welcome-shown" type="b">
+      <default>false</default>
+      <summary>Welcome shown</summary>
+      <description>Whether the first-run welcome has been shown. The first suite app opened says it once for the whole suite.</description>
+    </key>
   </schema>
 </schemalist>
