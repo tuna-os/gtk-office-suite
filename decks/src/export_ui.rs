@@ -91,33 +91,14 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
     // Send by Email: the deck attached to a new message in the desktop's mail
     // client (Lifafa on a suite install), as Save would write it or as a PDF
     // (INTEGRATION-PLAN A1).
-    for (action, extension, pdf) in [("send-by-email", "pptx", false), ("send-as-pdf-by-email", "pdf", true)] {
-        let (ctl, win) = (ctl.clone(), window.clone());
-        let act = gio::SimpleAction::new(action, None);
-        act.connect_activate(move |_, _| {
-            let name = suite_common::mail::attachment_name(&stem(&ctl), extension);
-            let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
-            let path = dir.join(&name);
-            let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| {
-                if pdf {
-                    crate::export::export_pdf(&ctl.deck(), &path, None)
-                } else {
-                    decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save())
-                }
-            });
-            match written {
-                Ok(()) => {
-                    let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);
-                    let parent = win.clone();
-                    suite_common::mail::compose(&win, draft, move |result| {
-                        if let Err(e) = result {
-                            suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
-                        }
-                    });
-                }
-                Err(e) => suite_common::show_error_dialog(Some(&win), &suite_common::i18n("Could Not Send by Email"), &e),
-            }
-        });
+    {
+        let act = gio::SimpleAction::new("send-by-email", None);
+        act.connect_activate(send_by_email(ctl, window, "pptx", false));
+        app.add_action(&act);
+    }
+    {
+        let act = gio::SimpleAction::new("send-as-pdf-by-email", None);
+        act.connect_activate(send_by_email(ctl, window, "pdf", true));
         app.add_action(&act);
     }
     {
@@ -132,6 +113,42 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
             });
         });
         app.add_action(&act);
+    }
+}
+
+/// The handler for a Send by Email action: write the deck as `extension` (its
+/// own format, or the PDF export when `pdf`) to a temporary file and hand the
+/// mail client a draft with it attached.
+fn send_by_email(
+    ctl: &Rc<DecksController>,
+    window: &adw::ApplicationWindow,
+    extension: &'static str,
+    pdf: bool,
+) -> impl Fn(&gio::SimpleAction, Option<&glib::Variant>) + 'static {
+    let (ctl, win) = (ctl.clone(), window.clone());
+    move |_, _| {
+        let name = suite_common::mail::attachment_name(&stem(&ctl), extension);
+        let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
+        let path = dir.join(&name);
+        let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| {
+            if pdf {
+                crate::export::export_pdf(&ctl.deck(), &path, None)
+            } else {
+                decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save())
+            }
+        });
+        match written {
+            Ok(()) => {
+                let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);
+                let parent = win.clone();
+                suite_common::mail::compose(&win, draft, move |result| {
+                    if let Err(e) = result {
+                        suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
+                    }
+                });
+            }
+            Err(e) => suite_common::show_error_dialog(Some(&win), &suite_common::i18n("Could Not Send by Email"), &e),
+        }
     }
 }
 

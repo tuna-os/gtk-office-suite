@@ -51,6 +51,7 @@ calls them with more than one; they keep their unit tests
 | `app.export-handouts` | none: writes a handout PDF | `DecksExportSmoke` |
 | `app.export-png` | none: writes the current slide as a PNG | `DecksExportSmoke` |
 | `app.send-by-email` | none: writes the deck to a temporary file and hands it to the mail client | `DecksSendByEmailSmoke` |
+| `app.send-as-pdf-by-email` | none: writes the deck's PDF export to a temporary file and hands it to the mail client | `DecksSendAsPdfByEmailSmoke` |
 | `app.preferences` | *UI only* | — |
 | `app.show-shortcuts` | *UI only* | — |
 
