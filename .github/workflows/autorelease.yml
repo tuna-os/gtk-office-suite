@@ -145,7 +145,17 @@ jobs:
           # read) keeps pointing at the previous release until
           # publish-flatpak.yml has attached this one's downloads and
           # published it.
-          gh release create "v$VERSION" --draft --verify-tag --generate-notes --title "v$VERSION"
+          #
+          # GitHub refuses generated notes over 125000 characters, which a long
+          # gap between releases produces (the first run, after 698 changes,
+          # failed on it with the tag already pushed). Fall back to a short
+          # note that points at the comparison instead of failing the release.
+          if ! gh release create "v$VERSION" --draft --verify-tag --generate-notes --title "v$VERSION"; then
+            echo "::warning::generated release notes were refused; using a short note"
+            last="$(git tag --list 'v*' --sort=-v:refname | sed -n 2p)"
+            gh release create "v$VERSION" --draft --verify-tag --title "v$VERSION" \
+              --notes "Changes since ${last:-the previous release}: https://github.com/${GITHUB_REPOSITORY}/compare/${last:-v$VERSION}...v$VERSION"
+          fi
           gh workflow run publish-flatpak.yml --ref "v$VERSION" -f publish=true
           gh workflow run release-gate.yml --ref "v$VERSION"
           echo "Dispatched publish-flatpak.yml and release-gate.yml on v$VERSION." >> "$GITHUB_STEP_SUMMARY"
