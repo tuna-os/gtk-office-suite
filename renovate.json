@@ -3,7 +3,6 @@
   "rebaseWhen": "conflicted",
   "extends": [
     "local>tuna-os/.github",
-    "helpers:pinGitHubActionDigests",
     "docker:pinDigests"
   ],
   "packageRules": [

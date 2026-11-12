@@ -49,8 +49,9 @@ jobs:
       # Full history: a release commit is certified by evidence recorded at
       # its parent when the two differ only in release metadata, and
       # validate_capabilities.py asks git what differs.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Refuse to certify a release with stale scheduled evidence
         env:
@@ -75,17 +76,18 @@ jobs:
   release-critical-tests:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ inputs.revision || github.sha }}
       - name: Install GTK4 + libadwaita dev libraries, Xvfb and poppler
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
+      - uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
       - name: Run the workspace tests at the release revision
@@ -146,7 +148,7 @@ jobs:
       # evidence bundle (release-evidence.yml).
       - name: Keep the release-critical evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: release-critical-evidence
           path: |
