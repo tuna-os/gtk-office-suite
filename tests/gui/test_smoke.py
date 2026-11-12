@@ -11726,3 +11726,28 @@ class DecksSendAsPdfByEmailSmoke(DecksSendByEmailSmoke):
     action = "send-as-pdf-by-email"
     extension = "pdf"
     magic = b"%PDF-"
+
+
+class LettersWelcomeSmoke(BaseGUITestCase):
+    """The first-run welcome (INTEGRATION-PLAN C5): a fresh profile opens
+    Letters, which says once which other suite apps are not installed. Every
+    journey starts from a fresh profile with the welcome switched off; this
+    one switches it back on."""
+
+    app_name = "letters"
+    aid = "org.tunaos.letters"
+
+    def setUp(self):
+        self.launch_env = {**getattr(self, "launch_env", {}), "SUITE_NO_WELCOME": "0"}
+        super().setUp()
+
+    def test_the_first_launch_welcomes_once_and_names_what_is_missing(self):
+        self.wait_for_node(name="Welcome to the Suite")
+        body = self.wait_for_condition(
+            lambda: self.app.findChild(
+                lambda n: all(app in (n.name or "") for app in ("Tables", "Decks", "Lifafa", "Mandelbrot")),
+                retry=False, requireResult=False),
+            description="the welcome's text naming the four apps that are not installed")
+        self.assertNotIn("\u2022 Letters", body.name, "it never offers the app that is already open")
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "letters crashed on the welcome")

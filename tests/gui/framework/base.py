@@ -392,6 +392,9 @@ class BaseGUITestCase(unittest.TestCase):
             # (suite-common/src/crash_report.rs, #1192): the runners' cores
             # go to systemd-coredump, out of the container's reach.
             "GTK_OFFICE_CRASH_BACKTRACE": "1",
+            # No first-run welcome dialog (INTEGRATION-PLAN C5) in a journey that
+            # is not about it: every journey starts from a fresh profile.
+            "SUITE_NO_WELCOME": "1",
             "XDG_CONFIG_HOME": xdg["config"],
             "XDG_DATA_HOME": xdg["data"],
             "XDG_CACHE_HOME": xdg["cache"],

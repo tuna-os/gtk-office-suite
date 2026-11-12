@@ -40,6 +40,9 @@ fn main() {
         "org.tunaos.decks",
     );
 
+    // First-run welcome (INTEGRATION-PLAN C5): once for the whole suite.
+    suite_common::welcome::install(&suite.app, suite_common::welcome::SuiteApp::Decks);
+
     // Headless `--export-pdf <out>` (docs/EXPORT-PARITY-SPEC.md item 1): a
     // real GApplication option, so `--help` documents it. Export implies the
     // test-only actions, the same ones the render lab uses; connect_open
