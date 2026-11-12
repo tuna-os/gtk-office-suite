@@ -16,7 +16,7 @@
 use std::{cell::Cell, rc::Rc};
 
 use adw::prelude::*;
-use gtk4::{self as gtk, gio};
+use gtk4::gio;
 use libadwaita as adw;
 use suite_common_core::onboarding::{welcome, Welcome};
 pub use suite_common_core::onboarding::SuiteApp;
@@ -37,12 +37,14 @@ fn shared_settings() -> Option<gio::Settings> {
     schema.has_key(KEY).then(|| gio::Settings::new(SCHEMA))
 }
 
-/// The suite apps the system has a desktop file for.
+/// The suite apps the system has a desktop file for: the ids of every
+/// application the desktop knows, matched against `<app id>.desktop`.
 fn installed() -> Vec<&'static str> {
+    let known: Vec<String> = gio::AppInfo::all().iter().filter_map(|a| a.id()).map(|id| id.to_string()).collect();
     SuiteApp::ALL
         .iter()
         .map(|a| a.app_id())
-        .filter(|id| gio::DesktopAppInfo::new(&format!("{id}.desktop")).is_some())
+        .filter(|id| known.iter().any(|k| *k == format!("{id}.desktop")))
         .collect()
 }
 
