@@ -47,8 +47,9 @@ lower the claim's status or relax the rule.
 
 ## Automatic releases
 
-`.github/workflows/autorelease.yml` cuts a release every Wednesday when
-`main` has changed since the last tag, and on demand
+`.github/workflows/autorelease.yml` cuts a release after a merge to `main`
+(a patch bump; documentation-only changes do not count) and every Wednesday
+(a minor bump) when `main` has changed since the last tag, and on demand
 (`workflow_dispatch`: `bump` = minor, patch or major; `force` to release
 an unchanged `main`):
 
@@ -69,6 +70,11 @@ an unchanged `main`):
    draft. FlatPark repackages these tarballs (extra-data) and its update
    resolvers read them from `releases/latest`, which is why the release
    stays a draft until they are attached.
+
+Merges arrive faster than a release takes (the lanes run for a while), so the
+workflow's concurrency group keeps one run going and one waiting: a burst of
+merges becomes one release, cut from whatever `main` is when the waiting run
+starts. The evidence and soak gates still decide whether a tag publishes.
 
 A manual release follows the same steps: run the lanes at the commit, run
 `cut_release.py --version <v> --revision <sha>`, commit, tag and push the

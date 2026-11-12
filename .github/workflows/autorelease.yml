@@ -1,7 +1,7 @@
 name: Autorelease
 
-# Publish new Flatpaks on a schedule instead of whenever someone remembers to
-# tag. Nothing had shipped since v2.1.0 in July. Part of the reason was that
+# Publish new Flatpaks after merges to main and on a weekly schedule instead of
+# whenever someone remembers to tag. Nothing had shipped since v2.1.0 in July. Part of the reason was that
 # the documented release steps could not pass: the ledger had to record the
 # release commit's own SHA (docs/RELEASE.md).
 #
@@ -21,10 +21,21 @@ name: Autorelease
 # pushed to. cut_release.py writes earlier tags back into each release's
 # AppStream history.
 #
+# A merge to main starts a run too (patch bump). The concurrency group below
+# keeps one run going and one waiting, so a burst of merges is released as one
+# version, cut from whatever main is when the waiting run starts. Changes to
+# documentation alone do not start a run. The weekly run still bumps the minor
+# version.
+#
 # A tag pushed with GITHUB_TOKEN starts no workflow, which is why this run
 # dispatches publish-flatpak.yml and release-gate.yml itself.
 
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   schedule:
     - cron: '41 7 * * 3'   # Wednesdays 07:41 UTC, after nightly.yml's 05:00 run
   workflow_dispatch:
@@ -63,7 +74,7 @@ jobs:
       - name: Decide whether there is anything to release
         id: plan
         env:
-          BUMP: ${{ inputs.bump || 'minor' }}
+          BUMP: ${{ inputs.bump || (github.event_name == 'push' && 'patch') || 'minor' }}
           FORCE: ${{ inputs.force || false }}
         run: |
           set -euo pipefail
