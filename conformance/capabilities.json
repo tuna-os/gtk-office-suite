@@ -896,6 +896,29 @@
           "tests/gui/test_smoke.py::DecksSendAsPdfByEmailSmoke::test_send_by_email_attaches_the_document"
         ]
       }
+    },
+    {
+      "id": "suite.onboarding.first-run-welcome",
+      "app": "suite",
+      "title": "The first suite app opened says once which of the other apps are not installed",
+      "scope": "On a fresh profile the first Letters, Tables or Decks window shows a Welcome to the Suite dialog naming the other suite apps that have no desktop file, and sets welcome-shown in the shared org.tunaos.suite schema so no app shows it again. What it says and whether it is due is the GTK-free model (suite-common-core::onboarding::welcome). SUITE_NO_WELCOME=1 turns it off. Covered: Letters' first launch, in which the dialog appears, names the four other apps and not Letters itself, and dismisses (Tables and Decks call the same suite_common::welcome::install but have no journey of their own). Not covered: offering a mail account (it waits on reading the desktop's accounts), Lifafa and Mandelbrot, and that the second app stays silent in a real profile.",
+      "issue": 443,
+      "status": "verified",
+      "revision": "8c63572d7eebfbdf21fc3130c00071a6460568e7",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::onboarding::tests::it_offers_the_apps_that_are_not_installed_but_never_this_one",
+          "suite-common-core::onboarding::tests::it_is_silent_once_shown_anywhere_in_the_suite",
+          "suite-common-core::onboarding::tests::with_every_app_installed_it_only_speaks_if_an_account_is_needed"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersWelcomeSmoke::test_the_first_launch_welcomes_once_and_names_what_is_missing"
+        ]
+      }
     }
   ],
   "waivers": [
