@@ -1,0 +1,5 @@
+[Shell Search Provider]
+DesktopId=@application_id@.desktop
+BusName=@application_id@
+ObjectPath=/org/tunaos/mandelbrot/SearchProvider
+Version=2

@@ -24,6 +24,7 @@ mod identity_verification_view;
 mod intent;
 mod login;
 mod prelude;
+mod search_provider;
 mod secret;
 mod session;
 mod session_list;
