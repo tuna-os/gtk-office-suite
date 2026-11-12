@@ -143,6 +143,10 @@
     {"workflow": ".github/workflows/feature-verification.yml", "job": "publish", "policy": "optional",
      "reason": "Posts the recorded clips; runs only after a recording."},
     {"workflow": ".github/workflows/drop-bot-review-requests.yml", "job": "drop", "policy": "optional",
-     "reason": "Bot-authored pull requests only, and only on open/reopen/ready: housekeeping, not a check of the change."}
+     "reason": "Bot-authored pull requests only, and only on open/reopen/ready: housekeeping, not a check of the change."},
+    {"workflow": ".github/workflows/actions-security.yml", "job": "lockfile", "policy": "optional",
+     "reason": "New: checks that .github/workflows/actions.lock matches the workflows and that each locked commit verifies. It reports on every pull request; whether to require it is for the administrator."},
+    {"workflow": ".github/workflows/actions-security.yml", "job": "zizmor", "policy": "optional",
+     "reason": "New: zizmor security lint of the workflows, failing on any finding. It reports on every pull request; whether to require it is for the administrator."}
   ]
 }

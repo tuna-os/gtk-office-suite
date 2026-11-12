@@ -80,13 +80,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: collab-apps-product
       - name: Versions
@@ -108,13 +110,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: collab
           shared-key: collab-apps-sidecar
@@ -144,7 +148,7 @@ jobs:
       # The advisories of collab/Cargo.lock, against deny.toml (its ignores for this lock
       # are the ones that name collab/). The product's own gate is ci.yml's `advisories`.
       - name: cargo deny check advisories licenses (collab/Cargo.lock)
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           manifest-path: collab/Cargo.toml
           command: check advisories licenses
@@ -153,7 +157,7 @@ jobs:
       # test, built by the `headless` job): it links tables-core and the patched loro,
       # and resolves crates neither other lock holds. Same deny.toml, same ignores.
       - name: cargo deny check advisories licenses (collab/headless/Cargo.lock)
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           manifest-path: collab/headless/Cargo.toml
           command: check advisories licenses
@@ -164,17 +168,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
+        uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: collab-apps-letters-core
           cache-on-failure: true
@@ -210,7 +216,7 @@ jobs:
             exit 1
           fi
           cargo tree --locked -p letters-core --features collab -e normal --prefix none | grep -q '^loro '
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: letters-core-collab-junit
@@ -226,21 +232,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install GTK4 + libadwaita dev libraries and Xvfb
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@7c48f0a661edab95fdc666d1526d9ef945205245 # nextest
+        uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: collab-apps-letters-ui
           cache-on-failure: true
@@ -255,7 +263,7 @@ jobs:
         run: |
           scripts/with-display.sh cargo nextest run -p letters --features collab --locked \
             --profile collab --no-fail-fast -E 'test(collab) | test(live::)' --success-output final
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: letters-ui-collab-junit
@@ -272,12 +280,14 @@ jobs:
     env:
       COLLABD_BIN: ${{ github.workspace }}/collab/target/debug/collabd
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: |
             .
@@ -323,7 +333,7 @@ jobs:
           eval "$(tools/collab-spike/scripts/streams-up.sh node)"
           trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server.log" 2>/dev/null || true; tools/collab-spike/scripts/streams-down.sh node' EXIT
           cargo test -p letters-core --features collab --locked --test two_instances -- --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/letters_two_instances.log"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: collab-apps-letters-headless-logs
@@ -341,12 +351,14 @@ jobs:
       DCP_SKIP_STREAMS_TLS: '1'
       DCP_SKIP_STREAMS_AUTH: '1'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: |
             collab
@@ -414,7 +426,7 @@ jobs:
           trap 'cp "$DCP_STREAMS_LOG" "$GITHUB_WORKSPACE/logs/node-server-dcp-streams.log" 2>/dev/null || true; ../tools/collab-spike/scripts/streams-down.sh node' EXIT
           cargo test -p dcp-streams --locked --test streams -- conformance:: --nocapture --test-threads=2 2>&1 | tee "$GITHUB_WORKSPACE/logs/dcp-streams.log"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: collab-apps-logs

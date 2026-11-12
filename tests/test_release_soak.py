@@ -51,13 +51,18 @@ def stability_target():
     return max(int(n) for n in found)
 
 
+# A call to a workflow in this repository: `$/` is GitHub's same-repository
+# form, `./` the older relative one. Both run the caller's own commit.
+LOCAL_PREFIXES = ("$/", "./")
+
+
 def gate_jobs():
     """The publish workflow's jobs that call another workflow in this repo."""
     jobs = workflow(PUBLISH)["jobs"]
     return {
         name: body
         for name, body in jobs.items()
-        if str(body.get("uses", "")).startswith("./")
+        if str(body.get("uses", "")).startswith(LOCAL_PREFIXES)
     }
 
 
@@ -79,7 +84,7 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
             with self.subTest(gate=name):
                 # Not lstrip("./"): that strips *characters*, and would eat
                 # the leading directory's dot-prefix along with them.
-                path = os.path.join(REPO_ROOT, body["uses"].removeprefix("./"))
+                path = os.path.join(REPO_ROOT, body["uses"][2:])
                 self.assertTrue(os.path.isfile(path), f"{body['uses']} does not exist")
                 self.assertIn(
                     "workflow_call",
