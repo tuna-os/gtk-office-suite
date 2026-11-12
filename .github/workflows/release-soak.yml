@@ -114,6 +114,10 @@ jobs:
       - name: Soak the candidate at baseline
         env:
           REPEAT: ${{ inputs.repeat || 20 }}
+          # The journeys look for debug binaries unless told otherwise; this
+          # job built release ones (every attempt of the first soaks failed in
+          # setUp with "Binary not found" and was reported as a product crash).
+          GUI_TEST_PROFILE: release
         run: |
           python3 tests/gui/stress.py \
             --repeat "$REPEAT" \
@@ -124,6 +128,8 @@ jobs:
       # about 400px, and one pass over every size proves nothing about
       # flakiness.
       - name: The complete display matrix, once
+        env:
+          GUI_TEST_PROFILE: release
         run: |
           python3 tests/gui/stress.py \
             --repeat 1 --matrix display \

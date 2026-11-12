@@ -270,7 +270,7 @@ def binary_digests() -> dict:
     target = os.environ.get("CARGO_TARGET_DIR") or os.path.join(REPO_ROOT, "target")
     digests = {}
     for app in APPS:
-        path = os.path.join(target, "debug", app)
+        path = os.path.join(target, os.environ.get("GUI_TEST_PROFILE", "").strip() or "debug", app)
         if not os.path.exists(path):
             digests[app] = None
             continue

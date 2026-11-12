@@ -86,6 +86,7 @@ jobs:
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
+            tests/test_gui_binary_paths.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
@@ -179,6 +180,7 @@ jobs:
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
+            tests/test_gui_binary_paths.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
