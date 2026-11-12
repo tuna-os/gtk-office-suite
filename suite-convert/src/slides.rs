@@ -278,9 +278,18 @@ fn object(
                 }
             }
         }
-        SlideObject::Chart { .. } => {
-            left_out.push(("chart-omitted", "Chart left out", LossLevel::Major));
-            return None;
+        SlideObject::Chart { w, h, chart, .. } => {
+            let note = "A chart is drawn from its series alone, with one colour set and no gridlines or value axis.";
+            match chart_typst(chart, *w, *h * page.sy) {
+                Some(c) => {
+                    approximated.get_or_insert_with(|| note.to_string());
+                    c
+                }
+                None => {
+                    left_out.push(("chart-omitted", "Chart left out", LossLevel::Major));
+                    return None;
+                }
+            }
         }
     };
     let rotation = o.rotation();
@@ -352,6 +361,143 @@ fn table_typst(t: &decks_core::engine::table::TableData, w: f64, h: f64) -> Opti
         }
     }
     out.push_str(")\n");
+    Some(out)
+}
+
+/// Office's accent colours, in the order a chart takes them.
+const CHART_COLOURS: [&str; 6] = ["#4472c4", "#ed7d31", "#a5a5a5", "#ffc000", "#5b9bd5", "#70ad47"];
+
+/// A chart as Typst shapes in a `w` x `h` box (points). One series, as the
+/// model has: bars, a line, an area, scatter points or pie wedges, with the
+/// series name on top and the categories along the bottom. `None` when there
+/// is nothing to plot.
+fn chart_typst(chart: &decks_core::engine::chart::ChartData, w: f64, h: f64) -> Option<String> {
+    use suite_common_core::charts::ChartKind;
+    let pts: Vec<(&str, f64)> = chart
+        .points
+        .iter()
+        .filter(|(_, v)| v.is_finite())
+        .map(|(c, v)| (c.as_str(), *v))
+        .collect();
+    if pts.is_empty() || w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let colour = |i: usize| format!("rgb(\"{}\")", CHART_COLOURS[i % CHART_COLOURS.len()]);
+    let place = |dx: f64, dy: f64, body: String| format!("#place(top + left, dx: {}, dy: {}, {body})\n", pt(dx), pt(dy));
+    let label = |text: &str, dx: f64, dy: f64, size: f64| {
+        place(dx, dy, format!("text(size: {}, {})", pt(size), string(text)))
+    };
+    let mut out = format!("#box(width: {}, height: {}, clip: true)[\n", pt(w), pt(h));
+    let title_h = if chart.series.is_empty() { 4.0 } else { 18.0 };
+    if !chart.series.is_empty() {
+        out.push_str(&label(&chart.series, 4.0, 2.0, 12.0));
+    }
+
+    if chart.kind == ChartKind::Pie {
+        let total: f64 = pts.iter().map(|(_, v)| v.abs()).sum();
+        if total <= 0.0 {
+            return None;
+        }
+        let r = ((w - 8.0).min(h - title_h - 4.0) / 2.0).max(1.0);
+        let (cx, cy) = (w / 2.0, title_h + (h - title_h) / 2.0);
+        let mut start = -std::f64::consts::FRAC_PI_2;
+        for (i, (_, v)) in pts.iter().enumerate() {
+            let sweep = v.abs() / total * std::f64::consts::TAU;
+            let steps = ((sweep / 0.1).ceil() as usize).max(1);
+            let mut poly = vec![format!("({}, {})", pt(cx), pt(cy))];
+            for k in 0..=steps {
+                let a = start + sweep * k as f64 / steps as f64;
+                poly.push(format!("({}, {})", pt(cx + r * a.cos()), pt(cy + r * a.sin())));
+            }
+            out.push_str(&place(
+                0.0,
+                0.0,
+                format!("polygon(fill: {}, stroke: 0.5pt + white, {})", colour(i), poly.join(", ")),
+            ));
+            start += sweep;
+        }
+        out.push_str("]\n");
+        return Some(out);
+    }
+
+    // The plot area, and the value range always taking in zero.
+    let (left, right, top, bottom) = (6.0, 6.0, title_h, 16.0);
+    let (pw, ph) = ((w - left - right).max(1.0), (h - top - bottom).max(1.0));
+    let lo = pts.iter().map(|p| p.1).fold(0.0_f64, f64::min);
+    let hi = pts.iter().map(|p| p.1).fold(0.0_f64, f64::max);
+    let span = if hi - lo > f64::EPSILON { hi - lo } else { 1.0 };
+    let y = |v: f64| top + ph * (1.0 - (v - lo) / span);
+    let zero = y(0.0);
+    let n = pts.len();
+    let slot = pw / n as f64;
+    let mid = |i: usize| left + slot * (i as f64 + 0.5);
+
+    // Scatter plots against the category read as a number, else its position.
+    let xs: Vec<f64> = pts.iter().enumerate().map(|(i, (c, _))| c.trim().parse().unwrap_or(i as f64)).collect();
+    let (xlo, xhi) = (xs.iter().cloned().fold(f64::INFINITY, f64::min), xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max));
+    let xspan = if xhi - xlo > f64::EPSILON { xhi - xlo } else { 1.0 };
+    let sx = |i: usize| left + 6.0 + (pw - 12.0) * (xs[i] - xlo) / xspan;
+
+    out.push_str(&place(
+        0.0,
+        0.0,
+        format!(
+            "line(start: ({}, {}), end: ({}, {}), stroke: 0.75pt + luma(120))",
+            pt(left),
+            pt(zero),
+            pt(left + pw),
+            pt(zero)
+        ),
+    ));
+    match chart.kind {
+        ChartKind::Bar => {
+            for (i, (_, v)) in pts.iter().enumerate() {
+                let (y0, y1) = (y(*v).min(zero), y(*v).max(zero));
+                let bw = slot * 0.7;
+                out.push_str(&place(
+                    mid(i) - bw / 2.0,
+                    y0,
+                    format!("rect(width: {}, height: {}, fill: {})", pt(bw), pt((y1 - y0).max(0.5)), colour(0)),
+                ));
+            }
+        }
+        ChartKind::Line => {
+            for i in 1..n {
+                out.push_str(&place(
+                    0.0,
+                    0.0,
+                    format!(
+                        "line(start: ({}, {}), end: ({}, {}), stroke: 2pt + {})",
+                        pt(mid(i - 1)),
+                        pt(y(pts[i - 1].1)),
+                        pt(mid(i)),
+                        pt(y(pts[i].1)),
+                        colour(0)
+                    ),
+                ));
+            }
+            for (i, (_, v)) in pts.iter().enumerate() {
+                out.push_str(&place(mid(i) - 3.0, y(*v) - 3.0, format!("circle(radius: 3pt, fill: {})", colour(0))));
+            }
+        }
+        ChartKind::Area => {
+            let mut poly = vec![format!("({}, {})", pt(mid(0)), pt(zero))];
+            poly.extend((0..n).map(|i| format!("({}, {})", pt(mid(i)), pt(y(pts[i].1)))));
+            poly.push(format!("({}, {})", pt(mid(n - 1)), pt(zero)));
+            out.push_str(&place(0.0, 0.0, format!("polygon(fill: {}, {})", colour(0), poly.join(", "))));
+        }
+        _ => {
+            for (i, (_, v)) in pts.iter().enumerate() {
+                out.push_str(&place(sx(i) - 3.0, y(*v) - 3.0, format!("circle(radius: 3pt, fill: {})", colour(0))));
+            }
+        }
+    }
+    if chart.kind != ChartKind::Scatter {
+        for (i, (c, _)) in pts.iter().enumerate() {
+            out.push_str(&label(c, mid(i) - slot * 0.35, h - bottom + 2.0, 9.0));
+        }
+    }
+    out.push_str("]\n");
     Some(out)
 }
 
@@ -732,6 +878,53 @@ mod tests {
         assert_eq!(r.source.matches("table.cell(").count(), 1, "{}", r.source);
         assert!(r.source.contains("colspan: 2"));
         suite_export::compile_pdf_with_files(&r.source, &r.files).expect("compiles");
+    }
+
+
+    fn chart_deck(kind: suite_common_core::charts::ChartKind, points: Vec<(String, f64)>) -> Deck {
+        let mut deck = Deck::new();
+        deck.slides[0].objects.push(SlideObject::Chart {
+            x: 20.0,
+            y: 20.0,
+            w: 400.0,
+            h: 240.0,
+            rotation: 0.0,
+            chart: decks_core::engine::chart::ChartData { kind, series: "Sales \"#1\"".into(), points },
+        });
+        deck
+    }
+
+    #[test]
+    fn every_chart_kind_is_drawn_and_compiles_into_the_pdf() {
+        use suite_common_core::charts::ChartKind::*;
+        for kind in [Bar, Line, Pie, Scatter, Area] {
+            let points = decks_core::engine::chart::ChartData::sample(kind).points;
+            let r = render(&chart_deck(kind, points)).unwrap();
+            assert!(r.losses.iter().all(|l| l.id != "chart-omitted"), "{kind:?}");
+            assert!(r.losses.iter().any(|l| l.id == "shape-approximate"), "{kind:?}");
+            // The series name is a string literal, so markup in it is inert.
+            assert!(r.source.contains("\"Sales \\\"#1\\\"\""), "{kind:?}: {}", r.source);
+            let pdf = suite_export::compile_pdf_with_files(&r.source, &r.files)
+                .unwrap_or_else(|e| panic!("{kind:?} does not compile: {e}\n{}", r.source));
+            assert!(pdf.starts_with(b"%PDF-"));
+        }
+    }
+
+    #[test]
+    fn bars_below_zero_hang_from_the_axis_and_bars_scale_to_the_largest_value() {
+        use suite_common_core::charts::ChartKind::Bar;
+        let r = render(&chart_deck(Bar, vec![("a".into(), 10.0), ("b".into(), -5.0)])).unwrap();
+        assert_eq!(r.source.matches("rect(width:").count(), 2, "{}", r.source);
+        suite_export::compile_pdf_with_files(&r.source, &r.files).expect("compiles");
+    }
+
+    #[test]
+    fn a_chart_with_nothing_to_plot_is_left_out_by_name() {
+        use suite_common_core::charts::ChartKind::{Bar, Pie};
+        for deck in [chart_deck(Bar, vec![]), chart_deck(Pie, vec![("a".into(), 0.0)])] {
+            let r = render(&deck).unwrap();
+            assert!(r.losses.iter().any(|l| l.id == "chart-omitted"));
+        }
     }
 
     #[test]
