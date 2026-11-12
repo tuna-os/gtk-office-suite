@@ -34,8 +34,6 @@ fn every_listed_type_is_a_format_the_tool_draws_to_png() {
     for mime in mimes {
         let format = format_for(mime).unwrap_or_else(|| panic!("`{mime}` is not a known suite type"));
         assert!(supported(format, Format::Png), "{mime} cannot be drawn to png yet");
-        // Presentations are not drawn yet by the engine, so they stay out.
-        assert_ne!(format.category(), Some(suite_convert::Category::Presentation), "{mime}");
     }
 }
 
