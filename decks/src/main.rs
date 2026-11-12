@@ -32,6 +32,14 @@ mod preferences;
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.decks");
 
+    // Shell search (INTEGRATION-PLAN B1); path matches the ini in flatpak/.
+    suite_common::shell_search::export(
+        &suite.app,
+        gio::Settings::new("org.tunaos.decks"),
+        "/org/tunaos/decks/SearchProvider",
+        "org.tunaos.decks",
+    );
+
     // Headless `--export-pdf <out>` (docs/EXPORT-PARITY-SPEC.md item 1): a
     // real GApplication option, so `--help` documents it. Export implies the
     // test-only actions, the same ones the render lab uses; connect_open
