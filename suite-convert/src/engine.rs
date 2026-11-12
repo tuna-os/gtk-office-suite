@@ -269,12 +269,11 @@ fn deck(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> {
     if to == Format::Pdf {
         // The Typst slide renderer (`slides`): approximate by design, and it
         // names what it left out, slide by slide.
-        let (source, mut drawn) =
-            crate::slides::deck_typst(&deck).map_err(|e| Failure::new(Exit::Convert, e))?;
-        suite_export::compile_pdf_to_file(&source, &staged.to_string_lossy())
+        let mut drawn = crate::slides::render(&deck).map_err(|e| Failure::new(Exit::Convert, e))?;
+        suite_export::compile_pdf_to_file_with_files(&drawn.source, &drawn.files, &staged.to_string_lossy())
             .map_err(|e| Failure::new(Exit::Convert, e))?;
         let mut all = losses(&report);
-        all.append(&mut drawn);
+        all.append(&mut drawn.losses);
         return Ok(all);
     }
     decks_core::write_deck(&staged.to_string_lossy(), &deck)
