@@ -919,6 +919,37 @@
           "tests/gui/test_smoke.py::LettersWelcomeSmoke::test_the_first_launch_welcomes_once_and_names_what_is_missing"
         ]
       }
+    },
+    {
+      "id": "suite.clipboard.cross-app",
+      "app": "suite",
+      "title": "Text and grids copied in one suite app paste into another with their structure",
+      "scope": "Letters, Tables and Decks copy and paste a neutral fragment (the application/x-tunaos-suite+json type, suite-common-core::document), alongside plain-text, HTML and tab-separated forms for outside programs. Covered: the fragment's JSON shape, its text, HTML and TSV forms, and that unknown fields from another app are ignored (suite-common-core); each app's own round trip (a Letters styled-text fragment, a Tables grid whose formulas stay live and which carries inputs, never displayed results, and a Decks styled text box); and, between two live applications on one X11 selection, text copied in Letters pasting into Tables, a grid copied in Tables pasting into Letters, and the clipboard surviving the copying app being closed. Not covered: pasting from or into programs outside the suite, Wayland, and any pair of apps other than Letters and Tables in the live journeys.",
+      "issue": 442,
+      "status": "verified",
+      "revision": "8c63572d7eebfbdf21fc3130c00071a6460568e7",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::document::tests::the_json_shape_is_the_one_letters_has_always_written",
+          "suite-common-core::document::tests::unknown_fields_from_another_app_are_ignored",
+          "suite-common-core::document::tests::a_grid_fragment_round_trips_and_has_tsv_and_html_forms",
+          "suite-common-core::document::tests::a_text_fragment_has_plain_and_html_forms",
+          "letters-core::fragment::tests::styled_text_fragment_round_trips_json",
+          "letters-core::fragment::tests::grid_pastes_into_document_as_table",
+          "tables-core::fragment::tests::copy_paste_round_trip_keeps_formulas_live",
+          "tables-core::fragment::tests::copy_carries_inputs_never_displayed_results",
+          "decks-core::fragment::tests::styled_text_survives_decks_round_trip"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_text_copied_in_letters_pastes_into_tables",
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_a_grid_copied_in_tables_pastes_into_letters",
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_the_clipboard_survives_the_copying_app_being_closed"
+        ]
+      }
     }
   ],
   "waivers": [
