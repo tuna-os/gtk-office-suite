@@ -867,6 +867,35 @@
           "tests/gui/test_smoke.py::TablesChartEditorSmoke::test_an_inserted_chart_is_edited_in_place_as_one_undo_step"
         ]
       }
+    },
+    {
+      "id": "suite.mail.send-by-email",
+      "app": "suite",
+      "title": "Send by Email attaches the document, or its PDF, to a new message in the desktop's mail client",
+      "scope": "Letters, Tables and Decks hand the desktop's mail client (the XDG Email portal, or a mailto: link without it; Lifafa on a suite install) a draft with the document written in its own format attached, named after the document. Letters and Decks also offer Send as PDF by Email, which attaches the PDF export. The draft's subject and body, several documents in one draft and the mailto: encoding are the GTK-free model (suite-common-core::mail). Covered: the hand-over itself, read from the mail spool (SUITE_MAIL_SPOOL) in Letters, Tables and Decks, and that each attachment is a real file of its format. Not covered: delivery through a real portal or mail client, Tables as a PDF, sending a selection or the current slide, and sending several documents from the UI.",
+      "issue": 443,
+      "status": "verified",
+      "revision": "2c31b2cc8153eefa16d6d7cfc119684bd81973aa",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::mail::tests::for_document_attaches_the_file",
+          "suite-common-core::mail::tests::for_documents_with_one_file_is_for_document",
+          "suite-common-core::mail::tests::for_documents_names_the_first_and_counts_the_rest",
+          "suite-common-core::mail::tests::mailto_names_the_file_it_cannot_attach",
+          "suite-common-core::mail::tests::attachment_name_is_a_safe_file_name"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::TablesSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::DecksSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::LettersSendAsPdfByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::DecksSendAsPdfByEmailSmoke::test_send_by_email_attaches_the_document"
+        ]
+      }
     }
   ],
   "waivers": [
