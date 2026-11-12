@@ -258,6 +258,8 @@ expected_files = [
     "data/co.hyprlab.Hylki.desktop",
     "data/co.hyprlab.Hylki.metainfo.xml",
     "data/co.hyprlab.Hylki.Restart.service",
+    "data/co.hyprlab.Hylki.search-provider.ini",
+    "data/co.hyprlab.Hylki.service",
     "data/icons/hicolor/256x256/apps/co.hyprlab.Hylki.png",
     "data/icons/hicolor/512x512/apps/co.hyprlab.Hylki.png",
     "data/icons/hicolor/scalable/apps/co.hyprlab.Hylki.svg",
@@ -300,6 +302,11 @@ sub("src/config/secrets.rs", r'KEYRING_SERVICE: &str = "co\.hyprlab\.Hylki";',
     literal(f'KEYRING_SERVICE: &str = "{KEYRING}";'), count=1)
 sub("src/config/snapshot_tests.rs", r'assert_eq!\(KEYRING_SERVICE, "co\.hyprlab\.Hylki"\);',
     literal(f'assert_eq!(KEYRING_SERVICE, "{KEYRING}");'), count=1)
+search_ini = f"data/{APP_ID}.search-provider.ini"
+sub(search_ini, r"^DesktopId=co\.hyprlab\.Hylki\.desktop$", literal(f"DesktopId={APP_ID}.desktop"), count=1)
+sub(search_ini, r"^BusName=co\.hyprlab\.Hylki$", literal(f"BusName={APP_ID}"), count=1)
+activation = f"data/{APP_ID}.service"
+sub(activation, r"^Name=co\.hyprlab\.Hylki$", literal(f"Name={APP_ID}"), count=1)
 service = f"data/{APP_ID}.Restart.service"
 sub(service, r"^Name=co\.hyprlab\.Hylki\.Restart$", literal(f"Name={APP_ID}.Restart"), count=1)
 desktop = f"data/{APP_ID}.desktop"

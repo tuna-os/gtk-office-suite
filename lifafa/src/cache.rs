@@ -23,6 +23,7 @@ mod offline;
 mod open;
 mod outbox;
 mod schema;
+mod shell_search;
 mod smart;
 mod text_index;
 mod threads;
@@ -31,6 +32,7 @@ pub(crate) use assistant::{MailScope, ScopedFolder};
 pub(crate) use gallery::*;
 pub(crate) use local_copies::CopyKey;
 pub(crate) use messages::*;
+pub(crate) use shell_search::ShellHit;
 pub(crate) use text_index::body_text;
 
 #[cfg(test)]

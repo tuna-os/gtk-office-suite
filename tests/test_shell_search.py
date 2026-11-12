@@ -75,5 +75,54 @@ class ShellSearchProvider(unittest.TestCase):
             self.assertIn(f'"{name}"', source.split("method_call")[1], name)
 
 
+class LifafaMailProvider(unittest.TestCase):
+    """Lifafa searches mail, not recent files, so it has its own provider
+    (lifafa/src/desktop/shell_search.rs); the same pieces must still agree."""
+
+    DATA = os.path.join(ROOT, "lifafa", "data")
+    CODE = os.path.join(ROOT, "lifafa", "src", "desktop", "shell_search.rs")
+
+    def test_ini_service_manifest_and_code_agree(self):
+        code = read(self.CODE)
+        ini = configparser.ConfigParser()
+        ini.read(os.path.join(self.DATA, "co.hyprlab.Hylki.search-provider.ini"))
+        section = ini["Shell Search Provider"]
+        self.assertEqual(section["BusName"], "co.hyprlab.Hylki")
+        self.assertEqual(section["Version"], "2")
+        self.assertTrue(os.path.exists(os.path.join(self.DATA, section["DesktopId"])), section["DesktopId"])
+        m = re.search(r'OBJECT_PATH: &str = "(/[^"]+)"', code)
+        self.assertIsNotNone(m)
+        self.assertEqual(section["ObjectPath"], m.group(1))
+        self.assertNotEqual(section["ObjectPath"], "/co/hyprlab/Hylki")
+        service = configparser.ConfigParser()
+        service.read(os.path.join(self.DATA, "co.hyprlab.Hylki.service"))
+        self.assertEqual(service["D-BUS Service"]["Name"], "co.hyprlab.Hylki")
+        self.assertIn("--gapplication-service", service["D-BUS Service"]["Exec"])
+        manifest = read(os.path.join(ROOT, "lifafa", "co.hyprlab.Hylki.yml"))
+        self.assertIn("share/gnome-shell/search-providers/co.hyprlab.Hylki.search-provider.ini", manifest)
+        self.assertIn("share/dbus-1/services/co.hyprlab.Hylki.service", manifest)
+
+    def test_the_interface_matches_the_one_the_suite_exports(self):
+        def methods(path):
+            source = read(path)
+            xml = re.search(r'const XML: &str = r#"(.*?)"#;', source, re.S).group(1)
+            interface = ET.fromstring(xml).find("interface")
+            return interface.get("name"), {
+                m.get("name"): [(a.get("type"), a.get("direction")) for a in m.findall("arg")]
+                for m in interface.findall("method")
+            }
+
+        name, found = methods(self.CODE)
+        self.assertEqual(name, "org.gnome.Shell.SearchProvider2")
+        self.assertEqual(found, EXPECTED_METHODS)
+        body = read(self.CODE).split("method_call")[1]
+        for method in EXPECTED_METHODS:
+            self.assertIn(f'"{method}"', body, method)
+
+    def test_it_is_started_from_main_and_opens_results_as_mid_links(self):
+        self.assertIn("desktop::shell_search::export(", read(os.path.join(ROOT, "lifafa", "src", "main.rs")))
+        self.assertIn("mid:", read(self.CODE))
+
+
 if __name__ == "__main__":
     unittest.main()
