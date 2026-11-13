@@ -60,9 +60,7 @@ impl Host {
     }
 
     pub(crate) fn toast(&self, text: &str) {
-        let toast = adw::Toast::new(text);
-        toast.set_timeout(5);
-        self.toasts.add_toast(toast);
+        suite_common::toast_manager::show(&self.toasts, text);
     }
 
     pub(crate) fn alert(&self, heading: &str, body: &str) {
