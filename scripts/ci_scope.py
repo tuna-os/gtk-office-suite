@@ -66,8 +66,7 @@ PROSE_COMPILED = ("docs/collab-spec/",)
 SOURCES = (
     "letters", "letters-core", "tables", "tables-core", "decks", "decks-core",
     "suite-common", "suite-common-core", "suite-export", "suite-collab", "suite-convert",
-    "flatpak", "scripts", "conformance", "tools", "tests/gui", "third_party", "po", "data",
-    ".config", "Cargo.toml",
+    "flatpak", "scripts", "tools", "tests/gui", "third_party", "po", "data",
 )
 
 
