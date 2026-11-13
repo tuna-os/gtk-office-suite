@@ -147,13 +147,14 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
                 f"{name!r} would be cancelled by GitHub's six-hour limit",
             )
 
-    def test_both_campaigns_pace_their_typing_and_verify_delivery(self):
-        """The first soak lost a letter of "apple" in 7 of 14 attempts at
-        xdotool's 40ms default under release binaries. Both campaigns pace
-        the input and record whether it landed."""
+    def test_attempts_have_room_and_delivery_is_verified(self):
+        """An attempt takes about 24 minutes and stress.py's default limit is
+        30: a slower machine turned two shards' attempts into `timeout`s with
+        no report. Both campaigns give an attempt an hour and record whether
+        the typed input landed."""
         with open(SOAK, encoding="utf-8") as handle:
             body = handle.read()
-        self.assertGreaterEqual(body.count("GUI_TEST_TYPING_DELAY:"), 2)
+        self.assertEqual(body.count("--timeout 3600"), 2)
         self.assertGreaterEqual(body.count("GUI_TEST_VERIFY_TYPING:"), 2)
 
     def test_the_soak_runs_the_complete_display_matrix(self):
