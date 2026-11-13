@@ -101,6 +101,7 @@ jobs:
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
             tests/test_lifafa_sync_upstream.py \
+            tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
             tests/test_gui_sleeps.py \
@@ -199,6 +200,7 @@ jobs:
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
             tests/test_lifafa_sync_upstream.py \
+            tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
             tests/test_gui_sleeps.py \

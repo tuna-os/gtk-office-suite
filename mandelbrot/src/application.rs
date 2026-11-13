@@ -24,9 +24,11 @@ pub(crate) const APP_NAME: &str = "Mandelbrot";
 /// The URL of the homepage of the application.
 /// Mandelbrot's, not upstream Fractal's: it is also the OAuth client URI
 /// homeservers show, and Fractal's tracker is not where Mandelbrot's bugs go.
-pub(crate) const APP_HOMEPAGE_URL: &str = "https://github.com/tuna-os/gtk-office-suite/tree/main/mandelbrot";
+pub(crate) const APP_HOMEPAGE_URL: &str =
+    "https://github.com/tuna-os/gtk-office-suite/tree/main/mandelbrot";
 /// Where Mandelbrot's bugs are reported: the suite's tracker.
-pub(crate) const APP_ISSUE_URL: &str = "https://github.com/tuna-os/gtk-office-suite/issues/new?template=bug_report.yml";
+pub(crate) const APP_ISSUE_URL: &str =
+    "https://github.com/tuna-os/gtk-office-suite/issues/new?template=bug_report.yml";
 
 mod imp {
     use std::cell::Cell;
@@ -264,7 +266,8 @@ mod imp {
                 gio::ActionEntry::builder("share-file")
                     .parameter_type(Some(&<(String, String)>::static_variant_type()))
                     .activate(|obj: &super::Application, _, variant| {
-                        let Some((path, room)) = variant.and_then(glib::Variant::get::<(String, String)>)
+                        let Some((path, room)) =
+                            variant.and_then(glib::Variant::get::<(String, String)>)
                         else {
                             error!("Activated `app.share-file` without a (path, room) pair");
                             return;
@@ -297,6 +300,18 @@ mod imp {
                                 let window = obj.imp().present_main_window();
                                 toast!(window, gettext("Not a Matrix room"));
                             }
+                        }
+                    })
+                    .build(),
+                // `share-screen`: share a screen or window into the call that is going on;
+                // the desktop's picker asks what. Decks' "Present in Call…" calls it over
+                // `org.freedesktop.Application.ActivateAction` (INTEGRATION-PLAN A5, ADR 0016).
+                gio::ActionEntry::builder("share-screen")
+                    .activate(|obj: &super::Application, _, _| {
+                        if !obj.session_list().share_screen_in_active_call() {
+                            warn!("Cannot share the screen: no call is going on");
+                            let window = obj.imp().present_main_window();
+                            toast!(window, gettext("Join a call to share your screen"));
                         }
                     })
                     .build(),
@@ -334,6 +349,40 @@ mod imp {
                     })
                     .build(),
             ]);
+
+            self.set_up_matrix_account_action();
+        }
+
+        /// `matrix-account`: the signed-in Matrix user ID as the state of an
+        /// action, empty when there is none. The other suite apps read it with
+        /// `org.gtk.Actions.Describe` to know there is a Matrix account to chat
+        /// and call with (INTEGRATION-PLAN B7, ADR 0013: Mandelbrot owns the one
+        /// Matrix account, and nothing else holds its secrets). It is never
+        /// activated; only its state is read.
+        fn set_up_matrix_account_action(&self) {
+            let action = gio::SimpleAction::new_stateful(
+                "matrix-account",
+                None,
+                &String::new().to_variant(),
+            );
+            action.connect_activate(|_, _| {});
+            self.obj().add_action(&action);
+
+            let update = clone!(
+                #[weak]
+                action,
+                move |session_list: &SessionList| {
+                    let user_id = (0..session_list.n_items())
+                        .filter_map(|i| session_list.item(i).and_downcast::<SessionInfo>())
+                        .find(|info| !info.is::<FailedSession>())
+                        .map(|info| info.user_id().to_string())
+                        .unwrap_or_default();
+                    action.set_state(&user_id.to_variant());
+                }
+            );
+            update(&self.session_list);
+            self.session_list
+                .connect_items_changed(move |session_list, _, _, _| update(session_list));
         }
 
         /// Sets up keyboard shortcuts for application and window actions.

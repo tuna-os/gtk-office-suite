@@ -89,7 +89,7 @@ impl CameraSink {
     }
 
     /// Send a captured frame, dropping it if the media task cannot keep up.
-    fn send_frame(&self, frame: CameraFrame) {
+    pub(super) fn send_frame(&self, frame: CameraFrame) {
         if let Some(sender) = self.sender() {
             let _ = sender.try_send(CameraMessage::Frame(frame));
         }
@@ -268,7 +268,7 @@ impl CameraCapture {
 }
 
 /// Create the `GStreamer` element with the given factory name.
-fn make_element(name: &str) -> Result<gst::Element, String> {
+pub(super) fn make_element(name: &str) -> Result<gst::Element, String> {
     gst::ElementFactory::make(name)
         .build()
         .map_err(|error| format!("failed to create the `{name}` element: {error}"))
@@ -313,7 +313,7 @@ async fn default_camera() -> Result<aperture::Camera, String> {
 }
 
 /// Extract a tightly packed I420 frame from the given sample.
-fn frame_from_sample(sample: &gst::Sample) -> Option<CameraFrame> {
+pub(super) fn frame_from_sample(sample: &gst::Sample) -> Option<CameraFrame> {
     let buffer = sample.buffer()?;
     let info = gst_video::VideoInfo::from_caps(sample.caps()?).ok()?;
     let frame = gst_video::VideoFrameRef::from_buffer_ref_readable(buffer, &info).ok()?;
