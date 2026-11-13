@@ -40,6 +40,8 @@ mod actions;
 mod assistant;
 mod assistant_organize;
 mod attachments;
+// Fork-only: reply with an attachment edited in another app (A2).
+mod reply_with_edit;
 mod boot;
 mod card_menu;
 mod children;

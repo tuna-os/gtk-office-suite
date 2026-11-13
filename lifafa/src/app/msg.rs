@@ -445,6 +445,14 @@ pub(crate) enum AppMsg {
         index: usize,
         save: bool,
     },
+    /// An attachment opened from the reader was saved in another app, at this
+    /// staged path: ask whether to reply with it (`reply_with_edit`,
+    /// INTEGRATION-PLAN A2).
+    AttachmentEditedForReply {
+        staged: std::path::PathBuf,
+        account_id: u32,
+        id: u32,
+    },
     /// The drawer's "Show in Message": scroll the reader to the message this
     /// attachment came with (#213).
     ShowAttachmentInMessage(Attachment),
