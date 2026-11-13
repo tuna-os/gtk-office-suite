@@ -114,6 +114,20 @@
       ],
       "groupName": "p2panda",
       "allowedVersions": "<0.8"
+    },
+    {
+      "description": "dcp-streams (both copies) stays on reqwest 0.12. Its transport trusts only the CA it is given, over rustls with ring (`rustls-tls-manual-roots`, `tls_built_in_root_certs(false)`), and collab-spike.yml's tree gate bans aws-lc-rs and rustls-platform-verifier. reqwest 0.13 drops that feature and builder method, and both of its rustls features pull rustls-platform-verifier (`rustls` adds aws-lc-rs too). Moving it is a TLS-stack decision (a preconfigured ring ClientConfig, and the gate), not a version bump.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "collab/dcp-streams/Cargo.toml",
+        "tools/collab-spike/dcp-streams/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "reqwest"
+      ],
+      "allowedVersions": "<0.13"
     }
   ]
 }
