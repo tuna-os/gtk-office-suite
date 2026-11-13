@@ -190,8 +190,6 @@ jobs:
     env:
       IMAGE: ghcr.io/tuna-os/lifafa
       ARCH: ${{ matrix.arch }}
-      # Some runners' default container auth path is not writable.
-      REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
     steps:
       - uses: actions/download-artifact@v8.0.2
         with:
@@ -202,12 +200,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ACTOR: ${{ github.actor }}
+          # Some runners' default container auth path is not writable.
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$ACTOR" --password-stdin
 
       - name: Push OCI to the registry
         env:
           REF: ${{ github.ref }}
           REF_NAME: ${{ github.ref_name }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: |
           set -euo pipefail
           dir="oci-$ARCH"
