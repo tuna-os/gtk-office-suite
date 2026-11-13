@@ -116,7 +116,7 @@ pulldown-cmark = { version = "0.13.4", default-features = false, features = ["ht
 # of its own html5ever release only (#2060). renovate.json groups them.
 markup5ever_rcdom = "0.40"
 html5ever = "0.40"
-css-inline = { version = "0.23", default-features = false }
+css-inline = { version = "0.24", default-features = false }
 # A notification button that shows no window has to tell GNOME Shell its
 # launch is over (see src/desktop/startup.rs). On Wayland that takes
 # gtk_shell1, which GTK binds but keeps private, so a second binding is made on
