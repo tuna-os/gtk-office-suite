@@ -80,6 +80,7 @@ impl Preferences {
             .privacy
             .remote_ahead_row
             .set_active(init.remote_ahead);
+        widgets.privacy.clean_links_row.set_active(init.clean_links);
         widgets
             .privacy
             .show_remote_banner_row
@@ -455,6 +456,10 @@ impl Preferences {
             .list
             .pills_below_row
             .set_active(init.list_pills_below);
+        widgets
+            .list
+            .list_follows_window_row
+            .set_active(init.list_follows_window);
         widgets
             .list
             .list_search_open_row

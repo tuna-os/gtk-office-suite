@@ -46,6 +46,7 @@ calls them with more than one; they keep their unit tests
 | `app.focus-notes` | moves focus to the notes; typing edits the slide's notes | `DecksSpeakerNotesSmoke` |
 | `app.preview-transition` | none: plays the slide's transition | `DecksMagicMovePreviewSmoke` |
 | `app.present` | none: runs a show | `DecksPresenterDisplaySmoke` |
+| `app.present-in-call` | none: runs a show, then asks Mandelbrot to open its Share Screen picker (ADR 0016); enabled only while Mandelbrot is on the bus | `the_call_names_the_action_with_no_parameter_and_no_platform_data`, `the_item_hides_while_mandelbrot_is_not_running` |
 | `app.rehearse` | none: runs a show on the presenter display | `DecksPresenterDisplaySmoke` |
 | `app.export-pdf` | none: writes a PDF of the deck | `DecksExportSmoke` |
 | `app.export-handouts` | none: writes a handout PDF | `DecksExportSmoke` |
