@@ -85,9 +85,9 @@ The questions those answer:
 - [ ] Every new job classified in the required-checks table
   (`tests/test_required_checks.py`) and its actions locked
   (`.github/workflows/actions.lock`).
-- [ ] Renovate: `mandelbrot/renovate.json` is not read in a subdirectory;
-  fold its rules into the root configuration or the dependencies stop being
-  updated.
+- [x] Renovate: `mandelbrot/renovate.json` is not read in a subdirectory, so
+  its rules are folded into the root `renovate.json`, scoped to
+  `mandelbrot/**`, and the file is removed.
 
 ## 2. Publishing from this repository
 
@@ -132,20 +132,28 @@ The questions those answer:
 - [ ] `lifafa/fork/MAINTAINING.md`, `lifafa/README.md`, `mandelbrot/README.md`,
   `mandelbrot/RELEASING.md` and `mandelbrot/AGENTS.md` rewritten for this
   repository (where the code lives, how a release is cut, where to report).
-- [ ] The stale note at the top of `.github/workflows/lifafa.yml` and the root
-  `Cargo.toml` (Lifafa "gtk4 0.9") corrected: Lifafa is on gtk4 0.11 now.
+- [x] The stale note at the top of `.github/workflows/lifafa.yml` and the root
+  `Cargo.toml` (Lifafa "gtk4 0.9") corrected: Lifafa is on gtk4 0.11 now, and
+  `renovate.json`'s Lifafa toolkit rule says why it still moves only by hand.
   Whether it can then join the root workspace is a separate question.
 - [ ] The suite README and `docs/INTEGRATION-PLAN.md` say where each app is
   released from.
 
 ## 5. Upstream tracking
 
-- [ ] Lifafa: if it keeps following hyprlab/hylki, a workflow here that merges
-  upstream into `lifafa/` (`git subtree pull --prefix lifafa`, or a
-  vendor-and-diff script) and opens a pull request, replacing `upstream-sync`;
-  `fork/touchpoints.txt` and `fork/check-touchpoints.sh` keep the fork's
-  changes to upstream files listed. One upstream merge done this way end to
-  end before the switch.
+- [x] Lifafa: a workflow here that brings upstream into `lifafa/` and opens a
+  pull request, replacing `upstream-sync`: `.github/workflows/lifafa-upstream-sync.yml`
+  runs `lifafa/fork/sync-upstream.sh`. Lifafa was imported squashed, so
+  `git subtree` has no common history to merge from; the script applies
+  upstream's own diff since `lifafa/fork/UPSTREAM_BASE` (hyprlab/hylki
+  `b5650f58`, the upstream commit the import was built on) three-way, and
+  leaves conflict markers where the fork changed the same lines.
+- [ ] One upstream merge done this way end to end before the switch. A dry
+  run on 2026-11-13 (98 upstream commits, to `a86e1282`) changed 296 files
+  and left 36 conflicting hunks in 23, most where this repository reworked
+  Lifafa (the in-tree relm, gtk4 0.11, A2); resolving them and the build is
+  its own pull request. tuna-os/lifafa also has three fork fixes since the
+  import to carry (`66f86c48`, `dd0ddadd`, `76d5bc62`).
 - [ ] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
   works from a monorepo: a branch of hyprlab/hylki with the change applied,
   not a branch of this repository. Write the steps down.
