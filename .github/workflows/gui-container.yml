@@ -21,7 +21,7 @@ on:
 
 concurrency:
   group: gui-container-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

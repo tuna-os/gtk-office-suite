@@ -57,8 +57,7 @@ on:
   push:
     # main too: this workflow first ran on main 7 hours after the merge, and every
     # build job failed on a stale lockfile that Renovate's bumps had broken.
-    # A spike branch with a pull request already gets the pull_request run.
-    branches: [main]
+    branches: [main, spike/collab, 'spike/collab-*']
     paths:
       - 'tools/collab-spike/**'
       - 'docs/collab-spec/**'
@@ -77,11 +76,10 @@ on:
         type: boolean
         default: false
 
-# A newer push to the same pull request supersedes the queued or running one. Main,
-# the schedule and a dispatch always finish.
+# A newer push to the same ref supersedes the queued or running one.
 concurrency:
   group: collab-spike-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always

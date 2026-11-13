@@ -33,7 +33,7 @@ on:
 
 concurrency:
   group: render-real-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
