@@ -137,6 +137,10 @@ mod imp_state {
         /// Whether the local camera is enabled.
         #[property(get, set = Self::set_camera_on, explicit_notify)]
         camera_on: Cell<bool>,
+        /// Whether a screen or window is being shared into the call
+        /// (INTEGRATION-PLAN A5, ADR 0016).
+        #[property(get, set = Self::set_screen_shared, explicit_notify)]
+        screen_shared: Cell<bool>,
         /// The duration of the call, in seconds.
         #[property(get, set = Self::set_duration, explicit_notify)]
         duration: Cell<u64>,
@@ -166,6 +170,7 @@ mod imp_state {
                 connection_state: Cell::default(),
                 muted: Cell::default(),
                 camera_on: Cell::default(),
+                screen_shared: Cell::default(),
                 duration: Cell::default(),
                 participants: gio::ListStore::new::<CallParticipant>(),
                 room_name: RefCell::default(),
@@ -230,6 +235,18 @@ mod imp_state {
             // The `CallManager` starts or stops the camera capture, which
             // publishes or unpublishes the camera track.
             self.obj().notify_camera_on();
+        }
+
+        /// Set whether a screen or window is shared.
+        fn set_screen_shared(&self, screen_shared: bool) {
+            if self.screen_shared.get() == screen_shared {
+                return;
+            }
+
+            self.screen_shared.set(screen_shared);
+            // The `CallManager` asks the ScreenCast portal what to share, or
+            // stops sharing, which publishes or unpublishes the track.
+            self.obj().notify_screen_shared();
         }
 
         /// Set the duration of the call, in seconds.
