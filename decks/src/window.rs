@@ -533,12 +533,7 @@ impl DecksWindow {
                                 w.close();
                             }
                             Err(e) => {
-                                let err = adw::AlertDialog::builder()
-                                    .heading(suite_common::i18n("Could Not Save File"))
-                                    .body(&e)
-                                    .build();
-                                err.add_response("ok", &suite_common::i18n("_OK"));
-                                err.present(Some(&w));
+                                suite_common::dialogs::show_message(Some(&w), &suite_common::i18n("Could Not Save File"), &e);
                             }
                         });
                         return;
@@ -581,12 +576,7 @@ impl DecksWindow {
                                         w.close();
                                     }
                                     Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Could Not Save File"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("_OK"));
-                                        err.present(Some(&w));
+                                        suite_common::dialogs::show_message(Some(&w), &suite_common::i18n("Could Not Save File"), &e);
                                     }
                                 });
                             }
@@ -1263,13 +1253,7 @@ impl DecksWindow {
                                         da.queue_draw();
                                     }
                                     Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Could Not Open File"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("_OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
+                                        suite_common::dialogs::show_message(Some(&w2), &suite_common::i18n("Could Not Open File"), &e);
                                     }
                                 }
                             }
@@ -1308,13 +1292,7 @@ impl DecksWindow {
                             slot_save.clear_or_report();
                         }
                         Err(e) => {
-                            let err = adw::AlertDialog::builder()
-                                .heading(suite_common::i18n("Could Not Save File"))
-                                .body(&e)
-                                .build();
-                            err.add_response("ok", &suite_common::i18n("_OK"));
-                            err.set_default_response(Some("ok"));
-                            err.present(Some(&w_clone));
+                            suite_common::dialogs::show_message(Some(&w_clone), &suite_common::i18n("Could Not Save File"), &e);
                         }
                     });
                 } else {
@@ -1370,13 +1348,7 @@ impl DecksWindow {
                                         slot_as.clear_or_report();
                                     }
                                     Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Could Not Save File"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("_OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
+                                        suite_common::dialogs::show_message(Some(&w2), &suite_common::i18n("Could Not Save File"), &e);
                                     }
                                 });
                             }
@@ -1489,12 +1461,7 @@ impl DecksWindow {
                     // (DCK-003). The work stays, as an unsaved document,
                     // and this says where it can go instead.
                     *self.file_path.borrow_mut() = None;
-                    let err = adw::AlertDialog::builder()
-                        .heading(suite_common::i18n("Could Not Reassociate Recovered Document"))
-                        .body(suite_common::i18n("The recovered document's original location has a name Decks cannot reuse. It is kept as an unsaved document: save it to a destination you choose."))
-                        .build();
-                    err.add_response("ok", &suite_common::i18n("_OK"));
-                    err.present(Some(&self.window));
+                    suite_common::dialogs::show_message(Some(&self.window), &suite_common::i18n("Could Not Reassociate Recovered Document"), &suite_common::i18n("The recovered document's original location has a name Decks cannot reuse. It is kept as an unsaved document: save it to a destination you choose."));
                 }
             }
             // Names the original when it has one the session can hold;
@@ -1519,12 +1486,7 @@ impl DecksWindow {
                 if unresolved.len() > shown.len() {
                     body.push_str(&format!("\n…and {} more", unresolved.len() - shown.len()));
                 }
-                let dlg = adw::AlertDialog::builder()
-                    .heading(suite_common::i18n("Recovered With Missing Pictures"))
-                    .body(&body)
-                    .build();
-                dlg.add_response("ok", &suite_common::i18n("_OK"));
-                dlg.present(Some(&self.window));
+                suite_common::dialogs::show_message(Some(&self.window), &suite_common::i18n("Recovered With Missing Pictures"), &body);
             }
             // Order and failure handling: AutosaveSlot::adopt_recovered.
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
