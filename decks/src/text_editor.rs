@@ -511,6 +511,18 @@ impl Editor {
         }
         self.popover.popup();
         self.view.grab_focus();
+        crate::canvas_input::trace_input(|| {
+            let (_, nat) = self.popover.preferred_size();
+            format!(
+                "editor popup: visible {}, mapped {}, pointing to {:?}, natural {}x{}, window {:?}",
+                self.popover.is_visible(),
+                self.popover.is_mapped(),
+                self.popover.pointing_to().1,
+                nat.width(),
+                nat.height(),
+                self.popover.root().map(|r| (r.width(), r.height())),
+            )
+        });
     }
 }
 
@@ -692,6 +704,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
     {
         let weak = weak.clone();
         popover.connect_closed(move |_| {
+            crate::canvas_input::trace_input(|| "editor popover closed".to_owned());
             let Some(ed) = weak.upgrade() else { return };
             ed.preedit.set(false);
             // Leaving the session any other way commits it; a commit that
@@ -801,6 +814,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
             let Some((slide_id, object_id, bounds, caret)) = target else { return };
             gesture.set_state(gtk::EventSequenceState::Claimed);
             if !ed.ctl.begin_text_session(slide_id, object_id) {
+                crate::canvas_input::trace_input(|| "the text session did not begin".to_owned());
                 return;
             }
             // The caret goes where the double-click was, on the text the
