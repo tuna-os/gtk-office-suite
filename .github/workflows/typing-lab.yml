@@ -40,15 +40,19 @@ jobs:
           name: typing-lab
           path: typing-lab.txt
 
-  # The journeys that lost a "p" in the release soak, run many times on a
-  # debug build and on a release build: does the build profile matter?
-  apps:
+
+  # The cause, tested: Print Preview's Ctrl+Shift+P leaves "p" down at the X
+  # server, and the next journey that types a "p" loses it. Print Preview and a
+  # journey that types "apple", shuffled, 40 times: with the release off
+  # (GUI_TEST_RELEASE_KEYS=0) attempts where Print Preview runs first should
+  # lose the "p"; with it on, none should.
+  stuck-key:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        profile: [debug, release]
+        release: ['0', '1']
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -65,89 +69,27 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2.9.3
         with:
-          key: typing-lab-${{ matrix.profile }}
+          key: typing-lab-release
       - name: Build the apps
-        env:
-          PROFILE: ${{ matrix.profile }}
-        run: |
-          if [ "$PROFILE" = release ]; then flag=--release; else flag=; fi
-          cargo build $flag --bin letters --bin tables --bin decks
-      - name: Run the journeys that lost a p, 50 times
-        env:
-          GUI_TEST_PROFILE: ${{ matrix.profile }}
-          GUI_TEST_VERIFY_TYPING: '1'
-        run: |
-          python3 tests/gui/stress.py \
-            --repeat 50 --timeout 3000 \
-            --select "test_clear_filter_keeps_manual_hides or test_copy_paste_round_trip or test_a_comment_is_added_replied_to_and_resolved or test_a_protected_sheet_refuses_an_edit_with_a_message_and_unprotect_allows_it" \
-            --output "$GITHUB_WORKSPACE/lab-apps"
-      - name: Summary
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json
-          m = json.load(open("lab-apps/manifest.json"))
-          print(json.dumps(m.get("summary", {}), indent=2))
-          for a in m["attempts"]:
-              for f in a["failures"]:
-                  print(a["classification"], f.get("journey"), "|", (f.get("message") or "")[:140])
-          PY
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: typing-lab-apps-${{ matrix.profile }}
-          path: lab-apps
-          retention-days: 14
-          if-no-files-found: warn
-
-  # The same journeys inside the soak's own image: the plain runner never lost
-  # a "p" in 250 runs per profile, the soak's container lost one in about one
-  # run in ten. Container or run order?
-  apps-container:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    permissions:
-      contents: read
-      packages: read
-    container:
-      image: ghcr.io/tuna-os/gtk-office-suite/gui-test:main  # zizmor: ignore[unpinned-images] the image the release soak runs in, on purpose
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --shm-size=1g
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          key: typing-lab-container
-      - name: Build the release apps
         run: cargo build --release --bin letters --bin tables --bin decks
-      - name: Run the journeys that lost a p, 50 times, in the soak's image
+      - name: Print Preview and a journey that types "apple", shuffled, 40 times
         env:
           GUI_TEST_PROFILE: release
           GUI_TEST_VERIFY_TYPING: '1'
+          GUI_TEST_RELEASE_KEYS: ${{ matrix.release }}
         run: |
           python3 tests/gui/stress.py \
-            --repeat 50 --timeout 3000 \
-            --select "test_clear_filter_keeps_manual_hides or test_copy_paste_round_trip or test_a_comment_is_added_replied_to_and_resolved or test_a_protected_sheet_refuses_an_edit_with_a_message_and_unprotect_allows_it" \
-            --output "$GITHUB_WORKSPACE/lab-container"
+            --repeat 40 --timeout 3000 \
+            --select "test_print_preview_reports_single_page or test_clear_filter_keeps_manual_hides" \
+            --output "$GITHUB_WORKSPACE/lab-stuck"
       - name: Summary
         if: always()
         run: |
           python3 - <<'PY'
           import json
-          m = json.load(open("lab-container/manifest.json"))
+          m = json.load(open("lab-stuck/manifest.json"))
           print(json.dumps(m.get("summary", {}), indent=2))
           for a in m["attempts"]:
-              for f in a["failures"]:
-                  print(a["classification"], f.get("journey"), "|", (f.get("message") or "")[:140])
+              first = a["order"][0].split("::")[-1]
+              print(a["index"], a["classification"], "first:", first)
           PY
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: typing-lab-container
-          path: lab-container
-          retention-days: 14
-          if-no-files-found: warn
