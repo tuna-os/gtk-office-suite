@@ -196,21 +196,19 @@ jobs:
           name: lifafa-oci-${{ matrix.arch }}
           path: oci-${{ matrix.arch }}
 
-      # Some runners' default container auth path is not writable, so both
-      # skopeo steps keep it in the job's temporary directory (`runner` is
-      # not available in a job's `env`).
       - name: Log in to GHCR
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ACTOR: ${{ github.actor }}
+          # Some runners' default container auth path is not writable.
           REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$ACTOR" --password-stdin
 
       - name: Push OCI to the registry
         env:
-          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
           REF: ${{ github.ref }}
           REF_NAME: ${{ github.ref_name }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: |
           set -euo pipefail
           dir="oci-$ARCH"

@@ -252,6 +252,16 @@ fn a_missing_state_file_falls_back_to_the_declared_defaults() {
     assert_eq!(fresh.list_pane_width, super::default_list_pane_width());
 }
 
+/// A share of the window the list cannot have reads as none, and the list
+/// keeps its width instead (#648).
+#[test]
+fn a_list_share_out_of_range_reads_as_unset() {
+    assert_eq!(super::list_share(0.4), 0.4);
+    for bad in [0.0, 0.01, 0.99, 1.4, -0.3, f64::NAN] {
+        assert_eq!(super::list_share(bad), 0.0, "{bad}");
+    }
+}
+
 #[test]
 fn plain_string_aliases_still_load() {
     // The pre-per-alias-SMTP format (#34): a bare array of identity strings.
@@ -304,6 +314,36 @@ fn aliases_can_carry_their_own_smtp() {
         alias.smtp_password.is_empty(),
         "passwords live in the keyring"
     );
+}
+
+#[test]
+fn an_alias_server_saves_switch_round_trips() {
+    let toml_in = r#"
+        [[accounts]]
+        name = "Ann"
+        email = "ann@example.org"
+        imap_host = "imap.example.org"
+        username = "ann"
+
+        [[accounts.aliases]]
+        identity = "ann@work.org"
+        smtp_host = "smtp.work.org"
+        smtp_username = "ann"
+        server_saves_sent = true
+
+        [[accounts.aliases]]
+        identity = "ann@home.org"
+        smtp_host = "smtp.home.org"
+        smtp_username = "ann"
+        "#;
+    let cfg: ConfigFile = toml::from_str(toml_in).unwrap();
+    // A config from before #647 has no key: Hylki keeps filing the copy.
+    assert!(cfg.accounts[0].aliases[0].server_saves_sent);
+    assert!(!cfg.accounts[0].aliases[1].server_saves_sent);
+    let out = toml::to_string_pretty(&cfg).unwrap();
+    assert_eq!(out.matches("server_saves_sent").count(), 1, "{out}");
+    let back: ConfigFile = toml::from_str(&out).unwrap();
+    assert!(back.accounts[0].aliases[0].server_saves_sent);
 }
 
 #[test]
@@ -482,4 +522,78 @@ fn a_view_keeps_its_sort_through_the_file() {
     let old: super::PrivacyFile = toml::from_str("list_sort = \"unread\"").unwrap();
     assert!(old.list_sorts.is_empty());
     assert_eq!(old.list_sort, "unread");
+}
+
+/// An exported log or settings bundle replaces whatever file the user picked,
+/// and is left readable by its owner only, even where the file was not.
+#[cfg(unix)]
+#[test]
+fn a_private_file_is_tightened_before_it_is_filled() {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    let dir = std::env::temp_dir().join(format!("hylki-private-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    super::private_dir(&dir.join("a/b")).unwrap();
+    assert_eq!(mode(&dir.join("a/b")), 0o700);
+    std::fs::set_permissions(dir.join("a"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    super::private_dir(&dir.join("a")).unwrap();
+    assert_eq!(mode(&dir.join("a")), 0o700);
+
+    let file = dir.join("hylki-log.txt");
+    std::fs::write(&file, b"an older, longer log").unwrap();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+    super::write_private(&file, "log").unwrap();
+    assert_eq!(mode(&file), 0o600);
+    assert_eq!(std::fs::read(&file).unwrap(), b"log");
+    super::write_private_bytes(&dir.join("new.bin"), b"\x00\x01").unwrap();
+    assert_eq!(mode(&dir.join("new.bin")), 0o600);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn accepted_keys_keep_the_address_with_the_fingerprint() {
+    let key = |addr: &str, fingerprint: &str| super::AcceptedKey {
+        addr: addr.into(),
+        fingerprint: fingerprint.into(),
+    };
+    let saved = toml::to_string_pretty(&super::remembered::AcceptedKeysFile {
+        keys: vec![key("ada@example.org", "AAAA")],
+    })
+    .unwrap();
+    let file: super::remembered::AcceptedKeysFile = toml::from_str(&saved).unwrap();
+    assert!(file.keys.contains(&key("ada@example.org", "AAAA")));
+    // Another key for the address is not the one accepted.
+    assert!(!file.keys.contains(&key("ada@example.org", "BBBB")));
+    assert!(!file.keys.contains(&key("eve@example.org", "AAAA")));
+}
+
+/// A settings file is replaced whole (#642): a failed write leaves the old
+/// one as it was and no stray file beside it, and a file kept as a link
+/// stays a link.
+#[cfg(unix)]
+#[test]
+fn a_settings_file_is_replaced_whole() {
+    let dir = std::env::temp_dir().join(format!("hylki-replace-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("state.toml");
+    std::fs::write(&file, "old").unwrap();
+
+    super::replace_file(&file, |tmp| std::fs::write(tmp, "new")).unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+
+    let failed = super::replace_file(&file, |tmp| {
+        std::fs::write(tmp, "half")?;
+        Err(std::io::Error::other("disk full"))
+    });
+    assert!(failed.is_err());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+
+    let link = dir.join("window.toml");
+    std::os::unix::fs::symlink(&file, &link).unwrap();
+    super::replace_file(&link, |tmp| std::fs::write(tmp, "through")).unwrap();
+    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "through");
+    let _ = std::fs::remove_dir_all(&dir);
 }

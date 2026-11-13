@@ -1655,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "hylki"
-version = "1.47.1"
+version = "1.48.0"
 dependencies = [
  "ammonia",
  "async-imap",
@@ -2065,6 +2065,7 @@ checksum = "b06e69070b7e12262b0cd90832f0a7396f142a2b330181255562decf9f0c6215"
 dependencies = [
  "cc",
  "pkg-config",
+ "sqlcipher-src",
  "vcpkg",
 ]
 
@@ -3431,6 +3432,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlcipher-src"
+version = "420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6b5280ed2593d07b2816ec531821c15c306903bcca224716f1fbcc2bbfedfe"
+
+[[package]]
 name = "sqlite-wasm-rs"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3438,6 +3445,7 @@ checksum = "a6cd504cecbfe7eef649988840f9a6cb768d11085efec138f8e99f160632d867"
 dependencies = [
  "cc",
  "rsqlite-vfs",
+ "sqlcipher-src",
 ]
 
 [[package]]

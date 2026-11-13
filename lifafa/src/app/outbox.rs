@@ -2,7 +2,7 @@
 
 use crate::relm::prelude::*;
 
-use crate::ui::compose::ComposePrefill;
+use crate::ui::compose::{ComposePrefill, Original};
 use crate::ui::message_list::{MessageListInput, SearchScope};
 use crate::ui::sidebar::SidebarInput;
 use crate::worker::MailRequest;
@@ -187,7 +187,8 @@ impl AppModel {
             resumed: false,
             no_signature: false,
             template: false,
-            original_plain: false,
+            original: Original::Unknown,
+            written_plain: editable.plain,
             typed_html: String::new(),
             assistant: false,
             // As it was to go, but its passwords live in the Tuta contacts:
@@ -240,6 +241,8 @@ impl AppModel {
                     .emit(MessageListInput::SetScope(SearchScope::ThisFolder));
                 self.message_list
                     .emit(MessageListInput::SetColorize(self.accounts.len() > 1));
+                self.message_list
+                    .emit(MessageListInput::SetSearchAccount(None));
                 self.show_message(None, false);
                 self.push_outbox();
             }
