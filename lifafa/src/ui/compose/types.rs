@@ -190,6 +190,9 @@ pub(super) enum ComposeStep {
     },
     /// Take `count` attachments out again, starting at `at`.
     Remove { at: usize, count: usize },
+    /// Put this file back as the attachment at `at`, in place of the one
+    /// there: an attachment edited in another app and put back (A2).
+    Replace { at: usize, path: std::path::PathBuf },
 }
 
 /// A share link placed in the body (#144), by the id of its paragraph.

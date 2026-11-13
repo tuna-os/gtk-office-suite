@@ -220,6 +220,14 @@ pub(crate) enum ComposeInput {
     FocusField(Field),
     AddAttachments(Vec<std::path::PathBuf>),
     RemoveAttachment(usize),
+    /// The copy of an attachment opened for editing was saved in another
+    /// app, at this staged path (edit_back.rs, INTEGRATION-PLAN A2).
+    AttachmentEdited(std::path::PathBuf),
+    /// Use `to` in place of the attachment `from`, as one undoable step.
+    ReplaceAttachment {
+        from: std::path::PathBuf,
+        to: std::path::PathBuf,
+    },
     OpenContacts,
     /// The given recipient field changed — refresh autocomplete.
     Suggest(Field),
