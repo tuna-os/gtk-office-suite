@@ -7,25 +7,34 @@ use crate::relm::prelude::*;
 
 use super::{AttachmentDrawer, AttachmentDrawerInput};
 
-/// Space (or Enter) previews the highlighted attachment — the keyboard
-/// side of the single-click-then-preview flow (issue #37).
+/// Space previews the highlighted attachment and Enter opens it, as a
+/// double click does: the keyboard side of the single-click-then-preview
+/// flow (issue #37). They differ only for what the lightbox cannot show,
+/// which Space hands to the file previewer as Files does (#625).
 pub(super) fn activate_on_keys(flow: &gtk::FlowBox, sender: &ComponentSender<AttachmentDrawer>) {
     let key = gtk::EventControllerKey::new();
     let s = sender.clone();
     let flow_ref = flow.clone();
-    key.connect_key_pressed(move |_, keyval, _, _| {
+    key.connect_key_pressed(move |key, keyval, _, _| {
         use gtk::gdk::Key;
-        if matches!(
-            keyval,
-            Key::space | Key::KP_Space | Key::Return | Key::KP_Enter
-        ) {
-            if let Some(child) = flow_ref.selected_children().first() {
-                s.input_sender()
-                    .emit(AttachmentDrawerInput::Activate(child.index() as usize));
-                return gtk::glib::Propagation::Stop;
+        let Some(i) = flow_ref
+            .selected_children()
+            .first()
+            .map(|c| c.index() as usize)
+        else {
+            return gtk::glib::Propagation::Proceed;
+        };
+        let input = match keyval {
+            // The previewer's focus is asked for with the key press's
+            // time, which the compositor weighs against the last input.
+            Key::space | Key::KP_Space => {
+                AttachmentDrawerInput::Preview(i, key.current_event_time())
             }
-        }
-        gtk::glib::Propagation::Proceed
+            Key::Return | Key::KP_Enter => AttachmentDrawerInput::Activate(i),
+            _ => return gtk::glib::Propagation::Proceed,
+        };
+        s.input_sender().emit(input);
+        gtk::glib::Propagation::Stop
     });
     flow.add_controller(key);
 }

@@ -3,11 +3,13 @@
 
 use std::collections::HashSet;
 
+use adw::prelude::*;
 use crate::relm::prelude::*;
 
 use crate::i18n::i18n;
 use crate::models::Message;
 use crate::ui::compose::ComposeInput;
+use crate::ui::keymap::{focus_in_compose, focus_is_text};
 use crate::ui::message_list::MessageListInput;
 use crate::worker::{MailRequest, OutgoingMessage};
 
@@ -329,6 +331,45 @@ impl AppModel {
         }
     }
 
+    /// Escape takes back the message waiting out its Undo Send delay, the
+    /// latest when several wait (#607). In the capture phase, because the
+    /// toast overlay binds Escape itself: it would close the notice first
+    /// and leave the message to go. A text field, a composer and a dialog
+    /// keep the key.
+    pub(super) fn install_undo_send_key(
+        &self,
+        root: &adw::ApplicationWindow,
+        sender: &ComponentSender<Self>,
+    ) {
+        use gtk::gdk::ModifierType as M;
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let outgoing = self.outgoing.clone();
+        let window = root.clone();
+        let s = sender.clone();
+        keys.connect_key_pressed(move |_, keyval, _, state| {
+            let held = outgoing
+                .borrow()
+                .iter()
+                .filter(|o| o.held)
+                .map(|o| o.ticket)
+                .max();
+            let Some(ticket) = held.filter(|_| {
+                keyval == gtk::gdk::Key::Escape
+                    && !state
+                        .intersects(M::CONTROL_MASK | M::SHIFT_MASK | M::ALT_MASK | M::SUPER_MASK)
+                    && window.visible_dialog().is_none()
+                    && !focus_is_text(&window)
+                    && !focus_in_compose(&window)
+            }) else {
+                return gtk::glib::Propagation::Proceed;
+            };
+            s.input(AppMsg::UndoSend(ticket));
+            gtk::glib::Propagation::Stop
+        });
+        root.add_controller(keys);
+    }
+
     /// The messages the router sends here (see `AppModel::route`).
     pub(super) fn on_send(&mut self, msg: AppMsg, sender: ComponentSender<Self>) {
         match msg {
@@ -469,7 +510,7 @@ impl AppModel {
                 });
             }
         }
-        let sent_path = self.sent_copy_path(account_id);
+        let sent_path = self.sent_copy_path_as(account_id, out.from_alias.as_deref());
         if out.send_at.is_some() {
             // Send Later has its own way back: the message waits in
             // the Outbox, where it can be edited or dropped.

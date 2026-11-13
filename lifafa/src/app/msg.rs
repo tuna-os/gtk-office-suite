@@ -154,6 +154,8 @@ pub(crate) enum AppMsg {
     /// An account's starred mail, for an account with no Starred folder
     /// (#482): the unified Starred view narrowed to it.
     AccountStarredSelected(u32),
+    /// The sidebar's next pick stands in for the launch view (#642).
+    StandInView,
     /// A folder row was chosen (the sidebar, the command palette): list it.
     FolderSelected {
         account_id: u32,
@@ -397,6 +399,14 @@ pub(crate) enum AppMsg {
     /// A message window's Move To: the folder picker over that window, at
     /// its point (x, y). The window closes once a folder is picked.
     PopoutMoveTo {
+        key: (u32, u32),
+        message: Box<Message>,
+        x: f64,
+        y: f64,
+    },
+    /// A message window's Copy To (#398): the folder picker over that
+    /// window, at its point (x, y). The window stays open.
+    PopoutCopyTo {
         key: (u32, u32),
         message: Box<Message>,
         x: f64,
@@ -985,6 +995,10 @@ pub(crate) enum AppMsg {
     TemplatePickNow,
     /// The template picker answered (None: a blank message instead).
     TemplatePicked(Option<Message>),
+    /// A composer's Insert Template: pick a template to put into its message.
+    PickTemplate { id: u32 },
+    /// The template picked for composer `id`.
+    TemplateInsertPicked { id: u32, template: Message },
     /// A composer's Save Draft: store the message in its account's Drafts
     /// folder.
     SaveDraftMessage(Box<OutgoingMessage>),
@@ -1015,6 +1029,7 @@ pub(crate) enum AppMsg {
         account_id: u32,
         autosave: Option<u32>,
         message_id: Option<String>,
+        template: bool,
     },
 
     // ---- on_settings_window (settings_window.rs) ----

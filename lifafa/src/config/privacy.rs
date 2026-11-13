@@ -45,6 +45,12 @@ pub(crate) struct PrivacyFile {
     /// Off by default: a sender's tracking learns of a message never opened.
     #[serde(default)]
     pub(crate) remote_ahead: bool,
+    /// Whether a link opened from a message loses its tracking parameters
+    /// (`utm_*`, `fbclid`, …) and known redirectors (Google's `/url`,
+    /// Facebook's `l.php`) first; see [`crate::mail::link_clean`]. On unless
+    /// switched off: a site that needs one of them is the rare case.
+    #[serde(default = "default_on")]
+    pub(crate) clean_links: bool,
     /// Whether to load sender avatars from Gravatar (off by default — it sends
     /// a hash of each sender's email to a third party).
     #[serde(default)]
@@ -285,11 +291,17 @@ pub(crate) struct PrivacyFile {
     /// where `compose_plain` above still says which of the two it is.
     #[serde(default)]
     pub(crate) compose_format: Option<ComposeFormat>,
-    /// Whether a reply or forward to mail that had no HTML part is written
-    /// in plain text whatever `compose_format` says (#436). Mailing lists
-    /// and the people on them often write plain text and expect it back.
+    /// Whether a reply or forward answers in the original's format: plain
+    /// text to mail that had no HTML part whatever `compose_format` says
+    /// (#436), and rich text to formatted mail when `compose_format` is
+    /// plain (#646). Mailing lists and the people on them often write plain
+    /// text and expect it back; formatted mail keeps its look.
     #[serde(default)]
     pub(crate) follow_plain: bool,
+    /// Whether switching a message from rich to plain text asks first when
+    /// it holds formatting, pictures or links that plain text drops.
+    #[serde(default = "default_on")]
+    pub(crate) ask_plain_switch: bool,
     /// Where the split reply opens in the reading pane (#212).
     #[serde(default)]
     pub(crate) reply_position: ReplyPosition,
@@ -369,7 +381,9 @@ pub(crate) struct PrivacyFile {
     #[serde(default = "default_preview_lines")]
     pub(crate) preview_lines: u32,
     /// How the message list lays out a message: as a card, on one line, or
-    /// whichever the pane's width suits (#334).
+    /// whichever the pane's width suits (#334). A new install starts on
+    /// Automatic; a file without the key was written when Cards was all there
+    /// was, so it keeps cards.
     #[serde(default)]
     pub(crate) list_layout: ListLayout,
     /// The columns a single-line list shows, in order, by name (#334).
@@ -394,6 +408,10 @@ pub(crate) struct PrivacyFile {
     /// text, instead of at the end of the subject (#374).
     #[serde(default)]
     pub(crate) list_pills_below: bool,
+    /// The list keeps its share of the window as the window resizes,
+    /// instead of its width (#648). Off by default.
+    #[serde(default)]
+    pub(crate) list_follows_window: bool,
     /// The list's sort, by its key, and whether a heading turned it the
     /// other way (#574). Empty is newest first.
     #[serde(default)]
@@ -638,6 +656,7 @@ impl Default for PrivacyFile {
             allowed_senders: Vec::new(),
             auto_remote_content: false,
             remote_ahead: false,
+            clean_links: true,
             show_remote_banner: true,
             show_spoof_banner: true,
             show_unified: true,
@@ -727,6 +746,7 @@ impl Default for PrivacyFile {
             compose_plain: false,
             compose_format: None,
             follow_plain: false,
+            ask_plain_switch: true,
             reply_position: ReplyPosition::default(),
             signature_position: SignaturePosition::default(),
             signature_dashes: false,
@@ -746,12 +766,13 @@ impl Default for PrivacyFile {
             text_scale: default_text_scale(),
             theme: String::new(),
             preview_lines: default_preview_lines(),
-            list_layout: ListLayout::Cards,
+            list_layout: ListLayout::Automatic,
             list_columns: default_list_columns(),
             list_headings: false,
             list_column_scroll: false,
             list_group_by_date: true,
             list_pills_below: false,
+            list_follows_window: false,
             list_sort: String::new(),
             list_sort_reversed: false,
             list_sorts: Default::default(),

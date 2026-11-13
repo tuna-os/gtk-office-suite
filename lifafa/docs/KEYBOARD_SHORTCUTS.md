@@ -95,7 +95,7 @@ open the composer in a window of its own even when **Settings → Composing**
 puts replies or new messages in the reading pane.
 
 <kbd>x</kbd> selects the row the cursor is on without opening it, and closes
-the conversation that was open. While rows are selected this way, the
+the conversation that was open, which stays selected with it. While rows are selected this way, the
 reading pane counts them and the bar above the list acts on them, as do the
 action keys; <kbd>x</kbd> again on a row takes it out. <kbd>o</kbd>,
 <kbd>Enter</kbd> or a click opens a row in the reading pane and ends the
@@ -103,6 +103,12 @@ selection; with several rows selected, <kbd>o</kbd> and <kbd>Enter</kbd> do
 nothing. Deleting the selected rows leaves the cursor on the conversation
 above them, or the one below, without opening it. An action key pressed with
 none selected says that a selection is needed.
+
+In Drafts, a draft selected with <kbd>j</kbd>, <kbd>k</kbd> or a click opens
+in the reading pane with the keyboard still on the list, so the keys go on
+working and act on that draft. <kbd>o</kbd>, <kbd>Enter</kbd> or a click in
+the editor moves into it. A draft deleted or moved while open closes its
+editor without saving it again.
 
 <kbd>Enter</kbd> on a message that is already open opens it in a window of
 its own. A <kbd>g</kbd> or <kbd>*</kbd> waits a second and a half for the key
@@ -128,6 +134,10 @@ the message to Drafts, discard it or keep editing, as the Cancel button and
 the composer window's close button do; <kbd>Esc</kbd> again keeps editing.
 It works whether or not single-key shortcuts are enabled, as does everything
 in the menus, and in a search field it still clears the search.
+
+While a sent message waits out its Undo Send delay, <kbd>Esc</kbd> outside a
+text field or composer brings it back to its composer, the most recent one
+when several wait.
 
 <kbd>Ctrl+N</kbd> starts a new message, <kbd>Ctrl+Shift+N</kbd> starts one
 from a [template](DOCUMENTATION.md#templates), <kbd>Ctrl+R</kbd> replies,
@@ -197,8 +207,12 @@ In the composer, <kbd>Ctrl+Z</kbd> and <kbd>Ctrl+Shift+Z</kbd> undo and redo
 your typing instead, and <kbd>Ctrl+B</kbd>, <kbd>Ctrl+I</kbd> and
 <kbd>Ctrl+U</kbd> set bold, italic and underline.
 
-In the attachment drawer, <kbd>Space</kbd> or <kbd>Enter</kbd> previews the
-highlighted attachment. In the attachments gallery's preview, <kbd>←</kbd> and
+In the attachment drawer, <kbd>Space</kbd> previews the highlighted
+attachment, in the GNOME file previewer when it is installed and the file is
+not a picture or a PDF, and <kbd>Enter</kbd> opens it as a double click does
+([Previewing an attachment](DOCUMENTATION.md#previewing-an-attachment)).
+In Hylki's preview of a picture or a PDF, <kbd>Ctrl+P</kbd> prints that
+file rather than the message. In the attachments gallery's preview, <kbd>←</kbd> and
 <kbd>→</kbd> step to the previous and next one, and <kbd>Esc</kbd> closes it.
 
 In the Contacts view, <kbd>Ctrl+F</kbd> and <kbd>/</kbd> open its search

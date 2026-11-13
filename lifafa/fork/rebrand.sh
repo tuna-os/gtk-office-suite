@@ -150,8 +150,9 @@ def text_files(*roots):
 
 
 # "Hylki" as a word in text a person reads, not part of an identifier
-# ("HylkiTray", "X-Hylki-Icon-Launcher") or of the app ID.
-USER_HYLKI = re.compile(r"(?<![\w.\-])Hylki(?![\w\-])")
+# ("HylkiTray", "X-Hylki-Icon-Launcher"), of the app ID, or of a mail
+# domain ("TEST@Hylki.Invalid" in a test).
+USER_HYLKI = re.compile(r"(?<![\w.\-@])Hylki(?![\w\-])")
 # Strings that name Hylki on purpose: the credits this script writes into the
 # About window, which are matched as whole literals.
 CREDIT_FOOTER = "Built on Hylki by hyprlab. © 2026 Hyprlab"
@@ -499,8 +500,8 @@ sub(privacy, r"^    /// Whether to load sender avatars from Gravatar \(off by de
             "    /// it sends a hash of each sender's email to a third party)."), count=1)
 for golden in ("privacy-default.toml", "privacy-empty-file.toml", "bundle.toml"):
     sub(f"src/config/testdata/{golden}",
-        r"^remote_ahead = false\ngravatar = false\navatars = true\nsender_logos = false$",
-        literal("remote_ahead = false\ngravatar = true\navatars = true\nsender_logos = true"),
+        r"^remote_ahead = false\nclean_links = true\ngravatar = false\navatars = true\nsender_logos = false$",
+        literal("remote_ahead = false\nclean_links = true\ngravatar = true\navatars = true\nsender_logos = true"),
         count=1)
 
 # --- The Flatpak manifest ---------------------------------------------------

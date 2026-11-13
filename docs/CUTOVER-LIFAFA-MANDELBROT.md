@@ -98,12 +98,13 @@ The questions those answer:
   (`build-aux/release-notes.py`, image digests).
 - [ ] Lifafa: a publish job that runs `fork/rebrand.sh`, builds the manifest,
   and publishes to the channel decided in step 0 (both, during the
-  transition). The build half is `.github/workflows/lifafa-flatpak.yml`
-  (both architectures, bundles as artifacts, nothing published);
-  `lifafa/fork/with-suite-common.py` brings `../suite-common` and
-  `../suite-common-core` into the tree first, since flatpak-builder copies
-  only `lifafa/` into the sandbox. Publishing waits on the signing key
-  (step 3). The Pages OSTree repository needs the signing key as a secret
+  transition). `.github/workflows/lifafa-flatpak.yml` builds both
+  architectures (`lifafa/fork/with-suite-common.py` brings `../suite-common`
+  and `../suite-common-core` into the tree first, since flatpak-builder
+  copies only `lifafa/` into the sandbox). On a `lifafa-v*` tag, or a manual
+  run with `publish` on, it also pushes the OCI images to
+  `ghcr.io/tuna-os/lifafa` and updates the TunaOS index. That half needs no
+  signing key, only the GHCR grant in step 3. The Pages OSTree repository needs the signing key as a secret
   here and a `gh-pages` checkout of tuna-os/lifafa, or a new Pages site with
   a redirect.
 - [ ] One dry run of each from a branch, publishing nothing, then one real

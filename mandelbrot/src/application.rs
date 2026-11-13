@@ -349,6 +349,40 @@ mod imp {
                     })
                     .build(),
             ]);
+
+            self.set_up_matrix_account_action();
+        }
+
+        /// `matrix-account`: the signed-in Matrix user ID as the state of an
+        /// action, empty when there is none. The other suite apps read it with
+        /// `org.gtk.Actions.Describe` to know there is a Matrix account to chat
+        /// and call with (INTEGRATION-PLAN B7, ADR 0013: Mandelbrot owns the one
+        /// Matrix account, and nothing else holds its secrets). It is never
+        /// activated; only its state is read.
+        fn set_up_matrix_account_action(&self) {
+            let action = gio::SimpleAction::new_stateful(
+                "matrix-account",
+                None,
+                &String::new().to_variant(),
+            );
+            action.connect_activate(|_, _| {});
+            self.obj().add_action(&action);
+
+            let update = clone!(
+                #[weak]
+                action,
+                move |session_list: &SessionList| {
+                    let user_id = (0..session_list.n_items())
+                        .filter_map(|i| session_list.item(i).and_downcast::<SessionInfo>())
+                        .find(|info| !info.is::<FailedSession>())
+                        .map(|info| info.user_id().to_string())
+                        .unwrap_or_default();
+                    action.set_state(&user_id.to_variant());
+                }
+            );
+            update(&self.session_list);
+            self.session_list
+                .connect_items_changed(move |session_list, _, _, _| update(session_list));
         }
 
         /// Sets up keyboard shortcuts for application and window actions.
