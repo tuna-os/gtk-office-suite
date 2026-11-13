@@ -80,6 +80,73 @@ pub fn suggest(people: &[Person], query: &str, limit: usize) -> Vec<Suggestion> 
     rows.into_iter().take(limit).map(|(_, _, suggestion)| suggestion).collect()
 }
 
+/// The person one vCard describes, as an address book hands it over (what
+/// Evolution Data Server stores and returns): the formatted name (`FN`, or
+/// the structured `N` when there is none) and every `EMAIL`. `None` for a
+/// card that has no address to offer, and for a contact *group* (`X-EVOLUTION-LIST`
+/// or `KIND:group`), which is a list of people and not one.
+///
+/// Folded lines (a continuation starts with a space or tab) are joined first,
+/// parameters (`EMAIL;TYPE=work:...`, `item1.EMAIL:...`) are ignored, and the
+/// `\,` `\;` `\\` and `\n` escapes are undone.
+pub fn from_vcard(vcard: &str) -> Option<Person> {
+    let mut lines: Vec<String> = Vec::new();
+    for raw in vcard.lines() {
+        match (raw.strip_prefix(' ').or_else(|| raw.strip_prefix('\t')), lines.last_mut()) {
+            (Some(rest), Some(last)) => last.push_str(rest),
+            _ => lines.push(raw.to_string()),
+        }
+    }
+    let unescape = |v: &str| {
+        let mut out = String::new();
+        let mut chars = v.chars();
+        while let Some(c) = chars.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+            match chars.next() {
+                Some('n') | Some('N') => out.push('\n'),
+                Some(other) => out.push(other),
+                None => out.push('\\'),
+            }
+        }
+        out.trim().to_string()
+    };
+    let mut full_name = String::new();
+    let mut structured = String::new();
+    let mut emails = Vec::new();
+    for line in &lines {
+        let Some((head, value)) = line.split_once(':') else { continue };
+        // "item1.EMAIL;TYPE=work" -> "EMAIL"
+        let name = head.split(';').next().unwrap_or("");
+        let name = name.rsplit('.').next().unwrap_or(name).to_ascii_uppercase();
+        match name.as_str() {
+            "FN" if full_name.is_empty() => full_name = unescape(value),
+            "N" if structured.is_empty() => {
+                // family;given;additional;prefix;suffix -> "given additional family"
+                let parts: Vec<&str> = value.split(';').collect();
+                let get = |i: usize| parts.get(i).map(|p| unescape(p)).unwrap_or_default();
+                structured = [get(1), get(2), get(0)].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ");
+            }
+            "EMAIL" => {
+                let email = unescape(value);
+                if !email.is_empty() {
+                    emails.push(email);
+                }
+            }
+            "KIND" if value.trim().eq_ignore_ascii_case("group") => return None,
+            "X-EVOLUTION-LIST" => return None,
+            _ => {}
+        }
+    }
+    if emails.is_empty() {
+        return None;
+    }
+    let name = if full_name.is_empty() { structured } else { full_name };
+    Some(Person { name, emails })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +223,31 @@ mod tests {
         let bare = Suggestion { name: String::new(), email: "ada@example.org".into() };
         assert_eq!(named.display(), "Ada Lovelace <ada@example.org>");
         assert_eq!(bare.display(), "ada@example.org");
+    }
+    #[test]
+    fn a_vcard_gives_its_name_and_every_address() {
+        let card = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ada Lovelace\r\nN:Lovelace;Ada;;;\r\nEMAIL;TYPE=HOME:ada@home.example\r\nitem1.EMAIL;TYPE=WORK:ada@work.example\r\nEND:VCARD\r\n";
+        assert_eq!(from_vcard(card), Some(person("Ada Lovelace", &["ada@home.example", "ada@work.example"])));
+    }
+
+    #[test]
+    fn a_card_without_a_formatted_name_uses_the_structured_one() {
+        let card = "BEGIN:VCARD\nN:Hopper;Grace;Brewster;;\nEMAIL:grace@example.org\nEND:VCARD\n";
+        assert_eq!(from_vcard(card).unwrap().name, "Grace Brewster Hopper");
+    }
+
+    #[test]
+    fn folded_lines_and_escapes_are_undone() {
+        let card = "BEGIN:VCARD\nFN:Lovelace\\, Augusta\n Ada\nEMAIL:ada@\n example.org\nEND:VCARD\n";
+        let person = from_vcard(card).unwrap();
+        assert_eq!(person.name, "Lovelace, AugustaAda");
+        assert_eq!(person.emails, ["ada@example.org"]);
+    }
+
+    #[test]
+    fn a_card_with_no_address_and_a_group_are_not_people_to_pick() {
+        assert_eq!(from_vcard("BEGIN:VCARD\nFN:No Mail\nEND:VCARD\n"), None);
+        assert_eq!(from_vcard("BEGIN:VCARD\nFN:Team\nKIND:group\nEMAIL:team@example.org\nEND:VCARD\n"), None);
+        assert_eq!(from_vcard("BEGIN:VCARD\nFN:Team\nX-EVOLUTION-LIST:TRUE\nEMAIL:team@example.org\nEND:VCARD\n"), None);
     }
 }

@@ -849,6 +849,7 @@ mod sheet_props_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("v.xlsx");
         let mut s = SheetModel::new("Sheet1", 6, 4, 0);
+        #[allow(clippy::needless_range_loop)]
         for r in 0..3 {
             s.validations[r][0] = Some(V::List(vec!["Red".into(), "Green, dark".into(), "Say \"hi\"".into()]));
         }

@@ -1495,12 +1495,12 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
            <Default Extension=\"tiff\" ContentType=\"image/tiff\"/>\n\
            <Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/>\n"
     );
-    for i in 0..deck.slides.len() {
+    for (i, slide) in deck.slides.iter().enumerate() {
         content_types.push_str(&format!(
             "  <Override PartName=\"/ppt/slides/slide{}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>\n",
             i + 1
         ));
-        if !deck.slides[i].notes.is_empty() {
+        if !slide.notes.is_empty() {
             content_types.push_str(&format!(
                 "  <Override PartName=\"/ppt/notesSlides/notesSlide{}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml\"/>\n",
                 i + 1

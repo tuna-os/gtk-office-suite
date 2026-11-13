@@ -11647,13 +11647,14 @@ class SendByEmailMixin:
     aid = ""
     extension = ""
     magic = b"PK"
+    action = "send-by-email"
 
     def _prepare_mail(self):
         self._spool = os.path.join(self.temp_dir(prefix=f"{self.app_name}-mail-"), "spool")
         self.launch_env = {**getattr(self, "launch_env", {}), "SUITE_MAIL_SPOOL": self._spool}
 
     def _send_and_read(self):
-        self.gapplication_action(self.aid, "send-by-email")
+        self.gapplication_action(self.aid, self.action)
         draft = os.path.join(self._spool, "draft.txt")
         self.wait_until(lambda: os.path.exists(draft), bool, description="the mail draft to be handed over")
         with open(draft, encoding="utf-8") as f:
@@ -11710,3 +11711,43 @@ class DecksSendByEmailSmoke(SendByEmailMixin, BaseGUITestCase):
     def setUp(self):
         self._prepare_mail()
         super().setUp()
+
+
+class LettersSendAsPdfByEmailSmoke(LettersSendByEmailSmoke):
+    """Send as PDF by Email (INTEGRATION-PLAN A1): the same hand-over with the
+    PDF export attached."""
+
+    action = "send-as-pdf-by-email"
+    extension = "pdf"
+    magic = b"%PDF-"
+
+
+class DecksSendAsPdfByEmailSmoke(DecksSendByEmailSmoke):
+    action = "send-as-pdf-by-email"
+    extension = "pdf"
+    magic = b"%PDF-"
+
+
+class LettersWelcomeSmoke(BaseGUITestCase):
+    """The first-run welcome (INTEGRATION-PLAN C5): a fresh profile opens
+    Letters, which says once which other suite apps are not installed. Every
+    journey starts from a fresh profile with the welcome switched off; this
+    one switches it back on."""
+
+    app_name = "letters"
+    aid = "org.tunaos.letters"
+
+    def setUp(self):
+        self.launch_env = {**getattr(self, "launch_env", {}), "SUITE_NO_WELCOME": "0"}
+        super().setUp()
+
+    def test_the_first_launch_welcomes_once_and_names_what_is_missing(self):
+        self.wait_for_node(name="Welcome to the Suite")
+        body = self.wait_for_condition(
+            lambda: self.app.findChild(
+                lambda n: all(app in (n.name or "") for app in ("Tables", "Decks", "Lifafa", "Mandelbrot")),
+                retry=False, requireResult=False),
+            description="the welcome's text naming the four apps that are not installed")
+        self.assertNotIn("\u2022 Letters", body.name, "it never offers the app that is already open")
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "letters crashed on the welcome")

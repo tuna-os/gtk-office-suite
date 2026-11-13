@@ -320,6 +320,7 @@ mod cond_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("cf.xlsx");
         let mut sh = SheetModel::new("Sheet1", 10, 5, 0);
+        #[allow(clippy::needless_range_loop)]
         for r in 0..5 {
             sh.data[r][1] = format!("{}", r * 10);
         }

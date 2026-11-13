@@ -115,14 +115,37 @@ pub fn show(app: &adw::Application) {
 
 #[cfg(test)]
 mod tests {
+    /// The release versions of `app_id`'s metainfo, in file order.
+    fn release_versions(app_id: &str) -> Vec<(u32, u32, u32)> {
+        let xml = super::METAINFO.iter().find(|(id, _)| *id == app_id).expect(app_id).1;
+        xml.split("<release version=\"")
+            .skip(1)
+            .map(|rest| {
+                let v = rest.split('"').next().unwrap();
+                let mut n = v.split('.').map(|p| p.parse::<u32>().unwrap_or_else(|_| panic!("{app_id}: {v} is not a number")));
+                (n.next().unwrap_or(0), n.next().unwrap_or(0), n.next().unwrap_or(0))
+            })
+            .collect()
+    }
+
     /// Each app's About names the app and its latest release, not the
-    /// suite and a hard-coded version.
+    /// suite and a hard-coded version. The latest is the first `<release>`,
+    /// so it must be the greatest version listed. (This used to pin "2.1.0",
+    /// which every release, each adding a newer entry, then broke.)
     #[test]
     fn each_app_is_about_itself_at_its_latest_release() {
         for (id, name) in [("org.tunaos.letters", "Letters"), ("org.tunaos.tables", "Tables"), ("org.tunaos.decks", "Decks")] {
             let info = super::about_info(id).expect(id);
             assert_eq!(info.name, name);
-            assert_eq!(info.version, "2.1.0", "{id}: the first <release> is the latest");
+            let versions = release_versions(id);
+            assert!(!versions.is_empty(), "{id}: no <release> in the metainfo");
+            assert_eq!(
+                Some(&versions[0]),
+                versions.iter().max(),
+                "{id}: the first <release> is the latest"
+            );
+            let shown: Vec<u32> = info.version.split('.').map(|p| p.parse().expect("a numeric version")).collect();
+            assert_eq!(shown, [versions[0].0, versions[0].1, versions[0].2], "{id}: About shows the first <release>");
             assert!(!info.summary.is_empty() && !info.developer.is_empty());
         }
         assert_eq!(super::about_info("org.example.other"), None);
@@ -133,7 +156,7 @@ mod tests {
         for (id, name) in [("org.tunaos.letters", "Letters"), ("org.tunaos.tables", "Tables"), ("org.tunaos.decks", "Decks")] {
             let ctx = super::report_context(id);
             assert_eq!(ctx.app_name, name);
-            assert_eq!(ctx.version, "2.1.0");
+            assert_eq!(ctx.version, super::about_info(id).expect(id).version, "{id}: reports against the latest release");
             assert!(ctx.toolkit.contains("GTK 4"));
         }
     }

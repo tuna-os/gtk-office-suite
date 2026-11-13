@@ -405,6 +405,7 @@ fn tbl005_selection_permissions() {
     controller.edit_cell(0, 0, "locked");
     controller.edit_cell(0, 1, "=1+1");
     controller.mutate_sheet("Unlock column B", |sheet| {
+        #[allow(clippy::needless_range_loop)]
         for row in 0..4 { sheet.cell_protections[row][1].locked = false; }
     });
     let mut protection = controller.state.borrow().sheet().protection.clone();

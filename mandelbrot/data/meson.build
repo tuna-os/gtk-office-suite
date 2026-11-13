@@ -98,4 +98,16 @@ configure_file(
     install_dir: datadir / 'dbus-1/services',
 )
 
+# Rooms in GNOME Shell's overview search (src/search_provider.rs): the provider
+# entry. The service file above is its bus activation.
+search_conf = configuration_data()
+search_conf.set('application_id', application_id)
+configure_file(
+    input: 'org.tunaos.mandelbrot.search-provider.ini.in',
+    output: '@0@.search-provider.ini'.format(application_id),
+    configuration: search_conf,
+    install: true,
+    install_dir: datadir / 'gnome-shell/search-providers',
+)
+
 subdir('resources')

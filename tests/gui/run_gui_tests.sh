@@ -146,6 +146,22 @@ if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
     else
         echo "GUI_TEST_REUSE_DISPLAY is set, so DISPLAY was inherited rather than started." >&2
     fi
+    # What the probe itself says, which the loop above discards: a missing
+    # xdpyinfo, a refused connection and a wrong socket all read the same
+    # without it (the release gate's journeys failed this way, three tags in
+    # a row, with only the line above to go on).
+    {
+        echo "--- display diagnostics ---"
+        echo "xdpyinfo: $(command -v xdpyinfo || echo 'not found')"
+        xdpyinfo -display "$DISPLAY" 2>&1 | head -5 || true
+        echo "DISPLAY=${DISPLAY} user=$(id -un) uid=$(id -u)"
+        ls -la /tmp/.X11-unix 2>&1 | head -8 || true
+        if [ -n "${XVFB_PID:-}" ]; then
+            echo "Xvfb pid ${XVFB_PID}: $(kill -0 "${XVFB_PID}" 2>/dev/null && echo running || echo exited)"
+        fi
+        ps -eo pid,etime,args 2>/dev/null | grep -i "[X]vfb" | head -5 || true
+        echo "--- end display diagnostics ---"
+    } >&2
     exit 1
 fi
 

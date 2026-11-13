@@ -89,6 +89,7 @@ impl FactoryComponent for NotificationCard {
     ) -> Self::Widgets {
         let dismiss = gtk::Button::builder()
             .icon_name("window-close-symbolic")
+            .tooltip_text(i18n("Dismiss"))
             .valign(gtk::Align::Start)
             .css_classes(["flat", "circular"])
             .build();

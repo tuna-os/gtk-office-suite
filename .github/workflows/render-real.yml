@@ -53,8 +53,9 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           # On a pull request this is its merge commit; the scope step
           # diffs it against its first parent, the base branch it merges
           # into, which is all the history it needs.
@@ -86,12 +87,12 @@ jobs:
             echo "Nothing this pull request changes reaches $APP's rendering (tools/render-lab/real_scope.py), so its real documents were not rendered: they would render as on main." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/setup-buildx-action@v4.4.1
         if: steps.scope.outputs.run == 'true'
 
       - name: Build render-lab image
         if: steps.scope.outputs.run == 'true'
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        uses: docker/build-push-action@v7.4.0
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -102,7 +103,7 @@ jobs:
 
       - name: Cache cargo
         if: steps.scope.outputs.run == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@v6.1.0  # zizmor: ignore[cache-poisoning] false positive: the build-push-action step only loads the render-lab image into the local docker with load: true and publishes nothing
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -114,7 +115,7 @@ jobs:
 
       - name: Cache the real documents
         if: steps.scope.outputs.run == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@v6.1.0  # zizmor: ignore[cache-poisoning] false positive: the build-push-action step only loads the render-lab image into the local docker with load: true and publishes nothing
         with:
           path: .cache/render-lab-corpus
           key: render-lab-corpus-${{ matrix.app }}-${{ hashFiles('tools/render-lab/real_corpus/manifest.json') }}
@@ -153,7 +154,7 @@ jobs:
 
       - name: Upload report
         if: always() && steps.scope.outputs.run == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: render-real-${{ matrix.app }}
           path: |
@@ -186,11 +187,13 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download the report
         continue-on-error: true
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: render-real-${{ matrix.app }}
           path: render-lab-out

@@ -29,7 +29,9 @@ jobs:
     name: Mandelbrot MatrixRTC engine (clippy, tests)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: clippy
         run: cargo clippy --manifest-path mandelbrot/matrixrtc/Cargo.toml --all-targets -- -D warnings
       - name: tests
@@ -42,8 +44,10 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51@sha256:78d969b18225ae107ca29497bf09c4a3f791e5f1838a9a912a529d0024fb6210
       options: --privileged
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           manifest-path: mandelbrot/org.tunaos.mandelbrot.json
           build-bundle: false

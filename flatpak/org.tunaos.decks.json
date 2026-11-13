@@ -17,7 +17,10 @@
       "cargo clean && cargo build --locked --release -p decks",
       "install -Dm755 target/release/decks /app/bin/decks",
       "install -Dm644 flatpak/org.tunaos.decks.desktop /app/share/applications/org.tunaos.decks.desktop",
+      "install -Dm644 flatpak/org.tunaos.decks.search-provider.ini /app/share/gnome-shell/search-providers/org.tunaos.decks.search-provider.ini",
+      "install -Dm644 flatpak/org.tunaos.decks.service /app/share/dbus-1/services/org.tunaos.decks.service",
       "install -Dm644 flatpak/org.tunaos.decks.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks.gschema.xml",
+      "install -Dm644 flatpak/org.tunaos.suite.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.suite.gschema.xml",
       "glib-compile-schemas /app/share/glib-2.0/schemas/",
       "install -Dm644 flatpak/icons/org.tunaos.decks.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.decks.svg",
       "install -Dm644 flatpak/org.tunaos.decks.metainfo.xml /app/share/metainfo/org.tunaos.decks.metainfo.xml"

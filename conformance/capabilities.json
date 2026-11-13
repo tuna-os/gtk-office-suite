@@ -867,6 +867,89 @@
           "tests/gui/test_smoke.py::TablesChartEditorSmoke::test_an_inserted_chart_is_edited_in_place_as_one_undo_step"
         ]
       }
+    },
+    {
+      "id": "suite.mail.send-by-email",
+      "app": "suite",
+      "title": "Send by Email attaches the document, or its PDF, to a new message in the desktop's mail client",
+      "scope": "Letters, Tables and Decks hand the desktop's mail client (the XDG Email portal, or a mailto: link without it; Lifafa on a suite install) a draft with the document written in its own format attached, named after the document. Letters and Decks also offer Send as PDF by Email, which attaches the PDF export. The draft's subject and body, several documents in one draft and the mailto: encoding are the GTK-free model (suite-common-core::mail). Covered: the hand-over itself, read from the mail spool (SUITE_MAIL_SPOOL) in Letters, Tables and Decks, and that each attachment is a real file of its format. Not covered: delivery through a real portal or mail client, Tables as a PDF, sending a selection or the current slide, and sending several documents from the UI.",
+      "issue": 443,
+      "status": "verified",
+      "revision": "2c31b2cc8153eefa16d6d7cfc119684bd81973aa",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::mail::tests::for_document_attaches_the_file",
+          "suite-common-core::mail::tests::for_documents_with_one_file_is_for_document",
+          "suite-common-core::mail::tests::for_documents_names_the_first_and_counts_the_rest",
+          "suite-common-core::mail::tests::mailto_names_the_file_it_cannot_attach",
+          "suite-common-core::mail::tests::attachment_name_is_a_safe_file_name"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::TablesSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::DecksSendByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::LettersSendAsPdfByEmailSmoke::test_send_by_email_attaches_the_document",
+          "tests/gui/test_smoke.py::DecksSendAsPdfByEmailSmoke::test_send_by_email_attaches_the_document"
+        ]
+      }
+    },
+    {
+      "id": "suite.onboarding.first-run-welcome",
+      "app": "suite",
+      "title": "The first suite app opened says once which of the other apps are not installed",
+      "scope": "On a fresh profile the first Letters, Tables or Decks window shows a Welcome to the Suite dialog naming the other suite apps that have no desktop file, and sets welcome-shown in the shared org.tunaos.suite schema so no app shows it again. What it says and whether it is due is the GTK-free model (suite-common-core::onboarding::welcome). SUITE_NO_WELCOME=1 turns it off. Covered: Letters' first launch, in which the dialog appears, names the four other apps and not Letters itself, and dismisses (Tables and Decks call the same suite_common::welcome::install but have no journey of their own). Not covered: offering a mail account (it waits on reading the desktop's accounts), Lifafa and Mandelbrot, and that the second app stays silent in a real profile.",
+      "issue": 443,
+      "status": "verified",
+      "revision": "8c63572d7eebfbdf21fc3130c00071a6460568e7",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::onboarding::tests::it_offers_the_apps_that_are_not_installed_but_never_this_one",
+          "suite-common-core::onboarding::tests::it_is_silent_once_shown_anywhere_in_the_suite",
+          "suite-common-core::onboarding::tests::with_every_app_installed_it_only_speaks_if_an_account_is_needed"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersWelcomeSmoke::test_the_first_launch_welcomes_once_and_names_what_is_missing"
+        ]
+      }
+    },
+    {
+      "id": "suite.clipboard.cross-app",
+      "app": "suite",
+      "title": "Text and grids copied in one suite app paste into another with their structure",
+      "scope": "Letters, Tables and Decks copy and paste a neutral fragment (the application/x-tunaos-suite+json type, suite-common-core::document), alongside plain-text, HTML and tab-separated forms for outside programs. Covered: the fragment's JSON shape, its text, HTML and TSV forms, and that unknown fields from another app are ignored (suite-common-core); each app's own round trip (a Letters styled-text fragment, a Tables grid whose formulas stay live and which carries inputs, never displayed results, and a Decks styled text box); and, between two live applications on one X11 selection, text copied in Letters pasting into Tables, a grid copied in Tables pasting into Letters, and the clipboard surviving the copying app being closed. Not covered: pasting from or into programs outside the suite, Wayland, and any pair of apps other than Letters and Tables in the live journeys.",
+      "issue": 442,
+      "status": "verified",
+      "revision": "8c63572d7eebfbdf21fc3130c00071a6460568e7",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "suite-common-core::document::tests::the_json_shape_is_the_one_letters_has_always_written",
+          "suite-common-core::document::tests::unknown_fields_from_another_app_are_ignored",
+          "suite-common-core::document::tests::a_grid_fragment_round_trips_and_has_tsv_and_html_forms",
+          "suite-common-core::document::tests::a_text_fragment_has_plain_and_html_forms",
+          "letters-core::fragment::tests::styled_text_fragment_round_trips_json",
+          "letters-core::fragment::tests::grid_pastes_into_document_as_table",
+          "tables-core::fragment::tests::copy_paste_round_trip_keeps_formulas_live",
+          "tables-core::fragment::tests::copy_carries_inputs_never_displayed_results",
+          "decks-core::fragment::tests::styled_text_survives_decks_round_trip"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_text_copied_in_letters_pastes_into_tables",
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_a_grid_copied_in_tables_pastes_into_letters",
+          "tests/gui/test_smoke.py::CrossAppClipboardSmoke::test_the_clipboard_survives_the_copying_app_being_closed"
+        ]
+      }
     }
   ],
   "waivers": [

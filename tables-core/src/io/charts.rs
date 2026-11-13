@@ -1028,6 +1028,7 @@ mod chart_tests {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("c.xlsx");
             let mut sh = SheetModel::new("Sheet1", 6, 3, 0);
+            #[allow(clippy::needless_range_loop)]
             for r in 0..4 {
                 sh.data[r][0] = format!("{}", r + 1);
                 sh.data[r][1] = format!("{}", (r * 7) % 5);

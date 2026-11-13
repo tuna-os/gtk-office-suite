@@ -72,6 +72,14 @@ fn main() {
     // Store settings so we can pass to preferences
     let settings = gio::Settings::new("org.tunaos.letters");
 
+    // Shell search (INTEGRATION-PLAN B1): answer GNOME Shell's search provider
+    // calls from the recent-files list. The object path matches the
+    // `ObjectPath=` in flatpak/org.tunaos.letters.search-provider.ini.
+    suite_common::shell_search::export(&suite.app, settings.clone(), "/org/tunaos/letters/SearchProvider", "org.tunaos.letters");
+
+    // First-run welcome (INTEGRATION-PLAN C5): once for the whole suite.
+    suite_common::welcome::install(&suite.app, suite_common::welcome::SuiteApp::Letters);
+
     // Register the "show-preferences" action
     let s = settings.clone();
     let app_weak = suite.app.downgrade();

@@ -237,6 +237,11 @@ modules:
       # The restart helper's D-Bus service (Settings → App icon → Restart Now):
       # exported by Flatpak, so the bus can start a fresh sandbox instance.
       - install -Dm644 data/co.hyprlab.Hylki.Restart.service /app/share/dbus-1/services/co.hyprlab.Hylki.Restart.service
+      # Mail in GNOME Shell's overview search (src/desktop/shell_search.rs): the
+      # provider entry, and the bus activation that lets it answer with the
+      # app closed.
+      - install -Dm644 data/co.hyprlab.Hylki.search-provider.ini /app/share/gnome-shell/search-providers/co.hyprlab.Hylki.search-provider.ini
+      - install -Dm644 data/co.hyprlab.Hylki.service /app/share/dbus-1/services/co.hyprlab.Hylki.service
       # WebKit's fonts for a host whose own fonts hang it (#296): used only
       # once a probe page has shown the fallback is what loads.
       - install -Dm644 data/fontconfig/fallback.conf /app/share/hylki/fontconfig/fallback.conf

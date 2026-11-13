@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Settings every app in the suite reads, so a choice made once holds everywhere
+     (INTEGRATION-PLAN C2). Each app ships this file beside its own schema; they
+     share the dconf path, so the values are shared too. -->
+<schemalist>
+  <schema id="org.tunaos.suite" path="/org/tunaos/suite/">
+    <key name="default-mail-account" type="s">
+      <default>""</default>
+      <summary>Default mail account</summary>
+      <description>The id of the account new mail is sent from. Empty means the first account that can send mail.</description>
+    </key>
+    <key name="send-format" type="s">
+      <choices>
+        <choice value="html"/>
+        <choice value="plain"/>
+      </choices>
+      <default>"html"</default>
+      <summary>Send format</summary>
+      <description>Whether new mail is sent as formatted (HTML) or plain text.</description>
+    </key>
+    <key name="notification-policy" type="s">
+      <choices>
+        <choice value="all"/>
+        <choice value="mentions"/>
+        <choice value="none"/>
+      </choices>
+      <default>"all"</default>
+      <summary>Notifications</summary>
+      <description>Which messages notify: all of them, only those that mention you or are direct, or none.</description>
+    </key>
+    <key name="welcome-shown" type="b">
+      <default>false</default>
+      <summary>Welcome shown</summary>
+      <description>Whether the first-run welcome has been shown. The first suite app opened says it once for the whole suite.</description>
+    </key>
+  </schema>
+</schemalist>
