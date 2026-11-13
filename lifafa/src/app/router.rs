@@ -152,6 +152,9 @@ impl AppModel {
             | AppMsg::SendDeleteAttachment(..)
             | AppMsg::AttachmentNotDeleted { .. }
             | AppMsg::AttachmentDeleted { .. }) => self.on_attachments(msg, sender),
+            msg @ AppMsg::AttachmentEditedForReply { .. } => {
+                self.on_attachment_edited_for_reply(msg, sender)
+            }
             msg @ (AppMsg::ShowcasePopout
             | AppMsg::ShowcaseFolder { .. }
             | AppMsg::ShowcaseNotify
