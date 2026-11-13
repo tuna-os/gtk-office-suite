@@ -8,6 +8,8 @@ pub(crate) mod attachment_io;
 pub(crate) mod attachments_gallery;
 pub(crate) mod calendar_item;
 pub(crate) mod carry_over;
+// Fork-only: watch an attachment opened for editing (INTEGRATION-PLAN A2).
+pub(crate) mod edit_watch;
 mod chip_flow;
 mod cloud_accounts;
 mod column_bin;

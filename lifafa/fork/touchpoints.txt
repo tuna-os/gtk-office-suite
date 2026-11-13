@@ -8,7 +8,9 @@ Cargo.lock
 Cargo.toml
 co.hyprlab.Hylki.yml
 packaging/fedora/hylki.spec
+src/app.rs
 src/app/accounts.rs
+src/app/attachments.rs
 src/app/compose_init.rs
 src/app/compose_open.rs
 src/app/demo.rs
@@ -43,6 +45,7 @@ src/mcp/server.rs
 src/models/outbox.rs
 src/models/tests.rs
 src/services/goa.rs
+src/ui.rs
 src/ui/accounts.rs
 src/ui/accounts/editor.rs
 src/ui/accounts/fields.rs
