@@ -123,6 +123,11 @@ exceptions = [
     # and AGPLv3 section 13 each allow the combination, but nothing else in
     # the suite should pull in AGPL code unnoticed.
     { allow = ["AGPL-3.0-or-later"], crate = "hylki" },
+    # Lifafa's encrypted mail cache (upstream's rusqlite `bundled-sqlcipher`).
+    # The bundled C sources carry SQLite's public-domain blessing and
+    # LibTomCrypt's WTFPL; both are permissive and GPL-compatible, and are
+    # allowed for this one crate only.
+    { allow = ["blessing", "WTFPL"], crate = "sqlcipher-src" },
 ]
 
 [licenses.private]

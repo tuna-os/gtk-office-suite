@@ -20,11 +20,17 @@ const AUTOSAVE_SECS: u32 = 30;
 
 /// An identity's From as the composer writes it out: "Name <address>".
 fn identity_display(a: &ComposeAccount) -> String {
-    a.alias_from
-        .clone()
+    wire_from(a)
         .unwrap_or_else(|| a.label.clone())
         .trim()
         .to_string()
+}
+
+/// The From an identity puts on the wire, `None` for the account's own as
+/// configured: an alias's, or the account's address under the sender name of
+/// the signature in the message.
+fn wire_from(a: &ComposeAccount) -> Option<String> {
+    a.alias_from.clone().or_else(|| a.signed_as.clone())
 }
 
 /// Whether two Froms name the same person at the same address, however
@@ -41,17 +47,20 @@ pub(super) fn same_from(a: &str, b: &str) -> bool {
 
 /// Whether an OpenPGP send can go ahead (#133): a key of the user's own
 /// for the From address (or the account's chosen key), and, to encrypt, a
-/// public key for every recipient. The message names the first gap.
+/// public key for every recipient. The message names the first gap. What
+/// comes back are the keys nobody has vouched for and the user has not yet
+/// said to use, which the composer asks about before sending.
 fn pgp_send_check(
+    gpg: &crate::mail::pgp::Gpg,
+    accepted: &[crate::config::AcceptedKey],
     from: &str,
     chosen_key: Option<&str>,
     fields: &[&str],
     encrypt: bool,
-) -> Result<(), String> {
-    let gpg = crate::mail::pgp::Gpg::system();
+) -> Result<Vec<crate::config::AcceptedKey>, String> {
     let own = chosen_key
-        .and_then(|f| crate::mail::pgp::secret_key_by_fingerprint(&gpg, f))
-        .or_else(|| crate::mail::pgp::secret_key_for(&gpg, from));
+        .and_then(|f| crate::mail::pgp::secret_key_by_fingerprint(gpg, f))
+        .or_else(|| crate::mail::pgp::secret_key_for(gpg, from));
     if own.is_none() {
         return Err(crate::i18n::i18n_f(
             "There is no OpenPGP key of your own for {addr}. Generate one under Settings, OpenPGP, \
@@ -59,6 +68,7 @@ fn pgp_send_check(
             &[("addr", from)],
         ));
     }
+    let mut unvouched = Vec::new();
     if encrypt {
         for field in fields {
             for (_, addr) in crate::worker::parse_recipients(field) {
@@ -66,17 +76,68 @@ fn pgp_send_check(
                 if addr.is_empty() {
                     continue;
                 }
-                if crate::mail::pgp::public_key_for(&gpg, addr).is_none() {
+                let Some(key) = crate::mail::pgp::public_key_for(gpg, addr) else {
                     return Err(crate::i18n::i18n_f(
                         "There is no OpenPGP key for {addr}. Ask them for their public key, or fetch it \
                          under Settings, OpenPGP.",
                         &[("addr", addr)],
                     ));
+                };
+                let this = crate::config::AcceptedKey {
+                    addr: addr.to_ascii_lowercase(),
+                    fingerprint: key.fingerprint.clone(),
+                };
+                if !key.vouched_for(addr) && !accepted.contains(&this) && !unvouched.contains(&this)
+                {
+                    unvouched.push(this);
                 }
             }
         }
     }
-    Ok(())
+    Ok(unvouched)
+}
+
+/// Ask before encrypting to keys the keyring does not vouch for. Anyone can
+/// publish a key with any address on it, so an unchecked key may belong to
+/// somebody else. Most people never check keys, and asking at every send would
+/// teach them to click through it, so Send Anyway is remembered for the key:
+/// the question comes back only when an address gets a different one.
+#[allow(deprecated)] // adw::MessageDialog, as in crate::ui::dialog
+fn ask_unvouched(
+    unvouched: Vec<crate::config::AcceptedKey>,
+    checked: Vec<String>,
+    widgets: &ComposeWidgets,
+    sender: &ComponentSender<Compose>,
+) {
+    let parent = widgets.to_row.root().and_downcast::<gtk::Window>();
+    let addresses: Vec<&str> = unvouched.iter().map(|k| k.addr.as_str()).collect();
+    let dialog = adw::MessageDialog::new(
+        parent.as_ref(),
+        Some(&i18n("Encrypt to keys you have not checked?")),
+        Some(&i18n_f(
+            "Nothing confirms that the keys for {addresses} belong to them. If one is someone else's, that person can read this message and the recipient cannot. To check a key, compare its fingerprint with its owner and trust it under Settings, OpenPGP. Send Anyway does not ask about these keys again.",
+            &[("addresses", &addresses.join(", "))],
+        )),
+    );
+    dialog.add_response("cancel", &i18n("Cancel"));
+    dialog.add_response("send", &i18n("Send Anyway"));
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
+    let pending = std::cell::RefCell::new(Some(checked));
+    let s = sender.input_sender().clone();
+    dialog.connect_response(None, move |_, resp| {
+        if resp != "send" {
+            return;
+        }
+        if let Some(checked) = pending.borrow_mut().take() {
+            crate::config::accept_keys(&unvouched);
+            s.emit(ComposeInput::PgpChecked {
+                checked,
+                result: Ok(Vec::new()),
+            });
+        }
+    });
+    dialog.present();
 }
 
 /// The Send Later picker (#145), starting from the scheduled time if there
@@ -103,7 +164,7 @@ impl Compose {
     /// address.
     pub(super) fn chosen_from(&self, widgets: &ComposeWidgets) -> Result<Option<String>, String> {
         let idx = widgets.from_row.selected() as usize;
-        let picked = self.accounts.get(idx).and_then(|a| a.alias_from.clone());
+        let picked = self.accounts.get(idx).and_then(wire_from);
         if !self.custom_from {
             return Ok(picked);
         }
@@ -195,7 +256,7 @@ impl Compose {
         let from_account_id = self.accounts.get(idx).map(|a| a.id).unwrap_or(1);
         let from_alias = self
             .chosen_from(widgets)
-            .unwrap_or_else(|_| self.accounts.get(idx).and_then(|a| a.alias_from.clone()));
+            .unwrap_or_else(|_| self.accounts.get(idx).and_then(wire_from));
         OutgoingFields {
             html: String::new(),
             text: String::new(),
@@ -261,6 +322,7 @@ impl Compose {
 
     /// Handles [`ComposeInput::SaveDraftIfDirty`].
     pub(super) fn on_save_draft_if_dirty(&mut self, sender: &ComponentSender<Self>) {
+        self.stop_autosave();
         // Save only if the user actually edited something, so navigating
         // away from a pristine quote-only reply doesn't litter Drafts.
         if self.fields_dirty {
@@ -330,10 +392,19 @@ impl Compose {
         self.signature_btn
             .set_visible(!account.signatures.is_empty());
         let new_sig = account.signature.clone();
-        if !account_changed || new_sig == self.current_sig {
-            return;
+        if account_changed && new_sig != self.current_sig {
+            self.put_signature(new_sig);
         }
-        self.put_signature(new_sig);
+        // The account's own address takes the sender name of the signature
+        // now in the message, which an alias of the same account may have
+        // picked.
+        let sender_name = self.accounts[idx]
+            .signatures
+            .iter()
+            .find(|sig| !self.current_sig.is_empty() && sig.html == self.current_sig)
+            .map(|sig| sig.sender_name.clone())
+            .unwrap_or_default();
+        self.apply_signature_sender(idx, &sender_name, widgets);
     }
 
     /// Handles [`ComposeInput::ToggleSign`].
@@ -350,16 +421,17 @@ impl Compose {
     pub(super) fn on_pgp_checked(
         &mut self,
         checked: Vec<String>,
-        result: Result<(), String>,
+        result: Result<Vec<crate::config::AcceptedKey>, String>,
         widgets: &ComposeWidgets,
         sender: &ComponentSender<Self>,
     ) {
         self.pgp_checking = false;
         match result {
-            Ok(()) => {
+            Ok(unvouched) if unvouched.is_empty() => {
                 self.pgp_cleared = Some(checked);
                 sender.input_sender().emit(ComposeInput::Send);
             }
+            Ok(unvouched) => ask_unvouched(unvouched, checked, widgets, sender),
             Err(problem) => {
                 let parent = widgets.to_row.root().and_downcast::<gtk::Window>();
                 alert(parent.as_ref(), &i18n("Cannot send with OpenPGP"), &problem);
@@ -493,7 +565,14 @@ impl Compose {
                 gtk::glib::spawn_future_local(async move {
                     let result = gtk::gio::spawn_blocking(move || {
                         let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
-                        pgp_send_check(&from_email, key.as_deref(), &fields, encrypt)
+                        pgp_send_check(
+                            &crate::mail::pgp::Gpg::system(),
+                            &crate::config::load_accepted_keys(),
+                            &from_email,
+                            key.as_deref(),
+                            &fields,
+                            encrypt,
+                        )
                     })
                     .await
                     .unwrap_or_else(|_| Err("task failed".into()));
@@ -523,6 +602,7 @@ impl Compose {
 
     /// Hand the message to the app to send, and close the composer.
     pub(super) fn finish_send(&mut self, fields: OutgoingFields, sender: &ComponentSender<Self>) {
+        self.stop_autosave();
         let mut out = self.outgoing_message(fields);
         out.tuta = self.tuta_delivery_for([&out.to, &out.cc, &out.bcc]);
         // The direction of each line (#524) is written in only here, on
@@ -567,12 +647,21 @@ impl Compose {
             let _ = sender.output(ComposeOutput::SaveTemplate(Box::new(out)));
             return;
         }
+        self.stop_autosave();
         if self.template {
             let _ = sender.output(ComposeOutput::SaveTemplate(Box::new(out)));
         } else {
             let _ = sender.output(ComposeOutput::SaveDraft(Box::new(out)));
         }
         let _ = sender.output(ComposeOutput::Close(self.compose_id));
+    }
+
+    /// The composer is done with the message (saved, sent or thrown away):
+    /// no automatic save may follow. One whose body was still being read
+    /// would reach the worker after the composer's own save, with no draft
+    /// to replace, and leave a second copy in Drafts (#634).
+    pub(super) fn stop_autosave(&mut self) {
+        self.autosave_off = true;
     }
 
     /// Handles [`ComposeInput::AutoSave`].
@@ -600,7 +689,7 @@ impl Compose {
         widgets: &ComposeWidgets,
         sender: &ComponentSender<Self>,
     ) {
-        if self.autosaving {
+        if self.autosaving || self.autosave_off {
             return;
         }
         let fields = self.draft_fields(widgets);
@@ -654,7 +743,7 @@ impl Compose {
             .all(|f| f.trim().is_empty())
             && text.trim().is_empty()
             && self.attachments.is_empty();
-        if self.autosaved == Some(hash) || empty || self.autosaving {
+        if self.autosaved == Some(hash) || empty || self.autosaving || self.autosave_off {
             return;
         }
         let out = self.outgoing_message(OutgoingFields {
@@ -711,7 +800,8 @@ impl Compose {
         sender: &ComponentSender<Self>,
     ) {
         // Populate the From dropdown.
-        let labels: Vec<&str> = self.accounts.iter().map(|a| a.label.as_str()).collect();
+        let labels: Vec<String> = self.accounts.iter().map(identity_display).collect();
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
         let strings = gtk::StringList::new(&labels);
         widgets.from_row.set_model(Some(&strings));
         // Custom factory so the selected account isn't needlessly ellipsized.
@@ -738,7 +828,18 @@ impl Compose {
         });
         widgets.from_row.set_factory(Some(&factory));
         widgets.from_row.set_selected(selected as u32);
-        widgets.from_row.set_visible(self.accounts.len() > 1);
+        // A sender name carried by a signature is part of the From even
+        // when there is only one address, so the row stays visible to show
+        // which name will actually go out.
+        let named_by_signature = self.accounts.iter().any(|account| {
+            account
+                .signatures
+                .iter()
+                .any(|signature| !signature.sender_name.trim().is_empty())
+        });
+        widgets
+            .from_row
+            .set_visible(self.accounts.len() > 1 || named_by_signature);
         {
             // The pencil types a From of your own (#347); the custom row's
             // button goes back to the list.
@@ -866,4 +967,73 @@ fn recipients_ok(widgets: &ComposeWidgets) -> bool {
         return false;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pgp_send_check;
+    use crate::config::AcceptedKey;
+    use crate::mail::pgp::{export_public, generate_key, import_keys, trust_key, Gpg};
+
+    /// What Send asks about: an unchecked key until Send Anyway accepts it,
+    /// again when the address gets a different key, and never one trusted.
+    #[test]
+    fn the_send_check_asks_once_for_each_unchecked_key() {
+        if !crate::mail::pgp::available() {
+            eprintln!("gpg not installed; skipping");
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("hylki-gpg-ask-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let keyring = |name: &str| {
+            let home = root.join(name);
+            std::fs::create_dir_all(&home).unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+            }
+            Gpg::at(home)
+        };
+        let me = keyring("me");
+        let peer = keyring("peer");
+        generate_key(&me, "Me", "me@hylki.invalid", "never", "").expect("own key");
+        let fpr = generate_key(&peer, "Ada", "ada@hylki.invalid", "never", "").expect("key");
+        import_keys(&me, &export_public(&peer, &fpr).expect("exported")).expect("imported");
+        let check = |accepted: &[AcceptedKey]| {
+            pgp_send_check(
+                &me,
+                accepted,
+                "me@hylki.invalid",
+                None,
+                &["Ada <ADA@hylki.invalid>, ada@hylki.invalid"],
+                true,
+            )
+            .expect("can send")
+        };
+        let this_key = AcceptedKey {
+            addr: "ada@hylki.invalid".into(),
+            fingerprint: fpr.clone(),
+        };
+        let other_key = AcceptedKey {
+            addr: "ada@hylki.invalid".into(),
+            fingerprint: "0".repeat(40),
+        };
+        assert_eq!(check(&[]), vec![this_key.clone()], "named once");
+        assert!(check(std::slice::from_ref(&this_key)).is_empty());
+        assert_eq!(check(&[other_key]), vec![this_key.clone()]);
+        // Signing only encrypts to nobody, so there is nothing to ask.
+        let signing = pgp_send_check(
+            &me,
+            &[],
+            "me@hylki.invalid",
+            None,
+            &["ada@hylki.invalid"],
+            false,
+        );
+        assert_eq!(signing, Ok(Vec::new()));
+        trust_key(&me, &fpr, None).expect("trusted");
+        assert!(check(&[]).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

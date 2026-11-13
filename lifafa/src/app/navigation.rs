@@ -58,7 +58,12 @@ impl AppModel {
     /// The sidebar has an Inboxes row: the preference is on and there is
     /// more than one account to merge.
     pub(super) fn unified_inboxes_shown(&self) -> bool {
-        self.show_unified_pref && self.multi_account()
+        let wanted = if self.focus.enabled {
+            self.focus.show_inboxes
+        } else {
+            self.show_unified_pref
+        };
+        wanted && self.multi_account()
     }
 
     /// An account joined or left the unified section (#267): the unified
@@ -87,7 +92,12 @@ impl AppModel {
             }
             UnifiedView::Filtered => self.filtered_shown(),
             UnifiedView::Favorites => {
-                self.favorites_placement.shown() && !self.favorites.is_empty()
+                let shown = if self.focus.enabled {
+                    self.focus.show_favorites
+                } else {
+                    self.favorites_placement.shown()
+                };
+                shown && !self.favorites.is_empty()
             }
         };
         if listed {
@@ -114,7 +124,8 @@ impl AppModel {
         sender: &ComponentSender<Self>,
     ) {
         let t_open = std::time::Instant::now();
-        if view == UnifiedView::Kind(FolderKind::Inbox) && !demo_mode() {
+        let stand_in = std::mem::take(&mut self.stand_in);
+        if view == UnifiedView::Kind(FolderKind::Inbox) && !demo_mode() && !stand_in {
             config::save_last_view(config::LastView::default());
         }
         self.close_sidebar_peek();
@@ -200,6 +211,9 @@ impl AppModel {
             )));
         self.message_list
             .emit(MessageListInput::SetColorize(account.is_none()));
+        // An "All folders" search keeps to the account a view is narrowed to.
+        self.message_list
+            .emit(MessageListInput::SetSearchAccount(account));
         // A Sent view's rows all come from you — name the recipients.
         self.message_list.emit(MessageListInput::SetShowRecipient(
             view == UnifiedView::Kind(FolderKind::Sent),
@@ -342,7 +356,11 @@ impl AppModel {
         path: String,
     ) {
         // For "Open at startup" (#256). The demo's accounts are not real.
-        if let Some(email) = self.email_of(account_id).filter(|_| !demo_mode()) {
+        let stand_in = std::mem::take(&mut self.stand_in);
+        if let Some(email) = self
+            .email_of(account_id)
+            .filter(|_| !demo_mode() && !stand_in)
+        {
             config::save_last_view(config::LastView {
                 email,
                 path: path.clone(),
@@ -372,6 +390,8 @@ impl AppModel {
                 self.folder_kind(account_id, folder_id) == Some(FolderKind::Inbox),
             )));
         self.message_list.emit(MessageListInput::SetColorize(false));
+        self.message_list
+            .emit(MessageListInput::SetSearchAccount(Some(account_id)));
         // A Sent folder's rows all come from you — name the recipients (#27).
         let is_sent = self.folder_kind(account_id, folder_id) == Some(FolderKind::Sent);
         self.message_list
@@ -444,6 +464,8 @@ impl AppModel {
             AppMsg::UnifiedSelected(view) => {
                 self.open_unified(view, &sender);
             }
+
+            AppMsg::StandInView => self.stand_in = true,
 
             AppMsg::AccountStarredSelected(account_id) => {
                 self.open_unified_in(

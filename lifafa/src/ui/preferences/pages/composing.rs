@@ -26,6 +26,7 @@ pub(in crate::ui::preferences) struct ComposingPage {
     pub(in crate::ui::preferences) compose_size_row: adw::ComboRow,
     pub(in crate::ui::preferences) compose_zoom_row: adw::ComboRow,
     pub(in crate::ui::preferences) follow_plain_row: adw::SwitchRow,
+    pub(in crate::ui::preferences) ask_plain_switch_row: adw::SwitchRow,
     pub(in crate::ui::preferences) signature_position_row: adw::ComboRow,
     pub(in crate::ui::preferences) signature_dashes_row: adw::SwitchRow,
     pub(in crate::ui::preferences) fold_quote_row: adw::SwitchRow,
@@ -133,6 +134,25 @@ impl ComposingPage {
             });
         }
         preferences_group_1.add(&compose_format_row);
+        let follow_plain_row = adw::SwitchRow::default();
+        follow_plain_row.set_title(&i18n("Reply in the original's format"));
+        {
+            let sender = sender.clone();
+            follow_plain_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetFollowPlain(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&follow_plain_row);
+        let ask_plain_switch_row = adw::SwitchRow::default();
+        ask_plain_switch_row.set_title(&i18n("Ask before switching to plain text"));
+        ask_plain_switch_row.set_subtitle(&i18n("Only when formatting, images or links would be removed."));
+        {
+            let sender = sender.clone();
+            ask_plain_switch_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetAskPlainSwitch(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&ask_plain_switch_row);
         // Filled and connected in init: the
         // list grows with the fonts picked
         // through Other Font….
@@ -149,16 +169,6 @@ impl ComposingPage {
         let compose_zoom_row = adw::ComboRow::default();
         compose_zoom_row.set_title(&i18n("Default zoom"));
         preferences_group_1.add(&compose_zoom_row);
-        let follow_plain_row = adw::SwitchRow::default();
-        follow_plain_row.set_title(&i18n("Reply in the original's format"));
-        follow_plain_row.set_subtitle(&i18n("Plain-text mail is answered in plain text."));
-        {
-            let sender = sender.clone();
-            follow_plain_row.connect_active_notify(move |row| {
-                let _ = sender.output(PrefOutput::SetFollowPlain(row.is_active()));
-            });
-        }
-        preferences_group_1.add(&follow_plain_row);
         let signature_position_row = adw::ComboRow::default();
         signature_position_row.set_title(&i18n("Signature in replies"));
         {
@@ -326,6 +336,7 @@ impl ComposingPage {
             compose_size_row,
             compose_zoom_row,
             follow_plain_row,
+            ask_plain_switch_row,
             signature_position_row,
             signature_dashes_row,
             fold_quote_row,

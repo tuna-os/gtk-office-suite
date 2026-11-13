@@ -100,7 +100,7 @@ impl AppModel {
                 // A snapshot, so the reply holds this version even if the
                 // other app saves again.
                 let snapshot: Option<PathBuf> = gtk::gio::spawn_blocking(move || {
-                    crate::ui::attachment_io::stage_bytes(&name, &data)
+                    crate::ui::attachment_io::stage(&name, &data)
                 })
                 .await
                 .ok()
