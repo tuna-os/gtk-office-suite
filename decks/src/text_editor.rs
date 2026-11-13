@@ -783,6 +783,28 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         let masters = h.masters.clone();
         let dbl = gtk::GestureClick::new();
         dbl.set_button(1);
+        // The editor opens on the double-click's release, not its press.
+        // Opened on the press, the autohiding popover was up before the
+        // second click's release arrived; that release lands on the canvas,
+        // outside it, and closed it at once wherever the popover mapped
+        // that fast (the release soak's wide-1280-scale2: mapped, then
+        // closed, no editor).
+        let pending_open = Rc::new(Cell::new(false));
+        {
+            let weak = Rc::downgrade(&ed);
+            let pending = pending_open.clone();
+            let open_now = move || {
+                if pending.replace(false) {
+                    if let Some(ed) = weak.upgrade().filter(|ed| ed.ctl.has_text_session()) {
+                        ed.open();
+                    }
+                }
+            };
+            let on_stop = open_now.clone();
+            dbl.connect_released(move |_, _, _, _| open_now());
+            // No release, the sequence taken over: open all the same.
+            dbl.connect_stopped(move |_| on_stop());
+        }
         dbl.connect_pressed(move |gesture, n, x, y| {
             crate::canvas_input::trace_input(|| format!("click {n} at {x:.1},{y:.1}, text session {}", ed.ctl.has_text_session()));
             if n != 2 || ed.ctl.has_text_session() {
@@ -826,7 +848,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
             }
             ed.bounds.set(bounds);
             (ed.refresh)();
-            ed.open();
+            pending_open.set(true);
         });
         h.canvas.add_controller(dbl);
     }
