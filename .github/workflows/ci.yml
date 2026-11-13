@@ -101,6 +101,7 @@ jobs:
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
             tests/test_flatpak_installation_writable.py \
+            tests/test_workflow_env_contexts.py \
             tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
@@ -200,6 +201,7 @@ jobs:
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
             tests/test_flatpak_installation_writable.py \
+            tests/test_workflow_env_contexts.py \
             tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
