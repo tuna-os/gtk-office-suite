@@ -73,9 +73,7 @@ pub(crate) fn main_menu_section() -> gio::Menu {
 }
 
 fn toast(toasts: &adw::ToastOverlay, text: &str) {
-    let t = adw::Toast::new(text);
-    t.set_timeout(3);
-    toasts.add_toast(t);
+    suite_common::toast_manager::show(toasts, &suite_common::i18n(text));
 }
 
 /// What a refused edit says: the edit is not lost silently.
@@ -106,11 +104,7 @@ pub(crate) fn apply(
     };
     if !accepted {
         // The grid lives inside the window's shared native toast overlay.
-        if let Some(toasts) = grid.ancestor(adw::ToastOverlay::static_type())
-            .and_then(|widget| widget.downcast::<adw::ToastOverlay>().ok())
-        {
-            toast(&toasts, PROTECTED);
-        }
+        suite_common::toast_manager::show_near(grid, &suite_common::i18n(PROTECTED));
     }
     accepted
 }

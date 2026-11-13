@@ -30,14 +30,7 @@ pub(crate) const UNSELECTABLE: &str = "This sheet's protection doesn't allow sel
 
 /// Post `text` on the window's toast overlay above `widget`.
 pub(crate) fn notify(widget: &impl IsA<gtk::Widget>, text: &str) {
-    if let Some(toasts) = widget
-        .ancestor(adw::ToastOverlay::static_type())
-        .and_then(|w| w.downcast::<adw::ToastOverlay>().ok())
-    {
-        let toast = adw::Toast::new(&suite_common::i18n(text));
-        toast.set_timeout(3);
-        toasts.add_toast(toast);
-    }
+    suite_common::toast_manager::show_near(widget, &suite_common::i18n(text));
 }
 
 /// Show (`row`, `col`)'s input in the formula bar — or nothing, with a

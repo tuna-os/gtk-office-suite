@@ -10,8 +10,8 @@
 //! path; the caller asks the person what to do and reports the answer with
 //! [`answer`], which hands back the edited bytes when they said yes.
 //!
-//! The reader's "reply with the changed file" uses it; the composer's
-//! put-back (`ui::compose::edit_back`) predates it and keeps its own copy.
+//! The reader's "reply with the changed file" and the composer's put-back
+//! (`ui::compose::edit_back`) both use it.
 //!
 //! Fork-only: upstream Hylki has no such hook.
 
@@ -131,6 +131,11 @@ fn check(staged: &Path) -> Option<Observation> {
         on_edited(staged.to_path_buf());
     }
     Some(seen)
+}
+
+/// Stop watching `staged`: whoever wanted its edits is gone.
+pub(crate) fn stop(staged: &Path) {
+    WATCHES.with(|w| w.borrow_mut().remove(staged));
 }
 
 /// The person answered about the edit reported for `staged`: the edit becomes
