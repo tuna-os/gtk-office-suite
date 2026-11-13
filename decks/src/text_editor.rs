@@ -771,6 +771,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         let dbl = gtk::GestureClick::new();
         dbl.set_button(1);
         dbl.connect_pressed(move |gesture, n, x, y| {
+            crate::canvas_input::trace_input(|| format!("click {n} at {x:.1},{y:.1}, text session {}", ed.ctl.has_text_session()));
             if n != 2 || ed.ctl.has_text_session() {
                 return;
             }
@@ -796,6 +797,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     Some((slide.ids.slide, slide.ids.objects[oi], decks_core::undo::obj_bounds(obj), caret))
                 })
             };
+            crate::canvas_input::trace_input(|| format!("double-click at slide {hx:.1},{hy:.1} hits a text box: {}", target.is_some()));
             let Some((slide_id, object_id, bounds, caret)) = target else { return };
             gesture.set_state(gtk::EventSequenceState::Claimed);
             if !ed.ctl.begin_text_session(slide_id, object_id) {
