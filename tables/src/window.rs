@@ -987,12 +987,7 @@ impl TablesWindow {
                 let idx = sd.selected() as usize;
                 drop(controller);
                 if state.borrow().sheets.len() <= 1 {
-                    let err = adw::AlertDialog::builder()
-                        .heading(suite_common::i18n("Can't Delete Sheet"))
-                        .body(suite_common::i18n("A workbook needs at least one sheet."))
-                        .build();
-                    err.add_response("ok", &suite_common::i18n("_OK"));
-                    err.present(w.as_ref());
+                    suite_common::dialogs::show_message(w.as_ref(), &suite_common::i18n("Can't Delete Sheet"), &suite_common::i18n("A workbook needs at least one sheet."));
                     return;
                 }
                 let name = state.borrow().sheets[idx].borrow().name.clone();
@@ -1134,12 +1129,7 @@ impl TablesWindow {
                                 let sheet_model = st.sheets[st.active_sheet].borrow().clone();
                                 let parent_win = wr2.borrow().clone();
                                 if let Err(err_msg) = tables_core::export::to_pdf_for_sheet(&st.engine, &sheet_model, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
-                                    let alert = adw::AlertDialog::builder()
-                                        .heading(suite_common::i18n("Export Failed"))
-                                        .body(&err_msg)
-                                        .build();
-                                    alert.add_response("ok", &suite_common::i18n("_OK"));
-                                    alert.present(parent_win.as_ref());
+                                    suite_common::dialogs::show_message(parent_win.as_ref(), &suite_common::i18n("Export Failed"), &err_msg);
                                 } else {
                                     println!("PDF exported successfully to {}", path_str);
                                 }
@@ -1607,13 +1597,7 @@ impl TablesWindow {
                                         da.queue_draw();
                                     }
                                     Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Could Not Open File"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("_OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
+                                        suite_common::dialogs::show_message(Some(&w2), &suite_common::i18n("Could Not Open File"), &e);
                                     }
                                 }
                             }

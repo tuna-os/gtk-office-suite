@@ -70,6 +70,8 @@ struct LocalSources {
     muted: Arc<AtomicBool>,
     /// The camera frames captured by the UI, if the camera is on.
     camera: mpsc::Receiver<CameraMessage>,
+    /// The frames of the shared screen or window, if one is shared.
+    screen: mpsc::Receiver<CameraMessage>,
 }
 
 /// A handle to the media connection of one call.
@@ -109,6 +111,7 @@ pub(super) fn start(
     engine: Arc<RtcCallSession>,
     preferred_foci: Vec<Transport>,
     camera_sink: &CameraSink,
+    screen_sink: &CameraSink,
 ) -> (MediaHandle, mpsc::Receiver<MediaEvent>) {
     let (tx, rx) = mpsc::channel(8);
     let muted = Arc::new(AtomicBool::new(false));
@@ -118,14 +121,20 @@ pub(super) fn start(
     // the channel never closes while it runs.
     let (camera_tx, camera_rx) = mpsc::channel(CAMERA_QUEUE_LEN);
     camera_sink.set_sender(Some(camera_tx.clone()));
+    // The same for a shared screen, which can also start before the media
+    // connection does.
+    let (screen_tx, screen_rx) = mpsc::channel(CAMERA_QUEUE_LEN);
+    screen_sink.set_sender(Some(screen_tx.clone()));
 
     let task_muted = Arc::clone(&muted);
     // Must go through the shared runtime: this is called from a GTK signal
     // handler on the main thread, where `tokio::spawn` has no reactor and
     // aborts the process.
     let task = spawn_tokio!(async move {
-        // Keep the camera channel open for as long as the task runs.
+        // Keep the camera and screen channels open for as long as the task
+        // runs.
         let _camera_tx = camera_tx;
+        let _screen_tx = screen_tx;
 
         let error = match run(
             client,
@@ -137,6 +146,7 @@ pub(super) fn start(
             LocalSources {
                 muted: task_muted,
                 camera: camera_rx,
+                screen: screen_rx,
             },
         )
         .await
@@ -210,6 +220,7 @@ async fn run(
     let LocalSources {
         muted,
         camera: mut camera_rx,
+        screen: mut screen_rx,
     } = local;
 
     // Subscribe before connecting so that no key event is lost.
@@ -246,6 +257,8 @@ async fn run(
     // once frames actually arrive, so that the resolution is known and the
     // other participants never see an empty track.
     let mut camera: Option<CameraTrack> = None;
+    // The published screen share track, if a screen is shared, likewise.
+    let mut screen: Option<CameraTrack> = None;
 
     // Reconnect backoff: starts at 200 ms, capped at 30 s.
     let mut reconnect_backoff = Duration::from_millis(200);
@@ -260,7 +273,13 @@ async fn run(
                     let Some(message) = message else {
                         break 'outer Ok(());
                     };
-                    handle_camera_message(&connection, &mut camera, message).await;
+                    handle_video_message(&connection, &mut camera, message, VideoKind::Camera).await;
+                }
+                message = screen_rx.recv() => {
+                    let Some(message) = message else {
+                        break 'outer Ok(());
+                    };
+                    handle_video_message(&connection, &mut screen, message, VideoKind::Screen).await;
                 }
                 event = engine_events.recv() => {
                     let Some(event) = event else {
@@ -320,8 +339,12 @@ async fn run(
                 );
                 // Keys may have arrived while disconnected.
                 apply_known_keys(&engine, &new_connection);
-                // Replacing the old connection drops it.
+                // Replacing the old connection drops it, and its tracks with
+                // it: the camera and the screen share are published again on
+                // the new one with their next frame.
                 connection = new_connection;
+                camera = None;
+                screen = None;
                 room_events = new_events;
                 reconnect_backoff = Duration::from_millis(200);
             }
@@ -482,42 +505,64 @@ async fn handle_room_event(
     ControlFlow::Continue(())
 }
 
-/// Apply a message from the local camera capture to the connection.
+/// Which local video a track carries.
+#[derive(Debug, Clone, Copy)]
+enum VideoKind {
+    /// The local camera.
+    Camera,
+    /// A shared screen or window (INTEGRATION-PLAN A5, ADR 0016).
+    Screen,
+}
+
+impl VideoKind {
+    /// What the track is called in the logs.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Camera => "camera",
+            Self::Screen => "screen share",
+        }
+    }
+}
+
+/// Apply a message from a local video capture to the connection.
 ///
 /// The track is only published once frames actually arrive, so that its
 /// resolution is known and the other participants never see an empty track.
-async fn handle_camera_message(
+async fn handle_video_message(
     connection: &LivekitCallConnection,
-    camera: &mut Option<CameraTrack>,
+    track: &mut Option<CameraTrack>,
     message: CameraMessage,
+    kind: VideoKind,
 ) {
     match message {
         CameraMessage::Frame(frame) => {
-            if camera.is_none() {
-                match publish_camera(connection, &frame).await {
-                    Ok(track) => *camera = Some(track),
-                    Err(error) => warn!("Failed to publish the camera: {error}"),
+            if track.is_none() {
+                match publish_video(connection, &frame, kind).await {
+                    Ok(published) => *track = Some(published),
+                    Err(error) => warn!("Failed to publish the {}: {error}", kind.name()),
                 }
             }
 
-            if let Some(camera) = camera.as_ref() {
-                camera.capture(&frame);
+            if let Some(track) = track.as_ref() {
+                track.capture(&frame);
             }
         }
         CameraMessage::Stopped => {
-            if let Some(camera) = camera.take()
-                && let Err(error) = connection.unpublish_track(&camera.sid).await
+            if let Some(track) = track.take()
+                && let Err(error) = connection.unpublish_track(&track.sid).await
             {
-                warn!("Failed to unpublish the camera: {error}");
+                warn!("Failed to unpublish the {}: {error}", kind.name());
             }
         }
     }
 }
 
-/// Publish a camera track with the resolution of the given first frame.
-async fn publish_camera(
+/// Publish a camera or screen share track with the resolution of the given
+/// first frame.
+async fn publish_video(
     connection: &LivekitCallConnection,
     frame: &CameraFrame,
+    kind: VideoKind,
 ) -> Result<CameraTrack, String> {
     use livekit::webrtc::video_source::{
         RtcVideoSource, VideoResolution, native::NativeVideoSource,
@@ -531,11 +576,13 @@ async fn publish_camera(
         false,
     );
 
-    let sid = connection
-        .publish_camera_track(RtcVideoSource::Native(source.clone()))
-        .await
-        .map_err(|error| format!("failed to publish the camera track: {error}"))?;
-    debug!("Published the camera track {sid}");
+    let rtc_source = RtcVideoSource::Native(source.clone());
+    let sid = match kind {
+        VideoKind::Camera => connection.publish_camera_track(rtc_source).await,
+        VideoKind::Screen => connection.publish_screen_share_track(rtc_source).await,
+    }
+    .map_err(|error| format!("failed to publish the {} track: {error}", kind.name()))?;
+    debug!("Published the {} track {sid}", kind.name());
 
     Ok(CameraTrack { source, sid })
 }

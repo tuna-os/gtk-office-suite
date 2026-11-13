@@ -1,0 +1,241 @@
+name: Lifafa Flatpak
+
+# Lifafa's Flatpak, built from this repository (docs/CUTOVER-LIFAFA-MANDELBROT.md,
+# step 2). The build half of tuna-os/lifafa's fork-release.yml, which this
+# replaces once it also publishes: rebrand Hylki into Lifafa
+# (lifafa/fork/rebrand.sh), vendor the crates, build both architectures with
+# flatpak-builder, check the result, and keep the bundles as artifacts.
+#
+# The one step the standalone repository did not need:
+# lifafa/fork/with-suite-common.py, which brings ../suite-common and
+# ../suite-common-core into the tree, because flatpak-builder copies only
+# lifafa/ into the sandbox and Lifafa links the suite's shared crates.
+#
+# A `lifafa-v<version>` tag, or a manual run with `publish` on, also
+# publishes: an OCI image per architecture on ghcr.io/tuna-os/lifafa, indexed
+# in the TunaOS remote (oci+https://tunaos.org/flatpak), the way
+# publish-flatpak.yml publishes Letters, Tables and Decks. It needs no
+# signing key. Pushing to ghcr.io/tuna-os/lifafa from here needs the package
+# to grant this repository write access (the cutover's step 3), as Mandelbrot
+# does. The Pages OSTree repository, signed with LIFAFA_GPG_PRIVATE_KEY, is
+# added once that key has moved here.
+
+on:
+  push:
+    tags: ['lifafa-v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to GHCR and update the central index (leave off for a build-only run)
+        type: boolean
+        default: false
+  schedule:
+    # Weekly, so a change outside lifafa/ that breaks its Flatpak build (in
+    # suite-common, say) is found before a release needs it.
+    - cron: '23 4 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A tag's run publishes: never cut it off half way.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  RUST_EXTENSION: org.freedesktop.Sdk.Extension.rust-stable//25.08
+  GO_EXTENSION: org.freedesktop.Sdk.Extension.golang//25.08
+  # flatpak-builder-tools' cargo generator, pinned to a reviewed commit.
+  CARGO_GENERATOR: https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/9d86d336a39b9af38b86f114b6ce5820fe260f91/cargo/flatpak-cargo-generator.py
+
+jobs:
+  build:
+    name: Lifafa Flatpak (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash
+        working-directory: lifafa
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # The Tuta and Proton helpers build from the two SDK submodules.
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory '*'
+
+      - name: Read the identity
+        run: |
+          set -euo pipefail
+          fork/rebrand.sh --identity | grep -E '^(APP_ID|APP_NAME)=' >> "$GITHUB_ENV"
+
+      - name: Install the Rust and Go SDK extensions
+        run: |
+          set -euo pipefail
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          for ref in "$RUST_EXTENSION" "$GO_EXTENSION"; do
+            for attempt in 1 2 3; do
+              flatpak install --user -y --noninteractive --no-static-deltas flathub "$ref" && break
+              [ "$attempt" = 3 ] && exit 1
+              echo "install attempt $attempt failed for $ref; retrying"
+              sleep 30
+            done
+          done
+
+      - name: Prepare the Tuta SDK
+        run: sh native/tuta-unofficial-sdk/prepare.sh
+
+      - name: Bring the suite's shared crates into the tree
+        run: python3 fork/with-suite-common.py .
+
+      - name: Vendor the crate sources
+        run: |
+          set -euo pipefail
+          pip install --break-system-packages --quiet aiohttp tomlkit
+          curl -fsSL -o "$RUNNER_TEMP/flatpak-cargo-generator.py" "$CARGO_GENERATOR"
+          python3 "$RUNNER_TEMP/flatpak-cargo-generator.py" Cargo.lock -o cargo-sources.json
+          test -s cargo-sources.json
+          test -s native/tuta-unofficial-sdk/cargo-sources.json
+
+      - name: Rebrand
+        run: HYLKI_REBRAND_IN_PLACE=1 fork/rebrand.sh "$PWD"
+
+      - name: Build
+        run: |
+          flatpak-builder --user --force-clean --disable-rofiles-fuse \
+            --repo="$RUNNER_TEMP/repo" --default-branch=stable \
+            "$RUNNER_TEMP/build-dir" "fork/$APP_ID.yml"
+
+      - name: Check the result
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          files="$RUNNER_TEMP/build-dir/files"
+          case "$ARCH" in
+            x86_64) want_arch='x86-64' ;;
+            aarch64) want_arch='ARM aarch64' ;;
+          esac
+          for bin in hylki hylki-tuta hylki-proton; do
+            file -L "$files/bin/$bin" | tee /dev/stderr | grep -q "$want_arch"
+          done
+          want="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          grep -q "version=\"$want\"" "$files/share/metainfo/$APP_ID.metainfo.xml" \
+            || { echo "built app is not $want" >&2; exit 1; }
+          grep -qx "Name=$APP_NAME" "$files/share/applications/$APP_ID.desktop"
+          test -s "$files/share/icons/hicolor/scalable/apps/$APP_ID.svg"
+
+      - name: Bundle
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          flatpak build-bundle --arch="$ARCH" \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            "$RUNNER_TEMP/repo" "$APP_ID-$ARCH.flatpak" "$APP_ID" stable
+          sha256sum "$APP_ID-$ARCH.flatpak"
+
+      - name: Export OCI
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          flatpak build-bundle --oci --arch="$ARCH" \
+            "$RUNNER_TEMP/repo" "oci-$ARCH" "$APP_ID" stable
+          test -s "oci-$ARCH/index.json"
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: lifafa-flatpak-${{ matrix.arch }}
+          path: lifafa/*.flatpak
+          retention-days: 14
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: lifafa-oci-${{ matrix.arch }}
+          path: lifafa/oci-${{ matrix.arch }}/
+          retention-days: 7
+          if-no-files-found: error
+
+  # As publish-flatpak.yml's publish job: each architecture pushes its own
+  # tags and updates its own entry in the central index. `latest` without an
+  # architecture follows x86_64.
+  publish:
+    name: Publish Lifafa (${{ matrix.arch }})
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/lifafa-v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write  # GHCR push (skopeo login + copy)
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    env:
+      IMAGE: ghcr.io/tuna-os/lifafa
+      ARCH: ${{ matrix.arch }}
+      # Some runners' default container auth path is not writable.
+      REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: lifafa-oci-${{ matrix.arch }}
+          path: oci-${{ matrix.arch }}
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: Push OCI to the registry
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          dir="oci-$ARCH"
+          [ -s "$dir/index.json" ] || { echo "::error::missing $dir"; exit 1; }
+          skopeo copy "oci:$dir" "docker://$IMAGE:latest-$ARCH"
+          if [[ "$REF" == refs/tags/* ]]; then
+            skopeo copy "oci:$dir" "docker://$IMAGE:$REF_NAME-$ARCH"
+          fi
+          if [ "$ARCH" = x86_64 ]; then
+            skopeo copy "oci:$dir" "docker://$IMAGE:latest"
+          fi
+
+      # publish-flatpak.yml's index action, from the same reviewed commit of
+      # tuna-os/.github that publish-mandelbrot.yml pins (#286, #1007).
+      # Checked out rather than named in `uses:`, so actions.lock pins it
+      # through actions/checkout. Keep the two commits in step.
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: tuna-os/.github
+          ref: 4078f531ac74703f203bde835ef6c25e9321b97b
+          path: tuna-os-github
+          persist-credentials: false
+
+      - name: Update the central index
+        uses: ./tuna-os-github/.github/actions/publish-flatpak-index  # zizmor: ignore[self-repository] a checkout of tuna-os/.github, not this repository
+        with:
+          oci-dir: oci-${{ matrix.arch }}
+          repo-name: tuna-os/lifafa
+          registry: ghcr.io
+          tags: latest
+          ssh-key: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}

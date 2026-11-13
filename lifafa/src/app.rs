@@ -40,6 +40,8 @@ mod actions;
 mod assistant;
 mod assistant_organize;
 mod attachments;
+// Fork-only: reply with an attachment edited in another app (A2).
+mod reply_with_edit;
 mod boot;
 mod card_menu;
 mod children;
@@ -74,6 +76,7 @@ mod keymap;
 mod keyring_alert;
 mod list_header;
 mod list_sort;
+mod mail_split;
 mod merge_send;
 mod model;
 mod model_new;
@@ -139,6 +142,7 @@ pub(crate) use model::AppModel;
 pub(crate) use msg::AppMsg;
 pub(crate) use uri_queue::{
     is_message_file, queue_attach_files, queue_mailto, queue_message_file, queue_mid,
+    queue_start_view,
 };
 
 use attachments::schedule_download_prune;
@@ -529,6 +533,9 @@ fn build_widgets(
 
     let content_stack = gtk::Stack::new();
     content_stack.set_hexpand(true);
+    // Only the page on show asks for width: the gallery's columns would hold
+    // the window wide while the mail is showing (#624).
+    content_stack.set_hhomogeneous(false);
     panes.append(&content_stack);
 
     let mail_split = gtk::Paned::new(gtk::Orientation::Horizontal);
@@ -537,45 +544,10 @@ fn build_widgets(
     // theme::css); without one it keeps the stock separator.
     mail_split.add_css_class("mail-split");
     mail_split.set_wide_handle(false);
-    // Launch at the remembered width; `shrink_start_child: false` keeps it
-    // above the list's floor.
-    mail_split.set_position(crate::config::load_list_pane_width());
-    // Remember the width the user drags to (#28). Debounced: position-notify
-    // fires per pixel of a drag (and when the window squeezes the pane), one
-    // write once it settles.
-    {
-        let tx = sender.input_sender().clone();
-        let pending = std::rc::Rc::new(std::cell::RefCell::new(None::<gtk::glib::SourceId>));
-        mail_split.connect_position_notify(move |p| {
-            let pos = p.position();
-            // With the reader below, the list's height (#475).
-            let below = p.orientation() == gtk::Orientation::Vertical;
-            // Automatic layout follows the width as it is dragged, not once the
-            // drag has settled (#334).
-            if !below {
-                tx.emit(AppMsg::ListPaneWidth(pos));
-            }
-            if let Some(id) = pending.borrow_mut().take() {
-                id.remove();
-            }
-            let armed = pending.clone();
-            *pending.borrow_mut() = Some(gtk::glib::timeout_add_local_once(
-                std::time::Duration::from_millis(600),
-                move || {
-                    *armed.borrow_mut() = None;
-                    if below {
-                        crate::config::save_list_pane_height(pos);
-                    } else {
-                        crate::config::save_list_pane_width(pos);
-                    }
-                },
-            ));
-        });
-    }
-    // The list keeps its width as the window resizes (the reader absorbs the
-    // change), and can't be dragged narrower than its own minimum. The reader
-    // has a floor of its own: its header carries a full row of actions, and
-    // squeezing it pushed them off the right-hand edge of the window.
+    // `MailSplit` places the divider (#28, #648). The list can't be dragged
+    // narrower than its own minimum. The reader has a floor of its own: its
+    // header carries a full row of actions, and squeezing it pushed them off
+    // the right-hand edge of the window.
     mail_split.set_resize_start_child(false);
     mail_split.set_shrink_start_child(false);
     mail_split.set_resize_end_child(true);
@@ -945,7 +917,7 @@ impl SimpleComponent for AppModel {
         follow_motion_setting();
         let widgets = build_widgets(&root, &sender, &model);
         let _ = model.reader_header.set(widgets.reader_header.clone());
-        let _ = model.mail_split.set(widgets.mail_split.clone());
+        model.mail_split.wire(widgets.mail_split.clone(), &sender);
         let _ = model.toasts.set(widgets.toasts.clone());
         model.init_reader_header_menu(&widgets, &sender);
         model.init_reader_toolbar_fold(&widgets, &sender);
@@ -953,6 +925,7 @@ impl SimpleComponent for AppModel {
         model.init_compose_overlay(&widgets);
         model.init_gallery_page(&widgets, &sender);
         model.install_notification_actions(&sender);
+        model.install_view_actions(&sender);
         model.init_window_size(&root, &widgets, &sender);
         model.init_hover_peek(&widgets, &sender);
         model.sidebar_split = Some(widgets.sidebar_split.clone());
@@ -969,6 +942,7 @@ impl SimpleComponent for AppModel {
         root.add_controller(palette_key(&sender));
 
         model.install_key_controller(&root, &sender);
+        model.install_undo_send_key(&root, &sender);
 
         model.show_startup_notices(&sender);
 

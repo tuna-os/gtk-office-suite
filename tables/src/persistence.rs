@@ -144,10 +144,7 @@ pub(crate) fn local_path(
     staged
         .map_err(|e| {
             let heading = if for_save { "Could Not Save File" } else { "Could Not Open File" };
-            use libadwaita::prelude::{AdwDialogExt, AlertDialogExt};
-            let alert = libadwaita::AlertDialog::builder().heading(suite_common::i18n(heading)).body(&e).build();
-            alert.add_response("ok", &suite_common::i18n("_OK"));
-            alert.present(parent);
+            suite_common::dialogs::show_message(parent, &suite_common::i18n(heading), &e);
         })
         .ok()
 }
