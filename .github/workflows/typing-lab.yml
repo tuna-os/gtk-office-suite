@@ -28,10 +28,10 @@ jobs:
             x11-utils python3-gi gir1.2-gtk-4.0
       - name: Type into a GTK entry in every mode
         run: |
-          xdotool version
           xvfb-run -a -s "-screen 0 1920x1080x24" sh -c '
             matchbox-window-manager -use_titlebar no &
             sleep 1
+            xdotool version
             TRIALS=100 python3 tools/typing-lab/typing_lab.py
           ' | tee typing-lab.txt
       - uses: actions/upload-artifact@v7.0.2
