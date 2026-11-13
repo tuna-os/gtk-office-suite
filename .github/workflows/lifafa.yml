@@ -1,8 +1,8 @@
 name: lifafa
 
 # Lifafa, the suite's email client (imported in #1957), has its own cargo
-# workspace and Cargo.lock: the root Cargo.toml excludes it because its gtk4
-# 0.9 cannot share a lockfile with the suite's gtk4 0.11. Its fork's own
+# workspace and Cargo.lock: the root Cargo.toml excludes it (it came in on gtk4
+# 0.9, which could not share the suite's lockfile; it is on 0.11 now). Its fork's own
 # workflows were not imported, so nothing here built it, ran its tests or
 # checked its lockfile against RustSec, although the suite's "Send by Email"
 # hands drafts to it (#1956) and it parses untrusted mail for a living (#1986).

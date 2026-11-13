@@ -7,9 +7,9 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/hyprlab/hylki"
 homepage = "https://hylki.hyprlab.co"
 
-# Its own workspace root: the suite's root Cargo.toml excludes lifafa/ (gtk4 0.9
-# cannot share a lockfile with the suite's gtk4 0.11), so a standalone build
-# needs this table.
+# Its own workspace root: the suite's root Cargo.toml excludes lifafa/ (it came
+# in on gtk4 0.9, which could not share the suite's lockfile; it is on 0.11
+# now), so a standalone build needs this table.
 [workspace]
 
 [features]

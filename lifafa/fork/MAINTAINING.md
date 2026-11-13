@@ -1,11 +1,14 @@
 # Maintaining the Hylki soft fork
 
-This repository, tuna-os/lifafa, is a soft fork of
-[hyprlab/hylki](https://github.com/hyprlab/hylki). It ships as **Lifafa**
-(`org.tunaos.lifafa`), the email client of the TunaOS office suite
-([tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)),
-and installs next to upstream Hylki. The suite membership is branding and
-packaging only; the code stays here. The fork exists for one
+Lifafa is a soft fork of [hyprlab/hylki](https://github.com/hyprlab/hylki).
+It ships as **Lifafa** (`org.tunaos.lifafa`), the email client of the TunaOS
+office suite, and installs next to upstream Hylki. Its code lives in
+`lifafa/` of [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)
+and is maintained there; [tuna-os/lifafa](https://github.com/tuna-os/lifafa),
+where it used to live, still publishes it until the cutover
+(`docs/CUTOVER-LIFAFA-MANDELBROT.md`) moves releases, issues and the upstream
+merge here, and is archived after. Where this page says "this repository" for
+releases and workflows, it means tuna-os/lifafa until then. The fork exists for one
 reason: upstream declined native Tuta
 ([#584](https://github.com/hyprlab/hylki/pull/584)) and native Proton
 ([#586](https://github.com/hyprlab/hylki/pull/586)) accounts, and we want

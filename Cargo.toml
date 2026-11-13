@@ -3,8 +3,10 @@ members = ["suite-common-core", "suite-common", "suite-export", "suite-collab", 
 resolver = "2"
 # The CRDT measurement spike (RFC-0001 Phase 1) keeps its candidates out of
 # the product lockfile.
-# `lifafa` is the email client (AGPL-3.0-or-later; gtk4 0.9, which cannot share
-# a lockfile with the suite's gtk4 0.11: gtk4-sys declares `links = "gtk-4"`).
+# `lifafa` is the email client (AGPL-3.0-or-later), with its own workspace and
+# lock: it came in on gtk4 0.9, which could not share this lockfile
+# (gtk4-sys declares `links = "gtk-4"`). It is on gtk4 0.11 now; whether it
+# joins this workspace is open (docs/CUTOVER-LIFAFA-MANDELBROT.md).
 # `mandelbrot` is the Matrix client (GPL-3.0-or-later): matrix-sdk, LiveKit and
 # their dependency tree stay out of the suite's lockfile.
 # `collab` is the collabd sidecar (RFC-0005 option B): its own workspace and
