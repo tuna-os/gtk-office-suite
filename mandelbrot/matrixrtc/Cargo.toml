@@ -22,7 +22,7 @@ features = ["events", "unstable-msc3401"]
 
 # Optional media layer (feature `livekit`).
 [dependencies.livekit]
-version = "0.10"
+version = "0.11"
 optional = true
 default-features = false
 features = ["tokio", "rustls-tls-webpki-roots"]
