@@ -147,6 +147,15 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
                 f"{name!r} would be cancelled by GitHub's six-hour limit",
             )
 
+    def test_both_campaigns_pace_their_typing_and_verify_delivery(self):
+        """The first soak lost a letter of "apple" in 7 of 14 attempts at
+        xdotool's 40ms default under release binaries. Both campaigns pace
+        the input and record whether it landed."""
+        with open(SOAK, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertGreaterEqual(body.count("GUI_TEST_TYPING_DELAY:"), 2)
+        self.assertGreaterEqual(body.count("GUI_TEST_VERIFY_TYPING:"), 2)
+
     def test_the_soak_runs_the_complete_display_matrix(self):
         """Repetition at one size proves nothing about 400px, and one pass over
         every size proves nothing about flakiness. Both runs, or neither

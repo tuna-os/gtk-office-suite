@@ -145,6 +145,13 @@ jobs:
           # job built release ones (every attempt of the first soaks failed in
           # setUp with "Binary not found" and was reported as a product crash).
           GUI_TEST_PROFILE: release
+          # Release binaries are quicker than the debug ones the smoke job
+          # types into, and xdotool's 40ms default dropped a letter of
+          # "apple" in 7 of the first soak's 14 attempts (#1209, #1951).
+          # Pacing the input is not weakening an assertion; verifying
+          # delivery makes a keystroke that never landed say so.
+          GUI_TEST_TYPING_DELAY: '0.12'
+          GUI_TEST_VERIFY_TYPING: '1'
         run: |
           python3 tests/gui/stress.py \
             --repeat 2 \
@@ -201,6 +208,8 @@ jobs:
       - name: The complete display matrix, once
         env:
           GUI_TEST_PROFILE: release
+          GUI_TEST_TYPING_DELAY: '0.12'
+          GUI_TEST_VERIFY_TYPING: '1'
         run: |
           python3 tests/gui/stress.py \
             --repeat 1 --matrix display \
