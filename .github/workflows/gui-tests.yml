@@ -9,9 +9,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Only pull requests cancel a superseded run; main, the schedule and a
+# dispatch always finish.
 concurrency:
-  group: gui-tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: gui-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege: these jobs only read the repository (#349).
 # Lean dev builds, as in ci.yml: backtraces keep file and line, and the
@@ -35,6 +37,28 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # A change that cannot reach the apps (prose nothing includes, Lifafa's
+      # or Mandelbrot's own workspace, a workflow other than ci.yml and this
+      # one) passes here in seconds instead of building three apps and
+      # installing the GUI stack (scripts/ci_scope.py). Decided per step,
+      # never by a job-level `if:`, so `smoke` reports on every pull request.
+      - name: Does the change reach the apps?
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            python3 scripts/ci_scope.py --all | tee -a "$GITHUB_OUTPUT"
+          else
+            git rev-parse --verify -q HEAD^2 >/dev/null || {
+              echo "::error::expected the pull request's merge commit at HEAD; cannot tell what it changes"
+              exit 1
+            }
+            git diff --no-renames --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt"
+            python3 scripts/ci_scope.py --changed "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+          fi
+          if grep -qx 'heavy=false' "$GITHUB_OUTPUT"; then
+            echo "Nothing this pull request changes reaches the apps, so no journey ran: they would give main's result (scripts/ci_scope.py)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       # #108: only run the AT-SPI journeys for apps a change could
       # actually affect, instead of always running all three. A change
       # to a shared crate (suite-common*, suite-export) or the test
@@ -44,6 +68,7 @@ jobs:
       # "run it all," never "skip it."
       - name: Determine affected apps
         id: affected
+        if: steps.scope.outputs.heavy == 'true'
         # Every GitHub context value arrives through the environment. A
         # `${{ }}` expression inside the script is pasted in before bash
         # parses it, so a ref or event field containing shell
@@ -84,22 +109,27 @@ jobs:
           esac
 
       - name: Install GTK4 + libadwaita dev libraries
+        if: steps.scope.outputs.heavy == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
 
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.scope.outputs.heavy == 'true'
         with:
           toolchain: stable
       # Pull requests restore main's cache and do not save their own (ci.yml).
       - uses: Swatinem/rust-cache@v2.9.3
+        if: steps.scope.outputs.heavy == 'true'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build app binaries
+        if: steps.scope.outputs.heavy == 'true'
         run: cargo build --bin letters --bin tables --bin decks
 
       - name: Install GUI test dependencies
+        if: steps.scope.outputs.heavy == 'true'
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager xdotool \
             x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests
@@ -111,6 +141,7 @@ jobs:
       # and thirty seconds of video usually does. Recording is free of
       # verdicts: a missing ffmpeg would warn, not fail.
       - name: Run smoke tests
+        if: steps.scope.outputs.heavy == 'true'
         env:
           GUI_TEST_VIDEO: failures
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
@@ -142,7 +173,7 @@ jobs:
       # below would otherwise find no harness report and could judge none
       # of the other cited journeys either.
       - name: Harness retains evidence when a journey fails before its body
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.scope.outputs.heavy == 'true' }}
         env:
           GUI_TEST_VIDEO: failures
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
@@ -167,7 +198,7 @@ jobs:
       # ledger failure rather than as evidence that quietly stopped meaning
       # anything.
       - name: Capability ledger vs. collected and completed journeys
-        if: always()
+        if: always() && steps.scope.outputs.heavy == 'true'
         env:
           JOURNEY_FILTER: ${{ steps.affected.outputs.filter }}
         run: |
@@ -203,7 +234,7 @@ jobs:
             --candidate "$GITHUB_SHA"
 
       - name: Keep the journeys' outcomes and inventory
-        if: always()
+        if: always() && steps.scope.outputs.heavy == 'true'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: smoke-ledger-evidence
@@ -216,7 +247,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload failure artifacts
-        if: failure()
+        if: failure() && steps.scope.outputs.heavy == 'true'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: smoke-failure-artifacts
@@ -227,7 +258,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload GTK diagnostics
-        if: always()
+        if: always() && steps.scope.outputs.heavy == 'true'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: gtk-diagnostics
@@ -236,6 +267,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Run buffer-bridge round-trip tests (Xvfb)
+        if: steps.scope.outputs.heavy == 'true'
         run: scripts/with-display.sh cargo test -p letters bridge
 
   # VLM-judged visual audit. Non-gating (continue-on-error): screenshot

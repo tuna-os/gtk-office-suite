@@ -14,10 +14,12 @@ on:
   workflow_dispatch:
 
 # Rapid alpha pushes: newer commits supersede queued/running CI for the
-# same ref instead of stacking up and starving the runner pool.
+# same pull request instead of stacking up and starving the runner pool.
+# Only pull requests cancel: a run on main, a tag or a dispatch always
+# finishes (a newer main push still replaces a *queued* one).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -116,6 +118,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_matrix_sdk_pin.py \
             tests/test_ci_test_list.py \
+            tests/test_ci_scope.py \
             tests/test_render_lab_rules.py \
             tests/test_render_lab_words.py \
             tests/test_cut_release.py \
@@ -212,6 +215,7 @@ jobs:
             tests/test_collab_defaults.py \
             tests/test_matrix_sdk_pin.py \
             tests/test_ci_test_list.py \
+            tests/test_ci_scope.py \
             tests/test_render_lab_rules.py \
             tests/test_render_lab_words.py \
             tests/test_cut_release.py \
@@ -301,10 +305,40 @@ jobs:
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:
     runs-on: ubuntu-24.04
+    # What the heavy lanes have to do for this change (scripts/ci_scope.py).
+    # Decided per step below, never by a job-level `if:`, so `test` and the
+    # three `flatpak` checks report on every pull request.
+    outputs:
+      heavy: ${{ steps.scope.outputs.heavy }}
+      flatpak: ${{ steps.scope.outputs.flatpak }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          # On a pull request this is its merge commit; the scope diffs it
+          # against its first parent, the base branch it merges into.
+          fetch-depth: 2
+
+      # A change that cannot reach the workspace (prose nothing includes,
+      # Lifafa's or Mandelbrot's own workspace, a workflow other than this
+      # one) passes here in seconds instead of installing GTK and compiling
+      # the workspace. Not a pull request (main, a tag, a dispatch): all of it.
+      - name: Which heavy lanes does the change reach?
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            python3 scripts/ci_scope.py --all | tee -a "$GITHUB_OUTPUT"
+          else
+            git rev-parse --verify -q HEAD^2 >/dev/null || {
+              echo "::error::expected the pull request's merge commit at HEAD; cannot tell what it changes"
+              exit 1
+            }
+            git diff --no-renames --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt"
+            python3 scripts/ci_scope.py --changed "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+          fi
+          if grep -qx 'heavy=false' "$GITHUB_OUTPUT"; then
+            echo "Nothing this pull request changes reaches the workspace, so clippy, nextest and the Flatpak builds were not run: they would give main's result (scripts/ci_scope.py)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       # Xvfb because the workspace contains GTK widget tests. Without a
       # display `suite_common::gtk_test::run` cannot initialise GTK, and
@@ -313,16 +347,19 @@ jobs:
       # harness reported "0 ignored", so neither the log nor the ledger
       # gate below could see it (#241).
       - name: Install GTK4 + libadwaita dev libraries and Xvfb
+        if: steps.scope.outputs.heavy == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
 
       - name: Install Rust stable
+        if: steps.scope.outputs.heavy == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
       - name: Install cargo-nextest
+        if: steps.scope.outputs.heavy == 'true'
         uses: taiki-e/install-action@releases/nextest
         with:
           tool: nextest
@@ -332,6 +369,7 @@ jobs:
       # and never save their own, so a burst of PRs cannot evict main's
       # entry from the repository's 10 GB cache budget.
       - uses: Swatinem/rust-cache@v2.9.3  # zizmor: ignore[cache-poisoning] save-if writes the cache only on main; tag pushes only restore it
+        if: steps.scope.outputs.heavy == 'true'
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -339,6 +377,7 @@ jobs:
       # checks over every target, so it compiled the workspace twice.
 
       - name: cargo clippy (deny warnings, all crates)
+        if: steps.scope.outputs.heavy == 'true'
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       # scripts/with-display.sh rather than `xvfb-run -a`: that starts the
@@ -352,20 +391,24 @@ jobs:
       # an artifact even on failure, so a failing run's per-test detail
       # survives past the job's own log retention.
       - name: cargo nextest run
+        if: steps.scope.outputs.heavy == 'true'
         run: scripts/with-display.sh cargo nextest run --workspace --profile ci
 
       - name: cargo test --doc
+        if: steps.scope.outputs.heavy == 'true'
         run: scripts/with-display.sh cargo test --doc --workspace
 
       # RFC-0001 Phase 2: the `collab` feature is off in every product
       # build, so the workspace runs above never compile it. Lint it here
       # on its own, and run its tests under nextest below.
       - name: tables-core with the collab feature
+        if: steps.scope.outputs.heavy == 'true'
         run: cargo clippy -p tables-core --features collab --all-targets -- -D warnings
 
       # RFC-0001 Phase 3: Decks' deck as a Loro movable tree, likewise off
       # by default.
       - name: decks-core with the collab feature
+        if: steps.scope.outputs.heavy == 'true'
         run: cargo clippy -p decks-core --features collab --all-targets -- -D warnings
 
       # The tests of the `collab` feature under nextest (RFC-0005 PR 1), not
@@ -378,6 +421,7 @@ jobs:
       # the same path would overwrite it. `--success-output final` prints
       # what passing tests print, which is where the delta sizes are.
       - name: collab-feature tests under nextest
+        if: steps.scope.outputs.heavy == 'true'
         run: |
           cargo nextest run -p tables-core -p decks-core \
             --features tables-core/collab,decks-core/collab \
@@ -391,6 +435,7 @@ jobs:
       # crates it covers, so it checks the Rust ids and stays quiet about
       # the journeys, which the GUI lane checks.
       - name: Capability ledger vs. the tests that ran
+        if: steps.scope.outputs.heavy == 'true'
         run: |
           python3 conformance/collect_test_inventory.py \
             --junit "=target/nextest/ci/junit.xml" --junit "=target/nextest/collab/junit.xml" \
@@ -413,7 +458,7 @@ jobs:
       # them too and the collector would have nothing to check. It
       # detects that case rather than passing quietly.
       - name: Collect skip reasons
-        if: always()
+        if: always() && steps.scope.outputs.heavy == 'true'
         run: |
           cargo nextest list --workspace --run-ignored all \
             --message-format json > nextest-list.json
@@ -433,7 +478,7 @@ jobs:
           python3 conformance/collect_skip_reasons.py "${args[@]}"
 
       - name: Upload JUnit test results and the skip report
-        if: always()
+        if: always() && steps.scope.outputs.heavy == 'true'
         uses: actions/upload-artifact@v7.0.2
         with:
           name: junit-results
@@ -461,10 +506,12 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7.0.1
+        if: contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
         with:
           persist-credentials: false
 
       - name: Build Flatpak — org.tunaos.${{ matrix.app }}
+        if: contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
@@ -483,10 +530,10 @@ jobs:
       # A letter is opened under Xvfb in the default and the dark style and
       # its ink counted on the page (tools/flatpak-smoke).
       - name: The Letters Flatpak draws a document's text
-        if: matrix.app == 'letters'
+        if: matrix.app == 'letters' && contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
         run: python3 tools/flatpak-smoke/letters_page_ink.py letters.flatpak flatpak-smoke
       - name: Upload the Flatpak's screens
-        if: always() && matrix.app == 'letters'
+        if: always() && matrix.app == 'letters' && contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
         uses: actions/upload-artifact@v7.0.2
         with:
           name: flatpak-smoke-letters
