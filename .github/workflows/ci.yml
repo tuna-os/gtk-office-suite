@@ -100,6 +100,7 @@ jobs:
             tests/test_save_paths.py \
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
+            tests/test_flatpak_installation_writable.py \
             tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
@@ -198,6 +199,7 @@ jobs:
             tests/test_save_paths.py \
             tests/test_chrome_contract.py \
             tests/test_icon_buttons_are_named.py \
+            tests/test_flatpak_installation_writable.py \
             tests/test_lifafa_with_suite_common.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
@@ -511,6 +513,19 @@ jobs:
         if: contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
         with:
           persist-credentials: false
+
+      # The image ships its SDK in /var/lib/flatpak, in the image's own
+      # layers. When Flathub has a newer SDK, flatpak-builder updates it in
+      # place, and on some runners' overlayfs that fails with "Invalid
+      # cross-device link" before anything is built. A copy in the
+      # container's writable layer updates normally.
+      - name: Make the image's Flatpak installation writable
+        if: contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
+        run: |
+          set -euo pipefail
+          cp -a /var/lib/flatpak /var/lib/flatpak.rw
+          rm -rf /var/lib/flatpak
+          mv /var/lib/flatpak.rw /var/lib/flatpak
 
       - name: Build Flatpak — org.tunaos.${{ matrix.app }}
         if: contains(fromJSON(needs.test.outputs.flatpak), matrix.app)
