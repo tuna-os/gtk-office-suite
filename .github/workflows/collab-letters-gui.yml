@@ -18,7 +18,8 @@ name: collab-letters-gui
 # skip says so. This workflow checks both behaviours, then runs the journeys with the server.
 on:
   push:
-    branches: [main, 'collab/**']
+    # main only: a collab/** branch with a pull request already gets the pull_request run.
+    branches: [main]
     paths:
       - 'letters/**'
       - 'letters-core/**'
@@ -51,7 +52,7 @@ on:
 # does not cancel a release's run.
 concurrency:
   group: collab-letters-gui-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Lean dev builds, as in gui-tests.yml: backtraces keep file and line, and the cache stays a
 # fraction of the size.
