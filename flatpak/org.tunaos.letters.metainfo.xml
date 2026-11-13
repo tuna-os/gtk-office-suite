@@ -26,6 +26,69 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.1.12" date="2026-11-13">
+      <description>
+        <p>Changes in this release:</p>
+        <ul>
+          <li>B12: name Lifafa's notification Dismiss button, and check icon-only buttons</li>
+        </ul>
+      </description>
+    </release>
+    <release version="2.1.11" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.10" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.9" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.8" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.7" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.6" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.5" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.4" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.3" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.2" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
+    <release version="2.1.1" date="2026-11-12">
+      <description>
+        <p>Maintenance release.</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-07-27">
       <description>
         <p>Crash fixes: reentrant state access that could close the app while opening files or editing.</p>
