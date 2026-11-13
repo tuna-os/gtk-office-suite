@@ -34,7 +34,7 @@ The question is who captures the slides and how they reach the call.
    `NativeVideoSource` feeding.
 3. **What to pick is the slide window, not the presenter window.** The
    presenter window holds notes and the next slide; sharing it would show
-   them to the call. Decks names its full-screen window "<deck> — Slides"
+   them to the call. Decks names its full-screen window "<deck> — Slide Show"
    so it is the obvious entry in the picker, and while presenting on one display
    it says, once, that the presenter view is not what to share.
 4. **Decks' "Present in Call" is a shortcut, not a second path.** Once

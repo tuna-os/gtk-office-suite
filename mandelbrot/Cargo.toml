@@ -160,6 +160,8 @@ aperture = "0.12"
 ashpd = { version = "0.14.0", default-features = false, features = [
     "camera",
     "location",
+    # Share Screen in calls (INTEGRATION-PLAN A5, ADR 0016).
+    "screencast",
     "settings",
     "tracing",
     "tokio",

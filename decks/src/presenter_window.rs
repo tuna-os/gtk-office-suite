@@ -344,7 +344,15 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&area));
     overlay.add_overlay(&revealer);
-    let window = gtk::Window::builder().application(app).title("Slide Show").decorated(false).child(&overlay).build();
+    // "<deck> — Slide Show": the window to pick when sharing the show into a
+    // call through the desktop's screen-share picker (ADR 0016), named after
+    // the deck being edited when the show starts.
+    let deck_name = app
+        .active_window()
+        .map(|w| suite_common::dialogs::document_name(&w))
+        .unwrap_or_else(|| suite_common::i18n("Untitled"));
+    let title = format!("{deck_name} \u{2014} {}", suite_common::i18n("Slide Show"));
+    let window = gtk::Window::builder().application(app).title(title).decorated(false).child(&overlay).build();
     // Clicking the slide advances, as in every presentation app.
     let click = gtk::GestureClick::new();
     let weak = Rc::downgrade(show);
