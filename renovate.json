@@ -39,6 +39,18 @@
       "groupSlug": "rdocx-family"
     },
     {
+      "description": "dcp-matrix (both copies) computes Synapse's registration MAC with Hmac<Sha1>, so hmac and sha1 move together: each digest release line (hmac 0.13 with sha1 0.11 on digest 0.11) only accepts its own hash types, and a lone bump of either does not build (#2138, #2144).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "hmac",
+        "sha1"
+      ],
+      "groupName": "hmac and sha1",
+      "groupSlug": "hmac-sha1"
+    },
+    {
       "description": "Lifafa (lifafa/, its own lock): html5ever and markup5ever_rcdom move together, because RcDom implements only its own html5ever release's TreeSink, so a lone html5ever bump does not build (#2060).",
       "matchManagers": [
         "cargo"
