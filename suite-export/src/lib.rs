@@ -10,8 +10,16 @@ use typst_as_lib::TypstEngine;
 
 /// Compile Typst source to PDF bytes.
 pub fn compile_pdf(source: &str) -> Result<Vec<u8>, String> {
+    compile_pdf_with_files(source, &[])
+}
+
+/// Compile Typst source that refers to files by name (`#image("a.png")`).
+/// `files` are `(name, bytes)` pairs served to the compile; nothing is read
+/// from the file system.
+pub fn compile_pdf_with_files(source: &str, files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, String> {
     let engine = TypstEngine::builder()
         .main_file(source.to_string())
+        .with_static_file_resolver(files.iter().map(|(name, bytes)| (name.as_str(), bytes.as_slice())))
         .search_fonts_with(TypstKitFontOptions::default())
         .build();
     let doc = engine
@@ -31,7 +39,16 @@ pub fn compile_pdf(source: &str) -> Result<Vec<u8>, String> {
 /// file in its place. This was the only format writer in the workspace still
 /// bypassing it (#437).
 pub fn compile_pdf_to_file(source: &str, path: &str) -> Result<(), String> {
-    let bytes = compile_pdf(source)?;
+    compile_pdf_to_file_with_files(source, &[], path)
+}
+
+/// [`compile_pdf_to_file`] for source that refers to named files.
+pub fn compile_pdf_to_file_with_files(
+    source: &str,
+    files: &[(String, Vec<u8>)],
+    path: &str,
+) -> Result<(), String> {
+    let bytes = compile_pdf_with_files(source, files)?;
     suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
 }
 

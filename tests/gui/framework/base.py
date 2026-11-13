@@ -10,6 +10,7 @@ from PIL import Image
 from dogtail import tree, rawinput
 
 from . import instances
+from .binary_paths import binary_path
 from . import recorder as screen_recorder
 from .owned_processes import (
     register as _register_launched,
@@ -173,7 +174,7 @@ class BaseGUITestCase(unittest.TestCase):
         # checkout's target/ (different toolchain, different glibc).
         target_dir = os.environ.get("CARGO_TARGET_DIR") or os.path.join(
             self.workspace_dir, "target")
-        self.bin_path = os.path.join(target_dir, "debug", self.app_name)
+        self.bin_path = binary_path(target_dir, self.app_name)
         if not os.path.exists(self.bin_path):
             raise RuntimeError(f"Binary not found at {self.bin_path}. Run 'cargo build' first.")
 
@@ -392,6 +393,9 @@ class BaseGUITestCase(unittest.TestCase):
             # (suite-common/src/crash_report.rs, #1192): the runners' cores
             # go to systemd-coredump, out of the container's reach.
             "GTK_OFFICE_CRASH_BACKTRACE": "1",
+            # No first-run welcome dialog (INTEGRATION-PLAN C5) in a journey that
+            # is not about it: every journey starts from a fresh profile.
+            "SUITE_NO_WELCOME": "1",
             "XDG_CONFIG_HOME": xdg["config"],
             "XDG_DATA_HOME": xdg["data"],
             "XDG_CACHE_HOME": xdg["cache"],
@@ -1273,7 +1277,7 @@ class BaseGUITestCase(unittest.TestCase):
         """
         target_dir = os.environ.get("CARGO_TARGET_DIR") or os.path.join(
             self.workspace_dir, "target")
-        bin_path = os.path.join(target_dir, "debug", app_name)
+        bin_path = binary_path(target_dir, app_name)
         if not os.path.exists(bin_path):
             raise RuntimeError(f"Binary not found at {bin_path}. Run 'cargo build' first.")
 

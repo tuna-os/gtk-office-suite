@@ -13,6 +13,7 @@
 // so every writer saves a chip as its label, and as a hyperlink where it
 // has one, without knowing about chips.
 
+use suite_common_core::people::{self, Person};
 use crate::model::{Run, RunStyle};
 pub use chrono::{Datelike, NaiveDate};
 use chrono::Duration;
@@ -129,6 +130,16 @@ pub fn people(doc: &crate::model::Document) -> Vec<Run> {
 /// relative dates whose name starts with it (all three when it is empty),
 /// then a date it spells, a link it is, or a new person it names.
 pub fn suggestions(query: &str, today: NaiveDate, known: &[Run]) -> Vec<Run> {
+    suggestions_with_contacts(query, today, known, &[])
+}
+
+/// `suggestions`, with the people of the desktop's address book
+/// (`contacts`, from Evolution Data Server in a GTK shell) offered after the
+/// people already in the document: matched and ranked by the suite's one
+/// person-picker rule (`suite_common_core::people::suggest`), one chip per
+/// matching address, and never an address the document already has. A
+/// person found there is not also offered as a new one.
+pub fn suggestions_with_contacts(query: &str, today: NaiveDate, known: &[Run], contacts: &[Person]) -> Vec<Run> {
     let q = query.trim();
     let lower = q.to_lowercase();
     let mut out: Vec<Run> = known
@@ -140,6 +151,16 @@ pub fn suggestions(query: &str, today: NaiveDate, known: &[Run]) -> Vec<Run> {
         .take(5)
         .cloned()
         .collect();
+    let have = |email: &str| out.iter().any(|r| r.style.chip.as_ref().is_some_and(|c| c.value.eq_ignore_ascii_case(email)));
+    let from_book: Vec<Run> = people::suggest(contacts, q, 5usize.saturating_sub(out.len()))
+        .into_iter()
+        .filter(|row| !have(&row.email))
+        .map(|row| {
+            let label = if row.name.is_empty() { row.email.split('@').next().unwrap_or(&row.email).to_string() } else { row.name };
+            chip_run(Chip { kind: ChipKind::Person, value: row.email }, &label)
+        })
+        .collect();
+    out.extend(from_book);
     out.extend(RELATIVE
         .iter()
         .filter(|(name, _)| name.to_lowercase().starts_with(&lower))
@@ -248,5 +269,23 @@ mod tests {
         let name = &suggestions("Grace Hopper", today, &[])[0];
         assert_eq!((name.style.chip.as_ref().unwrap().kind, name.style.link.as_ref()), (ChipKind::Person, None));
         assert!(suggestions("3 + 4 = 7", today, &[]).is_empty(), "not everything is a chip");
+    }
+    #[test]
+    fn the_address_book_is_offered_after_people_in_the_document() {
+        let today = day(2026, 9, 25);
+        let known = people(&sample_document());
+        let book = [
+            Person { name: "Ada Byron".into(), emails: vec!["byron@example.org".into(), "ada@example.org".into()] },
+            Person { name: "Alan Turing".into(), emails: vec!["alan@example.org".into()] },
+        ];
+        // "ada": the document's Ada first; the book's second address of
+        // another Ada after it, and the address the document has not repeated.
+        let rows = describe(&suggestions_with_contacts("ada", today, &known, &book));
+        assert_eq!(rows.iter().map(|r| r.1.as_str()).collect::<Vec<_>>(), ["ada@example.org", "byron@example.org"]);
+        // A person from the book is not also offered as someone new.
+        let rows = describe(&suggestions_with_contacts("alan", today, &known, &book));
+        assert_eq!(rows, [(ChipKind::Person, "alan@example.org".into(), "Alan Turing".into())]);
+        // Without a book it is what it was.
+        assert_eq!(suggestions_with_contacts("ada", today, &known, &[]), suggestions("ada", today, &known));
     }
 }

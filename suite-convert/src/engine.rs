@@ -158,7 +158,9 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
         {
             Engine::Sheet
         }
-        Some(Category::Presentation) if matches!(plan.to, Format::Odp | Format::Pptx) => {
+        Some(Category::Presentation)
+            if matches!(plan.to, Format::Odp | Format::Pptx | Format::Pdf | Format::Png) =>
+        {
             Engine::Deck
         }
         _ => {
@@ -194,7 +196,7 @@ pub fn convert(args: &Args, plan: &Plan) -> Result<Outcome, Failure> {
     let found = match engine {
         Engine::Text => text(&input.path, engine_out, target)?,
         Engine::Sheet => sheet(&input.path, engine_out, target)?,
-        Engine::Deck => deck(&input.path, &staged)?,
+        Engine::Deck => deck(&input.path, engine_out, target)?,
     };
     if plan.to == Format::Png {
         let pdf = std::fs::read(&pdf_stage)
@@ -261,9 +263,19 @@ pub fn rasterise(pdf: Vec<u8>, page: u32, width: u32) -> Result<Vec<u8>, Failure
         .map_err(|e| Failure::new(Exit::Convert, format!("encoding png: {e:?}")))
 }
 
-fn deck(input: &Path, staged: &Path) -> Result<Vec<Loss>, Failure> {
+fn deck(input: &Path, staged: &Path, to: Format) -> Result<Vec<Loss>, Failure> {
     let (deck, report, _opaque) = decks_core::read_deck_with_report(&input.to_string_lossy())
         .map_err(|e| Failure::new(Exit::Parse, e))?;
+    if to == Format::Pdf {
+        // The Typst slide renderer (`slides`): approximate by design, and it
+        // names what it left out, slide by slide.
+        let mut drawn = crate::slides::render(&deck).map_err(|e| Failure::new(Exit::Convert, e))?;
+        suite_export::compile_pdf_to_file_with_files(&drawn.source, &drawn.files, &staged.to_string_lossy())
+            .map_err(|e| Failure::new(Exit::Convert, e))?;
+        let mut all = losses(&report);
+        all.append(&mut drawn.losses);
+        return Ok(all);
+    }
     decks_core::write_deck(&staged.to_string_lossy(), &deck)
         .map_err(|e| Failure::new(Exit::Convert, e))?;
     Ok(losses(&report))

@@ -104,12 +104,12 @@ impl WorkbookController {
         // the header row and is not part of the data.
         let mut groups: BTreeMap<Vec<String>, BTreeMap<Vec<String>, Vec<usize>>> = BTreeMap::new();
         let mut column_keys = BTreeSet::new();
-        for r in (r0 + 1)..=r1.min(sheet.data.len() - 1) {
+        for (r, source_row) in sheet.data.iter().enumerate().take(r1.min(sheet.data.len() - 1) + 1).skip(r0 + 1) {
             let key_for = |fields: &[crate::sheet::PivotField]| {
                 fields
                     .iter()
                     .map(|field| {
-                        sheet.data[r]
+                        source_row
                             .get(field.col_index)
                             .cloned()
                             .unwrap_or_default()

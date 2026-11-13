@@ -276,9 +276,8 @@ pub fn save_sheets_to_xlsx_bytes(
             // merge_range applies the anchor's format to every covered blank.
             // Keep that appearance, but not its potentially different locks.
             let anchor = &sh.cell_protections[*mr][*mc];
-            for r in *mr..=lr {
-                for c in *mc..=lc {
-                    let protection = &sh.cell_protections[r][c];
+            for (r, protection_row) in sh.cell_protections.iter().enumerate().take(lr + 1).skip(*mr) {
+                for (c, protection) in protection_row.iter().enumerate().take(lc + 1).skip(*mc) {
                     if protection == anchor {
                         continue;
                     }

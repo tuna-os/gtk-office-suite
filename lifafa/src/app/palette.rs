@@ -180,6 +180,7 @@ const SHORTCUT_HELP: &[(&str, &[(&str, &str)])] = &[
                 i18n_noop("Close the window (background sync keeps running)"),
             ),
             ("Ctrl+Q", i18n_noop("Quit Hylki entirely")),
+            ("Ctrl+,", i18n_noop("Preferences")),
             (
                 "Ctrl+K",
                 i18n_noop("Command palette: search actions, folders and tags"),

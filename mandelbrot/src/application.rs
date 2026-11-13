@@ -122,6 +122,9 @@ mod imp {
 
             // Set icons for shell
             gtk::Window::set_default_icon_name(crate::APP_ID);
+
+            // Rooms in GNOME Shell's overview search (INTEGRATION-PLAN B1).
+            crate::search_provider::export(&self.obj(), crate::APP_ID);
         }
 
         fn open(&self, files: &[gio::File], _hint: &str) {

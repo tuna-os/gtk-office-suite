@@ -51,13 +51,18 @@ def stability_target():
     return max(int(n) for n in found)
 
 
+# A call to a workflow in this repository: `$/` is GitHub's same-repository
+# form, `./` the older relative one. Both run the caller's own commit.
+LOCAL_PREFIXES = ("$/", "./")
+
+
 def gate_jobs():
     """The publish workflow's jobs that call another workflow in this repo."""
     jobs = workflow(PUBLISH)["jobs"]
     return {
         name: body
         for name, body in jobs.items()
-        if str(body.get("uses", "")).startswith("./")
+        if str(body.get("uses", "")).startswith(LOCAL_PREFIXES)
     }
 
 
@@ -79,7 +84,7 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
             with self.subTest(gate=name):
                 # Not lstrip("./"): that strips *characters*, and would eat
                 # the leading directory's dot-prefix along with them.
-                path = os.path.join(REPO_ROOT, body["uses"].removeprefix("./"))
+                path = os.path.join(REPO_ROOT, body["uses"][2:])
                 self.assertTrue(os.path.isfile(path), f"{body['uses']} does not exist")
                 self.assertIn(
                     "workflow_call",
@@ -115,6 +120,42 @@ class ReleaseSoakGatesThePublish(unittest.TestCase):
             f"crash-stress.md asks for {stability_target()} consecutive runs; "
             f"the release soak defaults to {repeat['default']}",
         )
+
+    def test_the_shards_together_still_make_the_stated_repetitions(self):
+        """One hosted job is cut off at six hours, whatever `timeout-minutes`
+        says (v2.1.9's soak died at attempt 14 of 20), so the repetitions are
+        sharded. The shards' attempts, added up, must still reach the target,
+        and no job may be given longer than GitHub will let it run."""
+        spec = workflow(SOAK)
+        plan_env = spec["jobs"]["plan"]["steps"][0]["env"]
+        per_shard = int(plan_env["PER_SHARD"])
+        with open(SOAK, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertIn(
+            f"--repeat {per_shard} ",
+            body,
+            "the shard runs a different number of attempts than the plan counts",
+        )
+        repeat = int(spec["triggers"]["workflow_call"]["inputs"]["repeat"]["default"])
+        shards = -(-repeat // per_shard)
+        self.assertGreaterEqual(shards * per_shard, stability_target())
+        self.assertIn("fromJSON(needs.plan.outputs.shards)", body)
+        self.assertIs(spec["jobs"]["soak"]["strategy"]["fail-fast"], False)
+        for name in ("soak", "matrix"):
+            self.assertLessEqual(
+                int(spec["jobs"][name]["timeout-minutes"]), 355,
+                f"{name!r} would be cancelled by GitHub's six-hour limit",
+            )
+
+    def test_attempts_have_room_and_delivery_is_verified(self):
+        """An attempt takes about 24 minutes and stress.py's default limit is
+        30: a slower machine turned two shards' attempts into `timeout`s with
+        no report. Both campaigns give an attempt an hour and record whether
+        the typed input landed."""
+        with open(SOAK, encoding="utf-8") as handle:
+            body = handle.read()
+        self.assertEqual(body.count("--timeout 3600"), 2)
+        self.assertGreaterEqual(body.count("GUI_TEST_VERIFY_TYPING:"), 2)
 
     def test_the_soak_runs_the_complete_display_matrix(self):
         """Repetition at one size proves nothing about 400px, and one pass over

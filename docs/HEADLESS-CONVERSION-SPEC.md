@@ -42,7 +42,7 @@ Three reasons the drafts agree on, in the order they actually matter:
 |---|---|---|
 | Text | `.md` (CommonMark), `.odt`, `.docx` | `.odt`, `.docx`, `.md`, `.html`, `.pdf` |
 | Spreadsheets | `.csv`, `.ods`, `.xlsx` | `.xlsx`, `.csv`, `.html`, `.pdf`, `.png` (`.ods` output waits for Tables to gain an ODS writer: it has exactly one writer, XLSX) |
-| Presentations | `.odp`, `.pptx` | `.odp`, `.pptx` (`.pdf` and `.png` slide output wait for a GTK-free slide renderer: Decks draws with cairo and pango, which the headless graph may not link) |
+| Presentations | `.odp`, `.pptx` | `.odp`, `.pptx`, `.pdf`, `.png`. PDF and PNG come from a Typst re-drawing of the slides (`suite-convert/src/slides.rs`), not Decks' cairo and pango render, so they are approximate: backgrounds, text and solid shapes and pictures (png, jpeg, gif, webp, svg, with their crop) are drawn; pictures in other formats are left out; tables are drawn with their style's fills and text but not their border rules, and charts from their one series without gridlines or a value axis and named per slide in the loss report |
 
 Every conversion goes through the same engine the GUI export path uses. If the
 CLI and the GUI can produce different output for the same document, that is a

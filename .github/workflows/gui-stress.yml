@@ -49,9 +49,11 @@ jobs:
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+      - uses: docker/login-action@v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -80,7 +82,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     container:
-      image: ${{ needs.image.outputs.ref }}
+      image: ${{ needs.image.outputs.ref }}  # zizmor: ignore[unpinned-images] the image job resolves this to the gui-test:main image that gui-container.yml publishes from main; pinning would change which image runs
       # GTK and Xvfb share memory through /dev/shm; the container default
       # of 64MB makes rendering fail in ways that look like app bugs.
       # Privileged so the step below can route core dumps to files: the
@@ -89,9 +91,11 @@ jobs:
       # Tables crashed twice in one night with an empty stderr).
       options: --shm-size=1g --privileged
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
 
       - name: Build app binaries
         run: cargo build --bin letters --bin tables --bin decks
@@ -187,7 +191,7 @@ jobs:
       # the attempt that produced them.
       - name: Upload campaign evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: gui-stress-campaign
           path: campaign
@@ -223,12 +227,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     container:
-      image: ${{ needs.image.outputs.ref }}
+      image: ${{ needs.image.outputs.ref }}  # zizmor: ignore[unpinned-images] the image job resolves this to the gui-test:main image that gui-container.yml publishes from main; pinning would change which image runs
       options: --shm-size=1g --privileged
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
 
       - name: Build app binaries
         run: cargo build --bin letters --bin tables --bin decks
@@ -259,7 +265,7 @@ jobs:
 
       - name: Upload display-matrix evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: gui-stress-display
           path: campaign-display

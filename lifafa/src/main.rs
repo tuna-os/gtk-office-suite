@@ -225,6 +225,8 @@ fn build_application() -> adw::Application {
         use gtk::gio::prelude::*;
         adw_app.connect_open(open_files);
     }
+    // Mail in GNOME Shell's overview search (INTEGRATION-PLAN B1).
+    desktop::shell_search::export(&adw_app, APP_ID);
     // The embedded icon gresource lives at /co/hyprlab/Hylki regardless of the
     // channel; pin the base path so the beta's app ID (co.hyprlab.Hylki.Beta)
     // doesn't derive a base the bundled symbolic icons aren't under.

@@ -26,6 +26,7 @@ fn menu_section() -> gio::Menu {
     section.append_submenu(Some("Export _Handouts"), &handouts);
     section.append(Some("Export Slide as P_NG…"), Some("app.export-png"));
     section.append(Some("Send by _Email…"), Some("app.send-by-email"));
+    section.append(Some("Send as _PDF by Email…"), Some("app.send-as-pdf-by-email"));
     section
 }
 
@@ -87,31 +88,17 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
         });
         app.add_action(&act);
     }
+    // Send by Email: the deck attached to a new message in the desktop's mail
+    // client (Lifafa on a suite install), as Save would write it or as a PDF
+    // (INTEGRATION-PLAN A1).
     {
-        // Send by Email: the deck Save would write, attached to a new message
-        // in the desktop's mail client (Lifafa on a suite install).
-        let (ctl, win) = (ctl.clone(), window.clone());
         let act = gio::SimpleAction::new("send-by-email", None);
-        act.connect_activate(move |_, _| {
-            let name = suite_common::mail::attachment_name(&stem(&ctl), "pptx");
-            let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
-            let path = dir.join(&name);
-            let written = std::fs::create_dir_all(&dir)
-                .map_err(|e| e.to_string())
-                .and_then(|()| decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save()));
-            match written {
-                Ok(()) => {
-                    let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);
-                    let parent = win.clone();
-                    suite_common::mail::compose(&win, draft, move |result| {
-                        if let Err(e) = result {
-                            suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
-                        }
-                    });
-                }
-                Err(e) => suite_common::show_error_dialog(Some(&win), &suite_common::i18n("Could Not Send by Email"), &e),
-            }
-        });
+        act.connect_activate(send_by_email(ctl, window, "pptx", false));
+        app.add_action(&act);
+    }
+    {
+        let act = gio::SimpleAction::new("send-as-pdf-by-email", None);
+        act.connect_activate(send_by_email(ctl, window, "pdf", true));
         app.add_action(&act);
     }
     {
@@ -129,6 +116,42 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
     }
 }
 
+/// The handler for a Send by Email action: write the deck as `extension` (its
+/// own format, or the PDF export when `pdf`) to a temporary file and hand the
+/// mail client a draft with it attached.
+fn send_by_email(
+    ctl: &Rc<DecksController>,
+    window: &adw::ApplicationWindow,
+    extension: &'static str,
+    pdf: bool,
+) -> impl Fn(&gio::SimpleAction, Option<&glib::Variant>) + 'static {
+    let (ctl, win) = (ctl.clone(), window.clone());
+    move |_, _| {
+        let name = suite_common::mail::attachment_name(&stem(&ctl), extension);
+        let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
+        let path = dir.join(&name);
+        let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| {
+            if pdf {
+                crate::export::export_pdf(&ctl.deck(), &path, None)
+            } else {
+                decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save())
+            }
+        });
+        match written {
+            Ok(()) => {
+                let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);
+                let parent = win.clone();
+                suite_common::mail::compose(&win, draft, move |result| {
+                    if let Err(e) = result {
+                        suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
+                    }
+                });
+            }
+            Err(e) => suite_common::show_error_dialog(Some(&win), &suite_common::i18n("Could Not Send by Email"), &e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,10 +166,11 @@ mod tests {
     fn the_export_section_offers_pdf_handouts_png_and_email() {
         let section = menu_section();
         let m: &gio::MenuModel = section.upcast_ref();
-        assert_eq!(m.n_items(), 4);
+        assert_eq!(m.n_items(), 5);
         assert_eq!(action_of(m, 0), Some(("app.export-pdf".into(), None)));
         assert_eq!(action_of(m, 2), Some(("app.export-png".into(), None)));
         assert_eq!(action_of(m, 3), Some(("app.send-by-email".into(), None)));
+        assert_eq!(action_of(m, 4), Some(("app.send-as-pdf-by-email".into(), None)));
         let handouts = m.item_link(1, "submenu").expect("a handouts submenu");
         let targets: Vec<Option<(String, Option<u32>)>> = (0..handouts.n_items()).map(|i| action_of(&handouts, i)).collect();
         assert_eq!(
