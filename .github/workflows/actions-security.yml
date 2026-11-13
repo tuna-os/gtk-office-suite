@@ -7,6 +7,12 @@ on:
       - main
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes the queued or running one. Main
+# and a dispatch always finish.
+concurrency:
+  group: actions-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions: {}
 
 jobs:
