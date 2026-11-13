@@ -14,7 +14,7 @@
     "--device=dri",
     "--filesystem=xdg-documents",
     "--filesystem=xdg-run/gvfs",
-    "--own-name=org.tunaos.letters"
+    "--own-name=org.tunaos.letters", "--talk-name=org.gnome.evolution.dataserver.*"
   ],
   "build-options": {
     "append-path": "/usr/lib/sdk/rust-stable/bin",

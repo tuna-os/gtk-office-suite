@@ -114,9 +114,10 @@ pub fn attach(
             while let Some(r) = list.first_child() {
                 list.remove(&r);
             }
-            // People already mentioned come first (Docs does the same).
+            // People already mentioned come first (Docs does the same), then
+            // the desktop's address book (INTEGRATION-PLAN A7).
             let known = crate::live::of(&buf).map(|m| chips::people(m.borrow_mut().document())).unwrap_or_default();
-            let now = chips::suggestions(query, today(), &known);
+            let now = chips::suggestions_with_contacts(query, today(), &known, &suite_common::contacts::people());
             for run in &now {
                 list.append(&suggestion_row(run));
             }

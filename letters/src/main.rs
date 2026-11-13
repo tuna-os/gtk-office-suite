@@ -80,6 +80,10 @@ fn main() {
     // First-run welcome (INTEGRATION-PLAN C5): once for the whole suite.
     suite_common::welcome::install(&suite.app, suite_common::welcome::SuiteApp::Letters);
 
+    // The desktop's address book for the "@" person chips (INTEGRATION-PLAN
+    // A7), read in the background once the first window is up.
+    suite_common::contacts::install(&suite.app);
+
     // Register the "show-preferences" action
     let s = settings.clone();
     let app_weak = suite.app.downgrade();

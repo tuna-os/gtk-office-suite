@@ -396,6 +396,9 @@ class BaseGUITestCase(unittest.TestCase):
             # No first-run welcome dialog (INTEGRATION-PLAN C5) in a journey that
             # is not about it: every journey starts from a fresh profile.
             "SUITE_NO_WELCOME": "1",
+            # Nor the desktop's address book (INTEGRATION-PLAN A7): a journey's
+            # "@" suggestions must not depend on what the runner's EDS holds.
+            "SUITE_NO_CONTACTS": "1",
             "XDG_CONFIG_HOME": xdg["config"],
             "XDG_DATA_HOME": xdg["data"],
             "XDG_CACHE_HOME": xdg["cache"],

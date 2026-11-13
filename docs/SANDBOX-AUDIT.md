@@ -13,7 +13,7 @@ CI builds, so its list is a floor, not the shipped set).
 
 All three: `--share=ipc`, `--socket=fallback-x11`, `--socket=wayland`,
 `--device=dri`, `--filesystem=xdg-documents`, `--own-name=org.tunaos.<app>`.
-Letters adds `--filesystem=xdg-run/gvfs`. None has `--share=network`.
+Letters adds `--filesystem=xdg-run/gvfs` and `--talk-name=org.gnome.evolution.dataserver.*`. None has `--share=network`.
 
 | Grant | Why it is there | Narrowing |
 |---|---|---|
@@ -21,8 +21,9 @@ Letters adds `--filesystem=xdg-run/gvfs`. None has `--share=network`.
 | `--own-name=org.tunaos.<app>` | The app's `GApplication` name on the session bus (single instance, `gapplication action`). | Needed; A3/A4 hand-offs call into these names. |
 | `--filesystem=xdg-documents` (read-write) | Documents are saved in place with a temporary file beside the target and a rename (`suite-common-core/src/atomic_save.rs`), and autosave and recovery copies live beside the document. | The one real candidate. Files chosen through the file dialog already arrive through the Documents portal, but a portal path is a FUSE view that does not let an app create a sibling file or rename over the original, which is what the crash-safe save needs. Dropping it means either saving through the portal's own write path (losing the sibling temp file) or accepting a weaker save. That trade is a decision, not a cleanup, and needs the crash-stress suite to say what it costs before anyone removes the grant. |
 | `--filesystem=xdg-run/gvfs` (Letters only) | Opening documents from `dav://`, `smb://` and similar locations, which GIO reports as FUSE paths under `/run/user/<uid>/gvfs` (`docs/rfc/0003-spike-results.md`). It was `/run/user` until #1996. | Already narrowed to the one directory it needs. Tables and Decks do not offer it; if they should open network locations, it is a feature request, not a hole. |
+| `--talk-name=org.gnome.evolution.dataserver.*` (Letters only) | The desktop's address book for the "@" person chips (INTEGRATION-PLAN A7): `suite-common/src/contacts.rs` lists the enabled address books in the EDS source registry and reads their cards with an address, over D-Bus, read-only. Lifafa has the same grant. | The interface names carry a version that changes between EDS releases (`AddressBook10`, `Sources5`), so the wildcard. Read over D-Bus, it needs none of Lifafa's `xdg-*/evolution:ro` filesystem grants. Tables and Decks get it when they have a person picker. |
 
-No `--talk-name`, no `--share=network` and no home-directory access are
+Apart from Letters' address book, no `--talk-name`, no `--share=network` and no home-directory access are
 requested by the office apps; `docs/rfc/0005-collaboration-in-the-apps.md`
 keeps the network in the separate collaboration sidecar.
 
