@@ -47,6 +47,29 @@ pub(crate) fn save_attachment_as(
 /// a `.pdf`) the portal falls back to GNOME's own app-chooser dialog instead
 /// of silently doing nothing.
 pub(crate) fn open_bytes(name: &str, data: &[u8], parent: Option<&gtk::Window>) {
+    if let Some(path) = stage_bytes(name, data) {
+        launch_staged(path, parent, false);
+    }
+}
+
+/// Open bytes in the default application for editing, and return the staged
+/// copy that application is given, so the caller can watch it for saves
+/// (INTEGRATION-PLAN A2: the composer offers the edited file back). Inside
+/// Flatpak the document portal exports the copy writable; the person's own
+/// file, wherever the attachment came from, is never handed out.
+pub(crate) fn open_bytes_editable(
+    name: &str,
+    data: &[u8],
+    parent: Option<&gtk::Window>,
+) -> Option<std::path::PathBuf> {
+    let path = stage_bytes(name, data)?;
+    launch_staged(path.clone(), parent, true);
+    Some(path)
+}
+
+/// Write bytes to a new private file named after `name` in the staging
+/// directory, returning its path.
+pub(crate) fn stage_bytes(name: &str, data: &[u8]) -> Option<std::path::PathBuf> {
     let safe: String = name
         .chars()
         .map(|c| {
@@ -57,7 +80,7 @@ pub(crate) fn open_bytes(name: &str, data: &[u8], parent: Option<&gtk::Window>) 
             }
         })
         .collect();
-    let Some(dir) = attachment_dir() else { return };
+    let dir = attachment_dir()?;
     let base = if safe.is_empty() {
         "attachment".to_string()
     } else {
@@ -65,16 +88,22 @@ pub(crate) fn open_bytes(name: &str, data: &[u8], parent: Option<&gtk::Window>) 
     };
     let Some((mut file, path)) = create_private(&dir, &base) else {
         tracing::warn!("could not open a temporary file for the attachment");
-        return;
+        return None;
     };
     // Write through the handle rather than reopening by path: the checks below
     // are about what is at that name, and going back through it would hand the
     // result to whatever is there by the time we look again.
     if let Err(e) = std::io::Write::write_all(&mut file, data) {
         tracing::warn!("could not write the attachment: {e}");
-        return;
+        return None;
     }
     drop(file);
+    Some(path)
+}
+
+/// Hand a staged file to the default application; `writable` lets it save
+/// back into the staged copy through the document portal.
+fn launch_staged(path: std::path::PathBuf, parent: Option<&gtk::Window>, writable: bool) {
     let uri = format!("file://{}", path.to_string_lossy());
     // Outside Flatpak, GIO launches the default handler directly; the portal
     // route has been seen accepting an OpenURI request and then launching
@@ -94,7 +123,7 @@ pub(crate) fn open_bytes(name: &str, data: &[u8], parent: Option<&gtk::Window>) 
         // async task in the sandboxed path (task-tag assertion), so its
         // callback never fires and every failure vanishes. Speaking the
         // portal protocol directly restores the contract.
-        portal_open_file(path, false, parent.cloned());
+        portal_open_file(path, false, parent.cloned(), writable);
     } else if let Err(e) =
         gtk::gio::AppInfo::launch_default_for_uri(&uri, gtk::gio::AppLaunchContext::NONE)
     {
@@ -134,13 +163,24 @@ fn launch_failed_dialog(parent: Option<&gtk::Window>, error: &str) {
 /// direct default-handler launch is broken (seen on Fedora 44), and whose
 /// "always open with" sticks in the permission store. A cancelled chooser
 /// (1) is not an error; any other chooser failure gets the dialog.
-fn portal_open_file(path: std::path::PathBuf, ask: bool, parent: Option<gtk::Window>) {
+fn portal_open_file(
+    path: std::path::PathBuf,
+    ask: bool,
+    parent: Option<gtk::Window>,
+    writable: bool,
+) {
     use gtk::gio;
     use gtk::glib;
     use gtk::glib::prelude::*;
     use std::os::fd::AsFd;
 
-    let file = match std::fs::File::open(&path) {
+    // The portal exports the descriptor with the access it was opened with,
+    // and refuses `writable` on a read-only one.
+    let file = match std::fs::OpenOptions::new()
+        .read(true)
+        .write(writable)
+        .open(&path)
+    {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!("staged attachment vanished: {e}");
@@ -166,6 +206,9 @@ fn portal_open_file(path: std::path::PathBuf, ask: bool, parent: Option<gtk::Win
             if ask {
                 options.insert_value("ask", &true.to_variant());
             }
+            if writable {
+                options.insert_value("writable", &true.to_variant());
+            }
             // Not the tuple's ToVariant: that boxes the dict as a nested "v"
             // and the portal rejects "(shv)". tuple_from_iter splices each
             // child at its own type, producing the "(sha{sv})" the interface
@@ -190,7 +233,7 @@ fn portal_open_file(path: std::path::PathBuf, ask: bool, parent: Option<gtk::Win
             Ok(0) | Ok(1) => {}
             Ok(code) if !ask => {
                 tracing::warn!("portal open answered {code}; retrying with the chooser");
-                portal_open_file(retry_path.clone(), true, retry_parent.clone());
+                portal_open_file(retry_path.clone(), true, retry_parent.clone(), writable);
             }
             Ok(code) => launch_failed_dialog(
                 retry_parent.as_ref(),
