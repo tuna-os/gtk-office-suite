@@ -1,0 +1,54 @@
+name: Publish Mandelbrot
+
+# Mandelbrot, the suite's Matrix client, published from this repository
+# (docs/CUTOVER-LIFAFA-MANDELBROT.md, step 2). It ships the way it did from
+# tuna-os/mandelbrot (mandelbrot/RELEASING.md): an OCI Flatpak per
+# architecture on ghcr.io/tuna-os/mandelbrot, indexed in the TunaOS remote
+# (oci+https://tunaos.org/flatpak), through the same reusable workflow
+# publish-flatpak.yml uses for Letters, Tables and Decks.
+#
+# Its own tags, `mandelbrot-v<version>`, because it keeps its own version;
+# the suite's `v*` tags publish the three office apps and do not start this.
+# Its release waits on its CI (mandelbrot.yml) rather than the suite's soak,
+# which has no Mandelbrot journeys yet (the cutover's step 0).
+#
+# Run it by hand without `publish` first: that builds both architectures and
+# pushes nothing. Pushing to ghcr.io/tuna-os/mandelbrot from here needs the
+# package to grant this repository write access (the cutover's step 3).
+
+on:
+  push:
+    tags: ['mandelbrot-v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to GHCR and update the central index (leave off for a build-only validation run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+      packages: write
+    # Pinned to the same reviewed commit as publish-flatpak.yml (#286, #1007).
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@4078f531ac74703f203bde835ef6c25e9321b97b # main  # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
+    with:
+      app-id: org.tunaos.mandelbrot
+      manifest-path: mandelbrot/org.tunaos.mandelbrot.json
+      repo-name: tuna-os/mandelbrot
+      # mandelbrot.yml builds it against GNOME 51.
+      flatpak-builder-image: gnome-51
+      attach-bundles: true
+      # Not `A && B || C`, which publishes when B is false (see
+      # publish-flatpak.yml).
+      publish: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    secrets:
+      FLATPAK_INDEX_DEPLOY_KEY: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
