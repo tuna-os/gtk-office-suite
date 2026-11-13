@@ -577,7 +577,7 @@ mod attachment_scan_tests {
         let carried = BodyStructure::Message {
             common,
             other,
-            envelope: async_imap::imap_proto::types::Envelope {
+            envelope: async_imap::imap_proto::Envelope {
                 date: None,
                 subject: Some(Cow::Borrowed(b"Re: lunch?")),
                 from: None,

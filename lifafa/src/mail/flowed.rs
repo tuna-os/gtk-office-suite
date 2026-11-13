@@ -15,8 +15,8 @@ pub(crate) fn flowed_params(part: &MessagePart<'_>) -> Option<bool> {
     let value = |name: &str| {
         attrs
             .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.trim())
+            .find(|a| a.name.eq_ignore_ascii_case(name))
+            .map(|a| a.value.trim())
     };
     value("format")
         .is_some_and(|v| v.eq_ignore_ascii_case("flowed"))

@@ -234,13 +234,13 @@ pub(super) async fn search_count(session: &mut ImapSession, query: &str) -> Opti
     let answered = match session.run_command(&cmd).await {
         Ok(id) => loop {
             match session.read_response().await {
-                Some(Ok(reply)) => match reply.parsed() {
+                Ok(Some(reply)) => match reply.parsed() {
                     Response::Done { tag, status, .. } if *tag == id => {
                         break matches!(status, Status::Ok);
                     }
                     _ => {}
                 },
-                Some(Err(_)) | None => break false,
+                Ok(None) | Err(_) => break false,
             }
         },
         Err(_) => false,

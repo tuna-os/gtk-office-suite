@@ -207,7 +207,7 @@ fn raw_dkim_signatures(parsed: &mail_parser::Message) -> Vec<String> {
         .headers()
         .iter()
         .filter(|h| h.name().eq_ignore_ascii_case("DKIM-Signature"))
-        .filter_map(|h| raw.get(h.offset_start()..h.offset_end()))
+        .filter_map(|h| raw.get(h.offset_start() as usize..h.offset_end() as usize))
         .map(|b| crate::mail::mail_header::unfold(&String::from_utf8_lossy(b)))
         .collect()
 }
