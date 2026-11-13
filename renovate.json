@@ -24,6 +24,16 @@
       "allowedVersions": "<26"
     },
     {
+      "description": "Keep the Lifafa CI container on a released Fedora. docker.io/library/fedora:46 is Rawhide (its dnf installs from the rawhide repo) until Fedora 46 ships in spring 2027; #2092 ran the Lifafa job on it and it failed. Raise the bound to <47 when Fedora 46 is released.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "docker.io/library/fedora"
+      ],
+      "allowedVersions": "<46"
+    },
+    {
       "description": "Hold the rdocx family at 0.16.2 until the Letters adapters support 0.16.3, and group the eventual upgrade so incompatible partial updates are not proposed (#1725).",
       "matchManagers": [
         "cargo"
