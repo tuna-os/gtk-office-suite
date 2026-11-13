@@ -56,10 +56,13 @@ class WithSuiteCommonTest(unittest.TestCase):
 
     def test_points_a_direct_suite_common_core_dependency_at_its_copy_too(self):
         manifest = self.tree / "Cargo.toml"
-        text = manifest.read_text().replace(
-            'suite-common = { path = "../suite-common" }\n',
-            'suite-common = { path = "../suite-common" }\nsuite-common-core = { path = "../suite-common-core" }\n')
-        manifest.write_text(text)
+        text = manifest.read_text()
+        # Lifafa has had this line since #2200; add it where it does not.
+        if 'suite-common-core = { path = "../suite-common-core" }' not in text:
+            text = text.replace(
+                'suite-common = { path = "../suite-common" }\n',
+                'suite-common = { path = "../suite-common" }\nsuite-common-core = { path = "../suite-common-core" }\n')
+            manifest.write_text(text)
         self.assertEqual(self.run_script().returncode, 0)
         deps = tomllib.loads(manifest.read_text())["dependencies"]
         self.assertEqual(deps["suite-common"], {"path": "suite-common"})
