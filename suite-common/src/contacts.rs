@@ -50,7 +50,7 @@ pub fn install(app: &impl IsA<gtk4::Application>) {
             return;
         }
         started.set(true);
-        let _ = glib::spawn_future_local(async {
+        glib::spawn_future_local(async {
             let read = gio::spawn_blocking(read_all).await.unwrap_or_default();
             PEOPLE.with(|p| *p.borrow_mut() = read);
         });
