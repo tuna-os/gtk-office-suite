@@ -63,6 +63,9 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
         - 'dtolnay/rust-toolchain@stable'
         - 'swatinem/rust-cache@v2.9.3'
+    '.github/workflows/lifafa-flatpak.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/lifafa.yml':
         - 'actions/checkout@v7.0.1'
         - 'dtolnay/rust-toolchain@stable'
