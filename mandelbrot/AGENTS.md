@@ -1,4 +1,12 @@
-# AGENTS.md — agent guide for tuna-os/mandelbrot
+# AGENTS.md — agent guide for Mandelbrot
+
+Mandelbrot lives in `mandelbrot/` of
+[tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) and is
+maintained there. [tuna-os/mandelbrot](https://github.com/tuna-os/mandelbrot),
+where it used to live, still hosts its issues, advisories and releases until
+the cutover (`docs/CUTOVER-LIFAFA-MANDELBROT.md`) moves them here. The suite's
+own agent instructions (`AGENTS.md` at the repository root) apply to changes
+here too.
 
 **This file replaces one this fork inherited from upstream Fractal
 verbatim** ("Instructions for LLM agents operating with the Fractal
