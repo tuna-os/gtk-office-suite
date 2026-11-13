@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Letters, Tables or Decks should do
+description: Suggest something Letters, Tables, Decks, Lifafa or Mandelbrot should do
 title: '[feature] '
 labels: ['enhancement']
 body:
@@ -17,6 +17,8 @@ body:
         - Letters
         - Tables
         - Decks
+        - Lifafa (email)
+        - Mandelbrot (Matrix chat)
         - The whole suite
     validations:
       required: true

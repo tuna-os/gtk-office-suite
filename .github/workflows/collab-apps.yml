@@ -24,7 +24,8 @@ name: collab-apps
 # the test says so. The headless job checks both behaviours.
 on:
   push:
-    branches: [main, 'collab/**']
+    # main only: a collab/** branch with a pull request already gets the pull_request run.
+    branches: [main]
     paths:
       - 'collab/**'
       - 'suite-collab/**'
@@ -60,10 +61,11 @@ on:
       - '.github/workflows/collab-apps.yml'
   workflow_dispatch:
 
-# A newer push to the same ref supersedes the queued or running one.
+# A newer push to the same pull request supersedes the queued or running one. Main,
+# the schedule and a dispatch always finish.
 concurrency:
   group: collab-apps-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

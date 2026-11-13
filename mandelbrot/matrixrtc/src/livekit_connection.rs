@@ -234,6 +234,35 @@ impl LivekitCallConnection {
         Ok(publication.sid())
     }
 
+    /// Publish a screen share video track backed by the given source.
+    ///
+    /// The other participants see it as a screen share rather than a camera
+    /// (LiveKit's `Screenshare` source), the track a presentation goes out on
+    /// (INTEGRATION-PLAN A5, ADR 0016). Capturing the screen or window is the
+    /// application's responsibility, through the ScreenCast portal: feed its
+    /// frames into the source.
+    ///
+    /// Returns the SID of the published track, to stop sharing later with
+    /// [`Self::unpublish_track`].
+    pub async fn publish_screen_share_track(
+        &self,
+        source: RtcVideoSource,
+    ) -> Result<TrackSid, LivekitError> {
+        let track = LocalVideoTrack::create_video_track("screen_share", source);
+        let publication = self
+            .room
+            .local_participant()
+            .publish_track(
+                LocalTrack::Video(track),
+                TrackPublishOptions {
+                    source: TrackSource::Screenshare,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        Ok(publication.sid())
+    }
+
     /// Stop publishing the local track with the given SID.
     ///
     /// This removes the track from the SFU, so that other participants stop

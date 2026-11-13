@@ -22,7 +22,11 @@ pub(crate) const SETTINGS_KEY_CURRENT_SESSION: &str = "current-session";
 /// The name of the application.
 pub(crate) const APP_NAME: &str = "Mandelbrot";
 /// The URL of the homepage of the application.
-pub(crate) const APP_HOMEPAGE_URL: &str = "https://gitlab.gnome.org/World/fractal/";
+/// Mandelbrot's, not upstream Fractal's: it is also the OAuth client URI
+/// homeservers show, and Fractal's tracker is not where Mandelbrot's bugs go.
+pub(crate) const APP_HOMEPAGE_URL: &str = "https://github.com/tuna-os/gtk-office-suite/tree/main/mandelbrot";
+/// Where Mandelbrot's bugs are reported: the suite's tracker.
+pub(crate) const APP_ISSUE_URL: &str = "https://github.com/tuna-os/gtk-office-suite/issues/new?template=bug_report.yml";
 
 mod imp {
     use std::cell::Cell;
@@ -347,7 +351,7 @@ mod imp {
                 .developer_name(gettext("TunaOS"))
                 .license_type(gtk::License::Gpl30)
                 .website(APP_HOMEPAGE_URL)
-                .issue_url("https://gitlab.gnome.org/World/fractal/-/issues")
+                .issue_url(APP_ISSUE_URL)
                 .support_url("https://matrix.to/#/#fractal:gnome.org")
                 .version(config::VERSION)
                 .copyright(gettext("© The Fractal Team and Mandelbrot contributors"))

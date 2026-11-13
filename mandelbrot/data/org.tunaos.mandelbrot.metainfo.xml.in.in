@@ -51,13 +51,13 @@
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://gitlab.gnome.org/World/fractal</url>
-  <url type="vcs-browser">https://gitlab.gnome.org/World/fractal</url>
-  <url type="bugtracker">https://gitlab.gnome.org/World/fractal/work_items/</url>
+  <url type="homepage">https://github.com/tuna-os/gtk-office-suite/tree/main/mandelbrot</url>
+  <url type="vcs-browser">https://github.com/tuna-os/gtk-office-suite/tree/main/mandelbrot</url>
+  <url type="bugtracker">https://github.com/tuna-os/gtk-office-suite/issues</url>
   <url type="donation">https://www.gnome.org/donate/</url>
   <url type="translate">https://l10n.gnome.org/module/fractal/</url>
   <url type="contact">https://matrix.to/#/#fractal:gnome.org</url>
-  <url type="contribute">https://gitlab.gnome.org/World/fractal/-/blob/main/CONTRIBUTING.md</url>
+  <url type="contribute">https://github.com/tuna-os/gtk-office-suite/blob/main/mandelbrot/CONTRIBUTING.md</url>
 
   <requires>
     <display_length compare="ge">360</display_length>

@@ -65,6 +65,29 @@ class SuiteApps(unittest.TestCase):
         self.assertEqual([], own)
 
 
+    def test_a_plain_message_goes_through_suite_common(self):
+        """A dialog with nothing but an OK button is
+        suite_common::dialogs::show_message (or show_error_dialog), so it
+        answers Enter and Escape the same in every app. One that does
+        something when it closes, or offers a choice, is built by hand."""
+        import glob
+        own = []
+        for app in ("letters", "tables", "decks"):
+            for path in sorted(glob.glob(os.path.join(ROOT, app, "src", "**", "*.rs"), recursive=True)):
+                with open(path, encoding="utf-8") as f:
+                    src = f.read()
+                for m in re.finditer(r"AlertDialog::(?:new|builder)\(", src):
+                    window = src[m.end():m.end() + 700]
+                    end = window.find(".present(")
+                    if end < 0:
+                        continue
+                    body = window[:end]
+                    responses = re.findall(r'add_response\("(\w+)"', body)
+                    if responses == ["ok"] and "connect_" not in body:
+                        own.append("%s:%d" % (os.path.relpath(path, ROOT), src.count("\n", 0, m.start()) + 1))
+        self.assertEqual([], own)
+
+
 class Lifafa(unittest.TestCase):
     def test_quit_is_ctrl_q(self):
         self.assertIn("<control>q", accel_for(read("lifafa", "src", "app", "window.rs"), "app.quit"))
