@@ -483,6 +483,7 @@ fn add_open_and_menu(
         let owned = path.to_path_buf();
         let name = name.to_string();
         let chip = chip.downgrade();
+        let input = sender.input_sender().clone();
         move || {
             let parent = chip
                 .upgrade()
@@ -490,12 +491,19 @@ fn add_open_and_menu(
                 .and_downcast::<gtk::Window>();
             let owned = owned.clone();
             let name = name.clone();
+            let input = input.clone();
             gtk::glib::spawn_future_local(async move {
                 let read = owned.clone();
                 match gtk::gio::spawn_blocking(move || std::fs::read(read)).await {
-                    Ok(Ok(data)) => {
-                        crate::ui::attachment_io::open_bytes(&name, &data, parent.as_ref())
-                    }
+                    // Opened to be edited, and watched for saves to offer back
+                    // (INTEGRATION-PLAN A2).
+                    Ok(Ok(data)) => super::edit_back::open_and_watch(
+                        owned,
+                        &name,
+                        &data,
+                        parent.as_ref(),
+                        input,
+                    ),
                     Ok(Err(e)) => tracing::warn!("could not read the attachment to open it: {e}"),
                     Err(_) => {}
                 }

@@ -43,10 +43,11 @@ on:
     - cron: '17 5 * * *'
   workflow_dispatch:
 
-# A newer push to the same ref supersedes the queued or running one.
+# A newer push to the same pull request supersedes the queued or running one. Main,
+# the schedule and a dispatch always finish.
 concurrency:
   group: lifafa-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

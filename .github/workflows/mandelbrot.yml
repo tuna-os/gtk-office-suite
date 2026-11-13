@@ -17,9 +17,11 @@ on:
       - '.github/workflows/mandelbrot.yml'
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes the queued or running one. Main
+# and a dispatch always finish.
 concurrency:
   group: mandelbrot-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

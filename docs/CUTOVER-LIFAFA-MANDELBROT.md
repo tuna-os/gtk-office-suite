@@ -129,8 +129,11 @@ The questions those answer:
   some of these at build time. Check what the built app shows (About, the
   welcome page, "Report a problem") and point it at this repository's issues
   with a `lifafa` label, or keep tuna-os/lifafa's tracker open (step 6).
-- [ ] Mandelbrot's metainfo, About and `SECURITY.md` (advisories at
-  tuna-os/mandelbrot) pointed at this repository.
+- [x] Mandelbrot's metainfo, About and `SECURITY.md` (advisories at
+  tuna-os/mandelbrot) pointed at this repository. Before this they named
+  upstream Fractal's homepage and tracker, so About's "Report an Issue" sent
+  Mandelbrot's bugs to Fractal. The homepage is also the OAuth client URI
+  homeservers show at sign-in.
 - [ ] `lifafa/fork/MAINTAINING.md`, `lifafa/README.md`, `mandelbrot/README.md`,
   `mandelbrot/RELEASING.md` and `mandelbrot/AGENTS.md` rewritten for this
   repository (where the code lives, how a release is cut, where to report).
@@ -162,7 +165,8 @@ The questions those answer:
   or re-opened here.
 - [ ] Private vulnerability reporting turned on here, and open advisories in
   either repository dealt with or moved.
-- [ ] Issue templates for the two apps added to `.github/ISSUE_TEMPLATE`.
+- [x] Issue templates for the two apps added to `.github/ISSUE_TEMPLATE`: the
+  bug report and feature request forms list Lifafa and Mandelbrot.
 
 ## 7. The switch
 

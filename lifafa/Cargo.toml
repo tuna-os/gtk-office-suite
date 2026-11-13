@@ -26,6 +26,9 @@ beta = []
 # a Flatpak build of Lifafa has to bring ../suite-common and
 # ../suite-common-core along (docs/CUTOVER-LIFAFA-MANDELBROT.md, step 2).
 suite-common = { path = "../suite-common" }
+# Its GTK-free models directly, e.g. attachment_edit for putting an edited
+# attachment back (INTEGRATION-PLAN A2).
+suite-common-core = { path = "../suite-common-core" }
 # v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
 # blocking one spins a nested main loop and glib's future executor aborts when
 # re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.

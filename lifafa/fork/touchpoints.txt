@@ -52,7 +52,10 @@ src/ui/accounts/pages/form.rs
 src/ui/accounts/providers.rs
 src/ui/accounts/save.rs
 src/ui/accounts/setup.rs
+src/ui/attachment_io.rs
 src/ui/compose.rs
+src/ui/compose/attachments.rs
+src/ui/compose/history.rs
 src/ui/compose/host.rs
 src/ui/compose/merge.rs
 src/ui/compose/messages.rs
