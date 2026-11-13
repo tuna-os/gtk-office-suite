@@ -16,6 +16,7 @@ pub(crate) mod notify;
 pub(crate) mod platform;
 pub(crate) mod power;
 pub(crate) mod session;
+pub(crate) mod shell_search;
 pub(crate) mod single_instance;
 pub(crate) mod spell;
 pub(crate) mod startup;

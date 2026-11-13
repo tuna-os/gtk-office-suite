@@ -5,6 +5,7 @@
 // converts to what, and the exit codes. No conversion happens here yet.
 
 pub mod engine;
+pub mod slides;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -115,9 +116,9 @@ impl Format {
 /// `tables_core::io::format`), so there is no engine to route it to, and
 /// promising it would only fail later. It returns when Tables writes ODS.
 ///
-/// Presentations do not convert to PDF or PNG either: Decks draws slides with
-/// cairo and pango, which the headless graph may not link, so there is no
-/// GTK-free renderer to call. That needs a Typst slide renderer first.
+/// Presentations convert to PDF and PNG through the Typst slide renderer
+/// (`slides`), not Decks' cairo and pango render, which the headless graph
+/// may not link. It is an approximate re-drawing, and the loss report says so.
 pub fn supported(from: Format, to: Format) -> bool {
     use Format::*;
     let Some(category) = from.category() else {
@@ -128,7 +129,7 @@ pub fn supported(from: Format, to: Format) -> bool {
             matches!(from, Md | Odt | Docx) && matches!(to, Odt | Docx | Md | Html | Pdf | Png)
         }
         Category::Spreadsheet => matches!(to, Xlsx | Csv | Html | Pdf | Png),
-        Category::Presentation => matches!(to, Odp | Pptx),
+        Category::Presentation => matches!(to, Odp | Pptx | Pdf | Png),
     }
 }
 
@@ -570,6 +571,8 @@ mod tests {
             (Ods, Pdf),
             (Pptx, Odp),
             (Odp, Pptx),
+            (Pptx, Pdf),
+            (Odp, Png),
         ] {
             assert!(supported(from, to), "{} -> {}", from.name(), to.name());
         }
@@ -580,8 +583,6 @@ mod tests {
             (Png, Pdf),
             (Html, Docx),
             (Pptx, Csv),
-            (Pptx, Pdf),
-            (Odp, Png),
             (Csv, Odp),
         ] {
             assert!(!supported(from, to), "{} -> {}", from.name(), to.name());

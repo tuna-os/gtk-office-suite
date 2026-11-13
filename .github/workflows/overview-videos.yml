@@ -27,7 +27,9 @@ jobs:
     permissions:
       contents: write   # upload to the release that triggered the run
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install GTK4 + libadwaita and the recording tools
         run: |
@@ -37,10 +39,10 @@ jobs:
             ffmpeg librsvg2-bin fontconfig
           python3 -m pip install --break-system-packages mss
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3  # zizmor: ignore[cache-poisoning] a fix would stop release runs saving the cargo cache, a behaviour change
 
       - name: Build app binaries
         run: cargo build --bin letters --bin tables --bin decks
@@ -49,7 +51,7 @@ jobs:
         run: tests/gui/overview_video.sh videos
 
       - name: Upload the videos
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: overview-videos
           path: videos/*.mp4

@@ -14,6 +14,9 @@ pub(super) fn ctrl_shortcut_for(key: gtk::gdk::Key, shift: bool) -> Option<AppMs
         Key::r | Key::R if !shift => Some(AppMsg::Shortcut(Shortcut::Reply)),
         Key::r | Key::R => Some(AppMsg::Shortcut(Shortcut::ReplyAll)),
         Key::u | Key::U if !shift => Some(AppMsg::ViewSource),
+        // C1: Ctrl+, opens Preferences in every suite app (Letters, Tables,
+        // Decks and Mandelbrot already bind it).
+        Key::comma if !shift => Some(AppMsg::OpenPreferences),
         _ => None,
     }
 }
@@ -49,6 +52,10 @@ mod tests {
         assert!(matches!(
             ctrl_shortcut_for(Key::N, true),
             Some(AppMsg::NewFromTemplate)
+        ));
+        assert!(matches!(
+            ctrl_shortcut_for(Key::comma, false),
+            Some(AppMsg::OpenPreferences)
         ));
         // Taken elsewhere, or not ours.
         assert!(ctrl_shortcut_for(Key::U, true).is_none());

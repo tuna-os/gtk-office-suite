@@ -68,12 +68,14 @@ jobs:
             cairo-devel pango-devel openssl-devel dbus-devel gettext \
             xorg-x11-server-Xvfb mesa-dri-drivers \
             dbus-daemon gnome-keyring libsecret
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: lifafa
           shared-key: lifafa
@@ -116,12 +118,14 @@ jobs:
     name: Lifafa RustSec advisory gate
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       # The advisories of lifafa/Cargo.lock, against deny.toml (its ignores for
       # this lock are the ones that name lifafa/). The product's own gate is
       # ci.yml's `advisories`; collab/Cargo.lock's is collab-apps.yml's.
       - name: cargo deny check advisories licenses (lifafa/Cargo.lock)
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           manifest-path: lifafa/Cargo.toml
           command: check advisories licenses

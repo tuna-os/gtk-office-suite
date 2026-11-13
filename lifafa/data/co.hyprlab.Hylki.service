@@ -1,0 +1,6 @@
+# Bus activation for GNOME Shell's search (src/desktop/shell_search.rs): the
+# Shell calls the search provider on this name, and starting it here lets mail
+# be searched with Hylki closed. Flatpak rewrites Exec to `flatpak run …`.
+[D-BUS Service]
+Name=co.hyprlab.Hylki
+Exec=/app/bin/hylki --gapplication-service
