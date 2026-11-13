@@ -99,3 +99,55 @@ jobs:
           path: lab-apps
           retention-days: 14
           if-no-files-found: warn
+
+  # The same journeys inside the soak's own image: the plain runner never lost
+  # a "p" in 250 runs per profile, the soak's container lost one in about one
+  # run in ten. Container or run order?
+  apps-container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/tuna-os/gtk-office-suite/gui-test:main  # zizmor: ignore[unpinned-images] the image the release soak runs in, on purpose
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          key: typing-lab-container
+      - name: Build the release apps
+        run: cargo build --release --bin letters --bin tables --bin decks
+      - name: Run the journeys that lost a p, 50 times, in the soak's image
+        env:
+          GUI_TEST_PROFILE: release
+          GUI_TEST_VERIFY_TYPING: '1'
+        run: |
+          python3 tests/gui/stress.py \
+            --repeat 50 --timeout 3000 \
+            --select "test_clear_filter_keeps_manual_hides or test_copy_paste_round_trip or test_a_comment_is_added_replied_to_and_resolved or test_a_protected_sheet_refuses_an_edit_with_a_message_and_unprotect_allows_it" \
+            --output "$GITHUB_WORKSPACE/lab-container"
+      - name: Summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          m = json.load(open("lab-container/manifest.json"))
+          print(json.dumps(m.get("summary", {}), indent=2))
+          for a in m["attempts"]:
+              for f in a["failures"]:
+                  print(a["classification"], f.get("journey"), "|", (f.get("message") or "")[:140])
+          PY
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: typing-lab-container
+          path: lab-container
+          retention-days: 14
+          if-no-files-found: warn
