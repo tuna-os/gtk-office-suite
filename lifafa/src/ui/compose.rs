@@ -13,6 +13,7 @@ mod assistant_edit;
 mod attachment_check;
 mod attachments;
 mod cloud;
+mod edit_back;
 mod format;
 mod history;
 mod host;
@@ -977,6 +978,14 @@ impl Component for Compose {
                 }
 
                 ComposeInput::RemoveAttachment(i) => self.on_remove_attachment(i, widgets, &sender),
+
+                ComposeInput::AttachmentEdited(staged) => {
+                    self.on_attachment_edited(staged, &sender, root)
+                }
+
+                ComposeInput::ReplaceAttachment { from, to } => {
+                    self.on_replace_attachment(from, to, widgets, &sender)
+                }
 
                 ComposeInput::Zoom(step) => self.on_zoom(step),
 

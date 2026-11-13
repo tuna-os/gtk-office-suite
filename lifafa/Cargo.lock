@@ -1697,6 +1697,7 @@ dependencies = [
  "sha2",
  "siphasher",
  "suite-common",
+ "suite-common-core",
  "tar",
  "tokio",
  "toml",
