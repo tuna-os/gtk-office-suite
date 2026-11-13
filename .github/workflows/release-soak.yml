@@ -15,6 +15,15 @@ name: Release candidate soak
 # rather than beside them. A campaign that fails after publication is a
 # report, not a gate.
 #
+# One job cannot hold the whole campaign: GitHub-hosted jobs are cut off at six
+# hours whatever `timeout-minutes` says, and one attempt over the ~240
+# journeys takes about 24 minutes, so 20 consecutive runs need about eight.
+# v2.1.9's soak was cancelled at exactly 6h00m, at attempt 14 of 20. The
+# repetitions are therefore sharded over parallel jobs, `PER_SHARD` attempts
+# each, and the display matrix runs as a job of its own. The target is
+# unchanged: every shard's attempts must pass, and the `publish` gate sees the
+# worst result of all the jobs.
+#
 # Deliberately not on `schedule`: the nightly already covers that, and a
 # second nightly copy would compete for the same runner hours while
 # answering a question no release asked.
@@ -27,10 +36,6 @@ on:
         required: false
         type: number
         default: 20
-    outputs:
-      summary:
-        description: 'The campaign manifest summary'
-        value: ${{ jobs.soak.outputs.summary }}
   workflow_dispatch:
     inputs:
       repeat:
@@ -80,12 +85,34 @@ jobs:
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
-  soak:
-    needs: image
+  # How many shards the requested repetitions need.
+  plan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 420
     outputs:
-      summary: ${{ steps.summarize.outputs.summary }}
+      shards: ${{ steps.shards.outputs.shards }}
+    steps:
+      - id: shards
+        env:
+          REPEAT: ${{ inputs.repeat || 20 }}
+          PER_SHARD: '2'
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, math, os
+          repeat = int(os.environ["REPEAT"])
+          per = int(os.environ["PER_SHARD"])
+          print("shards=" + json.dumps(list(range(1, math.ceil(repeat / per) + 1))))
+          PY
+
+  soak:
+    needs: [image, plan]
+    runs-on: ubuntu-24.04
+    # Two attempts of ~24 minutes, the release build and the container start.
+    timeout-minutes: 150
+    strategy:
+      # Every shard's verdict is evidence: one failing must not hide the rest.
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     container:
       image: ${{ needs.image.outputs.ref }}  # zizmor: ignore[unpinned-images] the image job resolves this to the gui-test:main image that gui-container.yml publishes from main; pinning would change which image runs
       # GTK and Xvfb share memory through /dev/shm; the container default of
@@ -107,26 +134,70 @@ jobs:
       # Every context value reaches the script through the environment,
       # never through `${{ }}` inside it (#492).
       #
-      # The seed is recorded rather than fixed: a release soak that always
-      # shuffled the same way would stop finding order-dependent failures
-      # after the first release, and stress.py writes the seed it derived
-      # into the manifest so the run replays.
+      # Each shard has a seed of its own, derived from the run and the shard
+      # so that shards started in the same second still shuffle differently,
+      # and stress.py records it in the manifest so the shard replays.
       - name: Soak the candidate at baseline
         env:
-          REPEAT: ${{ inputs.repeat || 20 }}
+          SHARD: ${{ matrix.shard }}
+          RUN_ID: ${{ github.run_id }}
           # The journeys look for debug binaries unless told otherwise; this
           # job built release ones (every attempt of the first soaks failed in
           # setUp with "Binary not found" and was reported as a product crash).
           GUI_TEST_PROFILE: release
         run: |
           python3 tests/gui/stress.py \
-            --repeat "$REPEAT" \
+            --repeat 2 \
+            --seed "$(( (RUN_ID % 100000000) * 100 + SHARD ))" \
             --output "$GITHUB_WORKSPACE/soak-baseline"
 
-      # The complete matrix, once through. Repetition and breadth are
-      # separate instruments: repeating at one display size proves nothing
-      # about 400px, and one pass over every size proves nothing about
-      # flakiness.
+      - name: Upload soak evidence
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-candidate-soak-baseline-${{ matrix.shard }}
+          path: soak-baseline
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          manifest="$GITHUB_WORKSPACE/soak-baseline/manifest.json"
+          if [ ! -f "$manifest" ]; then
+            echo "### Soak shard $SHARD: no manifest — the campaign did not start" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Release candidate soak — shard $SHARD"
+            echo
+            echo '```json'
+            python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SHARD: ${{ matrix.shard }}
+
+  # The complete matrix, once through. Repetition and breadth are separate
+  # instruments: repeating at one display size proves nothing about 400px, and
+  # one pass over every size proves nothing about flakiness.
+  matrix:
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    container:
+      image: ${{ needs.image.outputs.ref }}  # zizmor: ignore[unpinned-images] the image job resolves this to the gui-test:main image that gui-container.yml publishes from main; pinning would change which image runs
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2.9.3
+
+      - name: Build the candidate binaries
+        run: cargo build --release --bin letters --bin tables --bin decks
+
       - name: The complete display matrix, once
         env:
           GUI_TEST_PROFILE: release
@@ -139,28 +210,23 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: release-candidate-soak
-          path: |
-            soak-baseline
-            soak-matrix
+          name: release-candidate-soak-matrix
+          path: soak-matrix
           retention-days: 90
           if-no-files-found: warn
 
       - name: Summary
-        id: summarize
         if: always()
         run: |
-          for campaign in soak-baseline soak-matrix; do
-            manifest="$GITHUB_WORKSPACE/$campaign/manifest.json"
-            if [ ! -f "$manifest" ]; then
-              echo "### $campaign: no manifest — the campaign did not start" >> "$GITHUB_STEP_SUMMARY"
-              continue
-            fi
-            {
-              echo "### Release candidate soak — $campaign"
-              echo
-              echo '```json'
-              python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          done
+          manifest="$GITHUB_WORKSPACE/soak-matrix/manifest.json"
+          if [ ! -f "$manifest" ]; then
+            echo "### soak-matrix: no manifest — the campaign did not start" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Release candidate soak — soak-matrix"
+            echo
+            echo '```json'
+            python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -63,7 +63,11 @@ an unchanged `main`):
    the commit `vN` and pushes only the tag. `main` is not pushed to;
 4. it creates the tag's GitHub release as a draft and dispatches
    `publish-flatpak.yml` with `publish` on the tag, which runs the evidence
-   and soak gates before publishing anything, and `release-gate.yml`;
+   and soak gates before publishing anything, and `release-gate.yml`. The
+   soak is 20 consecutive runs of every journey, which takes about eight
+   hours, and a hosted job is cut off at six, so `release-soak.yml` shards
+   them (two attempts a job, in parallel) and runs the display matrix as a
+   job of its own; a tag publishes only when every shard passed;
 5. once the Flatpaks are published, `publish-flatpak.yml` builds each app's
    `/app` tree in the GNOME SDK for x86_64 and aarch64, attaches it to the
    release as `<app>-<arch>.tar.gz` (with a `.sha256`), and publishes the
