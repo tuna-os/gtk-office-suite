@@ -355,11 +355,20 @@ msgstr "Imprimeix…"
 msgid "New Message"
 msgstr "Missatge nou"
 
-msgid "Hylki Address Book"
-msgstr "Llibreta d'adreces de l'Hylki"
+#, fuzzy
+msgid "A group needs a name."
+msgstr "Nom de la carpeta"
+
+msgid ""
+"A group in this address book is kept on its people's cards, so it needs at "
+"least one person."
+msgstr ""
 
 msgid "Hylki cannot change this kind of group"
 msgstr "L'Hylki no pot modificar aquest tipus de grup"
+
+msgid "Hylki Address Book"
+msgstr "Llibreta d'adreces de l'Hylki"
 
 msgid "On This Computer"
 msgstr "En aquest ordinador"
@@ -495,17 +504,36 @@ msgstr[1] "{n} persones"
 msgid "Enable Console mode in Settings → System & Appearance"
 msgstr "Activa el mode de consola a Paràmetres → Sistema i aparença"
 
+msgid ""
+"No templates yet. Save one from the composer's ⋯ menu with Save as Template."
+msgstr ""
+"Encara no hi ha plantilles. Desa'n una des del menú ⋯ del redactor amb «Desa "
+"com a plantilla»."
+
 msgid "New Message from Template"
 msgstr "Missatge nou a partir d'una plantilla"
 
 msgid "The new message starts as a copy of the template you pick."
 msgstr "El missatge nou començarà com una còpia de la plantilla que triïs."
 
-msgid ""
-"No templates yet. Save one from the composer's ⋯ menu with Save as Template."
-msgstr ""
-"Encara no hi ha plantilles. Desa'n una des del menú ⋯ del redactor amb «Desa "
-"com a plantilla»."
+#, fuzzy
+msgid "Insert Template"
+msgstr "Utilitza la plantilla"
+
+#, fuzzy
+msgid "The template goes in where the cursor is."
+msgstr "Col·loca la imatge on és el cursor"
+
+msgid "Templates"
+msgstr "Plantilles"
+
+#, fuzzy
+msgid "Template saved to {folder} in {account}"
+msgstr "Crea una carpeta nova per a aquest compte."
+
+#, fuzzy
+msgid "Could not load the template."
+msgstr "No s'ha pogut desar la plantilla: {e}"
 
 msgid "Continue a Draft"
 msgstr "Continua un esborrany"
@@ -1078,6 +1106,10 @@ msgstr "Negreta, cursiva, subratllat"
 msgid "Preview the highlighted attachment"
 msgstr "Previsualitza l'adjunt ressaltat"
 
+#, fuzzy
+msgid "Open the highlighted attachment"
+msgstr "Previsualitza l'adjunt ressaltat"
+
 msgid "Previous or next in the gallery's preview"
 msgstr "Anterior o següent a la previsualització de la galeria"
 
@@ -1480,6 +1512,15 @@ msgstr "Notes completes de la versió al GitHub"
 
 msgid "Delete this conversation?"
 msgstr "Vols suprimir aquesta conversa?"
+
+msgid ""
+"The message in this conversation will be deleted. You can turn this warning "
+"off in Settings."
+msgid_plural ""
+"All {n} messages in this conversation will be deleted. You can turn this "
+"warning off in Settings."
+msgstr[0] ""
+msgstr[1] ""
 
 msgid "Delete Conversation"
 msgstr "Suprimeix la conversa"
@@ -1916,6 +1957,11 @@ msgstr "El fitxer no és un fitxer de text"
 msgid "The file has no rows below its first."
 msgstr "El fitxer no és un fitxer de text"
 
+msgid ""
+"The signing key is not for {addr}, the address this message is from, so the "
+"signature does not show who sent it."
+msgstr ""
+
 msgid "GnuPG (gpg) is not installed, so this message cannot be read."
 msgstr ""
 "El GnuPG (gpg) no està instal·lat, així que aquest missatge no es pot llegir."
@@ -2175,6 +2221,12 @@ msgstr "Xifrat amb OpenPGP; no s'ha pogut desxifrar"
 msgid "Encrypted with OpenPGP"
 msgstr "Xifrat amb OpenPGP"
 
+#, fuzzy
+msgid ""
+"Encrypted, and signed by {signer}, whose key is not for the sender's address "
+"{addr}"
+msgstr "Xifrat i signat per {signer}; la signatura ha caducat"
+
 msgid "Encrypted, and signed by {signer}"
 msgstr "Xifrat i signat per {signer}"
 
@@ -2198,6 +2250,9 @@ msgstr "Xifrat i signat per {signer}; la signatura ha caducat"
 
 msgid "OpenPGP-signed; the signature could not be checked"
 msgstr "Signat amb OpenPGP; no s'ha pogut comprovar la signatura"
+
+msgid "Signed by {signer}, whose key is not for the sender's address {addr}"
+msgstr ""
 
 msgid "Signed by {signer}"
 msgstr "Signat per {signer}"
@@ -2227,6 +2282,10 @@ msgstr "Xifrat"
 
 msgid "Signature not checked"
 msgstr "Signatura no comprovada"
+
+#, fuzzy
+msgid "Signed by another address"
+msgstr "Mou a una altra llibreta d'adreces"
 
 msgid "Encrypted and signed"
 msgstr "Xifrat i signat"
@@ -2495,6 +2554,11 @@ msgstr "Afegeix un àlies"
 msgid "Save"
 msgstr "Desa"
 
+msgid ""
+"Will appear in the composer's From menu. Replies to mail sent here will come "
+"from this address."
+msgstr ""
+
 msgid "Display name (optional)"
 msgstr "Nom visible (opcional)"
 
@@ -2506,6 +2570,10 @@ msgstr "Enviament"
 
 msgid "Own SMTP server"
 msgstr "Servidor SMTP propi"
+
+msgid ""
+"Needed when this account's provider, such as Gmail, rewrites the sender."
+msgstr ""
 
 msgid "SMTP server"
 msgstr "Servidor SMTP"
@@ -2519,8 +2587,17 @@ msgstr "Nom d'usuari SMTP"
 msgid "SMTP password"
 msgstr "Contrasenya SMTP"
 
+msgid "Server saves its own copy of sent mail"
+msgstr "El servidor desa la seva pròpia còpia del correu enviat"
+
+msgid "Only when this server files sent mail in this account."
+msgstr ""
+
 msgid "Test SMTP"
 msgstr "Prova l'SMTP"
+
+msgid "Names that share an address send through this account's server."
+msgstr ""
 
 msgid "Testing…"
 msgstr "S'està provant…"
@@ -3169,8 +3246,37 @@ msgstr "Desa tots els adjunts en una carpeta"
 msgid "Save Attachment"
 msgstr "Desa l'adjunt"
 
+#, fuzzy
+msgid "Open “{name}”?"
+msgstr "Vols buidar «{name}»?"
+
+msgid ""
+"This attachment is a program or a script. Opening it can run it with your "
+"permissions. Open it only if you expected it and trust where it came from."
+msgstr ""
+
+#, fuzzy
+msgid "Open Anyway"
+msgstr "Envia ara"
+
 msgid "The file could not be opened"
 msgstr "No s'ha pogut obrir el fitxer"
+
+#. No Flatseal toggle can help here: portal access is not a
+#. permission, and the failure is inside the portal's own launcher.
+#. Offer the steps that actually work.
+#, fuzzy
+msgid ""
+"The desktop portal reported: {error}\n"
+"\n"
+"• Download the file, then open it from Files\n"
+"• Updating “xdg-desktop-portal” and logging back in may fix direct opening"
+msgstr ""
+"El portal de l'escriptori ha informat: {error}\n"
+"\n"
+"• Fes clic dret a l'enllaç, copia'l i obre'l al navegador\n"
+"• Actualitzar «xdg-desktop-portal» i tornar a iniciar sessió pot arreglar "
+"l'obertura directa d'enllaços"
 
 msgid "Go to Message"
 msgstr "Ves al missatge"
@@ -3307,6 +3413,124 @@ msgstr "Següent"
 
 msgid "Open in the default app"
 msgstr "Obre amb l'aplicació per defecte"
+
+#, fuzzy
+msgid "Waiting for the Keyring"
+msgstr "Esperant per enviar"
+
+msgid ""
+"Mail stored on this computer is encrypted with a key stored in the keyring. "
+"Unlock the keyring if it asks."
+msgstr ""
+
+msgid ""
+"This happens once and can take a few minutes. If you quit, your mail is left "
+"as it was."
+msgstr ""
+
+#, fuzzy
+msgid "Checking the copy"
+msgstr "S'està comprovant la connexió…"
+
+msgid "Encrypting Stored Mail"
+msgstr ""
+
+#, fuzzy
+msgid "Decrypting Stored Mail"
+msgstr "S'està comprovant si hi ha correu nou"
+
+#, fuzzy
+msgid "Store Unencrypted…"
+msgstr "No desxifrat"
+
+msgid "Reset Cache…"
+msgstr ""
+
+msgid "Try Again"
+msgstr "Torna-ho a provar"
+
+#, fuzzy
+msgid "Keyring Unavailable"
+msgstr "No hi ha cap carpeta {v1} disponible"
+
+msgid ""
+"Mail kept on this computer is encrypted with a key stored in the keyring, "
+"and the keyring is locked or did not answer. Unlock it, then try again."
+msgstr ""
+
+msgid "Mail Cache Key Missing"
+msgstr ""
+
+msgid ""
+"Mail kept on this computer is encrypted, and the keyring no longer holds its "
+"key. If the keyring was replaced, restore the old one and try again. "
+"Otherwise reset the cache to download your mail again."
+msgstr ""
+
+msgid "Mail Cache Cannot Be Unlocked"
+msgstr ""
+
+msgid ""
+"The key in the keyring does not open the mail kept on this computer. If the "
+"keyring was replaced, restore the old one and try again. Otherwise reset the "
+"cache to download your mail again."
+msgstr ""
+
+msgid "Mail Cache Not Converted"
+msgstr ""
+
+msgid ""
+"The mail kept on this computer could not be converted, and was left as it "
+"was. Check that the disk has free space, then try again."
+msgstr ""
+
+#, fuzzy
+msgid "Mail Cache Unreadable"
+msgstr "Marca com a no llegit"
+
+msgid ""
+"The mail kept on this computer could not be read. Try again, or reset the "
+"cache to download your mail again."
+msgstr ""
+
+msgid ""
+"Mail that exists only on this computer is lost: a POP3 account's mail, and "
+"unsent mail in the Outbox."
+msgstr ""
+
+#, fuzzy
+msgid ""
+"Mail kept on this computer is deleted and downloaded again from the server."
+msgstr ""
+"El correu i els adjunts d'aquest ordinador s'eliminen i es tornen a obtenir "
+"quan s'obren. Res canvia al servidor."
+
+msgid "Reset the Mail Cache?"
+msgstr ""
+
+msgid "Reset"
+msgstr ""
+
+msgid ""
+"Anyone who can read your files, or a backup of them, can then read the mail "
+"kept on this computer, including mail that is end-to-end encrypted on the "
+"server."
+msgstr ""
+
+msgid "Encryption can be turned back on in Settings → Privacy."
+msgstr ""
+
+msgid ""
+"The encrypted cache cannot be opened without the keyring, so it is deleted "
+"and your mail is downloaded again."
+msgstr ""
+
+msgid "Store Mail Unencrypted?"
+msgstr ""
+
+#, fuzzy
+msgid "Store Unencrypted"
+msgstr "No desxifrat"
 
 #, fuzzy
 msgid "New Event"
@@ -3933,6 +4157,16 @@ msgid ""
 msgstr ""
 "No hi ha cap clau OpenPGP per a {addr}. Demana'ls la seva clau pública, o "
 "obtén-la a Paràmetres, OpenPGP."
+
+msgid "Encrypt to keys you have not checked?"
+msgstr ""
+
+msgid ""
+"Nothing confirms that the keys for {addresses} belong to them. If one is "
+"someone else's, that person can read this message and the recipient cannot. "
+"To check a key, compare its fingerprint with its owner and trust it under "
+"Settings, OpenPGP. Send Anyway does not ask about these keys again."
+msgstr ""
 
 msgid "Send later"
 msgstr "Envia més tard"
@@ -4649,7 +4883,8 @@ msgstr "Envia com a Cco"
 msgid "Members do not see each other's addresses."
 msgstr "Els membres no veuen les adreces dels altres."
 
-#. An Apple group (iCloud's) holds cards of its own book.
+#. An Apple group (iCloud's) or a category (Nextcloud's) holds
+#. cards of its own book.
 msgid ""
 "Groups in this address book hold its own contacts: anyone added who is not "
 "in it yet is added to it."
@@ -5222,6 +5457,10 @@ msgstr "Marca-ho tot com a llegit"
 msgid "Mark All as Unread"
 msgstr "Marca-ho tot com a no llegit"
 
+#, fuzzy
+msgid "This Account (Except Trash & Junk)"
+msgstr "Totes les carpetes (menys la paperera i la brossa)"
+
 msgid "All folders (except trash & junk)"
 msgstr "Totes les carpetes (menys la paperera i la brossa)"
 
@@ -5231,8 +5470,20 @@ msgstr "A tot arreu"
 msgid "This folder"
 msgstr "Aquesta carpeta"
 
+#, fuzzy
+msgid "This Account"
+msgstr "Compte de correu"
+
 msgid "All folders"
 msgstr "Totes les carpetes"
+
+#, fuzzy
+msgid ""
+"Every folder of this account, except Trash and Junk. A search started in "
+"Trash or Junk looks there too."
+msgstr ""
+"Totes les carpetes de tots els comptes, menys la paperera i la brossa. Una "
+"cerca iniciada a la paperera o a la brossa també hi cerca."
 
 msgid ""
 "Every folder of every account, except Trash and Junk. A search started in "
@@ -5246,6 +5497,10 @@ msgstr "Totes les carpetes de tots els comptes, paperera i brossa incloses."
 
 msgid "Only the folder or view the list is showing."
 msgstr "Només la carpeta o vista que mostra la llista."
+
+#, fuzzy
+msgid "Every folder of this account, Trash and Junk included."
+msgstr "Totes les carpetes de tots els comptes, paperera i brossa incloses."
 
 msgid "What this searches"
 msgstr "Què cerca això"
@@ -5635,9 +5890,6 @@ msgstr "S'està traduint…"
 msgid "Could not translate: {why}"
 msgstr "No s'ha pogut traduir: {why}"
 
-msgid "Try Again"
-msgstr "Torna-ho a provar"
-
 msgid "Translated from {language} by {service}."
 msgstr "Traduït de l'{language} per {service}."
 
@@ -5707,6 +5959,10 @@ msgstr ""
 
 msgid "Status bar ({n})"
 msgstr "Barra d'estat ({n})"
+
+#, fuzzy
+msgid "Ask Again"
+msgstr "Torna-ho a provar"
 
 #, fuzzy
 msgid "All keys"
@@ -5796,6 +6052,12 @@ msgid "Fetch by address…"
 msgstr "Obtén per adreça…"
 
 msgid "Search by name, address or key ID"
+msgstr ""
+
+msgid "Unchecked keys you encrypt to"
+msgstr ""
+
+msgid "Send Anyway stopped the warning for these keys."
 msgstr ""
 
 msgid "No keys from other people yet."
@@ -6206,6 +6468,8 @@ msgstr "Segueix l'ordre de lectura"
 msgid "System language"
 msgstr "Idioma del sistema"
 
+#. A group's description is markup: "<code>" would be
+#. read as a tag and the whole line dropped.
 msgid ""
 "No dictionaries found. On Flatpak, add a language with: flatpak config --set "
 "extra-languages <code>"
@@ -6474,12 +6738,10 @@ msgid ""
 "and Trash are hidden again."
 msgstr ""
 
-msgid "Reset"
-msgstr ""
-
+#, fuzzy
 msgid ""
-"Accounts, preferences, filters, tags and layout, in one file. Passwords and "
-"OpenPGP keys are not included."
+"Accounts, preferences, filters, tags and layout, in one file. Passwords, "
+"OAuth client secrets and OpenPGP keys are not included."
 msgstr ""
 "Comptes, preferències, filtres, etiquetes i disposició, en un sol fitxer. "
 "Les contrasenyes i les claus OpenPGP no s'inclouen."
@@ -6553,6 +6815,101 @@ msgstr "Format de data"
 msgid "Clock"
 msgstr "Rellotge"
 
+msgid ""
+"While it is on, this page decides the layout in place of the other settings. "
+"Ctrl+Shift+F or the main menu turns it on."
+msgstr ""
+
+msgid "Start in Focus Mode"
+msgstr "Comença en mode d'enfocament"
+
+msgid "Fold the sidebar to the icon rail"
+msgstr "Replega la barra lateral a la barra d'icones"
+
+msgid "Unread counts"
+msgstr "Recomptes de no llegits"
+
+msgid "Unread dots instead of counts"
+msgstr "Punts de no llegit en lloc de recomptes"
+
+msgid "Expand the sidebar on hover"
+msgstr "Expandeix la barra lateral en passar-hi per sobre"
+
+msgid "Hide the accounts in the sidebar"
+msgstr "Amaga els comptes a la barra lateral"
+
+msgid "Only the unified section stays."
+msgstr "Només queda la secció unificada."
+
+#, fuzzy
+msgid "Fold up the accounts"
+msgstr "A sobre dels comptes"
+
+msgid "Collapses expanded accounts into their avatars"
+msgstr ""
+
+msgid "Fold accounts with one click"
+msgstr "Replega els comptes amb un clic"
+
+msgid "Fold up the unified rows"
+msgstr "Replega les files unificades"
+
+msgid "Unified"
+msgstr "Unificat"
+
+msgid "Inboxes"
+msgstr "Bústies d'entrada"
+
+msgid "Snoozed"
+msgstr ""
+
+msgid "Sections"
+msgstr "Seccions"
+
+msgid "Favorites"
+msgstr "Preferits"
+
+msgid "Show column headings"
+msgstr "Mostra els encapçalaments de columna"
+
+msgid "Preview lines"
+msgstr "Línies de previsualització"
+
+msgid "Fold the message list's header"
+msgstr "Replega l'encapçalament de la llista de missatges"
+
+msgid "Everything but the sidebar toggle goes into ⋯."
+msgstr "Tot menys l'alternador de la barra lateral va a ⋯."
+
+msgid "Hide sender avatars"
+msgstr "Amaga els avatars dels remitents"
+
+msgid "Hide the subject"
+msgstr "Amaga l'assumpte"
+
+msgid "Tag chips hide with it."
+msgstr "Les etiquetes s'amaguen amb ella."
+
+msgid "Tags and labels under the text"
+msgstr "Etiquetes i etiquetes del servidor sota el text"
+
+#, fuzzy
+msgid "Hide stars"
+msgstr "Amaga els avatars dels remitents"
+
+#, fuzzy
+msgid "Hide attachment icons"
+msgstr "Amaga els adjunts"
+
+msgid "Fold the reading pane's toolbar"
+msgstr "Replega la barra d'eines del panell de lectura"
+
+msgid "Every button goes into its ⋯ menu."
+msgstr "Tots els botons van al seu menú ⋯."
+
+msgid "Open messages in Reader View."
+msgstr "Obre els missatges a la vista de lector."
+
 msgid "Instant new mail (push)"
 msgstr "Correu nou instantani (push)"
 
@@ -6617,17 +6974,17 @@ msgstr "La imatge o l'emoji del compte, com a la barra lateral."
 msgid "Automatic uses single lines in wide windows."
 msgstr "Automàtic utilitza línies individuals en finestres amples."
 
-msgid "Preview lines"
-msgstr "Línies de previsualització"
+msgid "Resize the list with the window"
+msgstr ""
+
+msgid "Off, it keeps its width and the reader resizes."
+msgstr ""
 
 msgid "Off also stops downloading previews."
 msgstr "Desactivat també atura la baixada de previsualitzacions."
 
 msgid "Group by date"
 msgstr "Agrupa per data"
-
-msgid "Tags and labels under the text"
-msgstr "Etiquetes i etiquetes del servidor sota el text"
 
 msgid "Gives the subject its full width."
 msgstr "Dona a l'assumpte tota l'amplada."
@@ -6675,9 +7032,6 @@ msgstr ""
 "les o fora per treure-les. La data de venciment només es mostra per al "
 "correu de Microsoft 365."
 
-msgid "Show column headings"
-msgstr "Mostra els encapçalaments de columna"
-
 msgid "Fit columns to the list"
 msgstr "Ajusta les columnes a la llista"
 
@@ -6693,14 +7047,12 @@ msgstr "L'Hylki no recull cap telemetria ni envia analítiques."
 msgid "Always load remote content"
 msgstr "Carrega sempre el contingut remot"
 
-msgid "Remote content can tell a sender when and where you read."
-msgstr "El contingut remot pot dir a un remitent quan i on llegeixes."
-
 msgid "Pre-load remote content for the next messages"
 msgstr ""
 
-msgid "Their senders can tell they were opened."
-msgstr ""
+#, fuzzy
+msgid "Remove trackers from links"
+msgstr "Elimina aquest àlies"
 
 msgid "Warn when remote content is blocked"
 msgstr "Avisa quan es bloca el contingut remot"
@@ -6711,13 +7063,6 @@ msgstr "Desactivat amaga el bàner. El contingut remot continua blocat."
 msgid "Warn when the addressing doesn't match"
 msgstr "Avisa quan l'adreçament no coincideix"
 
-msgid ""
-"The badge beside the sender stays. A possible forgery always shows the "
-"banner."
-msgstr ""
-"La insígnia al costat del remitent es manté. Una possible falsificació "
-"sempre mostra el bàner."
-
 msgid "Use Gravatar when a contact has no photo"
 msgstr "Utilitza el Gravatar quan un contacte no té foto"
 
@@ -6727,18 +7072,32 @@ msgstr "Envia a Gravatar un hash de l'adreça del remitent."
 msgid "Show sender logos"
 msgstr "Mostra els logotips dels remitents"
 
-msgid ""
-"Most are fetched from the sender's domain, which learns your IP address."
-msgstr ""
-"La majoria s'obtenen del domini del remitent, que llavors aprèn la teva "
-"adreça IP."
-
 #, fuzzy
 msgid "Send read receipts"
 msgstr "Amaga els destinataris"
 
-msgid "A receipt tells the sender when you opened the message."
+#. Not "On This Computer": that names an account kind.
+#, fuzzy
+msgid "Stored Mail"
+msgstr "Proton Mail"
+
+#, fuzzy
+msgid "Encrypt stored mail"
+msgstr "Missatge xifrat"
+
+#, fuzzy
+msgid "Encrypt Stored Mail?"
+msgstr "Xifrat"
+
+msgid ""
+"Mail stored on this computer will be encrypted at the next start which can "
+"take a few minutes. Earlier versions of the app cannot open it. Turn this "
+"setting off and restart before going back to an older version."
 msgstr ""
+
+#, fuzzy
+msgid "Encrypt"
+msgstr "Xifrat"
 
 msgid "Open at startup"
 msgstr "Obre en iniciar"
@@ -6762,9 +7121,6 @@ msgstr "Arrossegar una carpeta canvia a «Ordre personalitzat»."
 msgid "Chevron placement"
 msgstr "Col·locació del xevró"
 
-msgid "Fold accounts with one click"
-msgstr "Replega els comptes amb un clic"
-
 msgid "When off, only its chevron or a double click activates the fold."
 msgstr ""
 "Quan està desactivat, només el seu xevró o un doble clic activen el replegat."
@@ -6774,9 +7130,6 @@ msgstr "Mostra el navegador d'adjunts"
 
 msgid "Browse every account's attachments in one place."
 msgstr "Navega pels adjunts de cada compte en un sol lloc."
-
-msgid "Expand the sidebar on hover"
-msgstr "Expandeix la barra lateral en passar-hi per sobre"
 
 msgid "Hovering the icon rail floats the full sidebar out."
 msgstr ""
@@ -6797,29 +7150,14 @@ msgstr "Ressalta només el correu no llegit nou"
 msgid "A count turns grey once you have looked at the folder."
 msgstr "El recompte es torna gris un cop has mirat la carpeta."
 
-msgid "Unified"
-msgstr "Unificat"
-
 msgid "Shown only with more than one account."
 msgstr "Només es mostra amb més d'un compte."
-
-msgid "Inboxes"
-msgstr "Bústies d'entrada"
-
-msgid "Snoozed"
-msgstr ""
 
 msgid "Shown only while mail is snoozed."
 msgstr ""
 
-msgid "Unread counts"
-msgstr "Recomptes de no llegits"
-
 msgid "Shown on the unified rows while they are folded up."
 msgstr "Es mostren a les files unificades mentre estan replegades."
-
-msgid "Sections"
-msgstr "Seccions"
 
 msgid "Section style"
 msgstr "Estil de secció"
@@ -6835,9 +7173,6 @@ msgstr "Col·locació dels preferits"
 
 msgid "Icon rail"
 msgstr "Barra d'icones"
-
-msgid "Unread dots instead of counts"
-msgstr "Punts de no llegit en lloc de recomptes"
 
 msgid "The count stays in the tooltip."
 msgstr "El recompte es manté a l'informació emergent."
@@ -7159,9 +7494,6 @@ msgstr "Encara no hi ha comptes"
 
 msgid "New Message from Template…"
 msgstr "Missatge nou a partir d'una plantilla…"
-
-msgid "Favorites"
-msgstr "Preferits"
 
 msgid "Show each inbox"
 msgstr "Mostra cada bústia d'entrada"
@@ -7538,6 +7870,16 @@ msgstr "S'està eliminant l'adjunt…"
 msgid "Could not remove the attachment: {e}"
 msgstr "No s'ha pogut eliminar l'adjunt: {e}"
 
+msgid ""
+"GNOME Online Accounts could not provide a sign-in token for {email}. Open "
+"Settings → Online Accounts and sign in again."
+msgstr ""
+
+msgid ""
+"Microsoft did not accept the saved sign-in for {email}. Open Hylki's "
+"Settings → Mail Accounts and sign in to it again."
+msgstr ""
+
 msgid "The attachment is no longer in the message on the server"
 msgstr "L'adjunt ja no és al missatge del servidor"
 
@@ -7810,6 +8152,10 @@ msgstr "no s'ha pogut llegir la resposta del servidor (començava: {reply})"
 
 msgid "Could not load {path}: {e}"
 msgstr "No s'ha pogut carregar {path}: {e}"
+
+#, fuzzy
+msgid "This message was moved or deleted on the server."
+msgstr "Aquest missatge és massa llarg per enviar-lo a traduir."
 
 msgid "Could not load conversation: {e}"
 msgstr "No s'ha pogut carregar la conversa: {e}"
@@ -8247,7 +8593,8 @@ msgstr "Utilitza les inicials"
 msgid "Send-as aliases"
 msgstr "Àlies d'enviament"
 
-msgid "Extra addresses this account can send as."
+#, fuzzy
+msgid "Extra names and addresses this account can send as."
 msgstr "Adreces addicionals amb què aquest compte pot enviar."
 
 msgid "Add Alias…"
@@ -8270,6 +8617,13 @@ msgstr "Importa un fitxer…"
 
 msgid "Delete Signature"
 msgstr "Suprimeix la signatura"
+
+#, fuzzy
+msgid "Sender name"
+msgstr "Nom de la carpeta"
+
+msgid "Replaces the account's name in From. Aliases keep their own."
+msgstr ""
 
 msgid "Start messages with this signature"
 msgstr "Comença els missatges amb aquesta signatura"
@@ -8383,14 +8737,8 @@ msgstr "Desa una còpia del correu enviat a"
 msgid "Save a copy of replies in"
 msgstr "Desa una còpia de les respostes a"
 
-msgid "Server saves its own copy of sent mail"
-msgstr "El servidor desa la seva pròpia còpia del correu enviat"
-
 msgid "For Gmail and others that file sent mail themselves."
 msgstr "Per al Gmail i altres que arxiven ells mateixos el correu enviat."
-
-msgid "Templates"
-msgstr "Plantilles"
 
 msgid "Hidden Folders"
 msgstr "Carpetes amagades"
@@ -8516,61 +8864,6 @@ msgstr ""
 msgid "Always fold the right group into ⋯"
 msgstr ""
 
-msgid ""
-"The parts switched on below hide while Focus Mode is on. Activated by "
-"Ctrl+Shift+F or the main menu."
-msgstr ""
-"Les parts activades a sota s'amaguen mentre el mode d'enfocament està "
-"activat. S'activa amb Ctrl+Maj+F o el menú principal."
-
-msgid "Start in Focus Mode"
-msgstr "Comença en mode d'enfocament"
-
-msgid "Fold the reading pane's toolbar"
-msgstr "Replega la barra d'eines del panell de lectura"
-
-msgid "Every button goes into its ⋯ menu."
-msgstr "Tots els botons van al seu menú ⋯."
-
-msgid "Fold the message list's header"
-msgstr "Replega l'encapçalament de la llista de missatges"
-
-msgid "Everything but the sidebar toggle goes into ⋯."
-msgstr "Tot menys l'alternador de la barra lateral va a ⋯."
-
-msgid "Hide the accounts in the sidebar"
-msgstr "Amaga els comptes a la barra lateral"
-
-msgid "Only the unified section stays."
-msgstr "Només queda la secció unificada."
-
-msgid "Fold up the unified rows"
-msgstr "Replega les files unificades"
-
-msgid "Hide sender avatars"
-msgstr "Amaga els avatars dels remitents"
-
-msgid "Hide the preview text"
-msgstr "Amaga el text de previsualització"
-
-msgid "One line of preview text"
-msgstr "Una línia de text de previsualització"
-
-msgid "Hide the subject"
-msgstr "Amaga l'assumpte"
-
-msgid "Tag chips hide with it."
-msgstr "Les etiquetes s'amaguen amb ella."
-
-msgid "Fold the sidebar to the icon rail"
-msgstr "Replega la barra lateral a la barra d'icones"
-
-msgid "Hovering it slides the full sidebar out."
-msgstr "Passar-hi per sobre desplega la barra lateral sencera."
-
-msgid "Open messages in Reader View."
-msgstr "Obre els missatges a la vista de lector."
-
 msgid "Compose in the main window"
 msgstr "Redacta a la finestra principal"
 
@@ -8619,6 +8912,17 @@ msgstr "Sempre expandit"
 msgid "Start new messages in"
 msgstr "Comença els missatges nous en"
 
+msgid "Reply in the original's format"
+msgstr "Respon en el format de l'original"
+
+#, fuzzy
+msgid "Ask before switching to plain text"
+msgstr "Vols canviar a text pla?"
+
+#, fuzzy
+msgid "Only when formatting, images or links would be removed."
+msgstr "El format, les imatges i els enllaços s'eliminen."
+
 msgid "For rich text. Default leaves it to the recipient's own font."
 msgstr "Per al text enriquit. Per defecte deixa la font del destinatari."
 
@@ -8627,12 +8931,6 @@ msgstr "Per al text enriquit, en punts."
 
 msgid "Default zoom"
 msgstr "Zoom per defecte"
-
-msgid "Reply in the original's format"
-msgstr "Respon en el format de l'original"
-
-msgid "Plain-text mail is answered in plain text."
-msgstr "El correu de text pla es respon en text pla."
 
 msgid "Signature in replies"
 msgstr "Signatura a les respostes"
@@ -8986,6 +9284,18 @@ msgstr "Enganxa amb format"
 msgid "Paste as Plain Text"
 msgstr "Enganxa com a text pla"
 
+#, fuzzy
+msgid "Cut"
+msgstr "País"
+
+#, fuzzy
+msgid "Select All"
+msgstr "Elimina-ho tot"
+
+#, fuzzy
+msgid "Insert Emoji"
+msgstr "Insereix un emoji"
+
 msgid "Email Client"
 msgstr "Client de correu"
 
@@ -9119,6 +9429,41 @@ msgstr "La bústia d'entrada unificada en mode clar"
 
 msgid "Hyprlab"
 msgstr "Hyprlab"
+
+#~ msgid "Plain-text mail is answered in plain text."
+#~ msgstr "El correu de text pla es respon en text pla."
+
+#~ msgid "Remote content can tell a sender when and where you read."
+#~ msgstr "El contingut remot pot dir a un remitent quan i on llegeixes."
+
+#~ msgid ""
+#~ "The badge beside the sender stays. A possible forgery always shows the "
+#~ "banner."
+#~ msgstr ""
+#~ "La insígnia al costat del remitent es manté. Una possible falsificació "
+#~ "sempre mostra el bàner."
+
+#~ msgid ""
+#~ "Most are fetched from the sender's domain, which learns your IP address."
+#~ msgstr ""
+#~ "La majoria s'obtenen del domini del remitent, que llavors aprèn la teva "
+#~ "adreça IP."
+
+#~ msgid ""
+#~ "The parts switched on below hide while Focus Mode is on. Activated by "
+#~ "Ctrl+Shift+F or the main menu."
+#~ msgstr ""
+#~ "Les parts activades a sota s'amaguen mentre el mode d'enfocament està "
+#~ "activat. S'activa amb Ctrl+Maj+F o el menú principal."
+
+#~ msgid "Hide the preview text"
+#~ msgstr "Amaga el text de previsualització"
+
+#~ msgid "One line of preview text"
+#~ msgstr "Una línia de text de previsualització"
+
+#~ msgid "Hovering it slides the full sidebar out."
+#~ msgstr "Passar-hi per sobre desplega la barra lateral sencera."
 
 #~ msgid "Not spam"
 #~ msgstr "No és brossa"

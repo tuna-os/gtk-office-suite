@@ -29,6 +29,7 @@ mod showcase;
 mod signature;
 mod subject;
 mod suggest;
+mod template;
 #[cfg(test)]
 mod tests;
 mod text_diff;
@@ -49,7 +50,7 @@ use showcase::showcase_hooks;
 use signature::sig_html;
 use subject::wire_subject;
 use suggest::{load_suggestions, wire_recipient_rows};
-pub(crate) use types::{ComposeAccount, ComposeInit, ComposePrefill};
+pub(crate) use types::{ComposeAccount, ComposeInit, ComposePrefill, Original};
 
 /// The composer's widgets: the ones the rest of the module reaches by field,
 /// and the ones that follow the model, which `apply` sets from it at build and
@@ -554,6 +555,7 @@ impl Component for Compose {
             decorations,
             format,
             signature_position,
+            has_templates,
         } = init;
         let in_reply_to = prefill.in_reply_to.clone();
         let references = prefill.references.clone();
@@ -687,6 +689,7 @@ impl Component for Compose {
                 accounts
                     .get(selected)
                     .is_some_and(|a| !a.signatures.is_empty()),
+                has_templates,
                 &sender,
             );
 
@@ -1150,7 +1153,7 @@ impl Component for Compose {
 
                 ComposeInput::MailMerge => self.on_mail_merge(widgets, &sender),
 
-                ComposeInput::MergeFields(target) => self.on_merge_fields(target, widgets, &sender),
+                ComposeInput::MergeFields(target) => self.on_merge_fields(target, widgets),
 
                 ComposeInput::MergeBody(fields) => self.on_merge_body(fields, widgets, &sender),
 
@@ -1162,6 +1165,14 @@ impl Component for Compose {
 
                 ComposeInput::SaveDraft => self.on_save_draft(false, widgets, &sender),
                 ComposeInput::SaveAsTemplate => self.on_save_draft(true, widgets, &sender),
+
+                ComposeInput::InsertTemplate => {
+                    let _ = sender.output(ComposeOutput::PickTemplate {
+                        id: self.compose_id,
+                    });
+                }
+
+                ComposeInput::TemplateBody(html) => self.insert_template(html),
 
                 ComposeInput::SaveDraftBody {
                     fields,

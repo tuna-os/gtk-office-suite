@@ -776,6 +776,19 @@ flowbox.attach-flow > flowboxchild {
   margin-left: -14px;
 }
 
+/* Focus Mode with Unread counts off. The Outbox count is not an unread count:
+   it says mail has not left yet. */
+.no-unread-counts label.unread-badge:not(.outbox-count) {
+  opacity: 0;
+  background: none;
+  box-shadow: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 1px;
+}
+
 /* ---- Message list ---- */
 
 /* The boxes above and below the rows that hold search and the bulk bar,
@@ -1521,11 +1534,11 @@ headerbar box.list-tools.compact button {
 
 /* ---- Notifications ---- */
 
-/* The bar uses the desktop accent color (libadwaita maps the GNOME accent to
-   @accent_bg_color, defaulting to #3584e4); errors turn amber. */
+/* The bar is always the same blue, whatever the accent color; errors and
+   the offline line turn it amber. */
 .notify-area {
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
+  background-color: #3383e0;
+  color: #ffffff;
 }
 
 .notify-area.error {
@@ -1864,18 +1877,14 @@ headerbar box.list-tools.compact button {
   opacity: 0.85;
 }
 
-/* Type-tinted attachment icons (symbolic icons follow `color`). Colors read
-   on both light and dark backgrounds. */
-.ftype-pdf      { color: #e01b24; } /* red    — PDF */
-.ftype-doc      { color: #3584e4; } /* blue   — Word / documents */
-.ftype-sheet    { color: #2ec27e; } /* green  — Excel / spreadsheets */
-.ftype-slides   { color: #ff7800; } /* orange — PowerPoint / presentations */
-.ftype-archive  { color: #e5a50a; } /* amber  — zip / archives */
-.ftype-audio    { color: #9141ac; } /* purple — audio */
-.ftype-video    { color: #e6689e; } /* pink   — video */
-.ftype-calendar { color: #009e8f; } /* teal   — calendar */
-.ftype-image    { color: #1c9bd8; } /* cyan   — images */
-.ftype-generic  { color: #8c8c8c; } /* grey   — everything else */
+/* Type-tinted attachment icons (symbolic icons follow `color`), in the
+   theme's colors (#651). A PDF wears the error color, as the importance mark
+   does; the other kinds take GNOME palette steps chosen by scheme, which the
+   scheme provider sets (thumbnails::FTYPE_PALETTE, app/theme.rs). An image
+   and anything unknown stay grey. */
+.ftype-pdf      { color: var(--error-color); }
+.ftype-image,
+.ftype-generic  { color: alpha(currentColor, 0.55); }
 
 /* Quick-open button on the thumbnail, revealed on hover. */
 .gallery-open {
@@ -1913,6 +1922,11 @@ headerbar box.list-tools.compact button {
 /* The page for an item with no picture sits on the dark ground in any theme. */
 .gallery-lightbox-file {
   color: white;
+}
+/* Its file-type icon too: the dark scheme's tints whatever the scheme (the
+   palette kinds are in the scheme provider). */
+.gallery-lightbox .ftype-pdf {
+  color: oklab(from var(--error-bg-color) max(l, 0.85) a b);
 }
 
 /* In-message attachment drawer (footer beneath the reader body). */

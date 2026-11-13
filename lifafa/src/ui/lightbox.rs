@@ -58,6 +58,8 @@ pub(crate) enum LightboxInput {
     OpenCurrent,
     /// Save the shown item via a file chooser.
     DownloadCurrent,
+    /// Print the shown item: Ctrl+P while the lightbox is open (#632).
+    PrintCurrent,
     /// A full-size PDF render finished (content hash, and the page unless
     /// it failed): show it if that item is still on screen.
     Rendered(u64, Option<gtk::gdk::Texture>),
@@ -82,6 +84,7 @@ pub(crate) struct LightboxWidgets {
     file_icon: gtk::Image,
     bottom_bar: gtk::CenterBox,
     caption: gtk::Label,
+    print: gtk::Button,
 }
 
 impl LightboxWidgets {
@@ -122,6 +125,7 @@ impl LightboxWidgets {
 
         self.bottom_bar.set_visible(normal);
         self.caption.set_label(&model.caption());
+        self.print.set_sensitive(model.printable());
     }
 }
 
@@ -220,6 +224,9 @@ fn build_widgets(root: &gtk::Box, sender: &ComponentSender<Lightbox>, model: &Li
     let open = icon_button("document-open-symbolic", &i18n("Open"), &["flat"]);
     on_click(&open, sender, || LightboxInput::OpenCurrent);
     actions.append(&open);
+    let print = icon_button("printer-symbolic", &i18n("Print…"), &["flat"]);
+    on_click(&print, sender, || LightboxInput::PrintCurrent);
+    actions.append(&print);
     let download = icon_button("folder-download-symbolic", &i18n("Download…"), &["flat"]);
     on_click(&download, sender, || LightboxInput::DownloadCurrent);
     actions.append(&download);
@@ -239,6 +246,7 @@ fn build_widgets(root: &gtk::Box, sender: &ComponentSender<Lightbox>, model: &Li
         file_icon,
         bottom_bar,
         caption,
+        print,
     };
     widgets.apply(model);
     widgets
@@ -385,6 +393,12 @@ impl Component for Lightbox {
                     );
                 }
             }
+            LightboxInput::PrintCurrent => {
+                if let Some(att) = self.items.get(self.pos) {
+                    let window = root.root().and_downcast::<gtk::Window>();
+                    crate::ui::print_preview::print_attachment(&att.name, &att.data, window);
+                }
+            }
             LightboxInput::Rendered(key, page) => {
                 let still_current = self
                     .items
@@ -399,6 +413,20 @@ impl Component for Lightbox {
 }
 
 impl Lightbox {
+    /// Whether the lightbox covers its window: the window's Ctrl+P then
+    /// prints the attachment rather than the message under it.
+    pub(crate) fn is_open(&self) -> bool {
+        !self.items.is_empty()
+    }
+
+    /// An image that does not decode has nothing to print; a PDF poppler
+    /// cannot open may still print, as the printer reads it, not poppler.
+    fn printable(&self) -> bool {
+        self.items
+            .get(self.pos)
+            .is_some_and(|a| !(self.no_preview && crate::models::is_image_name(&a.name)))
+    }
+
     /// Escape and the arrow keys drive the lightbox from anywhere in its
     /// window: capture phase, and only while it is open, so typing
     /// elsewhere is untouched.
