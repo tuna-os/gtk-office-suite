@@ -39,3 +39,63 @@ jobs:
         with:
           name: typing-lab
           path: typing-lab.txt
+
+  # The journeys that lost a "p" in the release soak, run many times on a
+  # debug build and on a release build: does the build profile matter?
+  apps:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install GTK4 + libadwaita dev libraries and the GUI test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils \
+            dbus at-spi2-core matchbox-window-manager xdotool x11-utils \
+            python3-dogtail python3-pytest python3-pil python3-requests
+          python3 -m pip install --break-system-packages mss
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          key: typing-lab-${{ matrix.profile }}
+      - name: Build the apps
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          if [ "$PROFILE" = release ]; then flag=--release; else flag=; fi
+          cargo build $flag --bin letters --bin tables --bin decks
+      - name: Run the journeys that lost a p, 50 times
+        env:
+          GUI_TEST_PROFILE: ${{ matrix.profile }}
+          GUI_TEST_VERIFY_TYPING: '1'
+        run: |
+          python3 tests/gui/stress.py \
+            --repeat 50 --timeout 3000 \
+            --select "test_clear_filter_keeps_manual_hides or test_copy_paste_round_trip or test_a_comment_is_added_replied_to_and_resolved or test_a_protected_sheet_refuses_an_edit_with_a_message_and_unprotect_allows_it" \
+            --output "$GITHUB_WORKSPACE/lab-apps"
+      - name: Summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          m = json.load(open("lab-apps/manifest.json"))
+          print(json.dumps(m.get("summary", {}), indent=2))
+          for a in m["attempts"]:
+              for f in a["failures"]:
+                  print(a["classification"], f.get("journey"), "|", (f.get("message") or "")[:140])
+          PY
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: typing-lab-apps-${{ matrix.profile }}
+          path: lab-apps
+          retention-days: 14
+          if-no-files-found: warn
