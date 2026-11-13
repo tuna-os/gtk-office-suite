@@ -13,9 +13,11 @@ src/app/compose_init.rs
 src/app/compose_open.rs
 src/app/demo.rs
 src/app/filter_forward.rs
+src/app/keymap.rs
 src/app/msg.rs
 src/app/outbox.rs
 src/app/outgoing.rs
+src/app/palette.rs
 src/app/prefill.rs
 src/app/receipts.rs
 src/app/router.rs
@@ -36,6 +38,7 @@ src/config/filter_tests.rs
 src/config/secrets.rs
 src/desktop/brand.rs
 src/desktop/platform.rs
+src/main.rs
 src/mcp/server.rs
 src/models/outbox.rs
 src/models/tests.rs
@@ -58,6 +61,7 @@ src/ui/compose/send.rs
 src/ui/compose/types.rs
 src/ui/message_row/shared.rs
 src/ui/message_view/tests/document.rs
+src/ui/notifications.rs
 src/ui/recipient_row.rs
 src/ui/welcome.rs
 src/ui/welcome/manual.rs

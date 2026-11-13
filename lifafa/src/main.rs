@@ -300,6 +300,11 @@ fn is_first_run() -> bool {
 /// Handlers that must run in GTK's `startup`, before relm4's builds a window.
 fn install_startup_handlers(adw_app: &adw::Application) {
     use gtk::gio::prelude::ApplicationExt;
+    // The suite's first-run welcome (INTEGRATION-PLAN C5), shared with
+    // Letters, Tables and Decks: once for the whole suite, naming the suite
+    // apps that are not installed. Silent where the shared org.tunaos.suite
+    // schema is not installed, and with SUITE_NO_WELCOME set.
+    suite_common::welcome::install(adw_app, suite_common::welcome::SuiteApp::Lifafa);
     // Every window's text fields open their emoji chooser at the cursor.
     adw_app.connect_startup(|_| crate::ui::emoji::follow_all());
     // GTK takes its direction from its own gtk40 catalogue ("default:LTR"
