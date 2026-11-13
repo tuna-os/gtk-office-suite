@@ -5,7 +5,7 @@
 //! records.
 
 use dcp_core::StoreError;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use matrix_sdk::reqwest;
 use serde_json::{json, Value};
 use sha1::Sha1;
