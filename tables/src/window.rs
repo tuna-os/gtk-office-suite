@@ -398,9 +398,7 @@ impl TablesWindow {
                     let c = sh.selected_col;
                     if let Some(rule) = &sh.validations[r][c] {
                         if !rule.validate(&val) {
-                            let toast = adw::Toast::new("Invalid input — value rejected");
-                            toast.set_timeout(3);
-                            toasts.add_toast(toast);
+                            suite_common::toast_manager::show(&toasts, &suite_common::i18n("Invalid input — value rejected"));
                             return;
                         }
                     }

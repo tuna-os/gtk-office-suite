@@ -9,6 +9,9 @@ sources instead, and fails when an app drops one of the standard pieces:
 - Ctrl+, opens Preferences (Mandelbrot: Account Settings),
 - a Keyboard Shortcuts item, and
 - an About item.
+
+Letters, Tables and Decks also show their toasts through suite-common's
+`toast_manager`, never with an `adw::Toast` of their own.
 """
 
 import os
@@ -46,6 +49,20 @@ class SuiteApps(unittest.TestCase):
     def test_the_main_menu_has_shortcuts_and_about(self):
         self.assertIn('Some("app.shortcuts")', self.src)
         self.assertIn('Some("app.about")', self.src)
+
+    def test_toasts_go_through_suite_common(self):
+        """Toasts are shown by suite_common::toast_manager, so they stay as
+        long in every app (its `timeout_for`) instead of each call site
+        picking a number."""
+        import glob
+        own = []
+        for app in ("letters", "tables", "decks"):
+            for path in sorted(glob.glob(os.path.join(ROOT, app, "src", "**", "*.rs"), recursive=True)):
+                with open(path, encoding="utf-8") as f:
+                    for n, line in enumerate(f, 1):
+                        if re.search(r"\bToast::(new|builder)\b", line):
+                            own.append("%s:%d" % (os.path.relpath(path, ROOT), n))
+        self.assertEqual([], own)
 
 
 class Lifafa(unittest.TestCase):
