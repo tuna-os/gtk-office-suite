@@ -145,16 +145,15 @@ jobs:
           # job built release ones (every attempt of the first soaks failed in
           # setUp with "Binary not found" and was reported as a product crash).
           GUI_TEST_PROFILE: release
-          # Release binaries are quicker than the debug ones the smoke job
-          # types into, and xdotool's 40ms default dropped a letter of
-          # "apple" in 7 of the first soak's 14 attempts (#1209, #1951).
-          # Pacing the input is not weakening an assertion; verifying
-          # delivery makes a keystroke that never landed say so.
-          GUI_TEST_TYPING_DELAY: '0.12'
+          # Verifying delivery makes a keystroke that never landed say so
+          # (`input-not-delivered`). Slower typing was tried (0.12s) and did
+          # not help: the same letter, "p", was lost at 0.04s and at 0.12s
+          # ("apple" -> "aple", "kept" -> "ket"), and the slower input made
+          # an attempt take 29 minutes, which hit the 30-minute limit below.
           GUI_TEST_VERIFY_TYPING: '1'
         run: |
           python3 tests/gui/stress.py \
-            --repeat 2 \
+            --repeat 2 --timeout 3600 \
             --seed "$(( (RUN_ID % 100000000) * 100 + SHARD ))" \
             --output "$GITHUB_WORKSPACE/soak-baseline"
 
@@ -208,11 +207,10 @@ jobs:
       - name: The complete display matrix, once
         env:
           GUI_TEST_PROFILE: release
-          GUI_TEST_TYPING_DELAY: '0.12'
           GUI_TEST_VERIFY_TYPING: '1'
         run: |
           python3 tests/gui/stress.py \
-            --repeat 1 --matrix display \
+            --repeat 1 --matrix display --timeout 3600 \
             --output "$GITHUB_WORKSPACE/soak-matrix"
 
       - name: Upload soak evidence
