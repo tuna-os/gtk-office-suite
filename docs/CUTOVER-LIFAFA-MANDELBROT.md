@@ -26,7 +26,24 @@ The suite's own apps publish the way Mandelbrot does: `publish-flatpak.yml`
 calls `tuna-os/.github`'s reusable workflow per app, to GHCR and the TunaOS
 remote, behind the evidence and soak gates.
 
-## 0. Decisions to make first
+## 0. Decisions
+
+Taken on 2026-11-13; change them here if they turn out wrong.
+
+- **Code:** this repository is where both apps are maintained from now on.
+  The standalone repositories take no new work; anything merged there before
+  they are frozen is carried here.
+- **Lifafa's channel:** the TunaOS OCI remote, with the Pages OSTree repository
+  still published until two releases have gone out on both.
+- **Tags:** `lifafa-v<version>` and `mandelbrot-v<version>`, each app keeping its
+  own version (Lifafa's follows upstream Hylki's).
+- **Upstream:** Lifafa keeps tracking hyprlab/hylki; Mandelbrot records its
+  Fractal base and pulls in Fractal changes by hand.
+- **Gates:** their releases wait on their CI (`lifafa.yml`, `mandelbrot.yml`)
+  until they have journeys of their own (INTEGRATION-PLAN B12), then on those.
+
+The questions those answer:
+
 
 - [ ] **Where the code is maintained.** This repository, from a named date.
   Until then the standalone repository stays authoritative and changes made
