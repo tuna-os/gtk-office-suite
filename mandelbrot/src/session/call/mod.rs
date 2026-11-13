@@ -33,6 +33,8 @@ mod camera;
 mod client_api;
 #[cfg(feature = "calls-media")]
 mod media;
+#[cfg(feature = "calls-media")]
+mod screen;
 
 pub(crate) use self::client_api::SdkRtcClientApi;
 use super::Session;
@@ -110,6 +112,18 @@ struct CameraSlot {
     starting: bool,
 }
 
+/// The local screen share of a room (INTEGRATION-PLAN A5, ADR 0016).
+#[cfg(feature = "calls-media")]
+#[derive(Debug, Default)]
+struct ScreenSlot {
+    /// Where the shared frames are sent, shared with the media task.
+    sink: Arc<camera::CameraSink>,
+    /// The ongoing share, if any.
+    capture: Option<screen::ScreenCapture>,
+    /// Whether the portal is being asked what to share.
+    starting: bool,
+}
+
 mod imp {
     use std::cell::RefCell;
 
@@ -133,6 +147,9 @@ mod imp {
         /// The local camera, per room.
         #[cfg(feature = "calls-media")]
         pub(super) cameras: RefCell<HashMap<OwnedRoomId, super::CameraSlot>>,
+        /// The local screen share, per room.
+        #[cfg(feature = "calls-media")]
+        pub(super) screens: RefCell<HashMap<OwnedRoomId, super::ScreenSlot>>,
         /// The preferred foci from the `.well-known` of our homeserver.
         pub(super) preferred_foci: RefCell<Vec<Transport>>,
         /// Guards keeping the SDK event handlers alive.
@@ -434,6 +451,15 @@ impl CallManager {
                     obj.set_camera_enabled(&camera_room_id, state.camera_on());
                 }
             ));
+
+            let screen_room_id = room_id.to_owned();
+            state.connect_screen_shared_notify(clone!(
+                #[weak(rename_to = obj)]
+                self,
+                move |state| {
+                    obj.set_screen_shared(&screen_room_id, state.screen_shared());
+                }
+            ));
         }
 
         self.imp()
@@ -523,6 +549,124 @@ impl CallManager {
                 }
             }
         ));
+    }
+
+    /// Share a screen or window into the call in the given room, or stop.
+    ///
+    /// Starting asks the person what to share, through the ScreenCast
+    /// portal's picker. If they cancel, or it fails, sharing is turned back
+    /// off in the call state; it is also turned off when the stream ends on
+    /// its own, such as from the desktop's sharing indicator.
+    #[cfg(feature = "calls-media")]
+    fn set_screen_shared(&self, room_id: &RoomId, shared: bool) {
+        if !shared {
+            let capture = self
+                .imp()
+                .screens
+                .borrow_mut()
+                .get_mut(room_id)
+                .and_then(|slot| slot.capture.take());
+
+            if capture.is_some() {
+                // Dropping the capture closes the portal session.
+                drop(capture);
+                self.screen_sink(room_id).notify_stopped();
+                debug!("Stopped sharing the screen in {room_id}");
+            }
+            return;
+        }
+
+        {
+            let mut screens = self.imp().screens.borrow_mut();
+            let slot = screens.entry(room_id.to_owned()).or_default();
+            if slot.capture.is_some() || slot.starting {
+                return;
+            }
+            slot.starting = true;
+        }
+
+        let sink = self.screen_sink(room_id);
+        let room_id = room_id.to_owned();
+        spawn!(clone!(
+            #[weak(rename_to = obj)]
+            self,
+            async move {
+                let ended_room_id = room_id.clone();
+                let weak_obj = obj.downgrade();
+                let on_ended = move || {
+                    let Some(obj) = weak_obj.upgrade() else {
+                        return;
+                    };
+                    // Not while `states` is borrowed: the notify reaches back
+                    // into the manager.
+                    let state = obj.imp().states.borrow().get(&ended_room_id).cloned();
+                    if let Some(state) = state {
+                        state.set_screen_shared(false);
+                    }
+                };
+                let result = screen::ScreenCapture::new(sink, on_ended).await;
+
+                let started = {
+                    let mut screens = obj.imp().screens.borrow_mut();
+                    let Some(slot) = screens.get_mut(&room_id) else {
+                        return;
+                    };
+                    slot.starting = false;
+
+                    match result {
+                        Ok(capture) => {
+                            slot.capture = Some(capture);
+                            true
+                        }
+                        Err(error) => {
+                            warn!("Could not share the screen: {error}");
+                            false
+                        }
+                    }
+                };
+
+                if !started {
+                    let state = obj.imp().states.borrow().get(&room_id).cloned();
+                    if let Some(state) = state {
+                        state.set_screen_shared(false);
+                    }
+                }
+            }
+        ));
+    }
+
+    /// The sink receiving the shared frames of the given room.
+    #[cfg(feature = "calls-media")]
+    fn screen_sink(&self, room_id: &RoomId) -> Arc<camera::CameraSink> {
+        Arc::clone(
+            &self
+                .imp()
+                .screens
+                .borrow_mut()
+                .entry(room_id.to_owned())
+                .or_default()
+                .sink,
+        )
+    }
+
+    /// Share a screen or window into the call that is going on, for the
+    /// application's `share-screen` action (Decks' "Present in Call…", ADR
+    /// 0016). Returns whether there was a call to share into.
+    pub(crate) fn share_screen_in_active_call(&self) -> bool {
+        let state = self
+            .imp()
+            .calls
+            .borrow()
+            .values()
+            .next()
+            .map(|call| call.state.clone());
+        match state {
+            Some(state) => {
+                state.set_screen_shared(true);
+                true
+            }
+            None => false,
+        }
     }
 
     /// The sink receiving the frames of the local camera of the given room.
@@ -670,6 +814,7 @@ impl CallManager {
     ) {
         let foci = self.imp().preferred_foci.borrow().clone();
         let camera_sink = self.camera_sink(room_id);
+        let screen_sink = self.screen_sink(room_id);
         let (handle, mut media_events) = media::start(
             client.clone(),
             room_id.to_owned(),
@@ -677,6 +822,7 @@ impl CallManager {
             Arc::clone(engine),
             foci,
             &camera_sink,
+            &screen_sink,
         );
         handle.set_muted(state.muted());
 
@@ -711,6 +857,10 @@ impl CallManager {
         {
             call.state.set_camera_on(false);
             self.imp().cameras.borrow_mut().remove(room_id);
+            // And stop sharing: dropping the capture closes the portal
+            // session.
+            call.state.set_screen_shared(false);
+            self.imp().screens.borrow_mut().remove(room_id);
         }
 
         let engine = Arc::clone(&call.engine);

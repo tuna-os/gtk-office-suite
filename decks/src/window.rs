@@ -627,6 +627,7 @@ impl DecksWindow {
         suite_win.add_top_bar(&toolbar);
         // Export as PDF, handouts and PNG, and their menu section (export_ui.rs).
         crate::export_ui::register(app, &suite_win.window, &suite_win.header_bar, &controller);
+        crate::call_ui::register(app, &suite_win.window, &suite_win.header_bar);
         let handles = crate::canvas_keys::EditorHandles {
             window: &suite_win.window,
             canvas: &canvas,
