@@ -20,6 +20,12 @@ homepage = "https://hylki.hyprlab.co"
 beta = []
 
 [dependencies]
+# The office suite's shared GTK pieces (INTEGRATION-PLAN C1, C5): Lifafa is on
+# the suite's gtk4 0.11 and libadwaita 0.9, so it links the same code rather
+# than copying it. Outside this tree (the root workspace excludes lifafa/), so
+# a Flatpak build of Lifafa has to bring ../suite-common and
+# ../suite-common-core along (docs/CUTOVER-LIFAFA-MANDELBROT.md, step 2).
+suite-common = { path = "../suite-common" }
 # v4_14 for GtkPrintDialog: printing needs an async dialog, because the older
 # blocking one spins a nested main loop and glib's future executor aborts when
 # re-entered (see MessageViewInput::Print). The GNOME 50 runtime has GTK 4.20.
