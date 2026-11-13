@@ -8,6 +8,7 @@ use super::*;
 pub(crate) struct PrefInit {
     pub(crate) auto_remote_content: bool,
     pub(crate) remote_ahead: bool,
+    pub(crate) clean_links: bool,
     pub(crate) show_remote_banner: bool,
     pub(crate) show_spoof_banner: bool,
     /// Answering requests for read receipts, and asking for them (#520).
@@ -113,6 +114,8 @@ pub(crate) struct PrefInit {
     pub(crate) compose_format: crate::config::ComposeFormat,
     /// Replies and forwards to plain-text mail are written in plain text (#436).
     pub(crate) follow_plain: bool,
+    /// Switching to plain text asks first when something would be lost.
+    pub(crate) ask_plain_switch: bool,
     /// Where the split reply opens in the reading pane (#212).
     pub(crate) reply_position: crate::config::ReplyPosition,
     /// Where the signature sits in a reply or forward (#237).
@@ -169,6 +172,7 @@ pub(crate) struct PrefInit {
     pub(crate) list_column_scroll: bool,
     pub(crate) list_group_by_date: bool,
     pub(crate) list_pills_below: bool,
+    pub(crate) list_follows_window: bool,
     pub(crate) list_search_open: bool,
     pub(crate) contacts_search_open: bool,
     pub(crate) contact_names: bool,
@@ -295,6 +299,10 @@ pub(crate) enum PrefInput {
     ToggleShowAccounts(bool),
     /// One of Focus Mode's switches.
     ToggleFocus(crate::config::FocusPart, bool),
+    /// Focus Mode's list layout, by its row in the combo.
+    SetFocusLayout(u32),
+    /// Focus Mode's preview lines: the row in the combo is the number of lines.
+    SetFocusPreviewLines(u32),
     /// The app's Focus Mode changed elsewhere (menu, shortcut): follow.
     SetFocusMode(crate::config::FocusMode),
     /// The main menu flipped "Show Accounts": the switch follows.
@@ -414,6 +422,7 @@ pub(crate) enum PrefOutput {
     PageShown(String),
     SetAutoRemoteContent(bool),
     SetRemoteAhead(bool),
+    SetCleanLinks(bool),
     SetShowRemoteBanner(bool),
     SetShowSpoofBanner(bool),
     SetReceipts(crate::config::ReceiptPolicy),
@@ -522,6 +531,8 @@ pub(crate) enum PrefOutput {
     SetGroupByDate(bool),
     /// A card's tags and labels on a line under its text (#374).
     SetPillsBelow(bool),
+    /// The list keeps its share of the window, not its width (#648).
+    SetListFollowsWindow(bool),
     /// Keep the list's search field open (#446).
     SetListSearchOpen(bool),
     /// Keep Contacts' search field open.
@@ -556,6 +567,7 @@ pub(crate) enum PrefOutput {
     SetPlainFont(String),
     SetComposeFormat(crate::config::ComposeFormat),
     SetFollowPlain(bool),
+    SetAskPlainSwitch(bool),
     SetReplyPosition(crate::config::ReplyPosition),
     SetSignaturePosition(crate::config::SignaturePosition),
     SetSignatureDashes(bool),

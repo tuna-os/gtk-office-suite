@@ -84,6 +84,7 @@ impl AppModel {
             | AppMsg::OpenAttachmentMessage { .. }) => self.on_gallery(msg),
             msg @ (AppMsg::UnifiedSelected(..)
             | AppMsg::AccountStarredSelected(..)
+            | AppMsg::StandInView
             | AppMsg::FolderSelected { .. }) => self.on_navigation(msg, sender),
             msg @ (AppMsg::AccountFolded { .. }
             | AppMsg::ToggleCustomFolders(..)
@@ -136,6 +137,7 @@ impl AppModel {
             | AppMsg::PopoutClosed(..)
             | AppMsg::AddContactFrom { .. }
             | AppMsg::PopoutMoveTo { .. }
+            | AppMsg::PopoutCopyTo { .. }
             | AppMsg::PopoutShortcut { .. }
             | AppMsg::ViewSource) => self.on_popout(msg, sender),
             msg @ (AppMsg::SetReadingPane(..)
@@ -292,6 +294,8 @@ impl AppModel {
             msg @ (AppMsg::NewFromTemplate
             | AppMsg::TemplatePickNow
             | AppMsg::TemplatePicked(..)
+            | AppMsg::PickTemplate { .. }
+            | AppMsg::TemplateInsertPicked { .. }
             | AppMsg::SaveDraftMessage(..)
             | AppMsg::SaveTemplateMessage(..)
             | AppMsg::AutoSaveDraft { .. }
@@ -491,6 +495,7 @@ impl AppModel {
             | PrefOutput::SetReceipts(..)
             | PrefOutput::SetAutoRemoteContent(..)
             | PrefOutput::SetRemoteAhead(..)
+            | PrefOutput::SetCleanLinks(..)
             | PrefOutput::SetThreading(..)
             | PrefOutput::SetThreadExpansion(..)
             | PrefOutput::SetThreadRowNewest(..)
@@ -522,6 +527,7 @@ impl AppModel {
             | PrefOutput::SetListBulkBarBottom(..)
             | PrefOutput::SetGroupByDate(..)
             | PrefOutput::SetPillsBelow(..)
+            | PrefOutput::SetListFollowsWindow(..)
             | PrefOutput::SetListColumns(..)
             | PrefOutput::SetPreviewLines(..)
             | PrefOutput::SetAttachmentsRow(..)
@@ -546,6 +552,7 @@ impl AppModel {
             | PrefOutput::SetSpellcheckLangs(..)
             | PrefOutput::SetComposeFormat(..)
             | PrefOutput::SetFollowPlain(..)
+            | PrefOutput::SetAskPlainSwitch(..)
             | PrefOutput::SetReplyPosition(..)
             | PrefOutput::SetSignaturePosition(..)
             | PrefOutput::SetSignatureDashes(..)

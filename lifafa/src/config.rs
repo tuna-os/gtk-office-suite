@@ -67,6 +67,11 @@ mod tests;
 /// hostnames, usernames, OAuth client secrets and correspondent lists. Creating
 /// with the mode already set closes it.
 pub(crate) fn write_private(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    write_private_bytes(path, contents.as_bytes())
+}
+
+/// [`write_private`] for bytes: the remote-content cache.
+pub(crate) fn write_private_bytes(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
@@ -76,15 +81,37 @@ pub(crate) fn write_private(path: &std::path::Path, contents: &str) -> std::io::
         opts.mode(0o600);
     }
     let mut f = opts.open(path)?;
-    f.write_all(contents.as_bytes())?;
     // An existing file keeps its old mode through `OpenOptions::mode`, which
-    // only applies at creation — so tighten regardless.
+    // only applies at creation, so it is tightened before anything goes in.
+    // Best effort: a document portal path may not take a mode.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+        let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
     }
-    Ok(())
+    f.write_all(contents)
+}
+
+/// Create `dir`, and any parent missing, for its owner alone, and tighten
+/// it if it already exists with more. A directory that refuses the mode stays
+/// usable: mail that cannot be kept would be worse than mail kept as it was.
+pub(crate) fn private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)?;
+        if std::fs::metadata(dir)?.permissions().mode() & 0o077 != 0 {
+            if let Err(e) = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)) {
+                tracing::warn!("could not make {} private: {e}", dir.display());
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(dir)
 }
 
 /// XDG base directories, with one twist: the beta channel running inside its
@@ -179,12 +206,42 @@ pub(crate) fn save_private_toml<T: serde::Serialize>(
     }
     match toml::to_string_pretty(value) {
         Ok(toml) => {
-            if let Err(e) = write_private(&path, &toml) {
+            if let Err(e) = replace_file(&path, |tmp| write_private(tmp, &toml)) {
                 tracing::warn!("could not save {what}: {e}");
             }
         }
         Err(e) => tracing::warn!("could not serialize {what}: {e}"),
     }
+}
+
+/// Write `path` through a file beside it that is then renamed over it, so
+/// the file is never seen half written (#642). Written in place, a logout
+/// that killed Hylki mid-write, or another thread reading at that moment,
+/// found it empty: every remembered setting fell back to its default, and
+/// the next save wrote the defaults back. A link is followed, so a config
+/// directory kept as links into a dotfiles tree stays that way.
+pub(crate) fn replace_file(
+    path: &std::path::Path,
+    write: impl FnOnce(&std::path::Path) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SERIAL: AtomicU32 = AtomicU32::new(0);
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // Unique per writer: two threads may save the same file at once.
+    let tmp = path.with_file_name(format!(
+        ".{name}.{}-{}.tmp",
+        std::process::id(),
+        SERIAL.fetch_add(1, Ordering::Relaxed)
+    ));
+    let done = write(&tmp).and_then(|()| std::fs::rename(&tmp, &path));
+    if done.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    done
 }
 
 /// Writes a settings file with the mode the umask gives, quietly: these
@@ -196,7 +253,7 @@ fn save_plain_toml<T: serde::Serialize>(path: Option<PathBuf>, value: &T) {
         let _ = std::fs::create_dir_all(dir);
     }
     if let Ok(toml) = toml::to_string_pretty(value) {
-        let _ = std::fs::write(&path, toml);
+        let _ = replace_file(&path, |tmp| std::fs::write(tmp, &toml));
     }
 }
 
