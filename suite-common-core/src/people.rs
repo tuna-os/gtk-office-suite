@@ -147,6 +147,53 @@ pub fn from_vcard(vcard: &str) -> Option<Person> {
     Some(Person { name, emails })
 }
 
+/// The Evolution Data Server query for every contact with an address: the
+/// picker has no use for the others, and a book of thousands is cheaper to
+/// read without them.
+pub const EDS_QUERY_WITH_EMAIL: &str = "(exists \"email\")";
+
+/// The newest of the versioned bus names `names` holds for `prefix`: EDS
+/// suffixes its interfaces with a number that grows across releases
+/// (`org.gnome.evolution.dataserver.AddressBook10`, `…Sources5`), so the
+/// name has to be looked up, and the highest wins when several are listed.
+pub fn eds_bus_name(names: &[String], prefix: &str) -> Option<String> {
+    names
+        .iter()
+        .filter_map(|name| Some((name.strip_prefix(prefix)?.parse::<u32>().ok()?, name)))
+        .max_by_key(|(version, _)| *version)
+        .map(|(_, name)| name.clone())
+}
+
+/// The UIDs of the address books among the EDS registry's sources, given as
+/// (UID, key file): a source with an `[Address Book]` group, unless its
+/// `[Data Source]` group says `Enabled=false` (what GNOME Online Accounts
+/// writes when Contacts is switched off for an account). Only that group's
+/// `Enabled` counts; other groups have keys of the same name.
+pub fn eds_address_books(sources: &[(String, String)]) -> Vec<String> {
+    sources
+        .iter()
+        .filter(|(_, data)| {
+            let mut group = "";
+            let mut is_book = false;
+            let mut disabled = false;
+            for line in data.lines().map(str::trim) {
+                if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+                    group = name;
+                    is_book |= name == "Address Book";
+                } else if group == "Data Source" {
+                    if let Some((key, value)) = line.split_once('=') {
+                        if key.trim() == "Enabled" && value.trim().eq_ignore_ascii_case("false") {
+                            disabled = true;
+                        }
+                    }
+                }
+            }
+            is_book && !disabled
+        })
+        .map(|(uid, _)| uid.clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,5 +296,28 @@ mod tests {
         assert_eq!(from_vcard("BEGIN:VCARD\nFN:No Mail\nEND:VCARD\n"), None);
         assert_eq!(from_vcard("BEGIN:VCARD\nFN:Team\nKIND:group\nEMAIL:team@example.org\nEND:VCARD\n"), None);
         assert_eq!(from_vcard("BEGIN:VCARD\nFN:Team\nX-EVOLUTION-LIST:TRUE\nEMAIL:team@example.org\nEND:VCARD\n"), None);
+    }
+    #[test]
+    fn the_newest_eds_interface_is_used() {
+        let names: Vec<String> = ["org.gnome.evolution.dataserver.AddressBook9", "org.freedesktop.DBus",
+            "org.gnome.evolution.dataserver.AddressBook10", "org.gnome.evolution.dataserver.AddressBookX"]
+            .iter().map(|s| s.to_string()).collect();
+        assert_eq!(
+            eds_bus_name(&names, "org.gnome.evolution.dataserver.AddressBook").as_deref(),
+            Some("org.gnome.evolution.dataserver.AddressBook10")
+        );
+        assert_eq!(eds_bus_name(&names, "org.gnome.evolution.dataserver.Sources"), None);
+    }
+
+    #[test]
+    fn only_enabled_address_books_are_read() {
+        let sources = [
+            ("system-address-book".to_string(), "[Data Source]\nDisplayName=Personal\nEnabled=true\n\n[Address Book]\nBackendName=local\n".to_string()),
+            ("google-off".to_string(), "[Data Source]\nDisplayName=Contacts\nEnabled=false\n\n[Address Book]\nBackendName=google\n".to_string()),
+            ("calendar".to_string(), "[Data Source]\nDisplayName=Calendar\n\n[Calendar]\nBackendName=local\n".to_string()),
+            // Enabled=false in another group does not switch the book off.
+            ("carddav".to_string(), "[Data Source]\nDisplayName=Work\n\n[Address Book]\nBackendName=carddav\n\n[Refresh]\nEnabled=false\n".to_string()),
+        ];
+        assert_eq!(eds_address_books(&sources), ["system-address-book", "carddav"]);
     }
 }

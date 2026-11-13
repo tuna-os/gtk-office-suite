@@ -268,7 +268,7 @@ pub fn bodies(doc: &rdocx::Document) -> Vec<Comment> {
             author: c.author().unwrap_or_default().to_string(),
             date: normalize_date(c.date().unwrap_or_default()),
             text: c.text(),
-            resolved: c.resolved(),
+            resolved: c.resolved().unwrap_or(false),
             parent: c.parent_id().filter(|p| *p >= 0).map(|p| p as u32),
         })
         .collect();

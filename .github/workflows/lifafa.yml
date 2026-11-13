@@ -24,11 +24,17 @@ on:
     branches: [main]
     paths:
       - 'lifafa/**'
+      # Lifafa links the suite's shared crates (C1).
+      - 'suite-common/**'
+      - 'suite-common-core/**'
       - 'deny.toml'
       - '.github/workflows/lifafa.yml'
   pull_request:
     paths:
       - 'lifafa/**'
+      # Lifafa links the suite's shared crates (C1).
+      - 'suite-common/**'
+      - 'suite-common-core/**'
       - 'deny.toml'
       - '.github/workflows/lifafa.yml'
   # A new advisory against Lifafa's lock lands with no change in this
