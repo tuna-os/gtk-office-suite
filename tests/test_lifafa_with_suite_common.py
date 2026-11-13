@@ -54,6 +54,17 @@ class WithSuiteCommonTest(unittest.TestCase):
                 if name in root_deps and isinstance(spec, dict) and "path" not in spec:
                     self.assertEqual(spec, root_deps[name], f"{crate}: {name}")
 
+    def test_points_a_direct_suite_common_core_dependency_at_its_copy_too(self):
+        manifest = self.tree / "Cargo.toml"
+        text = manifest.read_text().replace(
+            'suite-common = { path = "../suite-common" }\n',
+            'suite-common = { path = "../suite-common" }\nsuite-common-core = { path = "../suite-common-core" }\n')
+        manifest.write_text(text)
+        self.assertEqual(self.run_script().returncode, 0)
+        deps = tomllib.loads(manifest.read_text())["dependencies"]
+        self.assertEqual(deps["suite-common"], {"path": "suite-common"})
+        self.assertEqual(deps["suite-common-core"], {"path": "suite-common-core"})
+
     def test_refuses_a_tree_that_does_not_link_suite_common_as_expected(self):
         manifest = self.tree / "Cargo.toml"
         manifest.write_text(manifest.read_text().replace('path = "../suite-common"', 'path = "elsewhere"'))

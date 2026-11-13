@@ -81,9 +81,11 @@ def main() -> None:
 
     manifest = tree / "Cargo.toml"
     text = manifest.read_text()
-    text, n = re.subn(r'^suite-common = \{ path = "\.\./suite-common" \}$',
-                      'suite-common = { path = "suite-common" }', text, count=1, flags=re.M)
-    if n != 1:
+    # suite-common always; suite-common-core too where Lifafa uses its
+    # GTK-free models directly.
+    text, n = re.subn(r'^(suite-common(?:-core)?) = \{ path = "\.\./\1" \}$',
+                      r'\1 = { path = "\1" }', text, flags=re.M)
+    if not re.search(r'^suite-common = \{ path = "suite-common" \}$', text, flags=re.M):
         fail(f'{manifest}: expected `suite-common = {{ path = "../suite-common" }}`')
     exclude = ", ".join(f'"{c}"' for c in CRATES)
     text, n = re.subn(r"^\[workspace\]$", f"[workspace]\nexclude = [{exclude}]", text, count=1, flags=re.M)
