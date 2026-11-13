@@ -203,11 +203,12 @@ impl Compose {
             gtk::glib::spawn_future_local(async move {
                 // A snapshot, so later saves in the other application do not
                 // change what the draft holds without asking again.
-                let snapshot =
-                    gio::spawn_blocking(move || crate::ui::attachment_io::stage_bytes(&name, &data))
-                        .await
-                        .ok()
-                        .flatten();
+                let snapshot = gio::spawn_blocking(move || {
+                    crate::ui::attachment_io::stage_bytes(&name, &data)
+                })
+                .await
+                .ok()
+                .flatten();
                 match snapshot {
                     Some(snapshot) => {
                         let _ = s.send(ComposeInput::ReplaceAttachment {
