@@ -85,3 +85,5 @@ src/worker/test_support.rs
 tools/build-appimage.sh
 tools/build-packages.sh
 tools/local-manifest.sh
+src/contacts/categories.rs
+src/worker/imap/live_count_tests.rs
