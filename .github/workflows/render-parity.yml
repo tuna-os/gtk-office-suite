@@ -715,6 +715,18 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+      # The image ships its SDK in /var/lib/flatpak, in the image's own
+      # layers. When Flathub has a newer SDK, flatpak-builder updates it in
+      # place, and on some runners' overlayfs that fails with "Invalid
+      # cross-device link" before anything is built. A copy in the
+      # container's writable layer updates normally.
+      - name: Make the image's Flatpak installation writable
+        run: |
+          set -euo pipefail
+          cp -a /var/lib/flatpak /var/lib/flatpak.rw
+          rm -rf /var/lib/flatpak
+          mv /var/lib/flatpak.rw /var/lib/flatpak
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
@@ -757,6 +769,18 @@ jobs:
           # latest <release> was 1.1.0), so the report names the tag.
           echo "$tag" > prior-tag.txt
           echo "Prior release: $tag"
+      # The image ships its SDK in /var/lib/flatpak, in the image's own
+      # layers. When Flathub has a newer SDK, flatpak-builder updates it in
+      # place, and on some runners' overlayfs that fails with "Invalid
+      # cross-device link" before anything is built. A copy in the
+      # container's writable layer updates normally.
+      - name: Make the image's Flatpak installation writable
+        run: |
+          set -euo pipefail
+          cp -a /var/lib/flatpak /var/lib/flatpak.rw
+          rm -rf /var/lib/flatpak
+          mv /var/lib/flatpak.rw /var/lib/flatpak
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           bundle: ${{ matrix.app }}.flatpak
