@@ -34,21 +34,24 @@ pub const ICONS: &[(&str, &[u8])] = &[
 
 /// Make the suite's icons available by name to every widget on `display`.
 ///
-/// GTK finds unthemed icons in a search path directory, so they are written
-/// once to the user cache and the directory added to the display's theme.
+/// They are served from a resource compiled into the binary (build.rs).
+/// They used to be written to `$XDG_CACHE_HOME/gtk-office-suite/icons` at
+/// every start and that directory added as an icon search path. Every app
+/// crashed now and then in `gtk_icon_theme_lookup_icon` after an
+/// `object_already_finalized` assertion (#2226, 3 in 10 release soaks).
+/// A resource has no files for the theme to rescan or for another process
+/// to rewrite under it.
 pub fn install(display: &gtk::gdk::Display) {
-    let dir = gtk::glib::user_cache_dir().join("gtk-office-suite").join("icons");
-    if std::fs::create_dir_all(&dir).is_err() {
-        return;
-    }
-    for (name, svg) in ICONS {
-        let path = dir.join(format!("{name}.svg"));
-        if std::fs::read(&path).ok().as_deref() != Some(*svg) {
-            let _ = std::fs::write(&path, svg);
-        }
-    }
-    gtk::IconTheme::for_display(display).add_search_path(&dir);
+    static REGISTER: std::sync::Once = std::sync::Once::new();
+    REGISTER.call_once(|| {
+        gtk::gio::resources_register_include!("suite-icons.gresource").expect("the suite icons resource is valid");
+    });
+    gtk::IconTheme::for_display(display).add_resource_path(RESOURCE_PATH);
 }
+
+/// Where the icons live in the resource, laid out as a hicolor theme
+/// (`scalable/actions/<name>.svg`) as `add_resource_path` expects.
+const RESOURCE_PATH: &str = "/org/tunaos/suite/icons";
 
 #[cfg(test)]
 mod tests {
