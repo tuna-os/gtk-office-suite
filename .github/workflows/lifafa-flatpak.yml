@@ -54,7 +54,7 @@ jobs:
     name: Lifafa Flatpak (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
       options: --privileged
     timeout-minutes: 150
     strategy:
@@ -263,7 +263,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/lifafa-v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
       options: --privileged
     timeout-minutes: 60
     permissions:
