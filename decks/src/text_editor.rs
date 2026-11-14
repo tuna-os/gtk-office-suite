@@ -1085,8 +1085,32 @@ fn position_text_editor(
     )));
     // Tiny boxes still need usable controls; large boxes scroll rather than
     // forcing the native popup past the viewport.
-    scrolled.set_size_request(
-        (right - left).clamp(320.0, (width - 32.0).max(320.0)) as i32,
-        (bottom - top).clamp(120.0, (height * 0.5).max(120.0)) as i32,
-    );
+    let text_w = (right - left).clamp(320.0, (width - 32.0).max(320.0)) as i32;
+    let mut text_h = (bottom - top).clamp(120.0, (height * 0.5).max(120.0)) as i32;
+    // And the whole popover has to fit above or below the box in the
+    // window: one that fits on neither side was mapped and closed at once,
+    // so a short window (the release soak's 640x512 wide-1280-scale2)
+    // opened no editor at all. The text area gives up height first, down
+    // to a few lines.
+    if let (Some(root), Some(top_in_root), Some(bottom_in_root)) = (
+        canvas.root(),
+        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, top as f32)),
+        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, bottom as f32)),
+    ) {
+        scrolled.set_size_request(text_w, text_h);
+        let chrome = popover.measure(gtk::Orientation::Vertical, -1).1 - text_h;
+        let below = root.height() - bottom_in_root.y() as i32;
+        let above = top_in_root.y() as i32;
+        let room = below.max(above) - POPOVER_MARGIN;
+        if chrome + text_h > room {
+            text_h = (room - chrome).max(MIN_TEXT_HEIGHT);
+        }
+        crate::canvas_input::trace_input(|| format!("editor fits {text_h} text over {chrome} chrome; {above} above, {below} below the box"));
+    }
+    scrolled.set_size_request(text_w, text_h);
 }
+
+/// Space the popover's arrow and the window edge take, beyond its content.
+const POPOVER_MARGIN: i32 = 24;
+/// The least text the editor shows: a few lines, scrolling beyond.
+const MIN_TEXT_HEIGHT: i32 = 48;
