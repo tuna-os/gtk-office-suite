@@ -9,15 +9,22 @@
 // out the accounts' access tokens), so there the read fails and `read` says
 // so with `None`: "could not look" must never be taken for "no accounts",
 // or the welcome would ask a person who has a mail account to add one.
+//
+// The Matrix account is not GOA's: Mandelbrot owns it (ADR 0013) and says
+// which it is through the state of its `matrix-account` action, read with
+// `org.gtk.Actions.Describe` (`matrix`). That needs
+// `--talk-name=org.tunaos.mandelbrot`, which only Decks holds today.
 
 use std::collections::HashMap;
 
-use gtk4::{gio, glib};
-use suite_common_core::accounts::{from_goa_props, AccountBook, GoaAccountProps};
+use gtk4::{gio, glib, glib::prelude::*};
+use suite_common_core::accounts::{self, from_goa_props, Account, AccountBook, GoaAccountProps};
 
 const NAME: &str = "org.gnome.OnlineAccounts";
 const PATH: &str = "/org/gnome/OnlineAccounts";
 const ACCOUNT_IFACE: &str = "org.gnome.OnlineAccounts.Account";
+const MANDELBROT: &str = "org.tunaos.mandelbrot";
+const MANDELBROT_PATH: &str = "/org/tunaos/mandelbrot";
 /// A stuck GOA must not hold a thread for long.
 const TIMEOUT_MS: i32 = 3000;
 
@@ -51,6 +58,37 @@ pub fn read() -> Option<AccountBook> {
     Some(book)
 }
 
+/// The Matrix account Mandelbrot is signed in to, or `None` when it is not
+/// running, has no account, or cannot be asked. Never starts Mandelbrot: a
+/// look at the accounts must not open a chat app. Blocking: run it off the
+/// main thread.
+pub fn matrix() -> Option<Account> {
+    let conn = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).ok()?;
+    let reply = conn
+        .call_sync(
+            Some(MANDELBROT),
+            MANDELBROT_PATH,
+            "org.gtk.Actions",
+            "Describe",
+            Some(&("matrix-account",).to_variant()),
+            None,
+            gio::DBusCallFlags::NO_AUTO_START,
+            TIMEOUT_MS,
+            gio::Cancellable::NONE,
+        )
+        .ok()?;
+    matrix_from_describe(&reply)
+}
+
+/// `Describe`'s reply, `((bgav))`: the action's state is its first `av`
+/// entry, the user ID, empty when no one is signed in.
+fn matrix_from_describe(reply: &glib::Variant) -> Option<Account> {
+    let description = reply.try_child_value(0)?;
+    let state = description.try_child_value(2)?;
+    let user_id = state.try_child_value(0)?.as_variant()?.str()?.to_owned();
+    (user_id.starts_with('@') && user_id.contains(':')).then(|| accounts::matrix(&user_id))
+}
+
 fn account_props(props: &HashMap<String, glib::Variant>) -> Option<GoaAccountProps> {
     let text = |key: &str| props.get(key).and_then(|v| v.str()).map(str::to_owned);
     let flag = |key: &str| props.get(key).and_then(|v| v.get::<bool>()).unwrap_or(false);
@@ -68,7 +106,6 @@ fn account_props(props: &HashMap<String, glib::Variant>) -> Option<GoaAccountPro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glib::prelude::*;
     use suite_common_core::accounts::Capability;
 
     fn props(pairs: &[(&str, glib::Variant)]) -> HashMap<String, glib::Variant> {
@@ -88,6 +125,26 @@ mod tests {
         assert_eq!(a.identity, "ann@example.org");
         assert!(a.can(Capability::Mail));
         assert!(!a.can(Capability::Calendar));
+    }
+
+    fn describe(state: Option<&str>) -> glib::Variant {
+        let state = state.map(|s| format!("<{}>", s.to_variant().print(true))).unwrap_or_default();
+        let text = format!("((true, signature '', [{state}]),)");
+        glib::Variant::parse(Some(glib::VariantTy::new("((bgav))").unwrap()), &text).unwrap()
+    }
+
+    #[test]
+    fn mandelbrot_s_action_state_names_the_matrix_account() {
+        let a = matrix_from_describe(&describe(Some("@ann:example.org"))).unwrap();
+        assert_eq!(a.id, "matrix:@ann:example.org");
+        assert!(a.can(Capability::Chat));
+    }
+
+    #[test]
+    fn no_one_signed_in_or_no_state_is_no_matrix_account() {
+        assert!(matrix_from_describe(&describe(Some(""))).is_none());
+        assert!(matrix_from_describe(&describe(None)).is_none());
+        assert!(matrix_from_describe(&describe(Some("not an id"))).is_none());
     }
 
     #[test]
