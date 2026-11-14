@@ -87,7 +87,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@releases/nextest
+      - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - name: Run the workspace tests at the release revision
