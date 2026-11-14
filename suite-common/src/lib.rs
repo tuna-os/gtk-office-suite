@@ -29,6 +29,7 @@ pub mod mail;
 pub mod shell_search;
 pub mod welcome;
 pub mod contacts;
+pub mod online_accounts;
 pub mod page_setup;
 pub mod menus;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session, report};
