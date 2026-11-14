@@ -20,6 +20,17 @@ use decks_core::engine::Slide;
 use decks_core::guides::{snap_move, snap_resize, Edges, Guide, Rect};
 use decks_core::undo::{obj_bounds, set_obj_origin};
 
+/// With `DECKS_TRACE_INPUT` set, what the canvas's pointer gestures saw goes
+/// to stderr, which a failed GUI journey keeps as its app.log. For input that
+/// works everywhere but one display configuration (the release soak's
+/// wide-1280-scale2 double-click), where only the CI runner reproduces it.
+pub(crate) fn trace_input(what: impl FnOnce() -> String) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("DECKS_TRACE_INPUT").is_some_and(|v| !v.is_empty())) {
+        eprintln!("decks input: {}", what());
+    }
+}
+
 /// How close, in canvas pixels, an edge has to come to snap to a guide.
 const SNAP_PX: f64 = 6.0;
 
@@ -154,6 +165,7 @@ pub(crate) fn register_canvas_pointer_input(
         let guides_e = guides.clone();
 
         drag.connect_drag_begin(move |_g, x, y| {
+            trace_input(|| format!("drag begin at {x:.1},{y:.1} on a {}x{} canvas", cs_b.width(), cs_b.height()));
             let Some(idx) = ctl_b.selected_slide_index() else { return };
             let Some(slide_id) = ctl_b.slide_id_at(idx) else { return };
             let sl = ss_b.borrow();
@@ -164,6 +176,7 @@ pub(crate) fn register_canvas_pointer_input(
                     if let Some(handle) = crate::canvas::hit_test_handles(
                         &sl[idx].objects[oi], x, y, cs_b.width() as f64, cs_b.height() as f64
                     ) {
+                        trace_input(|| format!("drag begin grabs handle {handle:?}"));
                         let object_id = ctl_b.object_id_at(idx, oi).unwrap_or(u64::MAX);
                         if handle == crate::canvas::SelectionHandle::Rotate {
                             dm_begin.set(Some(DragMode::Rotate {
@@ -187,6 +200,7 @@ pub(crate) fn register_canvas_pointer_input(
             }
 
             let (sx, sy) = canvas_to_slide(x, y, cs_b.width() as f64, cs_b.height() as f64);
+            trace_input(|| format!("drag begin at slide {sx:.1},{sy:.1}"));
             if let Some(oi) = hit_test_object(&sl[idx].objects, sx, sy) {
                 let object_id = ctl_b.object_id_at(idx, oi).unwrap_or(u64::MAX);
                 let orig = obj_bounds(&sl[idx].objects[oi]);
@@ -247,6 +261,7 @@ pub(crate) fn register_canvas_pointer_input(
         });
 
         drag.connect_drag_end(move |_g, dx, dy| {
+            trace_input(|| format!("drag end by {dx:.2},{dy:.2}"));
             let Some(idx) = ctl_e.selected_slide_index() else { dm_end.set(None); return };
             let (_, _, sw, _) = crate::canvas::slide_geometry(cs_e.width() as f64, cs_e.height() as f64);
             let k = 960.0 / sw.max(1.0);
