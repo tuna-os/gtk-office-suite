@@ -222,3 +222,78 @@ pub fn attach(fx: &gtk::Entry, ctl: &Rc<RefCell<WorkbookController>>, refs: &cra
     }
     fx.add_controller(keys);
 }
+
+/// After a jump the bar holds the landed cell's input, selected, so typing
+/// replaces it as in any spreadsheet. The selection alone did not last: on
+/// the narrow window the Go to Cell dialog takes the window's focus away
+/// and back, and the bar came back with the caret before the old value,
+/// unselected, so "300" over "200" became "300200" (release soak,
+/// narrow-400-dark, after the Insert Pivot Table dialog). The returned
+/// closure arms the bar: until the user changes its text or clicks in it,
+/// each time it gets the focus back it selects everything again — at once,
+/// and again just after GTK has finished its own focus handling, before
+/// the next key is read.
+pub(crate) fn select_until_edited(fx: &gtk::Entry) -> Rc<dyn Fn()> {
+    let armed = Rc::new(std::cell::Cell::new(false));
+    let select = {
+        let weak = fx.downgrade();
+        move || {
+            if let Some(fx) = weak.upgrade() {
+                fx.select_region(0, -1);
+            }
+        }
+    };
+    {
+        let focus = gtk::EventControllerFocus::new();
+        let (on, select) = (armed.clone(), select.clone());
+        focus.connect_enter(move |_| {
+            let armed = &on;
+            if !armed.get() {
+                return;
+            }
+            select();
+            let (armed, select) = (armed.clone(), select.clone());
+            gtk::glib::idle_add_local_full(gtk::glib::Priority::HIGH, move || {
+                if armed.get() {
+                    select();
+                }
+                gtk::glib::ControlFlow::Break
+            });
+        });
+        // Leaving for another widget of an active window (Escape to the
+        // grid, a click elsewhere) ends it, so F2 or Return on the grid
+        // still puts the caret at the end. A window losing the focus
+        // altogether does not: that is the case this exists for.
+        let (armed, weak) = (armed.clone(), fx.downgrade());
+        focus.connect_leave(move |_| {
+            let (armed, weak) = (armed.clone(), weak.clone());
+            gtk::glib::idle_add_local_full(gtk::glib::Priority::HIGH, move || {
+                if let Some(fx) = weak.upgrade() {
+                    let active = fx.root().and_downcast::<gtk::Window>().is_some_and(|w| w.is_active());
+                    if active && !fx.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN) {
+                        armed.set(false);
+                    }
+                }
+                gtk::glib::ControlFlow::Break
+            });
+        });
+        fx.add_controller(focus);
+    }
+    {
+        let armed = armed.clone();
+        fx.connect_changed(move |_| armed.set(false));
+    }
+    {
+        // Capture, so a click that places the caret disarms before the
+        // focus it brings would select everything again.
+        let armed = armed.clone();
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(move |_, _, _, _| armed.set(false));
+        fx.add_controller(click);
+    }
+    Rc::new(move || {
+        select();
+        armed.set(true);
+    })
+}
