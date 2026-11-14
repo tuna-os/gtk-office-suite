@@ -191,7 +191,7 @@ A dependency or runtime update (a Renovate PR or a manual bump) has to get past 
 | `Flatpak launch smoke test` | that bundle installs with its runtime, starts on a headless Wayland display (mutter, as upstream Fractal's UI tests), restores sessions through the Secret portal, stays up 20 s, quits cleanly on `app.quit`, and logs no panic, `CRITICAL` or app `ERROR` | every PR, `main` (after the build) |
 | `MatrixRTC e2e harness` | real calls between `join_call` clients over Synapse + LiveKit + `lk-jwt-service`: interop, reconnect, restricted SFU, a five-way huddle, a two-homeserver federated call | PRs touching `Cargo.toml`, `Cargo.lock`, `matrixrtc/**`, `src/session/call/**`, `src/session_view/call/**`, `tests/e2e/**`, the manifest or the workflow; nightly; manual dispatch |
 
-Renovate (`renovate.json`) groups crates that must move together (matrix-sdk + ruma, gtk-rs and
+Renovate (the repository root's `renovate.json`, rules scoped to `mandelbrot/**`) groups crates that must move together (matrix-sdk + ruma, gtk-rs and
 the GNOME bindings, the LiveKit crates) and waits 3 days after a crate release. Because the e2e
 workflow is path-filtered it cannot be a required check, so updates it covers (`matrixrtc/**`,
 `tests/e2e/**`) are merged by Renovate itself only after every check, the e2e harness included,

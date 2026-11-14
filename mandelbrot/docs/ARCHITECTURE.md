@@ -180,7 +180,7 @@ Flatpak builds use `org.tunaos.mandelbrot.json` (GNOME 51 runtime, used by CI an
 
 ## Dependencies and review
 
-* Renovate (`renovate.json`) opens dependency update pull requests.
+* Renovate (the repository root's `renovate.json`) opens dependency update pull requests.
 * `cargo-deny` (`deny.toml`) checks advisories, bans, licenses, and sources, and cargo-machete
   flags unused dependencies; both run in the `hooks/checks` crate.
 * The app binary is built with `--locked`, so `Cargo.lock` is what ships.
