@@ -3436,9 +3436,11 @@ class TablesCellEntryMixin:
                         description=f"the jump to {ref} to hand focus back to fx")
         rawinput.typeText(value)
         rawinput.keyCombo("Return")
+        # The whole description: `in` took "cell C4: 300200" for 300, and
+        # a value typed after the old one instead of over it went unseen.
         self.wait_until(
             self._grid,
-            lambda text: f"cell {ref}: {value}" in text,
+            lambda text: text == f"cell {ref}: {value}",
             description=f"{ref} to hold {value}",
         )
 
