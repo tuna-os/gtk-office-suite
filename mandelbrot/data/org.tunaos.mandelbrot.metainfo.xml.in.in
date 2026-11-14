@@ -75,6 +75,24 @@
   </content_rating>
 
   <releases>@development-release@
+    <release version="14.2.0" type="stable" date="2026-11-14">
+      <description>
+        <p>
+          The first release of Mandelbrot from the TunaOS office suite's repository, where it is now
+          developed beside Letters, Tables, Decks and Lifafa.
+        </p>
+        <ul>
+          <li>Share your screen in a call: pick a window and it is published beside your camera.</li>
+          <li>Your camera is captured and published in calls.</li>
+          <li>Find rooms by name from the GNOME Shell overview search.</li>
+          <li>The other suite apps can open a room, start a call or share a file to a room through Mandelbrot; a shared file waits in the composer for you to confirm before anything is sent.</li>
+          <li>Images and videos show a preview by default.</li>
+          <li>Icon-only status buttons have accessible names for screen readers.</li>
+          <li>About names Fractal and its licence, and bugs and security reports go to the suite's tracker instead of Fractal's.</li>
+          <li>Built against GNOME 51, with updated Matrix Rust SDK and security fixes in its dependencies.</li>
+        </ul>
+      </description>
+    </release>
     <release version="14.1.1" type="stable" date="2026-07-24">
       <description>
         <p>
