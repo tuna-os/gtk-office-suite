@@ -25,16 +25,16 @@ pub(crate) fn install(app: &impl IsA<gio::ActionMap>, ctl: &Ctl, window: &adw::A
             (path, c.state.clone())
         };
         let name = suite_common::mail::attachment_name(&title(path.as_deref()), "xlsx");
-        let dir = std::env::temp_dir().join(format!("tables-mail-{}", std::process::id()));
-        let target = dir.join(&name);
         let source = path.as_ref().map(|p| p.to_string_lossy().to_string());
-        let written = std::fs::create_dir_all(&dir)
-            .map_err(|e| e.to_string())
-            .and_then(|()| crate::persistence::save_engine_to_xlsx(&target.to_string_lossy(), source.as_deref(), &state.borrow()));
+        let written = suite_common::mail::staging_dir().map_err(|e| e.to_string()).and_then(|dir| {
+            let target = dir.join(&name);
+            let saved = crate::persistence::save_engine_to_xlsx(&target.to_string_lossy(), source.as_deref(), &state.borrow());
+            saved.map(|()| target)
+        });
         let parent = window.clone();
         let fail = move |e: String| suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
         match written {
-            Ok(()) => {
+            Ok(target) => {
                 let draft = suite_common::mail::MailDraft::for_document("Tables", &name, target);
                 suite_common::mail::compose(&window, draft, move |result| {
                     if let Err(e) = result {

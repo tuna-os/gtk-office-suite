@@ -5,7 +5,7 @@
 //! note to attach the file.
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
-pub use suite_common_core::mail::{attachment_name, MailDraft};
+pub use suite_common_core::mail::{attachment_name, staging_dir, MailDraft};
 
 /// How a draft reached the mail client.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -8,7 +8,7 @@
 // default on a suite install. This module is the GTK-free half: the draft,
 // its subject and body wording, and the RFC 6068 `mailto:` encoding.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A message to compose, with the document attached.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -115,9 +115,50 @@ pub fn attachment_name(title: &str, extension: &str) -> String {
     }
 }
 
+/// A new directory to write an attachment into before the mail client is
+/// handed it: reachable by this user only, under a name nobody can guess.
+/// A directory named after the app and its process id in the shared temp
+/// directory was neither: another user could read the staged document, or
+/// create the directory first and choose where the write landed (#2229, as
+/// #268 was for pictures). Like the directory it replaces it is not
+/// removed, because the mail client may read the attachment long after the
+/// app that staged it has gone.
+pub fn staging_dir() -> std::io::Result<PathBuf> {
+    staging_dir_in(&std::env::temp_dir())
+}
+
+fn staging_dir_in(base: &Path) -> std::io::Result<PathBuf> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("office-mail-");
+    // tempfile creates directories with the process umask, not 0700.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    Ok(builder.tempdir_in(base)?.keep())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_attachment_is_staged_in_a_private_directory_of_its_own() {
+        let base = tempfile::tempdir().unwrap();
+        let (a, b) = (staging_dir_in(base.path()).unwrap(), staging_dir_in(base.path()).unwrap());
+        assert_ne!(a, b, "two sends share a directory");
+        for dir in [&a, &b] {
+            assert_eq!(dir.parent().unwrap(), base.path());
+            assert!(dir.is_dir());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(dir).unwrap().permissions().mode() & 0o777;
+                assert_eq!(mode, 0o700, "staging directory mode {mode:o}");
+            }
+        }
+    }
 
     #[test]
     fn mailto_escapes_subject_and_body() {
