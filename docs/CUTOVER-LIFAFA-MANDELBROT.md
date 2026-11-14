@@ -128,8 +128,19 @@ The questions those answer:
   on tuna-os/lifafa), neither set yet.
 - [ ] GHCR package permissions: this repository's workflows can push to
   `ghcr.io/tuna-os/mandelbrot` (and to Lifafa's package if it moves to OCI).
-- [ ] The two SDK submodules stay where they are; check that this
-  repository's checkouts can fetch them (they are public today).
+  Each existing package's settings, "Manage Actions access", must list
+  tuna-os/gtk-office-suite with Write; GitHub has no API for it. The suite's
+  own packages need it too: v2.1.38 passed the soak and the display matrix
+  and then failed to publish with `denied: permission_denied: write_package`
+  on `ghcr.io/tuna-os/decks` and `ghcr.io/tuna-os/tables` (run 43613993772,
+  attempt 2), so grant `letters`, `tables`, `decks` and `mandelbrot`.
+  `ghcr.io/tuna-os/lifafa` does not exist yet; the first push from here
+  creates it with this repository's access.
+- [x] The two SDK submodules stay where they are; check that this
+  repository's checkouts can fetch them (they are public today). The import
+  had left out their gitlinks, so no checkout had them; #2254 pins them at
+  the commits tuna-os/lifafa releases from, and `lifafa-flatpak.yml` now
+  builds both architectures (run 43637144330).
 
 ## 4. Identity, links and documents
 
