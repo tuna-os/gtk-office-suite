@@ -15,9 +15,12 @@ trailing comment for readers and Renovate.
 
 Two actions take their *configuration* from the ref: `dtolnay/rust-toolchain`
 picks the toolchain by branch name (`@stable`, `@nightly`) and
-`taiki-e/install-action` picks the tool (`@releases/nextest`). Pinning those
-to a SHA silently drops that choice unless the same value is passed as an
-input, so that is checked too.
+`taiki-e/install-action` can pick the tool (`@releases/nextest`). Pinning
+those to a SHA silently drops that choice unless the same value is passed as
+an input, so that is checked too. install-action is on a version tag with
+`tool: nextest`, not on its `releases/nextest` branch: upstream rewrote that
+branch, the locked commit stopped verifying, and every release-cutting run
+failed at "Set up job" until the pin moved.
 
 Derived from the workflow files themselves, so a new workflow or step is
 covered the moment it exists.
