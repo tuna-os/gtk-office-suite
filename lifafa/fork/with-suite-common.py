@@ -17,6 +17,11 @@ stay out of Cargo.lock and `--locked` still holds; and the root workspace's
 `{ workspace = true }` dependencies they inherit are written out, since the
 root workspace is not in the copy. Lifafa's Cargo.lock already lists every
 crate they use, so the vendored cargo-sources.json made from it covers them.
+
+Files the crates embed from outside their own directories with
+`include_str!` or `include_bytes!` (suite-common's About reads the office
+apps' metainfo from `../../flatpak/`) are copied to the same place relative
+to the tree, so those paths resolve in the copy as they do in the suite.
 """
 
 import re
@@ -26,6 +31,7 @@ import tomllib
 from pathlib import Path
 
 CRATES = ("suite-common", "suite-common-core")
+INCLUDE = re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')
 
 
 def fail(message: str) -> None:
@@ -60,6 +66,31 @@ def inline_workspace_deps(manifest: Path, workspace_deps: dict) -> None:
     manifest.write_text(text)
 
 
+def bring_out_of_crate_includes(suite: Path, tree: Path) -> list[Path]:
+    """Copy what the crates embed from outside themselves into the tree."""
+    crates = [(suite / crate).resolve() for crate in CRATES]
+    copied = []
+    for crate in crates:
+        for source in sorted(crate.rglob("*.rs")):
+            if "target" in source.relative_to(crate).parts:
+                continue
+            for literal in INCLUDE.findall(source.read_text()):
+                target = (source.parent / literal).resolve()
+                if any(target.is_relative_to(c) for c in crates):
+                    continue
+                if not target.is_relative_to(suite):
+                    fail(f"{source}: includes {literal}, outside the suite")
+                if not target.is_file():
+                    fail(f"{source}: includes {literal}, which does not exist")
+                dest = tree / target.relative_to(suite)
+                if dest.exists() and dest.read_bytes() != target.read_bytes():
+                    fail(f"{dest}: already in the tree and differs from {target}")
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(target, dest)
+                copied.append(dest)
+    return copied
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         fail("usage: with-suite-common.py <lifafa tree>")
@@ -78,6 +109,7 @@ def main() -> None:
             shutil.rmtree(dest)
         shutil.copytree(source, dest, ignore=shutil.ignore_patterns("target"))
         inline_workspace_deps(dest / "Cargo.toml", workspace_deps)
+    bring_out_of_crate_includes(suite.resolve(), tree)
 
     manifest = tree / "Cargo.toml"
     text = manifest.read_text()

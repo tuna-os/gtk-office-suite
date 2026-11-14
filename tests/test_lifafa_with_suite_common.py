@@ -6,6 +6,7 @@ it does so on a copy of the real files, and that it refuses a tree it does not
 recognise rather than half-rewriting it.
 """
 
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,7 @@ class WithSuiteCommonTest(unittest.TestCase):
         shutil.copy(ROOT / "lifafa" / "Cargo.toml", self.dir / "lifafa" / "Cargo.toml")
         for crate in ("suite-common", "suite-common-core"):
             shutil.copytree(ROOT / crate, self.dir / crate, ignore=shutil.ignore_patterns("target"))
+        shutil.copytree(ROOT / "flatpak", self.dir / "flatpak")
         self.tree = self.dir / "lifafa"
 
     def run_script(self):
@@ -67,6 +69,31 @@ class WithSuiteCommonTest(unittest.TestCase):
         deps = tomllib.loads(manifest.read_text())["dependencies"]
         self.assertEqual(deps["suite-common"], {"path": "suite-common"})
         self.assertEqual(deps["suite-common-core"], {"path": "suite-common-core"})
+
+    def test_brings_what_the_crates_embed_from_outside_themselves(self):
+        # suite-common's About embeds the office apps' metainfo from
+        # ../../flatpak/; without a copy, Lifafa's Flatpak build stops at
+        # "couldn't read suite-common/src/../../flatpak/..." (#2254).
+        self.assertEqual(self.run_script().returncode, 0)
+        include = re.compile(r'include_(?:str|bytes)!\(\s*"([^"]+)"\s*\)')
+        found = 0
+        for crate in ("suite-common", "suite-common-core"):
+            for source in (self.tree / crate).rglob("*.rs"):
+                for literal in include.findall(source.read_text()):
+                    found += 1
+                    self.assertTrue((source.parent / literal).resolve().is_file(),
+                                    f"{source.relative_to(self.tree)}: {literal}")
+        self.assertGreater(found, 0)
+        for app in ("letters", "tables", "decks"):
+            name = f"org.tunaos.{app}.metainfo.xml"
+            self.assertEqual((self.tree / "flatpak" / name).read_bytes(),
+                             (ROOT / "flatpak" / name).read_bytes())
+
+    def test_refuses_an_embedded_file_that_is_missing(self):
+        (self.dir / "flatpak" / "org.tunaos.tables.metainfo.xml").unlink()
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("org.tunaos.tables.metainfo.xml", result.stderr)
 
     def test_refuses_a_tree_that_does_not_link_suite_common_as_expected(self):
         manifest = self.tree / "Cargo.toml"
