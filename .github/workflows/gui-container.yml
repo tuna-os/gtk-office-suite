@@ -59,6 +59,7 @@ jobs:
           docker run --rm gui-test:candidate bash -euo pipefail -c '
             cargo --version
             pkg-config --modversion gtk4 libadwaita-1
+            grep -q gtk-icon-cache-race /etc/gtk-office-suite/gtk-patches
             ffmpeg -version | head -1
             command -v Xvfb matchbox-window-manager xdotool xdpyinfo xprop \
                        glib-compile-schemas gapplication dbus-run-session

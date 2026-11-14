@@ -1,0 +1,62 @@
+--- a/gtk/gtkicontheme.c
++++ b/gtk/gtkicontheme.c
+@@ -686,6 +686,28 @@
+   return old_icon;
+ }
+ 
++/* Take a reference unless the icon's last one is already gone. Its last
++ * unref can happen on the PRELOAD thread (the GTask that loaded it), and
++ * finalize only takes it out of the cache afterwards; a plain g_object_ref
++ * here resurrected a finalizing object ("object_already_finalized", then a
++ * crash). Called with the icon_cache lock held. */
++static gboolean
++icon_cache_try_ref (GtkIconPaintable *icon)
++{
++  GObject *object = G_OBJECT (icon);
++  int old;
++
++  do
++    {
++      old = g_atomic_int_get ((int *) &object->ref_count);
++      if (old <= 0)
++        return FALSE;
++    }
++  while (!g_atomic_int_compare_and_exchange ((int *) &object->ref_count, old, old + 1));
++
++  return TRUE;
++}
++
+ static GtkIconPaintable *
+ icon_cache_lookup (GtkIconTheme *theme,
+                    IconKey      *key)
+@@ -696,6 +718,8 @@
+   G_LOCK (icon_cache);
+ 
+   icon = g_hash_table_lookup (theme->icon_cache, key);
++  if (icon != NULL && !icon_cache_try_ref (icon))
++    icon = NULL;
+   if (icon != NULL)
+     {
+       DEBUG_CACHE (("cache hit %p (%s %d 0x%x) (cache size %d)\n",
+@@ -704,8 +728,6 @@
+                     icon->key.size, icon->key.flags,
+                     g_hash_table_size (theme->icon_cache)));
+ 
+-      icon = g_object_ref (icon);
+-
+       /* Move item to front in LRU cache */
+       if (_icon_cache_should_lru_cache (icon))
+         old_icon = _icon_cache_add_to_lru_cache (theme, icon);
+@@ -762,7 +784,11 @@
+ 
+   G_LOCK (icon_cache);
+   icon->in_cache = theme;
+-  g_hash_table_insert (theme->icon_cache, &icon->key, icon);
++  /* Replace, not insert: an entry with this key may be an icon that is
++   * being finalized (see icon_cache_try_ref). Insert would keep that
++   * icon's key, which its finalizer frees. The destroy notify clears the
++   * old icon's in_cache, so its finalizer leaves the new entry alone. */
++  g_hash_table_replace (theme->icon_cache, &icon->key, icon);
+ 
+   if (_icon_cache_should_lru_cache (icon))
+     old_icon = _icon_cache_add_to_lru_cache (theme, icon);
