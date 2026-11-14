@@ -76,7 +76,7 @@
       "groupSlug": "lifafa-html5ever"
     },
     {
-      "description": "Lifafa's toolkit moves as one, with its relm4: gtk4 0.9, libadwaita 0.7, webkit6 0.4, pangocairo 0.20 and cairo-rs 0.20 belong together (relm4 0.9 requires gtk4 0.9, and a newer cairo-rs is a second cairo whose surfaces the toolkit cannot draw). A lone bump of any of them does not build. They move in the relm4 replacement (#2025); until then Renovate proposes none of them.",
+      "description": "Lifafa's toolkit follows the suite's: lifafa/ links suite-common (INTEGRATION-PLAN C1), which pins gtk4 0.11 and libadwaita 0.9, so a Lifafa-only bump of gtk4, libadwaita, webkit6, pangocairo or cairo-rs puts a second GTK or cairo in its graph and does not build. They move together with the root workspace's gtk-rs bump, by hand, re-resolving lifafa/Cargo.lock in the same change.",
       "matchManagers": [
         "cargo"
       ],
@@ -86,7 +86,6 @@
       "matchDepNames": [
         "gtk",
         "adw",
-        "relm4",
         "webkit6",
         "pangocairo",
         "cairo-rs"
@@ -150,6 +149,89 @@
         "reqwest"
       ],
       "allowedVersions": "<0.13"
+    },
+    {
+      "description": "Mandelbrot (mandelbrot/, its own lock): let a crate release age a few days before proposing it, so yanked or quickly patched releases never reach a pull request. 'strict' holds the branch back until then instead of opening it with a pending check. Folded in from mandelbrot/renovate.json, which Renovate does not read in a subdirectory.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "mandelbrot/**"
+      ],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "Mandelbrot: ruma is re-exported by matrix-sdk, and bumping it alone puts two ruma-common versions in the graph, so the two move together.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "mandelbrot/**"
+      ],
+      "matchPackageNames": [
+        "/^ruma(-.*)?$/",
+        "/^matrix-sdk(-.*)?$/"
+      ],
+      "groupName": "mandelbrot matrix-sdk and ruma",
+      "groupSlug": "mandelbrot-matrix-sdk-ruma"
+    },
+    {
+      "description": "Mandelbrot: gtk-rs and the bindings built on it (gstreamer-rs, libadwaita, libshumate, sourceview5, glycin, aperture) all depend on one glib; bumping one alone either fails to resolve or puts two glib versions in the graph.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "mandelbrot/**"
+      ],
+      "matchPackageNames": [
+        "/^(glib|gio|gdk4|gsk4|gtk4|pango|cairo-rs|graphene-rs|gdk-pixbuf)(-.*)?$/",
+        "/^gstreamer(-.*)?$/",
+        "/^libadwaita(-.*)?$/",
+        "/^libshumate(-.*)?$/",
+        "/^sourceview5(-.*)?$/",
+        "/^libglycin(-.*)?$/",
+        "aperture"
+      ],
+      "groupName": "mandelbrot gtk-rs and GNOME bindings",
+      "groupSlug": "mandelbrot-gtk-rs"
+    },
+    {
+      "description": "Mandelbrot: the LiveKit SDK and the libwebrtc bindings it pins move together.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "mandelbrot/**"
+      ],
+      "matchPackageNames": [
+        "/^livekit(-.*)?$/",
+        "webrtc-sys",
+        "/^webrtc-sys-.*$/",
+        "libwebrtc"
+      ],
+      "groupName": "mandelbrot livekit",
+      "groupSlug": "mandelbrot-livekit"
+    },
+    {
+      "description": "Mandelbrot: no check exercises a call inside the app, so its matrix-sdk/ruma and LiveKit bumps stop for a person (mandelbrot/docs/DEVELOPMENT.md, 'How we know an update works'), and so does anything in its MatrixRTC engine or e2e stack, whose harness is path-filtered and cannot be a required check.",
+      "matchFileNames": [
+        "mandelbrot/Cargo.toml",
+        "mandelbrot/Cargo.lock",
+        "mandelbrot/matrixrtc/**",
+        "mandelbrot/tests/e2e/**"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "publish-mandelbrot.yml only runs on mandelbrot-v* tags and by hand, so no pull-request check exercises a bump there.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchFileNames": [
+        ".github/workflows/publish-mandelbrot.yml"
+      ],
+      "automerge": false
     }
   ]
 }
