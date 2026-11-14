@@ -265,7 +265,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let refresh = refresh_sel.clone();
             let fx = fx_entry.clone();
-            let select_fx = crate::formula_bar::select_until_edited(&fx_entry);
+            let select_fx = crate::formula_bar::replace_on_first_input(&fx_entry);
             Rc::new(move |text: &str| {
                 let target = tables_core::sheet::parse_cell_or_range(text).or_else(|| {
                     let ctl = ctl.borrow();
@@ -315,8 +315,8 @@ impl TablesWindow {
                 // narrow window's Go to Cell dialog has already handed it
                 // back: the caret sat before the old value and "300" over
                 // "200" became "300200" (release soak, narrow-400). The
-                // dialog can also take the window's focus away and back,
-                // which drops the selection, so it is kept until edited.
+                // dialog can also lose the selection, so the first input
+                // after a jump replaces the bar's text whatever it is.
                 fx.grab_focus();
                 select_fx();
                 true
