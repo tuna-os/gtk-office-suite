@@ -323,7 +323,9 @@ pub fn show_card(view: &gtk::Widget, buf: &gtk::TextBuffer, rect: &gtk::gdk::Rec
             column.append(&calendar);
         }
         ChipKind::Person | ChipKind::Link => {
-            let uri = chips::chip_run(chip.clone(), label).style.link;
+            // Only an address a click may open gets the button: the chip's
+            // value is whatever the file said.
+            let uri = chips::open_target(&chip);
             let value = gtk::Label::builder().label(&chip.value).xalign(0.0).selectable(true).build();
             value.add_css_class("dim-label");
             column.append(&value);
