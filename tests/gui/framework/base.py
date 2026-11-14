@@ -396,6 +396,7 @@ class BaseGUITestCase(unittest.TestCase):
             # Decks' pointer gestures say what they saw (canvas_input.rs),
             # in the app.log a failed journey keeps.
             "DECKS_TRACE_INPUT": "1",
+            "TABLES_TRACE_INPUT": "1",
             # No first-run welcome dialog (INTEGRATION-PLAN C5) in a journey that
             # is not about it: every journey starts from a fresh profile.
             "SUITE_NO_WELCOME": "1",

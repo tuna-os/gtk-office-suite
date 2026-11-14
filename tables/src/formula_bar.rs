@@ -222,3 +222,147 @@ pub fn attach(fx: &gtk::Entry, ctl: &Rc<RefCell<WorkbookController>>, refs: &cra
     }
     fx.add_controller(keys);
 }
+
+/// With `TABLES_TRACE_INPUT` set, what the formula bar saw goes to stderr,
+/// which a failed GUI journey keeps as its app.log: for the narrow window's
+/// Go to Cell journey, which only the CI runner reproduces.
+pub(crate) fn trace_input(what: impl FnOnce() -> String) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("TABLES_TRACE_INPUT").is_some_and(|v| !v.is_empty())) {
+        eprintln!("tables input: {}", what());
+    }
+}
+
+/// After a jump, typing replaces the landed cell's input, as in any
+/// spreadsheet. Selecting the bar's text was not enough: on the narrow
+/// window, after the Go to Cell dialog, the bar was found with the caret
+/// before the old value and nothing selected, and "300" typed over "200"
+/// became "300200" (release soak, narrow-400 and narrow-400-dark, 4 times
+/// in 8 there even with the selection restored on every focus-in). So the
+/// replacing does not depend on the selection. The returned closure arms
+/// the bar, and the first text inserted while it is armed first clears
+/// whatever the bar holds. A click in the bar, a caret key, or leaving it
+/// for another widget of the active window (Escape to the grid) disarms
+/// it, so placing the caret to edit the value still edits it.
+pub(crate) fn replace_on_first_input(fx: &gtk::Entry) -> Rc<dyn Fn()> {
+    let armed = Rc::new(std::cell::Cell::new(false));
+    let disarm = {
+        let armed = armed.clone();
+        move |why: &str| {
+            if armed.replace(false) {
+                trace_input(|| format!("disarmed by {why}"));
+            }
+        }
+    };
+    if let Some(text) = fx.delegate() {
+        let armed = armed.clone();
+        text.connect_insert_text(move |ed, new, pos| {
+            let old = ed.text();
+            trace_input(|| {
+                format!("insert {new:?} at {} into {old:?}, selection {:?}, armed {}", *pos, ed.selection_bounds(), armed.get())
+            });
+            if armed.replace(false) && !old.is_empty() {
+                ed.delete_text(0, -1);
+                *pos = 0;
+                trace_input(|| "replaced the old input".to_string());
+            }
+        });
+    }
+    {
+        let text = fx.clone();
+        fx.connect_changed(move |_| trace_input(|| format!("changed to {:?}", text.text())));
+    }
+    {
+        let focus = gtk::EventControllerFocus::new();
+        let weak = fx.downgrade();
+        focus.connect_enter(move |_| {
+            if let Some(fx) = weak.upgrade() {
+                trace_input(|| format!("focus in, text {:?}, selection {:?}", fx.text(), fx.selection_bounds()));
+            }
+        });
+        let (disarm, weak) = (disarm.clone(), fx.downgrade());
+        focus.connect_leave(move |_| {
+            trace_input(|| "focus out".to_string());
+            let (disarm, weak) = (disarm.clone(), weak.clone());
+            gtk::glib::idle_add_local_full(gtk::glib::Priority::HIGH, move || {
+                if let Some(fx) = weak.upgrade() {
+                    let active = fx.root().and_downcast::<gtk::Window>().is_some_and(|w| w.is_active());
+                    if active && !fx.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN) {
+                        disarm("leaving the bar");
+                    }
+                }
+                gtk::glib::ControlFlow::Break
+            });
+        });
+        fx.add_controller(focus);
+    }
+    {
+        // Capture, so the click disarms before it places the caret.
+        let disarm = disarm.clone();
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(move |_, _, _, _| disarm("a click"));
+        fx.add_controller(click);
+    }
+    {
+        use gtk::gdk::Key;
+        let disarm = disarm.clone();
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if matches!(key, Key::Left | Key::Right | Key::Home | Key::End | Key::KP_Left | Key::KP_Right | Key::KP_Home | Key::KP_End) {
+                disarm("a caret key");
+            }
+            gtk::glib::Propagation::Proceed
+        });
+        fx.add_controller(keys);
+    }
+    let weak = fx.downgrade();
+    Rc::new(move || {
+        if let Some(fx) = weak.upgrade() {
+            fx.select_region(0, -1);
+            trace_input(|| format!("armed on {:?}, focused {}", fx.text(), fx.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN)));
+        }
+        armed.set(true);
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use gtk4::{self as gtk, prelude::*};
+
+    /// The first input after a jump replaces the bar's text even when the
+    /// selection is gone and the caret sits before the old value — the
+    /// state the narrow window's Go to Cell journey found the bar in.
+    #[test]
+    fn the_first_input_after_a_jump_replaces_without_a_selection() {
+        suite_common::gtk_test::run(|| {
+            let fx = gtk::Entry::new();
+            fx.set_text("200");
+            let arm = super::replace_on_first_input(&fx);
+            arm();
+            fx.select_region(0, 0);
+            fx.set_position(0);
+            let mut pos = 0;
+            fx.insert_text("3", &mut pos);
+            assert_eq!(fx.text(), "3");
+            // Only the first: the rest of the value is typed after it.
+            let mut pos = 1;
+            fx.insert_text("00", &mut pos);
+            assert_eq!(fx.text(), "300");
+        });
+    }
+
+    /// Unarmed, input goes where the caret is, as in any entry.
+    #[test]
+    fn without_a_jump_input_inserts_at_the_caret() {
+        suite_common::gtk_test::run(|| {
+            let fx = gtk::Entry::new();
+            fx.set_text("200");
+            let _arm = super::replace_on_first_input(&fx);
+            let mut pos = 3;
+            fx.insert_text("1", &mut pos);
+            assert_eq!(fx.text(), "2001");
+        });
+    }
+}
