@@ -309,7 +309,13 @@ impl TablesWindow {
                 // hidden" after the sheet's protection was undone.
                 let (r, c) = { let st = s.borrow(); let sh = st.sheet(); (sh.selected_row, sh.selected_col) };
                 crate::protection_ui::show_input(&fx, &s, r, c);
+                // Selected, so typing replaces the cell as in any spreadsheet.
+                // grab_focus() selects only when focus moves in, and the
+                // narrow window's Go to Cell dialog has already handed it
+                // back: the caret sat before the old value and "300" over
+                // "200" became "300200" (release soak, narrow-400).
                 fx.grab_focus();
+                fx.select_region(0, -1);
                 true
             })
         };
