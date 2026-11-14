@@ -128,17 +128,17 @@ fn send_by_email(
     let (ctl, win) = (ctl.clone(), window.clone());
     move |_, _| {
         let name = suite_common::mail::attachment_name(&stem(&ctl), extension);
-        let dir = std::env::temp_dir().join(format!("decks-mail-{}", std::process::id()));
-        let path = dir.join(&name);
-        let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| {
-            if pdf {
+        let written = suite_common::mail::staging_dir().map_err(|e| e.to_string()).and_then(|dir| {
+            let path = dir.join(&name);
+            let result = if pdf {
                 crate::export::export_pdf(&ctl.deck(), &path, None)
             } else {
                 decks_core::write_deck_with_context(&path.to_string_lossy(), &ctl.deck(), &ctl.carried_for_save())
-            }
+            };
+            result.map(|()| path)
         });
         match written {
-            Ok(()) => {
+            Ok(path) => {
                 let draft = suite_common::mail::MailDraft::for_document("Decks", &name, path);
                 let parent = win.clone();
                 suite_common::mail::compose(&win, draft, move |result| {
