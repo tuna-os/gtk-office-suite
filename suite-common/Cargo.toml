@@ -11,6 +11,9 @@ suite-common-core = { path = "../suite-common-core" }
 gettext-rs = { workspace = true }
 libc = "0.2"
 
+[build-dependencies]
+glib-build-tools = "0.22"
+
 [lib]
 name = "suite_common"
 path = "src/lib.rs"

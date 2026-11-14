@@ -3527,6 +3527,7 @@ name = "suite-common"
 version = "0.1.0"
 dependencies = [
  "gettext-rs",
+ "glib-build-tools",
  "gtk4",
  "libadwaita",
  "libc",
