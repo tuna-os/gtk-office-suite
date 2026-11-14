@@ -1098,7 +1098,10 @@ fn position_text_editor(
         canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, bottom as f32)),
     ) {
         scrolled.set_size_request(text_w, text_h);
-        let chrome = popover.measure(gtk::Orientation::Vertical, -1).1 - text_h;
+        // The popover itself measures 0 until it is shown; its content
+        // has its real size already.
+        let content = popover.child().map_or(0, |c| c.measure(gtk::Orientation::Vertical, -1).1);
+        let chrome = content - text_h;
         let below = root.height() - bottom_in_root.y() as i32;
         let above = top_in_root.y() as i32;
         let room = below.max(above) - POPOVER_MARGIN;
