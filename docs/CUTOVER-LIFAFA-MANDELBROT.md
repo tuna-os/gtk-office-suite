@@ -117,7 +117,15 @@ The questions those answer:
 
 - [ ] Inventory the secrets each standalone repository's workflows use (at
   least Lifafa's Flatpak signing key, `GPG_HOMEDIR` in `flatpak-repo.sh`) and
-  add them here, with the narrowest scope that works.
+  add them here, with the narrowest scope that works. Inventory (2026-11-14):
+  tuna-os/lifafa's workflows use `LIFAFA_GPG_PRIVATE_KEY` (`fork-release`
+  signing) and `UPSTREAM_SYNC_TOKEN` (`upstream-sync`; the repository holds
+  `UPSTREAM_SYNC_SSH_KEY` instead, for lifafa #11); tuna-os/mandelbrot's use
+  `FLATPAK_INDEX_DEPLOY_KEY` and `FLATPAK_INDEX_TOKEN`, organisation secrets
+  this repository already sees. Here, `lifafa-upstream-sync.yml` falls back
+  to `github.token` without `UPSTREAM_SYNC_TOKEN`, and the Pages job needs
+  `LIFAFA_GPG_PRIVATE_KEY` and `LIFAFA_PAGES_DEPLOY_KEY` (a write deploy key
+  on tuna-os/lifafa), neither set yet.
 - [ ] GHCR package permissions: this repository's workflows can push to
   `ghcr.io/tuna-os/mandelbrot` (and to Lifafa's package if it moves to OCI).
 - [ ] The two SDK submodules stay where they are; check that this
@@ -168,18 +176,29 @@ The questions those answer:
 
 ## 6. Issues, pull requests and security reports
 
-- [ ] Labels here for `lifafa` and `mandelbrot`.
+- [x] Labels here for `lifafa` and `mandelbrot`.
 - [ ] Open issues transferred here (GitHub's issue transfer keeps comments
   and links), or closed with a pointer. Open pull requests landed, closed,
-  or re-opened here.
-- [ ] Private vulnerability reporting turned on here, and open advisories in
-  either repository dealt with or moved.
+  or re-opened here. Done for issues on 2026-11-14: tuna-os/lifafa #3, #4,
+  #5, #8, #15, #16 and #17 are #2241-#2247 here, labelled `lifafa`, and
+  tuna-os/mandelbrot #146, #162, #166, #171 and #253 are #2248-#2252,
+  labelled `mandelbrot`. Left there on purpose: lifafa #20 (that
+  repository's own upstream-sync alert) and mandelbrot #14 (its Renovate
+  dashboard), which close with their repositories. Still open: the pull
+  requests lifafa #11, mandelbrot #238 (ported here in #1976) and #246.
+- [x] Private vulnerability reporting turned on here, and open advisories in
+  either repository dealt with or moved: reporting is on here, and neither
+  repository has an advisory in any state (checked 2026-11-14). The report
+  that mandelbrot #253 (#2248 here) says is pending was never filed there;
+  file it here.
 - [x] Issue templates for the two apps added to `.github/ISSUE_TEMPLATE`: the
   bug report and feature request forms list Lifafa and Mandelbrot.
 
 ## 7. The switch
 
 - [ ] Announce the date in both repositories' READMEs and pinned issues.
+  Pinned: tuna-os/lifafa #21 and tuna-os/mandelbrot #254 (2026-11-13). README
+  notices: tuna-os/lifafa #22 and tuna-os/mandelbrot #255.
 - [ ] Last release from each standalone repository, its notes saying where
   the next one comes from.
 - [ ] A notice at the top of each standalone README: "Development moved to
