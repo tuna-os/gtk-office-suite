@@ -17,8 +17,9 @@ name: Lifafa Flatpak
 # publish-flatpak.yml publishes Letters, Tables and Decks. It needs no
 # signing key. Pushing to ghcr.io/tuna-os/lifafa from here needs the package
 # to grant this repository write access (the cutover's step 3), as Mandelbrot
-# does. The Pages OSTree repository, signed with LIFAFA_GPG_PRIVATE_KEY, is
-# added once that key has moved here.
+# does. The `pages` job below also publishes the signed Pages OSTree
+# repository that existing installs follow (LIFAFA_GPG_PRIVATE_KEY and
+# LIFAFA_PAGES_DEPLOY_KEY); a manual run only assembles it.
 
 on:
   push:
@@ -240,3 +241,182 @@ jobs:
           registry: ghcr.io
           tags: latest
           ssh-key: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
+
+  # Lifafa's signed OSTree repository on GitHub Pages, the channel every
+  # existing install follows, ported from tuna-os/lifafa's fork-release.yml
+  # (its "Sign into the Flatpak repository", "Publish the Flatpak repository"
+  # and "Attach the bundles" steps). The cutover's step 0 keeps it published
+  # beside the OCI remote until two releases have gone out on both.
+  #
+  # The site stays on tuna-os/lifafa's gh-pages, because installs and the
+  # .flatpakref name https://tuna-os.github.io/lifafa. This job pushes there
+  # with LIFAFA_PAGES_DEPLOY_KEY, a deploy key with write access to
+  # tuna-os/lifafa only, and signs with LIFAFA_GPG_PRIVATE_KEY, the secret
+  # half of lifafa/fork/flatpak-repo.asc (flatpak-repo.sh refuses any other).
+  #
+  # A manual run signs the repository and keeps it as an artifact, pushing
+  # nothing, whatever `publish` says: that is the dry run. Only a lifafa-v*
+  # tag pushes gh-pages and writes the GitHub Release with the signed bundles.
+  pages:
+    name: Lifafa Pages repository
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/lifafa-v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    timeout-minutes: 60
+    permissions:
+      contents: write  # gh release create/upload on a tag
+    defaults:
+      run:
+        shell: bash
+        working-directory: lifafa
+    env:
+      PAGES_REPO: tuna-os/lifafa
+      BASE_URL: https://tuna-os.github.io/lifafa
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory '*'
+
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: lifafa-flatpak-*
+          merge-multiple: true
+          path: lifafa/bundles
+
+      - name: Pick the version
+        id: version
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          fork/rebrand.sh --identity | grep -E '^(APP_ID|APP_NAME)=' >> "$GITHUB_ENV"
+          cargo="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [[ "$REF" == refs/tags/lifafa-v* ]]; then
+            tag="$REF_NAME"
+            version="${REF_NAME#lifafa-v}"
+          else
+            tag=""
+            version="$cargo-tuna.g$(git rev-parse --short HEAD)"
+          fi
+          # A tag names the version the build carries, plus the fork's suffix.
+          case "$version" in
+            "$cargo"-tuna*) ;;
+            *) echo "::error::$version is not Lifafa $cargo with a -tuna suffix"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "assembling the Pages repository for $version${tag:+, release $tag}"
+
+      - name: Sign into the Flatpak repository
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.LIFAFA_GPG_PRIVATE_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::LIFAFA_GPG_PRIVATE_KEY is not set in this repository"
+            exit 1
+          fi
+          export GPG_HOMEDIR="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GPG_HOMEDIR"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --quiet --homedir "$GPG_HOMEDIR" --import
+          # The published site, or an empty one before the first release, and
+          # the release's bundles, under publish/ in the workspace.
+          publish="$GITHUB_WORKSPACE/publish"
+          site="$publish/site"
+          release="$publish/release"
+          mkdir -p "$publish"
+          url="https://github.com/$PAGES_REPO.git"
+          if git ls-remote --exit-code "$url" refs/heads/gh-pages >/dev/null; then
+            git clone --quiet --depth 1 --branch gh-pages "$url" "$site"
+            git -C "$site" rev-parse HEAD > "$publish/pages-head"
+          else
+            git init --quiet -b gh-pages "$site"
+            : > "$publish/pages-head"
+          fi
+          # Both architectures' builds, unsigned, from the build job's bundles.
+          build_repo="$RUNNER_TEMP/repo"
+          mkdir -p "$build_repo"
+          printf '[core]\nrepo_version=1\nmode=archive-z2\n' > "$build_repo/config"
+          mkdir -p "$build_repo"/{tmp,extensions,state,refs/heads,refs/mirrors,refs/remotes,objects}
+          for arch in x86_64 aarch64; do
+            bundle="bundles/$APP_ID-$arch.flatpak"
+            test -s "$bundle"
+            flatpak build-import-bundle --no-update-summary "$build_repo" "$bundle"
+          done
+          fork/flatpak-repo.sh "$site" "$build_repo" "$VERSION" "$release"
+          (cd "$release" && sha256sum ./*.flatpak | tee SHA256SUMS)
+          test "$(wc -l < "$release/SHA256SUMS")" -eq 2
+          gpgconf --homedir "$GPG_HOMEDIR" --kill gpg-agent || true
+          rm -rf "$GPG_HOMEDIR"
+
+      - name: Keep the unpublished repository
+        # A manual run stops here: the signed repository and bundles are kept
+        # for inspection, and nothing is pushed.
+        if: steps.version.outputs.tag == ''
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: lifafa-pages-repo
+          path: |
+            publish/site
+            publish/release
+            !publish/site/.git
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Publish the Flatpak repository
+        if: steps.version.outputs.tag != ''
+        working-directory: publish/site
+        env:
+          DEPLOY_KEY: ${{ secrets.LIFAFA_PAGES_DEPLOY_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::LIFAFA_PAGES_DEPLOY_KEY is not set in this repository"
+            exit 1
+          fi
+          command -v ssh >/dev/null || dnf install -y --quiet openssh-clients
+          ssh_dir="$RUNNER_TEMP/ssh"
+          install -d -m 700 "$ssh_dir"
+          printf '%s\n' "$DEPLOY_KEY" > "$ssh_dir/key"
+          chmod 600 "$ssh_dir/key"
+          # GitHub's published host key, so the push cannot be redirected.
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
+          # One commit with no history: the branch holds the current
+          # repository only, so objects pruned from it leave git as well.
+          # The lease refuses to overwrite a publish that raced this one.
+          git checkout --quiet --orphan published
+          git add -A
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --quiet -m "$APP_NAME $VERSION"
+          git push --quiet \
+            --force-with-lease=refs/heads/gh-pages:"$(cat ../pages-head)" \
+            "git@github.com:$PAGES_REPO.git" published:refs/heads/gh-pages
+          rm -rf "$ssh_dir"
+
+      - name: Attach the bundles
+        if: steps.version.outputs.tag != ''
+        working-directory: publish/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$APP_NAME $VERSION" \
+              --notes "$APP_NAME $VERSION, the TunaOS office suite's email client: Hylki by hyprlab (https://github.com/hyprlab/hylki) with native Tuta and Proton Mail accounts, for x86_64 and aarch64, now built from this repository (lifafa/). Install with \`flatpak install --user $BASE_URL/$APP_ID.flatpakref\` and \`flatpak update\` keeps it current; it is also on the TunaOS remote (\`flatpak remote-add --user --if-not-exists tuna-os https://tunaos.org/flatpak/tuna-os.flatpakrepo\`, then \`flatpak install --user tuna-os $APP_ID\`). The bundles below install the same build and update from the signed Pages repository."
+          fi
+          gh release upload "$TAG" ./*.flatpak SHA256SUMS --clobber
