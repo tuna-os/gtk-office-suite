@@ -9882,9 +9882,13 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
         sw, sh = self.logical_screen()
         self._activate_window()
         px, py = self.to_device(min(x + w // 2, sw // 2), min(y + h // 3, sh // 2))
-        subprocess.run(["xdotool", "mousemove", "--sync", str(px), str(py),
-                        "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
-                       capture_output=True, timeout=5)
+        # move_pointer, not `mousemove --sync`: with the pointer already on
+        # that spot (the journey before left it at the screen's middle),
+        # --sync waited for a motion that never came and the 5 s timeout
+        # killed the scroll (release soaks, wide-1280-scale2 and medium-800).
+        self.move_pointer(px, py)
+        subprocess.run(["xdotool", "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
+                       capture_output=True, timeout=5, check=True)
         self.wait_until(zoom, lambda z: z > before, description=f"the zoom to grow past {before}")
         # Zoom only scales the display (LET-004): the laid-out pages — and
         # their breaks — are unchanged.
