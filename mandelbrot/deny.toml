@@ -11,6 +11,14 @@ ignore = [
     # matrix-sdk (0.18 and 0.19 alike); there is no fixed release, only the anymap3 replacement,
     # which matrix-sdk has to adopt upstream.
     { id = "RUSTSEC-2026-0319", reason = "anymap2 is unmaintained but is a direct dependency of matrix-sdk with no upgrade available" },
+    # libsqlite3-sys 0.38: SQLite before 3.54.0 can return uninitialized page-cache memory for a
+    # database opened with a crafted `-wal` file. The fix (0.39, bundling SQLite 3.54) needs
+    # rusqlite 0.41, but the newest matrix-sdk-sqlite release (0.19.1) requires rusqlite ^0.40.2;
+    # matrix-rust-sdk main is already on rusqlite 0.41, so drop this entry with the next
+    # matrix-sdk release. The advisory covers the SQLite copy built by the `bundled` feature,
+    # which nothing here enables: libsqlite3-sys resolves with only `pkg-config`/`vcpkg` and links
+    # the runtime's system SQLite, whose version decides the real exposure.
+    { id = "RUSTSEC-2026-0459", reason = "bundled SQLite not built (system SQLite linked); fixed libsqlite3-sys needs rusqlite 0.41, which no matrix-sdk-sqlite release allows yet" },
 ]
 
 [bans]
