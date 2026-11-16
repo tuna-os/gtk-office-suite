@@ -56,6 +56,7 @@ fn key_event(sender: &str, content: JsonValue) -> ToDeviceEvent {
         sender: sender.to_owned(),
         event_type: "io.element.call.encryption_keys".to_owned(),
         content,
+        encrypted: true,
     }
 }
 
@@ -185,6 +186,42 @@ async fn should_emit_when_a_key_is_received() {
     assert_eq!(
         fixture.statistics.lock().unwrap().encryption_keys_received,
         1
+    );
+}
+
+#[tokio::test]
+async fn should_ignore_a_key_sent_without_encryption() {
+    let fixture = make_transport();
+    let mut received = fixture.transport.subscribe();
+    fixture.transport.start();
+
+    // A homeserver can deliver this event in the clear with any sender.
+    let mut event = key_event(
+        "@bob:example.org",
+        json!({
+            "keys": {
+                "index": 2,
+                "key": "ABCDEDF",
+            },
+            "member": {
+                "claimed_device_id": "BOBDEVICE",
+            },
+            "room_id": ROOM_ID,
+            "session": {
+                "application": "m.call",
+                "call_id": "",
+                "scope": "m.room",
+            },
+        }),
+    );
+    event.encrypted = false;
+
+    fixture.transport.on_to_device_event(&event).unwrap();
+
+    assert_eq!(drain(&mut received), 0);
+    assert_eq!(
+        fixture.statistics.lock().unwrap().encryption_keys_received,
+        0
     );
 }
 
