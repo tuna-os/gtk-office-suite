@@ -1,0 +1,1 @@
+- Letters: an .odt list whose level hangs its marker by something other than 18pt (Word's numbered "1.1" paragraphs hang 0.5in) now keeps that hanging indent when opened and saved (#1630).
