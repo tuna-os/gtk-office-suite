@@ -47,5 +47,68 @@ class MatrixSdkPin(unittest.TestCase):
         self.assertEqual(minor(m.group(1)), minor(locked))
 
 
+MANDELBROT = os.path.join(ROOT, "mandelbrot")
+
+
+def mandelbrot_manifests():
+    """Every Cargo package directory under mandelbrot/, relative to it."""
+    found = []
+    for dirpath, dirnames, filenames in os.walk(MANDELBROT):
+        dirnames[:] = [d for d in dirnames if d != "target" and not d.startswith(".")]
+        if "Cargo.toml" in filenames:
+            found.append(os.path.relpath(dirpath, MANDELBROT))
+    return sorted(found)
+
+
+def mandelbrot_workspace():
+    """The root manifest's members: itself, its listed members, and its path
+    dependencies inside the directory (cargo's implicit membership), minus
+    anything it excludes."""
+    with open(os.path.join(MANDELBROT, "Cargo.toml"), "rb") as f:
+        root = tomllib.load(f)
+    workspace = root["workspace"]
+    excluded = {os.path.normpath(e) for e in workspace.get("exclude", [])}
+    members = {"."} | {os.path.normpath(m) for m in workspace.get("members", [])}
+    for table in ("dependencies", "dev-dependencies", "build-dependencies"):
+        for dep in root.get(table, {}).values():
+            if isinstance(dep, dict) and "path" in dep:
+                members.add(os.path.normpath(dep["path"]))
+    return members - excluded, excluded
+
+
+class MandelbrotIsOneWorkspace(unittest.TestCase):
+    """mandelbrot/Cargo.toml is a workspace root (the suite's root excludes the
+    directory), so cargo claims every package beneath it. A nested package
+    the root neither depends on nor excludes does not build at all: that was
+    hooks/checks, the pre-commit binary meson builds for the development
+    profile. A member that keeps its own Cargo.lock keeps a file cargo never
+    reads: matrixrtc/Cargo.lock drifted from the lockfile that ships while
+    Renovate went on updating it."""
+
+    def test_every_nested_package_is_a_member_or_excluded(self):
+        members, excluded = mandelbrot_workspace()
+        for package in mandelbrot_manifests():
+            with self.subTest(package):
+                own_root = False
+                if package not in members:
+                    with open(os.path.join(MANDELBROT, package, "Cargo.toml"), "rb") as f:
+                        own_root = "workspace" in tomllib.load(f)
+                self.assertTrue(
+                    package in members or package in excluded or own_root,
+                    f"mandelbrot/{package} is inside mandelbrot's workspace but neither a member nor in "
+                    "[workspace].exclude, so cargo refuses to build it",
+                )
+
+    def test_members_resolve_from_the_root_lockfile_alone(self):
+        members, _ = mandelbrot_workspace()
+        for package in sorted(members - {"."}):
+            with self.subTest(package):
+                self.assertFalse(
+                    os.path.exists(os.path.join(MANDELBROT, package, "Cargo.lock")),
+                    f"mandelbrot/{package}/Cargo.lock is never read: {package} is a workspace member "
+                    "and resolves from mandelbrot/Cargo.lock",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
