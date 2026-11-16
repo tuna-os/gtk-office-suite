@@ -1906,14 +1906,20 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
     out
 }
 
+/// One list level's position: (where its text starts, how far its marker
+/// hangs before that text), see `list_style_indents`.
+type ListLevelIndent = Option<(f64, Option<f64>)>;
+/// `list_style_indents` by `text:list-style` name.
+type ListIndentMap = std::collections::HashMap<String, Vec<ListLevelIndent>>;
+
 /// Each `text:list-style` in `xml`: where each level puts its text, in
 /// points from the paragraph's indent (`fo:margin-left` of its
 /// label-alignment properties, Word's 0.5in for a first level), by level,
 /// 0-based, with how far its marker hangs before that text (the negated
 /// `fo:text-indent`, Word's 0.5in for a "1.1" level) where it says.
 /// None where a level declares no position.
-fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option<(f64, Option<f64>)>>> {
-    let mut out: std::collections::HashMap<String, Vec<Option<(f64, Option<f64>)>>> = Default::default();
+fn list_style_indents(xml: &str) -> ListIndentMap {
+    let mut out: ListIndentMap = Default::default();
     let mut reader = Reader::from_str(xml);
     let mut current: Option<String> = None;
     let mut level: Option<usize> = None;
