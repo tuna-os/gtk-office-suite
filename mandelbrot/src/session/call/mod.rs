@@ -19,7 +19,7 @@ use matrix_sdk::{Client, deserialized_responses::EncryptionInfo};
 use ruma::{
     OwnedRoomId, RoomId, UserId,
     events::{
-        StateEventType, ToDeviceEvent as RumaToDeviceEvent, call::member::SyncCallMemberEvent,
+        StateEventType, call::member::SyncCallMemberEvent,
         macros::EventContent, room::member::MembershipState,
     },
 };
@@ -55,9 +55,6 @@ pub(crate) struct CallEncryptionKeysEventContent {
     #[serde(flatten)]
     pub(crate) data: BTreeMap<String, JsonValue>,
 }
-
-/// An `io.element.call.encryption_keys` to-device event.
-type CallEncryptionKeysEvent = RumaToDeviceEvent<CallEncryptionKeysEventContent>;
 
 /// A message from the SDK event handlers to the manager.
 enum CallManagerMessage {
