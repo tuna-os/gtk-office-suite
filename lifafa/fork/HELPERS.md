@@ -59,7 +59,7 @@ Bridge) go through `hylki-proton`, a separate Go program (GPL-3.0-or-later):
 the `native/proton-unofficial-sdk` submodule, installed under the name
 `hylki-proton`. It behaves the same under either name.
 
-It needs Go 1.26.1 or newer (the `go` line in
+It needs Go 1.26.11 or newer (the `go` line in
 `native/proton-unofficial-sdk/go.mod`) and nothing from the network: its
 dependencies are committed in the SDK's `vendor/`.
 

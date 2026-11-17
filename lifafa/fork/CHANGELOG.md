@@ -7,6 +7,13 @@ since the last tag ([MAINTAINING.md](MAINTAINING.md#releases)).
 
 ## Unreleased
 
+- **Fixed: Proton mail to a contact who must get encrypted mail.** A
+  Proton contact can demand encryption to a key you pinned. The helper
+  skipped that setting when the contact spelled the address in another
+  case than the message, or when the contact's signature did not verify,
+  and the mail went out unencrypted. It now applies the setting in the
+  first case and refuses to send in the second. The helper is
+  proton-unofficial-sdk 0.1.3, built with Go 1.26.11.
 - **Added: updates through `flatpak update`.** Lifafa is published as a
   signed Flatpak repository on GitHub Pages; install it with
   `flatpak install --user https://tuna-os.github.io/lifafa/org.tunaos.lifafa.flatpakref`.
