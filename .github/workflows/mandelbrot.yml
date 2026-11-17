@@ -105,7 +105,7 @@ jobs:
     steps:
       - name: All Mandelbrot jobs passed or were skipped
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: ${{ needs.changes.result }} ${{ needs.matrixrtc.result }} ${{ needs.flatpak.result }}
         run: |
           set -euo pipefail
           for result in $RESULTS; do
