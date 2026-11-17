@@ -17,8 +17,10 @@ use std::{
 
 use gst::prelude::*;
 use mandelbrot_matrixrtc::{
-    RtcCallSession, RtcCallSessionEvent, Transport, livekit,
-    livekit_connection::{LivekitCallConnection, OpenIdToken, SfuConfig, fetch_sfu_config},
+    RtcCallSession, RtcCallSessionEvent, Transport, check_service_url, check_sfu_url, livekit,
+    livekit_connection::{
+        LivekitCallConnection, OpenIdToken, SfuConfig, fetch_sfu_config, jwt_service_http_client,
+    },
     reqwest,
 };
 use matrix_sdk::Client;
@@ -228,7 +230,8 @@ async fn run(
 
     let service_url = sfu_to_join(&client, &room_id, &engine, &preferred_foci).await?;
 
-    let http = mandelbrot_matrixrtc::reqwest::Client::new();
+    let http = jwt_service_http_client()
+        .map_err(|error| format!("failed to create the HTTP client: {error}"))?;
 
     // Connect to the SFU BEFORE advertising membership, so that a user who
     // cannot reach the SFU never appears in the call (#9).
@@ -385,6 +388,13 @@ async fn connect_to_sfu(
     ),
     String,
 > {
+    // The service URL comes from a call membership, which any room member
+    // can write. Plain HTTP is only good enough for a call server when the
+    // homeserver itself is reached that way, as in a loopback test stack.
+    let allow_plain = client.homeserver().scheme() == "http";
+    check_service_url(service_url, allow_plain)
+        .map_err(|error| format!("refusing the LiveKit service URL of this call: {error}"))?;
+
     let openid_token = get_openid_token(client).await?;
     let sfu_config: SfuConfig = fetch_sfu_config(
         http,
@@ -395,6 +405,9 @@ async fn connect_to_sfu(
     )
     .await
     .map_err(|error| format!("failed to fetch the SFU configuration: {error}"))?;
+
+    check_sfu_url(&sfu_config.url, allow_plain)
+        .map_err(|error| format!("refusing the SFU URL of this call: {error}"))?;
 
     Box::pin(LivekitCallConnection::connect(&sfu_config))
         .await
