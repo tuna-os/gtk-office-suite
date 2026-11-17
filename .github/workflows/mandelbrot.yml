@@ -11,10 +11,10 @@ on:
     paths:
       - 'mandelbrot/**'
       - '.github/workflows/mandelbrot.yml'
+  # No paths filter: `Mandelbrot gate` is a required check, so it has to
+  # report on every pull request. The `changes` job skips the real work when
+  # nothing under mandelbrot/ changed.
   pull_request:
-    paths:
-      - 'mandelbrot/**'
-      - '.github/workflows/mandelbrot.yml'
   workflow_dispatch:
 
 # A newer push to the same pull request supersedes the queued or running one. Main
@@ -27,7 +27,35 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Mandelbrot changes
+    runs-on: ubuntu-24.04
+    outputs:
+      mandelbrot: ${{ steps.diff.outputs.mandelbrot }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=true
+          if [ "$EVENT" = pull_request ]; then
+            if ! git diff --name-only "$BASE...$HEAD" |
+                grep -Eq '^(mandelbrot/|\.github/workflows/mandelbrot\.yml$)'; then
+              changed=false
+            fi
+          fi
+          echo "mandelbrot=$changed" >> "$GITHUB_OUTPUT"
+
   matrixrtc:
+    needs: changes
+    if: needs.changes.outputs.mandelbrot == 'true'
     name: Mandelbrot MatrixRTC engine (clippy, tests)
     runs-on: ubuntu-24.04
     steps:
@@ -40,6 +68,8 @@ jobs:
         run: cargo test --manifest-path mandelbrot/matrixrtc/Cargo.toml
 
   flatpak:
+    needs: changes
+    if: needs.changes.outputs.mandelbrot == 'true'
     name: Mandelbrot Flatpak build
     runs-on: ubuntu-24.04
     container:
@@ -66,3 +96,21 @@ jobs:
           manifest-path: mandelbrot/org.tunaos.mandelbrot.json
           build-bundle: false
           cache: false
+
+  gate:
+    name: Mandelbrot gate
+    if: always()
+    needs: [changes, matrixrtc, flatpak]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All Mandelbrot jobs passed or were skipped
+        env:
+          RESULTS: ${{ needs.changes.result }} ${{ needs.matrixrtc.result }} ${{ needs.flatpak.result }}
+        run: |
+          set -euo pipefail
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "a Mandelbrot job ended with: $result"; exit 1 ;;
+            esac
+          done
