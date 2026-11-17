@@ -66,6 +66,18 @@ pub struct SfuConfig {
     pub jwt: String,
 }
 
+/// The HTTP client to reach a JWT service with.
+///
+/// It does not follow redirects. The service URL is checked before the
+/// request (see [`check_service_url`](crate::focus_url::check_service_url));
+/// a redirect would send the request, with the OpenID token in it, to an
+/// address nothing checked.
+pub fn jwt_service_http_client() -> Result<reqwest::Client, LivekitError> {
+    Ok(reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?)
+}
+
 /// Fetch the SFU configuration (URL + JWT) from an MSC4195 `lk-jwt-service`.
 ///
 /// This uses the legacy `POST {service_url}/sfu/get` endpoint, sending the
