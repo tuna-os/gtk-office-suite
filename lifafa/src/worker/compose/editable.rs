@@ -1,7 +1,7 @@
 //! Taking a queued or saved message apart again for editing, and putting
 //! back the Bcc a sent copy or a retry needs.
 
-use crate::encoding::escape_html;
+use crate::encoding::text_lines_html;
 use crate::worker::compose::recipients::mailbox;
 use crate::worker::render::attachments::attachment_parts;
 use crate::worker::render::body::inline_cid_images;
@@ -54,6 +54,9 @@ pub(crate) struct EditableMessage {
     /// (see [`crate::models::TUTA_CONFIDENTIAL_HEADER`]); `None` for any
     /// other message.
     pub(crate) confidential: Option<bool>,
+    /// It has no HTML part: it was written in plain text, and opens in
+    /// plain text again (#634).
+    pub(crate) plain: bool,
 }
 
 /// Whoever the envelope names that none of the `headers` (address lists)
@@ -131,11 +134,23 @@ fn msgid_list(hv: &mail_parser::HeaderValue) -> String {
     }
 }
 
+/// Whether the message carries an HTML part of its own, rather than only
+/// the HTML mail-parser writes for a text part.
+fn has_html_part(p: &mail_parser::Message) -> bool {
+    p.html_body
+        .iter()
+        .filter_map(|&id| p.part(id))
+        .any(|part| matches!(part.body, mail_parser::PartType::Html(_)))
+}
+
 /// The body as the composer edits it: the HTML part with its `cid:`
 /// pictures inlined (their Content-IDs noted in `embedded`), else the text
-/// part escaped, a `<div>` per line.
+/// part escaped, its lines and indents kept.
 fn editable_body(parsed: Option<&mail_parser::Message>, embedded: &mut Vec<String>) -> String {
+    // Only an HTML part of its own: for a text part mail-parser writes
+    // HTML in which the text's indents collapse (#635).
     let html = parsed
+        .filter(|p| has_html_part(p))
         .and_then(|p| {
             let html = p.body_html(0)?;
             let mut budget = 16 * 1024 * 1024;
@@ -146,12 +161,15 @@ fn editable_body(parsed: Option<&mail_parser::Message>, embedded: &mut Vec<Strin
         let text = parsed
             .and_then(|p| p.body_text(0).map(|b| b.to_string()))
             .unwrap_or_default();
-        // The composer edits HTML, so plain text has to be escaped and its line
-        // breaks preserved — otherwise the whole body collapses into one line.
-        text.lines()
-            .map(|line| format!("<div>{}</div>", escape_html(line)))
-            .collect::<Vec<_>>()
-            .join("")
+        // One block of lines, the way the composer holds the lines it is
+        // given: a block per line would read back in plain text as a
+        // paragraph each.
+        let text = text.trim_end_matches(['\r', '\n']);
+        if text.is_empty() {
+            String::new()
+        } else {
+            format!("<div>{}</div>", text_lines_html(text))
+        }
     } else {
         html
     }
@@ -254,6 +272,7 @@ pub(crate) fn editable_from_raw(raw: &[u8], envelope_rcpts: &[String]) -> Editab
             .as_ref()
             .and_then(|p| p.header_raw(crate::models::TUTA_CONFIDENTIAL_HEADER))
             .map(|v| v.trim().eq_ignore_ascii_case("yes")),
+        plain: parsed.as_ref().is_some_and(|p| !has_html_part(p)),
     }
 }
 
@@ -313,6 +332,29 @@ mod tests {
             editable.body_html
         );
         assert!(editable.attachments.is_empty());
+    }
+
+    /// A plain-text draft opens with its lines in one block and its indents
+    /// kept (#635): a block per line read back as a paragraph each, and the
+    /// leading spaces collapsed away.
+    #[test]
+    fn a_plain_text_draft_keeps_its_lines_and_indents() {
+        let msg = OutgoingMessage {
+            to: "ada@example.com".into(),
+            subject: "List".into(),
+            body: "List:\n - Foo\n    - SubFoo\n\nEnd".into(),
+            ..sample_outgoing()
+        };
+        let raw = build_draft(&sample_account(), &msg)
+            .expect("builds")
+            .formatted();
+        let editable = editable_from_raw(&raw, &[]);
+        assert_eq!(
+            editable.body_html,
+            "<div>List:<br>\u{a0}- Foo<br>\u{a0}\u{a0}\u{a0}\u{a0}- SubFoo<br><br>End</div>"
+        );
+        // And in plain text, as it was written (#634).
+        assert!(editable.plain);
     }
 
     /// The copy filed in Sent names the Bcc recipients the wire copy leaves
@@ -386,6 +428,7 @@ mod tests {
         let editable = editable_from_raw(&email.formatted(), &rcpts);
 
         // The HTML alternative is what the composer edits, not the plain fallback.
+        assert!(!editable.plain);
         assert!(
             editable.body_html.contains("rich <b>body</b>"),
             "{}",

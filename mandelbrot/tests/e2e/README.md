@@ -113,7 +113,7 @@ evidence bundle before tearing the stack down.
 * it needs UDP 50100-50200 (and 50300-50400 for the federated stack) plus
   host networking for LiveKit,
 * being path-filtered, it cannot be a required check; Renovate merges the
-  updates it covers only once it is green (see `renovate.json`).
+  updates it covers only once it is green (see the repository root's `renovate.json`).
 
 A GitHub-hosted `ubuntu-latest` runner is sufficient: the job owns the VM's
 network namespace, so host networking and arbitrary UDP ranges work, and

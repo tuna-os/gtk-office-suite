@@ -13,6 +13,7 @@ pub(super) struct AliasDialog {
     port_row: adw::EntryRow,
     user_row: adw::EntryRow,
     pass_row: adw::PasswordEntryRow,
+    saves_row: adw::SwitchRow,
     test_btn: gtk::Button,
     test_result: gtk::Label,
 }
@@ -170,8 +171,11 @@ impl AccountsWindow {
         let (name, addr) = split_identity(&alias.identity);
         let identity_group = adw::PreferencesGroup::new();
         identity_group.set_description(Some(
-            "The composer's From menu offers this address, and replies to \
-             mail sent to it answer from it.",
+            i18n(
+                "Will appear in the composer's From menu. Replies to mail sent here will come \
+                 from this address.",
+            )
+            .as_str(),
         ));
         let name_row = adw::EntryRow::builder()
             .title(i18n("Display name (optional)"))
@@ -188,11 +192,9 @@ impl AccountsWindow {
         smtp_group.set_title(&i18n("Sending"));
         let smtp_switch = adw::SwitchRow::builder()
             .title(i18n("Own SMTP server"))
-            .subtitle(
-                "Send through the alias's own mail provider, with its own \
-                 sign-in — instead of this account's server. Needed when the \
-                 account's provider (e.g. Gmail) rewrites the sender address.",
-            )
+            .subtitle(i18n(
+                "Needed when this account's provider, such as Gmail, rewrites the sender.",
+            ))
             .build();
         smtp_switch.set_active(alias.has_own_smtp());
         let host_row = adw::EntryRow::builder().title(i18n("SMTP server")).build();
@@ -207,11 +209,19 @@ impl AccountsWindow {
             .title(i18n("SMTP password"))
             .build();
         pass_row.set_text(&alias.smtp_password);
+        // The account's switch of the same name covers only its own SMTP
+        // (#647): this one is for a server that files in this account too.
+        let saves_row = adw::SwitchRow::builder()
+            .title(i18n("Server saves its own copy of sent mail"))
+            .subtitle(i18n("Only when this server files sent mail in this account."))
+            .build();
+        saves_row.set_active(alias.server_saves_sent);
         smtp_group.add(&smtp_switch);
         smtp_group.add(&host_row);
         smtp_group.add(&port_row);
         smtp_group.add(&user_row);
         smtp_group.add(&pass_row);
+        smtp_group.add(&saves_row);
 
         let test_btn = gtk::Button::with_label(&i18n("Test SMTP"));
         test_btn.set_halign(gtk::Align::Start);
@@ -230,6 +240,7 @@ impl AccountsWindow {
             port_row.upcast_ref(),
             user_row.upcast_ref(),
             pass_row.upcast_ref(),
+            saves_row.upcast_ref(),
             test_box.upcast_ref(),
         ] {
             smtp_switch
@@ -252,7 +263,8 @@ impl AccountsWindow {
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             .propagate_natural_height(true)
-            .max_content_height(640)
+            // The SMTP fields need about 670 px; a short screen still scrolls.
+            .max_content_height(760)
             .child(&content)
             .build();
         let toolbar = adw::ToolbarView::new();
@@ -260,6 +272,14 @@ impl AccountsWindow {
         toolbar.set_content(Some(&scroller));
         window.set_content(Some(&toolbar));
 
+        // The window keeps the height it opened with unless asked again:
+        // a default height of -1 takes the content's, so it grows down for
+        // the SMTP fields and shrinks back when they go.
+        let w = window.clone();
+        smtp_switch.connect_active_notify(move |_| {
+            let w = w.clone();
+            gtk::glib::idle_add_local_once(move || w.set_default_size(w.width(), -1));
+        });
         let w = window.clone();
         cancel.connect_clicked(move |_| w.close());
         let s = sender.input_sender().clone();
@@ -286,6 +306,7 @@ impl AccountsWindow {
             port_row,
             user_row,
             pass_row,
+            saves_row,
             test_btn,
             test_result,
         });
@@ -342,6 +363,7 @@ impl AccountsWindow {
             // dropped on Save, when the removal actually takes effect.
             self.alias_edits.remove(i);
             self.rebuild_alias_list(&widgets.form.aliases_list, &sender);
+            self.refresh_copy_rows(widgets);
         }
     }
 
@@ -366,18 +388,32 @@ impl AccountsWindow {
         let user = trimmed(&d.user_row);
         let pass = d.pass_row.text().to_string();
 
-        // The address must look like one, and must not shadow the
-        // account's own address or another alias — the send path picks
-        // an alias's transport by matching the From address, so a
-        // duplicate would make "which server sends this?" ambiguous.
+        // The address must look like one. Several names may share an
+        // address (a manager and a director writing from one mailbox), but
+        // then only through the account's own SMTP: the send path picks an
+        // alias's server by the From address alone, so an alias with its
+        // own server at a shared address, or at the account's address,
+        // would decide which server sends for all of them.
         let account_email = trimmed(&widgets.form.email_row);
-        let duplicate = addr.eq_ignore_ascii_case(&account_email)
+        let shared = addr.eq_ignore_ascii_case(&account_email)
             || self.alias_edits.iter().enumerate().any(|(i, a)| {
                 Some(i) != self.alias_editing && a.address().eq_ignore_ascii_case(&addr)
             });
+        let conflict = self.alias_edits.iter().enumerate().any(|(i, a)| {
+            Some(i) != self.alias_editing
+                && a.has_own_smtp()
+                && a.address().eq_ignore_ascii_case(&addr)
+        });
         let mut bad = false;
-        if addr.is_empty() || !addr.contains('@') || duplicate {
+        d.addr_row.set_tooltip_text(None);
+        if addr.is_empty() || !addr.contains('@') {
             d.addr_row.add_css_class("error");
+            bad = true;
+        } else if conflict || (shared && own_smtp) {
+            d.addr_row.add_css_class("error");
+            d.addr_row.set_tooltip_text(Some(
+                i18n("Names that share an address send through this account's server.").as_str(),
+            ));
             bad = true;
         }
         if own_smtp {
@@ -408,6 +444,7 @@ impl AccountsWindow {
             smtp_port: port,
             smtp_username: if own_smtp { user } else { String::new() },
             smtp_password: if own_smtp { pass } else { String::new() },
+            server_saves_sent: own_smtp && d.saves_row.is_active(),
         };
         match self.alias_editing {
             Some(i) if i < self.alias_edits.len() => self.alias_edits[i] = alias,
@@ -416,6 +453,7 @@ impl AccountsWindow {
         self.alias_editing = None;
         self.close_alias_dialog();
         self.rebuild_alias_list(&widgets.form.aliases_list, &sender);
+        self.refresh_copy_rows(widgets);
     }
 
     pub(super) fn on_alias_dialog_test(
@@ -432,6 +470,7 @@ impl AccountsWindow {
             smtp_port: trimmed(&d.port_row).parse().unwrap_or(587),
             smtp_username: trimmed(&d.user_row),
             smtp_password: d.pass_row.text().to_string(),
+            ..AliasConfig::default()
         };
         let email = trimmed(&widgets.form.email_row);
         d.test_btn.set_sensitive(false);

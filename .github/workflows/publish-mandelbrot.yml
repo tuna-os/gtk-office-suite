@@ -1,0 +1,106 @@
+name: Publish Mandelbrot
+
+# Mandelbrot, the suite's Matrix client, published from this repository
+# (docs/CUTOVER-LIFAFA-MANDELBROT.md, step 2). It ships the way it did from
+# tuna-os/mandelbrot (mandelbrot/RELEASING.md): an OCI Flatpak per
+# architecture on ghcr.io/tuna-os/mandelbrot, indexed in the TunaOS remote
+# (oci+https://tunaos.org/flatpak), through the same reusable workflow
+# publish-flatpak.yml uses for Letters, Tables and Decks.
+#
+# Its own tags, `mandelbrot-v<version>`, because it keeps its own version;
+# the suite's `v*` tags publish the three office apps and do not start this.
+# Its release waits on its CI (mandelbrot.yml) rather than the suite's soak,
+# which has no Mandelbrot journeys yet (the cutover's step 0).
+#
+# Run it by hand without `publish` first: that builds both architectures and
+# pushes nothing. Pushing to ghcr.io/tuna-os/mandelbrot from here needs the
+# package to grant this repository write access (the cutover's step 3).
+
+on:
+  push:
+    tags: ['mandelbrot-v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to GHCR and update the central index (leave off for a build-only validation run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+      packages: write
+    # Pinned to the same reviewed commit as publish-flatpak.yml (#286, #1007).
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@6c76230bdd69e19634d9c74d5e3edbd8eacadd9f # main  # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
+    with:
+      app-id: org.tunaos.mandelbrot
+      manifest-path: mandelbrot/org.tunaos.mandelbrot.json
+      repo-name: tuna-os/mandelbrot
+      # mandelbrot.yml builds it against GNOME 51.
+      flatpak-builder-image: gnome-51
+      attach-bundles: true
+      # Not `A && B || C`, which publishes when B is false (see
+      # publish-flatpak.yml).
+      publish: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    secrets:
+      FLATPAK_INDEX_DEPLOY_KEY: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
+
+  # The GitHub Release for a tag, as tuna-os/mandelbrot's publish workflow
+  # wrote it (mandelbrot/RELEASING.md): "Mandelbrot <version>", the notes of
+  # the matching <release> in the metainfo, the install instructions, and
+  # each architecture's image digest read back from GHCR. A pre-release when
+  # the metainfo says the release is not stable.
+  github-release:
+    name: GitHub Release
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/mandelbrot-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # gh release create/edit
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      # The architectures the reusable workflow builds by default (its `archs`
+      # input, not overridden above). Keep in sync if that changes.
+      ARCHS: x86_64 aarch64
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write release notes
+        run: |
+          set -euo pipefail
+          version="${TAG#mandelbrot-v}"
+          pairs=()
+          for arch in $ARCHS; do
+            # The package is public; an anonymous pull token is enough.
+            digest=$(skopeo inspect --format '{{.Digest}}' \
+              "docker://ghcr.io/tuna-os/mandelbrot:${TAG}-${arch}")
+            pairs+=("${arch}=${digest}")
+          done
+          python3 mandelbrot/build-aux/release-notes.py notes "$version" "$TAG" "${pairs[@]}" > notes.md
+          echo "RELEASE_TYPE=$(python3 mandelbrot/build-aux/release-notes.py type "$version")" >> "$GITHUB_ENV"
+
+      - name: Create or update the release
+        run: |
+          set -euo pipefail
+          prerelease=false
+          [ "$RELEASE_TYPE" = stable ] || prerelease=true
+          title="Mandelbrot ${TAG#mandelbrot-v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$title" --notes-file notes.md \
+              --prerelease="$prerelease"
+          else
+            gh release create "$TAG" --verify-tag --title "$title" --notes-file notes.md \
+              --prerelease="$prerelease"
+          fi

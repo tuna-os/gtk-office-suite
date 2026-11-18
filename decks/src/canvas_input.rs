@@ -20,6 +20,17 @@ use decks_core::engine::Slide;
 use decks_core::guides::{snap_move, snap_resize, Edges, Guide, Rect};
 use decks_core::undo::{obj_bounds, set_obj_origin};
 
+/// With `DECKS_TRACE_INPUT` set, what the canvas's pointer gestures saw goes
+/// to stderr, which a failed GUI journey keeps as its app.log. For input that
+/// works everywhere but one display configuration (the release soak's
+/// wide-1280-scale2 double-click), where only the CI runner reproduces it.
+pub(crate) fn trace_input(what: impl FnOnce() -> String) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("DECKS_TRACE_INPUT").is_some_and(|v| !v.is_empty())) {
+        eprintln!("decks input: {}", what());
+    }
+}
+
 /// How close, in canvas pixels, an edge has to come to snap to a guide.
 const SNAP_PX: f64 = 6.0;
 
@@ -46,8 +57,15 @@ fn edges_of(handle: crate::canvas::SelectionHandle) -> Edges {
 }
 
 /// Where a move ends up: smart guides first (docs/DESIGN-UI.md), then
-/// the grid on an axis no guide claimed, when the grid is on.
+/// the grid on an axis no guide claimed, when the grid is on. A press that
+/// never moved leaves the object where it is: snapping it there anyway
+/// nudged an off-grid box on every click, and the first click of a
+/// double-click moved a small text box out from under the pointer, so the
+/// second landed on its resize handle and the text editor never opened.
 fn moved(orig: Rect, d: (f64, f64), others: &[Rect], tol: f64, grid: bool) -> (Rect, Vec<Guide>) {
+    if d == (0.0, 0.0) {
+        return (orig, Vec::new());
+    }
     let raw = (orig.0 + d.0, orig.1 + d.1, orig.2, orig.3);
     let s = snap_move(raw, others, tol);
     let mut r = s.rect;
@@ -60,7 +78,8 @@ fn moved(orig: Rect, d: (f64, f64), others: &[Rect], tol: f64, grid: bool) -> (R
     (r, s.guides)
 }
 
-/// Where a resize ends up, by the same rules.
+/// Where a resize ends up, by the same rules; a press on a handle that never
+/// moved leaves the object as it was.
 fn resized(
     handle: crate::canvas::SelectionHandle,
     orig: Rect,
@@ -69,6 +88,9 @@ fn resized(
     tol: f64,
     grid: bool,
 ) -> (Rect, Vec<Guide>) {
+    if d == (0.0, 0.0) {
+        return (orig, Vec::new());
+    }
     let e = edges_of(handle);
     let (mut x, mut y, mut w, mut h) = orig;
     if e.left {
@@ -143,6 +165,7 @@ pub(crate) fn register_canvas_pointer_input(
         let guides_e = guides.clone();
 
         drag.connect_drag_begin(move |_g, x, y| {
+            trace_input(|| format!("drag begin at {x:.1},{y:.1} on a {}x{} canvas", cs_b.width(), cs_b.height()));
             let Some(idx) = ctl_b.selected_slide_index() else { return };
             let Some(slide_id) = ctl_b.slide_id_at(idx) else { return };
             let sl = ss_b.borrow();
@@ -153,6 +176,7 @@ pub(crate) fn register_canvas_pointer_input(
                     if let Some(handle) = crate::canvas::hit_test_handles(
                         &sl[idx].objects[oi], x, y, cs_b.width() as f64, cs_b.height() as f64
                     ) {
+                        trace_input(|| format!("drag begin grabs handle {handle:?}"));
                         let object_id = ctl_b.object_id_at(idx, oi).unwrap_or(u64::MAX);
                         if handle == crate::canvas::SelectionHandle::Rotate {
                             dm_begin.set(Some(DragMode::Rotate {
@@ -176,6 +200,7 @@ pub(crate) fn register_canvas_pointer_input(
             }
 
             let (sx, sy) = canvas_to_slide(x, y, cs_b.width() as f64, cs_b.height() as f64);
+            trace_input(|| format!("drag begin at slide {sx:.1},{sy:.1}"));
             if let Some(oi) = hit_test_object(&sl[idx].objects, sx, sy) {
                 let object_id = ctl_b.object_id_at(idx, oi).unwrap_or(u64::MAX);
                 let orig = obj_bounds(&sl[idx].objects[oi]);
@@ -236,6 +261,7 @@ pub(crate) fn register_canvas_pointer_input(
         });
 
         drag.connect_drag_end(move |_g, dx, dy| {
+            trace_input(|| format!("drag end by {dx:.2},{dy:.2}"));
             let Some(idx) = ctl_e.selected_slide_index() else { dm_end.set(None); return };
             let (_, _, sw, _) = crate::canvas::slide_geometry(cs_e.width() as f64, cs_e.height() as f64);
             let k = 960.0 / sw.max(1.0);
@@ -280,4 +306,28 @@ pub(crate) fn register_canvas_pointer_input(
             cs_e.queue_draw();
         });
         canvas.add_controller(drag);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{moved, resized};
+    use crate::canvas::SelectionHandle;
+
+    // DCK-007's text box: off the 20-unit grid in y.
+    const BOX: (f64, f64, f64, f64) = (200.0, 150.0, 200.0, 40.0);
+
+    #[test]
+    fn a_click_without_motion_does_not_move_an_off_grid_object() {
+        assert_eq!(moved(BOX, (0.0, 0.0), &[], 10.0, true).0, BOX);
+    }
+
+    #[test]
+    fn a_press_on_a_handle_without_motion_does_not_resize() {
+        assert_eq!(resized(SelectionHandle::TopCenter, BOX, (0.0, 0.0), &[], 10.0, true).0, BOX);
+    }
+
+    #[test]
+    fn a_real_move_still_snaps_to_the_grid() {
+        assert_eq!(moved(BOX, (1.0, 3.0), &[], 0.0, true).0, (200.0, 160.0, 200.0, 40.0));
+    }
 }

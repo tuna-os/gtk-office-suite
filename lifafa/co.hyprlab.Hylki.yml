@@ -40,6 +40,7 @@ finish-args:
   - --talk-name=org.kde.StatusNotifierWatcher      # optional tray icon (#116); absent on plain GNOME
   - --talk-name=com.canonical.Unity                # notice Dash/Ubuntu Dock coming back, to resend the badge (#353); Flatpak has no --see-name
   - --talk-name=org.gnome.Nautilus                 # "Restart Files" after installing the Files extension (#188)
+  - --talk-name=org.gnome.NautilusPreviewer        # preview attachments in the GNOME file previewer, Sushi (#625)
   - --talk-name=com.microsoft.identity.broker1      # Microsoft sign-in on a managed device, Conditional Access (#329)
   # Deliberately NOT --talk-name=org.freedesktop.Flatpak: that permits
   # `flatpak-spawn --host`, i.e. arbitrary command execution outside the
@@ -249,9 +250,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/hyprlab/hylki.git
-        tag: v1.47.1
-        commit: 3e4044407543f12792f39372b0f8f92ffd066e84
-        disable-submodules: true
+        tag: v1.48.0
+        commit: fa7b87a243f38ca6ff61ae2e946b8138358da635
       # Vendored crate sources for the offline Flatpak build. Generate with:
       #   flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
       - cargo-sources.json

@@ -55,10 +55,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev libreoffice-writer \
             libreoffice-calc libreoffice-impress poppler-utils
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@releases/nextest
+      - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - name: LibreOffice round trips and the LibreOffice-authored corpus

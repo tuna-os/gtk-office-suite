@@ -2,21 +2,38 @@
 //! banners, in the reader's grounds and accent. One `format!` so the bytes
 //! stay exactly what the page has always received.
 
+use super::frame::ThemeColors;
+
 /// The wrapper's stylesheet: the cards, their headers and chips, in the
-/// reader's grounds and accent.
+/// reader's grounds, foreground and accent. The marks and verdicts wear
+/// the theme's status colors, as the app's own widgets do (#619).
+// Each a color or a fragment dropped into the one `format!`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn wrapper_css(
     scheme: &str,
     page: &str,
     bg: &str,
     chrome: &str,
     accent: &str,
+    colors: &ThemeColors,
     toggle_color: &str,
     plain_css: &str,
 ) -> String {
+    let ThemeColors {
+        fg,
+        error,
+        warning,
+        success,
+    } = colors;
+    let ftype_css = ftype_css(scheme == "dark", error);
     format!(
         "\
          :root{{color-scheme:{scheme};}}\
-         body{{margin:0;padding:0;background:{page};font:14px/1.55 system-ui,sans-serif;}}\
+         /* The theme's own foreground, not the page's black: the chips\
+         and buttons mix their fills from it, so they come out as light as\
+         libadwaita's (#651). The messages are in frames of their own. */\
+         body{{margin:0;padding:0;background:{page};color:{fg};\
+         font:14px/1.55 system-ui,sans-serif;}}\
          body.hylki-conv{{padding:14px;}}\
          iframe.hylki-frame{{width:100%;border:0;display:block;background:{bg};\
          visibility:hidden;}}\
@@ -39,15 +56,23 @@ pub(super) fn wrapper_css(
          margin:-6px 0 12px;padding:0;padding-inline:50px 16px;position:relative;z-index:2;\
          cursor:pointer;user-select:none;}}\
          .hylki-msg.hylki-folded>:not(.hylki-fbar):not(.hylki-msg-hdr){{display:none;}}\
-         .hylki-marks{{display:inline-flex;gap:8px;align-self:center;flex:none;}}\
-         .hylki-mark{{display:inline-flex;opacity:0.55;line-height:0;}}\
+         /* Contents, not a box: a slot that is not drawn then takes no\
+         gap in the meta row either (#616). */\
+         .hylki-marks{{display:contents;}}\
+         .hylki-mark{{display:inline-flex;opacity:0.55;line-height:0;\
+         align-self:center;flex:none;}}\
          .hylki-mark svg{{width:16px;height:16px;}}\
          .hylki-mark svg,.hylki-mark svg *{{fill:currentColor;}}\
          .hylki-mark-none{{width:16px;height:16px;}}\
-         /* The star keeps its place unstarred, so starring moves nothing. */\
+         /* An unstarred star and a missing paperclip keep their place, so\
+         the marks of a conversation's cards stand in the same columns, but\
+         only while some message on the page fills that column: otherwise\
+         they are empty space between the chips and the date (#616). */\
          .hylki-mark-star{{color:#e5a50a;opacity:1;}}\
-         .hylki-mark-high{{color:#e01b24;opacity:1;}}\
+         .hylki-mark-high{{color:{error};opacity:1;}}\
          .hylki-msg:not(.starred) .hylki-mark-star{{visibility:hidden;}}\
+         body:not(:has(.hylki-msg.starred)) .hylki-mark-star,\
+         body:not(:has(.hylki-mark-clip)) .hylki-mark-none{{display:none;}}\
          body.hylki-folds .hylki-msg-hdr{{cursor:pointer;}}\
          @media print{{.hylki-msg.hylki-folded>:not(.hylki-fbar){{display:revert !important;}}\
          .hylki-msg.hylki-folded>.hylki-fbar{{display:none !important;}}}}\
@@ -132,40 +157,35 @@ pub(super) fn wrapper_css(
          .hylki-inv-row{{opacity:0.8;margin-top:2px;}}\
          .hylki-inv-note{{margin-top:4px;opacity:0.8;font-style:italic;}}\
          .hylki-inv-acts{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}}\
-         .hylki-inv-btn{{border:1px solid rgba(128,128,128,0.4);border-radius:6px;\
-         padding:3px 12px;background:rgba(128,128,128,0.1);color:inherit;font:inherit;\
-         font-size:0.95em;font-weight:600;cursor:pointer;}}\
-         .hylki-inv-btn:hover{{background:rgba(128,128,128,0.22);}}\
+         .hylki-inv-btn{{border:none;border-radius:6px;\
+         padding:3px 12px;background:color-mix(in srgb,currentColor 10%,transparent);\
+         color:inherit;font:inherit;font-size:0.95em;font-weight:600;cursor:pointer;}}\
+         .hylki-inv-btn:hover{{background:color-mix(in srgb,currentColor 15%,transparent);}}\
+         .hylki-inv-btn:active{{background:color-mix(in srgb,currentColor 30%,transparent);}}\
          /* The answer already given is marked, so a meeting opened\
          again shows where it stands at a glance. */\
-         .hylki-inv-btn.on{{border-color:{accent};color:{accent};\
+         .hylki-inv-btn.on{{color:{accent};\
          background:color-mix(in srgb, {accent} 16%, transparent);}}\
+         /* An attachment is a linked pair of filled buttons, open and\
+         save, with no outline: a libadwaita .linked box (#651). */\
          .hylki-attw{{display:inline-flex;align-items:stretch;max-width:100%;\
-         border:1px solid rgba(128,128,128,0.35);border-radius:8px;overflow:hidden;\
-         background:rgba(128,128,128,0.08);}}\
+         gap:1px;border-radius:6px;overflow:hidden;}}\
+         .hylki-attc,.hylki-attsave{{border:none;color:inherit;cursor:pointer;\
+         background:color-mix(in srgb,currentColor 10%,transparent);}}\
+         .hylki-attc:hover,.hylki-attsave:hover{{\
+         background:color-mix(in srgb,currentColor 15%,transparent);}}\
+         .hylki-attc:active,.hylki-attsave:active{{\
+         background:color-mix(in srgb,currentColor 30%,transparent);}}\
          .hylki-attc{{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;\
-         border:none;background:none;color:inherit;font:inherit;font-size:0.85em;\
-         cursor:pointer;min-width:0;max-width:320px;}}\
-         .hylki-attc:hover{{background:rgba(128,128,128,0.18);}}\
+         font:inherit;font-size:0.85em;min-width:0;max-width:320px;}}\
          .hylki-attc svg{{width:16px;height:16px;flex:none;display:block;}}\
          .hylki-attc svg,.hylki-attc svg *{{fill:currentColor;}}\
-         .hylki-attc.ftype-pdf svg{{color:#e01b24;}}\
-         .hylki-attc.ftype-doc svg{{color:#3584e4;}}\
-         .hylki-attc.ftype-sheet svg{{color:#2ec27e;}}\
-         .hylki-attc.ftype-slides svg{{color:#ff7800;}}\
-         .hylki-attc.ftype-archive svg{{color:#e5a50a;}}\
-         .hylki-attc.ftype-audio svg{{color:#9141ac;}}\
-         .hylki-attc.ftype-video svg{{color:#e6689e;}}\
-         .hylki-attc.ftype-calendar svg{{color:#009e8f;}}\
-         .hylki-attc.ftype-image svg{{color:#1c9bd8;}}\
-         .hylki-attc.ftype-generic svg{{color:#8c8c8c;}}\
+         {ftype_css}\
          .hylki-attn{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}}\
          .hylki-attz{{opacity:0.55;white-space:nowrap;flex:none;}}\
-         .hylki-attsave{{display:inline-flex;align-items:center;padding:0 7px;border:none;\
-         border-inline-start:1px solid rgba(128,128,128,0.35);background:none;color:inherit;\
-         cursor:pointer;opacity:0.6;}}\
-         .hylki-attsave:hover{{opacity:1;background:rgba(128,128,128,0.18);}}\
-         .hylki-attsave svg{{width:14px;height:14px;display:block;}}\
+         .hylki-attsave{{display:inline-flex;align-items:center;padding:0 7px;}}\
+         .hylki-attsave svg{{width:14px;height:14px;display:block;opacity:0.6;}}\
+         .hylki-attsave:hover svg{{opacity:1;}}\
          .hylki-attsave svg,.hylki-attsave svg *{{fill:currentColor;}}\
          .hylki-atts.flash .hylki-attw{{animation:hylki-att-flash 1.2s ease-out;}}\
          @keyframes hylki-att-flash{{0%,40%{{box-shadow:0 0 0 3px rgba(53,132,228,0.7);}}\
@@ -191,7 +211,7 @@ pub(super) fn wrapper_css(
          offers Copy / New Message. */\
          /* Sender-authentication seal (#88): invisible until a\
          verdict arrives; a pass wears Bazaar's fixed blue (never the\
-         system accent), problems the warning/error reds.\
+         system accent), problems the theme's warning and error colors.\
          Sized in em and anchored to the text baseline, then eased\
          down to the name's optical centre with an em transform\
          (margins can't move it: WebKit synthesizes the missing\
@@ -206,8 +226,8 @@ pub(super) fn wrapper_css(
          .hylki-verify svg,.hylki-verify svg *{{fill:currentColor;}}\
          .hylki-verify.trust-pass{{color:#3584e4;}}\
          .hylki-verify.trust-unverified{{color:currentColor;opacity:0.4;}}\
-         .hylki-verify.trust-suspicious{{color:#cd9309;}}\
-         .hylki-verify.trust-fail{{color:#c01c28;}}\
+         .hylki-verify.trust-suspicious{{color:{warning};}}\
+         .hylki-verify.trust-fail{{color:{error};}}\
          /* The OpenPGP chip (#133), a labelled pill since #300: the\
          verdict reads in words on a wash of its color. Text of its\
          own, so it sits on the name's baseline without the seal's\
@@ -222,9 +242,9 @@ pub(super) fn wrapper_css(
          .hylki-pgp svg,.hylki-pgp svg *{{fill:currentColor;}}\
          .hylki-pgp.enc svg:first-child{{display:block;}}\
          .hylki-pgp.sig svg:nth-child(2){{display:block;}}\
-         .hylki-pgp.pgp-good{{color:#26a269;background:rgba(38,162,105,0.16);}}\
-         .hylki-pgp.pgp-warn{{color:#cd9309;background:rgba(205,147,9,0.16);}}\
-         .hylki-pgp.pgp-bad{{color:#c01c28;background:rgba(192,28,40,0.14);}}\
+         .hylki-pgp.pgp-good{{color:{success};background:color-mix(in srgb,{success} 16%,transparent);}}\
+         .hylki-pgp.pgp-warn{{color:{warning};background:color-mix(in srgb,{warning} 16%,transparent);}}\
+         .hylki-pgp.pgp-bad{{color:{error};background:color-mix(in srgb,{error} 14%,transparent);}}\
          .hylki-pgp:hover{{filter:brightness(1.1);}}\
          /* The sensitivity label (#411): the OpenPGP pill's shape in a\
          neutral wash, since a label is a statement, not a verdict.\
@@ -273,7 +293,7 @@ pub(super) fn wrapper_css(
          .hylki-read svg{{width:1.05em;height:1.05em;display:block;}}\
          .hylki-read svg,.hylki-read svg *{{fill:currentColor;}}\
          .hylki-read.asked{{opacity:0.55;}}\
-         .hylki-read.read{{color:#26a269;}}\
+         .hylki-read.read{{color:{success};}}\
          .hylki-dot{{width:8px;height:8px;border-radius:50%;background:#3584e4;\
          flex:none;align-self:center;}}\
          .hylki-end{{height:1px;}}\
@@ -301,8 +321,11 @@ pub(super) fn wrapper_css(
          .hylki-acts-toggle svg{{width:14px;height:14px;display:block;}}\
          .hylki-acts-toggle svg,.hylki-acts-toggle svg *{{fill:currentColor;}}\
          .hylki-acts-toggle:hover{{opacity:1;background:rgba(128,128,128,0.18);}}\
-         .hylki-folder{{padding:0.05em 0.45em;border-radius:0.7em;\
-         font-size:0.78em;opacity:0.75;border:1px solid currentColor;\
+         /* The folder is a label, not a button: a filled pill (#651),\
+         the recipients chip's height but round. */\
+         .hylki-folder{{padding:0.15em 0.6em;border-radius:999px;\
+         font-size:0.78em;opacity:0.75;\
+         background:color-mix(in srgb,currentColor 13%,transparent);\
          white-space:nowrap;flex:none;}}\
          .hylki-rcpt-toggle{{font:inherit;font-size:0.78em;color:inherit;\
          background:color-mix(in srgb,currentColor 10%,transparent);\
@@ -335,4 +358,19 @@ pub(super) fn wrapper_css(
          .hylki-folder,.hylki-rcpt div){{unicode-bidi:plaintext;}}\
          "
     )
+}
+
+/// The attachment chips' file-type icons in the theme's colors (#651): a
+/// PDF wears the error color, as the importance mark does, and the rest the
+/// GNOME palette step for the scheme. The same mapping as `.ftype-*` in the
+/// app (`thumbnails::FTYPE_PALETTE`), as hex: the reader has no libadwaita
+/// stylesheet to name the palette from.
+fn ftype_css(dark: bool, error: &str) -> String {
+    let mut css = format!(".hylki-attc.ftype-pdf svg{{color:{error};}}");
+    for c in crate::ui::thumbnails::FTYPE_PALETTE {
+        let hex = if dark { c.dark } else { c.light };
+        css.push_str(&format!(".hylki-attc.ftype-{} svg{{color:{hex};}}", c.kind));
+    }
+    css.push_str(".hylki-attc.ftype-image svg,.hylki-attc.ftype-generic svg{opacity:0.55;}");
+    css
 }

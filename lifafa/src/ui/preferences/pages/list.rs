@@ -13,6 +13,7 @@ pub(in crate::ui::preferences) struct ListPage {
     pub(in crate::ui::preferences) avatars_row: adw::SwitchRow,
     pub(in crate::ui::preferences) own_mailbox_face_row: adw::SwitchRow,
     pub(in crate::ui::preferences) list_layout_row: adw::ComboRow,
+    pub(in crate::ui::preferences) list_follows_window_row: adw::SwitchRow,
     pub(in crate::ui::preferences) preview_lines_row: adw::ComboRow,
     pub(in crate::ui::preferences) group_by_date_row: adw::SwitchRow,
     pub(in crate::ui::preferences) pills_below_row: adw::SwitchRow,
@@ -68,6 +69,18 @@ impl ListPage {
             });
         }
         preferences_group_1.add(&list_layout_row);
+        // The list's width, or its share of the window, as the window
+        // resizes (upstream #648).
+        let list_follows_window_row = adw::SwitchRow::default();
+        list_follows_window_row.set_title(&i18n("Resize the list with the window"));
+        list_follows_window_row.set_subtitle(&i18n("Off, it keeps its width and the reader resizes."));
+        {
+            let sender = sender.clone();
+            list_follows_window_row.connect_active_notify(move |row| {
+                let _ = sender.output(PrefOutput::SetListFollowsWindow(row.is_active()));
+            });
+        }
+        preferences_group_1.add(&list_follows_window_row);
         let preview_lines_row = adw::ComboRow::default();
         preview_lines_row.set_title(&i18n("Preview lines"));
         preview_lines_row.set_subtitle(&i18n("Off also stops downloading previews."));
@@ -221,6 +234,7 @@ impl ListPage {
             avatars_row,
             own_mailbox_face_row,
             list_layout_row,
+            list_follows_window_row,
             preview_lines_row,
             group_by_date_row,
             pills_below_row,

@@ -13,6 +13,7 @@
     "--socket=wayland",
     "--device=dri",
     "--own-name=org.tunaos.decks",
+    "--talk-name=org.tunaos.mandelbrot",
     "--filesystem=xdg-documents"
   ],
   "build-options": {

@@ -225,6 +225,9 @@
     "B": "green",
     "C": "green"
   },
+  "letters/odt-list-hanging": {
+    "A": "green"
+  },
   "letters/odt-page-break-spacing": {
     "A": "amber",
     "B": "amber",

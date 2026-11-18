@@ -55,6 +55,21 @@ pub fn chip_run(chip: Chip, label: impl Into<String>) -> Run {
     Run { text: label.into(), style: RunStyle { chip: Some(chip), link, ..Default::default() } }
 }
 
+/// Whether a click may open `uri`: a web or mail address. A chip read from
+/// a file holds whatever the file says, so this is checked where the link
+/// is opened: a crafted document cannot make the card's button launch a
+/// `file:` path or another program's scheme. Decks applies the same rule to
+/// linked text (`decks_core::rich_text::is_followable`).
+pub fn is_followable(uri: &str) -> bool {
+    let scheme = uri.split(':').next().unwrap_or("");
+    uri.contains(':') && ["http", "https", "mailto"].iter().any(|ok| scheme.eq_ignore_ascii_case(ok))
+}
+
+/// The address `chip`'s card may open: its link, when that is followable.
+pub fn open_target(chip: &Chip) -> Option<String> {
+    chip_run(chip.clone(), "").style.link.filter(|uri| is_followable(uri))
+}
+
 /// A date chip for `date`.
 pub fn date_chip(date: NaiveDate) -> Run {
     chip_run(Chip { kind: ChipKind::Date, value: date.format("%Y-%m-%d").to_string() }, date_label(date))
@@ -205,6 +220,22 @@ mod tests {
 
     fn day(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn a_chip_from_a_file_opens_only_a_web_or_mail_address() {
+        let link = |value: &str| open_target(&Chip { kind: ChipKind::Link, value: value.into() });
+        assert_eq!(link("https://gnome.org/").as_deref(), Some("https://gnome.org/"));
+        assert_eq!(link("HTTP://gnome.org/").as_deref(), Some("HTTP://gnome.org/"));
+        assert_eq!(link("mailto:ada@example.org").as_deref(), Some("mailto:ada@example.org"));
+        // What a crafted content-control tag can hold instead.
+        for value in ["file:///etc/passwd", "smb://host/share", "ssh://host", "javascript:alert(1)", "/etc/passwd", "gnome.org", ""] {
+            assert_eq!(link(value), None, "{value}");
+        }
+        let person = |value: &str| open_target(&Chip { kind: ChipKind::Person, value: value.into() });
+        assert_eq!(person("ada@example.org").as_deref(), Some("mailto:ada@example.org"));
+        assert_eq!(person("Grace Hopper"), None);
+        assert_eq!(open_target(&Chip { kind: ChipKind::Date, value: "2026-10-03".into() }), None);
     }
 
     fn describe(runs: &[Run]) -> Vec<(ChipKind, String, String)> {

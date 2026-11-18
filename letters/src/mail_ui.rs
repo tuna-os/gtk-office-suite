@@ -31,13 +31,14 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
             let Some(page) = tab_view.selected_page() else { return };
             let Some(buf) = crate::dialogs::active_buffer(&tab_view) else { return };
             let name = suite_common::mail::attachment_name(page.title().as_str(), extension);
-            let dir = std::env::temp_dir().join(format!("letters-mail-{}", std::process::id()));
-            let target = dir.join(&name);
-            let written = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|()| write(&buf, &target));
+            let written = suite_common::mail::staging_dir().map_err(|e| e.to_string()).and_then(|dir| {
+                let target = dir.join(&name);
+                write(&buf, &target).map(|()| target)
+            });
             let parent = window.clone();
             let fail = move |e: String| suite_common::show_error_dialog(Some(&parent), &suite_common::i18n("Could Not Send by Email"), &e);
             match written {
-                Ok(()) => {
+                Ok(target) => {
                     let draft = suite_common::mail::MailDraft::for_document("Letters", &name, target);
                     suite_common::mail::compose(&window, draft, move |result| {
                         if let Err(e) = result {

@@ -5,8 +5,9 @@ use async_imap::types::{Fetch, Flag};
 use futures::TryStreamExt;
 
 use crate::worker::imap::wire::{
-    copy_uids, create_box, delete_box, expunge_all, expunge_uids, imap_unquote, mv_uids,
-    quote_mailbox, rename_box, sel, store_uids, subscribe_box, uid_set, unsubscribe_box,
+    copy_uids, create_box, delete_box, expunge_all, expunge_uids, has_capability, imap_unquote,
+    mv_uids, quote_mailbox, rename_box, sel, select_for_write, store_uids, subscribe_box, uid_set,
+    unsubscribe_box,
 };
 use crate::worker::imap::ImapSession;
 
@@ -80,19 +81,16 @@ pub(super) fn kept_flags<'a>(flags: impl Iterator<Item = Flag<'a>>) -> Vec<Strin
 /// did before there was a MOVE: `UID COPY`, flag the originals `\Deleted`,
 /// expunge (issue #128 — a server without MOVE answers `UID MOVE` with
 /// "command not permitted with UID", and every move, deleting included,
-/// failed on it). The capability is asked for each time: it is one short
-/// round trip, and a session's answer can change after login on some
-/// servers, so it is not worth caching wrong.
+/// failed on it). The capability is read once per connection, after login:
+/// asked before every move, it cost up to two seconds apiece on a slow
+/// server (#296).
 pub(super) async fn uid_move(
     session: &mut ImapSession,
     set: &str,
     dest: &str,
 ) -> Result<(), async_imap::error::Error> {
-    let can_move = match session.capabilities().await {
-        Ok(caps) => caps.has_str("MOVE"),
-        // If even CAPABILITY fails, let MOVE produce the real error.
-        Err(_) => true,
-    };
+    // If even CAPABILITY fails, let MOVE produce the real error.
+    let can_move = has_capability(session, "MOVE").await.unwrap_or(true);
     tracing::debug!(target: "hylki::imap", "server {} MOVE", if can_move { "offers" } else { "lacks" });
     if can_move {
         return mv_uids(session, set, dest).await;
@@ -113,7 +111,7 @@ pub(super) async fn store_flag(
     flag: &str,
     add: bool,
 ) -> Result<(), async_imap::error::Error> {
-    sel(session, path).await?;
+    select_for_write(session, path).await?;
     let op = if add { "+FLAGS" } else { "-FLAGS" };
     let query = format!("{op} ({flag})");
     // Drain the resulting FETCH stream so the command completes.
@@ -155,6 +153,22 @@ pub(super) async fn store_keyword(
     Ok(true)
 }
 
+/// Whether a refused move might go through once the destination exists:
+/// the server said TRYCREATE, or gave no reason at all. A refusal that names
+/// another one (Aster Bridge's `[SERVERBUG]`, `[CANNOT]`, …) is not about the
+/// folder, and a CREATE and second try only bury that answer (#604).
+pub(super) fn worth_creating(e: &async_imap::error::Error) -> bool {
+    let async_imap::error::Error::No(why) = e else {
+        return true;
+    };
+    // async-imap words it `code: {:?}, info: {:?}`: a code imap-proto knows
+    // is in `code`, one it does not stays at the front of `info`.
+    if why.contains("code: Some(TryCreate)") || why.contains("[TRYCREATE]") {
+        return true;
+    }
+    !why.contains("code: Some(") && !why.contains("info: Some(\"[")
+}
+
 /// Move a message to `dest`, creating (and subscribing to) the destination
 /// mailbox first if it doesn't exist yet. Returns whether a folder was created,
 /// so the caller can refresh the folder list.
@@ -164,9 +178,11 @@ async fn move_or_create(
     uid: u32,
     dest: &str,
 ) -> Result<bool, async_imap::error::Error> {
-    sel(session, path).await?;
-    if uid_move(session, &uid.to_string(), dest).await.is_ok() {
-        return Ok(false);
+    select_for_write(session, path).await?;
+    match uid_move(session, &uid.to_string(), dest).await {
+        Ok(()) => return Ok(false),
+        Err(e) if !worth_creating(&e) => return Err(e),
+        Err(_) => {}
     }
     // The move failed — most likely the destination mailbox doesn't exist (the
     // account has no Archive/Junk/… folder yet). Create it, subscribe, and retry;
@@ -197,13 +213,15 @@ pub(super) async fn move_messages(
     uids: &[u32],
     dest: &str,
 ) -> Result<bool, async_imap::error::Error> {
-    sel(session, path).await?;
+    select_for_write(session, path).await?;
     let mut created = false;
     let mut ensured_dest = false;
     for chunk in uids.chunks(300) {
         let set = uid_set(chunk);
-        if uid_move(session, &set, dest).await.is_ok() {
-            continue;
+        match uid_move(session, &set, dest).await {
+            Ok(()) => continue,
+            Err(e) if !worth_creating(&e) => return Err(e),
+            Err(_) => {}
         }
         // First failure is most likely a missing destination mailbox — create,
         // subscribe, re-select the source, and retry this chunk (then the rest).
@@ -324,7 +342,7 @@ pub(super) async fn mark_spam(
     uid: u32,
     dest: &str,
 ) -> Result<bool, async_imap::error::Error> {
-    sel(session, path).await?;
+    select_for_write(session, path).await?;
     for query in ["+FLAGS ($Junk)", "-FLAGS ($NotJunk)"] {
         if let Ok(stream) = store_uids(session, uid.to_string(), query).await {
             let _: Result<Vec<Fetch>, _> = stream.try_collect().await;
@@ -341,7 +359,7 @@ pub(super) async fn mark_ham(
     uids: &[u32],
     dest: &str,
 ) -> Result<bool, async_imap::error::Error> {
-    sel(session, path).await?;
+    select_for_write(session, path).await?;
     let set = uid_set(uids);
     for query in ["+FLAGS ($NotJunk)", "-FLAGS ($Junk)"] {
         if let Ok(stream) = store_uids(session, set.clone(), query).await {
@@ -368,6 +386,28 @@ mod tests {
         assert_eq!(import_flags(true, false).as_deref(), Some("(\\Seen)"));
         assert_eq!(import_flags(false, true).as_deref(), Some("(\\Flagged)"));
         assert_eq!(import_flags(false, false), None);
+    }
+
+    /// Only a refusal that could be about a missing folder is worth a
+    /// CREATE and a second try (#604).
+    #[test]
+    fn a_named_refusal_creates_no_folder() {
+        use async_imap::error::Error;
+        let no = |s: &str| Error::No(s.to_string());
+        assert!(worth_creating(&no(
+            "code: Some(TryCreate), info: Some(\"Mailbox doesn't exist: Archive\")"
+        )));
+        assert!(worth_creating(&no(
+            "code: None, info: Some(\"Mailbox does not exist\")"
+        )));
+        assert!(worth_creating(&no("code: None, info: None")));
+        assert!(!worth_creating(&no(
+            "code: None, info: Some(\"[SERVERBUG] could not move message on the server\")"
+        )));
+        assert!(!worth_creating(&no(
+            "code: Some(ReadOnly), info: Some(\"Mailbox is read-only\")"
+        )));
+        assert!(worth_creating(&Error::Bad("code: None, info: None".into())));
     }
 
     #[test]

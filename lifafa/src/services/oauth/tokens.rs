@@ -1,12 +1,32 @@
 //! Talking to the token endpoint: redeeming a code, refreshing an access
 //! token, and asking Microsoft Graph who signed in.
 
+use std::sync::OnceLock;
+use std::time::Duration;
+
 use serde::Deserialize;
 
 use crate::config::OAuthSettings;
 use crate::services::graph_api::{bearer, GRAPH_BASE};
 
 use super::flow::Authorization;
+
+/// The token endpoint and the sign-in's `/me`, with deadlines: a refresh
+/// runs ahead of every mail request once the access token expires, so one
+/// that waited forever on a dead connection stopped the account's mail with
+/// it (upstream #618). Upstream builds a ureq 2 agent for it; this fork's
+/// requests go through `crate::http`, whose whole-call `timeout` also bounds
+/// the write that ureq 2's `timeout_write` did.
+fn agent() -> &'static crate::http::Agent {
+    static AGENT: OnceLock<crate::http::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        crate::http::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(20))
+            .timeout_read(Duration::from_secs(30))
+            .timeout(Duration::from_secs(60))
+            .build()
+    })
+}
 
 #[derive(Deserialize)]
 struct TokenResponse {
@@ -51,7 +71,7 @@ pub(crate) fn exchange_code(
     if !settings.client_secret.is_empty() {
         form.push(("client_secret", &settings.client_secret));
     }
-    let token: TokenResponse = crate::http::post(&settings.token_url)
+    let token: TokenResponse = agent().post(&settings.token_url)
         .send_form(&form)
         .map_err(|e| e.to_string())?
         .into_json()
@@ -75,7 +95,7 @@ pub(crate) fn microsoft_whoami(
     user: Option<&str>,
 ) -> Result<(String, String, String), String> {
     let fresh = refresh_access_token_as(settings, refresh, user)?;
-    let me: serde_json::Value = crate::http::get(&format!(
+    let me: serde_json::Value = agent().get(&format!(
         "{GRAPH_BASE}/me?$select=displayName,mail,userPrincipalName"
     ))
     .set("Authorization", &bearer(&fresh.access_token))
@@ -122,7 +142,7 @@ pub(crate) fn refresh_access_token_as(
     if !settings.client_secret.is_empty() {
         form.push(("client_secret", &settings.client_secret));
     }
-    let mut post = crate::http::post(&settings.token_url);
+    let mut post = agent().post(&settings.token_url);
     if let Some(cookie) = crate::services::ms_broker::sso_cookie(settings, user) {
         post = post.set(&cookie.name, &cookie.value);
     }

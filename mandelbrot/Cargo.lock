@@ -1306,7 +1306,7 @@ dependencies = [
 
 [[package]]
 name = "fractal"
-version = "14.1.0"
+version = "14.2.0"
 dependencies = [
  "aperture",
  "as_variant",
@@ -3293,6 +3293,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "url",
  "zeroize",
 ]
 

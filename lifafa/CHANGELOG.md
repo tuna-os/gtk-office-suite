@@ -2,6 +2,479 @@
 
 ## Unreleased
 
+- **Fixed: a message opened from a file can be saved and imported** (#398,
+  reported by 3v1n0). In the window of a `.eml` or `.msg` file, or of a
+  message attached to another, Save as File and View Source did nothing,
+  as there was no server to ask; they now use the file's own bytes. Its
+  right-click menu has Copy To…, which stores the message in a folder of
+  any account that takes mail, and no longer offers Star, Archive, Delete
+  and the rest. Message windows of mail on a server gain Copy To… too.
+
+- **Fixed: addresses in plain-text mail are links** (#653, reported by
+  3v1n0). Email addresses, Matrix IDs (`@name:server.org`, opened through
+  matrix.to) and fediverse handles (`@name@server.org`, opened on their
+  server) in plain-text mail are now links, as web addresses were. The
+  Markdown composer read a fediverse handle as an `@` in front of an email
+  address; it links it as a handle now. Cache v25 drops the plain bodies
+  holding an `@` once, so mail already read renders again.
+
+- **Fixed: contact groups in Nextcloud books** (#652, reported by 7system7).
+  Nextcloud keeps a group as a category on each member's card, not as a
+  card of its own, so Hylki listed none of its groups, and a group made in
+  Hylki showed in Nextcloud as a contact. The categories on a
+  Nextcloud book's contacts are now its groups in Hylki, and making,
+  changing, renaming or deleting a group there changes the categories on
+  its people's cards. Send as Bcc for such a group is kept in Hylki.
+
+- **Changed: Reply in the original's format also answers formatted mail in
+  rich text** (#646, requested by 3v1n0). With the setting on and new
+  messages starting in plain text, a reply or forward to a message with
+  formatting of its own opens in rich text, so its quote keeps its look.
+  Plain-text mail is still answered in plain text. The switch now sits
+  under **Start new messages in**.
+
+- **Fixed: attachment icons in the reader kept fixed colors** (#651,
+  reported by yioannides). A PDF's icon now wears the theme's error color,
+  as the importance mark does since #619, and the other file types take the
+  GNOME palette: shade 1 in a dark scheme, shade 5 in a light one, the steps
+  that keep 3:1 contrast on a card. Archives are brown, since no yellow step
+  reads on white; audio and video share purple, a calendar shares blue, and
+  an image is grey like any other file. The attachment drawer, the gallery
+  and the lightbox use the same colors.
+
+- **Changed: the reader's outlined chips are filled** (#651). An attachment
+  is a pair of filled buttons, open and save, the folder chip on a card is a
+  filled pill, and an invitation's answer buttons lose their outline, in
+  the style of the recipients chip and the Unsubscribe button (#342).
+  Their fills mix from the theme's own foreground, so in light mode they
+  are as light as a selected sidebar row.
+
+## 1.48.0 — 2026-11-12
+
+Everything from 1.48.0-beta.1 to 1.48.0-beta.7: AI agents that reach your mail
+over MCP as far as you allow, an encrypted mail cache, templates inserted from
+the composer, attachments previewed in the GNOME file previewer, a sort kept
+for each folder, trackers taken off links, warnings before opening a program
+or encrypting to a key nobody has trusted, a narrower window, and faster mail
+on large Gmail accounts.
+
+- **Fixed: a search from one account's folder looked in every account**
+  (#649, reported by rsx-xp). From an account's folder the scope picker now
+  offers **This Account** and **This Account (Except Trash & Junk)**, the
+  default, and both look only in that account, on disk and on the server.
+  From a unified view the scopes are unchanged, and **Everywhere** covers
+  every account.
+
+- **Fixed: Enter and a paste left the new line below the composer's edge**
+  (#645). WebKit scrolls to the caret only after its own typing, not after
+  the editing commands the composer's Enter and paste handlers run, so the
+  caret could end up out of sight. The composer now scrolls to it.
+
+- **Fixed: Shift+click could not extend a selection of a message's text**
+  (#643). The click picked a range of cards and cleared the selection
+  WebKit had just extended. When the body holds a selection, a Shift+click
+  is now left to the text.
+
+- **Fixed: the app could crash as a message opened on Wayland** (#650). The
+  sender's initials circle was drawn through the GPU renderer of the first
+  window, which can be a hidden one, as after opening the window from the
+  tray; a hidden window has no surface to draw to, and the app aborted. The
+  circle is now drawn without the GPU.
+
+- **Fixed: the hint shown when no spelling dictionaries are installed was
+  missing** (#650). The line in **Settings → Composing** was dropped
+  because of the markup in its text.
+
+- **Fixed: the message list stayed narrow after the window grew** (#648,
+  reported by MisterPerson42). A window too small for the list's width
+  narrowed the list, and that narrower width was kept, so the list had to be
+  dragged wide again after maximizing. The list now goes back to the width it
+  was dragged to, and with the reader below the list, to its height.
+
+- **Added: Resize the list with the window** (#648). **Settings → Message
+  List → Resize the list with the window**, off by default, keeps the list's
+  share of the window instead of its width as the window resizes. Turned on,
+  the list keeps the share it has at that moment; a drag sets a new one.
+
+- **Added: attachments preview in the GNOME file previewer** (#625). Where
+  Sushi is installed, Space on a file in the attachment drawer, or Preview
+  in the right-click menu of a file in the drawer, the attachment gallery or
+  the composer, shows it in Sushi over Hylki's window, as Space does in GNOME
+  Files. The arrow keys there step through the drawer's files. Pictures and
+  PDFs keep Hylki's own preview, and Enter opens a file as a double click
+  does. The Flatpak gains `--talk-name=org.gnome.NautilusPreviewer` for it.
+
+- **Added: Contacts and Attachments in the launcher's menu** (by
+  ChrisLauinger77, #626). Right-clicking Hylki's icon in the dock or app grid
+  now offers **Contacts** and **Attachments** beside **New Message**, opening
+  the window on that view. From a terminal, `hylki --contacts` and
+  `hylki --attachments` do the same, and hand over to the window already
+  open.
+
+- **Added: the mail cache can be encrypted on disk** (by hanthor, #601).
+  **Settings → Privacy → Encrypt stored mail**, off by default, makes
+  `cache.db`, which holds every message and attachment kept on the computer,
+  a SQLCipher database under a random key kept in the keyring. The cache is
+  converted at the next start, in a window that shows its progress, and left
+  as it was if that fails or is quit. A keyring that is locked, or a key that
+  is missing or wrong, never opens the cache unencrypted: Hylki asks to try
+  again, quit, or reset the cache, and shows a window while the keyring is
+  slow to answer. Versions before this one cannot open an encrypted cache, so
+  turning it on asks first and says to turn it off before going back to one.
+
+- **Added: Ask before switching to plain text can be turned off.**
+  **Settings → Composing → Ask before switching to plain text**, on by
+  default, is the question asked when a message holding formatting,
+  pictures or links is switched from rich text to plain text. Off, the
+  message switches at once.
+
+- **Changed: the window goes narrower** (#624). The window's minimum width
+  was 904 pixels whatever the layout, which kept it from tiling to half of a
+  laptop screen. It now follows what is on show: about 520 pixels with the
+  reader below the list, about 810 with the reader beside the list, where a
+  message being written has room for its buttons, and about 780 with the
+  reader off and the toolbar in the list's header. The Attachments
+  page no longer holds the window wide while the mail is showing.
+
+- **Fixed: a message opened while mail was being archived or marked read
+  waited for all of it** (#296). Each account's server connection takes one
+  request at a time, and a message's text was kept behind every move and
+  read or star change queued before it; on a slow server a run of them held
+  the reader on its spinner for a minute or more. The text is now fetched
+  first, unless one of those changes moves that very message. Each change
+  also no longer selects its folder again when it is already open, which
+  cost 2 to 3 seconds apiece on a large Gmail inbox. Undoing a delete of
+  many messages finds them again 50 at a time instead of one by one, which
+  took nine minutes for 425 messages on Gmail. A message moved or deleted
+  on another device says so in the reader at once, instead of being asked
+  for six times over 20 seconds and ending in an error.
+
+- **Fixed: large Gmail accounts were slow in other ways too** (#296). The
+  unread count of a folder is now asked of the server as a number where it
+  can give one (ESEARCH), instead of as the list of every unread message:
+  for a Gmail All Mail with 234,000 unread messages that list was about
+  1.5 MB, fetched again on every change. A page of conversations finds its
+  members in other folders with one pass over the cache instead of one per
+  conversation, which took a page of 205 conversations from about 9 seconds
+  to under a tenth of a second on an 87,000-message cache. A message opened
+  while the account is still connecting is fetched first on the new
+  connection, rather than after a second connect. How the server's folders
+  nest is read once per run instead of at every reconnect, and its
+  capabilities once per connection instead of before every move. Read and
+  star changes to one message that queue up while the server is busy are
+  sent as the last one only.
+
+- **Fixed: the single-key shortcuts did nothing in Drafts** (#392, reported
+  by 3v1n0). Selecting a draft opened it in the reading pane and put the
+  keyboard in the editor, so the next key was typed into the draft, and the
+  action keys found no message to act on. A draft selected from the list now
+  leaves the keyboard on the list, and the keys act on it; o, Enter or a
+  click moves into the editor. A draft deleted or moved while its editor is
+  open closes the editor without saving it back.
+
+- **Fixed: Gmail's x dropped the conversation picked with the pointer**
+  (#392, reported by 3v1n0). With a conversation opened by a click, j to
+  another and x, only the second ended up selected. Both are now.
+
+- **Fixed: a message was marked read before it had loaded** (#638). A
+  message opened while its text was still being fetched was marked read at
+  once, or two seconds later with **Settings → Reading → Mark as read** set
+  to **After two seconds**, whether or not the text had come. It is now marked once
+  the text shows, and the two seconds count from then. In a conversation, a
+  message still saying Loading… is no longer marked as it scrolls past, and
+  the count for each message starts once its text is drawn.
+
+- **Fixed: Open at startup and the window size were forgotten after a
+  logout** (#642). The window size was saved only when the window closed,
+  so a logout, a restart or an update, or a resize after closing to the
+  background, lost it; it is now saved a second after it changes. The view
+  set under **Settings → Sidebar → Open at startup** waited five seconds
+  from launch for its account, and a slow start (a login, the first start
+  after an update) ran that out and opened All Inboxes, which then replaced
+  the remembered view. The wait now starts once the account is listed, and a
+  stand-in view is never remembered. Settings files are written beside the
+  old one and then put in its place, so a write cut short by a logout no
+  longer leaves an empty file that resets every remembered setting.
+
+- **Fixed: mail sent as an alias with its own SMTP server was kept
+  nowhere** (#640). With **Server saves its own copy of sent mail** on, Hylki
+  saved no copy of anything it sent, but the server only sees mail that
+  leaves through the account's SMTP. Mail sent as an alias through the
+  alias's own server now gets Hylki's copy in Sent, or beside the message it
+  answers, as the account's settings say.
+
+- **Added: Server saves its own copy of sent mail for each alias** (#647,
+  requested by 3v1n0). An alias with its own SMTP server has the switch in
+  its settings, off by default. On, mail sent as that alias gets no copy
+  from Hylki, whatever the account's switch says. The account's sent copy
+  rows stay available while an alias still needs Hylki's copy.
+
+- **Fixed: Ctrl+P in an attachment's preview printed the message** (#632).
+  With a PDF or a picture open in Hylki's full-window preview, Ctrl+P now
+  prints that file, as does a new printer button beside Open and Download. A
+  PDF goes to the printer as it is; a picture is centred on one page inside
+  15 mm margins, shrunk to fit and never enlarged past its size on screen.
+  The same applies in a message's own window.
+
+- **Fixed: a narrow reader was drawn past the window's edge when a message
+  had attachments** (#624). The attachment drawer's header needs about 560
+  pixels with its thumbnail size slider, and a narrower reader lost its ⋯,
+  the window's close button and the right side of the message. The slider
+  now folds away while the reader is too narrow for it.
+
+- **Fixed: a name with a part in parentheses got a bracket for an initial**
+  (#627). libadwaita takes the first character of the first and last word,
+  so "Foo Bar (Baz)" showed "F(" and ".Foo" showed ".". Initials now skip
+  anything in parentheses and the punctuation a word starts with, as
+  libadwaita merge request 1848 proposes, so those read "FB" and "F". This
+  covers the message list, the reader's cards, the account circles, the
+  contacts window, the contact picker and the drag card. A name that is
+  nothing but a parenthesis keeps its letters.
+
+- **Fixed: cells copied from a spreadsheet pasted as a picture** (#623).
+  LibreOffice Calc, like Word and other office programs, puts a picture of
+  the selection on the clipboard beside the cells, and the composer always
+  took the picture. When the clipboard's HTML holds text, the paste now uses
+  it. A copied picture still pastes as a picture.
+  The cells arrive as a table that looks as it does in other mail clients:
+  the font, colors, borders and column widths the spreadsheet set, which
+  Calc keeps partly in a stylesheet the paste used to drop, are written onto
+  the table, so they go out with the message too. Ctrl+V pastes
+  them as a table even with **Paste as plain text** on, the default, where it
+  used to give tab-separated text; a single cell still arrives as its value,
+  and Ctrl+Shift+V or **Paste as Plain Text** gives the text. In a
+  dark composer the table shows on the white it was made on, a double line
+  is drawn as two, and the typing goes on below the table.
+  While the caret is in a table, faint lines mark the cells that have no
+  borders of their own, so such a table can be filled in. The lines are not
+  part of the message and go when the caret leaves the table.
+
+- **Fixed: indented text lost its indent in the composer** (#635). Text
+  pasted without formatting, and a plain-text draft opened again, lost the
+  spaces at the start of each line and had other runs of spaces cut to one,
+  so an indented list was sent flat. Indents, runs of spaces and tabs (as
+  spaces to the next stop of eight) now stay as they were, on screen and in
+  what is sent. Plain text pasted into rich text no longer becomes a
+  paragraph a line, which put an empty line under every line of the text
+  part, and of the message when switched to plain text.
+
+- **Fixed: a plain-text draft opened again in rich text** (#634). A message
+  written in plain text came back in the composer's default format when its
+  draft was opened, when Undo Send was pressed, when it was edited in the
+  Outbox, and when it was used as a template or with Edit as New. A message
+  with no HTML part now opens in plain text, whatever the default.
+
+- **Fixed: saving a draft could leave a second copy in Drafts** (#634). An
+  automatic save that began just before Save, Send or Discard reached the
+  server after the composer had closed, with no draft to replace. The copy
+  it made stayed beside the saved one, or the clean-up that followed
+  removed the saved one instead. A closing composer now saves nothing more
+  on its own.
+
+- **Fixed: a message attached to another opened the Send file dialog**
+  (#622). An attached message the sender gave no file name was listed as
+  `attachment-1`, a blank file, and opening it handed it to the desktop,
+  which passed it back to Hylki as a file to attach. Attached messages are
+  now listed under their subject with `.eml` and open in a message window of
+  their own. A file with no suffix that starts with mail headers, as one
+  saved from an older version does, is read as a message too.
+
+- **Fixed: mail a filter sends to Trash or Junk still raised a new mail
+  notification** (#621, by Fabio Rotondo). A filter that moves a new message
+  into Trash or Junk now gives no notification and no sound for it, as the
+  tray icon already showed no new mail. Mail filed into any other folder is
+  still announced.
+
+- **Fixed: plain-text mail stopped a third of the way across the reader**
+  (#606). Thunderbird, Apple Mail and Evolution send plain text as
+  `format=flowed` (RFC 3676): lines broken at about 72 characters, with a
+  space before each break so the reader can join them again. Hylki showed the
+  breaks as they arrived. The lines of a paragraph are now joined and wrap to
+  the pane, quoted paragraphs included; lines the sender ended without the
+  space stay as written. Plain-text messages already read are rendered again
+  the next time they are opened.
+
+- **Fixed: the remote picture cache could delete other programs' files**
+  (#614). Outside Flatpak the cache was kept in `~/.cache/remote` rather than
+  `~/.cache/hylki/remote`, and its weekly trim removed every file in that
+  folder. It now lives in `~/.cache/hylki/remote`, and a trim touches only the
+  files the cache wrote. Hylki's own entries are cleared out of the old
+  folder, which goes only if nothing else is left in it.
+
+- **Fixed: a Microsoft account could stop checking for mail after a
+  suspend** (#618, reported by jorgegarciaavila). Requests to Microsoft Graph
+  and to Microsoft's sign-in had no read deadline, so a download whose
+  connection died while the computer slept waited for it forever, and every
+  later check and Refresh queued behind it until the account was switched off
+  and on. A request now fails after a minute without an answer (half a minute
+  for a sign-in renewal), and the next check connects again. Each request
+  opens its own connection: 1.48.0-beta.4 kept connections for the next
+  request, and the HTTP library drops the deadline from a kept one, so a
+  connection that died during a suspend could still hold the account.
+
+- **Fixed: choosing a CSV file from the merge field button stopped the window
+  responding** (#617, reported by samuel-edlmeier). The field list tried to
+  open again by itself once the file was chosen. GNOME refuses a popup that
+  no click in the window asked for, and the window was left waiting on a list
+  that was never shown, ignoring every click and key until Hylki was
+  restarted. The file is now only remembered, and its columns are in the list
+  the next time the button is clicked.
+
+- **Fixed: the warning before deleting a conversation was always in
+  English** (#620, reported by samuel-edlmeier). Its text was missing from
+  `po/hylki.pot`, as were the dialog shown when the desktop portal cannot open
+  an attachment and the two Microsoft sign-in errors. All four can now be
+  translated. The warning also names Settings rather than Preferences, the
+  name the window has.
+
+- **Added: Insert Template in the composer** (#610, by FLASH911). A button in
+  the formatting row puts a saved template's text into the message being
+  written, at the cursor, so a reply can use a standard answer and keep its
+  recipients, subject and quote. The template's own signature is left out.
+  The button shows only when an account has a Templates folder.
+
+- **Added: several names on one send-as address** (#610, by FLASH911). A
+  shared mailbox can send as, say, a manager and a director: aliases may now
+  repeat an address, or the account's own, under another name. Such an
+  address goes through the account's own SMTP server, since an alias's server
+  is chosen by address. A draft reopens on the name it was saved with.
+
+- **Added: a signature can name the sender** (#610, by FLASH911). The
+  signature editor's **Sender name** replaces the account's name in From
+  while that signature is in the message. It applies to the account's own
+  address; aliases keep their names.
+
+- **Changed: Save as Template says where the template went.** The composer
+  stays open after the save, so nothing showed that it had worked. A
+  notification now names the Templates folder and the account once the server
+  has the copy.
+
+- **Changed: one message fades into the next in the reading pane.** Since
+  #570 the pane cut from one message to the next; the old message now fades
+  out over the new one in 80 ms.
+
+- **Fixed: sent and deleted drafts stayed in Drafts with Aster Mail** (#604,
+  reported by czinehuba). Aster Bridge refuses to move a draft to Trash once
+  its server no longer has the draft. A draft it will not move is now marked
+  deleted and erased in place, and a refusal that names a reason other than
+  TRYCREATE no longer makes the app create the folder and try again.
+
+- **Changed: the status bar is always blue.** It took the desktop accent
+  color, so a pink or green accent turned it pink or green. It is now
+  `#3383e0` whatever the accent, and still turns amber for an error or while
+  offline.
+
+- **Fixed: the high-importance mark in the reader was a fixed red** (#619,
+  reported by yioannides). The mark beside a message's date was always
+  `#e01b24`, in light and dark alike, while the message list draws it in the
+  theme's error color. The reader now uses the same color as the list. The
+  sender check, the OpenPGP chip and a returned read receipt in a message's
+  header now take the theme's error, warning and success colors too, as they
+  do in the toolbar.
+
+- **Fixed: a wide gap between the recipients chip and the date** (#616,
+  reported by yioannides). Since 1.47.0 a message's header kept room for a
+  star and a paperclip even when it had neither, which left about 56 px of
+  blank space before the date. That room is now kept only while another
+  message in the conversation is starred or has files, so the marks of its
+  cards still line up.
+
+- **Fixed: Add to Calendar could close the app** (#611, by FLASH911). An
+  invitation is handed to the calendar under a file name made from its title,
+  cut to 60 characters. The cut was made in bytes, so a long title in Russian,
+  Greek or any other non-Latin script could fall inside a character, and the
+  app crashed. It is now cut in characters.
+
+- **Fixed: Cut, Copy, Delete, Select All and Insert Emoji in the composer's
+  right-click menu** (#611, by FLASH911) were in the system's language rather
+  than the one chosen in Hylki. They now follow Hylki's.
+
+- **Translations:** German (PRs #578, #628 and #636 by Samuel Edlmeier),
+  2488 of 2498 strings translated. Spanish (PR #629 by Daniel Miguel), 2487.
+  Portuguese (Portugal) and Portuguese (Brazil) (PR #633 by Paulo Fino), 2488
+  each. Russian (PR #611 by FLASH911), 2435. French (PR #615 by frenchy82),
+  2418.
+
+- **Added: trackers come off links** (#599, by James Reilly). A link opened or
+  copied from a message loses its tracking tags (`utm_source` and the like,
+  `fbclid`, `gclid`, `mc_eid`), and Google, Facebook and YouTube redirects
+  open at the address written inside them, with nothing looked up. Outlook
+  Safe Links are left alone. **Settings → Privacy → Remove trackers from
+  links** turns it off. The reader and the composer also turn DNS prefetching
+  off explicitly.
+
+- **Fixed: a forged message could send a one-click unsubscribe** (#596, by
+  James Reilly). The request now goes only to an https address, as RFC 8058
+  requires, and only when the mail provider's DKIM check covers the
+  List-Unsubscribe header or the sender check finds nothing wrong. Otherwise
+  the list's page opens in the browser.
+
+- **Added: a warning before opening a program or a script** (#598, by James
+  Reilly). An attachment such as a `.desktop`, `.sh`, `.AppImage`, `.jar` or
+  `.exe` file, or one whose first bytes say it is a program whatever its name,
+  asks before it opens.
+
+- **Fixed: Bcc recipients' OpenPGP keys showed in encrypted mail** (#595, by
+  James Reilly). Every copy of an encrypted message named the key of each
+  recipient, so the To and Cc could tell whose keys were Bcc'd. A Bcc
+  recipient's key is now in the message without its key ID.
+
+- **Fixed: a signature from someone else's key showed green** (#595, by James
+  Reilly). A good signature by a trusted key whose addresses do not include the
+  message's From address now shows amber, **Signed by another address**, and
+  the details name the address the key lacks. An address added to a key after
+  it was trusted stays amber, **Signed, key not trusted**, until the key is
+  trusted again.
+
+- **Fixed: trusting a key did nothing with an imported key of your own** (#595).
+  gpg ignored the signature of a secret key imported from another computer, so
+  the key stayed untrusted after **Key trusted.** Your key now gets the trust a
+  generated one has when you sign with it.
+
+- **Added: a warning before encrypting to a key you have not trusted** (#595, by
+  James Reilly). **Send** names the recipients whose keys nobody has vouched
+  for and asks before the message goes. **Send Anyway** sends it and does not
+  ask about that key again until the address gets a different one, or **Ask
+  Again** takes the answer back under *Settings → OpenPGP*. When an address has
+  several keys, the trusted one is used.
+
+- **Fixed: the settings export carried OAuth client secrets** (#597, by James
+  Reilly). An account's own OAuth client secret is now left out. Importing the
+  file on the same computer keeps the secret already there; on another one, an
+  account with its own OAuth client needs the secret typed in again.
+
+- **Fixed: exports and local mail files were left readable by other users** (#600,
+  by James Reilly). The log exports and the settings export are written owner-only,
+  also over an existing file. The remote-content cache and the On This Computer
+  folders are owner-only; older files in them are protected by their folder.
+
+- **Fixed: opened attachments were never cleared under Flatpak** (#600, by James
+  Reilly). The startup purge cleared `/tmp` while the Flatpak staged them in the
+  runtime directory. A second launch no longer clears them while Hylki is running,
+  in any package.
+
+- **Added: Esc takes back a message waiting out its Undo Send delay** (#607, by
+  Fabio Rotondo). Outside a text field or composer it does the same as Undo, for
+  the most recent message when several wait. With none waiting it goes back to
+  the list as before. The notice's close button still only hides the notice.
+
+- **Changed: a new install starts on the Automatic list layout.** Beside the
+  reader that is cards at the list's starting width. Below the list or with the
+  reader off, it is single lines. An existing install keeps its layout.
+
+- **Fixed: Cards turned into single lines with the reading pane below the list
+  or off** (#475, reported by fhangel). The Layout setting now holds in every
+  reading pane position; Automatic stays on single lines there, as the list has
+  the window's width.
+
+- **Changed: Focus Mode has its own page in Settings, and its own layout.** While
+  it is on, Settings → Focus Mode alone decides the sidebar, the message list's
+  layout, avatars, preview lines and subjects, and Reader View, in place of the
+  settings on the other pages. Favorites, Filters and Tags sit above the accounts
+  and can each be switched off there. The switches moved from Settings →
+  Appearance. The list's two preview switches became one Preview lines choice,
+  and hovering the rail no longer slides the sidebar out unless switched on there.
+
 - **Changed: the message list can be dragged narrower**, down to 290 pixels from
   348. The selection bar's buttons draw tighter below 344 pixels so they all
   still fit.
@@ -33,9 +506,6 @@
   now use the accent's foreground color. GNOME's accents still get white. The
   dark palettes of Forest, Tidal and Earth now get their dark foreground on the
   accent, and Rose's its pale pink.
-
-- **Translations:** German updated (PR #578 by Samuel Edlmeier), with 2375 of
-  2458 strings translated.
 
 - **Fixed: sending from a Microsoft account could report that a message could
   not be loaded** (#538, by James Reilly). The message had gone out. Microsoft

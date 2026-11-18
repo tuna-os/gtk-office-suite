@@ -139,10 +139,5 @@ pub fn refresher(controller: Rc<RefCell<WorkbookController>>, grid: gtk::Drawing
 
 /// A toast in the window's overlay, as the controller's refusals use.
 fn toast(grid: &gtk::DrawingArea, text: &str) {
-    if let Some(overlay) = grid
-        .ancestor(adw::ToastOverlay::static_type())
-        .and_then(|w| w.downcast::<adw::ToastOverlay>().ok())
-    {
-        overlay.add_toast(adw::Toast::new(text));
-    }
+    suite_common::toast_manager::show_near(grid, text);
 }

@@ -511,6 +511,18 @@ impl Editor {
         }
         self.popover.popup();
         self.view.grab_focus();
+        crate::canvas_input::trace_input(|| {
+            let (_, nat) = self.popover.preferred_size();
+            format!(
+                "editor popup: visible {}, mapped {}, pointing to {:?}, natural {}x{}, window {:?}",
+                self.popover.is_visible(),
+                self.popover.is_mapped(),
+                self.popover.pointing_to().1,
+                nat.width(),
+                nat.height(),
+                self.popover.root().map(|r| (r.width(), r.height())),
+            )
+        });
     }
 }
 
@@ -692,6 +704,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
     {
         let weak = weak.clone();
         popover.connect_closed(move |_| {
+            crate::canvas_input::trace_input(|| "editor popover closed".to_owned());
             let Some(ed) = weak.upgrade() else { return };
             ed.preedit.set(false);
             // Leaving the session any other way commits it; a commit that
@@ -770,7 +783,30 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         let masters = h.masters.clone();
         let dbl = gtk::GestureClick::new();
         dbl.set_button(1);
+        // The editor opens on the double-click's release, not its press.
+        // Opened on the press, the autohiding popover was up before the
+        // second click's release arrived; that release lands on the canvas,
+        // outside it, and closed it at once wherever the popover mapped
+        // that fast (the release soak's wide-1280-scale2: mapped, then
+        // closed, no editor).
+        let pending_open = Rc::new(Cell::new(false));
+        {
+            let weak = Rc::downgrade(&ed);
+            let pending = pending_open.clone();
+            let open_now = move || {
+                if pending.replace(false) {
+                    if let Some(ed) = weak.upgrade().filter(|ed| ed.ctl.has_text_session()) {
+                        ed.open();
+                    }
+                }
+            };
+            let on_stop = open_now.clone();
+            dbl.connect_released(move |_, _, _, _| open_now());
+            // No release, the sequence taken over: open all the same.
+            dbl.connect_stopped(move |_| on_stop());
+        }
         dbl.connect_pressed(move |gesture, n, x, y| {
+            crate::canvas_input::trace_input(|| format!("click {n} at {x:.1},{y:.1}, text session {}", ed.ctl.has_text_session()));
             if n != 2 || ed.ctl.has_text_session() {
                 return;
             }
@@ -796,9 +832,11 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     Some((slide.ids.slide, slide.ids.objects[oi], decks_core::undo::obj_bounds(obj), caret))
                 })
             };
+            crate::canvas_input::trace_input(|| format!("double-click at slide {hx:.1},{hy:.1} hits a text box: {}", target.is_some()));
             let Some((slide_id, object_id, bounds, caret)) = target else { return };
             gesture.set_state(gtk::EventSequenceState::Claimed);
             if !ed.ctl.begin_text_session(slide_id, object_id) {
+                crate::canvas_input::trace_input(|| "the text session did not begin".to_owned());
                 return;
             }
             // The caret goes where the double-click was, on the text the
@@ -810,7 +848,7 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
             }
             ed.bounds.set(bounds);
             (ed.refresh)();
-            ed.open();
+            pending_open.set(true);
         });
         h.canvas.add_controller(dbl);
     }
@@ -1047,8 +1085,35 @@ fn position_text_editor(
     )));
     // Tiny boxes still need usable controls; large boxes scroll rather than
     // forcing the native popup past the viewport.
-    scrolled.set_size_request(
-        (right - left).clamp(320.0, (width - 32.0).max(320.0)) as i32,
-        (bottom - top).clamp(120.0, (height * 0.5).max(120.0)) as i32,
-    );
+    let text_w = (right - left).clamp(320.0, (width - 32.0).max(320.0)) as i32;
+    let mut text_h = (bottom - top).clamp(120.0, (height * 0.5).max(120.0)) as i32;
+    // And the whole popover has to fit above or below the box in the
+    // window: one that fits on neither side was mapped and closed at once,
+    // so a short window (the release soak's 640x512 wide-1280-scale2)
+    // opened no editor at all. The text area gives up height first, down
+    // to a few lines.
+    if let (Some(root), Some(top_in_root), Some(bottom_in_root)) = (
+        canvas.root(),
+        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, top as f32)),
+        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, bottom as f32)),
+    ) {
+        scrolled.set_size_request(text_w, text_h);
+        // The popover itself measures 0 until it is shown; its content
+        // has its real size already.
+        let content = popover.child().map_or(0, |c| c.measure(gtk::Orientation::Vertical, -1).1);
+        let chrome = content - text_h;
+        let below = root.height() - bottom_in_root.y() as i32;
+        let above = top_in_root.y() as i32;
+        let room = below.max(above) - POPOVER_MARGIN;
+        if chrome + text_h > room {
+            text_h = (room - chrome).max(MIN_TEXT_HEIGHT);
+        }
+        crate::canvas_input::trace_input(|| format!("editor fits {text_h} text over {chrome} chrome; {above} above, {below} below the box"));
+    }
+    scrolled.set_size_request(text_w, text_h);
 }
+
+/// Space the popover's arrow and the window edge take, beyond its content.
+const POPOVER_MARGIN: i32 = 24;
+/// The least text the editor shows: a few lines, scrolling beyond.
+const MIN_TEXT_HEIGHT: i32 = 48;

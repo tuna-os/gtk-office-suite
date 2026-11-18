@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Letters, Tables or Decks doesn't work as it should
+description: Something in Letters, Tables, Decks, Lifafa or Mandelbrot doesn't work as it should
 title: '[bug] '
 labels: ['bug']
 body:
@@ -17,6 +17,8 @@ body:
         - Letters
         - Tables
         - Decks
+        - Lifafa (email)
+        - Mandelbrot (Matrix chat)
         - More than one
     validations:
       required: true

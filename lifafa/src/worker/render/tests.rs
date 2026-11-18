@@ -141,6 +141,28 @@ fn linkify_ignores_scheme_inside_a_word() {
 }
 
 #[test]
+fn linkify_links_addresses_and_handles() {
+    // #653: a fediverse handle used to be read as `@` plus an email address.
+    let out = linkify("email: foo@bar.red\nmatrix: @foo:bar.net\nmastodon: @foo@bar.io.");
+    assert!(out.contains("<a href=\"mailto:foo@bar.red\">foo@bar.red</a>"));
+    assert!(out.contains("<a href=\"https://matrix.to/#/@foo:bar.net\">@foo:bar.net</a>"));
+    assert!(out.contains("<a href=\"https://bar.io/@foo\">@foo@bar.io</a>."));
+    assert_eq!(
+        linkify("hi@www.example.com"),
+        "<a href=\"mailto:hi@www.example.com\">hi@www.example.com</a>"
+    );
+    assert_eq!(
+        linkify("www.example.com/a@b"),
+        "<a href=\"https://www.example.com/a@b\">www.example.com/a@b</a>"
+    );
+    assert_eq!(
+        linkify("https://x.com/@ann and ann@x.com"),
+        "<a href=\"https://x.com/@ann\">https://x.com/@ann</a> and \
+         <a href=\"mailto:ann@x.com\">ann@x.com</a>"
+    );
+}
+
+#[test]
 fn linkify_never_forges_a_dangerous_scheme() {
     // "javascript:" isn't one of our recognized prefixes, so it stays plain text.
     let out = linkify("javascript:alert(1)");
@@ -508,6 +530,24 @@ fn plain_text_only_message_still_renders() {
     assert!(body.contains("hello &lt;there&gt;"), "body was: {body}");
 }
 
+/// Thunderbird's plain text: broken at 72 characters with a space before each
+/// soft break. The reader joins the lines so the text wraps to the pane (#606).
+#[test]
+fn flowed_plain_text_joins_its_soft_breaks() {
+    let raw = b"Content-Type: text/plain; charset=UTF-8; format=flowed\r\n\r\n\
+        Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus \r\n\
+        ex sapien vitae pellentesque sem placerat.\r\n\r\nSecond paragraph.\r\n";
+    let body = extract_body(raw);
+    assert!(
+        body.contains("Quisque faucibus ex sapien vitae pellentesque sem placerat.\n\nSecond"),
+        "body was: {body}"
+    );
+
+    // The same text, not flowed, keeps every break the sender wrote.
+    let fixed = b"Content-Type: text/plain\r\n\r\nfaucibus \r\nex sapien\r\n";
+    assert!(extract_body(fixed).contains("faucibus \r\nex sapien"));
+}
+
 /// The same part, read out of the raw message rather than described by
 /// the server, and named the same way.
 #[test]
@@ -533,4 +573,26 @@ fn image_mime_rejects_a_hostile_subtype() {
         .unwrap();
     let part = parsed.html_bodies().next().unwrap();
     assert!(image_mime(part).is_none());
+}
+
+/// #622: a message forwarded as an attachment, unnamed by its sender, is
+/// listed under its own subject with `.eml`, so it opens as a message.
+#[test]
+fn an_attached_message_is_named_eml() {
+    let raw = concat!(
+        "Content-Type: multipart/mixed; boundary=\"b\"\r\n\r\n",
+        "--b\r\nContent-Type: text/plain\r\n\r\nSee below.\r\n",
+        "--b\r\nContent-Type: message/rfc822\r\n",
+        "Content-Disposition: attachment\r\n\r\n",
+        "MIME-Version: 1.0\r\nFrom: Ann <ann@example.org>\r\n",
+        "Subject: Q3 / plan\r\n\r\nInner body.\r\n",
+        "--b--\r\n",
+    );
+    let found = extract_attachments(raw.as_bytes());
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].name, "Q3 - plan.eml");
+    assert!(crate::mail::message_file::is_message(
+        &found[0].name,
+        &found[0].data
+    ));
 }

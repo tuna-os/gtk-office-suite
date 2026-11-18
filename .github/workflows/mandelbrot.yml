@@ -11,21 +11,51 @@ on:
     paths:
       - 'mandelbrot/**'
       - '.github/workflows/mandelbrot.yml'
+  # No paths filter: `Mandelbrot gate` is a required check, so it has to
+  # report on every pull request. The `changes` job skips the real work when
+  # nothing under mandelbrot/ changed.
   pull_request:
-    paths:
-      - 'mandelbrot/**'
-      - '.github/workflows/mandelbrot.yml'
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes the queued or running one. Main
+# and a dispatch always finish.
 concurrency:
   group: mandelbrot-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Mandelbrot changes
+    runs-on: ubuntu-24.04
+    outputs:
+      mandelbrot: ${{ steps.diff.outputs.mandelbrot }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=true
+          if [ "$EVENT" = pull_request ]; then
+            if ! git diff --name-only "$BASE...$HEAD" |
+                grep -Eq '^(mandelbrot/|\.github/workflows/mandelbrot\.yml$)'; then
+              changed=false
+            fi
+          fi
+          echo "mandelbrot=$changed" >> "$GITHUB_OUTPUT"
+
   matrixrtc:
+    needs: changes
+    if: needs.changes.outputs.mandelbrot == 'true'
     name: Mandelbrot MatrixRTC engine (clippy, tests)
     runs-on: ubuntu-24.04
     steps:
@@ -38,6 +68,8 @@ jobs:
         run: cargo test --manifest-path mandelbrot/matrixrtc/Cargo.toml
 
   flatpak:
+    needs: changes
+    if: needs.changes.outputs.mandelbrot == 'true'
     name: Mandelbrot Flatpak build
     runs-on: ubuntu-24.04
     container:
@@ -47,8 +79,38 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+      # The image ships its SDK in /var/lib/flatpak, in the image's own
+      # layers. When Flathub has a newer SDK, flatpak-builder updates it in
+      # place, and on some runners' overlayfs that fails with "Invalid
+      # cross-device link" before anything is built. A copy in the
+      # container's writable layer updates normally.
+      - name: Make the image's Flatpak installation writable
+        run: |
+          set -euo pipefail
+          cp -a /var/lib/flatpak /var/lib/flatpak.rw
+          rm -rf /var/lib/flatpak
+          mv /var/lib/flatpak.rw /var/lib/flatpak
+
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           manifest-path: mandelbrot/org.tunaos.mandelbrot.json
           build-bundle: false
           cache: false
+
+  gate:
+    name: Mandelbrot gate
+    if: always()
+    needs: [changes, matrixrtc, flatpak]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All Mandelbrot jobs passed or were skipped
+        env:
+          RESULTS: ${{ needs.changes.result }} ${{ needs.matrixrtc.result }} ${{ needs.flatpak.result }}
+        run: |
+          set -euo pipefail
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "a Mandelbrot job ended with: $result"; exit 1 ;;
+            esac
+          done

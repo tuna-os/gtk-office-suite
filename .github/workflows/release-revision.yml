@@ -84,10 +84,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@releases/nextest
+      - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - name: Run the workspace tests at the release revision

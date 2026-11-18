@@ -1906,12 +1906,20 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
     out
 }
 
+/// One list level's position: (where its text starts, how far its marker
+/// hangs before that text), see `list_style_indents`.
+type ListLevelIndent = Option<(f64, Option<f64>)>;
+/// `list_style_indents` by `text:list-style` name.
+type ListIndentMap = std::collections::HashMap<String, Vec<ListLevelIndent>>;
+
 /// Each `text:list-style` in `xml`: where each level puts its text, in
 /// points from the paragraph's indent (`fo:margin-left` of its
 /// label-alignment properties, Word's 0.5in for a first level), by level,
-/// 0-based. None where a level declares no position.
-fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option<f64>>> {
-    let mut out: std::collections::HashMap<String, Vec<Option<f64>>> = Default::default();
+/// 0-based, with how far its marker hangs before that text (the negated
+/// `fo:text-indent`, Word's 0.5in for a "1.1" level) where it says.
+/// None where a level declares no position.
+fn list_style_indents(xml: &str) -> ListIndentMap {
+    let mut out: ListIndentMap = Default::default();
     let mut reader = Reader::from_str(xml);
     let mut current: Option<String> = None;
     let mut level: Option<usize> = None;
@@ -1929,7 +1937,8 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
                         if levels.len() < l {
                             levels.resize(l, None);
                         }
-                        levels[l - 1] = Some(margin);
+                        let hanging = attr_val(&e, "fo:text-indent").and_then(|v| parse_length_pt(&v)).map(|t| (-t).max(0.0));
+                        levels[l - 1] = Some((margin, hanging));
                     }
                 }
                 _ => {}
@@ -3952,8 +3961,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         let declared = name.and_then(|n| list_indents.get(n)).and_then(|l| l.get(usize::from(list_level.max(1) - 1)).copied().flatten());
                         let text = crate::lists::text_indent_pt(style.list_level);
                         if style.left_indent_pt == 0.0 {
-                            if let Some(declared) = declared {
+                            if let Some((declared, hanging)) = declared {
                                 style.left_indent_pt = (declared - text).max(0.0);
+                                // The level's own hanging (its label's
+                                // `fo:text-indent`), where it is not ours.
+                                style.list_hanging_pt = hanging.filter(|h| (h - crate::lists::HANGING_PT).abs() > 0.5);
                                 if style.first_line_indent_pt < 0.0 {
                                     style.first_line_indent_pt = 0.0;
                                 }
@@ -4127,6 +4139,18 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         f.href = attr_val(&e, "xlink:href");
                     }
                 }
+                // Inside a note, spacing belongs to the note's text, not to
+                // the paragraph that carries the reference: Writer writes
+                // the space after a Word note's mark as `<text:s/>`.
+                "text:s" | "text:tab" | "text:line-break" if note.is_some() => {
+                    if let Some(n) = note.as_mut().filter(|_| !in_citation) {
+                        match e.name().as_ref() {
+                            "text:s" => n.push_str(&" ".repeat(attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).min(1024))),
+                            "text:tab" => n.push('\t'),
+                            _ => n.push('\n'),
+                        }
+                    }
+                }
                 "text:s" if chip.is_some() => {
                     let n = attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
                     if let Some(c) = chip.as_mut() { c.1.push_str(&" ".repeat(n)); }
@@ -4179,7 +4203,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
             }
             Ok(Event::GeneralRef(r)) => {
-                if let Some(c) = chip.as_mut() {
+                if let Some(n) = note.as_mut() {
+                    if !in_citation {
+                        n.push_str(&resolve_general_ref(&r));
+                    }
+                } else if let Some(c) = chip.as_mut() {
                     c.1.push_str(&resolve_general_ref(&r));
                 } else if para.is_some() {
                     let txt = resolve_general_ref(&r);
@@ -5808,6 +5836,32 @@ mod tests {
         assert!((rt.left_indent_pt - item.style.left_indent_pt).abs() < 0.01 && rt.list_hanging_pt.is_some_and(|h| (h - hanging).abs() < 0.01), "{rt:?}");
     }
 
+    /// A list level's own hanging, its label's `fo:text-indent`, is the
+    /// item's hanging when the paragraph sets no indents of its own:
+    /// Word's "1.1" level hangs its number 0.5in before its text at 0.5in,
+    /// not Letters' 18pt (#1630). Such an item writes the hanging back.
+    #[test]
+    fn a_list_levels_hanging_is_read_and_written() {
+        let content = "<office:document-content><office:automatic-styles>\
+            <text:list-style style:name=\"L1\"><text:list-level-style-number text:level=\"1\" style:num-format=\"1\" style:num-suffix=\".\">\
+              <style:list-level-properties text:list-level-position-and-space-mode=\"label-alignment\">\
+              <style:list-level-label-alignment text:label-followed-by=\"listtab\" fo:margin-left=\"0.5in\" fo:text-indent=\"-0.5in\"/>\
+              </style:list-level-properties></text:list-level-style-number></text:list-style>\
+            </office:automatic-styles><office:body><office:text>\
+            <text:list text:style-name=\"L1\"><text:list-item><text:p>the minutes</text:p></text:list-item></text:list>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let item = &d.paragraphs[0];
+        assert_eq!(item.style.list, ListKind::Numbered);
+        let hanging = item.style.list_hanging_pt.expect("the level's hanging");
+        assert!((hanging - 36.0).abs() < 0.01, "0.5in: {hanging}");
+        let text_x = crate::layout::paragraph_box_x(item);
+        assert!((text_x - 36.0).abs() < 0.01, "text at 0.5in: {text_x}");
+        let rt = round_trip(&d).paragraphs[0].style.clone();
+        assert!(rt.list_hanging_pt.is_some_and(|h| (h - 36.0).abs() < 0.01), "{rt:?}");
+        assert!((rt.left_indent_pt - item.style.left_indent_pt).abs() < 0.01, "{rt:?}");
+    }
+
     /// Writer's default paragraph style is the root of every style chain
     /// (a Word-made .odt keeps its space after and line height there),
     /// and a self-closing paragraph is a blank line with its style's
@@ -6857,6 +6911,21 @@ mod tests {
         assert_eq!(d.paragraphs.len(), 1);
         assert_eq!(d.paragraphs[0].runs[0].text, "Statistical Release\nOctober 2020");
         assert_eq!(round_trip(&d).paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// Writer turns the space after a Word note's mark into `<text:s/>`
+    /// inside the note body: it is the note's, and the paragraph that
+    /// carries the reference stays as it was.
+    #[test]
+    fn spacing_inside_a_note_stays_in_the_note() {
+        let content = "<office:document-content><office:body><office:text>\
+             <text:p>Body text<text:note text:id=\"ftn1\" text:note-class=\"footnote\">\
+             <text:note-citation>1</text:note-citation><text:note-body>\
+             <text:p><text:s/>A note<text:tab/>with &amp; more.</text:p></text:note-body></text:note></text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        assert_eq!(d.paragraphs[0].runs.iter().map(|r| r.text.as_str()).collect::<String>(), "Body text");
+        assert_eq!(d.footnotes, [" A note\twith & more."]);
     }
 
     #[test]

@@ -18,6 +18,9 @@ pub(crate) enum SidebarInput {
         /// A click anywhere on an account's header folds it.
         account_click_folds: bool,
         rail_dots: bool,
+        /// Off, no unread count shows anywhere in the sidebar (Settings →
+        /// Focus Mode → Unread counts).
+        unread_counts: bool,
         rail_fold: crate::config::RailFold,
         unified_unread: u32,
         /// Filter-rule folders to list inside All Inboxes (already
@@ -194,6 +197,10 @@ pub(crate) enum SidebarInput {
 
 #[derive(Debug)]
 pub(crate) enum SidebarOutput {
+    /// The launch view could not be shown, and the view picked next is a
+    /// stand-in: the app must not remember it as the one to open next
+    /// time (#642).
+    StandIn,
     /// The unified sections' open state changed (a click, or the rail's
     /// fold-up) — for persistence.
     SectionsOpen {

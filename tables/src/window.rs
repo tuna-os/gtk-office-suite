@@ -265,6 +265,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let refresh = refresh_sel.clone();
             let fx = fx_entry.clone();
+            let select_fx = crate::formula_bar::replace_on_first_input(&fx_entry);
             Rc::new(move |text: &str| {
                 let target = tables_core::sheet::parse_cell_or_range(text).or_else(|| {
                     let ctl = ctl.borrow();
@@ -309,7 +310,15 @@ impl TablesWindow {
                 // hidden" after the sheet's protection was undone.
                 let (r, c) = { let st = s.borrow(); let sh = st.sheet(); (sh.selected_row, sh.selected_col) };
                 crate::protection_ui::show_input(&fx, &s, r, c);
+                // Selected, so typing replaces the cell as in any spreadsheet.
+                // grab_focus() selects only when focus moves in, and the
+                // narrow window's Go to Cell dialog has already handed it
+                // back: the caret sat before the old value and "300" over
+                // "200" became "300200" (release soak, narrow-400). The
+                // dialog can also lose the selection, so the first input
+                // after a jump replaces the bar's text whatever it is.
                 fx.grab_focus();
+                select_fx();
                 true
             })
         };
@@ -398,9 +407,7 @@ impl TablesWindow {
                     let c = sh.selected_col;
                     if let Some(rule) = &sh.validations[r][c] {
                         if !rule.validate(&val) {
-                            let toast = adw::Toast::new("Invalid input — value rejected");
-                            toast.set_timeout(3);
-                            toasts.add_toast(toast);
+                            suite_common::toast_manager::show(&toasts, &suite_common::i18n("Invalid input — value rejected"));
                             return;
                         }
                     }
@@ -987,12 +994,7 @@ impl TablesWindow {
                 let idx = sd.selected() as usize;
                 drop(controller);
                 if state.borrow().sheets.len() <= 1 {
-                    let err = adw::AlertDialog::builder()
-                        .heading(suite_common::i18n("Can't Delete Sheet"))
-                        .body(suite_common::i18n("A workbook needs at least one sheet."))
-                        .build();
-                    err.add_response("ok", &suite_common::i18n("_OK"));
-                    err.present(w.as_ref());
+                    suite_common::dialogs::show_message(w.as_ref(), &suite_common::i18n("Can't Delete Sheet"), &suite_common::i18n("A workbook needs at least one sheet."));
                     return;
                 }
                 let name = state.borrow().sheets[idx].borrow().name.clone();
@@ -1134,12 +1136,7 @@ impl TablesWindow {
                                 let sheet_model = st.sheets[st.active_sheet].borrow().clone();
                                 let parent_win = wr2.borrow().clone();
                                 if let Err(err_msg) = tables_core::export::to_pdf_for_sheet(&st.engine, &sheet_model, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
-                                    let alert = adw::AlertDialog::builder()
-                                        .heading(suite_common::i18n("Export Failed"))
-                                        .body(&err_msg)
-                                        .build();
-                                    alert.add_response("ok", &suite_common::i18n("_OK"));
-                                    alert.present(parent_win.as_ref());
+                                    suite_common::dialogs::show_message(parent_win.as_ref(), &suite_common::i18n("Export Failed"), &err_msg);
                                 } else {
                                     println!("PDF exported successfully to {}", path_str);
                                 }
@@ -1607,13 +1604,7 @@ impl TablesWindow {
                                         da.queue_draw();
                                     }
                                     Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Could Not Open File"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("_OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
+                                        suite_common::dialogs::show_message(Some(&w2), &suite_common::i18n("Could Not Open File"), &e);
                                     }
                                 }
                             }

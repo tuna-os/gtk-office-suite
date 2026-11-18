@@ -48,6 +48,7 @@ pub(crate) use messages::{PrefInit, PrefInput, PrefOutput};
 use navigation::{side_page, SIDE_PAGES};
 use pages::{
     AppearancePage, AssistantsPage, BackupPage, ComposingPage, ConversationsPage, DateTimePage,
+    FocusPage,
     GeneralPage, ListPage, PrivacyPage, ReadingPage, SidebarPage, SystemPage,
 };
 use rows::{compose_font_setup, middle_ellipsize, widen_combo_value, widen_page};
@@ -226,6 +227,7 @@ struct Pages {
     datetime: DateTimePage,
     system: SystemPage,
     backup: BackupPage,
+    focus_mode: FocusPage,
 }
 
 /// The window's frame and the pages the rest of the module reads back by
@@ -258,6 +260,7 @@ pub(crate) struct PreferencesWidgets {
     datetime: DateTimePage,
     system: SystemPage,
     backup: BackupPage,
+    focus_mode: FocusPage,
 }
 
 fn build_widgets(root: &adw::Window, sender: &ViewSender, pages: Pages) -> PreferencesWidgets {
@@ -344,6 +347,7 @@ fn build_widgets(root: &adw::Window, sender: &ViewSender, pages: Pages) -> Prefe
     panels_stack.add_named(&pages.datetime.page, Some("datetime"));
     panels_stack.add_named(&pages.system.page, Some("system"));
     panels_stack.add_named(&pages.backup.page, Some("backup"));
+    panels_stack.add_named(&pages.focus_mode.page, Some("focus"));
     let host_toolbar = adw::ToolbarView::new();
     host_toolbar.add_top_bar(&host_header);
     host_toolbar.set_content(Some(&panels_stack));
@@ -359,7 +363,7 @@ fn build_widgets(root: &adw::Window, sender: &ViewSender, pages: Pages) -> Prefe
     root.set_content(Some(&split));
 
     let appearance_page = pages.appearance.page.clone();
-    let Pages { general, appearance, sidebar, list, conversations, reading, composing, privacy, assistants, datetime, system, backup } = pages;
+    let Pages { general, appearance, sidebar, list, conversations, reading, composing, privacy, assistants, datetime, system, backup, focus_mode } = pages;
     PreferencesWidgets {
         split,
         side_toolbar,
@@ -387,6 +391,7 @@ fn build_widgets(root: &adw::Window, sender: &ViewSender, pages: Pages) -> Prefe
         datetime,
         system,
         backup,
+        focus_mode,
     }
 }
 
@@ -406,7 +411,7 @@ impl Component for Preferences {
     /// view had them; the window itself has none.
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
         widgets.general.update_view(self);
-        widgets.appearance.update_view(self);
+        widgets.focus_mode.update_view(self);
         widgets.sidebar.update_view(self);
         widgets.list.update_view(self);
         widgets.conversations.update_view(self);
@@ -480,7 +485,7 @@ impl Component for Preferences {
         };
         let pages = Pages {
             general: GeneralPage::build(&model, &sender),
-            appearance: AppearancePage::build(&model, &sender),
+            appearance: AppearancePage::build(&sender),
             sidebar: SidebarPage::build(&model, &sender),
             list: ListPage::build(&model, &sender),
             conversations: ConversationsPage::build(&model, &sender),
@@ -491,6 +496,7 @@ impl Component for Preferences {
             datetime: DateTimePage::build(&sender),
             system: SystemPage::build(&model, &sender),
             backup: BackupPage::build(&sender),
+            focus_mode: FocusPage::build(&model, &sender),
         };
         let widgets = build_widgets(&root, &sender, pages);
         let ready = sender.ready.clone();
@@ -657,6 +663,14 @@ impl Component for Preferences {
             } => self.on_set_accounts_panel(panel, accounts),
             PrefInput::ToggleShowAccounts(on) => self.on_toggle_show_accounts(on, sender),
             PrefInput::ToggleFocus(part, on) => self.on_toggle_focus(part, on, sender),
+            PrefInput::SetFocusLayout(index) => {
+                self.focus.layout = choices::list_layout_at(index);
+                let _ = sender.output(PrefOutput::SetFocusMode(self.focus));
+            }
+            PrefInput::SetFocusPreviewLines(lines) => {
+                self.focus.preview_lines = Some(lines);
+                let _ = sender.output(PrefOutput::SetFocusMode(self.focus));
+            }
             PrefInput::SetFocusMode(focus) => {
                 self.focus = focus;
             }

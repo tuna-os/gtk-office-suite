@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2.9.3
@@ -81,7 +81,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             libreoffice-writer libreoffice-calc libreoffice-impress
-      - uses: taiki-e/install-action@releases/nextest
+      - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       # One nextest run over both targets, so the lane leaves one JUnit
@@ -157,7 +157,7 @@ jobs:
       # tests/test_workspace_test_lanes.py keeps the two lists in step.
       - name: Install GTK4 deps, Xvfb and poppler
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - name: Install llvm-cov
@@ -200,7 +200,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
       - name: Install cargo-fuzz

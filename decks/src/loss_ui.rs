@@ -134,11 +134,7 @@ pub(crate) fn save_after_asking(window: &adw::ApplicationWindow, source: Option<
 
 fn show_source_changed(window: &adw::ApplicationWindow) {
     let body = suite_common::i18n("The original file changed while the question was open, so the listed content may no longer match. Nothing was saved. Try saving again to review what changed.");
-    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Source Changed")), Some(&body));
-    dialog.add_response("ok", &suite_common::i18n("_OK"));
-    dialog.set_default_response(Some("ok"));
-    dialog.set_close_response("ok");
-    dialog.present(Some(window));
+    suite_common::dialogs::show_message(Some(window), &suite_common::i18n("Source Changed"), &body);
 }
 
 fn show_inspection_failure(window: &adw::ApplicationWindow, details: &str) {
@@ -147,11 +143,7 @@ fn show_inspection_failure(window: &adw::ApplicationWindow, details: &str) {
         suite_common::i18n("Decks could not check the original file for content this save might lose. Nothing was saved. Make the original file available and try again, or use Save As with a new filename to save an unverified copy of your current edits. An unverified copy cannot replace an existing file."),
         details,
     );
-    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Could Not Save File")), Some(&body));
-    dialog.add_response("ok", &suite_common::i18n("_OK"));
-    dialog.set_default_response(Some("ok"));
-    dialog.set_close_response("ok");
-    dialog.present(Some(window));
+    suite_common::dialogs::show_message(Some(window), &suite_common::i18n("Could Not Save File"), &body);
 }
 
 /// Run `save` (a save to `target`), first asking when the imported

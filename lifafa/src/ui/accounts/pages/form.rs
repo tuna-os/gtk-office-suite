@@ -70,6 +70,7 @@ pub(in crate::ui::accounts) struct EditorForm {
     pub(in crate::ui::accounts) openpgp_group: adw::PreferencesGroup,
     pub(in crate::ui::accounts) sig_choice_row: adw::ComboRow,
     pub(in crate::ui::accounts) sig_name_row: adw::EntryRow,
+    pub(in crate::ui::accounts) sig_sender_row: adw::EntryRow,
     pub(in crate::ui::accounts) sig_default_row: adw::SwitchRow,
     pub(in crate::ui::accounts) sig_holder: gtk::Box,
     pub(in crate::ui::accounts) push_row: adw::ComboRow,
@@ -574,7 +575,7 @@ impl EditorForm {
         let aliases_group = adw::PreferencesGroup::default();
         aliases_group.set_title(&i18n("Send-as aliases"));
         aliases_group.set_description(Some(
-            i18n("Extra addresses this account can send as.").as_str(),
+            i18n("Extra names and addresses this account can send as.").as_str(),
         ));
         // At the header's end, styled like the Add
         // Filter…, Add Tag… and cloud Add Account…
@@ -669,6 +670,16 @@ impl EditorForm {
         }
         sig_name_row.add_suffix(&button_23);
         signatures_group.add(&sig_name_row);
+        let sig_sender_row = adw::EntryRow::default();
+        sig_sender_row.set_title(&i18n("Sender name"));
+        sig_sender_row.set_tooltip_text(Some(&i18n(
+            "Replaces the account's name in From. Aliases keep their own.",
+        )));
+        {
+            let sender = sender.clone();
+            sig_sender_row.connect_changed(move |_| sender.input(AccountsInput::SigSenderRename));
+        }
+        signatures_group.add(&sig_sender_row);
         let sig_default_row = adw::SwitchRow::default();
         sig_default_row.set_title(&i18n("Start messages with this signature"));
         {
@@ -1024,6 +1035,7 @@ impl EditorForm {
             openpgp_group,
             sig_choice_row,
             sig_name_row,
+            sig_sender_row,
             sig_default_row,
             sig_holder,
             push_row,

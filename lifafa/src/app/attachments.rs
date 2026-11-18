@@ -381,11 +381,9 @@ impl AppModel {
                         start,
                     });
                 } else {
-                    crate::ui::attachment_io::open_bytes(
-                        &att.name,
-                        &att.data,
-                        Some(self.window.upcast_ref::<gtk::Window>()),
-                    );
+                    // Opened to be edited, and watched so a saved edit can
+                    // become a reply (reply_with_edit, INTEGRATION-PLAN A2).
+                    self.open_for_reply(account_id, id, &att, &sender);
                 }
             }
             AppMsg::ShowAttachmentInMessage(att) => {

@@ -201,6 +201,21 @@ template $CallView: Adw.Bin {
           }
         }
 
+        Gtk.ToggleButton screen_button {
+          icon-name: "video-display-symbolic";
+          tooltip-text: _("Share Screen");
+          toggled => $screen_toggled() swapped;
+
+          styles [
+            "circular",
+            "large",
+          ]
+
+          accessibility {
+            label: _("Share a screen or window into the call");
+          }
+        }
+
         Gtk.MenuButton audio_output_button {
           icon-name: "audio-speakers-symbolic";
           tooltip-text: _("Audio Output");

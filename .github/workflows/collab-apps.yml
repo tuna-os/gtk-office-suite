@@ -24,7 +24,8 @@ name: collab-apps
 # the test says so. The headless job checks both behaviours.
 on:
   push:
-    branches: [main, 'collab/**']
+    # main only: a collab/** branch with a pull request already gets the pull_request run.
+    branches: [main]
     paths:
       - 'collab/**'
       - 'suite-collab/**'
@@ -60,10 +61,11 @@ on:
       - '.github/workflows/collab-apps.yml'
   workflow_dispatch:
 
-# A newer push to the same ref supersedes the queued or running one.
+# A newer push to the same pull request supersedes the queued or running one. Main,
+# the schedule and a dispatch always finish.
 concurrency:
   group: collab-apps-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -84,7 +86,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: clippy
@@ -114,7 +116,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: clippy
@@ -172,12 +174,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@releases/nextest
+        uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - uses: Swatinem/rust-cache@v2.9.3
@@ -240,12 +242,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: clippy
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@releases/nextest
+        uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - uses: Swatinem/rust-cache@v2.9.3
@@ -284,7 +286,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2.9.3
@@ -355,7 +357,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2.9.3

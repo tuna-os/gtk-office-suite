@@ -172,6 +172,14 @@ Controller state machines generate valid commands and assert invariants after ev
       `test_undelivered_input_is_not_an_assertion_mismatch`,
       `test_delivery_evidence_does_not_clear_a_failure`,
       `test_delivery_evidence_does_not_hide_a_crash` and the DeliveryTraceTests class.
+      The release soak's `input-not-delivered` (one lost "p" per attempt, v2.1.9 to v2.1.15)
+      was not timing: `LettersPrintPreviewSmoke`'s Ctrl+Shift+P opened a window between
+      the press and the release of "p", the release never reached the X server, and the next
+      "p" any journey typed was lost as a repeat. Slower typing did not change it; run alone,
+      the affected journeys never failed (debug, release, the soak's image: 50/50 each). The
+      harness now releases every key of a combo at the server (#2192); with that off, every
+      attempt in which Print Preview ran first lost the "p" (22 of 22), with it on none did
+      (40 of 40).
       Not done: **nondeterministic rendering is not a class of its own.** A frame that differed
       between two otherwise identical attempts currently lands in `assertion-mismatch` beside a
       genuine wrong answer, which is the conflation this row asks to avoid — the two have different

@@ -66,6 +66,18 @@ pub struct SfuConfig {
     pub jwt: String,
 }
 
+/// The HTTP client to reach a JWT service with.
+///
+/// It does not follow redirects. The service URL is checked before the
+/// request (see [`check_service_url`](crate::focus_url::check_service_url));
+/// a redirect would send the request, with the OpenID token in it, to an
+/// address nothing checked.
+pub fn jwt_service_http_client() -> Result<reqwest::Client, LivekitError> {
+    Ok(reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?)
+}
+
 /// Fetch the SFU configuration (URL + JWT) from an MSC4195 `lk-jwt-service`.
 ///
 /// This uses the legacy `POST {service_url}/sfu/get` endpoint, sending the
@@ -227,6 +239,35 @@ impl LivekitCallConnection {
                 LocalTrack::Video(track),
                 TrackPublishOptions {
                     source: TrackSource::Camera,
+                    ..Default::default()
+                },
+            )
+            .await?;
+        Ok(publication.sid())
+    }
+
+    /// Publish a screen share video track backed by the given source.
+    ///
+    /// The other participants see it as a screen share rather than a camera
+    /// (LiveKit's `Screenshare` source), the track a presentation goes out on
+    /// (INTEGRATION-PLAN A5, ADR 0016). Capturing the screen or window is the
+    /// application's responsibility, through the ScreenCast portal: feed its
+    /// frames into the source.
+    ///
+    /// Returns the SID of the published track, to stop sharing later with
+    /// [`Self::unpublish_track`].
+    pub async fn publish_screen_share_track(
+        &self,
+        source: RtcVideoSource,
+    ) -> Result<TrackSid, LivekitError> {
+        let track = LocalVideoTrack::create_video_track("screen_share", source);
+        let publication = self
+            .room
+            .local_participant()
+            .publish_track(
+                LocalTrack::Video(track),
+                TrackPublishOptions {
+                    source: TrackSource::Screenshare,
                     ..Default::default()
                 },
             )

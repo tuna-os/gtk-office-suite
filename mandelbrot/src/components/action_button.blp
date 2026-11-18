@@ -66,6 +66,10 @@ template $ActionButton: Adw.Bin {
         can-target: false;
         valign: center;
 
+        accessibility {
+          label: _("Loading");
+        }
+
         styles [
           "circular",
         ]
@@ -89,6 +93,10 @@ template $ActionButton: Adw.Bin {
         valign: center;
         icon-name: "checkmark-symbolic";
 
+        accessibility {
+          label: _("Success");
+        }
+
         styles [
           "suggested-action",
           "circular",
@@ -107,6 +115,10 @@ template $ActionButton: Adw.Bin {
         valign: center;
         icon-name: "warning-symbolic";
 
+        accessibility {
+          label: _("Warning");
+        }
+
         styles [
           "circular",
           "warning",
@@ -123,6 +135,10 @@ template $ActionButton: Adw.Bin {
         can-target: false;
         valign: center;
         icon-name: "error-symbolic";
+
+        accessibility {
+          label: _("Error");
+        }
 
         styles [
           "circular",

@@ -5,6 +5,7 @@ use crate::relm::prelude::*;
 
 use crate::models::{Attachment, Message};
 use crate::ui::attachments_gallery::GalleryInput;
+use crate::ui::compose::ComposeInput;
 use crate::ui::message_view::MessageViewInput;
 use crate::ui::message_window::MessageWindowInput;
 use crate::worker::MailRequest;
@@ -361,6 +362,14 @@ impl AppModel {
             }
             self.pending_draft = Some((pd, inline, extra));
         }
+        // A template being inserted into a composer that is already open.
+        if let Some((composer_id, template)) = self.pending_template_insert.take() {
+            if template.account_id == account_id && template.id == message_id {
+                self.emit_to_composer(composer_id, ComposeInput::TemplateBody(body.to_string()));
+                return true;
+            }
+            self.pending_template_insert = Some((composer_id, template));
+        }
         // Likewise a copy being edited as a new message: the body is
         // in the cache now, so the second pass finds it there.
         if let Some(pending) = self.pending_edit_as_new.take() {
@@ -444,6 +453,10 @@ impl AppModel {
         } else if self.current.as_ref().is_some_and(is_target) {
             let current = self.current.clone();
             self.show_message(current, false);
+            // Opened before its body came: it can be read from now on (#638).
+            if let Some(m) = self.read_mark_waiting.take_if(|m| is_target(m)) {
+                self.start_read_mark(&m, sender);
+            }
         }
     }
 }

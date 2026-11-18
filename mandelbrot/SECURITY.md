@@ -6,9 +6,9 @@
 
 Report it privately through GitHub's private vulnerability reporting:
 
-1. Open the [Security tab](https://github.com/tuna-os/mandelbrot/security) of this repository.
+1. Open the [Security tab](https://github.com/tuna-os/gtk-office-suite/security) of tuna-os/gtk-office-suite, where Mandelbrot is maintained.
 2. Click **Report a vulnerability**, or go straight to
-   [the new advisory form](https://github.com/tuna-os/mandelbrot/security/advisories/new).
+   [the new advisory form](https://github.com/tuna-os/gtk-office-suite/security/advisories/new).
 3. Describe the affected component (app, `matrixrtc/` crate, Flatpak packaging, CI workflows),
    the version or commit, the impact, reproduction steps, and a suggested fix if you have one.
 

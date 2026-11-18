@@ -5,6 +5,7 @@ use crate::relm::prelude::*;
 
 use crate::config;
 use crate::models::{thread_ids, Message, ThreadSummary};
+use crate::ui::compose::ComposeInput;
 use crate::ui::contacts_page::ContactsPageInput;
 use crate::ui::message_list::{DateBound, MessageListInput, QuickFilters};
 use crate::ui::message_view::MessageViewInput;
@@ -61,6 +62,24 @@ impl AppModel {
     pub(super) fn on_reader_select(&mut self, msg: AppMsg, sender: ComponentSender<Self>) {
         match msg {
             AppMsg::OpenedByKey { already_open } => {
+                // A draft selected opens in the reader's editor, at once or
+                // once its bytes come: o and Enter take the keyboard there.
+                self.draft_keeps_list = None;
+                let draft = self
+                    .reader_compose
+                    .as_ref()
+                    .filter(|r| r.list_draft.is_some() && r.window.is_none());
+                if let Some(r) = draft {
+                    r.controller.emit(ComposeInput::FocusInitial);
+                    return;
+                }
+                if self
+                    .pending_draft
+                    .as_ref()
+                    .is_some_and(|(_, inline, _)| *inline)
+                {
+                    return;
+                }
                 if !self.reader_shown() {
                     // No pane to read it in: Gmail's o or Enter opens a
                     // window, now or once the row is selected (#475).
@@ -459,7 +478,8 @@ impl AppModel {
         // Selecting a draft opens it in the compose editor, in the
         // reading pane where the message would otherwise show.
         if self.is_drafts_folder(m.account_id, m.folder_id) {
-            self.reader_focus_pending = false;
+            self.draft_keeps_list =
+                (!std::mem::take(&mut self.reader_focus_pending)).then_some((m.account_id, m.id));
             self.open_draft(m, true, HandOffFiles::default(), &sender);
             return;
         }
@@ -483,7 +503,7 @@ impl AppModel {
         // Marking that one outright left it read, and folded, every
         // time an unread conversation was opened again (#392).
         let conversation = thread.len() > 1;
-        self.mark_read_on_open(&m, conversation, &sender);
+        self.mark_read_on_open(&m, conversation, needs_body, &sender);
 
         let mut current = m.clone();
         if !conversation {
@@ -572,29 +592,43 @@ impl AppModel {
 
     /// Marks a lone message read as the read-mark setting says: at once,
     /// after two seconds in view (#100), or never. A conversation is marked
-    /// card by card as the reader shows them.
+    /// card by card as the reader shows them. One whose body is still on its
+    /// way waits for it: nothing can be read before then (#638).
     fn mark_read_on_open(
         &mut self,
         m: &Message,
         conversation: bool,
+        needs_body: bool,
         sender: &ComponentSender<Self>,
     ) {
-        if m.unread && !conversation {
-            match self.read_mark {
-                config::ReadMark::Shown => self.mark_opened_read(m),
-                config::ReadMark::Delay => {
-                    // Mark after a beat in view — navigating away
-                    // before then leaves it unread (#100).
-                    let s = sender.clone();
-                    let msg = m.clone();
-                    gtk::glib::timeout_add_seconds_local_once(2, move || {
-                        s.input(AppMsg::DeferredMarkRead {
-                            message: Box::new(msg.clone()),
-                        });
+        self.read_mark_waiting = None;
+        if !m.unread || conversation {
+            return;
+        }
+        if needs_body && self.read_mark != config::ReadMark::Manual {
+            self.read_mark_waiting = Some(Box::new(m.clone()));
+            return;
+        }
+        self.start_read_mark(m, sender);
+    }
+
+    /// The lone message on screen can be read now: mark it, or start the
+    /// count to marking it, as the read-mark setting says.
+    pub(super) fn start_read_mark(&mut self, m: &Message, sender: &ComponentSender<Self>) {
+        match self.read_mark {
+            config::ReadMark::Shown => self.mark_opened_read(m),
+            config::ReadMark::Delay => {
+                // Mark after a beat in view — navigating away
+                // before then leaves it unread (#100).
+                let s = sender.clone();
+                let msg = m.clone();
+                gtk::glib::timeout_add_seconds_local_once(2, move || {
+                    s.input(AppMsg::DeferredMarkRead {
+                        message: Box::new(msg.clone()),
                     });
-                }
-                config::ReadMark::Manual => {}
+                });
             }
+            config::ReadMark::Manual => {}
         }
     }
 

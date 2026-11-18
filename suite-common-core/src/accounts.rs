@@ -68,6 +68,35 @@ pub fn from_goa(id: &str, provider: &str, identity: &str) -> Account {
     }
 }
 
+/// One account as GOA's D-Bus object reports it (the
+/// `org.gnome.OnlineAccounts.Account` interface's properties), for the shell
+/// half that reads them.
+#[derive(Clone, Debug, Default)]
+pub struct GoaAccountProps {
+    pub id: String,
+    pub provider_type: String,
+    pub presentation_identity: String,
+    pub mail_disabled: bool,
+    pub calendar_disabled: bool,
+    pub contacts_disabled: bool,
+    /// GOA wants the person to sign in again: its tokens no longer work, so
+    /// nothing can use the account until they do.
+    pub attention_needed: bool,
+}
+
+/// An account GOA listed, with what the person switched off in Settings
+/// removed: a Google account with mail turned off cannot send mail.
+pub fn from_goa_props(props: &GoaAccountProps) -> Account {
+    let mut account = from_goa(&props.id, &props.provider_type, &props.presentation_identity);
+    account.capabilities.retain(|c| match c {
+        Capability::Mail => !props.mail_disabled && !props.attention_needed,
+        Capability::Calendar => !props.calendar_disabled && !props.attention_needed,
+        Capability::Contacts => !props.contacts_disabled && !props.attention_needed,
+        Capability::Chat => true,
+    });
+    account
+}
+
 /// The Matrix account (ADR 0013: there is exactly one).
 pub fn matrix(user_id: &str) -> Account {
     Account {
@@ -200,4 +229,37 @@ mod tests {
         book.add(from_goa("g2", "google", "a@x.org"));
         assert!(!book.needs_first_run());
     }
+
+    fn google() -> GoaAccountProps {
+        GoaAccountProps {
+            id: "account_1".into(),
+            provider_type: "google".into(),
+            presentation_identity: "ann@example.org".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_goa_account_keeps_what_its_provider_gives() {
+        let a = from_goa_props(&google());
+        assert_eq!(a.capabilities, vec![Mail, Calendar, Contacts]);
+        assert_eq!(a.identity, "ann@example.org");
+        assert_eq!(a.source, Source::OnlineAccounts);
+    }
+
+    #[test]
+    fn what_the_person_switched_off_in_settings_is_left_out() {
+        let a = from_goa_props(&GoaAccountProps { mail_disabled: true, contacts_disabled: true, ..google() });
+        assert_eq!(a.capabilities, vec![Calendar]);
+        let mut book = AccountBook::default();
+        book.add(a);
+        assert!(book.needs_first_run(), "an account with mail off cannot send mail");
+    }
+
+    #[test]
+    fn an_account_that_needs_signing_in_again_can_do_nothing_yet() {
+        let a = from_goa_props(&GoaAccountProps { attention_needed: true, ..google() });
+        assert!(a.capabilities.is_empty());
+    }
+
 }

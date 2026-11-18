@@ -39,7 +39,7 @@ jobs:
             ffmpeg librsvg2-bin fontconfig
           python3 -m pip install --break-system-packages mss
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2.9.3  # zizmor: ignore[cache-poisoning] a fix would stop release runs saving the cargo cache, a behaviour change

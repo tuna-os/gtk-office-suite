@@ -17,7 +17,7 @@ impl BackupPage {
         let preferences_group_1 = adw::PreferencesGroup::default();
         preferences_group_1.set_title(&i18n("Backup"));
         preferences_group_1.set_description(Some(
-                        i18n("Accounts, preferences, filters, tags and layout, in one file. Passwords and OpenPGP keys are not included.").as_str()
+                        i18n("Accounts, preferences, filters, tags and layout, in one file. Passwords, OAuth client secrets and OpenPGP keys are not included.").as_str()
                     ));
         let action_row_2 = adw::ActionRow::default();
         action_row_2.set_title(&i18n("Export settings"));

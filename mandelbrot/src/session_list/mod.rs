@@ -309,6 +309,22 @@ impl SessionList {
             .any(|s| s.state() == SessionState::Ready)
     }
 
+    /// Share a screen or window into the call going on in any session, for
+    /// the application's `share-screen` action (INTEGRATION-PLAN A5, ADR
+    /// 0016). Returns whether there was a call to share into.
+    pub(crate) fn share_screen_in_active_call(&self) -> bool {
+        let sessions: Vec<Session> = self
+            .imp()
+            .list
+            .borrow()
+            .values()
+            .filter_map(|s| s.downcast_ref::<Session>().cloned())
+            .collect();
+        sessions
+            .iter()
+            .any(|session| session.call_manager().share_screen_in_active_call())
+    }
+
     /// The session with the given ID, if any.
     pub(crate) fn get(&self, session_id: &str) -> Option<SessionInfo> {
         self.imp().list.borrow().get(session_id).cloned()

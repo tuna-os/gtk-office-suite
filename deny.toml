@@ -46,20 +46,9 @@ ignore = [
     # here calls either; calamine and rust_xlsxwriter read and write
     # entries only. Patched only in zip 9, which those crates do not take
     # yet: remove with the zip@8.6.0 entry above (#1537).
-    # pulldown-cmark 0.13.4: quadratic nested image wikilinks, only with
-    # Options::ENABLE_WIKILINKS. Neither our parsers (letters-core, decks)
-    # nor rdocx's html.rs set it. rdocx pins =0.13.4, so no lock update
-    # reaches 0.13.6.
-    { id = "RUSTSEC-2026-0433", reason = "pulldown-cmark 0.13.4 wikilink parsing; ENABLE_WIKILINKS is set nowhere here or in rdocx, which pins =0.13.4 (#1868); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0367", reason = "zip 8.6.0 SUID/SGID bits kept by extract(); never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0368", reason = "zip 8.6.0 extract() symlink targets outside the destination; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
     { id = "RUSTSEC-2026-0369", reason = "zip 8.6.0 extract() permissions through symlinks; never called here or by calamine/rust_xlsxwriter; patched only in zip 9 (#1537); review by 2027-01-01" },
-    # pulldown-cmark 0.13.4: rdocx (0.16.2 and the latest, 0.16.4) pins
-    # `=0.13.4`, so the lock cannot take 0.13.5. The flaw needs
-    # `Options::ENABLE_WIKILINKS` (or `Options::all()`); letters-core,
-    # decks and rdocx enable only tables and strikethrough. Remove once
-    # rdocx allows 0.13.5 (#1798).
-    { id = "RUSTSEC-2026-0414", reason = "pulldown-cmark wikilink event growth needs ENABLE_WIKILINKS, which nothing here or in rdocx sets; rdocx pins =0.13.4 so 0.13.5 cannot be locked (#1798); review by 2027-01-01" },
     # collab/Cargo.lock, the collabd sidecar's own lock (RFC-0005 option B; the product's
     # lock is unaffected: `tests/test_collab_defaults.py`). `collab-apps.yml` runs this
     # gate on it, and on collab/headless/Cargo.lock, the two-instance test's own (#1997). These are matched only when that lock is read; the product's `advisories`
@@ -80,8 +69,8 @@ ignore = [
     # The fix is rusqlite 0.41 (libsqlite3-sys 0.39), a manifest change for
     # Lifafa tracked from #1986.
     { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys C SQLite CVE via rusqlite/matrix-sdk 0.19.1 (collab/Cargo.lock: 0.39 unreachable behind the pin, migration is upstream's call (#1043); sqlite feature off in all builds so the C never compiles); lifafa/Cargo.lock no longer needs it since Lifafa moved to rusqlite 0.41 (#1986); review by 2027-01-01" },
-    # lifafa/Cargo.lock, the email client's own lock (#1957; gtk4 0.9 cannot share the
-    # product's lock). `lifafa.yml` runs this gate on it. Matched only when that lock is
+    # lifafa/Cargo.lock, the email client's own lock (#1957; it kept a lock of its
+    # own, having come in on gtk4 0.9). `lifafa.yml` runs this gate on it. Matched only when that lock is
     # read; neither the product's nor collab's lock holds these crates.
     #
     # zvariant, zvariant_derive and zbus_names were folded into zbus 6 and are no longer
@@ -93,6 +82,14 @@ ignore = [
     # pin-utils is archived; async-imap 0.12 (the latest) still depends on it. Its macros
     # expand at compile time to code std now provides.
     { id = "RUSTSEC-2026-0441", reason = "pin-utils archived, no further release; via async-imap 0.12.0 (latest) in lifafa/Cargo.lock only — drop when async-imap moves to core::pin::pin! (#1986); review by 2027-01-01" },
+    # chrono and chrono-tz are unmaintained (chronotope/chrono#1768); every
+    # version is affected and there is no release to move to. They are in
+    # every lock here: our own crates (suite-common-core, letters-core,
+    # tables-core, lifafa) and dependencies (ironcalc_base, typst-as-lib,
+    # async-imap, rmcp, schemars, matrix-sdk). The move to jiff or time is
+    # tracked in #2289; remove these two entries when it lands.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no patched release; in our own crates and via ironcalc_base/typst-as-lib/async-imap/rmcp — migrate to jiff or time (#2289); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained, no patched release; via ironcalc_base — migrate with chrono to jiff or time (#2289); review by 2027-01-01" },
 ]
 
 # Licence policy (#1975). The office apps and collab are GPL-3.0-or-later;
@@ -134,6 +131,11 @@ exceptions = [
     # and AGPLv3 section 13 each allow the combination, but nothing else in
     # the suite should pull in AGPL code unnoticed.
     { allow = ["AGPL-3.0-or-later"], crate = "hylki" },
+    # Lifafa's encrypted mail cache (upstream's rusqlite `bundled-sqlcipher`).
+    # The bundled C sources carry SQLite's public-domain blessing and
+    # LibTomCrypt's WTFPL; both are permissive and GPL-compatible, and are
+    # allowed for this one crate only.
+    { allow = ["blessing", "WTFPL"], crate = "sqlcipher-src" },
 ]
 
 [licenses.private]

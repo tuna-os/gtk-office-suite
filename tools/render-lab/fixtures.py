@@ -2468,11 +2468,88 @@ def letters_odt_page_break_spacing():
         "Three pages with 24pt paragraph space before: document start, explicit break, then a new page master")
 
 
+def letters_odt_list_hanging():
+    """A list level whose own hanging is not Letters' 18pt (#1630).
+
+    Word's "1.1" numbering hangs its number 0.5in before text at 0.5in,
+    kept on the level's label alignment rather than on the paragraph.
+    Long items wrap, so the text edge and the marker are both measured.
+    """
+    from zipfile import ZIP_STORED, ZipFile
+
+    directory = os.path.join(OUT, "letters")
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "odt-list-hanging.odt")
+    namespaces = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'office:version="1.3"'
+    )
+    item = "Resolved that the committee notes the report and the auditors' findings, " * 3
+    content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content {namespaces}>
+  <office:automatic-styles>
+    <text:list-style style:name="L1">
+      <text:list-level-style-number text:level="1" style:num-format="1" style:num-suffix=".">
+        <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+          <style:list-level-label-alignment text:label-followed-by="listtab"
+            text:list-tab-stop-position="0.5in" fo:margin-left="0.5in" fo:text-indent="-0.5in"/>
+        </style:list-level-properties>
+      </text:list-level-style-number>
+    </text:list-style>
+  </office:automatic-styles>
+  <office:body><office:text>
+    <text:list text:style-name="L1">
+      <text:list-item><text:p text:style-name="Body">{item}</text:p></text:list-item>
+      <text:list-item><text:p text:style-name="Body">{item}</text:p></text:list-item>
+    </text:list>
+  </office:text></office:body>
+</office:document-content>'''
+    styles = f'''<?xml version="1.0" encoding="UTF-8"?>
+<office:document-styles {namespaces}>
+  <office:font-face-decls>
+    <style:font-face style:name="Liberation Serif" svg:font-family="Liberation Serif"/>
+  </office:font-face-decls>
+  <office:styles>
+    <style:style style:name="Body" style:family="paragraph">
+      <style:paragraph-properties fo:margin-top="0pt" fo:margin-bottom="12pt"/>
+      <style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt"/>
+    </style:style>
+  </office:styles>
+  <office:automatic-styles>
+    <style:page-layout style:name="Page">
+      <style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" fo:margin="1in"/>
+    </style:page-layout>
+  </office:automatic-styles>
+  <office:master-styles>
+    <style:master-page style:name="Standard" style:page-layout-name="Page"/>
+  </office:master-styles>
+</office:document-styles>'''
+    manifest = '''<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
+                   manifest:version="1.3">
+  <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+</manifest:manifest>'''
+    with ZipFile(path, "w") as package:
+        package.writestr("mimetype", "application/vnd.oasis.opendocument.text", compress_type=ZIP_STORED)
+        package.writestr("META-INF/manifest.xml", manifest)
+        package.writestr("content.xml", content)
+        package.writestr("styles.xml", styles)
+    add("letters", "odt-list-hanging", path,
+        "Two numbered items whose numbers sit at the left margin, their text and wrapped lines 0.5in in")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     img = test_image(os.path.join(OUT, "test-image.png"))
     letters(img)
     letters_odt_page_break_spacing()
+    letters_odt_list_hanging()
     letters_floating_image_gap(img)
     tables(img)
     decks(img)

@@ -11,6 +11,31 @@
 #
 # Build:  docker build -t gui-test tests/gui/container
 # Use:    tests/gui/container/run.sh tests/gui/run_gui_tests.sh test_smoke.py
+# GTK with its icon-cache race fixed (#2226). GtkIconHelper preloads icons
+# on a GTask thread, and that thread can drop an icon's last reference;
+# the icon leaves the theme's cache only in finalize, so a main-thread
+# lookup in between ref'd a finalizing object and crashed
+# (object_already_finalized, then SIGSEGV in gtk_icon_theme_lookup_icon).
+# It took down about one release soak in three, mostly as a file dialog
+# opened. The race is in GTK 4.14 through 4.18, so it is fixed here, in
+# Ubuntu's own source package at the same version, until GTK fixes it
+# upstream; only libgtk-4-1 is replaced.
+FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS gtk
+ENV DEBIAN_FRONTEND=noninteractive
+RUN sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends dpkg-dev devscripts equivs ca-certificates \
+    && apt-get build-dep -y --no-install-recommends -P nodoc,nocheck,noinsttest gtk4
+WORKDIR /build
+COPY gtk-icon-cache-race.patch /build/
+RUN apt-get source gtk4 \
+    && cd gtk4-*/ \
+    && patch -p1 < /build/gtk-icon-cache-race.patch \
+    && DEB_BUILD_PROFILES="nodoc nocheck noinsttest" \
+       DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)" \
+       dpkg-buildpackage -b -uc -us \
+    && mkdir /debs && cp ../libgtk-4-1_*.deb /debs/
+
 FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
 
 LABEL org.opencontainers.image.source=https://github.com/tuna-os/gtk-office-suite
@@ -49,6 +74,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip python3-dogtail python3-pytest python3-pil \
       python3-requests \
     && rm -rf /var/lib/apt/lists/*
+
+# The patched GTK from the `gtk` stage: same version as Ubuntu's, so the
+# -dev packages above still match it.
+COPY --from=gtk /debs/ /tmp/gtk-debs/
+RUN dpkg -i /tmp/gtk-debs/libgtk-4-1_*.deb \
+    && apt-mark hold libgtk-4-1 \
+    && rm -rf /tmp/gtk-debs \
+    && mkdir -p /etc/gtk-office-suite \
+    && echo "gtk-icon-cache-race.patch (#2226)" > /etc/gtk-office-suite/gtk-patches
 
 # mss (screen capture) has no Ubuntu package.
 RUN pip3 install --no-cache-dir --break-system-packages mss==9.0.2

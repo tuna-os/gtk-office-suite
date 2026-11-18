@@ -237,6 +237,7 @@ impl<E: Fn(WorkerEvent)> TutaWorker<E> {
             Ok(message_id) => (self.emit)(WorkerEvent::DraftSaved {
                 autosave,
                 message_id: Some(message_id),
+                template,
             }),
             Err(why) => {
                 tracing::warn!(

@@ -555,6 +555,7 @@ async fn a_draft_is_saved_on_the_server_and_found_again_by_its_message_id() {
             WorkerEvent::DraftSaved {
                 autosave: Some(7),
                 message_id: Some(id),
+                template: false,
             } => Some(id.clone()),
             _ => None,
         })
@@ -712,6 +713,7 @@ async fn a_template_is_a_draft_moved_to_a_templates_folder() {
         e,
         WorkerEvent::DraftSaved {
             message_id: Some(_),
+            template: true,
             ..
         }
     )));

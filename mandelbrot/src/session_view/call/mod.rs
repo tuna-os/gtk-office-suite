@@ -78,6 +78,8 @@ mod imp {
         #[template_child]
         camera_button: TemplateChild<gtk::ToggleButton>,
         #[template_child]
+        screen_button: TemplateChild<gtk::ToggleButton>,
+        #[template_child]
         room_name_label: TemplateChild<gtk::Label>,
         #[template_child]
         status_label: TemplateChild<gtk::Label>,
@@ -163,6 +165,13 @@ mod imp {
                         imp.schedule_bars_hide();
                     }
                 )));
+                handlers.push(state.connect_screen_shared_notify(clone!(
+                    #[weak(rename_to = imp)]
+                    self,
+                    move |_| {
+                        imp.update_controls();
+                    }
+                )));
                 handlers.push(state.connect_connection_state_notify(clone!(
                     #[weak(rename_to = imp)]
                     self,
@@ -241,6 +250,11 @@ mod imp {
             } else {
                 "camera-disabled-symbolic"
             });
+
+            // The portal's picker shows what is shared; the toggle only says
+            // whether something is.
+            let screen_shared = state.as_ref().is_some_and(CallState::screen_shared);
+            self.screen_button.set_active(screen_shared);
 
             let page = if camera_on { "video" } else { "off" };
             self.self_view_stack.set_visible_child_name(page);
@@ -337,6 +351,14 @@ mod imp {
         fn camera_toggled(&self) {
             if let Some(state) = self.state.borrow().as_ref() {
                 state.set_camera_on(self.camera_button.is_active());
+            }
+        }
+
+        /// Handle when the share screen toggle was activated.
+        #[template_callback]
+        fn screen_toggled(&self) {
+            if let Some(state) = self.state.borrow().as_ref() {
+                state.set_screen_shared(self.screen_button.is_active());
             }
         }
 

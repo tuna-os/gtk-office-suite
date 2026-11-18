@@ -10,7 +10,7 @@ use crate::config;
 use crate::config::{split_identity, AccountConfig};
 use crate::i18n::i18n;
 use crate::ui::compose::{Compose, ComposeInit, ComposeOutput};
-use crate::ui::compose::{ComposeAccount, ComposePrefill};
+use crate::ui::compose::{ComposeAccount, ComposePrefill, Original};
 use crate::ui::preferences::PrefOutput;
 
 use super::model::AppModel;
@@ -77,6 +77,12 @@ fn account_identities(
     let signature = default
         .map(|i| signatures[i].html.clone())
         .unwrap_or_default();
+    // The default signature's sender name goes on the account's own
+    // address; the aliases below keep theirs.
+    let signed_as = default
+        .and_then(|i| signatures.get(i))
+        .map(|sig| sig.sender_from(&label))
+        .filter(|from| *from != label);
     let pgp_key = cfg.and_then(|c| c.pgp_key.clone());
     let sign_default = cfg.is_some_and(|c| c.sign_by_default);
     let tuta = cfg.is_some_and(|c| c.protocol == config::Protocol::Tuta);
@@ -92,6 +98,7 @@ fn account_identities(
         alias_from: None,
         tuta,
         confidential_default,
+        signed_as,
     }];
     for alias in cfg.map(|c| c.aliases.as_slice()).unwrap_or_default() {
         let (name, addr) = split_identity(&alias.identity);
@@ -114,6 +121,7 @@ fn account_identities(
             alias_from: Some(display),
             tuta,
             confidential_default,
+            signed_as: None,
         });
     }
     // A JMAP server's own identities (#346), unless the account
@@ -147,6 +155,7 @@ fn account_identities(
             alias_from: Some(display),
             tuta,
             confidential_default,
+            signed_as: None,
         });
     }
     identities
@@ -191,6 +200,19 @@ fn choose_identity(
     if let Some((_, from)) = &plus {
         prefill.custom_from = from.clone();
     }
+    // A draft saved from one of several names at one address reopens on
+    // that name, not on the first identity with the address.
+    let named = || {
+        let found = crate::worker::parse_recipients(&prefill.custom_from);
+        let [(name, addr)] = found.as_slice() else {
+            return None;
+        };
+        accounts.iter().position(|c| {
+            let display = c.alias_from.clone().unwrap_or_else(|| c.label.clone());
+            let (n, a) = crate::config::split_identity(&display);
+            c.id == account_id && n == *name && a.eq_ignore_ascii_case(addr)
+        })
+    };
     let hay = prefill.reply_addressed_to.to_lowercase();
     let want = prefill.from_address.trim().to_lowercase();
     // An account with no From of its own (On This Computer, #552) answers
@@ -206,6 +228,7 @@ fn choose_identity(
             .flatten()
     };
     plus.map(|(i, _)| i)
+        .or_else(named)
         .or_else(by_reply)
         .or_else(|| {
             (!want.is_empty())
@@ -276,13 +299,12 @@ impl AppModel {
         let selected = choose_identity(&accounts, account_id, &mut prefill);
         prefill.receipt.get_or_insert(self.request_receipts);
 
-        // A reply or forward to plain-text mail answers in kind when the
-        // setting says so (#436); anything else starts in the chosen format.
-        let format = if self.follow_plain && prefill.original_plain {
-            config::ComposeFormat::Plain
-        } else {
-            self.compose_format
-        };
+        let format = opening_format(
+            self.compose_format,
+            self.follow_plain,
+            prefill.written_plain,
+            prefill.original,
+        );
         // The user's own addresses go last in the recipient suggestions.
         let own: Vec<(String, String)> = self
             .config
@@ -303,6 +325,7 @@ impl AppModel {
             decorations: true,
             format,
             signature_position: self.signature_position,
+            has_templates: !self.templates_folders().is_empty(),
         };
         (id, init)
     }
@@ -325,6 +348,7 @@ impl AppModel {
                 }
                 ComposeOutput::SaveDraft(msg) => AppMsg::SaveDraftMessage(msg),
                 ComposeOutput::SaveTemplate(msg) => AppMsg::SaveTemplateMessage(msg),
+                ComposeOutput::PickTemplate { id } => AppMsg::PickTemplate { id },
                 ComposeOutput::AutoSave { id, message } => AppMsg::AutoSaveDraft { id, message },
                 ComposeOutput::DiscardAutosave { id, origin } => {
                     AppMsg::DiscardAutosave { id, origin }
@@ -386,6 +410,26 @@ impl AppModel {
             }
         });
         win
+    }
+}
+
+/// The format a composer opens in. Plain text picked up again stays plain
+/// (#634). With "Reply in the original's format" on, a reply or forward
+/// answers in kind (#436): plain text to plain-text mail, and rich text to
+/// formatted mail when new messages start in plain text (#646). Markdown and
+/// HTML source are kept, as both send formatted mail. Anything else starts
+/// in the chosen format.
+fn opening_format(
+    chosen: config::ComposeFormat,
+    follow: bool,
+    written_plain: bool,
+    original: Original,
+) -> config::ComposeFormat {
+    use config::ComposeFormat::{Plain, Rich};
+    match (written_plain, follow, original) {
+        (true, _, _) | (_, true, Original::Plain) => Plain,
+        (_, true, Original::Formatted) if chosen == Plain => Rich,
+        _ => chosen,
     }
 }
 
@@ -451,6 +495,76 @@ mod tests {
                     Some("Ann <info@x.com>")
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn one_address_can_have_several_send_as_names() {
+        let mut config = demo_account_configs();
+        config.truncate(1);
+        config[0].email = "office@example.com".into();
+        config[0].name = "Office".into();
+        config[0].aliases = vec![
+            toml::from_str("identity = \"Boss <office@example.com>\"").unwrap(),
+            toml::from_str("identity = \"Manager <office@example.com>\"").unwrap(),
+        ];
+
+        let ids = compose_identities(&[], &config, &HashMap::new());
+        let rows: Vec<(&str, &str)> = ids
+            .iter()
+            .map(|c| (c.label.as_str(), c.email.as_str()))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("Office <office@example.com>", "office@example.com"),
+                ("Boss <office@example.com>", "office@example.com"),
+                ("Manager <office@example.com>", "office@example.com"),
+            ]
+        );
+
+        // A draft saved as one of them reopens on that name.
+        let mut draft = ComposePrefill {
+            from_address: "office@example.com".into(),
+            custom_from: "Manager <office@example.com>".into(),
+            ..Default::default()
+        };
+        assert_eq!(choose_identity(&ids, ids[0].id, &mut draft), 2);
+    }
+
+    #[test]
+    fn the_default_signature_names_the_account_but_not_its_aliases() {
+        let mut config = demo_account_configs();
+        config.truncate(1);
+        config[0].email = "office@example.com".into();
+        config[0].name = "Office".into();
+        config[0].aliases =
+            vec![toml::from_str("identity = \"Boss <office@example.com>\"").unwrap()];
+        config[0].set_signatures(
+            vec![crate::config::NamedSignature {
+                name: "Director".into(),
+                sender_name: "Alex Morgan".into(),
+                html: "Alex Morgan".into(),
+            }],
+            Some(0),
+        );
+
+        let ids = compose_identities(&[], &config, &HashMap::new());
+        assert_eq!(ids[0].label, "Office <office@example.com>");
+        assert_eq!(ids[0].alias_from, None);
+        assert_eq!(
+            ids[0].signed_as.as_deref(),
+            Some("Alex Morgan <office@example.com>")
+        );
+        assert_eq!(
+            ids[1].alias_from.as_deref(),
+            Some("Boss <office@example.com>")
+        );
+        assert_eq!(ids[1].signed_as, None);
+        // A new message still opens on the account's own address.
+        assert_eq!(
+            choose_identity(&ids, ids[0].id, &mut ComposePrefill::default()),
+            0
         );
     }
 
@@ -520,5 +634,27 @@ mod tests {
         assert_eq!(choose_identity(&ids, 1, &mut reply), 1);
         let mut fresh = ComposePrefill::default();
         assert_eq!(choose_identity(&ids, 1, &mut fresh), 0);
+    }
+
+    #[test]
+    fn an_answer_opens_in_the_original_format_when_asked() {
+        use config::ComposeFormat::{Html, Markdown, Plain, Rich};
+        // Off: the chosen format, whatever the original was.
+        for original in [Original::Plain, Original::Formatted, Original::Unknown] {
+            assert_eq!(opening_format(Rich, false, false, original), Rich);
+            assert_eq!(opening_format(Plain, false, false, original), Plain);
+        }
+        // On: plain-text mail is answered in plain text (#436)...
+        assert_eq!(opening_format(Rich, true, false, Original::Plain), Plain);
+        assert_eq!(opening_format(Markdown, true, false, Original::Plain), Plain);
+        // ...and formatted mail in rich text when the default is plain (#646).
+        assert_eq!(opening_format(Plain, true, false, Original::Formatted), Rich);
+        assert_eq!(opening_format(Markdown, true, false, Original::Formatted), Markdown);
+        assert_eq!(opening_format(Html, true, false, Original::Formatted), Html);
+        // A new message, or one whose original was not loaded.
+        assert_eq!(opening_format(Plain, true, false, Original::Unknown), Plain);
+        assert_eq!(opening_format(Rich, true, false, Original::Unknown), Rich);
+        // Plain text picked up again stays plain (#634).
+        assert_eq!(opening_format(Rich, true, true, Original::Formatted), Plain);
     }
 }

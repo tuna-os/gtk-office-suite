@@ -60,6 +60,7 @@ impl AppModel {
         PrefInit {
             auto_remote_content: self.auto_remote_content,
             remote_ahead: self.remote_ahead,
+            clean_links: self.clean_links,
             show_remote_banner: self.show_remote_banner,
             show_spoof_banner: self.show_spoof_banner,
             receipts: self.receipts,
@@ -103,6 +104,7 @@ impl AppModel {
             plain_font: self.plain_font.clone(),
             compose_format: self.compose_format,
             follow_plain: self.follow_plain,
+            ask_plain_switch: self.ask_plain_switch,
             reply_position: self.reply_position,
             signature_position: self.signature_position,
             signature_dashes: self.signature_dashes,
@@ -171,6 +173,7 @@ impl AppModel {
             list_column_scroll: self.list_column_scroll,
             list_group_by_date: self.list_group_by_date,
             list_pills_below: self.list_pills_below,
+            list_follows_window: self.mail_split.follows(),
             list_search_open: self.list_search_open,
             contacts_search_open: self.contacts_search_open,
             contact_names: self.contact_names,

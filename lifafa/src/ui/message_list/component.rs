@@ -435,6 +435,9 @@ impl SimpleComponent for MessageList {
                 subject,
                 animate,
             } => self.on_set_look(avatars, preview_lines, subject, animate, &sender),
+            MessageListInput::SetMarks { stars, attachments } => {
+                self.on_set_marks(stars, attachments)
+            }
             MessageListInput::LookSettled => {
                 self.avatars = false;
                 self.sync_look();
@@ -465,6 +468,7 @@ impl SimpleComponent for MessageList {
                 self.on_server_hits(terms, hits, done)
             }
             MessageListInput::SetScope(scope) => self.on_set_scope(scope, &sender),
+            MessageListInput::SetSearchAccount(account) => self.on_set_search_account(account),
             MessageListInput::SetSearchPool(pool, folders, text) => {
                 self.on_set_search_pool(pool, folders, text)
             }

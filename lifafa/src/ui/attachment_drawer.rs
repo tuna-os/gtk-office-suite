@@ -39,10 +39,12 @@ use crate::ui::attachment_io::open_bytes;
 
 mod actions;
 mod cells;
+mod header_fold;
 mod motion;
 mod setup;
 
 pub(crate) use cells::previewable;
+use header_fold::header_fold;
 use setup::{
     activate_on_keys, grab_pill, remove_paned_gestures, showcase_clicks, wire_drawer_edge,
 };
@@ -51,6 +53,10 @@ const MIN_THUMB: f64 = 56.0;
 const MAX_THUMB: f64 = 220.0;
 /// Minimum expanded drawer height in px (the drag can't go below this).
 const MIN_HEIGHT: i32 = 96;
+
+/// The size slider and its two pictures, with the gaps before them: what
+/// the header needs beyond its other buttons for the slider to show.
+const SLIDER_ROOM: i32 = 12 + 130 + 22 + 3 * 8;
 
 /// What the drawer needs at launch: its remembered state plus the reader widget
 /// it docks beneath (which becomes the top pane of its internal `GtkPaned`).
@@ -117,6 +123,11 @@ pub(crate) struct AttachmentDrawer {
     /// Bumped by every list, so an empty one held back is dropped when the
     /// next message's list follows it.
     empty_gen: u64,
+    /// The header is too narrow for the size slider, which then hides: a
+    /// narrow reader would otherwise be pushed past the window's edge.
+    narrow: bool,
+    /// Applies below the width the header needs with the slider showing.
+    header_fold: Option<adw::Breakpoint>,
 }
 
 /// What the drawer asks the app to do.
@@ -151,10 +162,15 @@ pub(crate) enum AttachmentDrawerInput {
     Open(usize),
     /// Import an attached OpenPGP public key into the keyring (#133).
     ImportKey(usize),
-    /// Activate a cell/row (display order) — double-click, or Space/Enter on
+    /// Activate a cell/row (display order) — double-click, or Enter on
     /// the highlighted one: preview images and PDFs in the lightbox, open
     /// anything else in its default app.
     Activate(usize),
+    /// Space, or Preview in the menu: as [`Self::Activate`], except that
+    /// what the lightbox cannot show goes to the file previewer when there
+    /// is one (#625). With the time of the key press, or
+    /// `gdk::CURRENT_TIME` when there is no event to take it from.
+    Preview(usize, u32),
     /// Save an attachment to disk (file chooser).
     Download(usize),
     /// Scroll the reader to the message the attachment belongs to (#213).
@@ -197,6 +213,8 @@ pub(crate) enum AttachmentDrawerInput {
     /// An empty list held back (see `SetItems`) is due, unless a newer list
     /// came since: carries the `empty_gen` it was held under.
     SettleEmpty(u64),
+    /// The header became too narrow for the size slider, or wide enough.
+    SetNarrow(bool),
 }
 
 /// The drawer's widgets: the ones `init` wires afterwards (`drawer_body`,
@@ -207,6 +225,8 @@ pub(crate) enum AttachmentDrawerInput {
 pub(crate) struct AttachmentDrawerWidgets {
     drawer_body: gtk::Box,
     drawer_edge: gtk::Box,
+    header_bin: adw::BreakpointBin,
+    header: gtk::Box,
     count_btn: gtk::Button,
     count_label: gtk::Label,
     chevron: gtk::Image,
@@ -236,7 +256,7 @@ impl AttachmentDrawerWidgets {
         self.chevron.set_icon_name(Some(if model.collapsed { "pan-up-symbolic" } else { "pan-down-symbolic" }));
         // The size slider is meaningless with the grid hidden (and sizes
         // thumbnails only, so also in the list view).
-        let sizing = !model.collapsed && !model.list_view;
+        let sizing = model.slider_shown();
         self.small_icon.set_visible(sizing);
         self.scale.set_visible(sizing);
         self.large_icon.set_visible(sizing);
@@ -403,13 +423,20 @@ fn build_widgets(
         .css_classes(["attachment-drawer"])
         .build();
     drawer_body.append(&drawer_edge);
-    drawer_body.append(&header);
+    // Its own minimum width, so the slider folds away rather than hold the
+    // reader wider than its pane (#624). The sizes are set in update_view,
+    // from the header's.
+    let header_bin = adw::BreakpointBin::new();
+    header_bin.set_child(Some(&header));
+    drawer_body.append(&header_bin);
     drawer_body.append(scroller);
     root.set_end_child(Some(&drawer_body));
 
     let widgets = AttachmentDrawerWidgets {
         drawer_body,
         drawer_edge,
+        header_bin,
+        header,
         count_btn,
         count_label,
         chevron,
@@ -438,6 +465,7 @@ impl SimpleComponent for AttachmentDrawer {
 
     fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
         widgets.apply(self);
+        self.fit_header(&widgets.header_bin, &widgets.header);
     }
 
     fn init(
@@ -475,10 +503,13 @@ impl SimpleComponent for AttachmentDrawer {
             pending_items: None,
             drawer_body: None,
             empty_gen: 0,
+            narrow: false,
+            header_fold: None,
         };
 
         let widgets = build_widgets(&root, &sender, &model, &flow, &scroller);
         model.drawer_body = Some(widgets.drawer_body.clone());
+        model.header_fold = Some(header_fold(&widgets.header_bin, &sender));
         // The body moves into an overlay of its own (`header_height` reads
         // it there). The overlay comes and goes with the body, so the split
         // still hides its seam with no drawer.
@@ -519,6 +550,7 @@ impl SimpleComponent for AttachmentDrawer {
                 self.pending_items = Some(items);
             }
             AttachmentDrawerInput::SetItems(items) => self.set_items(items, &sender),
+            AttachmentDrawerInput::SetNarrow(narrow) => self.narrow = narrow,
             AttachmentDrawerInput::SettleEmpty(gen) => {
                 if gen == self.empty_gen {
                     self.apply_items(Vec::new(), &sender);
@@ -577,6 +609,7 @@ impl SimpleComponent for AttachmentDrawer {
                 }
             }
             AttachmentDrawerInput::Activate(i) => self.activate(i, &sender),
+            AttachmentDrawerInput::Preview(i, time) => self.preview(i, time, &sender),
             AttachmentDrawerInput::SaveAll => {
                 self.save_all();
             }

@@ -133,6 +133,18 @@ impl Compose {
                 let paths: Vec<_> = self.attachments.drain(at..end).collect();
                 ComposeStep::Insert { at, paths }
             }
+            ComposeStep::Replace { at, path } => match self.attachments.get_mut(at) {
+                Some(slot) => ComposeStep::Replace {
+                    at,
+                    path: std::mem::replace(slot, path),
+                },
+                // Nothing at `at` any more: put the file back at the end.
+                None => {
+                    let at = self.attachments.len();
+                    self.attachments.push(path);
+                    ComposeStep::Remove { at, count: 1 }
+                }
+            },
         }
     }
 

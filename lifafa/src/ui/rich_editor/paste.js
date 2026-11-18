@@ -147,6 +147,28 @@
     var n = sel.rangeCount ? sel.anchorNode : null;
     return n && n.nodeType === 3 ? n.parentNode : n;
   }
+  /* WebKit scrolls to the caret after what it types itself, not after an
+     execCommand from script: Enter and a paste handled here left the new
+     line below the window until a letter was typed (#645). The caret's
+     own line comes into view, at the nearest edge, as typing brings it.
+     A collapsed range after a <br> has no box, so the placeholder <br>
+     at the caret, or the element it is in, stands in for it. */
+  function revealCaret(){
+    var sel = getSelection();
+    if(!sel.rangeCount) return;
+    var n = sel.focusNode, o = sel.focusOffset, r = document.createRange();
+    r.setStart(n, o);
+    var box = r.getBoundingClientRect();
+    if(!box.height){
+      var el = n.nodeType === 1 ? (n.childNodes[o] || n) : n.parentNode;
+      if(el.nodeType !== 1) el = el.parentNode;
+      box = el.getBoundingClientRect();
+    }
+    var view = window.innerHeight;
+    if(!box.height || box.height > view) return;
+    if(box.bottom > view) window.scrollBy(0, box.bottom - view);
+    else if(box.top < 0) window.scrollBy(0, box.top);
+  }
   /* WebKit's Indent wraps the paragraph in a blockquote of its own, with
      no border: an indent, not a quote, for the Quote toggle and for Enter
      twice (#358). */
@@ -414,6 +436,7 @@
       e.preventDefault();
       document.execCommand('outdent');
       enterInQuote = false;
+      revealCaret();
       return;
     }
     enterInQuote = inQuote && !e.shiftKey;
@@ -421,6 +444,7 @@
     if(!window.__hylkiReturnParagraph === !e.shiftKey){
       if(!lineBlock(blockOf(n))){
         document.execCommand('insertLineBreak');
+        revealCaret();
         return;
       }
       document.execCommand('insertParagraph');
@@ -429,6 +453,7 @@
         l.setAttribute(LINE, '');
         l.setAttribute('dir', 'auto');
       }
+      revealCaret();
       return;
     }
     /* WebKit makes only the new block a paragraph, and the first line of
@@ -446,6 +471,7 @@
     if(b && b.tagName === 'DIV' && bare(b)){
       document.execCommand('formatBlock', false, 'p');
     }
+    revealCaret();
   }, true);
   document.addEventListener('compositionstart', function(){ composing = true; });
   document.addEventListener('compositionend', function(){ composing = false; });
@@ -880,7 +906,10 @@
     }
     imgs.forEach(insertImageFile);
   });
+  /* The text's indents are kept (#635): a no-break space ends an
+     address as a space does. */
   function insertLinkified(text){
+    text = text.split(/\r\n|\r|\n/).map(keepSpaces).join('\n');
     urlRe.lastIndex = 0;
     var out='', last=0, m;
     while((m = urlRe.exec(text)) !== null){
@@ -893,39 +922,76 @@
     out += esc(text.slice(last));
     out = out.replace(/\r\n|\r|\n/g,'<br>');
     document.execCommand('insertHTML', false, out);
+    revealCaret();
   }
+  /* Ctrl+Shift+V is WebKit's own Paste as Plain Text, and its paste event
+     looks like any other: the key is what tells it apart. */
+  var textKey = false;
+  document.addEventListener('keydown', function(e){
+    textKey = (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && /^v$/i.test(e.key);
+  }, true);
   document.addEventListener('paste', function(e){
     var cd = e.clipboardData; if(!cd) return;
+    var once = window.__hylkiPasteOnce, asText = textKey;
+    window.__hylkiPasteOnce = null;
+    textKey = false;
     /* Plain text takes the clipboard's text and nothing else: no
-       formatting, no picture, no link made of an address. */
+       formatting, no picture, no link made of an address. Its indents
+       stay, as typed ones do (#635). */
     if(window.__hylkiPlain){
-      window.__hylkiPasteOnce = null;
       e.preventDefault();
       var t = cd.getData('text/plain');
-      if(t) document.execCommand('insertHTML', false, esc(t).replace(/\r\n|\r|\n/g, '<br>'));
+      if(t) document.execCommand('insertHTML', false, t.split(/\r\n|\r|\n/)
+        .map(function(l){ return esc(keepSpaces(l)); }).join('<br>'));
+      revealCaret();
       return;
     }
     /* An image on the clipboard beats any text flavour riding along with it,
-       and pastes inline whichever paste mode is set. */
+       and pastes inline whichever paste mode is set. Not when the HTML
+       flavour holds words: a spreadsheet or word processor offers a picture
+       of the selection beside the cells themselves (#623), where a copied
+       picture's HTML is a bare <img>. DOMParser builds an inert document,
+       so nothing in the markup runs or loads. */
     var its = cd.items || [];
-    for(var i = 0; i < its.length; i++){
+    var html = cd.getData('text/html');
+    var doc = html ? new DOMParser().parseFromString(html, 'text/html') : null;
+    var words = !!doc && !!doc.body.textContent.trim();
+    for(var i = 0; i < its.length && !words; i++){
       if(its[i].kind === 'file' && /^image\//.test(its[i].type)){
         e.preventDefault();
         insertImageFile(its[i].getAsFile());
         return;
       }
     }
-    var rich = window.__hylkiPasteRich === true;
-    if(window.__hylkiPasteOnce !== null){ rich = window.__hylkiPasteOnce; window.__hylkiPasteOnce = null; }
-    var html = cd.getData('text/html');
+    /* true keeps the formatting, false takes the text; 'cells' (Ctrl+V
+       with Paste as plain text set) takes the text, but a spreadsheet's
+       cells as the table they are, which their text cannot show. */
+    var rich = once !== null ? once : window.__hylkiPasteRich === true;
+    if(asText) rich = false;
+    if(rich !== false && doc){
+      var sheet = window.__hylkiSheet(doc, rich === true);
+      if(sheet){
+        e.preventDefault();
+        /* The break gives the caret a line below the table to go on
+           writing on, where it would be left in the last cell. */
+        document.execCommand('insertHTML', false, sheet + '<br>');
+        revealCaret();
+        return;
+      }
+    }
+    rich = rich === true;
     var text = cd.getData('text/plain');
+    if(rich && html) return;                 // native paste keeps the formatting
+    if(!text) return;                        // no text flavour; let WebKit try
+    /* Text alone WebKit pastes as a <div> a line, each of them a paragraph
+       of the text sent and of plain text (#635): it goes in as lines of
+       the caret's block instead, as typed ones are sent. A list takes it
+       as an item a line, and preformatted text as it is, so they are left
+       to WebKit, unless there is an address to make a link of. */
     if(rich){
-      if(html) return;                       // native paste keeps the formatting
-      if(!text) return;
       urlRe.lastIndex = 0;
-      if(!urlRe.test(text)) return;          // plain text with nothing to linkify
-    } else {
-      if(!text) return;                      // no text flavour; let WebKit try
+      var at = caretBlock();
+      if(!urlRe.test(text) && at && at.closest && at.closest('li,pre')) return;
     }
     e.preventDefault();
     insertLinkified(text);

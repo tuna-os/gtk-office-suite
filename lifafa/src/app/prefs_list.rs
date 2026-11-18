@@ -22,7 +22,8 @@ impl AppModel {
             }
             PrefOutput::SetListHeadings(on) => {
                 if pref!(self.list_headings = on) {
-                    self.message_list.emit(MessageListInput::SetHeadings(on));
+                    self.message_list
+                        .emit(MessageListInput::SetHeadings(self.list_headings_now()));
                 }
             }
             PrefOutput::SetListColumnScroll(on) => {
@@ -65,7 +66,14 @@ impl AppModel {
             }
             PrefOutput::SetPillsBelow(on) => {
                 if pref!(self.list_pills_below = on) {
-                    self.message_list.emit(MessageListInput::SetPillsBelow(on));
+                    self.message_list
+                        .emit(MessageListInput::SetPillsBelow(self.list_pills_below_now()));
+                }
+            }
+            PrefOutput::SetListFollowsWindow(on) => {
+                if self.mail_split.follows() != on {
+                    self.mail_split.set_follows(on);
+                    self.save_settings();
                 }
             }
             PrefOutput::SetListColumns(columns) => {
@@ -94,7 +102,7 @@ impl AppModel {
 
             PrefOutput::SetAttachmentsRow(show) => {
                 if pref!(self.show_attachments = show) {
-                    self.sidebars_emit(SidebarInput::SetAttachmentsRow(show));
+                    self.sidebars_emit(SidebarInput::SetAttachmentsRow(self.attachments_row_now()));
                 }
             }
             PrefOutput::ResetColumnWidths => {

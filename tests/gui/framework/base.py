@@ -393,9 +393,16 @@ class BaseGUITestCase(unittest.TestCase):
             # (suite-common/src/crash_report.rs, #1192): the runners' cores
             # go to systemd-coredump, out of the container's reach.
             "GTK_OFFICE_CRASH_BACKTRACE": "1",
+            # Decks' pointer gestures say what they saw (canvas_input.rs),
+            # in the app.log a failed journey keeps.
+            "DECKS_TRACE_INPUT": "1",
+            "TABLES_TRACE_INPUT": "1",
             # No first-run welcome dialog (INTEGRATION-PLAN C5) in a journey that
             # is not about it: every journey starts from a fresh profile.
             "SUITE_NO_WELCOME": "1",
+            # Nor the desktop's address book (INTEGRATION-PLAN A7): a journey's
+            # "@" suggestions must not depend on what the runner's EDS holds.
+            "SUITE_NO_CONTACTS": "1",
             "XDG_CONFIG_HOME": xdg["config"],
             "XDG_DATA_HOME": xdg["data"],
             "XDG_CACHE_HOME": xdg["cache"],
@@ -1184,6 +1191,21 @@ class BaseGUITestCase(unittest.TestCase):
                 ["xdotool", "key", "--window", self._win_id, "+".join(tokens)],
                 capture_output=True, timeout=5,
             )
+            # Release every key of the combo at the X server, through XTEST
+            # (no --window). A combo that opens a window between its press and
+            # its release (Ctrl+Shift+P opening Print Preview) has its release
+            # sent to the old window instead, so the server keeps the key down,
+            # and the next time any journey in the session types that letter
+            # it is taken as a repeat and lost: the release soak lost one "p"
+            # per attempt, always in the first journey after
+            # LettersPrintPreviewSmoke that typed one ("apple" -> "aple"). A
+            # release of a key that is already up changes nothing.
+            # GUI_TEST_RELEASE_KEYS=0 turns this off, to show the loss.
+            if os.environ.get("GUI_TEST_RELEASE_KEYS", "1").strip() != "0":
+                subprocess.run(
+                    ["xdotool", "keyup", *reversed(tokens)],
+                    capture_output=True, timeout=5,
+                )
 
         def type_text(text):
             # Keystroke spacing is load-bearing: a doubled letter ("apple")

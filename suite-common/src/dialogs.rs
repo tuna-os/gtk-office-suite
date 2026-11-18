@@ -22,12 +22,21 @@ use adw::prelude::*;
 /// GUI journeys match on phrases like "could not" / "cannot open" / "failed
 /// to", and an accessible name that avoids all of them is invisible to them.
 pub fn show_error_dialog(parent: Option<&adw::ApplicationWindow>, heading: &str, body: &str) {
+    show_message(parent, heading, body);
+}
+
+/// A message with one OK button, the same in every suite app (INTEGRATION-PLAN
+/// C1): OK is the default, and Escape answers it too. For a failure, prefer
+/// [`show_error_dialog`] and its wording rule; this also serves notices
+/// ("Recovered With Missing Pictures") that need no answer.
+pub fn show_message(parent: Option<&impl IsA<gtk::Widget>>, heading: &str, body: &str) {
     let dialog = adw::AlertDialog::builder()
         .heading(heading)
         .body(body)
         .build();
     dialog.add_response("ok", &i18n("_OK"));
     dialog.set_default_response(Some("ok"));
+    dialog.set_close_response("ok");
     dialog.present(parent);
 }
 

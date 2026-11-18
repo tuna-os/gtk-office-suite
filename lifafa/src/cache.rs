@@ -13,6 +13,7 @@ use crate::models::Message;
 
 mod addresses;
 mod assistant;
+pub(crate) mod at_rest;
 mod bodies;
 mod draft_copies;
 mod flags;
@@ -26,6 +27,7 @@ mod schema;
 mod shell_search;
 mod smart;
 mod text_index;
+mod thread_members;
 mod threads;
 
 pub(crate) use assistant::{MailScope, ScopedFolder};
@@ -38,6 +40,8 @@ pub(crate) use text_index::body_text;
 #[cfg(test)]
 use schema::*;
 
+#[cfg(all(test, unix))]
+mod at_rest_tests;
 #[cfg(test)]
 mod gallery_tests;
 #[cfg(test)]
@@ -142,4 +146,6 @@ fn split_labels(col: String) -> Vec<String> {
 /// the methods live in the child modules by what they touch.
 pub(crate) struct Cache {
     conn: Connection,
+    /// How the file is keyed, for the readers opened from this connection.
+    protection: at_rest::Protection,
 }

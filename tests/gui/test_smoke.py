@@ -3436,9 +3436,11 @@ class TablesCellEntryMixin:
                         description=f"the jump to {ref} to hand focus back to fx")
         rawinput.typeText(value)
         rawinput.keyCombo("Return")
+        # The whole description: `in` took "cell C4: 300200" for 300, and
+        # a value typed after the old one instead of over it went unseen.
         self.wait_until(
             self._grid,
-            lambda text: f"cell {ref}: {value}" in text,
+            lambda text: text == f"cell {ref}: {value}",
             description=f"{ref} to hold {value}",
         )
 
@@ -6399,18 +6401,18 @@ class DecksMissingMediaPreflightSmoke(BaseGUITestCase):
             self.wait_until(self._texts,
                             lambda texts: any("Slide 1: " + self._picture in (t or "") for t in texts),
                             description="the missing image warning with its slide and path")
-            self.assertNotIn("Slide Show", self._frames(), "audience opened before consent")
+            self.assertFalse(any((f or "").endswith("Slide Show") for f in self._frames()), "audience opened before consent")
             if attempt == 0:
                 self.app.child(name="Cancel", roleName="push button").do_action(0)
                 self.wait_until(self._texts,
                                 lambda texts: not any(self._picture in (t or "") for t in texts),
                                 description="Cancel to dismiss the preflight")
-                self.assertNotIn("Slide Show", self._frames(), "Cancel opened the audience")
+                self.assertFalse(any((f or "").endswith("Slide Show") for f in self._frames()), "Cancel opened the audience")
                 self.assertEqual(self.trigger_snapshot(self.AID)["slides"][0]["objects"][0]["kind"], "Image",
                                  "Cancel must not remove the missing image from the document")
             else:
                 self.app.child(name="Continue Anyway", roleName="push button").do_action(0)
-                self.wait_until(self._frames, lambda frames: "Slide Show" in frames,
+                self.wait_until(self._frames, lambda frames: any((f or "").endswith("Slide Show") for f in frames),
                                 description="explicit consent to open the audience")
         self.assertIsNone(self.process.poll(), "decks crashed during missing-image preflight")
 
@@ -6480,7 +6482,7 @@ class DecksPresenterDisplaySmoke(BaseGUITestCase):
         subprocess.run(["gapplication", "action", aid, "present"], check=True, timeout=5)
         # The audience window: an undecorated fullscreen frame.
         self.wait_until(lambda: [n.name for n in self.app.findChildren(lambda n: n.roleName == "frame")],
-                        lambda names: "Slide Show" in names, interval=0.5,
+                        lambda names: any((n or "").endswith("Slide Show") for n in names), interval=0.5,
                         description="the audience window to open")
         self.assertIsNone(self.process.poll(), "decks crashed running a show")
 
@@ -6545,7 +6547,8 @@ class DecksPresenterDisplayLostSmoke(DecksPresenterDisplaySmoke):
         self.wait_until(self._texts, lambda t: "Slide 1 of 2" in t, interval=0.5,
                         description="the presenter display, beside the audience window")
         frames = [n.name for n in self.app.findChildren(lambda n: n.roleName == "frame")]
-        self.assertIn("Slide Show", frames)
+        # "<deck> — Slide Show" (ADR 0016: the window to pick when sharing).
+        self.assertTrue(any((f or "").endswith("Slide Show") for f in frames), frames)
         self.assertEqual(self._slides_on(), "On display 2", "automatic: the slides on the second display")
         self.assertFalse(self._showing(self.LOST), "the status before anything was unplugged")
 
@@ -9879,9 +9882,13 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
         sw, sh = self.logical_screen()
         self._activate_window()
         px, py = self.to_device(min(x + w // 2, sw // 2), min(y + h // 3, sh // 2))
-        subprocess.run(["xdotool", "mousemove", "--sync", str(px), str(py),
-                        "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
-                       capture_output=True, timeout=5)
+        # move_pointer, not `mousemove --sync`: with the pointer already on
+        # that spot (the journey before left it at the screen's middle),
+        # --sync waited for a motion that never came and the 5 s timeout
+        # killed the scroll (release soaks, wide-1280-scale2 and medium-800).
+        self.move_pointer(px, py)
+        subprocess.run(["xdotool", "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
+                       capture_output=True, timeout=5, check=True)
         self.wait_until(zoom, lambda z: z > before, description=f"the zoom to grow past {before}")
         # Zoom only scales the display (LET-004): the laid-out pages — and
         # their breaks — are unchanged.

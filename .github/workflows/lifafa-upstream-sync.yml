@@ -1,0 +1,95 @@
+name: Lifafa upstream sync
+
+# Bring upstream Hylki (hyprlab/hylki) into lifafa/ and open a pull request
+# (docs/CUTOVER-LIFAFA-MANDELBROT.md, step 5), replacing tuna-os/lifafa's
+# upstream-sync workflow. lifafa/fork/sync-upstream.sh applies upstream's diff
+# since lifafa/fork/UPSTREAM_BASE, three-way; a conflict leaves markers in the
+# files, and the pull request then says so and waits for a person. Either
+# way lifafa.yml builds and tests it on the pull request, and nothing is
+# merged without that.
+#
+# A pull request opened with the workflow's own token starts no workflows, so
+# CI would not run on it. Give the repository an UPSTREAM_SYNC_TOKEN secret
+# (a fine-grained token with contents and pull-requests write on this
+# repository) for CI to run; without it the pull request is still opened, and
+# a push to its branch starts CI.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lifafa-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge hyprlab/hylki into lifafa/
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write        # push the sync branch
+      pull-requests: write   # open its pull request
+    env:
+      GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: lifafa-upstream-sync
+    steps:
+      - uses: actions/checkout@v7.0.1  # zizmor: ignore[artipacked] this job pushes the sync branch with the checkout credentials
+        with:
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN || github.token }}
+
+      - name: Apply upstream's changes
+        id: sync
+        run: |
+          set -uo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          before=$(cat lifafa/fork/UPSTREAM_BASE)
+          lifafa/fork/sync-upstream.sh main 2> "$RUNNER_TEMP/sync.err"
+          status=$?
+          cat "$RUNNER_TEMP/sync.err" >&2
+          if [ "$status" -ge 2 ]; then
+            exit "$status"
+          fi
+          after=$(cat lifafa/fork/UPSTREAM_BASE)
+          if [ "$before" = "$after" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "changed=true"
+            echo "conflicts=$([ "$status" -eq 1 ] && echo true || echo false)"
+            echo "before=$before"
+            echo "after=$after"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Push the branch and open the pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          BEFORE: ${{ steps.sync.outputs.before }}
+          AFTER: ${{ steps.sync.outputs.after }}
+          CONFLICTS: ${{ steps.sync.outputs.conflicts }}
+        run: |
+          set -euo pipefail
+          git checkout -B "$BRANCH"
+          git add -A lifafa/
+          git commit -q -m "lifafa: merge hyprlab/hylki ${AFTER:0:12}" \
+            -m "Upstream's changes from ${BEFORE:0:12} to ${AFTER:0:12}, applied by lifafa/fork/sync-upstream.sh."
+          git push --force origin "$BRANCH"
+          body="Upstream Hylki from \`${BEFORE:0:12}\` to \`${AFTER:0:12}\` ([compare](https://github.com/hyprlab/hylki/compare/${BEFORE}...${AFTER})), applied three-way under \`lifafa/\` by \`lifafa/fork/sync-upstream.sh\`."
+          if [ "$CONFLICTS" = true ]; then
+            body="$body
+
+          **It left conflicts**: search the diff for \`<<<<<<<\`. Resolve them on this branch before merging; \`lifafa.yml\` fails until they are."
+          fi
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -qx OPEN; then
+            gh pr edit "$BRANCH" --body "$body"
+          else
+            gh pr create --head "$BRANCH" --base main \
+              --title "lifafa: merge hyprlab/hylki ${AFTER:0:12}" --body "$body"
+          fi

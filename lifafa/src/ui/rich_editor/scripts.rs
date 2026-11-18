@@ -40,6 +40,10 @@ pub(super) const EMOJI_SCRIPT: &str = concat!("<script>", include_str!("emoji.js
 /// [`PASTE_SCRIPT`] through `__hylkiLines`, so it goes in first.
 pub(super) const LINES_SCRIPT: &str = concat!("<script>", include_str!("lines.js"), "</script>");
 
+/// A spreadsheet's cells made into a table that carries its own look
+/// (#623), for [`PASTE_SCRIPT`].
+pub(super) const SHEETS_SCRIPT: &str = concat!("<script>", include_str!("sheets.js"), "</script>");
+
 /// The paste choke point: every paste — shortcut, context menu, editing
 /// command — raises a DOM `paste` event here, where the clipboard's flavours
 /// can be inspected. `__hylkiPasteRich` is the standing mode (the user's
@@ -49,7 +53,9 @@ pub(super) const LINES_SCRIPT: &str = concat!("<script>", include_str!("lines.js
 ///
 /// Plain mode inserts the clipboard's text flavour with URLs linkified; rich
 /// mode lets WebKit's native paste keep the formatting, linkifying only
-/// pastes that carry no HTML at all. Lives in `<head>` (not the editable
+/// pastes that carry no HTML at all. A spreadsheet's cells go through
+/// [`SHEETS_SCRIPT`] in rich mode, and in the `'cells'` mode Ctrl+V uses
+/// when the preference is plain. Lives in `<head>` (not the editable
 /// body) so it never becomes part of the message.
 pub(super) const PASTE_SCRIPT: &str = concat!("<script>", include_str!("paste.js"), "</script>");
 
@@ -57,6 +63,9 @@ pub(super) const PASTE_SCRIPT: &str = concat!("<script>", include_str!("paste.js
 /// `__hylkiFoldQuote` is set (#549). After [`PASTE_SCRIPT`], whose plain
 /// view flattens the body first.
 pub(super) const FOLD_SCRIPT: &str = concat!("<script>", include_str!("fold.js"), "</script>");
+
+/// Faint guide lines on the cells of the table the caret is in (#623).
+pub(super) const TABLES_SCRIPT: &str = concat!("<script>", include_str!("tables.js"), "</script>");
 
 /// Grammar and style marks (#452), drawn over the text the user wrote once
 /// the host switches them on. See [`super::grammar`].

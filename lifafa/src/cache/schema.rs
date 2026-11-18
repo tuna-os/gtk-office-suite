@@ -289,7 +289,16 @@ pub(super) const DOWNLOADED_TABLES: [&str; 3] = ["bodies", "attachments", "attac
 /// the From: domain, which the reader learns the account's provider from,
 /// and ignores headers from another site than the topmost one. Verdicts
 /// stored earlier have neither, so they are checked again.
-pub(super) const SCHEMA_VERSION: i64 = 22;
+/// v23: the one-click unsubscribe POST goes only to an https handle, and
+/// only for a sender with nothing wrong or a DKIM signature over the header
+/// (#596). Stored routes lose a one-click handle these rules would not give
+/// them, in place: the banner opens the list's page for those instead.
+/// v24: `format=flowed` plain text is shown with its soft line breaks joined
+/// (#606). Plain bodies with a space before a line break are dropped once to
+/// render again; the rest of the cache stays.
+/// v25: plain text links email addresses, Matrix IDs and fediverse handles
+/// (#653). Plain bodies holding an `@` are dropped once to render again.
+pub(super) const SCHEMA_VERSION: i64 = 25;
 
 /// The newest version whose change altered how bodies are *rendered* or how
 /// senders are checked. Opening a database older than this drops `bodies` and

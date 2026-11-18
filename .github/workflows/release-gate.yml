@@ -150,7 +150,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       # No cache on purpose: each run starts from nothing.
@@ -239,7 +239,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - name: Build the archive
@@ -282,6 +282,18 @@ jobs:
           archive="$(ls "$PWD"/source-archive/*.tar.gz)"
           sha="$(cut -d' ' -f1 "$archive.sha256")"
           python3 tools/release/flathub_manifests.py "$archive" "$sha" flathub-build
+      # The image ships its SDK in /var/lib/flatpak, in the image's own
+      # layers. When Flathub has a newer SDK, flatpak-builder updates it in
+      # place, and on some runners' overlayfs that fails with "Invalid
+      # cross-device link" before anything is built. A copy in the
+      # container's writable layer updates normally.
+      - name: Make the image's Flatpak installation writable
+        run: |
+          set -euo pipefail
+          cp -a /var/lib/flatpak /var/lib/flatpak.rw
+          rm -rf /var/lib/flatpak
+          mv /var/lib/flatpak.rw /var/lib/flatpak
+
       - name: Build Letters offline
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
@@ -328,10 +340,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@releases/nextest
+      - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       - name: Core crates' tests on aarch64

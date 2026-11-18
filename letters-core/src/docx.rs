@@ -1342,7 +1342,14 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     }
     // Footnote texts land in the document list; docx ids remap to
     // zero-based indexes on the referencing runs (see map_paragraph).
-    let footnotes: Vec<String> = doc.footnotes().into_iter().map(|(_, t)| t).collect();
+    // Word puts one space run after the reference mark (`<w:footnoteRef/>`,
+    // " ", text), and rdocx 0.17's `add_footnote` writes the same; that
+    // separator is not part of the note, so a note reads back as written.
+    let footnotes: Vec<String> = doc
+        .footnotes()
+        .into_iter()
+        .map(|(_, t)| t.strip_prefix(' ').map(str::to_owned).unwrap_or(t))
+        .collect();
     // Table ids are the tables' order, as the cells above are tagged.
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
     let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
