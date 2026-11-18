@@ -82,6 +82,14 @@ ignore = [
     # pin-utils is archived; async-imap 0.12 (the latest) still depends on it. Its macros
     # expand at compile time to code std now provides.
     { id = "RUSTSEC-2026-0441", reason = "pin-utils archived, no further release; via async-imap 0.12.0 (latest) in lifafa/Cargo.lock only — drop when async-imap moves to core::pin::pin! (#1986); review by 2027-01-01" },
+    # chrono and chrono-tz are unmaintained (chronotope/chrono#1768); every
+    # version is affected and there is no release to move to. They are in
+    # every lock here: our own crates (suite-common-core, letters-core,
+    # tables-core, lifafa) and dependencies (ironcalc_base, typst-as-lib,
+    # async-imap, rmcp, schemars, matrix-sdk). The move to jiff or time is
+    # tracked in #2289; remove these two entries when it lands.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no patched release; in our own crates and via ironcalc_base/typst-as-lib/async-imap/rmcp — migrate to jiff or time (#2289); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz unmaintained, no patched release; via ironcalc_base — migrate with chrono to jiff or time (#2289); review by 2027-01-01" },
 ]
 
 # Licence policy (#1975). The office apps and collab are GPL-3.0-or-later;
