@@ -1,0 +1,1 @@
+- Lifafa: the mail stack now uses lettre 0.11.24, which fixes the SMTP advisories RUSTSEC-2026-0560 to RUSTSEC-2026-0565.
