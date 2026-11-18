@@ -97,6 +97,14 @@ Call media is end-to-end encrypted:
   a participant who left cannot decrypt what follows.
 * The LiveKit SFU forwards media it cannot decrypt.
 
+The call servers are reached over TLS only. The `lk-jwt-service` of a call is named in a call
+membership, which any room member can write, so Mandelbrot checks it before sending anything: the
+URL must be `https`, with no user name, password, query or fragment, and a redirect from the
+service is not followed. The SFU URL the service returns must be `wss` or `https`. A call whose
+servers do not meet this cannot be joined, and the log says which check failed. The one
+exception is an account whose homeserver is itself reached over plain `http`, as in the local test
+stack: there, `http` and `ws` call servers are accepted too.
+
 The SFU and the `lk-jwt-service` still learn metadata: who is connected to which call, when, from
 which IP address, and how much media flows. See [PRIVACY.md](PRIVACY.md#calls) for the wider
 picture.

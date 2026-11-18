@@ -15,11 +15,11 @@ use mandelbrot_matrixrtc::{
     CallMembership, CallMembershipIdentity, MatrixRtcSession, MemberStateEvent, RtcCallSession,
     RtcCallSessionConfig, RtcCallSessionEvent, RtcRoom, Status, ToDeviceEvent, Transport,
 };
-use matrix_sdk::Client;
+use matrix_sdk::{Client, deserialized_responses::EncryptionInfo};
 use ruma::{
     OwnedRoomId, RoomId, UserId,
     events::{
-        StateEventType, ToDeviceEvent as RumaToDeviceEvent, call::member::SyncCallMemberEvent,
+        StateEventType, call::member::SyncCallMemberEvent,
         macros::EventContent, room::member::MembershipState,
     },
 };
@@ -229,15 +229,18 @@ impl CallManager {
                 async {}
             });
 
-        // Watch for (decrypted) call encryption keys to-device events.
+        // Watch for call encryption keys to-device events. The SDK calls this
+        // handler for events sent in the clear too; only an Olm-decrypted
+        // event comes with encryption info.
         let keys_tx = tx;
         let keys_handle = client.add_event_handler(
-            move |event: RumaToDeviceEvent<CallEncryptionKeysEventContent>| {
+            move |event: CallEncryptionKeysEvent, encryption_info: Option<EncryptionInfo>| {
                 let content = serde_json::to_value(&event.content).unwrap_or_default();
                 let _ = keys_tx.send(CallManagerMessage::KeysReceived(ToDeviceEvent {
                     sender: event.sender.to_string(),
                     event_type: mandelbrot_matrixrtc::CALL_ENCRYPTION_KEYS_EVENT_TYPE.to_owned(),
                     content,
+                    encrypted: encryption_info.is_some(),
                 }));
                 async {}
             },
