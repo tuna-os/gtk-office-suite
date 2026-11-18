@@ -19,6 +19,9 @@ ignore = [
     # which nothing here enables: libsqlite3-sys resolves with only `pkg-config`/`vcpkg` and links
     # the runtime's system SQLite, whose version decides the real exposure.
     { id = "RUSTSEC-2026-0459", reason = "bundled SQLite not built (system SQLite linked); fixed libsqlite3-sys needs rusqlite 0.41, which no matrix-sdk-sqlite release allows yet" },
+    # chrono is unmaintained (chronotope/chrono#1768); no patched release.
+    # The move to jiff or time is tracked in #2289.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no patched release — migrate to jiff or time (#2289); review by 2027-01-01" },
 ]
 
 [bans]

@@ -243,6 +243,9 @@ impl HttpClientApi {
                     .unwrap_or_default()
                     .to_owned(),
                 content: e.get("content").cloned().unwrap_or_default(),
+                // DEVELOPMENT ONLY: this harness has no Olm, so it trusts the
+                // sender that `/sync` reports. A real client must not.
+                encrypted: true,
             })
             .collect();
         Ok((next_batch, to_device))

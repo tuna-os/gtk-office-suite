@@ -178,6 +178,12 @@ pub struct ToDeviceEvent {
     pub event_type: String,
     /// The (decrypted) content of the event.
     pub content: serde_json::Value,
+    /// Whether the crypto stack decrypted this event from an Olm message.
+    ///
+    /// The sender of a to-device event that came in the clear is whatever a
+    /// homeserver on its path wrote, so the key transport ignores such an
+    /// event.
+    pub encrypted: bool,
 }
 
 /// The client API used to send MatrixRTC membership events.
