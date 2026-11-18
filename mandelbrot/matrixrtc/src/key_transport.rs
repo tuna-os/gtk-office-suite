@@ -146,13 +146,20 @@ impl ToDeviceKeyTransport {
     /// Events of other types are silently ignored; malformed
     /// `io.element.call.encryption_keys` events are rejected with an error
     /// (and a warning is logged), mirroring the reference implementation's
-    /// validation.
+    /// validation. A key that was not sent Olm-encrypted is ignored with a
+    /// warning.
     pub fn on_to_device_event(&self, event: &ToDeviceEvent) -> Result<(), MalformedKeyEvent> {
         if !self.active.load(Ordering::SeqCst) {
             return Ok(());
         }
         if event.event_type != CALL_ENCRYPTION_KEYS_EVENT_TYPE {
             // Ignore, this is not a call encryption event.
+            return Ok(());
+        }
+        if !event.encrypted {
+            // Only an Olm message proves who sent a key. In the clear, a
+            // homeserver could hand us a key under any participant's name.
+            warn!("Ignoring call encryption keys that were sent without encryption");
             return Ok(());
         }
 

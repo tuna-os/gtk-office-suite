@@ -47,8 +47,10 @@ no Tuta or Proton account configured. If it would, it goes upstream.
 - **Touchpoints** are upstream files the fork modifies (enum variants, match
   arms, provider rows, packaging steps). They are listed in
   [`touchpoints.txt`](touchpoints.txt). `fork/check-touchpoints.sh` fails when
-  the fork modifies an upstream file that is not listed, and the upstream-sync
-  workflow runs it after every merge.
+  the fork modifies an upstream file that is not listed. It compares lifafa/
+  with the upstream commit in `fork/UPSTREAM_BASE`, so run it from anywhere in
+  the suite checkout, after a sync as well as before a pull request. No
+  workflow runs it yet (#2243).
 - **Rules for touchpoints:**
   - Keep each edit as small as the language allows: one match arm that calls
     into a fork-only module, not inline logic.

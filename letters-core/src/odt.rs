@@ -1906,12 +1906,20 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
     out
 }
 
+/// One list level's position: (where its text starts, how far its marker
+/// hangs before that text), see `list_style_indents`.
+type ListLevelIndent = Option<(f64, Option<f64>)>;
+/// `list_style_indents` by `text:list-style` name.
+type ListIndentMap = std::collections::HashMap<String, Vec<ListLevelIndent>>;
+
 /// Each `text:list-style` in `xml`: where each level puts its text, in
 /// points from the paragraph's indent (`fo:margin-left` of its
 /// label-alignment properties, Word's 0.5in for a first level), by level,
-/// 0-based. None where a level declares no position.
-fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option<f64>>> {
-    let mut out: std::collections::HashMap<String, Vec<Option<f64>>> = Default::default();
+/// 0-based, with how far its marker hangs before that text (the negated
+/// `fo:text-indent`, Word's 0.5in for a "1.1" level) where it says.
+/// None where a level declares no position.
+fn list_style_indents(xml: &str) -> ListIndentMap {
+    let mut out: ListIndentMap = Default::default();
     let mut reader = Reader::from_str(xml);
     let mut current: Option<String> = None;
     let mut level: Option<usize> = None;
@@ -1929,7 +1937,8 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
                         if levels.len() < l {
                             levels.resize(l, None);
                         }
-                        levels[l - 1] = Some(margin);
+                        let hanging = attr_val(&e, "fo:text-indent").and_then(|v| parse_length_pt(&v)).map(|t| (-t).max(0.0));
+                        levels[l - 1] = Some((margin, hanging));
                     }
                 }
                 _ => {}
@@ -3952,8 +3961,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         let declared = name.and_then(|n| list_indents.get(n)).and_then(|l| l.get(usize::from(list_level.max(1) - 1)).copied().flatten());
                         let text = crate::lists::text_indent_pt(style.list_level);
                         if style.left_indent_pt == 0.0 {
-                            if let Some(declared) = declared {
+                            if let Some((declared, hanging)) = declared {
                                 style.left_indent_pt = (declared - text).max(0.0);
+                                // The level's own hanging (its label's
+                                // `fo:text-indent`), where it is not ours.
+                                style.list_hanging_pt = hanging.filter(|h| (h - crate::lists::HANGING_PT).abs() > 0.5);
                                 if style.first_line_indent_pt < 0.0 {
                                     style.first_line_indent_pt = 0.0;
                                 }
@@ -5822,6 +5834,32 @@ mod tests {
         assert_eq!(item.style.first_line_indent_pt, 0.0);
         let rt = round_trip(&d).paragraphs[0].style.clone();
         assert!((rt.left_indent_pt - item.style.left_indent_pt).abs() < 0.01 && rt.list_hanging_pt.is_some_and(|h| (h - hanging).abs() < 0.01), "{rt:?}");
+    }
+
+    /// A list level's own hanging, its label's `fo:text-indent`, is the
+    /// item's hanging when the paragraph sets no indents of its own:
+    /// Word's "1.1" level hangs its number 0.5in before its text at 0.5in,
+    /// not Letters' 18pt (#1630). Such an item writes the hanging back.
+    #[test]
+    fn a_list_levels_hanging_is_read_and_written() {
+        let content = "<office:document-content><office:automatic-styles>\
+            <text:list-style style:name=\"L1\"><text:list-level-style-number text:level=\"1\" style:num-format=\"1\" style:num-suffix=\".\">\
+              <style:list-level-properties text:list-level-position-and-space-mode=\"label-alignment\">\
+              <style:list-level-label-alignment text:label-followed-by=\"listtab\" fo:margin-left=\"0.5in\" fo:text-indent=\"-0.5in\"/>\
+              </style:list-level-properties></text:list-level-style-number></text:list-style>\
+            </office:automatic-styles><office:body><office:text>\
+            <text:list text:style-name=\"L1\"><text:list-item><text:p>the minutes</text:p></text:list-item></text:list>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let item = &d.paragraphs[0];
+        assert_eq!(item.style.list, ListKind::Numbered);
+        let hanging = item.style.list_hanging_pt.expect("the level's hanging");
+        assert!((hanging - 36.0).abs() < 0.01, "0.5in: {hanging}");
+        let text_x = crate::layout::paragraph_box_x(item);
+        assert!((text_x - 36.0).abs() < 0.01, "text at 0.5in: {text_x}");
+        let rt = round_trip(&d).paragraphs[0].style.clone();
+        assert!(rt.list_hanging_pt.is_some_and(|h| (h - 36.0).abs() < 0.01), "{rt:?}");
+        assert!((rt.left_indent_pt - item.style.left_indent_pt).abs() < 0.01, "{rt:?}");
     }
 
     /// Writer's default paragraph style is the root of every style chain

@@ -21,6 +21,7 @@ pub mod call_membership;
 pub mod call_session;
 pub mod client;
 pub mod encryption_manager;
+pub mod focus_url;
 pub mod key_transport;
 #[cfg(feature = "livekit")]
 pub mod livekit_connection;
@@ -41,6 +42,7 @@ pub use client::{
 pub use encryption_manager::{
     EncryptionConfig, KeyRingEntry, RtcEncryptionManager, decode_base64, encode_unpadded_base64,
 };
+pub use focus_url::{FocusUrlError, check_service_url, check_sfu_url};
 pub use key_transport::{
     CALL_ENCRYPTION_KEYS_EVENT_TYPE, CallMembershipIdentity, KeyTransport, MalformedKeyEvent,
     ParticipantDeviceInfo, ReceivedKeyEvent, Statistics, ToDeviceKeyTransport,

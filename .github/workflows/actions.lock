@@ -11,7 +11,7 @@ workflows:
     '.github/workflows/ci.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'embarkstudios/cargo-deny-action@v2.1.1'
         - 'flatpak/flatpak-github-actions@v6.8'
         - 'swatinem/rust-cache@v2.9.3'
@@ -19,21 +19,21 @@ workflows:
     '.github/workflows/collab-apps.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'embarkstudios/cargo-deny-action@v2.1.1'
         - 'swatinem/rust-cache@v2.9.3'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/collab-letters-gui.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/collab-spike.yml':
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/drop-bot-review-requests.yml': []
     '.github/workflows/feature-verification.yml':
@@ -46,7 +46,7 @@ workflows:
     '.github/workflows/file-corpus.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/gui-container.yml':
         - 'actions/checkout@v7.0.1'
@@ -61,7 +61,7 @@ workflows:
     '.github/workflows/gui-tests.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/lifafa-flatpak.yml':
         - 'actions/checkout@v7.0.1'
@@ -71,7 +71,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
     '.github/workflows/lifafa.yml':
         - 'actions/checkout@v7.0.1'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'embarkstudios/cargo-deny-action@v2.1.1'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/mandelbrot.yml':
@@ -80,8 +80,7 @@ workflows:
     '.github/workflows/nightly.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@nightly'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/office-bench.yml':
@@ -93,7 +92,7 @@ workflows:
     '.github/workflows/overview-videos.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/publish-flatpak.yml':
         - 'actions/checkout@v7.0.1'
@@ -106,19 +105,19 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/release-gate.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'flatpak/flatpak-github-actions@v6.8'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/release-revision.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.2'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/release-soak.yml':
         - 'actions/checkout@v7.0.1'
@@ -142,7 +141,7 @@ workflows:
         - 'docker/setup-buildx-action@v4.4.1'
     '.github/workflows/screenshots.yml':
         - 'actions/checkout@v7.0.1'
-        - 'dtolnay/rust-toolchain@stable'
+        - 'dtolnay/rust-toolchain@master'
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/visual-matrix.yml':
         - 'actions/checkout@v7.0.1'
@@ -190,14 +189,9 @@ dependencies:
         commit: 'sha1-f87e5991a6d7451dcb8d9637bfbc97413f497069'
         owner_id: 5429470
         repo_id: 288485773
-    'dtolnay/rust-toolchain@nightly':
-        ref: 'nightly'
-        commit: 'sha1-2c76c034f9e32a5d6e2c104dc4df23a22476db04'
-        owner_id: 1940490
-        repo_id: 260749683
-    'dtolnay/rust-toolchain@stable':
-        ref: 'stable'
-        commit: 'sha1-b725eda525362e7cf34af9a7243cac1e3f01a7ec'
+    'dtolnay/rust-toolchain@master':
+        ref: 'master'
+        commit: 'sha1-df2a88e9fe4098bad09cb42c3dec7187f15861fc'
         owner_id: 1940490
         repo_id: 260749683
     'embarkstudios/cargo-deny-action@v2.1.1':

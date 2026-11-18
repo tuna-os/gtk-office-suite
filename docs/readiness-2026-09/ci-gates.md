@@ -419,6 +419,8 @@ by hand:
 | `interop-corpus` | `ci.yml` → `interop-corpus` | required | Reports on every pull request; a failure blocks the merge. |
 | `test` | `ci.yml` → `test` | required | Reports on every pull request; a failure blocks the merge. |
 | `smoke` | `gui-tests.yml` → `smoke` | required | Reports on every pull request; a failure blocks the merge. |
+| `Mandelbrot changes` | `mandelbrot.yml` → `changes` | required | Reports on every pull request; a failure blocks the merge. |
+| `Mandelbrot gate` | `mandelbrot.yml` → `gate` | required | Reports on every pull request; a failure blocks the merge. |
 | `Export PDF vs LibreOffice PDF` | `render-parity.yml` → `export-report` | required | Reports on every pull request; a failure blocks the merge. |
 | `Render scope` | `render-parity.yml` → `scope` | required | Reports on every pull request; a failure blocks the merge. |
 | `Tiers A+B vs LibreOffice` | `render-parity.yml` → `report` | required | Reports on every pull request; a failure blocks the merge. |
@@ -496,8 +498,8 @@ by hand:
 | `vlm-audit (tables)` | `gui-tests.yml` → `vlm-audit` | optional | Scheduled/dispatch only and continue-on-error: model judgments flake and need API keys, so they inform rather than gate (AGENTS.md). |
 | `Lifafa (check, tests)` | `lifafa.yml` → `build` | optional | Path-filtered to lifafa/, deny.toml and its own workflow (#1986): Lifafa is its own cargo workspace and lock, so it reports nothing on other pull requests and requiring it would block them forever. |
 | `Lifafa RustSec advisory gate` | `lifafa.yml` → `advisories` | optional | Path-filtered like `build`, and also scheduled daily so a new advisory against lifafa/Cargo.lock shows without a change here; it runs `cargo deny check advisories licenses` on that lock, which the product's `advisories` job does not read (#1986). |
-| `Mandelbrot Flatpak build` | `mandelbrot.yml` → `flatpak` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Builds the Matrix client with its own Flatpak manifest against the GNOME 51 runtime. |
-| `Mandelbrot MatrixRTC engine (clippy, tests)` | `mandelbrot.yml` → `matrixrtc` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever. Lints and tests the MatrixRTC engine crate, which has no GTK dependency. |
+| `Mandelbrot Flatpak build` | `mandelbrot.yml` → `flatpak` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever; `Mandelbrot gate` is the required verdict for it. Builds the Matrix client with its own Flatpak manifest against the GNOME 51 runtime. |
+| `Mandelbrot MatrixRTC engine (clippy, tests)` | `mandelbrot.yml` → `matrixrtc` | optional | Path-filtered to mandelbrot/ (docs/SUITE-INTEGRATION.md); it reports nothing on other pull requests, so requiring it would block them forever; `Mandelbrot gate` is the required verdict for it. Lints and tests the MatrixRTC engine crate, which has no GTK dependency. |
 | `Fuzz importer smoke tests` | `nightly.yml` → `fuzz-smoke` | optional | Skipped on pull requests by design (nightly cost). |
 | `coverage` | `nightly.yml` → `coverage` | optional | Skipped on pull requests by design (nightly cost). |
 | `oracle` | `nightly.yml` → `oracle` | optional | Path-filtered to format/model code (runs_on_every_revision: false). release-revision.yml refuses a release whose oracle evidence was recorded at another revision instead. |
@@ -524,7 +526,6 @@ by hand:
 | `Publish real-document results (letters)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
 | `Publish real-document results (tables)` | `render-real.yml` → `publish` | optional | Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests. |
 
-<!-- required-checks:end -->
 <!-- required-checks:end -->
 
 To apply it, an administrator reviews the list and then runs:

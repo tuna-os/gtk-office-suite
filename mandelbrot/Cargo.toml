@@ -10,8 +10,12 @@ publish = false
 # Its own workspace root: the suite's root Cargo.toml excludes mandelbrot/
 # (the Matrix SDK and LiveKit stay out of the suite's lockfile), so a
 # standalone build needs this table. mandelbrot-matrixrtc (matrixrtc/) joins it
-# as a path dependency.
+# as a path dependency, so this directory's Cargo.lock is the only one it
+# resolves from. hooks/checks (the pre-commit binary meson builds for the
+# development profile) is not a dependency and keeps its own lockfile; without
+# the exclude, cargo refuses to build it inside this workspace.
 [workspace]
+exclude = ["hooks/checks"]
 
 [package.metadata.cargo-machete]
 ignored = [
