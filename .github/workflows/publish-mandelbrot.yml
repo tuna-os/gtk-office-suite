@@ -39,7 +39,7 @@ jobs:
       contents: write
       packages: write
     # Pinned to the same reviewed commit as publish-flatpak.yml (#286, #1007).
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@4078f531ac74703f203bde835ef6c25e9321b97b # main  # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@6c76230bdd69e19634d9c74d5e3edbd8eacadd9f # main  # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
     with:
       app-id: org.tunaos.mandelbrot
       manifest-path: mandelbrot/org.tunaos.mandelbrot.json
