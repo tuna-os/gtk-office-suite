@@ -7,6 +7,13 @@ since the last tag ([MAINTAINING.md](MAINTAINING.md#releases)).
 
 ## Unreleased
 
+- **Fixed: AI agents could read end-to-end encrypted Tuta and Proton
+  mail.** Settings says agents cannot read encrypted mail, which held for
+  OpenPGP mail only. In a shared Tuta or Proton account an agent got the
+  text, the preview and the files of mail that arrived end-to-end
+  encrypted, and saw into a composer with Confidential on. Such mail is
+  now kept from agents as OpenPGP mail is, and so is that composer: see
+  [AI agents and end-to-end encrypted mail](ACCOUNTS.md#ai-agents-and-end-to-end-encrypted-mail).
 - **Fixed: Proton mail to a contact who must get encrypted mail.** A
   Proton contact can demand encryption to a key you pinned. The helper
   skipped that setting when the contact spelled the address in another

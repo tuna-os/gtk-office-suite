@@ -107,6 +107,13 @@ fn unique(addresses: &[String]) -> Vec<String> {
 }
 
 impl TutaCompose {
+    /// Whether an assistant is kept out of the composer: the message is to
+    /// go confidential, which is end-to-end encrypted for everyone it
+    /// reaches, so nothing of it leaves the app before it does.
+    pub(super) fn sealed(&self) -> bool {
+        self.active && self.confidential
+    }
+
     /// Where `address` is, if the account has said.
     pub(super) fn reach_of(&self, address: &str) -> Option<Reach> {
         self.reach.get(&key(address)).copied()
@@ -1021,6 +1028,18 @@ mod tests {
     }
 
     const STRONG: &str = "Lantern-Orbit-42!";
+
+    #[test]
+    fn a_confidential_message_is_kept_from_assistants() {
+        assert!(state(true).sealed());
+        assert!(!state(false).sealed());
+        // The toggle of a From that is not a Tuta account means nothing.
+        let other = TutaCompose {
+            confidential: true,
+            ..Default::default()
+        };
+        assert!(!other.sealed());
+    }
 
     #[test]
     fn a_send_waits_until_the_account_has_said() {

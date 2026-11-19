@@ -17,6 +17,7 @@ use crate::models::{Folder, FolderKind, Message};
 
 mod full_access;
 mod open;
+mod sealed;
 
 const ADA: &str = "ada@example.org";
 const BO: &str = "bo@example.org";
@@ -87,6 +88,13 @@ fn seeded_cache() -> Cache {
     let mut sealed = message(11, "Sealed");
     sealed.preview = crate::models::ENCRYPTED_PREVIEW.into();
     cache.upsert_messages(1, "Vault", &[sealed]);
+    // Mail a helper decrypted (see `crate::cache::sealed`), read long ago:
+    // its preview and its text are on disk, and its mark keeps them back.
+    let mut marked = message(12, "Helper letter");
+    marked.timestamp = 1;
+    marked.keywords = crate::cache::listed_marks(Some(true));
+    cache.upsert_messages(1, "Vault", &[marked]);
+    cache.save_body(1, "Vault", 12, "<p>The word is pineapple.</p>");
     cache.upsert_messages(1, "Trash", &[message(21, "In the plain Trash folder")]);
     cache.upsert_messages(1, "iCloud/Saved", &[message(22, "One copy")]);
     cache.upsert_messages(1, "Work/Saved", &[message(23, "Other copy")]);

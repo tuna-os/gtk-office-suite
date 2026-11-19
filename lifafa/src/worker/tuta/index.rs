@@ -447,7 +447,11 @@ pub(super) async fn tuta_backfill_with(
                     merge_page(c, account_id, folder_id, &job.path, messages);
                 }
                 let cached = c.cached_uid_times(account_id, &job.path);
-                let (gone, missing) = snapshot_plan(&ids, &cached, since, TUTA_BACKFILL_CHUNK);
+                let (gone, _) = snapshot_plan(&ids, &cached, since, TUTA_BACKFILL_CHUNK);
+                // A row no listing has marked yet is fetched again, for
+                // its mark (see `crate::cache::sealed`).
+                let checked = c.checked_uid_times(account_id, &job.path);
+                let (_, missing) = snapshot_plan(&ids, &checked, since, TUTA_BACKFILL_CHUNK);
                 tracing::info!(
                     "[account {account_id}] index of {}: {} on the server, {} to fetch in {} run(s), {} gone",
                     job.path,

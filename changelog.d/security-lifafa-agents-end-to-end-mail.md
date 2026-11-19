@@ -1,0 +1,1 @@
+- Lifafa: AI agents no longer get the text, the preview or the files of end-to-end encrypted mail in a shared Tuta or Proton account, and no longer see into a composer with Confidential on. Settings already said agents cannot read encrypted mail; that held for OpenPGP mail only (#2277).

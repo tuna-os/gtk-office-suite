@@ -30,7 +30,7 @@ pub(in crate::mcp) enum NoRaw {
 impl Mail {
     /// A message's body (HTML).
     pub(super) async fn body(&self, account_id: u32, m: &Located) -> Body {
-        if preview_is_encrypted(&m.message.preview) {
+        if preview_is_encrypted(&m.message.preview) || crate::cache::is_sealed(&m.message) {
             return Body::Encrypted;
         }
         let cached = self.lock().load_body(account_id, &m.path, m.uid);
@@ -53,7 +53,7 @@ impl Mail {
     /// the account's worker as background work: the reader's loads go first,
     /// and none of this interrupts a sync.
     pub(super) async fn raw(&self, account_id: u32, m: &Located) -> Result<Arc<Vec<u8>>, NoRaw> {
-        if preview_is_encrypted(&m.message.preview) {
+        if preview_is_encrypted(&m.message.preview) || crate::cache::is_sealed(&m.message) {
             return Err(NoRaw::Encrypted);
         }
         let key = (account_id, m.path.clone(), m.uid);
