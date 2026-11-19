@@ -82,6 +82,26 @@ ignore = [
     # pin-utils is archived; async-imap 0.12 (the latest) still depends on it. Its macros
     # expand at compile time to code std now provides.
     { id = "RUSTSEC-2026-0441", reason = "pin-utils archived, no further release; via async-imap 0.12.0 (latest) in lifafa/Cargo.lock only — drop when async-imap moves to core::pin::pin! (#1986); review by 2027-01-01" },
+    # heapless 0.8.0: nine unsound notices issued 2026-11-19, all patched in
+    # 0.9.4. The 0.9 copy (generic-btree) is on 0.9.4 in the locks. This one
+    # is behind loro-delta, whose latest release (1.18.0) still requires
+    # ^0.8.0. loro comes in only with the `collab` feature of letters-core,
+    # tables-core and decks-core, which no shipped build turns on; the lock
+    # records the edge either way. loro-delta uses `heapless::Vec` and
+    # nothing else of the crate (its src/array_vec.rs). Of the nine, only
+    # 0577 names a function of that type (`vec::IntoIter::drop`, which needs
+    # an element whose `Drop` panics); the others are in SortedLinkedList,
+    # Spsc, IndexMap, Deque and the pools. Remove all nine when loro-delta
+    # moves to heapless 0.9 (#2304).
+    { id = "RUSTSEC-2026-0574", reason = "heapless 0.8.0 unsound in SortedLinkedList FindMutView::pop; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0575", reason = "heapless 0.8.0 unsound in Spsc::peek; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0576", reason = "heapless 0.8.0 unsound in IndexMap::truncate; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0577", reason = "heapless 0.8.0 unsound in a panicking Drop; of its functions loro-delta reaches vec::IntoIter::drop only; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0578", reason = "heapless 0.8.0 unsound in SortedLinkedList zeroize; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0579", reason = "heapless 0.8.0 unsound in Deque::try_from; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0580", reason = "heapless 0.8.0 unsound in the pools' treiber stack; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0581", reason = "heapless 0.8.0 unsound in Deque::make_contiguous; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0582", reason = "heapless 0.8.0 unsound in IndexMap::insert; via loro-delta (latest still needs ^0.8), collab feature only, and loro-delta uses heapless::Vec alone (#2304); review by 2027-01-01" },
     # chrono and chrono-tz are unmaintained (chronotope/chrono#1768); every
     # version is affected and there is no release to move to. They are in
     # every lock here: our own crates (suite-common-core, letters-core,
