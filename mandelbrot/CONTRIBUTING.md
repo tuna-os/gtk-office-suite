@@ -29,7 +29,7 @@ These resources can help with Rust and GTK development:
 Read the [feature overview](docs/FEATURES.md) and
 [upstream relationship](docs/UPSTREAM.md) before choosing where to report a
 problem. Mandelbrot-specific issues belong in the
-[Mandelbrot issue tracker](https://github.com/tuna-os/mandelbrot/issues).
+[Mandelbrot issue tracker](https://github.com/tuna-os/gtk-office-suite/issues?q=is%3Aissue+label%3Amandelbrot).
 Problems that also reproduce in Fractal belong in the
 [Fractal issue tracker](https://gitlab.gnome.org/World/fractal/-/issues).
 

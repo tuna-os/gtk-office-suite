@@ -149,5 +149,5 @@ Before opening a pull request that touches security-relevant code:
 * Calling changes must keep the `matrixrtc/` conformance suite green and must not weaken media
   encryption or key rotation.
 * If a change fixes a vulnerability, coordinate through a
-  [private advisory](https://github.com/tuna-os/mandelbrot/security/advisories/new) before
+  [private advisory](https://github.com/tuna-os/gtk-office-suite/security/advisories/new) before
   opening a public pull request.

@@ -4,7 +4,7 @@ Mandelbrot has native MatrixRTC voice and video calling: calls run inside the ap
 call UI, and no embedded browser. Calling is **experimental** — it works against live
 homeservers and interoperates with Element Call, but it is new code and still has the gaps listed
 under [Known limitations](#known-limitations). Please
-[file issues](https://github.com/tuna-os/mandelbrot/issues) for anything that does not work.
+[file issues](https://github.com/tuna-os/gtk-office-suite/issues?q=is%3Aissue+label%3Amandelbrot) for anything that does not work.
 
 For the implementation side, see [ARCHITECTURE.md](ARCHITECTURE.md#matrixrtc-calling).
 

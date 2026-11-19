@@ -6,7 +6,7 @@ Help for common problems with Mandelbrot. Installation problems (Flatpak remotes
 [CALLING.md](CALLING.md#troubleshooting-calls).
 
 If nothing here helps, search the
-[open issues](https://github.com/tuna-os/mandelbrot/issues) and file a new one with your
+[open issues](https://github.com/tuna-os/gtk-office-suite/issues?q=is%3Aissue+is%3Aopen+label%3Amandelbrot) and file a new one with your
 Mandelbrot version (from **About Mandelbrot** in the main menu), your homeserver, and a log. A bug
 that also happens in upstream [Fractal](https://gitlab.gnome.org/World/fractal/-/issues) belongs
 there instead.
@@ -134,4 +134,4 @@ rooms, only in private rooms, or in no rooms.
 * Calling is experimental; see [CALLING.md](CALLING.md#known-limitations) for its known gaps.
 * Threaded read receipts (MSC3771) are not implemented, and thread activity does not mark a room as
   unread (see [FEATURES.md](FEATURES.md#threads-msc3440)).
-* The full list is on the [issue tracker](https://github.com/tuna-os/mandelbrot/issues).
+* The full list is on the [issue tracker](https://github.com/tuna-os/gtk-office-suite/issues?q=is%3Aissue+label%3Amandelbrot).
