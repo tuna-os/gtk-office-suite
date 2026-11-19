@@ -26,6 +26,7 @@ mod fields;
 mod filters;
 mod form;
 mod form_page;
+mod helper_sign_in;
 mod local;
 mod messages;
 mod navigation;
@@ -46,9 +47,10 @@ pub(crate) use editor::AccountSecrets;
 pub(crate) use form::non_ellipsizing_factory;
 use form::{
     apply_protocol, clear_editor, fill_editor, form_protocol, import_avatar_file, mount_editor,
-    parse_color, read_account, set_connection_editable, show_quota, sign_in_rows, trimmed,
+    parse_color, read_account, set_connection_editable, show_quota, trimmed,
 };
-pub(crate) use form::{
+use helper_sign_in::{drop_server_fields, helper_name, sign_in_rows};
+pub(crate) use helper_sign_in::{
     hide_sign_in_rows, is_sign_in_step, mailbox_password, reveal_sign_in_row, totp_code, SignInRows,
 };
 pub(crate) use messages::{AccountsCmd, AccountsInit, AccountsInput, AccountsOutput, TagProposal};
