@@ -24,6 +24,7 @@ pub mod markdown;
 pub mod model;
 pub mod neutral;
 pub mod odt;
+pub mod picture_source;
 pub mod review;
 pub mod save;
 pub mod typst_export;

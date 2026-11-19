@@ -334,11 +334,11 @@ fn para_style_children(st: &ParaStyle) -> String {
 /// An image run's picture as the package stores it (#1292): its member
 /// name under `Pictures/`, named by a hash of its bytes so a picture used
 /// twice is stored once, its bytes and its media type. None when the
-/// source can't be read; the run is then written as its alt text, as the
-/// docx writer does.
+/// source can't be read or is not a picture (`picture_source`); the run is
+/// then written as its alt text, as the docx writer does.
 fn picture(src: &str) -> Option<(String, Vec<u8>, &'static str)> {
     use std::hash::{Hash, Hasher};
-    let bytes = std::fs::read(src).ok()?;
+    let bytes = crate::picture_source::read(src)?;
     let ext = std::path::Path::new(src)
         .extension()
         .and_then(|e| e.to_str())

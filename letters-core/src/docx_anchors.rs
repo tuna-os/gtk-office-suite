@@ -267,14 +267,14 @@ pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)], fir
 /// Word's default, unsaid): the pictures go in the first line's
 /// paragraph, where the reader finds them. Returns the part and its images
 /// as (relationship id, bytes, file name); a picture whose file cannot be
-/// read is left out.
+/// read, or is not a picture (`picture_source`), is left out.
 pub fn header_footer_part(is_header: bool, text: &str, pictures: &[crate::model::Run], alignment: crate::model::Alignment, lines: &[crate::model::HfLine], page_w_pt: f64) -> (String, Vec<(String, Vec<u8>, String)>) {
     let mut images = Vec::new();
     let mut floating = Vec::new();
     let mut drawings = String::new();
     for run in pictures {
         let Some(src) = run.style.image.as_deref() else { continue };
-        let Ok(bytes) = std::fs::read(src) else { continue };
+        let Some(bytes) = crate::picture_source::read(src) else { continue };
         let rel = format!("rIdLettersPic{}", images.len() + 1);
         let n = 9800 + images.len();
         let (w, h) = run.style.image_extent_emu.unwrap_or((914_400, 914_400));

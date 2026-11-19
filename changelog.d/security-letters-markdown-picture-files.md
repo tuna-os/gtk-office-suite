@@ -1,0 +1,1 @@
+- Letters: a Markdown image that names a file which is not a picture is no longer put into the .odt or .docx the document is saved as, and a path that names a device is no longer read as a picture. The file used to be stored in the package in full, shown or not (#2302).

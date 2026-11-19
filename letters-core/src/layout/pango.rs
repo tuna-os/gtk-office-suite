@@ -935,6 +935,11 @@ impl Typeset {
     /// there unchanged, so a picture that was missing, or is fixed in
     /// place, shows on the next draw (#1992).
     fn image(&self, src: &str) -> Option<cairo::ImageSurface> {
+        // A Markdown image can name a device, and a loader that reads its
+        // file whole (GTK's does) would never finish reading /dev/zero.
+        if crate::picture_source::is_not_a_file(src) {
+            return None;
+        }
         let stamp = file_stamp(src);
         let mut images = self.images.borrow_mut();
         if let Some(hit) = images.get(src) {
@@ -1714,6 +1719,30 @@ mod tests {
         assert_eq!(loads.get(), 4);
         t.update(doc(1, "x"), LayoutOptions::default());
         assert!(t.images.borrow().is_empty(), "a picture the document no longer shows is let go");
+    }
+
+    /// A picture whose path names a device never reaches the loader: the
+    /// page view's loader reads the file whole, and /dev/zero has no end.
+    #[cfg(unix)]
+    #[test]
+    fn a_device_named_as_a_picture_is_not_decoded() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let mut d = doc(1, "x");
+        d.paragraphs[0].runs.push(Run {
+            text: "\u{FFFC}".into(),
+            style: crate::model::RunStyle { image: Some("/dev/zero".into()), image_extent_emu: Some((914_400, 914_400)), ..Default::default() },
+        });
+        let loads = Rc::new(Cell::new(0));
+        let mut t = Typeset::new(d, LayoutOptions::default());
+        let counted = loads.clone();
+        t.set_image_loader(move |_| {
+            counted.set(counted.get() + 1);
+            None
+        });
+        let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, 10, 10).unwrap();
+        t.draw_page(&cairo::Context::new(&surface).unwrap(), 0);
+        assert_eq!(loads.get(), 0);
     }
 
     /// A bullet is a disc and nothing else: its path starts at the disc,
