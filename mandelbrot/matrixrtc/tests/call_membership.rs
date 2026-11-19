@@ -252,3 +252,66 @@ fn session_membership_template_roundtrips_field_for_field() {
     let data: SessionMembershipData = serde_json::from_value(template.clone()).unwrap();
     assert_eq!(serde_json::to_value(data).unwrap(), template);
 }
+
+#[test]
+fn rtc_backend_identity_defaults_to_user_and_device() {
+    let membership = create_call_membership(0, membership_template());
+    assert_eq!(
+        membership.rtc_backend_identity(),
+        "@alice:example.org:AAAAAAA"
+    );
+}
+
+#[test]
+fn rtc_backend_identity_can_be_overridden() {
+    let mut membership = create_call_membership(0, membership_template());
+    membership.set_rtc_backend_identity("hashed-identity".to_owned());
+    assert_eq!(membership.rtc_backend_identity(), "hashed-identity");
+}
+
+#[test]
+fn constructed_membership_exposes_its_parts() {
+    let data: SessionMembershipData = serde_json::from_value(membership_template()).unwrap();
+    let membership = CallMembership::new(
+        "$ev".to_owned(),
+        "@bob:example.org".to_owned(),
+        42,
+        data.clone(),
+    );
+    assert_eq!(membership.user_id(), "@bob:example.org");
+    assert_eq!(membership.data(), &data);
+    assert_eq!(
+        membership.rtc_backend_identity(),
+        "@bob:example.org:AAAAAAA"
+    );
+}
+
+#[test]
+fn data_equal_ignores_event_metadata() {
+    let a = create_call_membership(1, membership_template());
+    let b = create_call_membership(2, membership_template());
+    assert!(CallMembership::data_equal(&a, &b));
+
+    let c = create_call_membership(1, template_with(json!({ "device_id": "BBBBBBB" })));
+    assert!(!CallMembership::data_equal(&a, &c));
+}
+
+#[test]
+fn livekit_transport_roundtrips_through_ruma_focus() {
+    use mandelbrot_matrixrtc::Transport;
+    use ruma::events::call::member::LivekitFocus;
+
+    let focus = LivekitFocus::new(
+        "!room:example.org".to_owned(),
+        "https://lk.example".to_owned(),
+    );
+    let transport = Transport::from_livekit(&focus);
+    assert_eq!(transport.transport_type, "livekit");
+    assert_eq!(transport.as_livekit(), Some(focus));
+
+    let unknown = Transport {
+        transport_type: "other".to_owned(),
+        extra: serde_json::Map::new(),
+    };
+    assert_eq!(unknown.as_livekit(), None);
+}
