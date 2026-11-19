@@ -215,6 +215,16 @@ The questions those answer:
 - [ ] A notice at the top of each standalone README: "Development moved to
   tuna-os/gtk-office-suite (`lifafa/`, `mandelbrot/`)", with the issue and
   release links.
+- [ ] The standalone repositories frozen, so nothing lands there that has to
+  be made again here. A README notice does not stop Renovate: it kept
+  opening and merging routine bumps in tuna-os/mandelbrot after the switch,
+  each one a second copy of a change made here. tuna-os/mandelbrot's
+  `renovate.json` extends `security:only-security-updates`, so it still gets
+  vulnerability fixes for the releases it publishes until step 2 is done,
+  and nothing else. What merged there after 2026-11-13, and where it is
+  here: mandelbrot #257 (`matrixrtc/tests/call_membership.rs` tests,
+  carried), #258 (replaced by #2259), #260 (#2292), #264 (#2290). Anything
+  merged there later is added to this list.
 
 ## 8. Archive
 
