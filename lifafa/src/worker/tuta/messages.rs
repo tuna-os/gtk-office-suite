@@ -66,7 +66,9 @@ pub(super) fn tuta_message(
         starred: false,
         answered: matches!(reply_type, REPLIED | REPLIED_AND_FORWARDED),
         forwarded: matches!(reply_type, FORWARDED | REPLIED_AND_FORWARDED),
-        keywords: Vec::new(),
+        // Whether it arrived end-to-end encrypted ("confidential"), which
+        // keeps it from assistants (see `crate::cache::sealed`).
+        keywords: crate::cache::listed_marks(v["confidential"].as_bool()),
         has_attachment: v["has_attachments"].as_bool().unwrap_or(false),
         message_id: listed_message_id(v),
         references: if conversation.is_empty() {

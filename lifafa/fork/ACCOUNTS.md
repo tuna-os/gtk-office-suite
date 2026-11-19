@@ -240,6 +240,24 @@ the layout below says, the window's close button moves to the list's header,
 and replies, forwards and new messages open in a window of their own. Below,
 when it is narrower. On one line a row does not swipe, as sideways is how
 
+## AI agents and end-to-end encrypted mail
+
+Hylki never gives encrypted mail to an AI agent (Settings → AI agents). In a
+Tuta or Proton account that covers every message that arrived end-to-end
+encrypted, as the account itself reports it: Tuta's confidential mail, and
+Proton mail that came end-to-end encrypted.
+
+- An agent sees who such a message is from, its subject and its date.
+- It does not get the preview, the text or the files.
+- It cannot reply to the message or forward it.
+- Its search does not match what the message says.
+- A composer with **Confidential** on, or one that answers such a message,
+  is hidden from agents.
+
+The rest of the account's mail is shared as Settings allows. Mail that an
+earlier version cached stays out of an agent's reach until the account has
+listed it again, which happens by itself after the update.
+
 ## Writing the account by hand
 
 An account is normally added from Settings or the welcome wizard. In

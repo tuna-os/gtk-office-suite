@@ -437,6 +437,7 @@ impl AppModel {
         // An answer may turn Encrypt off, and a forward never has it on, yet
         // both hold what was decrypted.
         prefill.from_encrypted = crate::models::preview_is_encrypted(&m.preview)
+            || crate::cache::is_sealed(m)
             || self
                 .sender_cache
                 .get(&body_key(m))

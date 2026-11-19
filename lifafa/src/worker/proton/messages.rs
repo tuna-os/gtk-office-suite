@@ -54,7 +54,9 @@ pub(super) fn proton_message(
         // The listing has no replied or forwarded mark.
         answered: false,
         forwarded: false,
-        keywords: Vec::new(),
+        // Whether it arrived end-to-end encrypted ("confidential"), which
+        // keeps it from assistants (see `crate::cache::sealed`).
+        keywords: crate::cache::listed_marks(v["confidential"].as_bool()),
         has_attachment: v["has_attachments"].as_bool().unwrap_or(false),
         message_id,
         references: String::new(),

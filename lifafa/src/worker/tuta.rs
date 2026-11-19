@@ -162,6 +162,15 @@ impl<E: Fn(WorkerEvent)> TutaWorker<E> {
         let cache = Cache::open()
             .map_err(|e| tracing::warn!("cache unavailable: {e}"))
             .ok();
+        // Rows cached before listings said which mail is end-to-end
+        // encrypted stay out of an assistant's reach until the index has
+        // listed them again (see `crate::cache::sealed`).
+        if let Some(c) = cache.as_ref() {
+            let sealed = c.seal_unchecked(account_id);
+            if sealed > 0 {
+                tracing::info!("[account {account_id}] {sealed} cached message(s) to list again");
+            }
+        }
         emit(WorkerEvent::account(account_id, &account));
         emit(WorkerEvent::Hierarchy(
             crate::models::FolderHierarchy::slashed(true),

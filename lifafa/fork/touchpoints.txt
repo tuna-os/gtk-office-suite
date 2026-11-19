@@ -87,6 +87,10 @@ tools/build-packages.sh
 tools/local-manifest.sh
 src/contacts/categories.rs
 src/worker/imap/live_count_tests.rs
+src/mcp/tools.rs
+src/mcp/tools/bodies.rs
+src/mcp/tools/session_tests.rs
+src/ui/compose/assistant_edit.rs
 
 # Baseline: upstream files lifafa/ already modified when the check first ran
 # inside gtk-office-suite. Until then the check could not run here (no
@@ -170,7 +174,6 @@ src/app/uri_queue.rs
 src/app/view_flags.rs
 src/app/window.rs
 src/desktop/notify.rs
-src/mcp/tools/session_tests.rs
 src/ui/accounts/tags.rs
 src/ui/attachment_drawer/actions.rs
 src/ui/attachment_drawer/header_fold.rs
@@ -182,7 +185,6 @@ src/ui/attachments_gallery/scope.rs
 src/ui/attachments_gallery/table.rs
 src/ui/attachments_gallery/update.rs
 src/ui/cloud_accounts/editor.rs
-src/ui/compose/assistant_edit.rs
 src/ui/compose/attachment_check.rs
 src/ui/compose/cloud.rs
 src/ui/compose/format.rs

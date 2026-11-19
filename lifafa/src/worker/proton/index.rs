@@ -654,8 +654,11 @@ fn index_page(
                     let cached = c.cached_uid_times(account_id, &job.path);
                     let (gone, _) = snapshot_plan(ids, &cached, since, PROTON_BACKFILL_CHUNK);
                     // A full pass fetches what is cached too, all but the
-                    // page just merged.
-                    let known = if job.full { &listed } else { &cached };
+                    // page just merged. Any other fetches again a row no
+                    // listing has marked yet, for its mark (see
+                    // `crate::cache::sealed`).
+                    let checked = c.checked_uid_times(account_id, &job.path);
+                    let known = if job.full { &listed } else { &checked };
                     let (_, missing) = snapshot_plan(ids, known, since, PROTON_BACKFILL_CHUNK);
                     tracing::info!(
                         "[account {account_id}] index of {}: {} on the server, {} to fetch in {} run(s), {} gone",
