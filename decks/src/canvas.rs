@@ -1091,7 +1091,7 @@ pub fn draw_shape(
         k if is_line(k) => {
             cr.move_to(x, y);
             cr.line_to(x + w, y + h);
-            paint_effects(cr, style, scale);
+            paint_effects(cr, style, scale, false);
             paint_path(cr, style, (x, y, w, h), scale, false, true);
             cr.new_path();
             return;
@@ -1102,7 +1102,7 @@ pub fn draw_shape(
             for p in paths.iter().filter(|p| p.fill) {
                 trace_freeform(cr, p, (x, y, w, h));
             }
-            paint_effects(cr, style, scale);
+            paint_effects(cr, style, scale, true);
             let style = &*without_effects(style);
             paint_path(cr, style, (x, y, w, h), scale, true, false);
             cr.new_path();
@@ -1151,7 +1151,7 @@ pub fn draw_shape(
                         cr.close_path();
                     }
                 }
-                paint_effects(cr, style, scale);
+                paint_effects(cr, style, scale, true);
                 cr.new_path();
             }
             let style = &*without_effects(style);
@@ -1172,7 +1172,7 @@ pub fn draw_shape(
             return;
         }
     }
-    paint_effects(cr, style, scale);
+    paint_effects(cr, style, scale, true);
     paint_path(cr, &without_effects(style), (x, y, w, h), scale, true, true);
     cr.new_path();
 }
@@ -1181,14 +1181,17 @@ pub fn draw_shape(
 /// current path (left as it was). Painted once per shape, before any of its
 /// layers, as PowerPoint and LibreOffice cast one shadow for the whole shape
 /// (#2332).
-fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, scale: f64) {
+///
+/// `area` is whether the path encloses anything: a line has none, so its
+/// shadow is its outline's even when its style carries a fill.
+fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, scale: f64, area: bool) {
     // The shadow, under everything: the shape's path moved by the offset
     // and filled in the shadow's colour, its edge softened to the blur
     // radius by translucent strokes, as for the glow below (#2332). A shape
     // with no fill casts its outline's shadow.
     // A shape with neither fill nor outline casts no shadow of its own;
     // PowerPoint and LibreOffice shadow its text instead.
-    let casts = style.fill.is_some() || style.gradient.is_some() || style.stroke.is_some();
+    let casts = (area && (style.fill.is_some() || style.gradient.is_some())) || style.stroke.is_some();
     if let (true, Some(sh)) = (casts, style.shadow) {
         const PASSES: u32 = 6;
         let (r, g, b) = sh.color.to_f64();
@@ -1215,7 +1218,7 @@ fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeSt
             }
         }
         cr.set_source_rgba(r, g, b, sh.alpha);
-        if style.fill.is_some() || style.gradient.is_some() {
+        if area && (style.fill.is_some() || style.gradient.is_some()) {
             cr.fill().unwrap();
         } else {
             cr.set_line_width(style.stroke.map_or(1.0, |s| s.width * scale).max(0.5));
