@@ -46,9 +46,27 @@ if [ "$target" = "$base" ]; then
     exit 0
 fi
 
+# Upstream edits to files the fork deleted or renamed have nothing here to
+# apply to, and `git apply` is all or nothing: one such file would abort the
+# whole sync. They are left out and listed, to carry over by hand where they
+# still matter. Renames are off so an upstream rename is a deletion plus an
+# addition.
+excluded=()
+while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if ! git cat-file -e "HEAD:lifafa/$path" 2>/dev/null; then
+        excluded+=("$path")
+    fi
+done < <(git diff --no-renames --name-only --diff-filter=MD "$base" "$target")
+
 patch=$(mktemp)
 trap 'rm -f "$patch"' EXIT
-git diff --binary --full-index "$base" "$target" > "$patch"
+git diff --no-renames --binary --full-index "$base" "$target" -- . \
+    "${excluded[@]/#/:(exclude)}" > "$patch"
+if [ ${#excluded[@]} -gt 0 ]; then
+    echo "sync-upstream: left out, not in lifafa/ (deleted or renamed here):" >&2
+    printf '  %s\n' "${excluded[@]}" >&2
+fi
 if [ ! -s "$patch" ]; then
     echo "${target}" > "$base_file"
     echo "sync-upstream: no changes between ${base:0:12} and ${target:0:12}"
@@ -68,6 +86,11 @@ printf '%s\n' "$target" > "$base_file"
 git add -- "$base_file"
 
 if [ "$status" -ne 0 ]; then
+    if [ -z "$conflicts" ]; then
+        echo "sync-upstream: git apply failed before applying anything; see its errors above" >&2
+        git checkout HEAD -- "$base_file" 2>/dev/null || true
+        exit 2
+    fi
     echo "sync-upstream: applied ${base:0:12}..${target:0:12} with conflicts in:" >&2
     printf '  %s\n' $conflicts >&2
     exit 1
