@@ -1091,6 +1091,7 @@ pub fn draw_shape(
         k if is_line(k) => {
             cr.move_to(x, y);
             cr.line_to(x + w, y + h);
+            paint_effects(cr, style, scale);
             paint_path(cr, style, (x, y, w, h), scale, false, true);
             cr.new_path();
             return;
@@ -1101,6 +1102,8 @@ pub fn draw_shape(
             for p in paths.iter().filter(|p| p.fill) {
                 trace_freeform(cr, p, (x, y, w, h));
             }
+            paint_effects(cr, style, scale);
+            let style = &*without_effects(style);
             paint_path(cr, style, (x, y, w, h), scale, true, false);
             cr.new_path();
             for p in paths.iter().filter(|p| p.stroke) {
@@ -1132,8 +1135,27 @@ pub fn draw_shape(
         }
         _ => {
             // Each layer painted over the one before (a cube's faces); a hole
-            // in a layer (a donut's) is a subpath wound against it.
-            for layer in outline(kind, w, h).unwrap_or_default() {
+            // in a layer (a donut's) is a subpath wound against it. The
+            // effects are cast once, from every layer together, under all.
+            let layers = outline(kind, w, h).unwrap_or_default();
+            if style.glow.is_some() || style.shadow.is_some() {
+                for layer in &layers {
+                    for poly in layer {
+                        for (i, (px, py)) in poly.iter().enumerate() {
+                            if i == 0 {
+                                cr.move_to(x + px, y + py);
+                            } else {
+                                cr.line_to(x + px, y + py);
+                            }
+                        }
+                        cr.close_path();
+                    }
+                }
+                paint_effects(cr, style, scale);
+                cr.new_path();
+            }
+            let style = &*without_effects(style);
+            for layer in layers {
                 for poly in layer {
                     for (i, (px, py)) in poly.into_iter().enumerate() {
                         if i == 0 {
@@ -1150,25 +1172,21 @@ pub fn draw_shape(
             return;
         }
     }
-    paint_path(cr, style, (x, y, w, h), scale, true, true);
+    paint_effects(cr, style, scale);
+    paint_path(cr, &without_effects(style), (x, y, w, h), scale, true, true);
     cr.new_path();
 }
 
-/// Fill (with `fill`) and outline (with `stroke`) the current path in a
-/// shape's style; the box `(x, y, w, h)` is what a gradient spans.
-fn paint_path(
-    cr: &cairo::Context,
-    style: &decks_core::engine::shape::ShapeStyle,
-    (x, y, w, h): (f64, f64, f64, f64),
-    scale: f64,
-    fill: bool,
-    stroke: bool,
-) {
+/// A shape's effects, under it: its shadow, then its glow, from the
+/// current path (left as it was). Painted once per shape, before any of its
+/// layers, as PowerPoint and LibreOffice cast one shadow for the whole shape
+/// (#2332).
+fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, scale: f64) {
     // The shadow, under everything: the shape's path moved by the offset
     // and filled in the shadow's colour, its edge softened to the blur
     // radius by translucent strokes, as for the glow below (#2332). A shape
     // with no fill casts its outline's shadow.
-    if let (true, Some(sh)) = (fill, style.shadow) {
+    if let Some(sh) = style.shadow {
         const PASSES: u32 = 6;
         let (r, g, b) = sh.color.to_f64();
         let path = cr.copy_path().unwrap();
@@ -1207,7 +1225,7 @@ fn paint_path(
     // The glow, under the shape: the outline stroked ever narrower in the
     // glow's colour, each pass a share of its opacity, so it is densest at
     // the edge and fades out to the radius, as a blurred halo does (#2332).
-    if let (true, Some(glow)) = (fill, style.glow) {
+    if let Some(glow) = style.glow {
         const PASSES: u32 = 8;
         let (r, g, b) = glow.color.to_f64();
         let reach = glow.radius * scale;
@@ -1219,6 +1237,29 @@ fn paint_path(
             }
         }
     }
+}
+
+/// The style without its effects, for layers painted after `paint_effects`.
+fn without_effects(style: &decks_core::engine::shape::ShapeStyle) -> std::borrow::Cow<'_, decks_core::engine::shape::ShapeStyle> {
+    if style.glow.is_none() && style.shadow.is_none() {
+        return std::borrow::Cow::Borrowed(style);
+    }
+    let mut s = style.clone();
+    s.glow = None;
+    s.shadow = None;
+    std::borrow::Cow::Owned(s)
+}
+
+/// Fill (with `fill`) and outline (with `stroke`) the current path in a
+/// shape's style; the box `(x, y, w, h)` is what a gradient spans.
+fn paint_path(
+    cr: &cairo::Context,
+    style: &decks_core::engine::shape::ShapeStyle,
+    (x, y, w, h): (f64, f64, f64, f64),
+    scale: f64,
+    fill: bool,
+    stroke: bool,
+) {
     if fill {
         if let Some(grad) = &style.gradient {
             // Colours run along `angle` (clockwise from left-to-right) across
