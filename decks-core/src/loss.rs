@@ -34,7 +34,7 @@
 //! | 3 | Embedded OLE objects | explicit-loss (`embedded-objects`): `oleObj` elements | explicit-loss (`embedded-objects`): `object-ole` elements | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `pptx_drops`, `odp_drops` below |
 //! | 4 | SmartArt diagrams | explicit-loss (`smartart`): `ppt/diagrams/` parts | not applicable: ODP has no diagram part; plain shapes import as shapes | `impress-loss-pptx-v1` | `pptx_drops` below |
 //! | 5 | Emphasis and motion-path animation (entrance/exit stay editable) | explicit-loss (`animations`): `presetClass` `emph`/`path` | explicit-loss (`animations`): `preset-class` `emphasis`/`motion-path` | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `pptx_drops`, `odp_drops` below |
-//! | 6 | Chart series past the first (the reader keeps the first series only) | explicit-loss (`multi-series-charts`): chart parts with two or more `ser` elements | explicit-loss (`multi-series-charts`): chart objects with two or more `series` elements | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `chart_parts`, `odp_chart_objects` below |
+//! | 6 | Chart series the reader cannot keep: a scatter or pie chart's past the first, any past `MAX_SERIES`, a combined chart's second type, and stacking other than stacked columns (stacked lines and areas, 100% stacking); bar, line and area keep every series, #2327 | explicit-loss (`multi-series-charts`): chart parts whose first type is scatter/pie with two or more `ser`, more than `MAX_SERIES` `ser`, or two chart types | explicit-loss (`multi-series-charts`): chart objects whose class is scatter/circle/ring with two or more `series`, more than `MAX_SERIES`, or a series of another class | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `chart_parts`, `odp_chart_objects` below |
 //! | 7 | Pictures the file names but does not contain | explicit-loss (`missing-pictures`): dangling `image` relationship targets per slide | explicit-loss (`missing-pictures`): dangling image `href`s per document part | loss unit tests (a dangling target cannot ship in `interop/corpus.json`, whose validator requires every relationship/manifest target to exist) | `pptx_drops`, `odp_drops` below |
 //! | 8 | A source that cannot be inspected (missing, corrupt, over budget) | blocked (`source-inspection-failed`): no save, not even a confirmed one | blocked (`source-inspection-failed`) | loss unit tests, `hostile_packages.rs`, `malformed_inputs.rs` | `inspect_source`, `scan_part` below |
 //! | 9 | Anything in a package Decks itself wrote | clean: no warning in either format | clean | `package_consistency.rs`, `a_deck_decks_wrote_loses_nothing` below | — |
@@ -66,7 +66,8 @@ const MEDIA: (&str, &str) = ("media", "Audio and video");
 const OLE: (&str, &str) = ("embedded-objects", "Embedded objects");
 const SMARTART: (&str, &str) = ("smartart", "SmartArt graphics");
 const ANIMATION: (&str, &str) = ("animations", "Emphasis and motion-path animations");
-const CHARTS: (&str, &str) = ("multi-series-charts", "Charts with more than one series");
+const CHARTS: (&str, &str) = ("multi-series-charts", "Chart series that are not kept");
+use crate::engine::chart::MAX_SERIES;
 const MISSING: (&str, &str) = ("missing-pictures", "Pictures missing from the file");
 /// Slides the presentation names but the package does not contain (#1977):
 /// the reader skips them, so they are not in the deck and a save drops
@@ -248,8 +249,28 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
     }
     for chart in chart_parts(zip, names, budget, report)? {
         let xml = scan_part(zip, &chart, budget)?;
-        if start_tags(&xml).iter().filter(|t| t.local == "ser").count() > 1 {
+        let tags = start_tags(&xml);
+        let series = tags.iter().filter(|t| t.local == "ser").count();
+        let types: Vec<&str> = tags
+            .iter()
+            .map(|t| t.local)
+            .filter(|l| l.ends_with("Chart") && l.len() > "Chart".len())
+            .collect();
+        let first_only = types
+            .first()
+            .is_some_and(|t| matches!(*t, "scatterChart" | "pieChart" | "pie3DChart" | "doughnutChart" | "ofPieChart" | "bubbleChart"));
+        // Stacking is kept for columns alone, and only as plain stacking.
+        let grouping = tags.iter().find(|t| t.local == "grouping").and_then(|t| attr_value(t.attrs, "val")).unwrap_or("");
+        let bars = types.first().is_some_and(|t| matches!(*t, "barChart" | "bar3DChart"));
+        let lost_grouping = grouping == "percentStacked" || (grouping == "stacked" && !bars);
+        if types.len() > 1 {
+            record(report, CHARTS, &chart, "only the first chart type is kept");
+        } else if lost_grouping {
+            record(report, CHARTS, &chart, &format!("{grouping} grouping is drawn as series side by side or plainly stacked"));
+        } else if first_only && series > 1 {
             record(report, CHARTS, &chart, "only the first chart series is kept");
+        } else if series > MAX_SERIES {
+            record(report, CHARTS, &chart, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     Ok(())
@@ -344,8 +365,24 @@ fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTre
     for object in odp_chart_objects(names) {
         let xml = scan_part(zip, &object, budget)?;
         let tags = start_tags(&xml);
-        if tags.iter().any(|t| t.local == "chart") && tags.iter().filter(|t| t.local == "series").count() > 1 {
+        // `chart:chart`, not the `office:chart` body around it: the one with a class.
+        let Some(chart) = tags.iter().find(|t| t.local == "chart" && attr_value(t.attrs, "class").is_some()) else { continue };
+        let class = attr_value(chart.attrs, "class").map(|c| local_of(c).to_string()).unwrap_or_default();
+        let series: Vec<&StartTag> = tags.iter().filter(|t| t.local == "series").collect();
+        let other_type = series
+            .iter()
+            .filter_map(|s| attr_value(s.attrs, "class"))
+            .any(|c| local_of(c) != class);
+        let props = |name: &str| tags.iter().any(|t| t.local == "chart-properties" && attr_value(t.attrs, name) == Some("true"));
+        let lost_grouping = props("percentage") || (props("stacked") && class != "bar");
+        if other_type {
+            record(report, CHARTS, &object, "only the chart's own type is kept");
+        } else if lost_grouping {
+            record(report, CHARTS, &object, "stacking other than stacked columns is drawn plainly");
+        } else if matches!(class.as_str(), "scatter" | "circle" | "ring" | "bubble") && series.len() > 1 {
             record(report, CHARTS, &object, "only the first chart series is kept");
+        } else if series.len() > MAX_SERIES {
+            record(report, CHARTS, &object, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     mixed_page_sizes(zip, names, budget, report)?;
@@ -1177,9 +1214,9 @@ mod tests {
 
     #[test]
     fn multi_series_charts_warn_in_both_formats() {
-        // The readers keep the first series only (`parse_chart_space`,
-        // `parse_odf_chart`); a second series is an explicit loss with the
-        // chart part as its location. One series stays silent.
+        // A bar chart keeps every series (#2327); a scatter chart keeps its
+        // first (`parse_chart_space`, `parse_odf_chart`), so its second is
+        // an explicit loss with the chart part as its location.
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("series.pptx");
         package(&p, &[
@@ -1193,14 +1230,14 @@ mod tests {
             ),
             (
                 "ppt/charts/chart1.xml",
-                "<c:chartSpace><c:chart><c:plotArea><c:barChart>\
+                "<c:chartSpace><c:chart><c:plotArea><c:scatterChart>\
                  <c:ser><c:idx val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/></c:ser>\
-                 </c:barChart></c:plotArea></c:chart></c:chartSpace>",
+                 </c:scatterChart></c:plotArea></c:chart></c:chartSpace>",
             ),
             (
                 "ppt/charts/chart2.xml",
                 "<c:chartSpace><c:chart><c:plotArea><c:barChart>\
-                 <c:ser><c:idx val=\"0\"/></c:ser>\
+                 <c:ser><c:idx val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/></c:ser>\
                  </c:barChart></c:plotArea></c:chart></c:chartSpace>",
             ),
         ]);
@@ -1219,12 +1256,12 @@ mod tests {
             ),
             (
                 "Object 1/content.xml",
-                "<office:document-content><chart:chart><chart:series/><chart:series/></chart:chart>\
+                "<office:document-content><chart:chart chart:class=\"chart:scatter\"><chart:series/><chart:series/></chart:chart>\
                  <table:table/></office:document-content>",
             ),
             (
                 "Object 2/content.xml",
-                "<office:document-content><chart:chart><chart:series/></chart:chart>\
+                "<office:document-content><chart:chart chart:class=\"chart:bar\"><chart:series/><chart:series/></chart:chart>\
                  <table:table/></office:document-content>",
             ),
         ]);
@@ -1232,6 +1269,66 @@ mod tests {
         let charts: Vec<&UnsupportedFeature> = r.features.iter().filter(|f| f.id == "multi-series-charts").collect();
         assert_eq!(charts.len(), 1);
         assert_eq!(charts[0].location, "Object 1/content.xml");
+    }
+
+    #[test]
+    fn stacking_the_reader_does_not_keep_warns() {
+        // Stacked columns are kept (#2327); a stacked area and a 100%
+        // stacked column are not, and say so in both formats.
+        let dir = tempfile::tempdir().unwrap();
+        let chart = |group: &str, grouping: &str| {
+            format!(
+                "<c:chartSpace><c:chart><c:plotArea><c:{group}><c:grouping val=\"{grouping}\"/>\
+                 <c:ser><c:idx val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/></c:ser>\
+                 </c:{group}></c:plotArea></c:chart></c:chartSpace>"
+            )
+        };
+        let rels = "<Relationships>".to_string()
+            + &(1..=3)
+                .map(|i| format!("<Relationship Id=\"rId{i}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart\" Target=\"../charts/chart{i}.xml\"/>"))
+                .collect::<String>()
+            + "</Relationships>";
+        let (a, b, c) = (chart("barChart", "stacked"), chart("areaChart", "stacked"), chart("barChart", "percentStacked"));
+        let p = dir.path().join("stacked.pptx");
+        package(&p, &[
+            ("ppt/slides/slide1.xml", "<p:sld/>"),
+            ("ppt/slides/_rels/slide1.xml.rels", rels.as_str()),
+            ("ppt/charts/chart1.xml", a.as_str()),
+            ("ppt/charts/chart2.xml", b.as_str()),
+            ("ppt/charts/chart3.xml", c.as_str()),
+        ]);
+        let r = content_a_save_drops(p.to_str().unwrap());
+        let mut at: Vec<&str> = r.features.iter().filter(|f| f.id == "multi-series-charts").map(|f| f.location.as_str()).collect();
+        at.sort();
+        assert_eq!(at, ["ppt/charts/chart2.xml", "ppt/charts/chart3.xml"]);
+        let object = |class: &str, prop: &str| {
+            format!(
+                "<office:document-content><office:automatic-styles><style:style style:name=\"p\">\
+                 <style:chart-properties chart:{prop}=\"true\"/></style:style></office:automatic-styles>\
+                 <office:body><office:chart><chart:chart chart:class=\"chart:{class}\"><chart:plot-area chart:style-name=\"p\">\
+                 <chart:series/><chart:series/></chart:plot-area></chart:chart></office:chart></office:body>\
+                 <table:table/></office:document-content>"
+            )
+        };
+        let (a, b, c) = (object("bar", "stacked"), object("area", "stacked"), object("bar", "percentage"));
+        let o = dir.path().join("stacked.odp");
+        package(&o, &[
+            (
+                "content.xml",
+                "<office:document-content><draw:page>\
+                 <draw:frame><draw:object xlink:href=\"./Object 1\"/></draw:frame>\
+                 <draw:frame><draw:object xlink:href=\"./Object 2\"/></draw:frame>\
+                 <draw:frame><draw:object xlink:href=\"./Object 3\"/></draw:frame>\
+                 </draw:page></office:document-content>",
+            ),
+            ("Object 1/content.xml", a.as_str()),
+            ("Object 2/content.xml", b.as_str()),
+            ("Object 3/content.xml", c.as_str()),
+        ]);
+        let r = content_a_save_drops(o.to_str().unwrap());
+        let mut at: Vec<&str> = r.features.iter().filter(|f| f.id == "multi-series-charts").map(|f| f.location.as_str()).collect();
+        at.sort();
+        assert_eq!(at, ["Object 2/content.xml", "Object 3/content.xml"]);
     }
 
     #[test]
