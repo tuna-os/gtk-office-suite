@@ -33,7 +33,7 @@ SCP=(scp -i id_lab -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/de
 
 qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6G \
     -drive file=guest.qcow2,if=virtio,snapshot=on \
-    -device virtio-vga,xres=1600,yres=1400 -display none \
+    -device virtio-vga,xres=1920,yres=1920 -display none \
     -device qemu-xhci -device usb-tablet \
     -nic user,model=virtio,hostfwd=tcp::2222-:22 \
     -qmp unix:qmp.sock,server,nowait -serial file:run-serial.log &
@@ -151,6 +151,21 @@ sleep 2
 "${SSH[@]}" 'for b in ~/lab/bundles/*.flatpak; do flatpak install --user -y --noninteractive "$b"; done'
 
 
+# The window Tiers A and B lay the document out in (capture.py's window()):
+# Tables dumps the visible grid, so a different window shows different
+# columns. GNOME starts it at its 960x680 default and maximizing makes it
+# the monitor's size; either way wide sheets differed from the other tiers.
+# Set through the apps' own settings, as capture.py seeds them, and the
+# monitor above is big enough to hold them.
+for app in letters tables decks; do
+    read -r w h < <(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import capture; print(*capture.window(sys.argv[2]))' "$HERE/.." "$app")
+    extra=""; [ "$app" = tables ] && extra="flatpak run --command=gsettings org.tunaos.$app set org.tunaos.$app show-gridlines false;"
+    "${SSH[@]}" "flatpak run --command=gsettings org.tunaos.$app set org.tunaos.$app window-width $w; \
+        flatpak run --command=gsettings org.tunaos.$app set org.tunaos.$app window-height $h; \
+        flatpak run --command=gsettings org.tunaos.$app set org.tunaos.$app window-maximized false; $extra" \
+        || echo "could not set $app's window size" >&2
+done
+
 python3 -c 'import json,sys; [print(f["app"], f["feature"], f["file"]) for f in json.load(open(sys.argv[1]))]' "$FIX/manifest.json" |
 while read -r app feature file; do
     dest="$OUT/$app/$feature"; mkdir -p "$dest"; rm -f "$dest"/C-*.png
@@ -158,7 +173,7 @@ while read -r app feature file; do
     "${SSH[@]}" "rm -rf ~/$remote_out; mkdir -p ~/$remote_out; \
         export XDG_RUNTIME_DIR=/run/user/\$(id -u) WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus; \
         setsid flatpak run --filesystem=home \
-          --env=GTK_OFFICE_TEST_MODE=1 --env=GTK_OFFICE_RENDER_DUMP=\$HOME/$remote_out --env=GTK_OFFICE_RENDER_HOLD=1 \
+          --env=GTK_OFFICE_TEST_MODE=1 --env=GTK_OFFICE_RENDER_DUMP=\$HOME/$remote_out --env=GTK_OFFICE_RENDER_HOLD=1 --env=GTK_OFFICE_RENDER_SIZED=1 \
           org.tunaos.$app \$HOME/lab/fixtures/$file >\$HOME/$remote_out/app.log 2>&1 < /dev/null & \
         for i in \$(seq 60); do [ -f ~/$remote_out/geom.json ] && break; sleep 1; done; sleep 2"
     qmp "$PWD/screen.ppm" >/dev/null

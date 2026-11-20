@@ -7,6 +7,7 @@ readable by the other, and that holds only while the two stay on the same
 release. A bump of one is a bump of both, in one change.
 """
 
+import json
 import os
 import re
 import tomllib
@@ -45,6 +46,29 @@ class MatrixSdkPin(unittest.TestCase):
         self.assertIsNotNone(m, "dcp-matrix no longer pins matrix-sdk by version")
         (locked,) = locked_version("collab/Cargo.lock", "matrix-sdk")
         self.assertEqual(minor(m.group(1)), minor(locked))
+
+
+class RenovateHoldsRuma(unittest.TestCase):
+    """ruma moves with matrix-sdk, never ahead of it.
+
+    matrix-sdk pins one ruma release line, so a lone ruma bump cannot resolve
+    and Renovate's pull request for it is red on every Mandelbrot job. The
+    bound in renovate.json has to name the line the lockfile is on; moving
+    ruma and matrix-sdk together means raising it in the same change.
+    """
+
+    def test_renovate_holds_ruma_on_the_locked_release_line(self):
+        (locked,) = locked_version("mandelbrot/Cargo.lock", "ruma")
+        major, minor_, _ = locked.split(".")
+        expected = f"<{major}.{int(minor_) + 1}"
+        with open(os.path.join(ROOT, "renovate.json"), encoding="utf-8") as f:
+            rules = json.load(f)["packageRules"]
+        bounds = [
+            r["allowedVersions"]
+            for r in rules
+            if "ruma" in r.get("matchPackageNames", []) and "allowedVersions" in r
+        ]
+        self.assertEqual(bounds, [expected], f"renovate.json must hold ruma at {expected} while mandelbrot/Cargo.lock has {locked}")
 
 
 MANDELBROT = os.path.join(ROOT, "mandelbrot")
