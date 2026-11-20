@@ -5,16 +5,20 @@ Lifafa is the email client of the TunaOS office suite,
 alongside Letters, Tables and Decks. Its name is a word for envelope. It is
 [Hylki](https://github.com/hyprlab/hylki) by hyprlab with native
 [Tuta](https://tuta.com) and [Proton Mail](https://proton.me/mail) accounts,
-built from this soft fork, [tuna-os/lifafa](https://github.com/tuna-os/lifafa).
-Upstream declined both providers, so the fork carries them and follows
-upstream for everything else. It belongs to the suite by name, icon and
-packaging; the code lives here. It ships as its own app, `org.tunaos.lifafa`,
-which installs beside upstream Hylki and shares none of its state.
+built from this soft fork in the suite's `lifafa/` directory. Upstream
+declined both providers, so the fork carries them and follows upstream for
+everything else. It belongs to the suite by name, icon and packaging, and its
+code, issues and releases are in the suite's repository; the standalone
+[tuna-os/lifafa](https://github.com/tuna-os/lifafa) it came from is being
+retired, and keeps only the Pages Flatpak repository (see [Updates](#updates)). It
+ships as its own app, `org.tunaos.lifafa`, which installs beside upstream
+Hylki and shares none of its state.
 
 Neither Tuta nor Proton endorses third-party clients built this way; use them
 knowing that. What belongs in the fork and what goes upstream, and how
 touchpoints are kept small, is in [MAINTAINING.md](MAINTAINING.md). Report
-problems on [this repository's issues](https://github.com/tuna-os/lifafa/issues).
+problems on [the suite's issues](https://github.com/tuna-os/gtk-office-suite/issues/new/choose),
+choosing Lifafa as the app.
 
 ## What is in this directory
 
@@ -26,16 +30,20 @@ problems on [this repository's issues](https://github.com/tuna-os/lifafa/issues)
 | `MAINTAINING.md` | The fork's boundary and upstreaming policy |
 | `touchpoints.txt`, `check-touchpoints.sh` | The upstream files the fork modifies, and the check that keeps that list honest |
 | `flatpak-repo.sh`, `flatpak-repo.asc` | Adds a release to the signed Flatpak repository, and the key it is signed with |
+| `sync-upstream.sh`, `UPSTREAM_BASE` | Applies upstream Hylki's changes to `lifafa/`, and the upstream commit last applied |
+| `with-suite-common.py` | Copies the suite's shared crates into a build tree, for the Flatpak build |
 | `upstream-candidates.md` | Provider-neutral changes drafted for hyprlab/hylki, and their state |
 | `ACCOUNTS.md` | The user documentation for Tuta and Proton Mail accounts |
 | `HELPERS.md` | Building, packaging and licences of the two helpers |
 | `CHANGELOG.md` | The fork's own changes |
 
-The workflows are `.github/workflows/upstream-sync.yml` and
-`.github/workflows/fork-release.yml`. `.github/README.md` is the fork's front
-page on GitHub, which shows it in place of upstream's `README.md`; the fork's
-documentation lives here rather than in upstream's files, so that the daily
-merge never conflicts on it.
+The workflows are in the suite's `.github/workflows/`: `lifafa.yml` (build,
+tests, RustSec and licences on every change to `lifafa/`),
+`lifafa-flatpak.yml` (the Flatpak, and releases) and
+`lifafa-upstream-sync.yml` (following upstream). `lifafa/README.md` is
+upstream's README, left as upstream wrote it; the fork's documentation lives
+here rather than in upstream's files, so that the upstream sync never
+conflicts on it.
 
 ## How the rebrand works
 
@@ -48,7 +56,7 @@ Everything the app is called sits in one block of variables at the top of the
 script: `APP_ID`, `APP_NAME`, `DATA_DIR_NAME`, `KEYRING_SERVICE`, the desktop
 comment, the metainfo summary and developer, the suite's name, the homepage,
 bug tracker and source links, and the icon. A rename edits those lines and
-nothing else; `fork-release.yml` and `import-from-hylki.sh` read them through
+nothing else; `lifafa-flatpak.yml` and `import-from-hylki.sh` read them through
 `fork/rebrand.sh --identity`. With the current values it rewrites:
 
 - **App ID** `co.hyprlab.Hylki` becomes `org.tunaos.lifafa`, lowercase like
@@ -117,83 +125,49 @@ sweep.
 
 ## How upstream is followed
 
-`.github/workflows/upstream-sync.yml` runs daily and on demand:
+The suite's `.github/workflows/lifafa-upstream-sync.yml` runs every Monday and
+on demand. It runs `fork/sync-upstream.sh`, which applies upstream's changes
+since the commit in `fork/UPSTREAM_BASE` to `lifafa/` with a three-way merge,
+and records the new base. It then opens a pull request with the result. When
+upstream's change conflicts with the fork's, the conflicting files keep their
+markers, and the pull request says so and waits for a person. Either way,
+`lifafa.yml` builds and tests the pull request, and nothing is merged without
+that.
 
-1. It fetches hyprlab/hylki `main` and merges it into our `main` with a merge
-   commit. It never rebases and never force-pushes.
-2. It runs `fork/check-touchpoints.sh`.
-3. It rebrands a copy and runs `cargo check` on it, in a Fedora container
-   with the app's build dependencies.
-4. If all of that passed, it pushes.
-
-If any step fails, nothing is pushed and the run fails; its summary names the
-step that failed and any conflicting files. It also opens one issue labelled
-`upstream-sync`, or updates the one already open, and the next clean run
-closes it.
-
-`GITHUB_TOKEN` may not push a commit that changes `.github/workflows`. When
-upstream changes its workflows, the push fails and the run says so. Merge
-that one by hand, or add an `UPSTREAM_SYNC_TOKEN` secret holding a token with
-the `workflow` scope; the job pushes with it when it is set.
+A pull request opened with the workflow's own token starts no workflows. The
+`UPSTREAM_SYNC_TOKEN` secret, when set, opens it with a token that does; without
+it, a push to the branch starts CI.
 
 ## Building
 
-Releases are tagged `v<upstream-version>-tuna<N>`, for example `v1.47.1-tuna3`.
-A tag, or a manual run of `.github/workflows/fork-release.yml` given such a
-tag, builds Lifafa for x86_64 and aarch64 and publishes it twice over:
+Releases are tagged `lifafa-v<upstream-version>-tuna<N>`, for example
+`lifafa-v1.48.0-tuna1`, since the suite's plain `v*` tags release Letters,
+Tables and Decks. Tags from before the move, in tuna-os/lifafa, were
+`v<upstream-version>-tuna<N>`. A tag runs `.github/workflows/lifafa-flatpak.yml`,
+which builds Lifafa for x86_64 and aarch64 in Flathub's GNOME builder image and
+publishes it three ways:
 
-- into the signed Flatpak repository on GitHub Pages, which `flatpak update`
-  follows (see [Updates](#updates)), pushed to the `gh-pages` branch;
-- as `org.tunaos.lifafa-<version>.flatpak` (x86_64) and
-  `org.tunaos.lifafa-<version>-aarch64.flatpak`, with their `SHA256SUMS`, on a
-  GitHub release titled "Lifafa <version>". The bundles are made from the
-  signed commits and name the repository, so they update from it as well.
+- as OCI images on `ghcr.io/tuna-os/lifafa`, indexed in the TunaOS remote
+  (`oci+https://tunaos.org/flatpak`) with the other apps of the suite;
+- into the signed Flatpak repository on GitHub Pages, which existing installs
+  follow (see [Updates](#updates)); the site stays on tuna-os/lifafa's
+  `gh-pages` branch, because every install names that URL;
+- as `.flatpak` bundles, with their `SHA256SUMS`, on the GitHub release for the
+  tag. The bundles are made from the signed commits and name the Pages
+  repository, so they update from it.
 
-A manual run on a branch builds the same bundles as workflow artifacts, and
-assembles and signs the repository as a `flatpak-repo` artifact without
-pushing it. Upstream's `build-arm64.yml` also runs for these tags, because it
-matches every `v*` tag; its upstream-branded artifact can be ignored.
+A manual run builds both architectures and keeps the bundles and the signed
+Pages repository as workflow artifacts; it publishes the OCI images only with
+`publish` ticked, and never pushes the Pages site. The workflow also runs every
+week, so that a change elsewhere in the suite (to `suite-common`, say) that
+breaks Lifafa's Flatpak build is found before a release needs it.
 
-The workflow keeps its builds fast with caches:
+Lifafa links the suite's `suite-common` and `suite-common-core` crates by
+relative path, and flatpak-builder copies only `lifafa/` into its sandbox. So
+before building, `fork/with-suite-common.py` copies those crates into the tree
+being built (never into the repository's own checkout).
 
-- It runs in Flathub's builder image
-  (`ghcr.io/flathub-infra/flatpak-github-actions:gnome-50`), which holds the
-  GNOME runtime and SDK. The Rust and Go SDK extensions are cached per arch
-  and extension commit.
-- flatpak-builder's state directory is cached per arch, SDK commit and Rust
-  extension commit, one entry per commit built, and restored from the newest.
-  It holds the module cache, so poppler and the dictionaries are reused while
-  their sources are unchanged, the downloads, and the cargo target
-  directories. The app and both helpers build from the checkout, a directory
-  source that flatpak-builder cannot checksum, so those modules always run,
-  but `fork/ci-mtimes.py` gives every unchanged file, and the directories
-  build scripts watch, their timestamps from the cached build, and cargo then
-  recompiles only the crates that changed. The target directories are
-  dropped instead of saved once they pass 5 GB.
-- GitHub lets a run read only caches saved on its own ref or on `main`. Tag
-  runs therefore restore and never save, and a daily build of `main` (after
-  the upstream sync) keeps `main`'s caches current and inside GitHub's seven
-  days of eviction.
-- The x86_64 job waits for the aarch64 bundle and attaches both itself: a
-  separate release job queued for half an hour behind the organisation's
-  other runs.
-- A manual run with `clean` ticked builds from scratch, for a cache that has
-  gone bad.
-- A manual run that is not a release builds the app with LTO off and 16
-  codegen units (`HYLKI_REBRAND_FAST_PROFILE=1` to `rebrand.sh`), in a
-  target directory of its own, unless `upstream_profile` is ticked. Tags and
-  the daily build of `main`, which keeps the tags' cache warm, use upstream's
-  release profile (thin LTO, one codegen unit). When the target directories
-  pass the cap, the fast profile's is dropped first. Measured on GitHub's
-  runners with warm caches, a change to the app crate alone compiles in
-  2m04s (x86_64) and 2m29s (aarch64) with the fast profile, against 7m09s
-  and 8m40s with upstream's; building every crate of the app from cold takes
-  5m42s and 4m43s. The fast binary is about 18% larger (48.8 MB against
-  41.3 MB on x86_64, 44.2 MB against 37.8 MB on aarch64); its run-time speed
-  was not measured, and it is never published. Both target directories
-  together make the cached state about 1.45 GB per arch instead of 1.05 GB.
-
-A local build follows the same steps as `fork-release.yml`. It needs
+A local build follows the same steps as `lifafa-flatpak.yml`. It needs
 `flatpak-builder`, the GNOME 50 SDK, and the `rust-stable` and `golang`
 extensions for 25.08 (see [HELPERS.md](HELPERS.md)):
 
@@ -204,11 +178,16 @@ flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
 
 rsync -a --delete --exclude=.git --exclude=/target \
     --exclude=/native/tuta-unofficial-sdk/target \
-    --exclude=/native/tuta-unofficial-sdk/upstream ./ /tmp/lifafa/
-fork/rebrand.sh /tmp/lifafa
+    --exclude=/native/tuta-unofficial-sdk/upstream ./ /tmp/suite/lifafa/
+# with-suite-common.py finds the shared crates beside the tree it is given.
+for d in suite-common suite-common-core flatpak; do
+    rsync -a --delete --exclude=/target ../$d/ /tmp/suite/$d/
+done
+python3 fork/with-suite-common.py /tmp/suite/lifafa
+fork/rebrand.sh /tmp/suite/lifafa
 flatpak-builder --user --install --force-clean --ccache \
     --state-dir=/tmp/lifafa-state /tmp/lifafa-build \
-    /tmp/lifafa/fork/org.tunaos.lifafa.yml
+    /tmp/suite/lifafa/fork/org.tunaos.lifafa.yml
 flatpak run org.tunaos.lifafa
 ```
 
@@ -222,8 +201,8 @@ for N of 256 and 512.
 
 ## Updates
 
-Lifafa is published as a signed Flatpak repository on this fork's GitHub
-Pages, `https://tuna-os.github.io/lifafa/repo/`. Install it from there, and
+Lifafa is published as a signed Flatpak repository on GitHub Pages,
+`https://tuna-os.github.io/lifafa/repo/`. Install it from there, and
 `flatpak update` follows every release:
 
 ```sh
@@ -237,6 +216,18 @@ flatpak remote-add --user --if-not-exists lifafa \
     https://tuna-os.github.io/lifafa/org.tunaos.lifafa.flatpakrepo
 flatpak install --user lifafa org.tunaos.lifafa
 ```
+
+Releases made from the suite also go to the TunaOS remote that carries
+Letters, Tables, Decks and Mandelbrot:
+
+```sh
+flatpak remote-add --user --if-not-exists tuna-os https://tunaos.org/flatpak/tuna-os.flatpakrepo
+flatpak install --user tuna-os org.tunaos.lifafa
+```
+
+Both are published until two releases have gone out on each
+(docs/CUTOVER-LIFAFA-MANDELBROT.md); an install keeps following whichever it
+came from.
 
 The runtime comes from Flathub. Commits and the summary are signed with
 `Lifafa (TunaOS) <noreply@tunaos.org>`, fingerprint

@@ -43,8 +43,10 @@ SUMMARY='Email client for the GNOME desktop'
 DEVELOPER_NAME='Hanthor Contributors'
 SUITE_NAME='Hanthor Office Suite'
 HOMEPAGE=https://github.com/tuna-os/gtk-office-suite
-BUGTRACKER=https://github.com/tuna-os/lifafa/issues
-SOURCE_URL=https://github.com/tuna-os/lifafa
+# Lifafa's code, issues and releases live in the suite's repository (the
+# cutover, docs/CUTOVER-LIFAFA-MANDELBROT.md); tuna-os/lifafa is retired.
+BUGTRACKER=https://github.com/tuna-os/gtk-office-suite/issues
+SOURCE_URL=https://github.com/tuna-os/gtk-office-suite/tree/main/lifafa
 # The app icon; its 256 and 512 pixel renders sit beside it as -256.png and
 # -512.png (rsvg-convert -w N -h N).
 ICON=fork/icons/org.tunaos.lifafa.svg
@@ -401,7 +403,8 @@ sub(metainfo, r'<url type="vcs-browser">https://github\.com/hyprlab/hylki</url>'
     literal(f'<url type="vcs-browser">{x(SOURCE_URL)}</url>'), count=1)
 sub(metainfo, r'<developer id="co\.hyprlab">\n    <name>Hyprlab</name>\n  </developer>\n  <update_contact>.*</update_contact>',
     literal(f"<developer_name>{x(os.environ['DEVELOPER_NAME'])}</developer_name>"), count=1)
-sub(metainfo, r"raw\.githubusercontent\.com/hyprlab/hylki/", "raw.githubusercontent.com/tuna-os/lifafa/")
+sub(metainfo, r"raw\.githubusercontent\.com/hyprlab/hylki/main/",
+    "raw.githubusercontent.com/tuna-os/gtk-office-suite/main/lifafa/")
 
 # --- Directories ------------------------------------------------------------
 # Config, data and cache all join "hylki" onto an XDG base; the MCP socket

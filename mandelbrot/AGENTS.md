@@ -2,11 +2,13 @@
 
 Mandelbrot lives in `mandelbrot/` of
 [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) and is
-maintained there. [tuna-os/mandelbrot](https://github.com/tuna-os/mandelbrot),
-where it used to live, still hosts its issues, advisories and releases until
-the cutover (`docs/CUTOVER-LIFAFA-MANDELBROT.md`) moves them here. The suite's
-own agent instructions (`AGENTS.md` at the repository root) apply to changes
-here too.
+maintained, released and tracked there: issues go to the suite's tracker
+(label `mandelbrot`), security advisories to the suite's (`SECURITY.md`), and
+releases are the suite's `mandelbrot-v*` tags (`RELEASING.md`).
+[tuna-os/mandelbrot](https://github.com/tuna-os/mandelbrot), where it used to
+live, keeps the releases cut before the move and is being retired
+(`docs/CUTOVER-LIFAFA-MANDELBROT.md`). The suite's own agent instructions
+(`AGENTS.md` at the repository root) apply to changes here too.
 
 **This file replaces one this fork inherited from upstream Fractal
 verbatim** ("Instructions for LLM agents operating with the Fractal
@@ -41,6 +43,8 @@ GTK4/libadwaita client; treat unfamiliar code as inherited unless
 
 ## Build and check
 
+Run these from `mandelbrot/`; it is outside the suite's Cargo workspace.
+
 ```sh
 meson setup _build -Dprofile=development   # once: generates src/config.rs
 cargo build
@@ -55,13 +59,13 @@ crate fails until `meson setup` has run once.
 The pinned nightly matters: `rustfmt.toml` enables unstable options whose
 output changes between nightly releases, so formatting against whatever
 `rustup toolchain install nightly` gives you today can rewrap comments
-across the tree and fail CI on files you did not touch. Match
-`.github/workflows/ci.yml`'s pin, not your local default.
+across the tree and fail CI on files you did not touch. Use that pin, not
+your local default.
 
 ## Commits
 
-Sign off commits (`git commit -s`, DCO). Review is routed to
-`.github/CODEOWNERS` (currently @hanthor).
+Sign off commits (`git commit -s`, DCO). Review is routed by the suite's
+`.github/CODEOWNERS`.
 
 ## Generated and vendored content
 
@@ -78,4 +82,5 @@ Per `README.md`'s "Relationship to Fractal": a bug that reproduces in
 upstream Fractal too belongs at
 [the Fractal project](https://gitlab.gnome.org/World/fractal/-/issues), not
 here. Mandelbrot-specific work (calls, sliding sync, QR login, packaging)
-belongs in this repository.
+belongs in this repository, under `mandelbrot/`. Bringing a new Fractal
+release in is `build-aux/sync-upstream.sh` (`docs/UPSTREAM.md`).

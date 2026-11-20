@@ -143,7 +143,13 @@ functionality is retained, and we aim to track upstream releases. See
 [MANDELBROT.md](MANDELBROT.md) for the detailed feature gap analysis. Please report
 issues with core messaging that also reproduce in Fractal to the
 [Fractal project](https://gitlab.gnome.org/World/fractal/-/issues), and Mandelbrot-specific
-issues (calls, sliding sync, QR login…) to this repo.
+issues (calls, sliding sync, QR login…) to the
+[suite's issue tracker](https://github.com/tuna-os/gtk-office-suite/issues/new/choose), choosing
+Mandelbrot as the app.
+
+Mandelbrot is maintained as part of the TunaOS office suite: its code lives in `mandelbrot/` of
+[tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite), and it is released from
+there under `mandelbrot-v*` tags ([RELEASING.md](RELEASING.md)).
 
 ## Security Best Practices
 
