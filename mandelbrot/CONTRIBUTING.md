@@ -1,8 +1,9 @@
 # Contributing to Mandelbrot
 
-[Mandelbrot](https://github.com/tuna-os/mandelbrot) is a downstream fork of
-[GNOME Fractal](https://gitlab.gnome.org/World/fractal). This guide covers
-Mandelbrot development and its GitHub contribution workflow.
+Mandelbrot, the Matrix client of the TunaOS office suite, is a downstream fork
+of [GNOME Fractal](https://gitlab.gnome.org/World/fractal). Its code lives in
+`mandelbrot/` of [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite).
+This guide covers Mandelbrot development and its GitHub contribution workflow.
 
 <!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
 ## Contribute compute — no code needed
@@ -139,8 +140,9 @@ If you are building the flatpak manually you will also need flatpak-builder on y
 
 Using [GNOME Builder](https://apps.gnome.org/Builder/) with [Flatpak](https://flatpak.org/) is
 the recommended way to build and install Mandelbrot. Clone
-`https://github.com/tuna-os/mandelbrot.git` and select
-`build-aux/org.tunaos.mandelbrot.Devel.json` as the Flatpak manifest.
+`https://github.com/tuna-os/gtk-office-suite.git`, open its `mandelbrot/`
+directory, and select `build-aux/org.tunaos.mandelbrot.Devel.json` as the
+Flatpak manifest.
 
 Development builds use the `org.tunaos.mandelbrot.Devel` application ID.
 Published builds use `org.tunaos.mandelbrot`.
@@ -227,8 +229,8 @@ git commit -s
 ## Pull Requests
 
 Create a branch in your fork, push it to GitHub, and open a
-[pull request](https://github.com/tuna-os/mandelbrot/compare) against the
-`main` branch. Use the commit title as the pull request title for a single
+[pull request](https://github.com/tuna-os/gtk-office-suite/compare) against
+the suite's `main` branch. Use the commit title as the pull request title for a single
 commit; otherwise summarize the whole change.
 
 Describe what changed and why. For UI or UX changes, include screenshots in
