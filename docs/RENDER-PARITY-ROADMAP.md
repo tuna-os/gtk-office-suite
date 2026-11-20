@@ -617,6 +617,16 @@ so a real regression on those fixtures still shows.
 
 Exit: Tier C nightly is green on the real corpus with budgets met.
 
+*Status (2026-11-20): whole-document scores and budgets ratchet nightly in
+`baseline-real.json` (Tiers A and B, `render-real.yml`), and the editing
+journeys run in `edit_journeys.py`. Tier C now runs over the real corpus
+too: `render-parity.yml`'s nightly `vm-real` job opens every real document
+in the shipped Flatpak in the GNOME VM and compares against
+`baseline-real.json`. Like the fixtures' `vm` job it is non-gating until its
+first verdicts are committed from the proposed baseline it uploads; the
+exit holds once those verdicts stay green, or amber with a recorded reason,
+on the nightly runs.*
+
 ### Phase 4: Earn "usable"
 
 Only after Phase 3 does the README table move an app to "usable for
