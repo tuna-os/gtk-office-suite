@@ -1186,7 +1186,10 @@ fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeSt
     // and filled in the shadow's colour, its edge softened to the blur
     // radius by translucent strokes, as for the glow below (#2332). A shape
     // with no fill casts its outline's shadow.
-    if let Some(sh) = style.shadow {
+    // A shape with neither fill nor outline casts no shadow of its own;
+    // PowerPoint and LibreOffice shadow its text instead.
+    let casts = style.fill.is_some() || style.gradient.is_some() || style.stroke.is_some();
+    if let (true, Some(sh)) = (casts, style.shadow) {
         const PASSES: u32 = 6;
         let (r, g, b) = sh.color.to_f64();
         let path = cr.copy_path().unwrap();
