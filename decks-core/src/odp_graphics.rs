@@ -112,6 +112,10 @@ struct Props {
     stroke_width_pt: Option<f64>,
     /// `fo:clip`, as written: a picture's crop.
     clip: Option<String>,
+    /// LibreOffice's glow: radius (points), colour, transparency (0..1).
+    glow_radius_pt: Option<f64>,
+    glow_color: Option<Color>,
+    glow_transparency: Option<f64>,
 }
 
 impl Props {
@@ -122,6 +126,9 @@ impl Props {
         self.stroke = self.stroke.take().or_else(|| base.stroke.clone());
         self.stroke_color = self.stroke_color.or(base.stroke_color);
         self.stroke_width_pt = self.stroke_width_pt.or(base.stroke_width_pt);
+        self.glow_radius_pt = self.glow_radius_pt.or(base.glow_radius_pt);
+        self.glow_color = self.glow_color.or(base.glow_color);
+        self.glow_transparency = self.glow_transparency.or(base.glow_transparency);
     }
 }
 
@@ -177,6 +184,15 @@ impl GraphicDefs {
                         }
                         if let Some(v) = attr(&e, "fo:clip") {
                             p.clip = Some(v);
+                        }
+                        if let Some(r) = attr(&e, "loext:glow-radius").and_then(|v| crate::odp::parse_length_pt(&v)) {
+                            p.glow_radius_pt = Some(r);
+                        }
+                        if let Some(c) = attr(&e, "loext:glow-color").as_deref().and_then(color) {
+                            p.glow_color = Some(c);
+                        }
+                        if let Some(t) = attr(&e, "loext:glow-transparency").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
+                            p.glow_transparency = Some((t / 100.0).clamp(0.0, 1.0));
                         }
                     }
                     "draw:gradient" => {
@@ -260,7 +276,13 @@ impl GraphicDefs {
             Some("none") => Some(StrokeSrc::NoLine),
             _ => None,
         };
-        Some(ShapeStyle { fill, gradient, stroke, fill_src, stroke_src })
+        let glow = match (p.glow_radius_pt, p.glow_color) {
+            (Some(r), Some(color)) if r > 0.0 => {
+                Some(crate::engine::shape::Glow { radius: r * k, color, alpha: 1.0 - p.glow_transparency.unwrap_or(0.0) })
+            }
+            _ => None,
+        };
+        Some(ShapeStyle { glow, fill, gradient, stroke, fill_src, stroke_src })
     }
 }
 

@@ -174,7 +174,7 @@ mod tests {
                         w: 200.0,
                         h: 150.0,
                         rotation: 0.0,
-                        style: decks_core::engine::shape::ShapeStyle {
+                        style: decks_core::engine::shape::ShapeStyle { glow: None,
                             fill: Some(decks_core::engine::shape::Color(0xE0, 0x1B, 0x24)),
                             gradient: None,
                             stroke: None,
@@ -332,7 +332,7 @@ mod tests {
                 w: 960.0,
                 h: 540.0,
                 rotation: 0.0,
-                style: decks_core::engine::shape::ShapeStyle {
+                style: decks_core::engine::shape::ShapeStyle { glow: None,
                     fill: Some(decks_core::engine::shape::Color(0x1C, 0x71, 0xD8)),
                     gradient: None,
                     stroke: None,
@@ -387,7 +387,7 @@ mod tests {
             w: 960.0,
             h: 60.0,
             rotation: 0.0,
-            style: decks_core::engine::shape::ShapeStyle {
+            style: decks_core::engine::shape::ShapeStyle { glow: None,
                 fill: Some(decks_core::engine::shape::Color(0x26, 0xA2, 0x69)),
                 gradient: None,
                 stroke: None,

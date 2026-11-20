@@ -690,6 +690,22 @@ fn write_geometry_and_paint<W: std::io::Write>(
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }
+    // The glow, after the outline as CT_ShapeProperties orders them (#2332).
+    if let Some(g) = style.glow {
+        writer.write_event(Event::Start(BytesStart::new("a:effectLst")))?;
+        let mut glow = BytesStart::new("a:glow");
+        glow.push_attribute(("rad", emu(g.radius).as_str()));
+        writer.write_event(Event::Start(glow))?;
+        let mut srgb = BytesStart::new("a:srgbClr");
+        srgb.push_attribute(("val", g.color.to_hex().as_str()));
+        writer.write_event(Event::Start(srgb))?;
+        let mut alpha = BytesStart::new("a:alpha");
+        alpha.push_attribute(("val", ((g.alpha * 100_000.0).round() as i64).to_string().as_str()));
+        writer.write_event(Event::Empty(alpha))?;
+        writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
+        writer.write_event(Event::End(BytesEnd::new("a:glow")))?;
+        writer.write_event(Event::End(BytesEnd::new("a:effectLst")))?;
+    }
     Ok(())
 }
 

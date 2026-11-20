@@ -524,6 +524,20 @@ fn line_of(ln: &Node, theme: &Theme, placeholder: Option<Color>) -> (Option<Opti
 // ── Per shape ─────────────────────────────────────────────────────────────
 
 /// What one `p:sp` says about its painting.
+/// An `a:glow`: its radius (EMU, scaled as a stroke width is), its colour
+/// and the colour's `a:alpha` (100% when unstated). None without a colour.
+fn glow_of(glow: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Glow> {
+    let radius = glow.attr("rad").and_then(|r| r.parse::<f64>().ok()).unwrap_or(0.0) * scale;
+    let color = first_color(glow, theme, None)?;
+    let alpha = glow
+        .children
+        .iter()
+        .find_map(|c| c.child("a:alpha"))
+        .and_then(|a| a.attr("val")?.parse::<f64>().ok())
+        .map_or(1.0, |v| (v / 100_000.0).clamp(0.0, 1.0));
+    (radius > 0.0).then_some(super::shape::Glow { radius, color, alpha })
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SpStyle {
     pub style: ShapeStyle,
@@ -609,7 +623,9 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
         .and_then(|gd| gd.attr("fmla")?.strip_prefix("val ")?.trim().parse::<f64>().ok())
         .map(|v| v / 100_000.0);
 
-    SpStyle { style: ShapeStyle { fill, gradient, stroke, fill_src, stroke_src }, round_adj }
+    let glow = sppr.and_then(|p| p.child("a:effectLst")).and_then(|e| e.child("a:glow")).and_then(|g| glow_of(g, theme, scale));
+
+    SpStyle { style: ShapeStyle { glow, fill, gradient, stroke, fill_src, stroke_src }, round_adj }
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────
