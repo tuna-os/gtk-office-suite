@@ -64,11 +64,19 @@ fn place(
 
 /// The box's inner size after its insets, in canvas pixels.
 fn content_box(body: &TextBody, (bw, bh): (f64, f64), scale: f64) -> (f64, f64) {
+    let (l, t, r, b) = insets(body, (bw, bh), scale);
+    ((bw - l - r).max(8.0), bh - t - b)
+}
+
+/// The box's insets in canvas pixels: its own, inside the text rectangle
+/// of the shape it is drawn on, as an oval's text wraps inside the oval.
+fn insets(body: &TextBody, (bw, bh): (f64, f64), scale: f64) -> (f64, f64, f64, f64) {
     let (l, t, r, b) = match body.insets {
         Some(i) => (i.left * scale, i.top * scale, i.right * scale, i.bottom * scale),
         None => (PLAIN_INSET, PLAIN_INSET, PLAIN_INSET, PLAIN_INSET),
     };
-    ((bw - l - r).max(8.0), bh - t - b)
+    let (fl, ft, fr, fb) = body.frame.as_ref().map_or((0.0, 0.0, 0.0, 0.0), |f| f.kind.text_inset(bw, bh));
+    (l + fl, t + ft, r + fr, b + fb)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -83,10 +91,7 @@ fn place_inner(
     fit: Option<Autofit>,
 ) -> (Vec<Placed>, f64) {
     let (bx, by, bw, bh) = rect;
-    let (l, t, r, b) = match body.insets {
-        Some(i) => (i.left * scale, i.top * scale, i.right * scale, i.bottom * scale),
-        None => (PLAIN_INSET, PLAIN_INSET, PLAIN_INSET, PLAIN_INSET),
-    };
+    let (l, t, r, b) = insets(body, (bw, bh), scale);
     let inner_w = (bw - l - r).max(8.0);
     let inner_h = bh - t - b;
     let paras: Vec<Vec<Run>> = if runs.is_empty() {
@@ -154,16 +159,30 @@ fn place_inner(
             let first = para.first().map(|r| r.style.clone()).unwrap_or_default();
             let text_pt = first.font_size_hp.map_or(18.0, |hp| hp as f64 / 2.0);
             let ms = &st.marker;
+            // A Wingdings or Symbol bullet draws as the Unicode glyph it
+            // shows, in the text's font: those fonts aren't installed.
+            let (label, marker_font) = match decks_core::engine::symbol_font::unicode_bullet(ms.font.as_deref(), label) {
+                Some(glyph) => (glyph.to_string(), None),
+                None => (label.to_string(), ms.font.clone()),
+            };
+            let label = &label;
             let style = decks_core::engine::RunStyle {
                 bold: false,
                 italic: false,
                 underline: false,
-                font_family: ms.font.clone().or(first.font_family.clone()),
+                font_family: marker_font.or(first.font_family.clone()),
                 font_size_hp: ms.size.map(|s| (s.points(text_pt) * 2.0).round().max(1.0) as u16).or(first.font_size_hp),
                 color: ms.color.clone().or(first.color.clone()),
                 ..first.clone()
             };
             set_styled_text(&ml, label, &[Run { text: label.clone(), style }], text_scale);
+            // A marker wider than the room it hangs in pushes the first
+            // line past it, as LibreOffice lays it out: a bullet with no
+            // margin to hang in (marL 0) otherwise sits on the text.
+            let overlap = mx + ml.pixel_extents().1.width() as f64 - g.text_x;
+            if overlap > 0.0 {
+                layout.set_indent(((g.first_indent + overlap) * pango::SCALE as f64) as i32);
+            }
             let dy = (layout.baseline() - ml.baseline()) as f64 / pango::SCALE as f64;
             Marker { layout: ml, x: mx, dy }
         });
@@ -467,6 +486,42 @@ mod tests {
         assert_eq!(placed[1].layout.alignment(), pango::Alignment::Right);
         assert!(placed[1].y > placed[0].y);
         assert_eq!(placed[0].x, PLAIN_INSET, "no insets stated: the plain inset");
+    }
+
+    /// A bullet with no margin to hang in (marL 0, a negative indent)
+    /// sits at the box's edge and its first line starts after it, not under
+    /// it (the pay-centre innovation deck's Wingdings squares).
+    #[test]
+    fn a_bullet_with_no_room_to_hang_pushes_its_first_line_over() {
+        let zero = Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
+        let body = TextBody {
+            paras: vec![ParaStyle { margin_left: 0.0, indent: -30.0, bullet: Bullet::Char("•".into()), ..Default::default() }],
+            insets: Some(zero),
+            ..Default::default()
+        };
+        let placed = place(&ctx(), "text", &runs("text"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
+        let m = placed[0].marker.as_ref().expect("a marker");
+        assert_eq!(m.x, 0.0);
+        let width = m.layout.pixel_extents().1.width();
+        assert!(width > 0);
+        assert_eq!(placed[0].layout.indent(), width * pango::SCALE, "the first line starts after the bullet");
+    }
+
+    /// An oval's text wraps inside the oval, in its inscribed rectangle,
+    /// as PowerPoint and LibreOffice lay it out (the pay-centre innovation
+    /// deck's call-outs ran over the oval's edges).
+    #[test]
+    fn an_ovals_text_sits_in_its_inscribed_rectangle() {
+        use decks_core::engine::shape::{ShapeKind, ShapeStyle};
+        use decks_core::engine::text_body::Frame;
+        let zero = Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
+        let oval = TextBody { insets: Some(zero), frame: Some(Frame { kind: ShapeKind::Ellipse, style: ShapeStyle::default() }), ..Default::default() };
+        let placed = place(&ctx(), "a", &runs("a"), &oval, (0.0, 0.0, 400.0, 200.0), 1.0, &desc());
+        let inset = 200.0 * (1.0 - std::f64::consts::FRAC_1_SQRT_2);
+        assert!((placed[0].x - inset).abs() < 0.01, "{} vs {inset}", placed[0].x);
+        assert_eq!(content_box(&oval, (400.0, 200.0), 1.0).0, 400.0 - 2.0 * inset);
+        let square = TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style: ShapeStyle::default() }), ..oval };
+        assert_eq!(place(&ctx(), "a", &runs("a"), &square, (0.0, 0.0, 400.0, 200.0), 1.0, &desc())[0].x, 0.0, "a rectangle's is its box");
     }
 
     /// DCK-007: the editor's caret, selection and click placement are

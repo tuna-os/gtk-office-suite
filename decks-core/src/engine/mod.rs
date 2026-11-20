@@ -28,6 +28,7 @@ mod parse;
 mod placeholders;
 pub mod freeform;
 pub mod shape;
+pub mod symbol_font;
 pub mod table;
 pub mod resolver;
 pub mod theme;

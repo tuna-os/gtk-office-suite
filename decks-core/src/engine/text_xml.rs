@@ -385,14 +385,32 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         ..SpText::default()
     };
     let Some(tx) = tx else { return out };
+    // The shape style's font reference (`p:style/a:fontRef`): its colour
+    // and its theme font, over the master's text styles and under the
+    // shape's own. A white-on-accent oval states its white only there,
+    // and the master's tx1 would turn its text dark.
+    let font_ref = sp.child("p:style").and_then(|s| s.child("a:fontRef")).map(|f| RunProps {
+        color: first_color(f, theme, None).map(|c| c.to_hex().to_lowercase()),
+        latin: match f.attr("idx") {
+            Some("major") => theme.typeface("+mj-lt"),
+            Some("minor") => theme.typeface("+mn-lt"),
+            _ => None,
+        },
+        ..RunProps::default()
+    });
     let pt = 96.0 / 72.0 * scale.text_factor();
     for p in tx.children_named("a:p") {
         let ppr = p.child("a:pPr");
         let lvl = ppr.and_then(|n| n.attr("lvl")).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(8);
         let mut props = LevelProps::default();
-        for l in &lists {
+        let (own, inherited) = lists.split_last().expect("the shape's own list style");
+        for l in inherited {
             props.over(l.level(lvl));
         }
+        if let Some(f) = &font_ref {
+            props.run.over(f);
+        }
+        props.over(own.level(lvl));
         if let Some(ppr) = ppr {
             props.over(&LevelProps::of(ppr, theme));
         }
@@ -610,6 +628,32 @@ mod tests {
         let m = &got[0].paras[1].marker;
         assert_eq!((m.font.as_deref(), m.size), (None, Some(MarkerSize::Points(12.0))));
         assert_eq!(m.color.as_deref(), Some("c00000"), "the colour is still inherited");
+    }
+
+    /// A white-on-accent oval states its white only in its style's
+    /// `a:fontRef`: that sits over the master's text colour, under the
+    /// run's own (the pay-centre innovation deck's call-outs).
+    #[test]
+    fn a_shape_styles_font_reference_colours_its_text() {
+        let theme = super::super::shape_xml::theme(
+            r#"<a:theme xmlns:a="a"><a:themeElements><a:fontScheme name="x">
+               <a:majorFont><a:latin typeface="Heading Face"/></a:majorFont>
+               <a:minorFont><a:latin typeface="Body Face"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>"#,
+        );
+        let master = MASTER.replace(
+            r#"<a:defRPr sz="1800"/>"#,
+            r#"<a:defRPr sz="1800"><a:solidFill><a:srgbClr val="111111"/></a:solidFill></a:defRPr>"#,
+        );
+        let inh = Inherited::read(LAYOUT, &master, &theme);
+        let styled = r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="o"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/>
+            <p:style><a:lnRef idx="2"><a:srgbClr val="000000"/></a:lnRef><a:fillRef idx="1"><a:srgbClr val="000000"/></a:fillRef>
+            <a:effectRef idx="0"><a:srgbClr val="000000"/></a:effectRef><a:fontRef idx="major"><a:srgbClr val="FFFFFF"/></a:fontRef></p:style>
+            <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r><a:r><a:rPr><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:rPr><a:t>b</a:t></a:r></a:p></p:txBody></p:sp>"#;
+        let got = sp_texts(&slide(&(styled.to_string() + &sp("", "<a:p><a:r><a:t>c</a:t></a:r></a:p>"))), &theme, &inh, SlideScale::default());
+        assert_eq!(got[0].runs[0].style().color.as_deref(), Some("ffffff"), "the style's, over the master's");
+        assert_eq!(got[0].runs[0].style().font_family.as_deref(), Some("Heading Face"), "idx=major is the heading face");
+        assert_eq!(got[0].runs[1].style().color.as_deref(), Some("00ff00"), "the run's own wins");
+        assert_eq!(got[1].runs[0].style().color.as_deref(), Some("111111"), "a box with no style keeps the master's");
     }
 
     #[test]

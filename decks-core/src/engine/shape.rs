@@ -149,6 +149,29 @@ impl ShapeKind {
         }
     }
 
+    /// How far the preset's text rectangle (DrawingML `a:rect` in
+    /// presetShapeDefinitions.xml) sits inside a `w` by `h` box, as left,
+    /// top, right and bottom: an ellipse's text sits in its inscribed
+    /// rectangle, a diamond's in its middle half, a rounded rectangle's
+    /// clear of its corners. Nothing for the rest.
+    pub fn text_inset(&self, w: f64, h: f64) -> (f64, f64, f64, f64) {
+        // 1 - cos 45°: where the ellipse's diagonals cross it.
+        const ELLIPSE: f64 = 1.0 - std::f64::consts::FRAC_1_SQRT_2;
+        match self {
+            k if is_elliptical(k) => {
+                let (x, y) = (w / 2.0 * ELLIPSE, h / 2.0 * ELLIPSE);
+                (x, y, x, y)
+            }
+            ShapeKind::Diamond => (w / 4.0, h / 4.0, w / 4.0, h / 4.0),
+            ShapeKind::RoundRect { radius } => {
+                // il = x1 * 29289 / 100000, x1 the corner's radius.
+                let i = radius.clamp(0.0, 0.5) * w.min(h) * ELLIPSE;
+                (i, i, i, i)
+            }
+            _ => (0.0, 0.0, 0.0, 0.0),
+        }
+    }
+
     /// The DrawingML preset name to write back.
     pub fn prst(&self) -> &str {
         match self {
