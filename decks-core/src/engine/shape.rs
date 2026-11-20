@@ -259,6 +259,11 @@ pub struct ShapeStyle {
     /// `draw:shadow`), #2332.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shadow: Option<Shadow>,
+    /// The solid fill's opacity, 0..1 (DrawingML `a:alpha` on the fill's
+    /// colour, ODF `draw:opacity`); None is opaque. A translucent box over
+    /// a dark slide shows the slide through it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_alpha: Option<f64>,
 }
 
 /// An outer shadow: its offset from the shape (dx right, dy down) and blur
@@ -309,6 +314,7 @@ impl Default for ShapeStyle {
             stroke_src: Some(StrokeSrc::Color(ColorRef::Rgb(line.to_hex()))),
             glow: None,
             shadow: None,
+            fill_alpha: None,
         }
     }
 }

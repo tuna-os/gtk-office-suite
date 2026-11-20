@@ -25,6 +25,7 @@ fn deck() -> Deck {
         style: ShapeStyle {
             glow: Some(glow()),
             shadow: None,
+            fill_alpha: None,
             fill: Some(navy),
             gradient: None,
             stroke: Some(Stroke { color: navy, width: 1.0 }),
@@ -188,6 +189,7 @@ fn a_rotated_text_frames_turning_shadow_is_saved_to_odp_as_the_page_offset_it_dr
     let style = ShapeStyle {
         glow: None,
         shadow: Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4, rotate_with_shape: true }),
+        fill_alpha: None,
         fill: Some(navy),
         gradient: None,
         stroke: None,

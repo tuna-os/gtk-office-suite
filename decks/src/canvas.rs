@@ -1370,7 +1370,7 @@ fn paint_path(
             cr.fill_preserve().unwrap();
         } else if let Some(fill) = style.fill {
             let (r, g, b) = fill.to_f64();
-            cr.set_source_rgb(r, g, b);
+            cr.set_source_rgba(r, g, b, style.fill_alpha.unwrap_or(1.0));
             cr.fill_preserve().unwrap();
         }
     }
@@ -1675,7 +1675,7 @@ mod freeform_tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
         {
             let cr = cairo::Context::new(&surface).unwrap();
-            let style = ShapeStyle { glow: None, shadow: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+            let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
             super::draw_shape(&cr, &ShapeKind::Freeform(vec![wedge]), &style, (0.0, 0.0, 100.0, 100.0), 1.0);
         }
         let stride = surface.stride() as usize;
@@ -1706,7 +1706,7 @@ mod font_tests {
             w: 200.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle { glow: None, shadow: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
         let slide = Slide { hidden: false,
             title: String::new(),
@@ -2194,7 +2194,7 @@ mod line_tests {
             let cr = cairo::Context::new(&surface).unwrap();
             cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.paint().unwrap();
-            let style = ShapeStyle { glow: None, shadow: None,
+            let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None,
                 fill: Some(Color(68, 114, 196)),
                 gradient: None,
                 stroke: Some(Stroke { color: Color(255, 255, 255), width: 2.0 }),
