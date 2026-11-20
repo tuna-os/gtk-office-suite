@@ -861,7 +861,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 2.0.118",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -5617,15 +5617,15 @@ dependencies = [
 
 [[package]]
 name = "typst-as-lib"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83771d795ff59eb1f198153120beb55cd0acf6200077b31c6aad928e954b5c53"
+checksum = "b1d4d86df26342e1989c486c9ff8bfbcaf33995efd1665fc372e38a96ff4245c"
 dependencies = [
- "chrono",
  "comemo",
  "dirs 6.0.0",
  "ecow",
  "thiserror 2.0.18",
+ "time",
  "typst",
  "typst-kit",
 ]
@@ -6435,7 +6435,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
