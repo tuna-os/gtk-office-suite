@@ -457,6 +457,27 @@ pub(crate) struct GraphicStyles {
     clips: Vec<String>,
 }
 
+/// `style` with its shadow as LibreOffice keeps one: fixed to the page. A
+/// shadow that turns with its shape (pptx `rotWithShape`, the default) has
+/// its offset in the shape's frame; turned by the shape's `rotation`
+/// (degrees, clockwise) it is the page offset that draws the same (#2335).
+fn page_fixed_shadow(style: &crate::engine::shape::ShapeStyle, rotation: f64) -> std::borrow::Cow<'_, crate::engine::shape::ShapeStyle> {
+    match style.shadow {
+        Some(sh) if sh.rotate_with_shape => {
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let mut s = style.clone();
+            s.shadow = Some(crate::engine::shape::Shadow {
+                dx: sh.dx * cos - sh.dy * sin,
+                dy: sh.dx * sin + sh.dy * cos,
+                rotate_with_shape: false,
+                ..sh
+            });
+            std::borrow::Cow::Owned(s)
+        }
+        _ => std::borrow::Cow::Borrowed(style),
+    }
+}
+
 impl GraphicStyles {
     fn new(prefix: &str, deck: &Deck) -> Self {
         GraphicStyles {
@@ -702,7 +723,7 @@ fn shapes_xml(
                 SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
                     use crate::engine::shape::ShapeKind;
                     let at = geometry(*x, *y, *w, *h, *rotation);
-                    let gs = graphics.name_of(style);
+                    let gs = graphics.name_of(&page_fixed_shadow(style, *rotation));
                     pages.push_str(&match kind {
                         ShapeKind::Rect => format!("<draw:rect draw:style-name=\"{gs}\" {at}/>"),
                         ShapeKind::RoundRect { radius } => format!(

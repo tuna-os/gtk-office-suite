@@ -158,3 +158,23 @@ fn whether_a_shadow_turns_with_its_shape_survives_pptx() {
         assert_eq!(back.rotate_with_shape, turns);
     }
 }
+
+#[test]
+fn a_rotated_shapes_turning_shadow_is_saved_to_odp_as_the_page_offset_it_draws() {
+    // Turned 90° clockwise, a shadow 3 right and 4 down of the shape's own
+    // frame falls 4 left and 3 down on the page, which is what LibreOffice
+    // keeps.
+    let mut d = shadowed();
+    if let SlideObject::Shape { style, rotation, .. } = &mut d.slides[0].objects[0] {
+        *rotation = 90.0;
+        if let Some(sh) = &mut style.shadow {
+            sh.rotate_with_shape = true;
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("r.odp");
+    decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
+    let back = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap();
+    assert!(!back.rotate_with_shape);
+    assert!((back.dx + 4.0).abs() < 0.05 && (back.dy - 3.0).abs() < 0.05, "{back:?}");
+}
