@@ -908,6 +908,99 @@ jobs:
             vm-work/*.log
           retention-days: 14
 
+  # Phase 3's exit (docs/RENDER-PARITY-ROADMAP.md): Tier C, the shipped
+  # Flatpak in a GNOME VM, over the real documents of
+  # tools/render-lab/real_corpus, ratcheted against baseline-real.json the
+  # way `vm` ratchets the fixtures against baseline.json. Its own runner, so
+  # the 90 documents do not share `vm`'s time limit, and capture only: `vm`
+  # already checks the installed Flatpak and the upgrade.
+  vm-real:
+    name: Tier C real documents (Flatpak in a GNOME VM)
+    needs: flatpak
+    if: ${{ !cancelled() && needs.flatpak.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    # Non-gating, like `vm`, until its verdicts are in baseline-real.json
+    # and hold for a week of nightly runs. Read the Compare step, not the
+    # job's conclusion.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
+
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: bundle-*
+          path: bundles
+          merge-multiple: true
+
+      - name: Cache prepared guest image
+        uses: actions/cache@v6.1.0
+        with:
+          path: vm-work
+          key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
+
+      - name: Prepare guest (first run only)
+        run: '[ -f vm-work/guest.qcow2 ] || tools/render-lab/vm/prepare.sh vm-work'
+
+      - name: Cache the real documents
+        uses: actions/cache@v6.1.0
+        with:
+          path: .cache/render-lab-corpus
+          key: render-lab-corpus-all-${{ hashFiles('tools/render-lab/real_corpus/manifest.json') }}
+          restore-keys: |
+            render-lab-corpus-all-
+
+      - name: Real documents and LibreOffice reference
+        run: |
+          docker build -t render-lab -f tools/render-lab/Containerfile \
+            --build-arg BASE=ghcr.io/${GITHUB_REPOSITORY}/gui-test:main tools/render-lab
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c \
+            'python3 tools/render-lab/fetch_real_corpus.py render-lab-out/fixtures --cache .cache/render-lab-corpus && python3 tools/render-lab/lo_render.py render-lab-out/fixtures render-lab-out'
+          sudo chown -R "$(id -u):$(id -g)" render-lab-out .cache
+
+      - name: Capture in the VM
+        env:
+          TIER_C_CAPTURE_ONLY: '1'
+        run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out
+
+      - name: Propose Tier C baseline
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -ec '
+            cp tools/render-lab/baseline-real.json render-lab-out/baseline-real.proposed.json
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out \
+              --baseline render-lab-out/baseline-real.proposed.json --update-baseline'
+
+      - name: Compare
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab \
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out --baseline tools/render-lab/baseline-real.json
+
+      - name: Tier C summary
+        if: always() && hashFiles('render-lab-out/summary.md') != ''
+        run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload VM report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: render-parity-vm-real-report
+          path: |
+            render-lab-out/report.html
+            render-lab-out/baseline-real.proposed.json
+            render-lab-out/summary.*
+            render-lab-out/*/*/C-*.png
+            render-lab-out/*/*/*.log
+            vm-work/*.log
+          retention-days: 14
+
   # Posts what `export-report` found, with the write token that job does
   # not get (#1678). On a pull request it runs none of the pull request's
   # code: no checkout, only the comment text `export-report` uploaded. On

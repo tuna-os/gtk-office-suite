@@ -7,6 +7,10 @@
 # With a prior-bundles directory (the last release's bundles), it ends by
 # upgrading from that release to these bundles (vm/upgrade.sh, #1209).
 #
+# TIER_C_CAPTURE_ONLY=1 stops after the captures, skipping the installed
+# and upgrade checks: the real-document run (render-parity.yml `vm-real`)
+# needs only the pages, and the fixture run already checks the install.
+#
 # Per fixture it stores:
 #   C-<n>.png       the app's own render dump, produced inside the Flatpak
 #                   (runtime fonts, GL GSK renderer, Wayland backend)
@@ -181,6 +185,7 @@ while read -r app feature file; do
     "${SCP[@]}" "lab@127.0.0.1:$remote_out/app.log" "$dest/C.log" 2>/dev/null || true
     echo "vm  $app/$feature: $(ls "$dest"/C-[0-9]*.png 2>/dev/null | wc -l) page(s)"
 done
+[ -z "${TIER_C_CAPTURE_ONLY:-}" ] || exit 0
 
 # The installed Flatpak used the way a desktop uses it (#1209): open a
 # document from "the file manager" (gio open) and save it through the

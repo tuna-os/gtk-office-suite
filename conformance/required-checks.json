@@ -35,6 +35,8 @@
      "reason": "Runs only on the schedule or a dispatch that asks for the VM tier; skipped on pull requests."},
     {"workflow": ".github/workflows/render-parity.yml", "job": "vm", "policy": "optional",
      "reason": "Tier C needs the bundles above and is continue-on-error; it never runs on an ordinary pull request."},
+    {"workflow": ".github/workflows/render-parity.yml", "job": "vm-real", "policy": "optional",
+     "reason": "Tier C over the real documents: needs the bundles above and is continue-on-error; it never runs on an ordinary pull request."},
     {"workflow": ".github/workflows/render-real.yml", "job": "lab", "policy": "required"},
     {"workflow": ".github/workflows/render-real.yml", "job": "publish", "policy": "optional",
      "reason": "Main only (schedule or a dispatch on main): publishes the scoreboards and syncs issues with the write token `lab` does not get (#1678). Skipped on pull requests."},
