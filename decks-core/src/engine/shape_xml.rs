@@ -555,7 +555,16 @@ fn shadow_of(shdw: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Sha
     let num = |k: &str| shdw.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
     let (dist, dir) = (num("dist") * scale, (num("dir") / 60_000.0).to_radians());
     let color = first_color(shdw, theme, None)?;
-    Some(super::shape::Shadow { dx: dist * dir.cos(), dy: dist * dir.sin(), blur: num("blurRad") * scale, color, alpha: alpha_of(shdw) })
+    // `rotWithShape` is true unless stated (CT_OuterShadowEffect).
+    let rotate_with_shape = !matches!(shdw.attr("rotWithShape"), Some("0" | "false"));
+    Some(super::shape::Shadow {
+        dx: dist * dir.cos(),
+        dy: dist * dir.sin(),
+        blur: num("blurRad") * scale,
+        color,
+        alpha: alpha_of(shdw),
+        rotate_with_shape,
+    })
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

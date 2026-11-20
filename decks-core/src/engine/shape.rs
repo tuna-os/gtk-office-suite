@@ -248,6 +248,15 @@ pub struct Shadow {
     pub blur: f64,
     pub color: Color,
     pub alpha: f64,
+    /// Whether the offset turns with a rotated shape (DrawingML
+    /// `rotWithShape`, true unless stated) or stays fixed to the slide, as
+    /// LibreOffice's shadows do.
+    #[serde(default = "rotates_by_default")]
+    pub rotate_with_shape: bool,
+}
+
+fn rotates_by_default() -> bool {
+    true
 }
 
 /// A glow: how far it reaches past the outline, in the same units as a

@@ -1174,7 +1174,16 @@ fn paint_path(
         let path = cr.copy_path().unwrap();
         cr.save().unwrap();
         cr.new_path();
-        cr.translate(sh.dx * scale, sh.dy * scale);
+        // The context is already turned with the shape (draw_object). A
+        // shadow fixed to the slide undoes that turn for its offset.
+        let (mut dx, mut dy) = (sh.dx * scale, sh.dy * scale);
+        if !sh.rotate_with_shape {
+            let m = cr.matrix();
+            let turn = m.yx().atan2(m.xx());
+            let (sin, cos) = (-turn).sin_cos();
+            (dx, dy) = (dx * cos - dy * sin, dx * sin + dy * cos);
+        }
+        cr.translate(dx, dy);
         cr.append_path(&path);
         let blur = sh.blur * scale;
         if blur > 0.0 {

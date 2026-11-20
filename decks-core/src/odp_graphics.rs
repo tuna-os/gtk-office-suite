@@ -322,6 +322,8 @@ impl GraphicDefs {
             blur: p.shadow_blur_pt.unwrap_or(0.0) * k,
             color: p.shadow_color.unwrap_or(Color(0x80, 0x80, 0x80)),
             alpha: p.shadow_opacity.unwrap_or(1.0),
+            // LibreOffice keeps a shadow's offset fixed to the page.
+            rotate_with_shape: false,
         });
         Some(ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src })
     }

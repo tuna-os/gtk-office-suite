@@ -90,7 +90,7 @@ fn shadowed() -> Deck {
     let mut d = deck();
     if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
         style.glow = None;
-        style.shadow = Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4 });
+        style.shadow = Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4, rotate_with_shape: false });
     }
     d
 }
@@ -137,4 +137,24 @@ fn a_glow_and_a_shadow_are_written_in_effect_list_order() {
     assert!(g < s, "CT_EffectList puts the glow before the outer shadow: {xml}");
     let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
     assert!(glow_of(&back).is_some() && shadow_of(&back).is_some());
+}
+
+#[test]
+fn whether_a_shadow_turns_with_its_shape_survives_pptx() {
+    // A rotated shape's shadow either turns with it (rotWithShape, the
+    // default) or keeps its direction on the slide.
+    let dir = tempfile::tempdir().unwrap();
+    for turns in [true, false] {
+        let mut d = shadowed();
+        if let SlideObject::Shape { style, rotation, .. } = &mut d.slides[0].objects[0] {
+            *rotation = 30.0;
+            if let Some(sh) = &mut style.shadow {
+                sh.rotate_with_shape = turns;
+            }
+        }
+        let path = dir.path().join(format!("r{turns}.pptx"));
+        decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
+        let back = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap();
+        assert_eq!(back.rotate_with_shape, turns);
+    }
 }

@@ -720,7 +720,7 @@ fn write_geometry_and_paint<W: std::io::Write>(
         el.push_attribute(("dist", emu(dist).as_str()));
         el.push_attribute(("dir", ((dir * 60_000.0).round() as i64).to_string().as_str()));
         el.push_attribute(("algn", "ctr"));
-        el.push_attribute(("rotWithShape", "0"));
+        el.push_attribute(("rotWithShape", if sh.rotate_with_shape { "1" } else { "0" }));
         writer.write_event(Event::Start(el))?;
         color_alpha(writer, sh.color, sh.alpha)?;
         writer.write_event(Event::End(BytesEnd::new("a:outerShdw")))?;
