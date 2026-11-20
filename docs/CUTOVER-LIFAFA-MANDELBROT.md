@@ -91,10 +91,12 @@ The questions those answer:
 
 ## 2. Publishing from this repository
 
-- [ ] Mandelbrot: add it to `publish-flatpak.yml` (manifest
-  `mandelbrot/org.tunaos.mandelbrot.json`, `repo-name: tuna-os/mandelbrot` so
-  the image path stays `ghcr.io/tuna-os/mandelbrot`), with its own tag
-  pattern, and the GitHub Release notes it makes today
+- [x] Mandelbrot: published from here by its own workflow,
+  `.github/workflows/publish-mandelbrot.yml`, through the same reusable
+  workflow as `publish-flatpak.yml` (manifest
+  `mandelbrot/org.tunaos.mandelbrot.json`, image path
+  `ghcr.io/tuna-os/mandelbrot`), on its own `mandelbrot-v*` tags, with the
+  GitHub Release notes it made in tuna-os/mandelbrot
   (`build-aux/release-notes.py`, image digests).
 - [ ] Lifafa: a publish job that runs `fork/rebrand.sh`, builds the manifest,
   and publishes to the channel decided in step 0 (both, during the
@@ -184,8 +186,16 @@ The questions those answer:
 - [ ] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
   works from a monorepo: a branch of hyprlab/hylki with the change applied,
   not a branch of this repository. Write the steps down.
-- [ ] Mandelbrot: record which Fractal release it is based on, and whether
-  Fractal changes are pulled in, and how.
+- [x] Mandelbrot: based on Fractal 14.3 (`fractal-14` @ `561b073e`), recorded in
+  `mandelbrot/build-aux/UPSTREAM_BASE` with the history in
+  `mandelbrot/docs/UPSTREAM.md`. Stable `fractal-N` releases are pulled in
+  whole and `main` fixes one at a time. `mandelbrot/build-aux/sync-upstream.sh`
+  used to `git merge` Fractal into the whole checkout, which in this
+  repository would have put Fractal at the root; it now applies upstream's
+  diff under `mandelbrot/` the way Lifafa's does. Both scripts leave out, and
+  list, upstream edits to files the fork deleted or renamed, since one such
+  file made `git apply` drop the whole sync (found running Mandelbrot's from
+  14.2 to 14.3).
 
 ## 6. Issues, pull requests and security reports
 
