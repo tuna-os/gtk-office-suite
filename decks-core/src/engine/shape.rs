@@ -228,6 +228,20 @@ pub struct ShapeStyle {
     pub fill_src: Option<super::theme::FillSrc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke_src: Option<super::theme::StrokeSrc>,
+    /// A soft halo around the outline (DrawingML `a:glow`, ODF
+    /// `loext:glow-*`), drawn under the shape (#2332).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glow: Option<Glow>,
+}
+
+/// A glow: how far it reaches past the outline, in the same units as a
+/// stroke's width, its colour and its opacity (0..1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Glow {
+    pub radius: f64,
+    pub color: Color,
+    pub alpha: f64,
 }
 
 impl Default for ShapeStyle {
@@ -245,6 +259,7 @@ impl Default for ShapeStyle {
             stroke: Some(Stroke { color: line, width: 1.0 }),
             fill_src: Some(FillSrc::Color(ColorRef::Rgb(accent1.to_hex()))),
             stroke_src: Some(StrokeSrc::Color(ColorRef::Rgb(line.to_hex()))),
+            glow: None,
         }
     }
 }

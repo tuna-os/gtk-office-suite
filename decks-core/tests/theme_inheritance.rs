@@ -40,7 +40,7 @@ fn inheritor(kind: ShapeKind, resolved: Color) -> SlideObject {
         kind,
         x: 10.0, y: 10.0, w: 100.0, h: 100.0,
         rotation: 0.0,
-        style: ShapeStyle {
+        style: ShapeStyle { glow: None,
             fill: Some(resolved),
             gradient: None,
             stroke: None,
@@ -55,7 +55,7 @@ fn local(kind: ShapeKind) -> SlideObject {
         kind,
         x: 10.0, y: 10.0, w: 100.0, h: 100.0,
         rotation: 0.0,
-        style: ShapeStyle {
+        style: ShapeStyle { glow: None,
             fill: Some(Color(0x00, 0x80, 0x00)),
             gradient: None,
             stroke: None,

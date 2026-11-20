@@ -1164,6 +1164,21 @@ fn paint_path(
     fill: bool,
     stroke: bool,
 ) {
+    // The glow, under the shape: the outline stroked ever narrower in the
+    // glow's colour, each pass a share of its opacity, so it is densest at
+    // the edge and fades out to the radius, as a blurred halo does (#2332).
+    if let (true, Some(glow)) = (fill, style.glow) {
+        const PASSES: u32 = 8;
+        let (r, g, b) = glow.color.to_f64();
+        let reach = glow.radius * scale;
+        if reach > 0.0 {
+            for i in (1..=PASSES).rev() {
+                cr.set_source_rgba(r, g, b, glow.alpha / PASSES as f64);
+                cr.set_line_width(2.0 * reach * i as f64 / PASSES as f64);
+                cr.stroke_preserve().unwrap();
+            }
+        }
+    }
     if fill {
         if let Some(grad) = &style.gradient {
             // Colours run along `angle` (clockwise from left-to-right) across
@@ -1487,7 +1502,7 @@ mod freeform_tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
         {
             let cr = cairo::Context::new(&surface).unwrap();
-            let style = ShapeStyle { fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+            let style = ShapeStyle { glow: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
             super::draw_shape(&cr, &ShapeKind::Freeform(vec![wedge]), &style, (0.0, 0.0, 100.0, 100.0), 1.0);
         }
         let stride = surface.stride() as usize;
@@ -1518,7 +1533,7 @@ mod font_tests {
             w: 200.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle { fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle { glow: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
         let slide = Slide { hidden: false,
             title: String::new(),
@@ -2006,7 +2021,7 @@ mod line_tests {
             let cr = cairo::Context::new(&surface).unwrap();
             cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.paint().unwrap();
-            let style = ShapeStyle {
+            let style = ShapeStyle { glow: None,
                 fill: Some(Color(68, 114, 196)),
                 gradient: None,
                 stroke: Some(Stroke { color: Color(255, 255, 255), width: 2.0 }),

@@ -83,7 +83,7 @@ fn shape(fill_src: Option<FillSrc>, fill: Option<Color>, stroke_src: Option<Stro
         w: 10.0,
         h: 10.0,
         rotation: 0.0,
-        style: ShapeStyle { fill, gradient: None, stroke, fill_src, stroke_src },
+        style: ShapeStyle { glow: None, fill, gradient: None, stroke, fill_src, stroke_src },
     }
 }
 
@@ -241,7 +241,7 @@ fn resolver_unspecified_properties_yield_documented_defaults() {
         h: 1.0,
         rotation: 0.0,
         runs: vec![],
-        body: TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style: ShapeStyle { fill: None, gradient: None, stroke: None, fill_src: None, stroke_src: None } }), ..Default::default() },
+        body: TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style: ShapeStyle { glow: None, fill: None, gradient: None, stroke: None, fill_src: None, stroke_src: None } }), ..Default::default() },
     };
     let plain_text = SlideObject::TextBox { text: "t".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0, runs: vec![], body: TextBody::default() };
     let d = deck(vec![], vec![master(1, None)], vec![slide(1, None, "", vec![bare, text_frame, plain_text])]);

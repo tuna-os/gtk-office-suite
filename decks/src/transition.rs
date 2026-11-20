@@ -354,7 +354,7 @@ mod tests {
             w: 100.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle { fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle { glow: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
         let (red, blue) = (Color(220, 0, 0), Color(0, 0, 220));
         let slide = |objects| Slide { hidden: false,

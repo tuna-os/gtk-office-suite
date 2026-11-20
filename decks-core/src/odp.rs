@@ -508,9 +508,20 @@ impl GraphicStyles {
                     ),
                     None => "draw:stroke=\"none\"".to_string(),
                 };
+                // LibreOffice's glow (#2332): radius, colour and the
+                // colour's transparency, the complement of its alpha.
+                let glow = match s.glow {
+                    Some(g) => format!(
+                        " loext:glow-radius=\"{}pt\" loext:glow-color=\"#{}\" loext:glow-transparency=\"{}%\"",
+                        snap(page_x(g.radius)),
+                        g.color.to_hex().to_lowercase(),
+                        ((1.0 - g.alpha) * 100.0).round()
+                    ),
+                    None => String::new(),
+                };
                 format!(
                     "<style:style style:name=\"{}{}\" style:family=\"graphic\">\
-                     <style:graphic-properties {fill} {stroke}/></style:style>",
+                     <style:graphic-properties {fill} {stroke}{glow}/></style:style>",
                     self.prefix,
                     i + 1
                 )
@@ -856,6 +867,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          <office:document-content \
          xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
          xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
          xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" \
@@ -1050,6 +1062,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
          xmlns:decks=\"{DECKS_NS}\" \
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
          xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
          xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" \
