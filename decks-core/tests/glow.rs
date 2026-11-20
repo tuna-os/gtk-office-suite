@@ -178,3 +178,46 @@ fn a_rotated_shapes_turning_shadow_is_saved_to_odp_as_the_page_offset_it_draws()
     assert!(!back.rotate_with_shape);
     assert!((back.dx + 4.0).abs() < 0.05 && (back.dy - 3.0).abs() < 0.05, "{back:?}");
 }
+
+#[test]
+fn a_rotated_text_frames_turning_shadow_is_saved_to_odp_as_the_page_offset_it_draws() {
+    // A dashboard card: a filled frame holding text, turned 90°, its
+    // shadow turning with it, takes the same page offset as a shape.
+    use decks_core::engine::text_body::{Frame, TextBody};
+    let navy = Color(0x0E, 0x28, 0x41);
+    let style = ShapeStyle {
+        glow: None,
+        shadow: Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4, rotate_with_shape: true }),
+        fill: Some(navy),
+        gradient: None,
+        stroke: None,
+        fill_src: None,
+        stroke_src: None,
+    };
+    let mut d = Deck::new();
+    d.slides[0].objects = vec![SlideObject::TextBox {
+        text: "6,043".into(),
+        x: 100.0,
+        y: 100.0,
+        w: 120.0,
+        h: 60.0,
+        rotation: 90.0,
+        runs: vec![],
+        body: TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style }), ..Default::default() },
+    }];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("card.odp");
+    decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
+    let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
+    let sh = back.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::TextBox { body, .. } => body.frame.as_ref().and_then(|f| f.style.shadow),
+            SlideObject::Shape { style, .. } => style.shadow,
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no shadow: {:?}", back.slides[0].objects));
+    assert!(!sh.rotate_with_shape);
+    assert!((sh.dx + 4.0).abs() < 0.05 && (sh.dy - 3.0).abs() < 0.05, "{sh:?}");
+}

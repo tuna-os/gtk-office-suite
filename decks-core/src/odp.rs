@@ -629,7 +629,7 @@ fn shapes_xml(
                     } else {
                         graphics.text.paragraphs(body, &inner)
                     };
-                    let gs = graphics.name_of(&frame.style);
+                    let gs = graphics.name_of(&page_fixed_shadow(&frame.style, *rotation));
                     let geom = enhanced_geometry(&frame.kind);
                     pages.push_str(&format!(
                         "<draw:custom-shape draw:style-name=\"{gs}\" {}>{paras}{geom}</draw:custom-shape>",
