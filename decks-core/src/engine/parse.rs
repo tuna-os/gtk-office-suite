@@ -392,6 +392,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let slide_rels_path = format!("{}/_rels/{}.rels", slide_dir.to_string_lossy(), slide_filename);
         
         let slide_rels_xml = archive.optional_part_to_string(&slide_rels_path, &mut budget);
+        // SmartArt as the shapes PowerPoint drew for it, before any pass
+        // reads the slide (diagram.rs).
+        let slide_xml = super::diagram::inline(&slide_xml, &slide_rels_xml, &slide_dir.to_string_lossy(), |part| {
+            archive.optional_part_to_string(part, &mut budget)
+        });
 
         let mut slide_image_rels = std::collections::HashMap::new();
         // The slide's external hyperlink targets by relationship id, for
