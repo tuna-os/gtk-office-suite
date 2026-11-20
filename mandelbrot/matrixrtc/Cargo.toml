@@ -18,7 +18,7 @@ tracing = "0.1"
 url = "2"
 
 [dependencies.ruma]
-version = "0.17"
+version = "0.18"
 features = ["events", "unstable-msc3401"]
 
 # Optional media layer (feature `livekit`).
