@@ -101,6 +101,9 @@ workflows:
         - 'flatpak/flatpak-github-actions@v6.8'
     '.github/workflows/publish-mandelbrot.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/ratchet.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'tuna-os/.github@main'
     '.github/workflows/release-evidence.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/download-artifact@v8.0.2'
@@ -219,6 +222,11 @@ dependencies:
         commit: 'sha1-4a76afe23f9e08d2d9550fb56e556444e8611d21'
         owner_id: 43724913
         repo_id: 442947557
+    'tuna-os/.github@main':
+        ref: 'main'
+        commit: 'sha1-8ecf20e5800fd80bde03d572ab1e3bbcb5b2cf17'
+        owner_id: 223733964
+        repo_id: 1187761922
     'zizmorcore/zizmor-action@v0.8.1':
         ref: 'v0.8.1'
         commit: 'sha1-45d7276c9ca790aabd705e31ca99c6185c3e76dd'
