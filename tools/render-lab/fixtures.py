@@ -2203,6 +2203,30 @@ def decks(img):
         sh.fill.fore_color.rgb = RGBColor(*color)
     save(p, "shapes", "Red rectangle, green ellipse, blue rounded rectangle in a row")
 
+    # Shape effects (#2332): an outer shadow straight down-right, a blurred
+    # one, a shadow fixed to the slide under a turned shape, and a glow.
+    # python-pptx has no effects API, so each a:effectLst is written into
+    # the shape's spPr, after its fill, where CT_ShapeProperties puts it.
+    from pptx.oxml import parse_xml
+
+    a_ns = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    effects = (
+        (MSO_SHAPE.RECTANGLE, 1.0, 0, '<a:outerShdw dist="152400" dir="2700000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="60000"/></a:srgbClr></a:outerShdw>'),
+        (MSO_SHAPE.OVAL, 4.2, 0, '<a:outerShdw blurRad="190500" dist="114300" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw>'),
+        (MSO_SHAPE.RECTANGLE, 7.4, 30, '<a:outerShdw dist="152400" dir="2700000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="60000"/></a:srgbClr></a:outerShdw>'),
+        (MSO_SHAPE.OVAL, 10.6, 0, '<a:glow rad="190500"><a:srgbClr val="00B0F0"><a:alpha val="60000"/></a:srgbClr></a:glow>'),
+    )
+    for kind, x, turn, effect in effects:
+        sh = s.shapes.add_shape(kind, Inches(x), Inches(2.5), Inches(2.2), Inches(2.0))
+        sh.fill.solid()
+        sh.fill.fore_color.rgb = RGBColor(40, 80, 220)
+        sh.line.fill.background()
+        sh.rotation = turn
+        sh._element.spPr.append(parse_xml(f"<a:effectLst {a_ns}>{effect}</a:effectLst>"))
+    save(p, "shape-effects", "Blue shapes with a shadow, a blurred shadow, a turned shape's slide-fixed shadow, and a glow")
+
     # The presets drawn with BetterOffice's DrawingML outlines
     # (decks-core shape.rs, borrowed_outline): stars, polygons, arrows,
     # a donut's hole, a cube's faces, callouts. Without them each was its box.
