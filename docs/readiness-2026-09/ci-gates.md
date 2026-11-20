@@ -503,6 +503,7 @@ by hand:
 | `Fuzz importer smoke tests` | `nightly.yml` → `fuzz-smoke` | optional | Skipped on pull requests by design (nightly cost). |
 | `coverage` | `nightly.yml` → `coverage` | optional | Skipped on pull requests by design (nightly cost). |
 | `oracle` | `nightly.yml` → `oracle` | optional | Path-filtered to format/model code (runs_on_every_revision: false). release-revision.yml refuses a release whose oracle evidence was recorded at another revision instead. |
+| `Ratchet` | `ratchet.yml` → `ratchet` | optional | New: count ratchet over .ratchet.toml (#[ignore] tests, #[allow] attributes, undated deny.toml ignores). It reports on every pull request; whether to require it is for the administrator. |
 | `Reproducible build (compare)` | `release-gate.yml` → `reproducible-compare` | optional | Path-filtered to release inputs; compares the two reproducible builds. |
 | `Reproducible build (first)` | `release-gate.yml` → `reproducible-build` | optional | Path-filtered, and only when a release input changed (not a module-ceiling file alone); two full builds per run. Nightly on main. |
 | `Reproducible build (second)` | `release-gate.yml` → `reproducible-build` | optional | Path-filtered, and only when a release input changed (not a module-ceiling file alone); two full builds per run. Nightly on main. |
