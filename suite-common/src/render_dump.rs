@@ -49,19 +49,14 @@ pub fn export_pdf_path(options: &glib::VariantDict) -> Result<Option<std::path::
     }
 }
 
-/// Tier C (a real GNOME session, tools/render-lab/vm/run.sh) has no
-/// browser to grow the window the way Broadway does: Mutter leaves it at
-/// its default 960x680, so the settle loops' wait for "maximized" timed out
-/// on every document, and Tables, which dumps the visible grid, lost most
-/// of a real sheet's columns (12 of 25 real workbooks red). With
-/// GTK_OFFICE_RENDER_MAXIMIZE set, the app asks for it while it waits.
-fn request_maximize(hold: bool, window: Option<&gtk4::Window>) {
-    if !hold || std::env::var_os("GTK_OFFICE_RENDER_MAXIMIZE").is_none() {
-        return;
-    }
-    if let Some(w) = window.filter(|w| !w.is_maximized()) {
-        w.maximize();
-    }
+/// Whether a held capture (`GTK_OFFICE_RENDER_HOLD`) must wait for the
+/// window to be maximized. Under Broadway (Tier B) maximizing is how the
+/// window takes the browser's size. Tier C (a real GNOME session,
+/// tools/render-lab/vm/run.sh) sets the window to Tier A's size through
+/// the app's settings instead, and sets `GTK_OFFICE_RENDER_SIZED`: nothing
+/// maximizes it there, so the wait timed out after 15 s on every document.
+fn wait_for_maximized(hold: bool) -> bool {
+    hold && std::env::var_os("GTK_OFFICE_RENDER_SIZED").is_none()
 }
 
 /// Headless `--export-pdf` driver: like `schedule`, but activates the app's
@@ -87,7 +82,6 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
     let stable = std::cell::Cell::new(0u32);
     glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
         let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
-        request_maximize(hold, window.as_ref());
         let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
         if size == last.get() && size != (0, 0) {
             stable.set(stable.get() + 1);
@@ -95,7 +89,7 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
         let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         if !ready && elapsed < std::time::Duration::from_secs(15) {
@@ -172,7 +166,6 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
     let stable = std::cell::Cell::new(0u32);
     glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
         let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
-        request_maximize(hold, window.as_ref());
         let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
         if size == last.get() && size != (0, 0) {
             stable.set(stable.get() + 1);
@@ -180,7 +173,7 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
         let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         // Give up waiting after 15 s and capture what there is; the lab's
