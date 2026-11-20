@@ -20,7 +20,7 @@ pub fn edited() -> (DecksController, SlideObject) {
         w: 80.0,
         h: 80.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb("E01B24".into()))), stroke_src: Some(StrokeSrc::NoLine) },
+        style: ShapeStyle { glow: None, shadow: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb("E01B24".into()))), stroke_src: Some(StrokeSrc::NoLine) },
     };
     c.edit_master(c.slide_id_at(0).unwrap()).unwrap();
     c.add_object(c.slide_id_at(0).unwrap(), triangle.clone());

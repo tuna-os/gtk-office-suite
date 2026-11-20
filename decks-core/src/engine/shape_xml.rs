@@ -538,6 +538,35 @@ fn glow_of(glow: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Glow>
     (radius > 0.0).then_some(super::shape::Glow { radius, color, alpha })
 }
 
+/// A colour element's `a:alpha` as 0..1, 1 when unstated.
+fn alpha_of(effect: &Node) -> f64 {
+    effect
+        .children
+        .iter()
+        .find_map(|c| c.child("a:alpha"))
+        .and_then(|a| a.attr("val")?.parse::<f64>().ok())
+        .map_or(1.0, |v| (v / 100_000.0).clamp(0.0, 1.0))
+}
+
+/// An `a:outerShdw`: `dist` (EMU) along `dir` (60000ths of a degree,
+/// clockwise from right) as an offset, `blurRad` (EMU), the colour and its
+/// alpha; distances scaled as a stroke width is. None without a colour.
+fn shadow_of(shdw: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Shadow> {
+    let num = |k: &str| shdw.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+    let (dist, dir) = (num("dist") * scale, (num("dir") / 60_000.0).to_radians());
+    let color = first_color(shdw, theme, None)?;
+    // `rotWithShape` is true unless stated (CT_OuterShadowEffect).
+    let rotate_with_shape = !matches!(shdw.attr("rotWithShape"), Some("0" | "false"));
+    Some(super::shape::Shadow {
+        dx: dist * dir.cos(),
+        dy: dist * dir.sin(),
+        blur: num("blurRad") * scale,
+        color,
+        alpha: alpha_of(shdw),
+        rotate_with_shape,
+    })
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SpStyle {
     pub style: ShapeStyle,
@@ -623,9 +652,11 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
         .and_then(|gd| gd.attr("fmla")?.strip_prefix("val ")?.trim().parse::<f64>().ok())
         .map(|v| v / 100_000.0);
 
-    let glow = sppr.and_then(|p| p.child("a:effectLst")).and_then(|e| e.child("a:glow")).and_then(|g| glow_of(g, theme, scale));
+    let effects = sppr.and_then(|p| p.child("a:effectLst"));
+    let glow = effects.and_then(|e| e.child("a:glow")).and_then(|g| glow_of(g, theme, scale));
+    let shadow = effects.and_then(|e| e.child("a:outerShdw")).and_then(|s| shadow_of(s, theme, scale));
 
-    SpStyle { style: ShapeStyle { glow, fill, gradient, stroke, fill_src, stroke_src }, round_adj }
+    SpStyle { style: ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src }, round_adj }
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────

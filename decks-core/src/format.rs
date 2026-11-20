@@ -264,7 +264,7 @@ fn promote(obj: &mut SlideObject) {
             w: *w,
             h: *h,
             rotation: *rotation,
-            style: ShapeStyle { glow: None, fill: Some(PLAIN_RECT), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_RECT.to_hex()))), stroke_src: None },
+            style: ShapeStyle { glow: None, shadow: None, fill: Some(PLAIN_RECT), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_RECT.to_hex()))), stroke_src: None },
         },
         SlideObject::Circle { x, y, r, rotation } => SlideObject::Shape {
             kind: ShapeKind::Ellipse,
@@ -273,7 +273,7 @@ fn promote(obj: &mut SlideObject) {
             w: *r * 2.0,
             h: *r * 2.0,
             rotation: *rotation,
-            style: ShapeStyle { glow: None, fill: Some(PLAIN_CIRCLE), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_CIRCLE.to_hex()))), stroke_src: None },
+            style: ShapeStyle { glow: None, shadow: None, fill: Some(PLAIN_CIRCLE), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_CIRCLE.to_hex()))), stroke_src: None },
         },
         _ => return,
     };

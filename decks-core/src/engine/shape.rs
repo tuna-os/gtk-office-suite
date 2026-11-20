@@ -232,6 +232,31 @@ pub struct ShapeStyle {
     /// `loext:glow-*`), drawn under the shape (#2332).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub glow: Option<Glow>,
+    /// A shadow cast under the shape (DrawingML `a:outerShdw`, ODF
+    /// `draw:shadow`), #2332.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<Shadow>,
+}
+
+/// An outer shadow: its offset from the shape (dx right, dy down) and blur
+/// radius, in the same units as a stroke's width, its colour and opacity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Shadow {
+    pub dx: f64,
+    pub dy: f64,
+    pub blur: f64,
+    pub color: Color,
+    pub alpha: f64,
+    /// Whether the offset turns with a rotated shape (DrawingML
+    /// `rotWithShape`, true unless stated) or stays fixed to the slide, as
+    /// LibreOffice's shadows do.
+    #[serde(default = "rotates_by_default")]
+    pub rotate_with_shape: bool,
+}
+
+fn rotates_by_default() -> bool {
+    true
 }
 
 /// A glow: how far it reaches past the outline, in the same units as a
@@ -260,6 +285,7 @@ impl Default for ShapeStyle {
             fill_src: Some(FillSrc::Color(ColorRef::Rgb(accent1.to_hex()))),
             stroke_src: Some(StrokeSrc::Color(ColorRef::Rgb(line.to_hex()))),
             glow: None,
+            shadow: None,
         }
     }
 }
