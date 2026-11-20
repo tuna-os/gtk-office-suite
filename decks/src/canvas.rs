@@ -895,10 +895,19 @@ pub fn draw_object(
                         values: values.as_slice(),
                     })
                     .collect();
+                let colors: Vec<Option<(f64, f64, f64)>> = chart
+                    .point_colors
+                    .iter()
+                    .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
+                    .collect();
                 let opts = suite_common::charts::Options {
                     stacked: chart.stacked,
                     labels: chart.labels,
                     hide_value_axis: chart.hide_value_axis,
+                    hole: chart.hole as f64 / 100.0,
+                    point_colors: &colors,
+                    no_legend: chart.no_legend,
+                    transparent: chart.transparent,
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {

@@ -43,6 +43,21 @@ pub struct ChartData {
     /// The value axis hidden (`c:valAx/c:delete`, `chart:display-label`).
     #[serde(default)]
     pub hide_value_axis: bool,
+    /// A doughnut's hole in percent of its radius (`c:holeSize`,
+    /// `chart:ring`); 0 is a pie.
+    #[serde(default)]
+    pub hole: u8,
+    /// A pie's slice colours as RGB, by category, where the file sets
+    /// them (`c:dPt`, `chart:data-point`).
+    #[serde(default)]
+    pub point_colors: Vec<Option<[u8; 3]>>,
+    /// No legend where one would be drawn: the file has none.
+    #[serde(default)]
+    pub no_legend: bool,
+    /// No chart background: the slide shows through (`a:noFill`,
+    /// `draw:fill="none"`).
+    #[serde(default)]
+    pub transparent: bool,
 }
 
 impl ChartData {
@@ -59,7 +74,19 @@ impl ChartData {
 
     /// A chart of one series and no options.
     pub fn one(kind: ChartKind, series: impl Into<String>, points: Vec<(String, f64)>) -> Self {
-        ChartData { kind, series: series.into(), points, more: Vec::new(), stacked: false, labels: false, hide_value_axis: false }
+        ChartData {
+            kind,
+            series: series.into(),
+            points,
+            more: Vec::new(),
+            stacked: false,
+            labels: false,
+            hide_value_axis: false,
+            hole: 0,
+            point_colors: Vec::new(),
+            no_legend: false,
+            transparent: false,
+        }
     }
 
     /// Every series as (name, values), the first included.
@@ -100,7 +127,25 @@ impl ChartData {
     /// series, or a grouping, labels or hidden axis the one-series drawing
     /// does not show.
     pub fn is_rich(&self) -> bool {
-        !self.more.is_empty() || self.stacked || self.labels || self.hide_value_axis
+        !self.more.is_empty()
+            || self.stacked
+            || self.labels
+            || self.hide_value_axis
+            || self.hole > 0
+            || self.point_colors.iter().any(Option::is_some)
+            || self.no_legend
+            || self.transparent
+    }
+
+    /// Whether a legend is drawn: a named series, a pie's categories or
+    /// several series, unless the file has none.
+    pub fn shows_legend(&self) -> bool {
+        !self.no_legend && self.has_default_legend()
+    }
+
+    /// Whether this chart would carry a legend by default.
+    fn has_default_legend(&self) -> bool {
+        self.legend().is_some() || self.kind == ChartKind::Pie || !self.more.is_empty()
     }
 
     /// Every category is a number: a scatter chart's x values.
@@ -214,6 +259,16 @@ fn esc(s: &str) -> String {
 
 /// The most series a chart keeps: more than a legend can name legibly.
 pub const MAX_SERIES: usize = 16;
+
+/// "4F81BD" as RGB.
+fn hex_rgb(v: &str) -> Option<[u8; 3]> {
+    let v = v.trim().trim_start_matches('#');
+    if v.len() != 6 {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&v[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
 
 /// A cached point's number; a gap or text is 0.
 fn number(v: Option<&str>) -> f64 {
@@ -340,9 +395,29 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
             cat_ax(),
             value_axis(AX_2, "l", AX_1, true, "midCat")
         ),
-        ChartKind::Pie => format!(
-            "<c:pieChart><c:varyColors val=\"1\"/>{head}{cat}{val}</c:ser>{dlbls}<c:firstSliceAng val=\"0\"/></c:pieChart>"
-        ),
+        ChartKind::Pie => {
+            let dpts: String = chart
+                .point_colors
+                .iter()
+                .enumerate()
+                .filter_map(|(i, c)| {
+                    let [r, g, b] = (*c)?;
+                    Some(format!(
+                        "<c:dPt><c:idx val=\"{i}\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>\
+                         <a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill></c:spPr></c:dPt>"
+                    ))
+                })
+                .collect();
+            if chart.hole > 0 {
+                format!(
+                    "<c:doughnutChart><c:varyColors val=\"1\"/>{head}{dpts}{cat}{val}</c:ser>{dlbls}\
+                     <c:firstSliceAng val=\"0\"/><c:holeSize val=\"{}\"/></c:doughnutChart>",
+                    chart.hole.clamp(10, 90)
+                )
+            } else {
+                format!("<c:pieChart><c:varyColors val=\"1\"/>{head}{dpts}{cat}{val}</c:ser>{dlbls}<c:firstSliceAng val=\"0\"/></c:pieChart>")
+            }
+        }
         ChartKind::Scatter => {
             let x_ref = format!("Sheet1!$A$2:$A${last}");
             let x = match chart.numeric_categories() {
@@ -359,7 +434,8 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
             )
         }
     };
-    let legend = if chart.legend().is_some() || chart.kind == ChartKind::Pie || !chart.more.is_empty() {
+    let background = if chart.transparent { "<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>" } else { "" };
+    let legend = if chart.shows_legend() {
         "<c:legend><c:legendPos val=\"r\"/><c:overlay val=\"0\"/></c:legend>"
     } else {
         ""
@@ -371,7 +447,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
          xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
          <c:date1904 val=\"0\"/><c:roundedCorners val=\"0\"/>\
          <c:chart><c:autoTitleDeleted val=\"1\"/><c:plotArea><c:layout/>{plot}</c:plotArea>{legend}\
-         <c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/></c:chart></c:chartSpace>"
+         <c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/></c:chart>{background}</c:chartSpace>"
     )
 }
 
@@ -597,6 +673,31 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
             })
             .collect()
     };
+    let hole = if group.local == "doughnutChart" {
+        group.child("holeSize").and_then(|h| h.attr("val")).and_then(|v| v.parse::<u8>().ok()).unwrap_or(10).clamp(10, 90)
+    } else {
+        0
+    };
+    // A slice's colour where the file gives it as RGB (`a:srgbClr`); a
+    // theme colour keeps the accent.
+    let point_colors: Vec<Option<[u8; 3]>> = if kind == ChartKind::Pie {
+        let mut colors = vec![None; n.min(10_000)];
+        for dpt in ser.children.iter().filter(|c| c.local == "dPt") {
+            let idx = dpt.child("idx").and_then(|i| i.attr("val")).and_then(|v| v.parse::<usize>().ok());
+            let rgb = dpt.child("spPr").and_then(|sp| sp.child("solidFill")).and_then(|f| f.child("srgbClr")).and_then(|c| c.attr("val")).and_then(hex_rgb);
+            if let (Some(i), Some(rgb)) = (idx, rgb) {
+                if i < colors.len() {
+                    colors[i] = Some(rgb);
+                }
+            }
+        }
+        if colors.iter().any(Option::is_some) { colors } else { Vec::new() }
+    } else {
+        Vec::new()
+    };
+    let chart_el = root.find("chart");
+    let has_legend = chart_el.is_some_and(|c| c.child("legend").is_some());
+    let transparent = root.child("spPr").or_else(|| root.find("chartSpace").and_then(|c| c.child("spPr"))).is_some_and(|sp| sp.child("noFill").is_some());
     let grouping = group.child("grouping").and_then(|g| g.attr("val")).unwrap_or("");
     let stacked = kind == ChartKind::Bar && matches!(grouping, "stacked" | "percentStacked");
     // Labels shown for the chart group, or for every series of it.
@@ -609,7 +710,9 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
             .filter(|c| c.local == "valAx")
             .any(|ax| ax.child("delete").and_then(|d| d.attr("val")).is_some_and(|v| v == "1" || v == "true"))
         && kind != ChartKind::Scatter;
-    Some(ChartData { kind, series, points, more, stacked, labels, hide_value_axis })
+    let mut c = ChartData { kind, series, points, more, stacked, labels, hide_value_axis, hole, point_colors, no_legend: false, transparent };
+    c.no_legend = !has_legend && c.has_default_legend();
+    Some(c)
 }
 
 // ── odp: the embedded ODF chart ──────────────────────────────────────────
@@ -645,7 +748,7 @@ const ODF_NS: &str = "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:offic
 pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String {
     let n = chart.points.len();
     let last = n + 1;
-    let class = odf_class(chart.kind);
+    let class = if chart.kind == ChartKind::Pie && chart.hole > 0 { "chart:ring" } else { odf_class(chart.kind) };
     let range = |c: usize| format!("local-table.${}$2:.${}${last}", col(c), col(c));
     let axes = match chart.kind {
         ChartKind::Pie => String::new(),
@@ -665,10 +768,18 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
     } else {
         String::new()
     };
-    let legend = if chart.legend().is_some() || chart.kind == ChartKind::Pie {
-        "<chart:legend chart:legend-position=\"end\"/>"
+    let legend = if chart.shows_legend() { "<chart:legend chart:legend-position=\"end\"/>" } else { "" };
+    // A slice's colour: one data point each, styled with its fill.
+    let point_colors: &[Option<[u8; 3]>] = if chart.kind == ChartKind::Pie { &chart.point_colors } else { &[] };
+    let data_points: String = if point_colors.iter().any(Option::is_some) {
+        (0..chart.points.len())
+            .map(|i| match point_colors.get(i).copied().flatten() {
+                Some(_) => format!("<chart:data-point chart:style-name=\"point-{i}\"/>"),
+                None => "<chart:data-point/>".to_string(),
+            })
+            .collect()
     } else {
-        ""
+        String::new()
     };
     let numeric_x = (chart.kind == ChartKind::Scatter).then(|| chart.numeric_categories()).flatten();
     let more = if chart.kind == ChartKind::Scatter { &[][..] } else { &chart.more[..] };
@@ -695,6 +806,19 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
     if chart.labels {
         styles.push_str(
             "<style:style style:name=\"series-labelled\" style:family=\"chart\"><style:chart-properties chart:data-label-number=\"value\"/></style:style>",
+        );
+    }
+    for (i, c) in point_colors.iter().enumerate() {
+        if let Some([r, g, b]) = c {
+            styles.push_str(&format!(
+                "<style:style style:name=\"point-{i}\" style:family=\"chart\">\
+                 <style:graphic-properties draw:fill=\"solid\" draw:fill-color=\"#{r:02x}{g:02x}{b:02x}\"/></style:style>"
+            ));
+        }
+    }
+    if chart.transparent {
+        styles.push_str(
+            "<style:style style:name=\"chart-clear\" style:family=\"chart\"><style:graphic-properties draw:fill=\"none\" draw:stroke=\"none\"/></style:style>",
         );
     }
     if chart.hide_value_axis {
@@ -727,10 +851,10 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-content {ODF_NS} office:version=\"1.2\"><office:automatic-styles>{styles}</office:automatic-styles>\
          <office:body><office:chart>\
-         <chart:chart svg:width=\"{w_pt}pt\" svg:height=\"{h_pt}pt\" chart:class=\"{class}\">{legend}\
+         <chart:chart svg:width=\"{w_pt}pt\" svg:height=\"{h_pt}pt\" chart:class=\"{class}\"{clear}>{legend}\
          <chart:plot-area{plot_style} table:cell-range-address=\"local-table.$A$1:.${last_col}${last}\" chart:data-source-has-labels=\"both\">\
          {axes}<chart:series chart:class=\"{class}\" chart:values-cell-range-address=\"{}\" \
-         chart:label-cell-address=\"local-table.$B$1\"{series_style}>{domain}</chart:series>{extra_series}</chart:plot-area>\
+         chart:label-cell-address=\"local-table.$B$1\"{series_style}>{domain}{data_points}</chart:series>{extra_series}</chart:plot-area>\
          <table:table table:name=\"local-table\">\
          <table:table-header-columns><table:table-column/></table:table-header-columns>\
          <table:table-columns><table:table-column/>{extra_columns}</table:table-columns>\
@@ -739,7 +863,8 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
          <table:table-rows>{rows}</table:table-rows></table:table></chart:chart>\
          </office:chart></office:body></office:document-content>",
         range(1),
-        esc(&chart.series)
+        esc(&chart.series),
+        clear = if chart.transparent { " chart:style-name=\"chart-clear\"" } else { "" },
     )
 }
 
@@ -762,7 +887,8 @@ fn column_of(address: &str) -> Option<usize> {
 pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
     let root = tree(xml);
     let chart = root.find_q("chart:chart")?;
-    let kind = match chart.attr("chart:class").map(local_of)? {
+    let class = chart.attr("chart:class").map(local_of).unwrap_or("");
+    let kind = match class {
         "bar" => ChartKind::Bar,
         "line" => ChartKind::Line,
         "circle" | "ring" => ChartKind::Pie,
@@ -859,7 +985,39 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
             .unwrap_or_default()
             .iter()
             .any(|ax| style_prop(ax.attr("chart:style-name"), "chart:display-label").as_deref() == Some("false"));
-    Some(ChartData { kind, series: series_name, points, more, stacked, labels, hide_value_axis })
+    // Impress writes no hole size a reader of ODF 1.2 keeps; a ring is
+    // drawn with LibreOffice's default hole, half the radius.
+    let hole = if class == "ring" { 50 } else { 0 };
+    let style_graphic = |name: Option<&str>, prop: &str| -> Option<String> {
+        let name = name?;
+        let styles = root.find_q("office:automatic-styles")?;
+        let style = styles.children.iter().find(|st| st.name == "style:style" && st.attr("style:name") == Some(name))?;
+        style.child_q("style:graphic-properties")?.attr(prop).map(str::to_string)
+    };
+    let point_colors: Vec<Option<[u8; 3]>> = if kind == ChartKind::Pie {
+        let colors: Vec<Option<[u8; 3]>> = series
+            .map(|s| {
+                s.children
+                    .iter()
+                    .filter(|c| c.name == "chart:data-point")
+                    .flat_map(|dp| {
+                        let repeat = dp.attr("chart:repeated").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).clamp(1, 10_000);
+                        let color = style_graphic(dp.attr("chart:style-name"), "draw:fill-color").as_deref().and_then(hex_rgb);
+                        std::iter::repeat_n(color, repeat)
+                    })
+                    .take(10_000)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if colors.iter().any(Option::is_some) { colors } else { Vec::new() }
+    } else {
+        Vec::new()
+    };
+    let transparent = style_graphic(chart.attr("chart:style-name"), "draw:fill").as_deref() == Some("none");
+    let has_legend = chart.child_q("chart:legend").is_some();
+    let mut c = ChartData { kind, series: series_name, points, more, stacked, labels, hide_value_axis, hole, point_colors, no_legend: false, transparent };
+    c.no_legend = !has_legend && c.has_default_legend();
+    Some(c)
 }
 
 #[cfg(test)]
@@ -926,6 +1084,44 @@ mod tests {
         assert_eq!(c.points, vec![("May".to_string(), 1.0), ("June".to_string(), 2.0)]);
         assert_eq!(c.more, vec![("B".to_string(), vec![0.0, 5.0])]);
         assert!(c.stacked && c.labels && c.hide_value_axis);
+    }
+
+    /// A doughnut with its slices coloured by the file, labelled, no
+    /// legend and no background: the aiva deck's chart (render parity
+    /// Phase 3).
+    fn coloured_ring(hole: u8) -> ChartData {
+        let mut c = ChartData::one(ChartKind::Pie, "Intake", vec![("Completed".into(), 7984.0), ("Forecast".into(), 152016.0)]);
+        c.hole = hole;
+        c.point_colors = vec![Some([0xd9, 0xe7, 0xf3]), Some([0x00, 0xb0, 0xf0])];
+        c.labels = true;
+        c.no_legend = true;
+        c.transparent = true;
+        c
+    }
+
+    #[test]
+    fn a_coloured_doughnut_reads_back_from_drawingml() {
+        let c = coloured_ring(55);
+        let xml = chart_space_xml(&c);
+        assert!(xml.contains("<c:holeSize val=\"55\"/>") && xml.contains("<a:srgbClr val=\"00B0F0\"/>") && !xml.contains("<c:legend>"), "{xml}");
+        assert_eq!(parse_chart_space(&xml), Some(c), "{xml}");
+    }
+
+    #[test]
+    fn a_coloured_ring_reads_back_from_odf() {
+        // ODF keeps no hole size; a ring reads back with the default half.
+        let c = coloured_ring(50);
+        let xml = odf_chart_content_xml(&c, 480.0, 300.0);
+        assert_eq!(parse_odf_chart(&xml), Some(c), "{xml}");
+    }
+
+    #[test]
+    fn a_chart_without_its_default_legend_says_so() {
+        // A pie draws its categories' legend unless the file has none.
+        let with = chart_space_xml(&ChartData::sample(ChartKind::Pie));
+        assert!(!parse_chart_space(&with).unwrap().no_legend);
+        let without = with.replace("<c:legend><c:legendPos val=\"r\"/><c:overlay val=\"0\"/></c:legend>", "");
+        assert!(parse_chart_space(&without).unwrap().no_legend);
     }
 
     #[test]

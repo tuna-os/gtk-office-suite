@@ -85,8 +85,8 @@ pub fn draw_chart_series(cr: &Context, categories: &[String], series: &[Series],
 
 /// How a chart's series are laid out beyond their kind, as a presentation's
 /// chart part names it (#2327). The default is the plain chart.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Options {
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Options<'a> {
     /// A column chart's series stacked in each category, one on another,
     /// instead of side by side.
     pub stacked: bool,
@@ -95,15 +95,26 @@ pub struct Options {
     pub labels: bool,
     /// No value axis: neither its labels nor its gridlines.
     pub hide_value_axis: bool,
+    /// A doughnut's hole, as a fraction of its radius; 0 is a pie.
+    pub hole: f64,
+    /// A colour per point, by category: a pie's slices, as the file
+    /// colours them (`c:dPt`); `None` keeps the accent.
+    pub point_colors: &'a [Option<(f64, f64, f64)>],
+    /// No legend, where the file has none.
+    pub no_legend: bool,
+    /// No white background: the slide shows through.
+    pub transparent: bool,
 }
 
 /// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
 /// apply to column charts; a hidden value axis to columns, lines and areas.
 pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64, opts: &Options) {
     let _ = cr.save();
-    cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.rectangle(0.0, 0.0, width, height);
-    let _ = cr.fill();
+    if !opts.transparent {
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.rectangle(0.0, 0.0, width, height);
+        let _ = cr.fill();
+    }
     // Chart text is Calibri 10 pt (Carlito where Calibri isn't
     // installed), as Excel and Calc draw a chart that names no font.
     cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
@@ -114,7 +125,7 @@ pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], k
             ChartKind::Bar => draw_bars(cr, categories, series, w, h, opts),
             ChartKind::Line => draw_category(cr, categories, series, w, h, Style::Line, opts),
             ChartKind::Area => draw_category(cr, categories, series, w, h, Style::Area, opts),
-            ChartKind::Pie => draw_pie(cr, categories, &series[0], w, h),
+            ChartKind::Pie => draw_pie(cr, categories, &series[0], w, h, opts),
             ChartKind::Scatter => draw_scatter(cr, categories, series, w, h),
         }
     }
@@ -222,7 +233,7 @@ pub fn draw_chart_decorated(cr: &Context, categories: &[String], series: &[Serie
             ChartKind::Bar => draw_bars(cr, categories, &plot_series, plot_w, plot_h, &Options::default()),
             ChartKind::Line => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Line, &Options::default()),
             ChartKind::Area => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Area, &Options::default()),
-            ChartKind::Pie => draw_pie(cr, categories, &plot_series[0], plot_w, plot_h),
+            ChartKind::Pie => draw_pie(cr, categories, &plot_series[0], plot_w, plot_h, &Options::default()),
             ChartKind::Scatter => draw_scatter(cr, categories, &plot_series, plot_w, plot_h),
         }
     }
@@ -446,7 +457,7 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
         max_of(series)
     };
     let axis = ValueAxis::new(max);
-    let legend = legend_entries(series);
+    let legend = if opts.no_legend { Vec::new() } else { legend_entries(series) };
     let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
     let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
     let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
@@ -510,7 +521,7 @@ enum Style {
 fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, style: Style, opts: &Options) {
     let axis = ValueAxis::new(max_of(series));
     let key = if style == Style::Line { Key::Line } else { Key::Square };
-    let legend = legend_entries(series);
+    let legend = if opts.no_legend { Vec::new() } else { legend_entries(series) };
     let legend_w = legend_width(cr, &legend, key);
     let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
     let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
@@ -567,25 +578,45 @@ fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64,
 
 /// A pie: slices clockwise from twelve o'clock in the theme's accents, and
 /// a legend naming each category at the right, as in Excel and Calc.
-fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64) {
+fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64, opts: &Options) {
     let data: Vec<(&String, f64)> = categories.iter().enumerate().map(|(i, c)| (c, series.at(i).unwrap_or(0.0))).collect();
     let total: f64 = data.iter().map(|d| d.1.max(0.0)).sum();
     if total <= 0.0 {
         return;
     }
-    let legend_w = data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0;
+    let color = |i: usize| opts.point_colors.get(i).copied().flatten().unwrap_or_else(|| accent(i));
+    let legend_w = if opts.no_legend { 0.0 } else { data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0 };
     let plot_w = (w - legend_w - 10.0).max(1.0);
     let r = ((plot_w.min(h) - 27.0) / 2.0).max(1.0);
     let (cx, cy) = (plot_w / 2.0 + 5.0, h / 2.0);
+    let inner = r * opts.hole.clamp(0.0, 0.9);
     let mut angle = -std::f64::consts::FRAC_PI_2;
     for (i, (_, val)) in data.iter().enumerate() {
         let sweep = val.max(0.0) / total * std::f64::consts::TAU;
-        set(cr, accent(i));
-        cr.move_to(cx, cy);
-        cr.arc(cx, cy, r, angle, angle + sweep);
-        cr.close_path();
+        set(cr, color(i));
+        if inner > 0.0 {
+            // A ring segment: out along the rim, back along the hole.
+            cr.new_sub_path();
+            cr.arc(cx, cy, r, angle, angle + sweep);
+            cr.arc_negative(cx, cy, inner, angle + sweep, angle);
+            cr.close_path();
+        } else {
+            cr.move_to(cx, cy);
+            cr.arc(cx, cy, r, angle, angle + sweep);
+            cr.close_path();
+        }
         cr.fill().unwrap();
+        if opts.labels && *val > 0.0 {
+            // On the segment, halfway across the ring (or the slice).
+            let mid = angle + sweep / 2.0;
+            let rad = (r + inner) / 2.0 + if inner > 0.0 { 0.0 } else { r * 0.15 };
+            let t = value_label(*val);
+            show(cr, cx + rad * mid.cos() - text_w(cr, &t) / 2.0, cy + rad * mid.sin() + CHART_TEXT_PX * 0.35, &t);
+        }
         angle += sweep;
+    }
+    if opts.no_legend {
+        return;
     }
     // The legend: one row per category, centred on the pie.
     let row = LEGEND_ROW;
@@ -593,7 +624,7 @@ fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64
     let y0 = cy - row * data.len() as f64 / 2.0 + row * 0.5 + 2.0;
     for (i, (cat, _)) in data.iter().enumerate() {
         let y = y0 + i as f64 * row;
-        set(cr, accent(i));
+        set(cr, color(i));
         cr.rectangle(lx, y - 7.0, 8.0, 8.0);
         cr.fill().unwrap();
         show(cr, lx + 12.0, y + 1.0, cat);
@@ -741,6 +772,26 @@ mod tests {
         let mut side = draw_with(&categories, &two, ChartKind::Bar, &Options::default());
         let (f, g) = (columns_with(&mut side, (0x4f, 0x81, 0xbd)), columns_with(&mut side, (0xc0, 0x50, 0x4d)));
         assert_ne!(plot(f), plot(g), "clustered columns stand side by side");
+    }
+
+    /// A doughnut leaves its centre unpainted, its slices take the file's
+    /// colours, and with no background the rest of the surface stays clear.
+    #[test]
+    fn a_transparent_coloured_doughnut() {
+        let categories: Vec<String> = ["Done", "Left"].iter().map(|s| s.to_string()).collect();
+        let a = [1.0, 3.0];
+        let one = [Series { name: None, values: &a }];
+        let colors = [Some((0.0, 176.0 / 255.0, 240.0 / 255.0)), None];
+        let opts = Options { hole: 0.5, point_colors: &colors, no_legend: true, transparent: true, ..Options::default() };
+        let mut s = draw_with(&categories, &one, ChartKind::Pie, &opts);
+        assert!(count(&mut s, (0x00, 0xb0, 0xf0)) > 0, "the file's slice colour");
+        assert!(count(&mut s, (0xc0, 0x50, 0x4d)) > 0, "the uncoloured slice keeps its accent");
+        let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+        let px = s.data().unwrap();
+        let alpha = |x: usize, y: usize| px[y * stride + x * 4 + 3];
+        // The pie's centre with no legend: (w - 10) / 2 + 5 across, h / 2 down.
+        assert_eq!(alpha((w - 10) / 2 + 5, h / 2), 0, "the hole");
+        assert_eq!(alpha(1, 1), 0, "no background");
     }
 
     /// A hidden value axis draws no gridlines: no grid grey anywhere.
