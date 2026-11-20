@@ -161,8 +161,10 @@ The questions those answer:
   `Cargo.toml` (Lifafa "gtk4 0.9") corrected: Lifafa is on gtk4 0.11 now, and
   `renovate.json`'s Lifafa toolkit rule says why it still moves only by hand.
   Whether it can then join the root workspace is a separate question.
-- [ ] The suite README and `docs/INTEGRATION-PLAN.md` say where each app is
-  released from.
+- [x] The suite README says where each app is released from ("Where each app
+  is released from": workflow, tag pattern and channel per app, and that
+  Mandelbrot and Lifafa ship from here from their first tag here);
+  `docs/INTEGRATION-PLAN.md`'s C3 row covers the office apps' releases.
 
 ## 5. Upstream tracking
 
