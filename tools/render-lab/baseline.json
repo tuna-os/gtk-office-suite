@@ -407,7 +407,7 @@
   "tables/fit-to-width": {
     "A": "amber",
     "B": "amber",
-    "C": "red"
+    "C": "amber"
   },
   "tables/frozen": {
     "A": "green",
@@ -437,7 +437,7 @@
   "tables/oversized-unheaded-instructions": {
     "A": "amber",
     "B": "amber",
-    "C": "red"
+    "C": "amber"
   },
   "tables/paginated-columns": {
     "A": "red",
@@ -452,12 +452,12 @@
   "tables/print-fit-page": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/print-scale": {
     "A": "red",
     "B": "red",
-    "C": "amber"
+    "C": "red"
   },
   "tables/tall-unheaded-postcodes": {
     "A": "amber",
@@ -467,7 +467,7 @@
   "tables/tall-unprinted-sheet": {
     "A": "amber",
     "B": "amber",
-    "C": "red"
+    "C": "amber"
   },
   "tables/unheaded-bordered-musts": {
     "A": "red",
@@ -496,7 +496,7 @@
   "tables/wide-column-right-align": {
     "A": "red",
     "B": "red",
-    "C": "amber"
+    "C": "red"
   },
   "tables/wide-unheaded-complaint-log": {
     "A": "amber",
@@ -526,7 +526,7 @@
   "tables/worksheet-image": {
     "A": "red",
     "B": "red",
-    "C": "amber"
+    "C": "red"
   },
   "tables/wrap-merged": {
     "A": "amber",
