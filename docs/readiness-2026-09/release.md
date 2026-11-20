@@ -9,7 +9,14 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
       commit, and `tools/release/evidence.py` writes `evidence.json` naming that commit, together with the SHA-256
       of the `Cargo.lock` and the three Flatpak manifests read from it; it fails when the lock is missing. To be
       ticked on the first release whose attached bundle carries both.
-- [ ] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
+- [x] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
+      The P0s are closed: failed Save/Save As/close-after-save keep unsaved work (#436), shared saves use exclusive
+      temporaries, keep permissions and are durable (#437), and completeness claims are revision-bound evidence (#441).
+      No data-loss issue is open. The release-critical journeys passed at v2.1.63's commit, in the evidence gate
+      `publish-flatpak.yml` runs before publishing (run 44552871670, `evidence / release-critical-tests`). Deferred
+      features are `deferred` capabilities in the capability manifest, each under a waiver naming an issue, reason,
+      scope and review date (`check_waivers`, capability-evidence.md). `docs/PARITY.md` describes them as users meet
+      them, for example paragraph direction and password-protected files in Letters.
 - [x] Build/install/launch each Flatpak; test file-manager MIME activation, open/save portals, recent files, drag/drop and sandbox file access.
       Tier C (`render-parity.yml` with `vm`, #1209) installs each app's Flatpak bundle into a clean GNOME VM and checks
       it there (`tools/render-lab/vm/installed.sh`, judged by `tools/render-lab/installed_check.py`):
