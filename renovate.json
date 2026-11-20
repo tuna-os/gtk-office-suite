@@ -177,6 +177,19 @@
       "groupSlug": "mandelbrot-matrix-sdk-ruma"
     },
     {
+      "description": "Mandelbrot: hold ruma below 0.18 until matrix-sdk depends on it. matrix-sdk 0.19 pins ruma ^0.17 (ruma-macros =0.20.0) and ruma 0.18 needs ruma-macros =0.20.3, so a lone ruma bump cannot resolve and its pull request (#2309) is red on every Mandelbrot job. The grouped rule above moves them together once a matrix-sdk release takes ruma 0.18; raise this bound in that change (tests/test_matrix_sdk_pin.py fails until it does).",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "mandelbrot/**"
+      ],
+      "matchPackageNames": [
+        "ruma"
+      ],
+      "allowedVersions": "<0.18"
+    },
+    {
       "description": "Mandelbrot: gtk-rs and the bindings built on it (gstreamer-rs, libadwaita, libshumate, sourceview5, glycin, aperture) all depend on one glib; bumping one alone either fails to resolve or puts two glib versions in the graph.",
       "matchManagers": [
         "cargo"
