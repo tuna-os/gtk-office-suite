@@ -67,11 +67,22 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
     // and images decode, so exporting on first paint would write a stale page.
     let app = app.as_ref().clone();
     let hold = std::env::var_os("GTK_OFFICE_RENDER_HOLD").is_some();
+    // Tier C (a real GNOME session, tools/render-lab/vm/run.sh) has no
+    // browser to grow the window: Mutter leaves it at its default 960x680,
+    // so the wait below for "maximized" timed out on every document, and
+    // Tables, which dumps the visible grid, lost most of a real sheet's
+    // columns (12 of 25 real workbooks red). There the app asks for it.
+    let maximize = hold && std::env::var_os("GTK_OFFICE_RENDER_MAXIMIZE").is_some();
     let start = std::time::Instant::now();
     let last = std::cell::Cell::new((0, 0));
     let stable = std::cell::Cell::new(0u32);
     glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
         let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
+        if maximize {
+            if let Some(w) = window.as_ref().filter(|w| !w.is_maximized()) {
+                w.maximize();
+            }
+        }
         let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
         if size == last.get() && size != (0, 0) {
             stable.set(stable.get() + 1);
