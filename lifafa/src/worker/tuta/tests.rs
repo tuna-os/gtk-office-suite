@@ -21,10 +21,11 @@ use super::wire::{sync_page, FolderRow};
 use super::TutaWorker;
 use crate::cache::Cache;
 use crate::config::{AccountConfig, Protocol};
-use crate::models::{DraftOrigin, FolderKind, Message};
+use crate::models::{DraftOrigin, FolderKind, Message, TutaDelivery, TutaPasswords};
 use crate::worker::helper::send::{send_outcome, SendOutcome};
 use crate::worker::helper::{HelperClient, HelperError, Object, Transport};
 use crate::worker::ids::hash_uid;
+use crate::worker::outbox::schedule_send;
 use crate::worker::test_support::{queued, sample_account, sample_outgoing};
 use crate::worker::{OutgoingMessage, WorkerEvent};
 
@@ -843,6 +844,88 @@ async fn a_queued_forward_keeps_what_it_forwards() {
     assert_eq!(request["in_reply_to"], "fwd.1@example.com");
     assert_eq!(request["action"], "forward");
     assert!(cache.outbox_items(1).is_empty());
+}
+
+/// A message that waits in the Outbox goes as it was composed: the row
+/// keeps the choice and never a password, and the flush sends by it. A
+/// confidential message used to be queued without its choice and went out
+/// as ordinary mail. A row with no choice written down is sent as not
+/// agreed to, which the helper refuses for an address outside Tuta.
+#[tokio::test]
+async fn a_queued_message_goes_as_it_was_composed() {
+    let (transport, asked) = fake(|op, _| match op {
+        "contact_passwords" => Ok(json!({"recipients": [
+            {"address": "ann@example.com", "external": true, "password": "s3cret-Pass!"}
+        ]})),
+        "send" => Ok(json!({"message_id": "x", "sent_mail": "s/1"})),
+        "sync" => Err("request_failed"),
+        _ => Err("unsupported_operation"),
+    });
+    let mut state = state_with(transport);
+    let account = account();
+    let cache = Cache::in_memory().unwrap();
+    let sent = |asked: &Asked| -> Value {
+        let mut asked = asked.lock().unwrap();
+        let send = asked.iter().find(|r| r["op"] == "send").cloned();
+        asked.clear();
+        send.expect("the Outbox sent it")
+    };
+
+    let mut passwords = TutaPasswords::default();
+    passwords.set("ann@example.com", "s3cret-Pass!");
+    let confidential = OutgoingMessage {
+        to: "ann@example.com".into(),
+        tuta: TutaDelivery {
+            confidential: true,
+            ordinary_confirmed: false,
+            passwords,
+        },
+        ..sample_outgoing()
+    };
+    schedule_send(Some(&cache), 1, &account, &confidential, None, 1, &|_| {});
+    let rows = cache.outbox_items(1);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].delivery.confidential);
+    assert!(rows[0].delivery.passwords.is_empty());
+    tuta_flush_outbox(Some(&cache), 1, &account, None, &mut state, &|_| {}).await;
+    let request = sent(&asked);
+    assert_eq!(request["confidential"], true);
+    assert_eq!(request["ordinary_confirmed"], false);
+    // Read from the Tuta contacts at the send.
+    assert_eq!(request["passwords"]["ann@example.com"], "s3cret-Pass!");
+    assert!(cache.outbox_items(1).is_empty());
+
+    // Ordinary mail the user agreed to goes as that.
+    let ordinary = OutgoingMessage {
+        to: "ann@example.com".into(),
+        ..sample_outgoing()
+    };
+    schedule_send(Some(&cache), 1, &account, &ordinary, None, 1, &|_| {});
+    tuta_flush_outbox(Some(&cache), 1, &account, None, &mut state, &|_| {}).await;
+    let request = sent(&asked);
+    assert_eq!(request["confidential"], false);
+    assert_eq!(request["ordinary_confirmed"], true);
+    assert!(request.get("passwords").is_none());
+
+    // A row with no choice written down, as older builds queued them all.
+    cache
+        .queue_outbox(
+            1,
+            "me@tuta.com",
+            &["ann@example.com".into()],
+            "",
+            "Notes",
+            "",
+            RAW,
+            None,
+            "offline",
+            None,
+        )
+        .unwrap();
+    tuta_flush_outbox(Some(&cache), 1, &account, None, &mut state, &|_| {}).await;
+    let request = sent(&asked);
+    assert_eq!(request["confidential"], false);
+    assert_eq!(request["ordinary_confirmed"], false);
 }
 
 #[tokio::test]

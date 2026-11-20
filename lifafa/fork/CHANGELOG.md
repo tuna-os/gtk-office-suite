@@ -7,6 +7,14 @@ since the last tag ([MAINTAINING.md](MAINTAINING.md#releases)).
 
 ## Unreleased
 
+- **Fixed: confidential Tuta mail sent from the Outbox went out as
+  ordinary mail.** A message with **Confidential** on that waited in the
+  Outbox (Send Later, a send that failed, quitting during Undo Send) lost
+  that choice, and reached addresses outside Tuta unencrypted, without
+  the password. The Outbox now keeps the choice and sends by it. A message
+  that an older build queued has no choice recorded: if it goes outside
+  Tuta it stays in the Outbox with an error until you open it and choose
+  how it goes. Mail to Tuta addresses only was always encrypted.
 - **Fixed: AI agents could read end-to-end encrypted Tuta and Proton
   mail.** Settings says agents cannot read encrypted mail, which held for
   OpenPGP mail only. In a shared Tuta or Proton account an agent got the
