@@ -1177,6 +1177,93 @@ pub fn draw_shape(
     cr.new_path();
 }
 
+/// Paint the current path blurred, for a shadow or a glow: filled if
+/// `filled`, outlined `stroke` wide if given, rendered into an alpha mask
+/// at device resolution, box-blurred three times (near enough a Gaussian of
+/// half the radius, as DrawingML's `blurRad` and LibreOffice draw it), then
+/// painted through in the colour. False, with nothing painted, when the
+/// mask would be too big to blur.
+fn blurred(cr: &cairo::Context, blur: f64, filled: bool, stroke: Option<f64>, (r, g, b, a): (f64, f64, f64, f64)) -> bool {
+    let m = cr.matrix();
+    // The radius in device pixels, along the context's scale.
+    let dev_blur = blur * (m.xx() * m.yy() - m.xy() * m.yx()).abs().sqrt();
+    let (mut x1, mut y1, mut x2, mut y2) = cr.fill_extents().unwrap();
+    if let Some(width) = stroke {
+        cr.set_line_width(width);
+        let (sx1, sy1, sx2, sy2) = cr.stroke_extents().unwrap();
+        (x1, y1, x2, y2) = (x1.min(sx1), y1.min(sy1), x2.max(sx2), y2.max(sy2));
+    }
+    let corners = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)].map(|(x, y)| cr.user_to_device(x, y));
+    let pad = (2.0 * dev_blur).ceil() + 2.0;
+    let bx = corners.iter().map(|c| c.0).fold(f64::INFINITY, f64::min).floor() - pad;
+    let by = corners.iter().map(|c| c.1).fold(f64::INFINITY, f64::min).floor() - pad;
+    let ex = corners.iter().map(|c| c.0).fold(f64::NEG_INFINITY, f64::max).ceil() + pad;
+    let ey = corners.iter().map(|c| c.1).fold(f64::NEG_INFINITY, f64::max).ceil() + pad;
+    let (w, h) = (ex - bx, ey - by);
+    if !(w > 0.0 && h > 0.0 && w * h <= 16_000_000.0) {
+        return false;
+    }
+    let Ok(mut mask) = cairo::ImageSurface::create(cairo::Format::A8, w as i32, h as i32) else { return false };
+    {
+        let Ok(mc) = cairo::Context::new(&mask) else { return false };
+        let path = cr.copy_path().unwrap();
+        mc.translate(-bx, -by);
+        mc.transform(m);
+        mc.append_path(&path);
+        mc.set_source_rgba(0.0, 0.0, 0.0, 1.0);
+        if filled {
+            mc.fill_preserve().unwrap();
+        }
+        if let Some(width) = stroke {
+            mc.set_line_width(width);
+            mc.stroke().unwrap();
+        }
+    }
+    mask.flush();
+    let stride = mask.stride() as usize;
+    let (w, h) = (w as usize, h as usize);
+    {
+        let Ok(mut data) = mask.data() else { return false };
+        // Three box passes of this half-width give a Gaussian of sigma
+        // blur / 2.
+        let sigma = dev_blur / 2.0;
+        let radius = (((12.0 * sigma * sigma / 3.0 + 1.0).sqrt() - 1.0) / 2.0).round().max(1.0) as usize;
+        let mut line = Vec::new();
+        for _ in 0..3 {
+            for y in 0..h {
+                box_blur(&mut data[y * stride..y * stride + w], 1, radius, &mut line);
+            }
+            for x in 0..w {
+                box_blur(&mut data[x..(h - 1) * stride + x + 1], stride, radius, &mut line);
+            }
+        }
+    }
+    mask.mark_dirty();
+    // The path stays: the shape is painted from it after its effects.
+    cr.save().unwrap();
+    cr.identity_matrix();
+    cr.set_source_rgba(r, g, b, a);
+    cr.mask_surface(&mask, bx, by).unwrap();
+    cr.restore().unwrap();
+    true
+}
+
+/// One box-blur pass of half-width `radius` along a line of samples
+/// `step` apart, in place.
+fn box_blur(data: &mut [u8], step: usize, radius: usize, line: &mut Vec<u32>) {
+    let n = data.len().div_ceil(step);
+    line.clear();
+    line.extend((0..n).map(|i| data[i * step] as u32));
+    let width = (2 * radius + 1) as u32;
+    let at = |i: isize| if i < 0 || i as usize >= n { 0 } else { line[i as usize] };
+    let mut sum: u32 = (-(radius as isize)..=radius as isize).map(at).sum();
+    for i in 0..n {
+        data[i * step] = ((sum + width / 2) / width) as u8;
+        sum += at(i as isize + radius as isize + 1);
+        sum -= at(i as isize - radius as isize);
+    }
+}
+
 /// A shape's effects, under it: its shadow, then its glow, from the
 /// current path (left as it was). Painted once per shape, before any of its
 /// layers, as PowerPoint and LibreOffice cast one shadow for the whole shape
@@ -1186,14 +1273,12 @@ pub fn draw_shape(
 /// shadow is its outline's even when its style carries a fill.
 fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, scale: f64, area: bool) {
     // The shadow, under everything: the shape's path moved by the offset
-    // and filled in the shadow's colour, its edge softened to the blur
-    // radius by translucent strokes, as for the glow below (#2332). A shape
-    // with no fill casts its outline's shadow.
+    // and filled in the shadow's colour, blurred to its radius (#2332). A
+    // shape with no fill casts its outline's shadow.
     // A shape with neither fill nor outline casts no shadow of its own;
     // PowerPoint and LibreOffice shadow its text instead.
     let casts = (area && (style.fill.is_some() || style.gradient.is_some())) || style.stroke.is_some();
     if let (true, Some(sh)) = (casts, style.shadow) {
-        const PASSES: u32 = 6;
         let (r, g, b) = sh.color.to_f64();
         let path = cr.copy_path().unwrap();
         cr.save().unwrap();
@@ -1209,33 +1294,34 @@ fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeSt
         }
         cr.translate(dx, dy);
         cr.append_path(&path);
+        let filled = area && (style.fill.is_some() || style.gradient.is_some());
+        let line_width = style.stroke.map_or(1.0, |s| s.width * scale).max(0.5);
         let blur = sh.blur * scale;
-        if blur > 0.0 {
-            for i in (1..=PASSES).rev() {
-                cr.set_source_rgba(r, g, b, sh.alpha / (2 * PASSES) as f64);
-                cr.set_line_width(2.0 * blur * i as f64 / PASSES as f64);
-                cr.stroke_preserve().unwrap();
+        let outline = (!filled).then_some(line_width);
+        if !(blur > 0.0 && blurred(cr, blur, filled, outline, (r, g, b, sh.alpha))) {
+            cr.set_source_rgba(r, g, b, sh.alpha);
+            if filled {
+                cr.fill().unwrap();
+            } else {
+                cr.set_line_width(line_width);
+                cr.stroke().unwrap();
             }
-        }
-        cr.set_source_rgba(r, g, b, sh.alpha);
-        if area && (style.fill.is_some() || style.gradient.is_some()) {
-            cr.fill().unwrap();
-        } else {
-            cr.set_line_width(style.stroke.map_or(1.0, |s| s.width * scale).max(0.5));
-            cr.stroke().unwrap();
         }
         cr.restore().unwrap();
         cr.new_path();
         cr.append_path(&path);
     }
-    // The glow, under the shape: the outline stroked ever narrower in the
-    // glow's colour, each pass a share of its opacity, so it is densest at
-    // the edge and fades out to the radius, as a blurred halo does (#2332).
+    // The glow, under the shape: the shape grown by half the radius and
+    // blurred over the other half, so it is solid at the edge and fades out
+    // to the radius, as PowerPoint and LibreOffice draw it (#2332). A
+    // glow too big to blur falls back to strokes ever narrower.
     if let Some(glow) = style.glow {
-        const PASSES: u32 = 8;
         let (r, g, b) = glow.color.to_f64();
         let reach = glow.radius * scale;
-        if reach > 0.0 {
+        let filled = area && (style.fill.is_some() || style.gradient.is_some());
+        let outline = style.stroke.map_or(0.0, |s| s.width * scale);
+        if reach > 0.0 && !blurred(cr, reach / 2.0, filled, Some(reach + outline), (r, g, b, glow.alpha)) {
+            const PASSES: u32 = 8;
             for i in (1..=PASSES).rev() {
                 cr.set_source_rgba(r, g, b, glow.alpha / PASSES as f64);
                 cr.set_line_width(2.0 * reach * i as f64 / PASSES as f64);
