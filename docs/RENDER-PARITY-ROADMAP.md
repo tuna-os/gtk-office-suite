@@ -621,11 +621,14 @@ Exit: Tier C nightly is green on the real corpus with budgets met.
 `baseline-real.json` (Tiers A and B, `render-real.yml`), and the editing
 journeys run in `edit_journeys.py`. Tier C now runs over the real corpus
 too: `render-parity.yml`'s nightly `vm-real` job opens every real document
-in the shipped Flatpak in the GNOME VM and compares against
-`baseline-real.json`. Like the fixtures' `vm` job it is non-gating until its
-first verdicts are committed from the proposed baseline it uploads; the
-exit holds once those verdicts stay green, or amber with a recorded reason,
-on the nightly runs.*
+in the shipped Flatpak in the GNOME VM, in the window Tiers A and B use
+(1100x1700; it had been GNOME's default 960x680, which turned 12 real
+workbooks red in Tier C alone, #2319). Its first verdicts are committed:
+of the 85 documents that can still be fetched, 19 are green, 62 amber and 4
+red, and the 4 red ones are red in Tiers A and B too. Five Tables documents
+have no Tier C verdict: three sources now answer HTTP 410, and two were not
+captured. The exit still waits on those reds and ambers: Tier C on the real
+corpus is ratcheted, not yet green.*
 
 ### Phase 4: Earn "usable"
 
