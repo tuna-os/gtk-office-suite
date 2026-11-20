@@ -19,7 +19,7 @@ keywords = ["pdf", "typst", "export"]
 # fixed only in quick-xml >= 0.41). The workspace therefore patches
 # citationberg to third_party/citationberg, the same release built against
 # quick-xml 0.41 with no source changes (#225; docs/DEPENDENCIES.md).
-typst-as-lib = { version = "0.17", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
+typst-as-lib = { version = "0.18", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
 typst-pdf = "0.15"
 suite-common-core = { path = "../suite-common-core" }
 
