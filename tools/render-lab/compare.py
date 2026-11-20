@@ -629,7 +629,79 @@ def reference_words(lo_path, ref, app):
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
-def align(app, lo_path, ours_path):
+# How much more of the sheet our capture must hold than LibreOffice's
+# printed page shows before the page is cut out of it.
+PAGE_WINDOW_OVERFLOW = 1.15
+# Words both sides read once each, needed to place the page in ours.
+PAGE_WINDOW_MIN_PAIRS = 4
+
+
+def page_in_capture(ref, ours):
+    """Where LibreOffice's printed page sits in our capture, from the words
+    both read: (left, top, right, bottom, scale) in our pixels, or None.
+
+    Each word read exactly once on each side (three letters or more) pairs
+    the two. Their spread gives the scale between the renderings, the
+    median offset then places the page's corners."""
+    def once(img):
+        seen = Counter()
+        found = {}
+        for text, x, y, *_ in ocr_pass(img.convert("L"), 2, "11"):
+            if len(text) >= 3:
+                seen[text] += 1
+                found[text] = (x, y)
+        return {t: xy for t, xy in found.items() if seen[t] == 1}
+
+    if not shutil.which("tesseract"):
+        return None
+    r, o = once(ref), once(ours)
+    pairs = [(r[t], o[t]) for t in r.keys() & o.keys()]
+    if len(pairs) < PAGE_WINDOW_MIN_PAIRS:
+        return None
+    ratios = []
+    for i, (ra, oa) in enumerate(pairs):
+        for rb, ob in pairs[i + 1:]:
+            dr = np.hypot(rb[0] - ra[0], rb[1] - ra[1])
+            if dr >= 20:
+                ratios.append(np.hypot(ob[0] - oa[0], ob[1] - oa[1]) / dr)
+    if not ratios:
+        return None
+    k = float(np.median(ratios))
+    tx = float(np.median([oa[0] - k * ra[0] for ra, oa in pairs]))
+    ty = float(np.median([oa[1] - k * ra[1] for ra, oa in pairs]))
+    return tx, ty, tx + k * ref.width, ty + k * ref.height, k
+
+
+def window_to_page(ref, ours, scale):
+    """Cut our capture to the part of the sheet one printed page shows.
+
+    LibreOffice prints a sheet wider or longer than the paper over several
+    pages, and the lab scores Tables against one of them (pick_sheet_page).
+    Our capture is the grid on screen, so it holds more of the sheet than
+    that page: bics-sectoral-consumption-estimates prints column A alone on
+    page 1, column B being too wide to share it, while our screen shows
+    columns A-F. Resampling the whole grid onto the page compared different
+    cells (scale 6.7, no words found) and turned such sheets red in every
+    tier. A fixed crop at the page's size does not work: sheets print scaled
+    (fit to page, a print scale) and need not start at A1. So the page is
+    found in our capture from the words both read (page_in_capture), and
+    `scale` becomes the size ratio those words give. Only when our capture
+    holds clearly more than that region (PAGE_WINDOW_OVERFLOW); otherwise,
+    or when too few words pair, the capture is scored whole, as before."""
+    found = page_in_capture(ref, ours)
+    if not found:
+        return ref, ours, scale
+    left, top, right, bottom, k = found
+    left, top = max(0, int(round(left))), max(0, int(round(top)))
+    right, bottom = min(ours.width, int(round(right))), min(ours.height, int(round(bottom)))
+    if right - left < 16 or bottom - top < 16:
+        return ref, ours, scale
+    if ours.width <= (right - left) * PAGE_WINDOW_OVERFLOW and ours.height <= (bottom - top) * PAGE_WINDOW_OVERFLOW:
+        return ref, ours, scale
+    return ref, ours.crop((left, top, right, bottom)), k
+
+
+def align(app, lo_path, ours_path, page_window=False):
     """Put both renderings in one coordinate space; returns (ref, ours,
     scale) where scale is our size / LibreOffice's for the same content
     (None where the page box fixes it).
@@ -693,6 +765,8 @@ def align(app, lo_path, ours_path):
             ref = ref.crop((0, 0, shared_w, ref.height))
             ours = ours_ink.crop((0, 0, shared_w, ours_ink.height))
             scale = ours.height / ref.height
+    if page_window:
+        ref, ours, scale = window_to_page(ref, ours, scale)
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
@@ -853,6 +927,7 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
     # picture.
     partial = tier == "B" or app == "tables"
     lo_page = None
+    page_window = False
     if app == "tables" and len(ours_pages) == 1 and len(lo_pages) > 1:
         # Tables opens the workbook's active sheet (as Excel and Calc do),
         # but LibreOffice prints every sheet from the first: a workbook
@@ -860,6 +935,7 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
         # (#1512). Score the opening sheet against the printed page that
         # shows it: the one, among the first pages, that shares the most
         # words with it (then the most structure).
+        page_window = True
         best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
         lo_page = page_no(best)
         lo_pages = [best]
@@ -870,7 +946,7 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
         if i >= len(ours_pages):
             per_page.append({"ink": 0.0, "words": 0.0, "lost_lines": None, "disp_pt": None, "colors": 0.0, "ssim": 0.0, "ref_words": None})
             continue
-        ref, ours, scale = align(app, lo, ours_pages[i])
+        ref, ours, scale = align(app, lo, ours_pages[i], page_window)
         key = (lo, ref.size)
         if key not in ref_words_cache:
             ref_words_cache[key] = reference_words(lo, ref, app)
