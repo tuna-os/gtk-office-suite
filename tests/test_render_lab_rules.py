@@ -227,7 +227,7 @@ class OpeningSheetPageTest(unittest.TestCase):
 
         # `align` hands back the paths: `ref.size` is all score_fixture
         # asks of a picture.
-        with mock.patch.object(compare, "align", lambda app, lo, ours: (_Sized(lo), ours, 1.0)), mock.patch.object(
+        with mock.patch.object(compare, "align", lambda app, lo, ours, page_window=False: (_Sized(lo), ours, 1.0)), mock.patch.object(
             compare, "ocr_words", lambda ref, tables: []
         ), mock.patch.object(compare, "compare_page", page), mock.patch.object(compare, "page_bag", bag):
             m = compare.score_fixture(app, d, "A", {})

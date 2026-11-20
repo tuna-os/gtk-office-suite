@@ -435,7 +435,7 @@
     "C": "green"
   },
   "tables/oversized-unheaded-instructions": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -460,7 +460,7 @@
     "C": "red"
   },
   "tables/tall-unheaded-postcodes": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -470,7 +470,7 @@
     "C": "amber"
   },
   "tables/unheaded-bordered-musts": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -499,7 +499,7 @@
     "C": "red"
   },
   "tables/wide-unheaded-complaint-log": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -514,12 +514,12 @@
     "C": "amber"
   },
   "tables/wide-unheaded-deep-sea-stock": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
   "tables/wide-unheaded-transactions": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },

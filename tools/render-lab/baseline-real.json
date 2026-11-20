@@ -300,7 +300,7 @@
     "C": "amber"
   },
   "tables/real-2020-deep-sea-stock": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -314,7 +314,7 @@
     "B": "red"
   },
   "tables/real-available-data-and-their-modes-of-access": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -323,7 +323,7 @@
     "B": "red"
   },
   "tables/real-bics-sectoral-consumption-estimates": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -338,7 +338,7 @@
     "C": "amber"
   },
   "tables/real-draft-schedule-4-complaint-log": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -368,7 +368,7 @@
     "C": "amber"
   },
   "tables/real-insolvency-service-transactions-april-2026": {
-    "A": "red",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -397,7 +397,7 @@
     "B": "amber"
   },
   "tables/real-norfolk-public-review-annex-c-additional-postcod": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -440,7 +440,7 @@
     "B": "amber"
   },
   "tables/real-ukhsa-government-procurement-card-gpc-transactio": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   }
