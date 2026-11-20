@@ -193,7 +193,7 @@ impl Compose {
 
     /// A composer an assistant never sees into.
     fn sealed(&self) -> bool {
-        self.encrypt || self.from_encrypted
+        self.encrypt || self.from_encrypted || self.tuta.sealed()
     }
 
     /// The account the composer sends from now.

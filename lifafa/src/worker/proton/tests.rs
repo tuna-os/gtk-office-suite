@@ -412,6 +412,74 @@ async fn a_poll_follows_the_event_log_from_where_it_left_off() {
         .any(|e| matches!(e, WorkerEvent::Messages { messages, .. } if messages.is_empty())));
 }
 
+#[test]
+fn a_listing_says_which_mail_arrived_end_to_end_encrypted() {
+    let confidential = header("m1", 1_000, true, &["0"]);
+    let mut ordinary = header("m2", 1_000, true, &["0"]);
+    ordinary["confidential"] = false.into();
+    let mut unsaid = header("m3", 1_000, true, &["0"]);
+    unsaid.as_object_mut().unwrap().remove("confidential");
+    let sealed = |h: &Value| crate::cache::is_sealed(&proton_message(h, 1, 1).unwrap().0);
+    assert!(sealed(&confidential));
+    assert!(!sealed(&ordinary));
+    assert!(sealed(&unsaid), "a helper that does not say seals the row");
+}
+
+#[tokio::test]
+async fn the_index_lists_again_a_row_no_listing_has_marked() {
+    // "old" was cached before listings said how a message arrived.
+    let (transport, asked) = fake(|_, request| {
+        let listed = match request["offset"].as_u64() {
+            None => header("new", 3_000, true, &["0"]),
+            Some(1) => {
+                let mut old = header("old", 2_000, true, &["0"]);
+                old["confidential"] = false.into();
+                old
+            }
+            other => panic!("asked from {other:?}"),
+        };
+        ok(listing(
+            "0",
+            vec![listed],
+            Some(vec!["new", "old", "kept"]),
+            "E1",
+        ))
+    });
+    let mut state = state_with(transport);
+    state.backfill.retain(|j| j.path == "Inbox");
+    let cache = Cache::in_memory().unwrap();
+    seed(
+        &mut state,
+        &cache,
+        "Inbox",
+        header("kept", 1_000, true, &["0"]),
+    );
+    let mut old = seed(
+        &mut state,
+        &cache,
+        "Inbox",
+        header("old", 2_000, true, &["0"]),
+    );
+    old.keywords.clear();
+    cache.upsert_messages(1, "Inbox", std::slice::from_ref(&old));
+    assert_eq!(cache.seal_unchecked(1), 1);
+    let account = account();
+    for _ in 0..2 {
+        assert!(proton_backfill_with(&account, 1, Some(&cache), &mut state, &|_| {}).await);
+    }
+    assert!(state.backfill.is_empty(), "the folder is indexed");
+    // Fetched again for its mark, and only it: "kept" had one.
+    assert_eq!(ops(&asked).len(), 2);
+    let rows = cache.load_messages(1, "Inbox", folder_id(&state, "Inbox"));
+    let row = |id: &str| rows.iter().find(|m| m.uid == hash_uid(id)).unwrap();
+    assert!(
+        !crate::cache::is_sealed(row("old")),
+        "its listing calls it ordinary"
+    );
+    assert!(crate::cache::is_sealed(row("kept")));
+    assert!(crate::cache::is_sealed(row("new")));
+}
+
 #[tokio::test]
 async fn the_index_plans_from_the_snapshot_or_walks_a_large_folder() {
     let (transport, asked) = fake(|_, request| {

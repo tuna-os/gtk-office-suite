@@ -1167,6 +1167,37 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&text).unwrap(), "Quarterly report\nbold and plain\n");
     }
 
+    /// A Markdown image's destination is whatever the file says, so it can
+    /// name any file the app can read. Saved as a package, a destination
+    /// that is not a picture is written as its alt text: its bytes used to
+    /// go into the package, where whoever wrote the Markdown could read
+    /// them once the document came back.
+    #[test]
+    fn a_markdown_image_that_is_not_a_picture_stays_out_of_the_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = dir.path().join("id_ed25519");
+        std::fs::write(&key, b"-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk=\n").unwrap();
+        let notes = dir.path().join("notes.md");
+        std::fs::write(&notes, format!("Minutes\n\n![the chart](<{}>)\n", key.display())).unwrap();
+        let doc = read(&notes).unwrap();
+        let named: Vec<&str> = doc.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image.as_deref()).collect();
+        assert_eq!(named, [key.to_str().unwrap()], "the Markdown names the file");
+
+        for name in ["out.odt", "out.docx"] {
+            let out = dir.path().join(name);
+            write(&doc, &out).unwrap();
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+            for index in 0..zip.len() {
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut zip.by_index(index).unwrap(), &mut bytes).unwrap();
+                assert!(!bytes.windows(7).any(|w| w == b"OPENSSH"), "{name}: member {index} holds the file");
+            }
+            let back = read(&out).unwrap();
+            assert!(back.to_plain_text().contains("the chart"), "{name}: {:?}", back.to_plain_text());
+            assert!(back.paragraphs.iter().flat_map(|p| &p.runs).all(|r| r.style.image.is_none()), "{name}: no picture");
+        }
+    }
+
     /// Round trip through the package writer to prove `write` really wrote
     /// a package and not text with a package extension.
     #[test]

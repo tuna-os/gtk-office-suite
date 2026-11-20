@@ -9,7 +9,9 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
 use super::folders::tuta_folders;
-use super::index::{apply_first_page, carry_over, TutaState, TUTA_BACKFILL_CHUNK};
+use super::index::{
+    apply_first_page, carry_over, tuta_backfill_with, TutaState, TUTA_BACKFILL_CHUNK,
+};
 use super::messages::tuta_message;
 use super::mime::mime_message;
 use super::ops::{tuta_move_uids, tuta_set_seen};
@@ -182,6 +184,66 @@ fn a_header_becomes_a_threaded_row() {
     assert!(crate::worker::ids::is_conversation_token(&m.references));
     assert!(tuta_message(&json!({"date_ms": 1}), 1, 1).is_none());
     assert!(tuta_message(&json!({"id": "a/b"}), 1, 1).is_none());
+}
+
+#[test]
+fn a_listing_says_which_mail_arrived_end_to_end_encrypted() {
+    let ordinary = header("l/1", 1_000, true);
+    let mut confidential = header("l/2", 1_000, true);
+    confidential["confidential"] = json!(true);
+    let mut unsaid = header("l/3", 1_000, true);
+    unsaid.as_object_mut().unwrap().remove("confidential");
+    let sealed = |h: &Value| crate::cache::is_sealed(&tuta_message(h, 1, 1).unwrap().0);
+    assert!(!sealed(&ordinary));
+    assert!(sealed(&confidential));
+    assert!(sealed(&unsaid), "a helper that does not say seals the row");
+}
+
+#[tokio::test]
+async fn the_index_lists_again_a_row_no_listing_has_marked() {
+    // "l/old" was cached before listings said how a message arrived.
+    let (transport, asked) = fake(|op, request| {
+        assert_eq!(op, "sync");
+        let listed = match request["offset"].as_u64() {
+            Some(0) => header("l/new", 3_000_000, true),
+            Some(1) => header("l/old", 2_000_000, true),
+            other => panic!("asked from {other:?}"),
+        };
+        Ok(json!({"folders": folder_rows(), "folder": "f/inbox",
+            "messages": [listed], "all_ids": ["l/new", "l/old", "l/kept"]}))
+    });
+    let mut state = state_with(transport);
+    state.backfill.retain(|j| j.path == "Inbox");
+    let account = account();
+    let cache = Cache::in_memory().unwrap();
+    let inbox = folder_id(&state, "Inbox");
+    let (mut old, _) = tuta_message(&header("l/old", 2_000_000, true), 1, inbox).unwrap();
+    old.keywords.clear();
+    old.starred = true;
+    let (kept, _) = tuta_message(&header("l/kept", 1_000_000, true), 1, inbox).unwrap();
+    cache.upsert_messages(1, "Inbox", &[old.clone(), kept]);
+    assert_eq!(cache.seal_unchecked(1), 1);
+    let row = |uid: u32| {
+        cache
+            .load_messages(1, "Inbox", inbox)
+            .into_iter()
+            .find(|m| m.uid == uid)
+            .unwrap()
+    };
+    assert!(crate::cache::is_sealed(&row(old.uid)));
+
+    for _ in 0..2 {
+        assert!(tuta_backfill_with(&account, 1, Some(&cache), &mut state, &|_| {}).await);
+    }
+    assert!(state.backfill.is_empty(), "the folder is indexed");
+    // Fetched again for its mark, and only it: "l/kept" had one.
+    assert_eq!(ops(&asked).len(), 2);
+    let again = row(old.uid);
+    assert!(
+        !crate::cache::is_sealed(&again),
+        "its listing calls it ordinary"
+    );
+    assert!(again.starred, "what only the cache knows is kept");
 }
 
 #[test]

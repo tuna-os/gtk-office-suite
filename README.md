@@ -18,25 +18,35 @@ libadwaita, an email client and a Matrix chat client built alongside them, shipp
 | **Letters** | Word processor | DOCX, ODT, Markdown, TXT | DOCX, ODT, Markdown, HTML, PDF, TXT |
 | **Tables** | Spreadsheet | XLSX, XLS, ODS, CSV, TSV | XLSX, PDF |
 | **Decks** | Presentations | PPTX, ODP | PPTX, ODP, PDF |
-| **Lifafa** | Email client, built on [Hylki](https://github.com/hyprlab/hylki); lives in [tuna-os/lifafa](https://github.com/tuna-os/lifafa) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
+| **Lifafa** | Email client, a fork of [Hylki](https://github.com/hyprlab/hylki); source in [`lifafa/`](lifafa/) | Mail over IMAP, POP3, JMAP, Microsoft 365, Tuta and Proton | Mail over SMTP and the same services |
 | **Mandelbrot** | Matrix chat client with native voice and video calls, a [Fractal](https://gitlab.gnome.org/World/fractal/) fork; source in [`mandelbrot/`](mandelbrot/) | Matrix rooms, threads, polls, voice messages | The same, end-to-end encrypted |
 
 CSV and TSV are import-only in Tables, on purpose: saving a spreadsheet
 over an imported `.csv` would write XLSX bytes to a file everything else
 reads as text, so Save As offers `.xlsx` instead.
 
-Lifafa (a word for envelope) is not built from this repository. It is
-[Hylki](https://github.com/hyprlab/hylki) by hyprlab with native Tuta and
-Proton Mail accounts added, developed in the fork
-[tuna-os/lifafa](https://github.com/tuna-os/lifafa), and it belongs to the
-suite by name, icon and packaging. It is published from that repository as a
-signed Flatpak repository on its GitHub Pages, and as bundles on its
-[releases page](https://github.com/tuna-os/lifafa/releases) (see
-[Install](#install)). Report problems with it in
-[tuna-os/lifafa's issues](https://github.com/tuna-os/lifafa/issues).
-Mandelbrot is built from `mandelbrot/` (its own Cargo workspace and Flatpak
-manifest); see [docs/SUITE-INTEGRATION.md](docs/SUITE-INTEGRATION.md) for how
-the whole suite fits together.
+Lifafa (a word for envelope) is [Hylki](https://github.com/hyprlab/hylki) by
+hyprlab with native Tuta and Proton Mail accounts added. It is developed here
+in [`lifafa/`](lifafa/), which tracks upstream Hylki
+([`lifafa/fork/MAINTAINING.md`](lifafa/fork/MAINTAINING.md)), and belongs to the
+suite by name, icon and packaging. Mandelbrot is developed here in
+[`mandelbrot/`](mandelbrot/) (its own Cargo workspace and Flatpak manifest),
+which tracks upstream Fractal ([`mandelbrot/docs/UPSTREAM.md`](mandelbrot/docs/UPSTREAM.md)).
+Both moved here from their own repositories, tuna-os/lifafa and
+tuna-os/mandelbrot ([docs/CUTOVER-LIFAFA-MANDELBROT.md](docs/CUTOVER-LIFAFA-MANDELBROT.md)).
+See [docs/SUITE-INTEGRATION.md](docs/SUITE-INTEGRATION.md) for how the whole
+suite fits together.
+
+### Where each app is released from
+
+| App | Released by | Tags | Channel |
+|---|---|---|---|
+| Letters, Tables, Decks | [`publish-flatpak.yml`](.github/workflows/publish-flatpak.yml), after the release evidence, soak and display-matrix gates | `vX.Y.Z`, cut automatically from `main` | TunaOS remote, and bundles on this repository's [releases](https://github.com/tuna-os/gtk-office-suite/releases) |
+| Mandelbrot | [`publish-mandelbrot.yml`](.github/workflows/publish-mandelbrot.yml), after its CI ([`mandelbrot/RELEASING.md`](mandelbrot/RELEASING.md)) | `mandelbrot-vX.Y.Z` | TunaOS remote, from the first `mandelbrot-v*` tag here; earlier releases came from [tuna-os/mandelbrot](https://github.com/tuna-os/mandelbrot/releases) |
+| Lifafa | [`lifafa-flatpak.yml`](.github/workflows/lifafa-flatpak.yml) | `lifafa-vX.Y.Z` | TunaOS remote, from the first `lifafa-v*` tag here; until then, and until its signing key moves here, its signed Flatpak repository and bundles come from [tuna-os/lifafa](https://github.com/tuna-os/lifafa) (see [Install](#install)) |
+
+Report problems with any of the five apps in
+[this repository's issues](https://github.com/tuna-os/gtk-office-suite/issues).
 
 The three apps can send the open document by email from the main menu (see
 [docs/LIFAFA-INTEGRATION.md](docs/LIFAFA-INTEGRATION.md)).

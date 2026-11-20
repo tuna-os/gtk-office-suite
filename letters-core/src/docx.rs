@@ -2445,9 +2445,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 // `add_picture`, which appends a paragraph of its own, so
                 // text around a picture was split into three paragraphs
                 // that read back as three, and each save added more
-                // (#1681). Unreadable sources degrade to the alt text.
-                match std::fs::read(src) {
-                    Ok(bytes) => {
+                // (#1681). Sources that can't be read, or are not pictures
+                // (`picture_source`), degrade to the alt text.
+                match crate::picture_source::read(src) {
+                    Some(bytes) => {
                         let name = std::path::Path::new(src)
                             .file_name().map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_else(|| "image.png".into());
@@ -2471,7 +2472,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         let rel = out.embed_image(&bytes, &name);
                         out.last_paragraph_mut().expect("paragraph").add_run("").add_picture(&rel, w, h);
                     }
-                    Err(_) => {
+                    None => {
                         let mut p = out.last_paragraph_mut().expect("paragraph");
                         let _ = p.add_run(&run.text);
                     }

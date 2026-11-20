@@ -1150,8 +1150,11 @@ fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &
                 continue;
             }
             if let Some(src) = &run.style.image {
-                match gtk4::gdk::Texture::from_filename(src) {
-                    Ok(texture) => {
+                // Not a device: GdkTexture reads the file whole, and a
+                // Markdown image can name /dev/zero.
+                let texture = if letters_core::picture_source::is_not_a_file(src) { None } else { gtk4::gdk::Texture::from_filename(src).ok() };
+                match texture {
+                    Some(texture) => {
                         unsafe {
                             texture.set_data("letters-image-src", src.clone());
                             texture.set_data("letters-image-alt", run.text.clone());
@@ -1163,7 +1166,7 @@ fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &
                         tag_object(buf, start, &insert, &run.style);
                     }
                     // Unloadable image degrades to visible alt text.
-                    Err(_) => buf.insert(&mut insert, &run.text),
+                    None => buf.insert(&mut insert, &run.text),
                 }
                 continue;
             }

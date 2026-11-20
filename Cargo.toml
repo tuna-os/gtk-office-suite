@@ -21,6 +21,24 @@ gettext-rs = { version = "0.8", features = ["gettext-system"] }
 # gives the locals it promotes between its codegen units (`.llvm.<hash>`)
 # took a different hash, so the symbol table and build-id did not match.
 # As one codegen unit it has no locals to promote.
+# The DOCX writer's dependencies, optimised in dev and test builds too.
+# rdocx 0.17's save re-parses the whole serialized story on every save
+# (canonicalize_drawing_ids, proved_document_matches): over 90% of a save's
+# time is inside rdocx. Unoptimised, a 5,000-paragraph save took about 14 s
+# against letters-core's 15 s performance budget, and v2.1.64's release
+# evidence failed on it. That budget exists to catch quadratic work in
+# Letters' own writer. Optimised, the save takes about 4.3 s, close to the
+# 3.8 s measured when the budget was set; Letters' own code stays a debug
+# build. Release builds were already optimised.
+[profile.dev.package.rdocx]
+opt-level = 2
+
+[profile.dev.package.rdocx-oxml]
+opt-level = 2
+
+[profile.dev.package.quick-xml]
+opt-level = 2
+
 [profile.release.package.ironcalc_base]
 codegen-units = 1
 

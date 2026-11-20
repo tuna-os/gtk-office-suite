@@ -214,6 +214,7 @@ fn find_sql(scopes: &[MailScope], query: &Query, limit: usize) -> (String, Vec<V
         .filter(|s| s.read_bodies)
         .map(|s| s.account_id.to_string())
         .collect();
+    let sealed = super::sealed::sealed_sql();
     for term in &query.terms {
         let mut found = like(
             &[
@@ -239,7 +240,14 @@ fn find_sql(scopes: &[MailScope], query: &Query, limit: usize) -> (String, Vec<V
             ));
             args.push(Value::Text(fts));
         }
-        wheres.push(format!("({found})"));
+        // A sealed message is found by what an assistant sees of it, never
+        // by its preview or its text (see `super::sealed`).
+        let seen = like(
+            &["subject", "from_name", "from_addr", "recipients", "cc"],
+            term,
+            &mut args,
+        );
+        wheres.push(format!("(({found}) AND (NOT ({sealed}) OR {seen}))"));
     }
     for term in &query.from {
         let c = like(&["from_name", "from_addr"], term, &mut args);

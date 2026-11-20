@@ -12,7 +12,8 @@ process for synchronizing upstream changes and security fixes.
 * **Initial Fork Baseline Tag**: Fractal 14.1 (released July 19, 2026)
 * **First Mandelbrot Tag**: v14.1.1 (released July 24, 2026)
 * **Current Sync Point**: upstream `fractal-14` @ `561b073e` (Fractal 14.3), merged
-  2026-11-07, plus the `main` cherry-picks listed in [Sync History](#sync-history)
+  2026-11-07, plus the `main` cherry-picks listed in [Sync History](#sync-history). The
+  commit is recorded in `build-aux/UPSTREAM_BASE`, which the sync script reads and moves.
 
 ## Divergence Boundaries
 
@@ -46,18 +47,21 @@ Mandelbrot maintains full feature parity with Fractal while developing downstrea
 Upstream has two kinds of branches:
 
 * **Stable branches (`fractal-N`)** only carry Fractal releases (e.g. `fractal-14` → 14.1, 14.2,
-  14.3). They build against released `matrix-sdk`/`ruma` crates. These are **merged** with a real
-  merge commit, so git records exactly which upstream release we contain and later merges only
-  bring in what is new.
+  14.3). They build against released `matrix-sdk`/`ruma` crates. These are **synced** whole:
+  `build-aux/UPSTREAM_BASE` records the upstream commit `mandelbrot/` is on, and a sync applies
+  upstream's diff from that commit, so later syncs only bring in what is new.
 * **`main`** is Fractal's development branch. It regularly pins `matrix-sdk` and `ruma` to
   unreleased git revisions (as of November 2026 it does), and carries large refactors. Mandelbrot
-  only uses released crates, so `main` is **not merged**: bug fixes and translations from it are
-  taken with `git cherry-pick -x <sha>`, which records the upstream commit in a
-  `(cherry picked from commit …)` trailer. Skip dependency bumps (our own dependency updates
+  only uses released crates, so `main` is **not synced**: bug fixes and translations from it are
+  taken one at a time, by applying the upstream commit's diff under `mandelbrot/`
+  (`git -C <fractal clone> format-patch -1 <sha> --stdout | git am -3 --directory=mandelbrot`)
+  and naming the upstream commit in the commit message, as `git cherry-pick -x` did. Skip dependency bumps (our own dependency updates
   supersede them) and anything that needs unreleased SDK APIs.
 
-Merge sync PRs with GitHub's "Create a merge commit" method. Squash or rebase merging flattens the
-upstream merge commit, and the next sync would then re-merge the same upstream history.
+Since Mandelbrot moved into gtk-office-suite (as a squashed tree, #1961), upstream's history is
+not this repository's, so a sync is not a `git merge`: it is upstream's own diff applied under
+`mandelbrot/`, and `UPSTREAM_BASE` is what records how far it got. Sync PRs can be merged any way
+the suite merges PRs.
 
 ### Synchronization Script
 
@@ -69,15 +73,22 @@ To run upstream synchronization:
 ./build-aux/sync-upstream.sh [upstream_branch]
 ```
 
-It performs the following steps:
+Run it from anywhere in the gtk-office-suite checkout (as
+`mandelbrot/build-aux/sync-upstream.sh`), on a branch, with `mandelbrot/` committed. It:
 
-1. Fetches latest branches and tags from `https://gitlab.gnome.org/World/fractal.git`.
-2. Picks the upstream branch: the argument if given, otherwise the newest stable `fractal-N`
-   branch. Passing `main` is possible but warns about the git dependencies it would bring in.
-3. Computes the upstream commits not yet merged (from the merge base with `HEAD`).
-4. If there are any, creates a sync branch (`sync/upstream-YYYYMMDD`) from the current `HEAD` and
-   runs `git merge --no-commit --no-ff`, reporting success or conflicts.
-5. Lists the `upstream/main` commits whose change is not in `HEAD` yet, as cherry-pick candidates.
+1. Picks the upstream ref: the argument if given, otherwise the newest stable `fractal-N` branch.
+   Passing `main` is possible but warns about the git dependencies it would bring in.
+2. Fetches that ref and the commit in `build-aux/UPSTREAM_BASE` from
+   `https://gitlab.gnome.org/World/fractal.git`, and lists the upstream commits in between.
+3. Leaves out, and lists, upstream changes to files Mandelbrot deleted or renamed (the GitLab CI,
+   the `org.gnome.Fractal*` manifests and metainfo); `git apply` is all or nothing, so one such
+   file would otherwise stop the whole sync. Carry them over by hand where they still matter.
+4. Applies the rest under `mandelbrot/` three-way, leaving conflict markers where Mandelbrot
+   changed the same lines, and moves `UPSTREAM_BASE` to the new commit.
+
+It exits 0 when the changes applied cleanly or there was nothing new, 1 when files were left with
+conflicts (resolve them by the rules below), and 2 when nothing could be applied. It changes the
+working tree only; commit the result as `chore(upstream): Fractal <version> (<branch>)`.
 
 ### Conflict Resolution Strategy
 

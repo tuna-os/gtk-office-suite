@@ -859,7 +859,7 @@ fn parse_id(id: &str) -> Option<(&str, &str, u32)> {
 }
 
 fn summary(account: &str, path: &str, m: &Message) -> SummaryOut {
-    let encrypted = preview_is_encrypted(&m.preview);
+    let encrypted = preview_is_encrypted(&m.preview) || crate::cache::is_sealed(m);
     SummaryOut {
         id: message_id(account, path, m.uid),
         thread_id: threads::thread_id(account, path, m),
