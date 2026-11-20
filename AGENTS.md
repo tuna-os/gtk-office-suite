@@ -8,7 +8,7 @@ ship vehicle. Human-oriented docs: `docs/DEVELOPMENT.md`, `docs/TESTING.md`.
 
 ```bash
 cargo build --bin letters --bin tables --bin decks   # build apps
-xvfb-run -a cargo test --workspace                   # unit tests (~90, fast)
+xvfb-run -a cargo test --workspace                   # unit tests
 tests/gui/run_gui_tests.sh test_smoke.py             # GUI smoke tests (~10s, needs Xvfb deps)
 cargo clippy --workspace                             # lint (many pre-existing warnings)
 just verify 'test_smoke.py -k Letters'               # journeys + recorded video evidence
@@ -36,15 +36,30 @@ GSETTINGS_SCHEMA_DIR=/tmp/gtk-office-schemas cargo run -p letters
 ## Architecture rule (the one that matters)
 
 **No business logic in widget code.** If a function does not need a GTK type
-to do its job, it belongs in `suite-common-core` (GTK-free, unit-testable) —
-or a future `letters-core`/`tables-core`/`decks-core` crate. `window.rs`
+to do its job, it belongs in the app's GTK-free core crate (`letters-core`,
+`tables-core`, `decks-core`), or in `suite-common-core` when more than one
+app needs it. Core crates are unit-testable without GTK (ADR 0001). `window.rs`
 files wire signals and render; they must not own document models, parsing,
 or algorithms. When you touch logic currently trapped in a `window.rs`,
 prefer extracting it over growing it.
 
-Crate map: `suite-common-core` (pure Rust: undo, formats, events, search,
-units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
-← app binaries.
+Crate map (arrows point at what a crate depends on):
+
+- `suite-common-core`: pure Rust shared by every app (undo, formats, events,
+  search, units).
+- `suite-export` (PDF export) and `suite-collab` (collaboration protocol):
+  GTK-free.
+- `letters-core`, `tables-core`, `decks-core` → `suite-common-core`: each
+  app's model, logic and file I/O. Letters and Tables also use
+  `suite-export`; Letters also uses `suite-collab`. Sibling core crates never
+  depend on one another (ADR 0012).
+- `suite-common` → `suite-common-core`: GTK helpers (dialogs, toasts,
+  SuiteApp/SuiteWindow).
+- App binaries `letters`, `tables`, `decks` → their core crate and
+  `suite-common`.
+- `suite-convert` → the three core crates: headless conversion (ADR 0015).
+
+What each crate holds: `docs/ARCHITECTURE.md` (Workspace Structure).
 
 ## Testing expectations
 

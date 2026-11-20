@@ -49,15 +49,16 @@ The load-bearing rule: **widget code must not own logic.**
 
 | Layer | Crates | May depend on GTK? | Tested by |
 |---|---|---|---|
-| Core logic | `suite-common-core` (and future `*-core` per app) | **No** | unit tests, fast, everywhere |
+| Core logic | `letters-core`, `tables-core`, `decks-core` (per app); `suite-common-core` (shared) | **No** | unit tests, fast, everywhere |
 | GTK shell helpers | `suite-common` | Yes | sparingly |
 | Apps | `letters`, `tables`, `decks` | Yes | GUI smoke tests |
 
 If a function can be written against plain data (`&str`, offsets, model
 structs) instead of `GtkTextBuffer`/`TabView`, write it that way and put it
-in a core crate with tests. The app crates' `engine.rs`/`undo.rs` modules
-are the current homes for per-app logic; the direction of travel is to
-extract them into GTK-free `letters-core`/`tables-core`/`decks-core` crates.
+in a core crate with tests: the app's own `*-core` crate for that app's
+model, file I/O and commands, `suite-common-core` for what the apps share.
+Sibling core crates never depend on one another (ADR 0012). The full crate
+table is in [ARCHITECTURE.md](ARCHITECTURE.md#workspace-structure).
 
 Engine choices (deliberate, don't churn): IronCalc for spreadsheet
 formulas/model, rdocx for DOCX I/O, pulldown-cmark for Markdown, Typst
