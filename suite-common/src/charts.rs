@@ -80,6 +80,26 @@ impl Series<'_> {
 /// the theme's accents, and a legend row per named series. A pie draws
 /// its first series. With one series it is exactly [`draw_chart`].
 pub fn draw_chart_series(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64) {
+    draw_chart_with(cr, categories, series, kind, width, height, &Options::default());
+}
+
+/// How a chart's series are laid out beyond their kind, as a presentation's
+/// chart part names it (#2327). The default is the plain chart.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Options {
+    /// A column chart's series stacked in each category, one on another,
+    /// instead of side by side.
+    pub stacked: bool,
+    /// Each column's value written on it: in the middle of a stacked
+    /// segment, over a clustered column.
+    pub labels: bool,
+    /// No value axis: neither its labels nor its gridlines.
+    pub hide_value_axis: bool,
+}
+
+/// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
+/// apply to column charts; a hidden value axis to columns, lines and areas.
+pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64, opts: &Options) {
     let _ = cr.save();
     cr.set_source_rgb(1.0, 1.0, 1.0);
     cr.rectangle(0.0, 0.0, width, height);
@@ -91,9 +111,9 @@ pub fn draw_chart_series(cr: &Context, categories: &[String], series: &[Series],
     let (w, h) = (width, height);
     if !series.is_empty() {
         match kind {
-            ChartKind::Bar => draw_bars(cr, categories, series, w, h),
-            ChartKind::Line => draw_category(cr, categories, series, w, h, Style::Line),
-            ChartKind::Area => draw_category(cr, categories, series, w, h, Style::Area),
+            ChartKind::Bar => draw_bars(cr, categories, series, w, h, opts),
+            ChartKind::Line => draw_category(cr, categories, series, w, h, Style::Line, opts),
+            ChartKind::Area => draw_category(cr, categories, series, w, h, Style::Area, opts),
             ChartKind::Pie => draw_pie(cr, categories, &series[0], w, h),
             ChartKind::Scatter => draw_scatter(cr, categories, series, w, h),
         }
@@ -199,9 +219,9 @@ pub fn draw_chart_decorated(cr: &Context, categories: &[String], series: &[Serie
     cr.clip();
     if !series.is_empty() {
         match kind {
-            ChartKind::Bar => draw_bars(cr, categories, &plot_series, plot_w, plot_h),
-            ChartKind::Line => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Line),
-            ChartKind::Area => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Area),
+            ChartKind::Bar => draw_bars(cr, categories, &plot_series, plot_w, plot_h, &Options::default()),
+            ChartKind::Line => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Line, &Options::default()),
+            ChartKind::Area => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Area, &Options::default()),
             ChartKind::Pie => draw_pie(cr, categories, &plot_series[0], plot_w, plot_h),
             ChartKind::Scatter => draw_scatter(cr, categories, &plot_series, plot_w, plot_h),
         }
@@ -283,7 +303,12 @@ fn text_w(cr: &Context, t: &str) -> f64 {
 }
 
 fn show(cr: &Context, x: f64, y: f64, t: &str) {
-    set(cr, CHART_TEXT);
+    show_in(cr, CHART_TEXT, x, y, t);
+}
+
+/// `t` at (x, y) in `color`.
+fn show_in(cr: &Context, color: (f64, f64, f64), x: f64, y: f64, t: &str) {
+    set(cr, color);
     cr.move_to(x, y);
     cr.show_text(t).unwrap();
 }
@@ -397,6 +422,12 @@ fn draw_value_axis(cr: &Context, axis: &ValueAxis, left: f64, right: f64, top_y:
     }
 }
 
+/// A data label's text: the value as a cache writes it, a whole number
+/// without a fraction.
+fn value_label(v: f64) -> String {
+    if v.fract() == 0.0 && v.abs() < 1e15 { format!("{}", v as i64) } else { format!("{v}") }
+}
+
 /// The largest value of any series.
 fn max_of(series: &[Series]) -> f64 {
     series.iter().map(Series::max).fold(0.0, f64::max)
@@ -405,29 +436,60 @@ fn max_of(series: &[Series]) -> f64 {
 /// A clustered column chart: value axis from 0 with round ticks and
 /// horizontal gridlines, categories under the bars, and the legend at the
 /// right when a series has a name.
-fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64) {
-    let axis = ValueAxis::new(max_of(series));
+fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, opts: &Options) {
+    // Stacked, the axis reaches the tallest category's sum of positives.
+    let max = if opts.stacked {
+        (0..categories.len())
+            .map(|i| series.iter().filter_map(|s| s.at(i)).filter(|v| *v > 0.0).sum::<f64>())
+            .fold(0.0, f64::max)
+    } else {
+        max_of(series)
+    };
+    let axis = ValueAxis::new(max);
     let legend = legend_entries(series);
     let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
-    let (left, right, top_y, bottom) = (axis.widest(cr) + 14.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
+    let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
+    let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y || categories.is_empty() {
         return;
     }
     let y_of = |v: f64| bottom - (v / axis.top) * (bottom - top_y);
-    draw_value_axis(cr, &axis, left, right, top_y, bottom);
+    if !opts.hide_value_axis {
+        draw_value_axis(cr, &axis, left, right, top_y, bottom);
+    }
 
     // Each category's slot holds the cluster and a gap of 150% of one bar,
-    // as Excel's default: one series' bar is 40% of the slot.
+    // as Excel's default: one series' bar is 40% of the slot. Stacked, the
+    // slot holds one column the width of one series' bar.
     let slot = (right - left) / categories.len() as f64;
-    let n = series.len() as f64;
+    let n = if opts.stacked { 1.0 } else { series.len() as f64 };
     let bar_w = slot / (n + 1.5);
     for (i, cat) in categories.iter().enumerate() {
         let start = left + i as f64 * slot + (slot - n * bar_w) / 2.0;
+        let mut base = 0.0;
         for (k, s) in series.iter().enumerate() {
             let Some(val) = s.at(i) else { continue };
+            let (x, from, to) = if opts.stacked {
+                let from = base;
+                base += val.max(0.0);
+                (start, from, base)
+            } else {
+                (start + k as f64 * bar_w, 0.0, val)
+            };
             set(cr, accent(k));
-            cr.rectangle(start + k as f64 * bar_w, y_of(val), bar_w, bottom - y_of(val));
+            cr.rectangle(x, y_of(to), bar_w, y_of(from) - y_of(to));
             cr.fill().unwrap();
+            if opts.labels {
+                let t = value_label(val);
+                let tw = text_w(cr, &t);
+                if opts.stacked {
+                    // In the segment, white on the accent, as PowerPoint's
+                    // default centred label reads.
+                    show_in(cr, (1.0, 1.0, 1.0), x + (bar_w - tw) / 2.0, (y_of(from) + y_of(to)) / 2.0 + CHART_TEXT_PX * 0.35, &t);
+                } else {
+                    show(cr, x + (bar_w - tw) / 2.0, y_of(to) - 3.0, &t);
+                }
+            }
         }
         show(cr, left + i as f64 * slot + (slot - text_w(cr, cat)) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
     }
@@ -445,12 +507,13 @@ enum Style {
 /// of each category's slot; an area's categories sit on the axis ticks, the
 /// first at the left edge and the last at the right, as in Excel and Calc.
 /// Series are drawn in order, a later area in front of an earlier one.
-fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, style: Style) {
+fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, style: Style, opts: &Options) {
     let axis = ValueAxis::new(max_of(series));
     let key = if style == Style::Line { Key::Line } else { Key::Square };
     let legend = legend_entries(series);
     let legend_w = legend_width(cr, &legend, key);
-    let (left, right, top_y, bottom) = (axis.widest(cr) + 14.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
+    let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
+    let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y || categories.is_empty() {
         return;
     }
@@ -460,7 +523,9 @@ fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64,
         Style::Line => left + (i as f64 + 0.5) * (right - left) / n as f64,
         Style::Area => left + i as f64 * (right - left) / (n - 1).max(1) as f64,
     };
-    draw_value_axis(cr, &axis, left, right, top_y, bottom);
+    if !opts.hide_value_axis {
+        draw_value_axis(cr, &axis, left, right, top_y, bottom);
+    }
 
     for (k, s) in series.iter().enumerate() {
         set(cr, accent(k));
@@ -627,6 +692,71 @@ mod tests {
             let mut b = draw(&categories, &[Series { name: Some("Column B"), values: &values }], kind);
             assert!(a.data().unwrap().iter().eq(b.data().unwrap().iter()), "{kind:?}");
         }
+    }
+
+    fn draw_with(categories: &[String], series: &[Series], kind: ChartKind, opts: &Options) -> ImageSurface {
+        let s = ImageSurface::create(Format::ARgb32, 400, 260).unwrap();
+        {
+            let cr = Context::new(&s).unwrap();
+            crate::use_ui_font_rendering(&cr);
+            draw_chart_with(&cr, categories, series, kind, 400.0, 260.0, opts);
+        }
+        s
+    }
+
+    /// The x columns that hold `rgb` anywhere, left to right.
+    fn columns_with(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> Vec<usize> {
+        let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+        let px = s.data().unwrap();
+        (0..w).filter(|x| (0..h).any(|y| px[y * stride + x * 4..][..3] == [b, g, r])).collect()
+    }
+
+    /// Default options are the plain chart, pixel for pixel.
+    #[test]
+    fn default_options_are_the_plain_chart() {
+        let categories: Vec<String> = ["1", "2", "3"].iter().map(|s| s.to_string()).collect();
+        let (a, b) = ([3.0, 5.0, 4.0], [4.0, 2.0, 6.0]);
+        let two = [Series { name: Some("North"), values: &a }, Series { name: Some("South"), values: &b }];
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area] {
+            let mut plain = draw(&categories, &two, kind);
+            let mut with = draw_with(&categories, &two, kind, &Options::default());
+            assert!(plain.data().unwrap().iter().eq(with.data().unwrap().iter()), "{kind:?}");
+        }
+    }
+
+    /// Stacked, both series share each category's one column: the second
+    /// accent sits in the same x columns as the first, not beside it (#2327).
+    #[test]
+    fn stacked_series_share_one_column() {
+        let categories: Vec<String> = ["May", "June"].iter().map(|s| s.to_string()).collect();
+        let (a, b) = ([951.0, 3623.0], [123.0, 587.0]);
+        let two = [Series { name: Some("$48"), values: &a }, Series { name: Some("$418"), values: &b }];
+        let stacked = Options { stacked: true, ..Options::default() };
+        let mut s = draw_with(&categories, &two, ChartKind::Bar, &stacked);
+        let (first, second) = (columns_with(&mut s, (0x4f, 0x81, 0xbd)), columns_with(&mut s, (0xc0, 0x50, 0x4d)));
+        // The legend's keys carry both accents too; compare the plot's columns.
+        let plot = |v: Vec<usize>| v.into_iter().filter(|x| *x < 300).collect::<Vec<_>>();
+        assert!(!plot(second.clone()).is_empty());
+        assert_eq!(plot(first), plot(second), "stacked segments sit in the same columns");
+        let mut side = draw_with(&categories, &two, ChartKind::Bar, &Options::default());
+        let (f, g) = (columns_with(&mut side, (0x4f, 0x81, 0xbd)), columns_with(&mut side, (0xc0, 0x50, 0x4d)));
+        assert_ne!(plot(f), plot(g), "clustered columns stand side by side");
+    }
+
+    /// A hidden value axis draws no gridlines: no grid grey anywhere.
+    #[test]
+    fn a_hidden_value_axis_draws_no_gridlines() {
+        let categories: Vec<String> = ["1", "2"].iter().map(|s| s.to_string()).collect();
+        let a = [3.0, 5.0];
+        let one = [Series { name: None, values: &a }];
+        let grid = |s: &mut ImageSurface| {
+            let (r, g, b) = GRID;
+            count(s, ((r * 255.0).round() as u8, (g * 255.0).round() as u8, (b * 255.0).round() as u8))
+        };
+        let mut shown = draw_with(&categories, &one, ChartKind::Bar, &Options::default());
+        let mut hidden = draw_with(&categories, &one, ChartKind::Bar, &Options { hide_value_axis: true, ..Options::default() });
+        assert!(grid(&mut shown) > 0);
+        assert_eq!(grid(&mut hidden), 0);
     }
 
     /// Two series: each in its own accent (the second in accent 2), the

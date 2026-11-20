@@ -34,7 +34,7 @@
 //! | 3 | Embedded OLE objects | explicit-loss (`embedded-objects`): `oleObj` elements | explicit-loss (`embedded-objects`): `object-ole` elements | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `pptx_drops`, `odp_drops` below |
 //! | 4 | SmartArt diagrams | explicit-loss (`smartart`): `ppt/diagrams/` parts | not applicable: ODP has no diagram part; plain shapes import as shapes | `impress-loss-pptx-v1` | `pptx_drops` below |
 //! | 5 | Emphasis and motion-path animation (entrance/exit stay editable) | explicit-loss (`animations`): `presetClass` `emph`/`path` | explicit-loss (`animations`): `preset-class` `emphasis`/`motion-path` | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `pptx_drops`, `odp_drops` below |
-//! | 6 | Chart series past the first (the reader keeps the first series only) | explicit-loss (`multi-series-charts`): chart parts with two or more `ser` elements | explicit-loss (`multi-series-charts`): chart objects with two or more `series` elements | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `chart_parts`, `odp_chart_objects` below |
+//! | 6 | Chart series the reader cannot keep: a scatter or pie chart's past the first, any past `MAX_SERIES`, and a combined chart's second type (bar, line and area keep every series, #2327) | explicit-loss (`multi-series-charts`): chart parts whose first type is scatter/pie with two or more `ser`, more than `MAX_SERIES` `ser`, or two chart types | explicit-loss (`multi-series-charts`): chart objects whose class is scatter/circle/ring with two or more `series`, more than `MAX_SERIES`, or a series of another class | `impress-loss-pptx-v1`, `impress-loss-odp-v1` | `chart_parts`, `odp_chart_objects` below |
 //! | 7 | Pictures the file names but does not contain | explicit-loss (`missing-pictures`): dangling `image` relationship targets per slide | explicit-loss (`missing-pictures`): dangling image `href`s per document part | loss unit tests (a dangling target cannot ship in `interop/corpus.json`, whose validator requires every relationship/manifest target to exist) | `pptx_drops`, `odp_drops` below |
 //! | 8 | A source that cannot be inspected (missing, corrupt, over budget) | blocked (`source-inspection-failed`): no save, not even a confirmed one | blocked (`source-inspection-failed`) | loss unit tests, `hostile_packages.rs`, `malformed_inputs.rs` | `inspect_source`, `scan_part` below |
 //! | 9 | Anything in a package Decks itself wrote | clean: no warning in either format | clean | `package_consistency.rs`, `a_deck_decks_wrote_loses_nothing` below | — |
@@ -66,7 +66,8 @@ const MEDIA: (&str, &str) = ("media", "Audio and video");
 const OLE: (&str, &str) = ("embedded-objects", "Embedded objects");
 const SMARTART: (&str, &str) = ("smartart", "SmartArt graphics");
 const ANIMATION: (&str, &str) = ("animations", "Emphasis and motion-path animations");
-const CHARTS: (&str, &str) = ("multi-series-charts", "Charts with more than one series");
+const CHARTS: (&str, &str) = ("multi-series-charts", "Chart series that are not kept");
+use crate::engine::chart::MAX_SERIES;
 const MISSING: (&str, &str) = ("missing-pictures", "Pictures missing from the file");
 /// Slides the presentation names but the package does not contain (#1977):
 /// the reader skips them, so they are not in the deck and a save drops
@@ -248,8 +249,22 @@ fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTr
     }
     for chart in chart_parts(zip, names, budget, report)? {
         let xml = scan_part(zip, &chart, budget)?;
-        if start_tags(&xml).iter().filter(|t| t.local == "ser").count() > 1 {
+        let tags = start_tags(&xml);
+        let series = tags.iter().filter(|t| t.local == "ser").count();
+        let types: Vec<&str> = tags
+            .iter()
+            .map(|t| t.local)
+            .filter(|l| l.ends_with("Chart") && l.len() > "Chart".len())
+            .collect();
+        let first_only = types
+            .first()
+            .is_some_and(|t| matches!(*t, "scatterChart" | "pieChart" | "pie3DChart" | "doughnutChart" | "ofPieChart" | "bubbleChart"));
+        if types.len() > 1 {
+            record(report, CHARTS, &chart, "only the first chart type is kept");
+        } else if first_only && series > 1 {
             record(report, CHARTS, &chart, "only the first chart series is kept");
+        } else if series > MAX_SERIES {
+            record(report, CHARTS, &chart, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     Ok(())
@@ -344,8 +359,20 @@ fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTre
     for object in odp_chart_objects(names) {
         let xml = scan_part(zip, &object, budget)?;
         let tags = start_tags(&xml);
-        if tags.iter().any(|t| t.local == "chart") && tags.iter().filter(|t| t.local == "series").count() > 1 {
+        // `chart:chart`, not the `office:chart` body around it: the one with a class.
+        let Some(chart) = tags.iter().find(|t| t.local == "chart" && attr_value(t.attrs, "class").is_some()) else { continue };
+        let class = attr_value(chart.attrs, "class").map(|c| local_of(c).to_string()).unwrap_or_default();
+        let series: Vec<&StartTag> = tags.iter().filter(|t| t.local == "series").collect();
+        let other_type = series
+            .iter()
+            .filter_map(|s| attr_value(s.attrs, "class"))
+            .any(|c| local_of(c) != class);
+        if other_type {
+            record(report, CHARTS, &object, "only the chart's own type is kept");
+        } else if matches!(class.as_str(), "scatter" | "circle" | "ring" | "bubble") && series.len() > 1 {
             record(report, CHARTS, &object, "only the first chart series is kept");
+        } else if series.len() > MAX_SERIES {
+            record(report, CHARTS, &object, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     mixed_page_sizes(zip, names, budget, report)?;
@@ -1177,9 +1204,9 @@ mod tests {
 
     #[test]
     fn multi_series_charts_warn_in_both_formats() {
-        // The readers keep the first series only (`parse_chart_space`,
-        // `parse_odf_chart`); a second series is an explicit loss with the
-        // chart part as its location. One series stays silent.
+        // A bar chart keeps every series (#2327); a scatter chart keeps its
+        // first (`parse_chart_space`, `parse_odf_chart`), so its second is
+        // an explicit loss with the chart part as its location.
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("series.pptx");
         package(&p, &[
@@ -1193,14 +1220,14 @@ mod tests {
             ),
             (
                 "ppt/charts/chart1.xml",
-                "<c:chartSpace><c:chart><c:plotArea><c:barChart>\
+                "<c:chartSpace><c:chart><c:plotArea><c:scatterChart>\
                  <c:ser><c:idx val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/></c:ser>\
-                 </c:barChart></c:plotArea></c:chart></c:chartSpace>",
+                 </c:scatterChart></c:plotArea></c:chart></c:chartSpace>",
             ),
             (
                 "ppt/charts/chart2.xml",
                 "<c:chartSpace><c:chart><c:plotArea><c:barChart>\
-                 <c:ser><c:idx val=\"0\"/></c:ser>\
+                 <c:ser><c:idx val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/></c:ser>\
                  </c:barChart></c:plotArea></c:chart></c:chartSpace>",
             ),
         ]);
@@ -1219,12 +1246,12 @@ mod tests {
             ),
             (
                 "Object 1/content.xml",
-                "<office:document-content><chart:chart><chart:series/><chart:series/></chart:chart>\
+                "<office:document-content><chart:chart chart:class=\"chart:scatter\"><chart:series/><chart:series/></chart:chart>\
                  <table:table/></office:document-content>",
             ),
             (
                 "Object 2/content.xml",
-                "<office:document-content><chart:chart><chart:series/></chart:chart>\
+                "<office:document-content><chart:chart chart:class=\"chart:bar\"><chart:series/><chart:series/></chart:chart>\
                  <table:table/></office:document-content>",
             ),
         ]);

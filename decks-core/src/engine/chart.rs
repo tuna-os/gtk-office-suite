@@ -11,9 +11,12 @@
 //!   (`Object N/content.xml`) whose data is its own local table, as Impress
 //!   writes one.
 //!
-//! A chart is one series of (category, value) points, the series a
-//! Tables chart draws. A file's chart with more than one series is read as
-//! its first.
+//! A chart is a first series of (category, value) points, the series a
+//! Tables chart draws and the inspector edits, and any further series over
+//! the same categories (`more`). A bar chart's series may be stacked, each
+//! value may be labelled on its bar, and the value axis may be hidden, as
+//! PowerPoint and Impress write them (#2327). A scatter chart, whose series
+//! need not share their x values, is read as its first series.
 
 pub use suite_common_core::charts::ChartKind;
 
@@ -26,6 +29,20 @@ pub struct ChartData {
     pub series: String,
     /// (category, value). For a scatter chart the category is the x value.
     pub points: Vec<(String, f64)>,
+    /// The series after the first, each (name, one value per category).
+    #[serde(default)]
+    pub more: Vec<(String, Vec<f64>)>,
+    /// A bar chart's series stacked in each category instead of side by
+    /// side (`c:grouping val="stacked"`, `chart:stacked`).
+    #[serde(default)]
+    pub stacked: bool,
+    /// Each value written on its bar or point (`c:dLbls/c:showVal`,
+    /// `chart:data-label-number="value"`).
+    #[serde(default)]
+    pub labels: bool,
+    /// The value axis hidden (`c:valAx/c:delete`, `chart:display-label`).
+    #[serde(default)]
+    pub hide_value_axis: bool,
 }
 
 impl ChartData {
@@ -37,7 +54,19 @@ impl ChartData {
         } else {
             vec![("Q1".into(), 4.3), ("Q2".into(), 2.5), ("Q3".into(), 3.5), ("Q4".into(), 4.5)]
         };
-        ChartData { kind, series: "Sales".into(), points }
+        ChartData::one(kind, "Sales", points)
+    }
+
+    /// A chart of one series and no options.
+    pub fn one(kind: ChartKind, series: impl Into<String>, points: Vec<(String, f64)>) -> Self {
+        ChartData { kind, series: series.into(), points, more: Vec::new(), stacked: false, labels: false, hide_value_axis: false }
+    }
+
+    /// Every series as (name, values), the first included.
+    pub fn all_series(&self) -> Vec<(&str, Vec<f64>)> {
+        let mut out = vec![(self.series.as_str(), self.points.iter().map(|p| p.1).collect())];
+        out.extend(self.more.iter().map(|(n, v)| (n.as_str(), v.clone())));
+        out
     }
 
     /// The kind's name, as the accessible name and the inspector say it.
@@ -65,6 +94,13 @@ impl ChartData {
     /// The series name the renderer puts in the legend.
     pub fn legend(&self) -> Option<&str> {
         (!self.series.trim().is_empty()).then_some(self.series.as_str())
+    }
+
+    /// Whether the chart has more than one plain series of points: further
+    /// series, or a grouping, labels or hidden axis the one-series drawing
+    /// does not show.
+    pub fn is_rich(&self) -> bool {
+        !self.more.is_empty() || self.stacked || self.labels || self.hide_value_axis
     }
 
     /// Every category is a number: a scatter chart's x values.
@@ -117,11 +153,20 @@ impl ChartData {
                     let category = self.next_category();
                     let value = self.points.last().map_or(0.0, |p| p.1);
                     self.points.push((category, value));
+                    for (_, values) in &mut self.more {
+                        let last = values.last().copied().unwrap_or(0.0);
+                        values.resize(self.points.len(), last);
+                    }
                 }
             }
             ChartEdit::RemovePoint(i) => {
                 if self.points.len() > 1 && *i < self.points.len() {
                     self.points.remove(*i);
+                    for (_, values) in &mut self.more {
+                        if *i < values.len() {
+                            values.remove(*i);
+                        }
+                    }
                 }
             }
         }
@@ -165,6 +210,14 @@ fn esc(s: &str) -> String {
         }
     }
     out
+}
+
+/// The most series a chart keeps: more than a legend can name legibly.
+pub const MAX_SERIES: usize = 16;
+
+/// A cached point's number; a gap or text is 0.
+fn number(v: Option<&str>) -> f64 {
+    v.and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(0.0)
 }
 
 /// A value as a cache or a cell writes it: "4.3", "10".
@@ -242,27 +295,53 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     let cat = format!("<c:cat>{}</c:cat>", str_ref(&format!("Sheet1!$A$2:$A${last}"), &cats));
     let val = format!("<c:val>{}</c:val>", num_ref(&format!("Sheet1!$B$2:$B${last}"), &vals));
     let ids = format!("<c:axId val=\"{AX_1}\"/><c:axId val=\"{AX_2}\"/>");
+    // The series after the first, in columns C, D, ... of the same sheet.
+    let more: String = chart
+        .more
+        .iter()
+        .enumerate()
+        .map(|(k, (name, values))| {
+            let c = col(k + 2);
+            let tx = str_ref(&format!("Sheet1!${c}$1"), &[name.as_str()]);
+            let val = format!("<c:val>{}</c:val>", num_ref(&format!("Sheet1!${c}$2:${c}${last}"), values));
+            let invert = if chart.kind == ChartKind::Bar { "<c:invertIfNegative val=\"0\"/>" } else { "" };
+            let smooth = if chart.kind == ChartKind::Line { "<c:smooth val=\"0\"/>" } else { "" };
+            format!("<c:ser><c:idx val=\"{i}\"/><c:order val=\"{i}\"/><c:tx>{tx}</c:tx>{invert}{cat}{val}{smooth}</c:ser>", i = k + 1)
+        })
+        .collect();
+    let dlbls = if chart.labels {
+        "<c:dLbls><c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/><c:showCatName val=\"0\"/>\
+         <c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/></c:dLbls>"
+    } else {
+        ""
+    };
+    let grouping = if chart.stacked { "stacked" } else { "clustered" };
+    let overlap = if chart.stacked { "<c:overlap val=\"100\"/>" } else { "" };
+    let value_axis = |id: &str, pos: &str, cross: &str, grid: bool, between: &str| {
+        let ax = val_ax(id, pos, cross, grid, between);
+        if chart.hide_value_axis { ax.replacen("<c:delete val=\"0\"/>", "<c:delete val=\"1\"/>", 1) } else { ax }
+    };
     let plot = match chart.kind {
         ChartKind::Bar => format!(
-            "<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/><c:varyColors val=\"0\"/>\
-             {head}<c:invertIfNegative val=\"0\"/>{cat}{val}</c:ser><c:gapWidth val=\"150\"/>{ids}</c:barChart>{}{}",
+            "<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"{grouping}\"/><c:varyColors val=\"0\"/>\
+             {head}<c:invertIfNegative val=\"0\"/>{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"150\"/>{overlap}{ids}</c:barChart>{}{}",
             cat_ax(),
-            val_ax(AX_2, "l", AX_1, true, "between")
+            value_axis(AX_2, "l", AX_1, true, "between")
         ),
         ChartKind::Line => format!(
             "<c:lineChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
-             {head}{cat}{val}<c:smooth val=\"0\"/></c:ser><c:marker val=\"1\"/>{ids}</c:lineChart>{}{}",
+             {head}{cat}{val}<c:smooth val=\"0\"/></c:ser>{more}{dlbls}<c:marker val=\"1\"/>{ids}</c:lineChart>{}{}",
             cat_ax(),
-            val_ax(AX_2, "l", AX_1, true, "between")
+            value_axis(AX_2, "l", AX_1, true, "between")
         ),
         ChartKind::Area => format!(
             "<c:areaChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
-             {head}{cat}{val}</c:ser>{ids}</c:areaChart>{}{}",
+             {head}{cat}{val}</c:ser>{more}{dlbls}{ids}</c:areaChart>{}{}",
             cat_ax(),
-            val_ax(AX_2, "l", AX_1, true, "midCat")
+            value_axis(AX_2, "l", AX_1, true, "midCat")
         ),
         ChartKind::Pie => format!(
-            "<c:pieChart><c:varyColors val=\"1\"/>{head}{cat}{val}</c:ser><c:firstSliceAng val=\"0\"/></c:pieChart>"
+            "<c:pieChart><c:varyColors val=\"1\"/>{head}{cat}{val}</c:ser>{dlbls}<c:firstSliceAng val=\"0\"/></c:pieChart>"
         ),
         ChartKind::Scatter => {
             let x_ref = format!("Sheet1!$A$2:$A${last}");
@@ -280,7 +359,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
             )
         }
     };
-    let legend = if chart.legend().is_some() || chart.kind == ChartKind::Pie {
+    let legend = if chart.legend().is_some() || chart.kind == ChartKind::Pie || !chart.more.is_empty() {
         "<c:legend><c:legendPos val=\"r\"/><c:overlay val=\"0\"/></c:legend>"
     } else {
         ""
@@ -487,8 +566,10 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
         };
         Some((kind, c))
     })?;
-    let ser = group.child("ser")?;
-    let series = ser.child("tx").map(cached).and_then(|v| v.into_iter().next().flatten()).unwrap_or_default();
+    let sers: Vec<&El> = group.children.iter().filter(|c| c.local == "ser").collect();
+    let ser = *sers.first()?;
+    let name_of = |s: &El| s.child("tx").map(cached).and_then(|v| v.into_iter().next().flatten()).unwrap_or_default();
+    let series = name_of(ser);
     let cats = ser.child("cat").or_else(|| ser.child("xVal")).map(cached).unwrap_or_default();
     let vals = ser.child("val").or_else(|| ser.child("yVal")).map(cached)?;
     let points = vals
@@ -498,10 +579,37 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
             // A category the file leaves out is its number, as PowerPoint
             // labels an axis with none.
             let cat = cats.get(i).cloned().flatten().unwrap_or_else(|| (i + 1).to_string());
-            (cat, v.as_deref().and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite()).unwrap_or(0.0))
+            (cat, number(v.as_deref()))
         })
-        .collect();
-    Some(ChartData { kind, series, points })
+        .collect::<Vec<_>>();
+    let n = points.len();
+    // The series after the first, over the first's categories. A scatter
+    // chart's series each carry their own x values, so it keeps its first.
+    let more = if kind == ChartKind::Scatter || kind == ChartKind::Pie {
+        Vec::new()
+    } else {
+        sers[1..]
+            .iter()
+            .take(MAX_SERIES - 1)
+            .map(|s| {
+                let vals = s.child("val").map(cached).unwrap_or_default();
+                (name_of(s), (0..n).map(|i| number(vals.get(i).and_then(|v| v.as_deref()))).collect())
+            })
+            .collect()
+    };
+    let grouping = group.child("grouping").and_then(|g| g.attr("val")).unwrap_or("");
+    let stacked = kind == ChartKind::Bar && matches!(grouping, "stacked" | "percentStacked");
+    // Labels shown for the chart group, or for every series of it.
+    let shows = |d: Option<&El>| d.and_then(|d| d.child("showVal")).and_then(|v| v.attr("val")).is_some_and(|v| v == "1" || v == "true");
+    let labels = shows(group.child("dLbls")) || (!sers.is_empty() && sers.iter().all(|s| shows(s.child("dLbls"))));
+    let hide_value_axis = kind != ChartKind::Pie
+        && plot
+            .children
+            .iter()
+            .filter(|c| c.local == "valAx")
+            .any(|ax| ax.child("delete").and_then(|d| d.attr("val")).is_some_and(|v| v == "1" || v == "true"))
+        && kind != ChartKind::Scatter;
+    Some(ChartData { kind, series, points, more, stacked, labels, hide_value_axis })
 }
 
 // ── odp: the embedded ODF chart ──────────────────────────────────────────
@@ -547,8 +655,9 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
         _ => format!(
             "<chart:axis chart:dimension=\"x\" chart:name=\"primary-x\">\
              <chart:categories table:cell-range-address=\"{}\"/></chart:axis>\
-             <chart:axis chart:dimension=\"y\" chart:name=\"primary-y\"><chart:grid chart:class=\"major\"/></chart:axis>",
-            range(0)
+             <chart:axis chart:dimension=\"y\" chart:name=\"primary-y\"{}><chart:grid chart:class=\"major\"/></chart:axis>",
+            range(0),
+            if chart.hide_value_axis { " chart:style-name=\"axis-hidden\"" } else { "" }
         ),
     };
     let domain = if chart.kind == ChartKind::Scatter {
@@ -562,6 +671,39 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
         ""
     };
     let numeric_x = (chart.kind == ChartKind::Scatter).then(|| chart.numeric_categories()).flatten();
+    let more = if chart.kind == ChartKind::Scatter { &[][..] } else { &chart.more[..] };
+    let series_style = if chart.labels { " chart:style-name=\"series-labelled\"" } else { "" };
+    let extra_series: String = (0..more.len())
+        .map(|k| {
+            format!(
+                "<chart:series chart:class=\"{class}\" chart:values-cell-range-address=\"{}\" \
+                 chart:label-cell-address=\"local-table.${}$1\"{series_style}/>",
+                range(k + 2),
+                col(k + 2)
+            )
+        })
+        .collect();
+    let extra_columns = "<table:table-column/>".repeat(more.len());
+    let extra_names: String = more
+        .iter()
+        .map(|(name, _)| format!("<table:table-cell office:value-type=\"string\"><text:p>{}</text:p></table:table-cell>", esc(name)))
+        .collect();
+    let mut styles = String::new();
+    if chart.stacked && chart.kind == ChartKind::Bar {
+        styles.push_str("<style:style style:name=\"plot\" style:family=\"chart\"><style:chart-properties chart:stacked=\"true\"/></style:style>");
+    }
+    if chart.labels {
+        styles.push_str(
+            "<style:style style:name=\"series-labelled\" style:family=\"chart\"><style:chart-properties chart:data-label-number=\"value\"/></style:style>",
+        );
+    }
+    if chart.hide_value_axis {
+        styles.push_str(
+            "<style:style style:name=\"axis-hidden\" style:family=\"chart\"><style:chart-properties chart:display-label=\"false\"/></style:style>",
+        );
+    }
+    let plot_style = if chart.stacked && chart.kind == ChartKind::Bar { " chart:style-name=\"plot\"" } else { "" };
+    let last_col = col(1 + more.len());
     let mut rows = String::new();
     for (i, (cat, v)) in chart.points.iter().enumerate() {
         let first = match &numeric_x {
@@ -572,25 +714,28 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
             ),
             None => format!("<table:table-cell office:value-type=\"string\"><text:p>{}</text:p></table:table-cell>", esc(cat)),
         };
-        rows.push_str(&format!(
-            "<table:table-row>{first}<table:table-cell office:value-type=\"float\" office:value=\"{v}\">\
-             <text:p>{v}</text:p></table:table-cell></table:table-row>",
-            v = num(*v)
-        ));
+        let cell = |v: f64| {
+            format!(
+                "<table:table-cell office:value-type=\"float\" office:value=\"{v}\"><text:p>{v}</text:p></table:table-cell>",
+                v = num(v)
+            )
+        };
+        let extra: String = more.iter().map(|(_, values)| cell(values.get(i).copied().unwrap_or(0.0))).collect();
+        rows.push_str(&format!("<table:table-row>{first}{}{extra}</table:table-row>", cell(*v)));
     }
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
-         <office:document-content {ODF_NS} office:version=\"1.2\"><office:automatic-styles/>\
+         <office:document-content {ODF_NS} office:version=\"1.2\"><office:automatic-styles>{styles}</office:automatic-styles>\
          <office:body><office:chart>\
          <chart:chart svg:width=\"{w_pt}pt\" svg:height=\"{h_pt}pt\" chart:class=\"{class}\">{legend}\
-         <chart:plot-area table:cell-range-address=\"local-table.$A$1:.$B${last}\" chart:data-source-has-labels=\"both\">\
+         <chart:plot-area{plot_style} table:cell-range-address=\"local-table.$A$1:.${last_col}${last}\" chart:data-source-has-labels=\"both\">\
          {axes}<chart:series chart:class=\"{class}\" chart:values-cell-range-address=\"{}\" \
-         chart:label-cell-address=\"local-table.$B$1\">{domain}</chart:series></chart:plot-area>\
+         chart:label-cell-address=\"local-table.$B$1\"{series_style}>{domain}</chart:series>{extra_series}</chart:plot-area>\
          <table:table table:name=\"local-table\">\
          <table:table-header-columns><table:table-column/></table:table-header-columns>\
-         <table:table-columns><table:table-column/></table:table-columns>\
+         <table:table-columns><table:table-column/>{extra_columns}</table:table-columns>\
          <table:table-header-rows><table:table-row><table:table-cell><text:p/></table:table-cell>\
-         <table:table-cell office:value-type=\"string\"><text:p>{}</text:p></table:table-cell></table:table-row></table:table-header-rows>\
+         <table:table-cell office:value-type=\"string\"><text:p>{}</text:p></table:table-cell>{extra_names}</table:table-row></table:table-header-rows>\
          <table:table-rows>{rows}</table:table-rows></table:table></chart:chart>\
          </office:chart></office:body></office:document-content>",
         range(1),
@@ -625,7 +770,14 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
         "scatter" => ChartKind::Scatter,
         _ => return None,
     };
-    let series = chart.find_q("chart:series");
+    let all_series: Vec<&El> = {
+        let mut v = Vec::new();
+        if let Some(plot) = chart.find_q("chart:plot-area") {
+            v.extend(plot.children.iter().filter(|c| c.name == "chart:series"));
+        }
+        v
+    };
+    let series = all_series.first().copied().or_else(|| chart.find_q("chart:series"));
     let val_col = series
         .and_then(|s| s.attr("chart:values-cell-range-address"))
         .and_then(column_of)
@@ -660,17 +812,54 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
         body.all_q("table:table-row", &mut rows);
     }
     rows.extend(table.children.iter().filter(|c| c.name == "table:table-row"));
-    let points = rows
-        .into_iter()
-        .take(10_000)
-        .filter_map(|r| {
-            let c = cells(r);
-            let value = c.get(val_col)?.1?;
+    let body: Vec<Vec<(String, Option<f64>)>> = rows.into_iter().take(10_000).map(cells).collect();
+    let data_rows: Vec<&Vec<(String, Option<f64>)>> = body.iter().filter(|c| c.get(val_col).is_some_and(|v| v.1.is_some())).collect();
+    let points = data_rows
+        .iter()
+        .map(|c| {
+            let value = c[val_col].1.unwrap_or(0.0);
             let cat = c.get(cat_col).map(|c| c.0.clone()).unwrap_or_default();
-            Some((cat, if value.is_finite() { value } else { 0.0 }))
+            (cat, if value.is_finite() { value } else { 0.0 })
         })
         .collect();
-    Some(ChartData { kind, series: series_name, points })
+    // Automatic chart styles by name: their chart-properties.
+    let style_prop = |name: Option<&str>, prop: &str| -> Option<String> {
+        let name = name?;
+        let styles = root.find_q("office:automatic-styles")?;
+        let style = styles.children.iter().find(|st| st.name == "style:style" && st.attr("style:name") == Some(name))?;
+        style.child_q("style:chart-properties")?.attr(prop).map(str::to_string)
+    };
+    let header_cells = header.map(cells).unwrap_or_default();
+    let more = if kind == ChartKind::Scatter || kind == ChartKind::Pie {
+        Vec::new()
+    } else {
+        all_series
+            .iter()
+            .skip(1)
+            .take(MAX_SERIES - 1)
+            .filter_map(|s| {
+                let c = s.attr("chart:values-cell-range-address").and_then(column_of)?;
+                let name = header_cells.get(c).map(|h| h.0.clone()).unwrap_or_default();
+                Some((name, data_rows.iter().map(|r| r.get(c).and_then(|v| v.1).filter(|v| v.is_finite()).unwrap_or(0.0)).collect()))
+            })
+            .collect()
+    };
+    let plot_style = chart.find_q("chart:plot-area").and_then(|p| p.attr("chart:style-name"));
+    let stacked = kind == ChartKind::Bar
+        && (style_prop(plot_style, "chart:stacked").as_deref() == Some("true")
+            || style_prop(plot_style, "chart:percentage").as_deref() == Some("true"));
+    let labels = !all_series.is_empty()
+        && all_series.iter().all(|s| {
+            style_prop(s.attr("chart:style-name"), "chart:data-label-number").is_some_and(|v| v != "none")
+        });
+    let hide_value_axis = matches!(kind, ChartKind::Bar | ChartKind::Line | ChartKind::Area)
+        && chart
+            .find_q("chart:plot-area")
+            .map(|p| p.children.iter().filter(|c| c.name == "chart:axis" && c.attr("chart:dimension") == Some("y")).collect::<Vec<_>>())
+            .unwrap_or_default()
+            .iter()
+            .any(|ax| style_prop(ax.attr("chart:style-name"), "chart:display-label").as_deref() == Some("false"));
+    Some(ChartData { kind, series: series_name, points, more, stacked, labels, hide_value_axis })
 }
 
 #[cfg(test)]
@@ -687,6 +876,66 @@ mod tests {
             let xml = chart_space_xml(&c);
             assert_eq!(parse_chart_space(&xml), Some(c.clone()), "{kind:?}: {xml}");
         }
+    }
+
+    /// Two series, stacked, labelled, with the value axis hidden: the
+    /// charts of the pay-centre deck in the real corpus (#2327).
+    fn stacked_pair() -> ChartData {
+        let mut c = ChartData::one(
+            ChartKind::Bar,
+            " $48/case ",
+            vec![("May".into(), 951.0), ("June".into(), 3623.0), ("July".into(), 5739.0)],
+        );
+        c.more = vec![(" $418/case ".into(), vec![123.0, 587.0, 814.0])];
+        c.stacked = true;
+        c.labels = true;
+        c.hide_value_axis = true;
+        c
+    }
+
+    #[test]
+    fn several_stacked_labelled_series_read_back_from_drawingml() {
+        let c = stacked_pair();
+        let xml = chart_space_xml(&c);
+        assert!(xml.contains("<c:grouping val=\"stacked\"/>") && xml.contains("<c:showVal val=\"1\"/>"), "{xml}");
+        assert!(xml.contains("<c:valAx><c:axId val=\"222222222\"/><c:scaling><c:orientation val=\"minMax\"/></c:scaling><c:delete val=\"1\"/>"), "{xml}");
+        assert_eq!(parse_chart_space(&xml), Some(c), "{xml}");
+    }
+
+    #[test]
+    fn several_stacked_labelled_series_read_back_from_odf() {
+        let c = stacked_pair();
+        let xml = odf_chart_content_xml(&c, 480.0, 300.0);
+        assert_eq!(parse_odf_chart(&xml), Some(c), "{xml}");
+    }
+
+    #[test]
+    fn powerpoints_stacked_chart_keeps_both_series() {
+        // As the pay-centre deck writes it: series-level labels, a deleted
+        // value axis, the second series' categories left to the first's.
+        let xml = "<c:chartSpace><c:chart><c:plotArea><c:barChart><c:barDir val=\"col\"/>\
+            <c:grouping val=\"stacked\"/>\
+            <c:ser><c:idx val=\"0\"/><c:tx><c:v>A</c:v></c:tx><c:dLbls><c:showVal val=\"1\"/></c:dLbls>\
+            <c:cat><c:strLit><c:pt idx=\"0\"><c:v>May</c:v></c:pt><c:pt idx=\"1\"><c:v>June</c:v></c:pt></c:strLit></c:cat>\
+            <c:val><c:numLit><c:pt idx=\"0\"><c:v>1</c:v></c:pt><c:pt idx=\"1\"><c:v>2</c:v></c:pt></c:numLit></c:val></c:ser>\
+            <c:ser><c:idx val=\"1\"/><c:tx><c:v>B</c:v></c:tx><c:dLbls><c:showVal val=\"1\"/></c:dLbls>\
+            <c:val><c:numLit><c:pt idx=\"1\"><c:v>5</c:v></c:pt></c:numLit></c:val></c:ser>\
+            <c:overlap val=\"100\"/></c:barChart><c:catAx/><c:valAx><c:delete val=\"1\"/></c:valAx>\
+            </c:plotArea></c:chart></c:chartSpace>";
+        let c = parse_chart_space(xml).unwrap();
+        assert_eq!(c.points, vec![("May".to_string(), 1.0), ("June".to_string(), 2.0)]);
+        assert_eq!(c.more, vec![("B".to_string(), vec![0.0, 5.0])]);
+        assert!(c.stacked && c.labels && c.hide_value_axis);
+    }
+
+    #[test]
+    fn adding_and_removing_points_keeps_every_series_aligned() {
+        let mut c = stacked_pair();
+        assert!(c.apply(&ChartEdit::AddPoint));
+        assert_eq!(c.more[0].1, vec![123.0, 587.0, 814.0, 814.0]);
+        assert!(c.apply(&ChartEdit::RemovePoint(0)));
+        assert_eq!(c.more[0].1, vec![587.0, 814.0, 814.0]);
+        assert_eq!(c.points.len(), 3);
     }
 
     #[test]
@@ -769,7 +1018,7 @@ mod tests {
     #[test]
     fn a_new_point_continues_the_categories() {
         let next = |cats: &[&str]| {
-            let mut c = ChartData { kind: ChartKind::Bar, series: String::new(), points: cats.iter().map(|s| (s.to_string(), 1.0)).collect() };
+            let mut c = ChartData::one(ChartKind::Bar, "", cats.iter().map(|s| (s.to_string(), 1.0)).collect());
             c.apply(&ChartEdit::AddPoint);
             c.points.last().unwrap().0.clone()
         };
@@ -783,7 +1032,7 @@ mod tests {
     #[test]
     fn a_chart_is_described_by_its_kind_series_and_size() {
         assert_eq!(ChartData::sample(ChartKind::Bar).describe(), "Bar chart: Sales, 4 values");
-        let c = ChartData { kind: ChartKind::Pie, series: String::new(), points: vec![("a".into(), 1.0)] };
+        let c = ChartData::one(ChartKind::Pie, "", vec![("a".into(), 1.0)]);
         assert_eq!(c.describe(), "Pie chart, 1 value");
     }
 

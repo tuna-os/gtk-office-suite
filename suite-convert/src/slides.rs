@@ -889,7 +889,7 @@ mod tests {
             w: 400.0,
             h: 240.0,
             rotation: 0.0,
-            chart: decks_core::engine::chart::ChartData { kind, series: "Sales \"#1\"".into(), points },
+            chart: decks_core::engine::chart::ChartData::one(kind, "Sales \"#1\"", points),
         });
         deck
     }

@@ -883,7 +883,27 @@ pub fn draw_object(
             let (w, h) = (sw / k, sh / k);
             cr.rectangle(0.0, 0.0, w, h);
             cr.clip();
-            suite_common::charts::draw_chart(cr, &chart.points, chart.kind, w, h, chart.legend());
+            if chart.is_rich() {
+                // Every series over the first's categories, stacked,
+                // labelled or axis-less as the file draws them (#2327).
+                let categories: Vec<String> = chart.points.iter().map(|p| p.0.clone()).collect();
+                let all = chart.all_series();
+                let series: Vec<suite_common::charts::Series> = all
+                    .iter()
+                    .map(|(name, values)| suite_common::charts::Series {
+                        name: (!name.trim().is_empty()).then_some(*name),
+                        values: values.as_slice(),
+                    })
+                    .collect();
+                let opts = suite_common::charts::Options {
+                    stacked: chart.stacked,
+                    labels: chart.labels,
+                    hide_value_axis: chart.hide_value_axis,
+                };
+                suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
+            } else {
+                suite_common::charts::draw_chart(cr, &chart.points, chart.kind, w, h, chart.legend());
+            }
             cr.restore().unwrap();
         }
         SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
