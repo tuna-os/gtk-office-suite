@@ -67,6 +67,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/shape-effects": {
+    "A": "amber"
+  },
   "decks/shapes": {
     "A": "green",
     "B": "green",
