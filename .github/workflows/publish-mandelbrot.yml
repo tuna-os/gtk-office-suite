@@ -5,7 +5,8 @@ name: Publish Mandelbrot
 # tuna-os/mandelbrot (mandelbrot/RELEASING.md): an OCI Flatpak per
 # architecture on ghcr.io/tuna-os/mandelbrot, indexed in the TunaOS remote
 # (oci+https://tunaos.org/flatpak), through the same reusable workflow
-# publish-flatpak.yml uses for Letters, Tables and Decks.
+# publish-flatpak.yml used for Letters, Tables and Decks (one app per run, so
+# its per-architecture artifact names cannot collide here).
 #
 # Its own tags, `mandelbrot-v<version>`, because it keeps its own version;
 # the suite's `v*` tags publish the three office apps and do not start this.
