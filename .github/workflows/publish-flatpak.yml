@@ -162,6 +162,13 @@ jobs:
   # `releases/latest` sees it before its downloads are attached. This
   # attaches the tarballs and then publishes it, only once the Flatpaks
   # were published and every tarball was built.
+  #
+  # Publishing it with GITHUB_TOKEN raises no `release: published` event
+  # (GitHub starts no workflow from that token's events), so
+  # release-evidence.yml and overview-videos.yml, which wait for that event,
+  # never ran for a release made this way, and v2.1.62 and v2.1.63 went out
+  # without their evidence (#1209). A workflow_dispatch is the one event the
+  # token may raise, so this dispatches both on the tag.
   release:
     needs: [publish, tarballs]
     if: >-
@@ -170,6 +177,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: write   # dispatch the release's evidence and overview videos
     steps:
       - uses: actions/download-artifact@v8.0.2
         with:
@@ -183,3 +191,11 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" --clobber -R "$GITHUB_REPOSITORY" -- *.tar.gz *.tar.gz.sha256
           gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
           gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' >> "$GITHUB_STEP_SUMMARY"
+      - name: Gather the release's evidence and overview videos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-evidence.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            -f tag="$GITHUB_REF_NAME" -f attach=true
+          gh workflow run overview-videos.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
