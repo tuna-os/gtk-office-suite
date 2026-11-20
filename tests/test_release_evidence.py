@@ -19,10 +19,16 @@ def fill(root, kinds):
             f.write(kind)
 
 
+def lock(tmp_path):
+    path = tmp_path / "Cargo.lock"
+    path.write_text("version = 4\n")
+    return str(path)
+
+
 def test_every_kind_is_listed_with_its_digest(tmp_path):
     src, out = tmp_path / "in", tmp_path / "out"
     fill(src, evidence.KINDS)
-    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out)]) == 0
+    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out), lock(tmp_path)]) == 0
     manifest = json.loads((out / "evidence.json").read_text())
     assert (manifest["revision"], manifest["tag"], manifest["missing"]) == ("abc123", "v3.0.0", [])
     entry = manifest["kinds"]["junit"]["files"][0]
@@ -34,8 +40,31 @@ def test_every_kind_is_listed_with_its_digest(tmp_path):
 def test_a_missing_kind_fails_and_is_named(tmp_path):
     src, out = tmp_path / "in", tmp_path / "out"
     fill(src, [k for k in evidence.KINDS if k != "visual"])
-    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out)]) == 1
+    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out), lock(tmp_path)]) == 1
     assert json.loads((out / "evidence.json").read_text())["missing"] == ["visual"]
+
+
+def test_the_bundle_names_the_lock_it_was_built_from(tmp_path):
+    """release.md: evidence identifies the exact commit *and* packaged lock."""
+    src, out = tmp_path / "in", tmp_path / "out"
+    fill(src, evidence.KINDS)
+    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out), lock(tmp_path)]) == 0
+    manifest = json.loads((out / "evidence.json").read_text())
+    assert manifest["locks"] == {"Cargo.lock": hashlib.sha256(b"version = 4\n").hexdigest()}
+
+
+def test_a_bundle_without_the_lock_fails(tmp_path):
+    src, out = tmp_path / "in", tmp_path / "out"
+    fill(src, evidence.KINDS)
+    assert evidence.main(["evidence.py", "abc123", "v3.0.0", str(src), str(out)]) == 1
+    assert json.loads((out / "evidence.json").read_text())["missing"] == ["Cargo.lock"]
+
+
+def test_the_workflow_passes_the_tags_lock():
+    with open(os.path.join(REPO, ".github", "workflows", "release-evidence.yml")) as f:
+        workflow = f.read()
+    assert 'git show "$rev:Cargo.lock"' in workflow
+    assert "locks/*" in workflow
 
 
 def test_the_kinds_are_the_ones_release_md_names():

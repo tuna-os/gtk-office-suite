@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assemble a release's evidence bundle (release-evidence.yml, #1209).
 
-    evidence.py <revision> <tag> <in-dir> <out-dir>
+    evidence.py <revision> <tag> <in-dir> <out-dir> [<lock file>...]
 
 release.md asks each release to publish its machine-readable capability
 matrix, JUnit, independent-reader results, visual and accessibility
@@ -13,6 +13,12 @@ reader can tell the bundle is the one CI made and that nothing is missing.
 
 A kind with no files is listed as missing rather than left out, and the
 script exits 1, so a release is not published with a gap it does not show.
+
+The lock files are what the packaged apps were built from at the revision:
+the workspace Cargo.lock and the Flatpak manifests (release.md: evidence
+must identify "that exact commit and packaged dependency lock"). Each is
+recorded under `locks` by name with its SHA-256; without Cargo.lock the
+script exits 1.
 """
 
 import hashlib
@@ -39,8 +45,16 @@ def sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def assemble(revision: str, tag: str, src: str, out: str) -> dict:
-    manifest = {"revision": revision, "tag": tag, "kinds": {}, "missing": []}
+def assemble(revision: str, tag: str, src: str, out: str, locks: tuple = ()) -> dict:
+    manifest = {
+        "revision": revision,
+        "tag": tag,
+        "locks": {os.path.basename(path): sha256(path) for path in locks},
+        "kinds": {},
+        "missing": [],
+    }
+    if "Cargo.lock" not in manifest["locks"]:
+        manifest["missing"].append("Cargo.lock")
     for kind, what in KINDS.items():
         files = []
         root = os.path.join(src, kind)
@@ -64,7 +78,12 @@ def assemble(revision: str, tag: str, src: str, out: str) -> dict:
 def main(argv: list) -> int:
     revision, tag, src, out = argv[1:5]
     os.makedirs(out, exist_ok=True)
-    manifest = assemble(revision, tag, src, out)
+    manifest = assemble(revision, tag, src, out, tuple(argv[5:]))
+    print(f"revision: {revision}")
+    for name, digest in manifest["locks"].items():
+        print(f"{name}: sha256 {digest}")
+    if "Cargo.lock" not in manifest["locks"]:
+        print("Cargo.lock: MISSING")
     for kind in KINDS:
         n = len(manifest["kinds"][kind]["files"])
         print(f"{kind}: {n} file(s)" if n else f"{kind}: MISSING")
