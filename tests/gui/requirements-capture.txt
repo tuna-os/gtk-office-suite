@@ -1,0 +1,12 @@
+# mss (screen capture) for the GUI journeys, the screenshots and the videos.
+# It has no Ubuntu package, so the workflows install it with pip:
+#
+#   python3 -m pip install --break-system-packages --require-hashes -r tests/gui/requirements-capture.txt
+#
+# The version and the hashes are fixed so a job installs the files that were
+# reviewed, not whatever PyPI serves when it runs (#2297). To move the pin:
+#
+#   echo 'mss==<version>' | uv pip compile - --universal --generate-hashes --no-header --no-annotate
+mss==10.2.0 \
+    --hash=sha256:ab271860775545e62f29d7b11f82f279ac1048f5bbdd26cfad84830208dbd393 \
+    --hash=sha256:e79f428899280e7e64e38365b5bfed683851ebea807eeaeadaf06eb8e0d67197
