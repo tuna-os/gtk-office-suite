@@ -12,15 +12,19 @@
 // So before the slide's passes run, each SmartArt frame is replaced by a
 // group of the drawing's shapes at the frame's place: every pass then
 // reads them as it reads any shape. A save writes them back as shapes.
+// A drawing's own relationships (a picture fill's `r:embed`) name parts
+// from the drawing's folder; they join the slide's under fresh ids.
 
 /// `slide_xml` with each SmartArt frame replaced by its drawing's shapes,
-/// grouped at the frame's place. `rels` is the slide's relationships part;
+/// grouped at the frame's place, and the `Relationship` elements the
+/// slide's relationships part needs added for them. `rels` is that part;
 /// `read` reads a package part by name, empty if it is missing. A frame
 /// whose drawing can't be found is left as it was.
-pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: impl FnMut(&str) -> String) -> String {
+pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: impl FnMut(&str) -> String) -> (String, String) {
     if !slide_xml.contains("relIds") {
-        return slide_xml.to_string();
+        return (slide_xml.to_string(), String::new());
     }
+    let mut extra_rels = String::new();
     let rels = relationships(rels);
     let drawings: Vec<&Rel> = rels.iter().filter(|r| r.kind.ends_with("/diagramDrawing")).collect();
     let mut out = String::with_capacity(slide_xml.len());
@@ -45,8 +49,24 @@ pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: imp
             .and_then(|data| attr_in(&data, "dataModelExt", "relId").map(str::to_string))
             .and_then(|id| rels.iter().find(|r| r.id == id));
         let drawing = named.or(drawings.get(nth).copied());
-        nth += 1;
-        let shapes = drawing.map(|d| read(&part_path(slide_dir, &d.target))).and_then(|xml| shapes_of(&xml));
+        let shapes = drawing.and_then(|d| {
+            let path = part_path(slide_dir, &d.target);
+            let mut shapes = shapes_of(&read(&path))?;
+            // The drawing's relationships, renamed so they can't collide
+            // with the slide's, their targets made relative to the slide.
+            let (dir, file) = path.rsplit_once('/').unwrap_or(("", &path));
+            for r in relationships(&read(&format!("{dir}/_rels/{file}.rels"))) {
+                let id = format!("dgm{nth}_{}", r.id);
+                if !shapes.contains(&format!("=\"{}\"", r.id)) {
+                    continue;
+                }
+                shapes = shapes.replace(&format!("r:embed=\"{}\"", r.id), &format!("r:embed=\"{id}\""));
+                shapes = shapes.replace(&format!("r:link=\"{}\"", r.id), &format!("r:link=\"{id}\""));
+                let target = relative_to(slide_dir, &part_path(dir, &r.target));
+                extra_rels.push_str(&format!(r#"<Relationship Id="{id}" Type="{}" Target="{target}"/>"#, r.kind));
+            }
+            Some(shapes)
+        });
         match (shapes, frame_box(frame)) {
             (Some(shapes), Some((x, y, w, h))) => out.push_str(&format!(
                 "<p:grpSp><p:nvGrpSpPr><p:cNvPr id=\"0\" name=\"Diagram\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
@@ -55,9 +75,20 @@ pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: imp
             )),
             _ => out.push_str(frame),
         }
+        nth += 1;
     }
     out.push_str(rest);
-    out
+    (out, extra_rels)
+}
+
+/// Part `part`'s path relative to folder `dir`, as a relationship target.
+fn relative_to(dir: &str, part: &str) -> String {
+    let from: Vec<&str> = dir.split('/').filter(|s| !s.is_empty()).collect();
+    let to: Vec<&str> = part.split('/').filter(|s| !s.is_empty()).collect();
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let mut out: Vec<&str> = vec![".."; from.len() - common];
+    out.extend(&to[common..]);
+    out.join("/")
 }
 
 struct Rel {
@@ -180,7 +211,8 @@ mod tests {
     #[test]
     fn a_smartart_frame_becomes_its_drawings_shapes_at_its_place() {
         let slide = format!("<p:spTree>{FRAME}</p:spTree>");
-        let out = inline(&slide, RELS, "ppt/slides", read);
+        let (out, extra) = inline(&slide, RELS, "ppt/slides", read);
+        assert_eq!(extra, "", "no pictures, no relationships");
         assert!(!out.contains("graphicFrame"), "{out}");
         assert!(out.contains(r#"<a:off x="100" y="200"/><a:ext cx="3000" cy="2000"/><a:chOff x="0" y="0"/><a:chExt cx="3000" cy="2000"/>"#), "{out}");
         assert!(out.contains(r#"<p:sp modelId="a"><p:nvSpPr>"#), "{out}");
@@ -191,14 +223,36 @@ mod tests {
     #[test]
     fn a_frame_without_its_drawing_and_other_frames_stay_as_they_were() {
         let slide = format!("<p:spTree>{FRAME}</p:spTree>");
-        assert_eq!(inline(&slide, RELS, "ppt/slides", |_| String::new()), slide);
+        assert_eq!(inline(&slide, RELS, "ppt/slides", |_| String::new()).0, slide);
         let table = r#"<p:spTree><p:graphicFrame><a:tbl/></p:graphicFrame></p:spTree>"#;
-        assert_eq!(inline(table, RELS, "ppt/slides", read), table);
+        assert_eq!(inline(table, RELS, "ppt/slides", read).0, table);
     }
 
     #[test]
     fn targets_resolve_against_the_slides_folder() {
         assert_eq!(part_path("ppt/slides", "../diagrams/drawing1.xml"), "ppt/diagrams/drawing1.xml");
         assert_eq!(part_path("ppt/slides", "/ppt/diagrams/d.xml"), "ppt/diagrams/d.xml");
+        assert_eq!(relative_to("ppt/slides", "ppt/media/image3.png"), "../media/image3.png");
+        assert_eq!(relative_to("ppt/slides", "ppt/slides/x.png"), "x.png");
+    }
+
+    /// A picture in a diagram names it in the drawing's own relationships:
+    /// it joins the slide's under a fresh id, its target from the slide.
+    #[test]
+    fn a_pictures_relationship_follows_it_into_the_slide() {
+        let drawing = DRAWING.replace(
+            "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>",
+            "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed=\"rId1\"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>",
+        );
+        let drawing_rels = r#"<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/></Relationships>"#;
+        let read = |name: &str| match name {
+            "ppt/diagrams/data1.xml" => DATA.to_string(),
+            "ppt/diagrams/drawing1.xml" => drawing.clone(),
+            "ppt/diagrams/_rels/drawing1.xml.rels" => drawing_rels.to_string(),
+            _ => String::new(),
+        };
+        let (out, extra) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:blip r:embed="dgm0_rId1"/>"#), "{out}");
+        assert_eq!(extra, r#"<Relationship Id="dgm0_rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>"#);
     }
 }
