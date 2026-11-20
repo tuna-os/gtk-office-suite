@@ -57,9 +57,12 @@ jobs:
           path: videos/*.mp4
           retention-days: 90
 
+      # A run for a tag is a release's: publish-flatpak.yml dispatches this on
+      # the tag, because the release it publishes with GITHUB_TOKEN raises no
+      # `release` event of its own.
       - name: Attach them to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
         run: gh release upload "$TAG" videos/*.mp4 --clobber
