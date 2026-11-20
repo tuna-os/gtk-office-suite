@@ -31,9 +31,15 @@ cd "$WORK"
 SSH=(ssh -n -i id_lab -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@127.0.0.1)
 SCP=(scp -i id_lab -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 
+# The virtual monitor. Big enough for Tier A's windows (capture.py's
+# window(): 1100x1700, Decks 1760x1100) with GNOME's top bar and the
+# window's frame; qmp_drag maps its pixels to the tablet with it.
+SCREEN_W=1920; SCREEN_H=1920
+export SCREEN_W SCREEN_H
+
 qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6G \
     -drive file=guest.qcow2,if=virtio,snapshot=on \
-    -device virtio-vga,xres=1920,yres=1920 -display none \
+    -device virtio-vga,xres=$SCREEN_W,yres=$SCREEN_H -display none \
     -device qemu-xhci -device usb-tablet \
     -nic user,model=virtio,hostfwd=tcp::2222-:22 \
     -qmp unix:qmp.sock,server,nowait -serial file:run-serial.log &
@@ -67,7 +73,8 @@ PY
 qmp_drag() { python3 - "$@" <<'PY'
 import json, socket, sys, time
 x1, y1, x2, y2 = (int(v) for v in sys.argv[1:5])
-W, H = 1600, 1400
+import os
+W, H = int(os.environ["SCREEN_W"]), int(os.environ["SCREEN_H"])
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
 f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
 def send(events):
