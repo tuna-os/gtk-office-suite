@@ -48,9 +48,8 @@ The questions those answer:
 - [ ] **Where the code is maintained.** This repository, from a named date.
   Until then the standalone repository stays authoritative and changes made
   here are carried back to it, or the two copies drift.
-  `lifafa/fork/MAINTAINING.md` says "the code stays here" about tuna-os/lifafa,
-  and `mandelbrot/AGENTS.md` is titled for tuna-os/mandelbrot; both are rewritten
-  at the switch (step 4).
+  Both apps' maintainer documents now name this repository (step 4), so
+  what is left is the owner's call to archive the standalone repositories.
 - [ ] **Lifafa's update channel.** Either move it to the TunaOS OCI remote with
   the other four apps (one remote for the whole suite), or keep publishing the
   Pages OSTree repository. Every existing Lifafa install follows the Pages
@@ -146,19 +145,23 @@ The questions those answer:
 
 ## 4. Identity, links and documents
 
-- [ ] Lifafa's metainfo (`lifafa/data/co.hyprlab.Hylki.metainfo.xml`) still
-  names Hylki's homepage, bug tracker and source; `fork/rebrand.sh` rewrites
-  some of these at build time. Check what the built app shows (About, the
-  welcome page, "Report a problem") and point it at this repository's issues
-  with a `lifafa` label, or keep tuna-os/lifafa's tracker open (step 6).
+- [x] Lifafa's links. The source keeps Hylki's homepage, bug tracker and
+  source, and `fork/rebrand.sh` rewrites them at build time, in the
+  metainfo, About and the welcome page. They now point at this repository:
+  its issues as the bug tracker, `lifafa/` as the source, and the metainfo
+  screenshots at `lifafa/data/repo/`. Before this they named tuna-os/lifafa.
 - [x] Mandelbrot's metainfo, About and `SECURITY.md` (advisories at
   tuna-os/mandelbrot) pointed at this repository. Before this they named
   upstream Fractal's homepage and tracker, so About's "Report an Issue" sent
   Mandelbrot's bugs to Fractal. The homepage is also the OAuth client URI
   homeservers show at sign-in.
-- [ ] `lifafa/fork/MAINTAINING.md`, `lifafa/README.md`, `mandelbrot/README.md`,
-  `mandelbrot/RELEASING.md` and `mandelbrot/AGENTS.md` rewritten for this
-  repository (where the code lives, how a release is cut, where to report).
+- [x] `lifafa/fork/MAINTAINING.md`, `lifafa/fork/README.md`,
+  `lifafa/fork/HELPERS.md`, `mandelbrot/README.md`, `mandelbrot/RELEASING.md`,
+  `mandelbrot/AGENTS.md`, `mandelbrot/CONTRIBUTING.md` and
+  `mandelbrot/docs/DEVELOPMENT.md` rewritten for this repository (where the
+  code lives, how a release is cut, where to report). `lifafa/README.md` is
+  upstream Hylki's README and stays as upstream wrote it, so the upstream
+  sync never conflicts on it; Lifafa's own front page is `lifafa/fork/README.md`.
 - [x] The stale note at the top of `.github/workflows/lifafa.yml` and the root
   `Cargo.toml` (Lifafa "gtk4 0.9") corrected: Lifafa is on gtk4 0.11 now, and
   `renovate.json`'s Lifafa toolkit rule says why it still moves only by hand.
@@ -177,15 +180,21 @@ The questions those answer:
   upstream's own diff since `lifafa/fork/UPSTREAM_BASE` (hyprlab/hylki
   `b5650f58`, the upstream commit the import was built on) three-way, and
   leaves conflict markers where the fork changed the same lines.
-- [ ] One upstream merge done this way end to end before the switch. A dry
+- [x] One upstream merge done this way end to end before the switch. A dry
   run on 2026-11-13 (98 upstream commits, to `a86e1282`) changed 296 files
   and left 36 conflicting hunks in 23, most where this repository reworked
   Lifafa (the in-tree relm, gtk4 0.11, A2); resolving them and the build is
   its own pull request. tuna-os/lifafa also has three fork fixes since the
   import to carry (`66f86c48`, `dd0ddadd`, `76d5bc62`).
-- [ ] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
+  Done in #2213: hyprlab/hylki to `1c86b250`, 307 files, the conflicts
+  resolved there and built and tested by `lifafa.yml`, with the three fork
+  fixes carried.
+- [x] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
   works from a monorepo: a branch of hyprlab/hylki with the change applied,
-  not a branch of this repository. Write the steps down.
+  not a branch of this repository. Write the steps down. (`lifafa/fork/MAINTAINING.md`,
+  "Sending a change upstream": work in a hyprlab/hylki clone, carry a change
+  made in `lifafa/` across with `git diff --relative=lifafa` and `git apply`,
+  and ship it early as the identical change through a suite pull request.)
 - [x] Mandelbrot: based on Fractal 14.3 (`fractal-14` @ `561b073e`), recorded in
   `mandelbrot/build-aux/UPSTREAM_BASE` with the history in
   `mandelbrot/docs/UPSTREAM.md`. Stable `fractal-N` releases are pulled in

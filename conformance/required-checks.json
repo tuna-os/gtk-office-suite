@@ -149,6 +149,8 @@
     {"workflow": ".github/workflows/actions-security.yml", "job": "lockfile", "policy": "optional",
      "reason": "New: checks that .github/workflows/actions.lock matches the workflows and that each locked commit verifies. It reports on every pull request; whether to require it is for the administrator."},
     {"workflow": ".github/workflows/actions-security.yml", "job": "zizmor", "policy": "optional",
-     "reason": "New: zizmor security lint of the workflows, failing on any finding. It reports on every pull request; whether to require it is for the administrator."}
+     "reason": "New: zizmor security lint of the workflows, failing on any finding. It reports on every pull request; whether to require it is for the administrator."},
+    {"workflow": ".github/workflows/ratchet.yml", "job": "ratchet", "policy": "optional",
+     "reason": "New: count ratchet over .ratchet.toml (#[ignore] tests, #[allow] attributes, undated deny.toml ignores). It reports on every pull request; whether to require it is for the administrator."}
   ]
 }

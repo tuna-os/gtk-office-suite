@@ -23,6 +23,28 @@ root, fuzz and `collab/headless` manifests, delete the vendored sources, and
 regenerate those lockfiles. Run the collaboration tests and the all-features advisory gate;
 none of the #1043 exceptions should return.
 
+## typst's CSL parser on a fixed quick-xml (#225)
+
+PDF export links typst, whose `typst-library` always depends on hayagriva and
+through it on **citationberg** 0.7.0, the latest release. That release asks for
+quick-xml `^0.38.1`, and the 0.38 line has no fix for RUSTSEC-2026-0194 or
+RUSTSEC-2026-0195; only quick-xml 0.41 and later are fixed. We waited for an
+upstream release first and kept both advisories in `deny.toml` meanwhile.
+
+We now vendor citationberg 0.7.0 with one change: its quick-xml requirement
+becomes 0.41.0, the version the workspace already resolves. The crate compiles
+without source changes, and its full test suite passes, including round-trips
+of every style in the CSL styles repository and every CSL locale. The quick-xml
+0.38.4 entry is gone from all three lockfiles, and so are the two advisory
+ignores.
+
+How to remove: once a citationberg release accepts quick-xml 0.41 or later,
+and the hayagriva and typst releases we use allow it, remove the
+`citationberg` patch from the root, fuzz and `collab/headless` manifests,
+delete `third_party/citationberg`, and regenerate those lockfiles. Then check
+that `cargo tree -i quick-xml@0.38.4` finds nothing and that `cargo deny check
+advisories` passes without the two ignores.
+
 ## Patch policy
 
 A patch must be mirrored in `fuzz/Cargo.toml` and `collab/headless/Cargo.toml`

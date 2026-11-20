@@ -4,11 +4,12 @@ Lifafa is a soft fork of [hyprlab/hylki](https://github.com/hyprlab/hylki).
 It ships as **Lifafa** (`org.tunaos.lifafa`), the email client of the TunaOS
 office suite, and installs next to upstream Hylki. Its code lives in
 `lifafa/` of [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)
-and is maintained there; [tuna-os/lifafa](https://github.com/tuna-os/lifafa),
-where it used to live, still publishes it until the cutover
-(`docs/CUTOVER-LIFAFA-MANDELBROT.md`) moves releases, issues and the upstream
-merge here, and is archived after. Where this page says "this repository" for
-releases and workflows, it means tuna-os/lifafa until then. The fork exists for one
+and is maintained, released and followed there: issues go to the suite's
+tracker, releases are `lifafa-v*` tags of the suite, and the upstream merge
+is the suite's `lifafa-upstream-sync.yml`
+(`docs/CUTOVER-LIFAFA-MANDELBROT.md`). [tuna-os/lifafa](https://github.com/tuna-os/lifafa),
+where it used to live, keeps only the Pages Flatpak repository existing
+installs follow. The fork exists for one
 reason: upstream declined native Tuta
 ([#584](https://github.com/hyprlab/hylki/pull/584)) and native Proton
 ([#586](https://github.com/hyprlab/hylki/pull/586)) accounts, and we want
@@ -22,8 +23,9 @@ There are three rules:
    upstream merge.
 2. **Fork-only code stays in fork-only files.** Every line the fork changes in
    an upstream file is a future merge conflict.
-3. **Never rewrite `main`.** Upstream is merged in, never rebased onto, so
-   anyone tracking this fork can always pull.
+3. **Never rewrite `main`.** Upstream's changes are applied on top as new
+   commits, never by rewriting history, so anyone tracking the suite can
+   always pull.
 
 ## What belongs where
 
@@ -35,7 +37,7 @@ There are three rules:
 | Native Tuta accounts | **Fork only** | [tuta-unofficial-sdk](https://github.com/tuna-os/tuta-unofficial-sdk) (the `native/tuta-unofficial-sdk` submodule), `src/worker/tuta*` |
 | Native Proton accounts | **Fork only** | [proton-unofficial-sdk](https://github.com/tuna-os/proton-unofficial-sdk) (the `native/proton-unofficial-sdk` submodule), `src/worker/proton*` |
 | Shared helper plumbing for Tuta and Proton | **Fork only** | `src/worker/helper*` |
-| Rebranding, fork CI, release and sync workflows | **Fork only** | `fork/`, `.github/workflows/{upstream-sync,fork-release,tuta-helper,proton-helper}.yml` |
+| Rebranding, fork CI, release and sync workflows | **Fork only** | `fork/`, and the suite's `.github/workflows/lifafa{,-flatpak,-upstream-sync}.yml` |
 
 When in doubt, ask whether the change would make sense in upstream Hylki with
 no Tuta or Proton account configured. If it would, it goes upstream.
@@ -68,31 +70,44 @@ no Tuta or Proton account configured. If it would, it goes upstream.
 
 ## Keeping up with upstream
 
-- **Automatic:** `.github/workflows/upstream-sync.yml` runs daily, and on
-  demand. It:
-  1. fetches `hyprlab/hylki` `main`;
-  2. merges it into our `main` with a merge commit;
-  3. builds, and runs the touchpoint check;
-  4. pushes if all of that passed.
-- **On a conflict or failure** it pushes nothing, and opens or updates one
-  issue labelled `upstream-sync` listing the files involved.
+`lifafa/` was imported into the suite as a snapshot, so git has no shared
+history with hyprlab/hylki to merge. Instead `fork/UPSTREAM_BASE` records the
+upstream commit last applied, and `fork/sync-upstream.sh` applies upstream's
+diff since then to `lifafa/`.
+
+- **Automatic:** the suite's `.github/workflows/lifafa-upstream-sync.yml` runs
+  every Monday, and on demand. It:
+  1. runs `fork/sync-upstream.sh` against hyprlab/hylki `main`, a three-way
+     apply that records the new base;
+  2. opens a pull request with the result, conflicts included;
+  3. leaves the build, the tests and the licence and advisory checks to
+     `lifafa.yml` on that pull request.
+- **On a conflict** the files keep their conflict markers, and the pull
+  request lists them and waits for a person. Files upstream changed that the
+  fork has deleted are left out, and the script names them.
 - **Resolving a sync by hand:**
-  1. `git fetch upstream && git switch main && git merge upstream/main`
+  1. Check out the sync branch, or run `lifafa/fork/sync-upstream.sh` from a
+     clean suite checkout.
   2. Resolve in favour of upstream's code, then re-apply the fork's small
      touchpoint edit on top. If the conflict is in a fork-only module's
      caller, change the fork module to fit upstream rather than the other
      way round.
   3. Run the build, the tests, `fork/check-touchpoints.sh` and the
      helpers' test suites.
-  4. Commit the merge and push. Close the `upstream-sync` issue.
+  4. Commit, keeping the new `fork/UPSTREAM_BASE`, and merge the pull
+     request once `lifafa.yml` passes.
 - **When upstream merges one of our pull requests,** the next sync brings it
-  in. If the fork carried an early copy, the merge resolves to upstream's
-  version; delete any fork-side duplicate in the same commit.
+  in. If the fork carried an early copy, the sync conflicts on it or applies
+  cleanly over it; resolve to upstream's version and delete any fork-side
+  duplicate in the same commit.
 
 ## Sending a change upstream
 
-1. `git fetch upstream && git switch -c fix/<topic> upstream/main`. Never
-   branch from our `main`: it contains Tuta and Proton.
+1. Work in a clone of hyprlab/hylki (or its fork under tuna-os), on a branch
+   from upstream's `main`: `git switch -c fix/<topic> upstream/main`. Never
+   start from `lifafa/`: it contains Tuta and Proton. A change made first in
+   `lifafa/` is carried across with `git diff --relative=lifafa` and
+   `git apply`.
 2. Follow upstream's `docs/CONTRIBUTING.md`:
    - Conventional Commits, with the subject at most 72 characters and no
      trailers;
@@ -105,9 +120,10 @@ no Tuta or Proton account configured. If it would, it goes upstream.
 4. Open the PR from `tuna-os:<branch>` to `hyprlab:main`. Say what was
    verified and what was not (for example "not reproduced against a real
    account").
-5. **Shipping it in the fork early (optional):** merge the same branch into
-   our `main`. Don't cherry-pick, because a merge keeps the commit identity,
-   so the upstream merge later resolves cleanly.
+5. **Shipping it in the fork early (optional):** make the same change in
+   `lifafa/` through a suite pull request, byte for byte as sent upstream.
+   When upstream merges it, the sync applies upstream's version over the
+   identical lines without a conflict.
 
 ## Dependencies the fork adds
 
@@ -119,7 +135,9 @@ no Tuta or Proton account configured. If it would, it goes upstream.
   Hylki identity (sessions named "Hylki", `HYLKI_TUTA_DEBUG`).
   - Tuta changes (protocol, SDK patches, tests) go to that repository, with
     its own CI and live tests. The fork only bumps the submodule to a
-    release tag, which `.github/workflows/tuta-helper.yml` checks.
+    release tag. The suite's `lifafa-flatpak.yml` builds the helper into
+    the Flatpak; the standalone repository's check that the submodule sits
+    on a tag has no counterpart here yet (the cutover's step 1).
   - Its README lists every SDK patch and why it exists, and documents the
     protocol `src/worker/tuta*` speaks.
 - **Proton:** [tuna-os/proton-unofficial-sdk](https://github.com/tuna-os/proton-unofficial-sdk),
@@ -130,7 +148,9 @@ no Tuta or Proton account configured. If it would, it goes upstream.
   behaves the same under either name.
   - Proton changes (protocol, tests, dependency bumps) go to that
     repository, with its own CI. The fork only bumps the submodule to a
-    release tag, which `.github/workflows/proton-helper.yml` checks.
+    release tag. The suite's `lifafa-flatpak.yml` builds the helper into
+    the Flatpak; the standalone repository's check that the submodule sits
+    on a tag has no counterpart here yet (the cutover's step 1).
   - A release whose `CHANGELOG.md` lists a protocol change needs the
     matching change in `src/worker/proton/wire.rs` in the same commit as the
     bump.
@@ -155,18 +175,20 @@ no Tuta or Proton account configured. If it would, it goes upstream.
 
 ## Releases
 
-- **Tags** are `v<upstream-version>-tuna<N>`, for example `v1.47.1-tuna3`, so
-  the upstream base is always visible.
-- **Building:** `.github/workflows/fork-release.yml` builds the rebranded
-  Flatpak (both helpers included) for x86_64 and aarch64, commits it signed
-  into the Flatpak repository on GitHub Pages, and attaches bundles of the
-  same commits to the GitHub release (fork/README.md, "Building" and
-  "Updates"). It reuses the caches a daily build of `main` keeps warm; run it
-  by hand with `clean` ticked if a cache goes bad. Before tagging, a manual
-  run on the branch builds, signs and assembles the repository without
-  publishing it.
+- **Tags** are `lifafa-v<upstream-version>-tuna<N>`, for example
+  `lifafa-v1.48.0-tuna1`, so the upstream base is always visible and the
+  suite's own `v*` tags stay the office apps'. Releases cut in tuna-os/lifafa
+  were `v<upstream-version>-tuna<N>`.
+- **Building:** the suite's `.github/workflows/lifafa-flatpak.yml` builds the
+  rebranded Flatpak (both helpers included) for x86_64 and aarch64. A tag
+  publishes it as OCI images to the TunaOS remote, commits it signed into
+  the Pages Flatpak repository, and attaches bundles of the same commits to
+  the GitHub release (fork/README.md, "Building" and "Updates"). Before
+  tagging, a manual run on the branch builds, signs and assembles everything
+  without publishing it.
 - **Keys:** the repository's signing key is the `LIFAFA_GPG_PRIVATE_KEY`
-  Actions secret, with an offline copy kept by the maintainers; only its
+  Actions secret of the suite's repository, with an offline copy kept by the
+  maintainers; only its
   public half, `fork/flatpak-repo.asc`, is in the tree, and the workflow
   refuses a secret that does not match it.
 - **Release notes** list the upstream version merged, plus the fork-only

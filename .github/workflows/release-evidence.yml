@@ -121,7 +121,15 @@ jobs:
           cp -r artifacts/release-readers-evidence/. gathered/
           cp -r artifacts/release-critical-evidence/. gathered/junit/ 2>/dev/null || true
           cp -r artifacts/visual-matrix/. gathered/visual/ 2>/dev/null || true
-          python3 tools/release/evidence.py "$(git rev-list -n 1 "$TAG")" "$TAG" gathered "evidence-$TAG" \
+          # The lock and manifests the packaged apps were built from, read
+          # from the tag's commit itself, not this workflow's checkout.
+          rev="$(git rev-list -n 1 "$TAG")"
+          mkdir -p locks
+          git show "$rev:Cargo.lock" > locks/Cargo.lock
+          for app in letters tables decks; do
+            git show "$rev:flatpak/org.tunaos.$app.json" > "locks/org.tunaos.$app.json"
+          done
+          python3 tools/release/evidence.py "$rev" "$TAG" gathered "evidence-$TAG" locks/* \
             | tee -a "$GITHUB_STEP_SUMMARY"
           tar czf "evidence-$TAG.tar.gz" "evidence-$TAG"
       - uses: actions/upload-artifact@v7.0.2

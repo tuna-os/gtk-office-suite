@@ -6,19 +6,23 @@ requests, code style) are in [CONTRIBUTING.md](../CONTRIBUTING.md); a map of the
 
 ## Get the source
 
+Mandelbrot lives in `mandelbrot/` of the suite's repository:
+
 ```sh
-git clone https://github.com/tuna-os/mandelbrot.git
-cd mandelbrot
+git clone https://github.com/tuna-os/gtk-office-suite.git
+cd gtk-office-suite/mandelbrot
 ```
 
-The repository has no submodules.
+Every command on this page runs from that directory. Mandelbrot is not a member
+of the suite's Cargo workspace (the root `Cargo.toml` excludes it), so its
+`Cargo.lock` and `target/` are its own.
 
 ## Choose a build path
 
 | Path | Manifest / command | Use it for |
 | --- | --- | --- |
 | Flatpak, development profile | `build-aux/org.tunaos.mandelbrot.Devel.json` | Day-to-day work in GNOME Builder or with `flatpak-builder`. Builds against the GNOME nightly SDK (`runtime-version: master`). |
-| Flatpak, release profile | `org.tunaos.mandelbrot.json` | Reproducing what CI and the release pipeline build (GNOME `50` runtime). |
+| Flatpak, release profile | `org.tunaos.mandelbrot.json` | Reproducing what CI and the release pipeline build (GNOME `51` runtime). |
 | Host build | `meson setup` + `ninja` | Working without Flatpak. You install the system dependencies yourself. |
 
 Both manifests build with `-Dcalls-media=true`, so Flatpak builds always include native call

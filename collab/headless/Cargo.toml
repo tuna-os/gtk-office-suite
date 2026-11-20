@@ -33,3 +33,5 @@ parking_lot = "0.13"
 # Mirror the product's collaboration security backports (#1043).
 loro-internal = { path = "../../third_party/loro-internal" }
 serde_columnar = { path = "../../third_party/serde_columnar" }
+# quick-xml 0.41 for typst's CSL parser (#225).
+citationberg = { path = "../../third_party/citationberg" }

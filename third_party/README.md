@@ -11,12 +11,13 @@ The measurement spikes remain separate experiments with their own lockfiles.
 | --- | --- | --- |
 | `loro-internal` (1.17.1) | `7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447` | `loro-dev/loro@ef83c083f19aea0d590a46db2d541b3a5daf1339` |
 | `serde_columnar` (0.3.14) | `2a16e404f17b16d0273460350e29b02d76ba0d70f34afdc9a4fa034c97d6c6eb` | `loro-dev/columnar@06663cfc569c6c770b28688f015f8a87fc04e156` |
+| `citationberg` (0.7.0, #225) | `756ff1e3d43a9ecc8183932fb4d9fd3971236f3ce4acb62fe51d1cd43297547d` | `typst/citationberg@25c66d5f79d919fb8446ef33075a70977066e82c` |
 
 Archives are available at
 `https://static.crates.io/crates/<crate>/<crate>-<version>.crate`.
 All archive files are preserved except the nested `Cargo.lock` files (unused
-by the product workspace). `LICENSE` was copied from each upstream revision's
-repository root because the published archives omit it.
+by the product workspace). For the two Loro crates, `LICENSE` was copied from
+each upstream revision's repository root because the published archives omit it.
 
 Local changes, also reflected in `Cargo.toml.orig`:
 
@@ -29,6 +30,12 @@ Local changes, also reflected in `Cargo.toml.orig`:
   The unused `heapless-cas` default was the path through `heapless` 0.7 to
   `atomic-polyfill`; columnar uses Postcard's allocation-backed serializers.
   Loro already requests Postcard with defaults disabled and `use-std` enabled.
+- `citationberg`: require quick-xml 0.41.0 instead of 0.38.1, so typst's CSL
+  parser no longer pulls the vulnerable quick-xml 0.38.4 (#225). No source
+  changes were needed. The archive ships `LICENSE-MIT` and `LICENSE-APACHE`;
+  the added `LICENSE` points to them. Upstream's tests pass with the CSL
+  `styles` and `locales` repositories checked out beside the crate. See
+  docs/DEPENDENCIES.md for how to remove it.
 
 ## How to remove
 
