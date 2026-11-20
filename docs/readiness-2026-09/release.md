@@ -4,11 +4,13 @@ Reuse this issue as release signoff owner, related #299/#407 and #390. Reference
 
 Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#241 and #1208 (performance and accessibility).
 
-- [ ] Select a candidate commit and require all capability evidence to identify that exact commit and packaged dependency lock.
+- [x] Select a candidate commit and require all capability evidence to identify that exact commit and packaged dependency lock.
       The candidate is the release tag. `release-evidence.yml` produces every kind of evidence at the tag's
       commit, and `tools/release/evidence.py` writes `evidence.json` naming that commit, together with the SHA-256
-      of the `Cargo.lock` and the three Flatpak manifests read from it; it fails when the lock is missing. To be
-      ticked on the first release whose attached bundle carries both.
+      of the `Cargo.lock` and the three Flatpak manifests read from it; it fails when the lock is missing.
+      **Verified on v2.1.65** (2026-11-20): `evidence-v2.1.65.tar.gz`, attached by release-evidence run
+      44725623501, names revision `7fd19c25` (the tag's commit) and `Cargo.lock` sha256 `d3bc98f9…`, the same
+      as `git show v2.1.65:Cargo.lock | sha256sum`.
 - [x] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
       The P0s are closed: failed Save/Save As/close-after-save keep unsaved work (#436), shared saves use exclusive
       temporaries, keep permissions and are durable (#437), and completeness claims are revision-bound evidence (#441).
@@ -46,7 +48,7 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
       the Help dialog's unescaped "&" in Pango markup, which left those group titles blank; that is fixed. Two are
       GtkLabel min-width warnings in the same dialog, kept as recorded warnings. **Crashes**: the harness already
       keeps a core dump and a gdb backtrace for a journey whose app dies (gui-stress, #1192).
-- [ ] Exercise supported architectures and reconcile flathub versus development manifests and locked source archives.
+- [x] Exercise supported architectures and reconcile flathub versus development manifests and locked source archives.
       Covered by `release-gate.yml`, to be ticked on the candidate that passes it: `source-archive` builds the
       locked source archive (`tools/release/source_archive.sh`: the tracked files and every crate vendored, the
       same bytes from the same revision); `offline-flatpak` builds Letters from it with no network on x86_64 and
@@ -54,17 +56,24 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
       which change only the app's source and cargo's network use; `tests/test_flathub_manifests.py`); and
       `aarch64-tests` runs the core crates' tests on aarch64. The dictionaries the Letters manifest fetched from
       LibreOffice's `master` are pinned to a commit: their sha256 would have broken the build at the next edit.
+      **Verified on v2.1.65**: release-gate run 44683901828 passed every job (source-archive, offline-flatpak on
+      x86_64 and aarch64, aarch64-tests, reproducible build), and publish-flatpak run 44683898911 built and pushed
+      all three apps for both architectures. Each `ghcr.io/tuna-os/<app>:v2.1.65-<arch>` and `latest-<arch>`
+      image's `org.flatpak.ref` names its own app and architecture (`tools/release/check_oci_ref.py` now checks
+      this in the build; v2.1.62 and v2.1.63 had shipped Decks under the Tables and Letters tags).
 - [x] Record reproducible-input checksums and compare clean builds; do not equate metadata validation with binary reproducibility.
       `release-gate.yml` records the inputs' sha256 (`release-inputs.sha256`) and, separately, builds the three
       release binaries twice from clean on two runners with the commit's `SOURCE_DATE_EPOCH` and fails unless
       they are byte-identical (`reproducible-build` / `reproducible-compare`, both checksum lists kept 90 days).
       Measured first locally: two clean release builds of Letters in different target directories, same sha256
       (`ee61d9de…`).
-- [ ] Publish machine-readable capability matrix, JUnit, independent-reader results, visual/a11y evidence and performance measurements with the release.
+- [x] Publish machine-readable capability matrix, JUnit, independent-reader results, visual/a11y evidence and performance measurements with the release.
       `release-evidence.yml` builds the bundle and attaches it to the release. Until #2314 it ran only on a
       `release: published` event, which a release published by `publish-flatpak.yml` with `GITHUB_TOKEN` never
-      raises, so v2.1.62 and v2.1.63 went out without it. The release job now dispatches it on the tag. To be
-      ticked on the first release carrying the bundle.
+      raises, so v2.1.62 and v2.1.63 went out without it. The release job now dispatches it on the tag.
+      **Verified on v2.1.65**: the release job dispatched release-evidence run 44725623501, which attached
+      `evidence-v2.1.65.tar.gz` to the release beside its six Flatpak bundles and six tarballs; the overview
+      videos were dispatched the same way (run 44725626997).
 - [ ] Resolve concrete security/dependency blockers using #268/#269/#225/#347/#1549 and verify fixes; no duplicate strategic security project required.
       #268, #269 and #347 are closed. #225 (quick-xml 0.38.4 through typst's CSL parser) is fixed in-repo by
       patching citationberg onto quick-xml 0.41 (#2312, `docs/DEPENDENCIES.md`). #1549 (unsafe-libyaml,
