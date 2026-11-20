@@ -440,21 +440,27 @@ The first baseline was Tier A 1 green / 31 amber / 10 red.
       screenshots the Broadway page, located by geom.json and verified
       against the app's own render. Tiers A and B agree to within about
       1 grey level; see "Broadway notes" (#888).
-- [ ] Tier C VM harness (`tools/render-lab/vm/`). Boots a GNOME image
+- [x] Tier C VM harness (`tools/render-lab/vm/`). Boots a GNOME image
       under QEMU/KVM, installs the CI Flatpak bundle, opens each fixture
       and takes a `screendump` over QMP. It needs `/dev/kvm`, which the
       2026-09-24 dev box lacks, so it is built and validated on a GitHub
-      runner.
+      runner. It runs nightly in `render-parity.yml`: every fixture captured
+      (105, none missing) and the installed and upgrade checks passing. Its
+      Compare step failed from 2026-11-12 only because improved and new
+      fixtures were never locked into `baseline.json`; they were on
+      2026-11-20, from three nights of identical verdicts.
 - [x] `render-parity.yml`: Tier A+B on every PR, ratchet, sticky PR
       comment, report artifact, issue sync on main, nightly Tier C (#888).
       Each app runs as its own parallel job, and every run publishes
       `baseline.proposed.json` (#946, #955). Tier C has not had a green run.
 - [x] Commit the first `baseline.json`, and let the issue sync open the
       first backlog: 41 `render-parity` issues (#888).
-- [ ] Close or consolidate the 60+ duplicate strategist issues so the
-      `render-parity` backlog is what agents find.
-- [ ] `visual_golden.py`: delete it, or make it the Tier A vs Tier B
-      comparator. Stop advertising a harness that doesn't run.
+- [x] Close or consolidate the 60+ duplicate strategist issues so the
+      `render-parity` backlog is what agents find. (No strategist issue is
+      open as of 2026-11-20.)
+- [x] `visual_golden.py`: delete it, or make it the Tier A vs Tier B
+      comparator. Stop advertising a harness that doesn't run. (Deleted;
+      nothing refers to it.)
 
 ### Phase 1: One renderer per app (architecture; ADR 0009 accepted)
 

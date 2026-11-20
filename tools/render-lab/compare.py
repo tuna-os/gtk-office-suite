@@ -1209,9 +1209,12 @@ def ratchet(args, manifest, card, agreement, printed=None):
         f.write("\n".join(md) + "\n")
 
     if args.update_baseline:
-        # Merge, so a single-app run (--app) doesn't drop the other apps.
+        # Merge per fixture *and* tier, so a single-app run (--app) keeps
+        # the other apps, and a run of one tier (the nightly Tier C job)
+        # keeps each fixture's verdicts in the tiers it did not run.
+        merged = {k: {**base.get(k, {}), **now.get(k, {})} for k in {*base, *now}}
         with open(args.baseline, "w") as f:
-            json.dump({**base, **now}, f, indent=2, sort_keys=True)
+            json.dump(merged, f, indent=2, sort_keys=True)
             f.write("\n")
         print(f"baseline written: {args.baseline}")
         # README's status table is generated from this file (#1211);
