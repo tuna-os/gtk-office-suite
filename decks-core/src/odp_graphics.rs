@@ -116,6 +116,14 @@ struct Props {
     glow_radius_pt: Option<f64>,
     glow_color: Option<Color>,
     glow_transparency: Option<f64>,
+    /// `draw:shadow` and its offset (points), colour, opacity and
+    /// LibreOffice's blur (points).
+    shadow: Option<String>,
+    shadow_dx_pt: Option<f64>,
+    shadow_dy_pt: Option<f64>,
+    shadow_color: Option<Color>,
+    shadow_opacity: Option<f64>,
+    shadow_blur_pt: Option<f64>,
 }
 
 impl Props {
@@ -129,6 +137,12 @@ impl Props {
         self.glow_radius_pt = self.glow_radius_pt.or(base.glow_radius_pt);
         self.glow_color = self.glow_color.or(base.glow_color);
         self.glow_transparency = self.glow_transparency.or(base.glow_transparency);
+        self.shadow = self.shadow.take().or_else(|| base.shadow.clone());
+        self.shadow_dx_pt = self.shadow_dx_pt.or(base.shadow_dx_pt);
+        self.shadow_dy_pt = self.shadow_dy_pt.or(base.shadow_dy_pt);
+        self.shadow_color = self.shadow_color.or(base.shadow_color);
+        self.shadow_opacity = self.shadow_opacity.or(base.shadow_opacity);
+        self.shadow_blur_pt = self.shadow_blur_pt.or(base.shadow_blur_pt);
     }
 }
 
@@ -190,6 +204,24 @@ impl GraphicDefs {
                         }
                         if let Some(c) = attr(&e, "loext:glow-color").as_deref().and_then(color) {
                             p.glow_color = Some(c);
+                        }
+                        if let Some(v) = attr(&e, "draw:shadow") {
+                            p.shadow = Some(v);
+                        }
+                        if let Some(v) = attr(&e, "draw:shadow-offset-x").and_then(|v| crate::odp::parse_length_pt(&v)) {
+                            p.shadow_dx_pt = Some(v);
+                        }
+                        if let Some(v) = attr(&e, "draw:shadow-offset-y").and_then(|v| crate::odp::parse_length_pt(&v)) {
+                            p.shadow_dy_pt = Some(v);
+                        }
+                        if let Some(c) = attr(&e, "draw:shadow-color").as_deref().and_then(color) {
+                            p.shadow_color = Some(c);
+                        }
+                        if let Some(o) = attr(&e, "draw:shadow-opacity").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
+                            p.shadow_opacity = Some((o / 100.0).clamp(0.0, 1.0));
+                        }
+                        if let Some(v) = attr(&e, "loext:shadow-blur").and_then(|v| crate::odp::parse_length_pt(&v)) {
+                            p.shadow_blur_pt = Some(v);
                         }
                         if let Some(t) = attr(&e, "loext:glow-transparency").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
                             p.glow_transparency = Some((t / 100.0).clamp(0.0, 1.0));
@@ -282,7 +314,16 @@ impl GraphicDefs {
             }
             _ => None,
         };
-        Some(ShapeStyle { glow, fill, gradient, stroke, fill_src, stroke_src })
+        // ODF's defaults where a visible shadow states none: 0.2 cm each
+        // way, grey 808080, opaque, unblurred.
+        let shadow = (p.shadow.as_deref() == Some("visible")).then(|| crate::engine::shape::Shadow {
+            dx: p.shadow_dx_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
+            dy: p.shadow_dy_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
+            blur: p.shadow_blur_pt.unwrap_or(0.0) * k,
+            color: p.shadow_color.unwrap_or(Color(0x80, 0x80, 0x80)),
+            alpha: p.shadow_opacity.unwrap_or(1.0),
+        });
+        Some(ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src })
     }
 }
 

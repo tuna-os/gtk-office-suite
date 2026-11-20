@@ -1,4 +1,4 @@
-// glow.rs — a shape's glow survives both formats (#2332).
+// glow.rs — a shape's glow and outer shadow survive both formats (#2332).
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The aiva progress dashboard's rings are circles filled with the slide's
@@ -24,6 +24,7 @@ fn deck() -> Deck {
         rotation: 0.0,
         style: ShapeStyle {
             glow: Some(glow()),
+            shadow: None,
             fill: Some(navy),
             gradient: None,
             stroke: Some(Stroke { color: navy, width: 1.0 }),
@@ -81,4 +82,59 @@ fn a_shape_without_a_glow_writes_none() {
         decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
         assert_eq!(glow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()), None, "{ext}");
     }
+}
+
+// ── Outer shadows: 119 across 13 of the real decks ──────────────────────
+
+fn shadowed() -> Deck {
+    let mut d = deck();
+    if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
+        style.glow = None;
+        style.shadow = Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4 });
+    }
+    d
+}
+
+fn shadow_of(d: &Deck) -> Option<decks_core::engine::shape::Shadow> {
+    d.slides[0].objects.iter().find_map(|o| match o {
+        SlideObject::Shape { style, .. } => style.shadow,
+        _ => None,
+    })
+}
+
+#[test]
+fn a_shadow_survives_both_formats() {
+    let want = shadow_of(&shadowed()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    for ext in ["pptx", "odp"] {
+        let path = dir.path().join(format!("s.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &shadowed()).unwrap();
+        let got = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap_or_else(|| panic!("{ext}: no shadow"));
+        assert!(
+            (got.dx - want.dx).abs() < 0.05
+                && (got.dy - want.dy).abs() < 0.05
+                && (got.blur - want.blur).abs() < 0.05
+                && got.color == want.color
+                && (got.alpha - want.alpha).abs() < 0.01,
+            "{ext}: {got:?}"
+        );
+    }
+}
+
+#[test]
+fn a_glow_and_a_shadow_are_written_in_effect_list_order() {
+    let mut d = shadowed();
+    if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
+        style.glow = Some(glow());
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("both.pptx");
+    decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml).unwrap();
+    let (g, s) = (xml.find("<a:glow").unwrap(), xml.find("<a:outerShdw").unwrap());
+    assert!(g < s, "CT_EffectList puts the glow before the outer shadow: {xml}");
+    let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
+    assert!(glow_of(&back).is_some() && shadow_of(&back).is_some());
 }

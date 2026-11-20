@@ -690,20 +690,42 @@ fn write_geometry_and_paint<W: std::io::Write>(
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }
-    // The glow, after the outline as CT_ShapeProperties orders them (#2332).
-    if let Some(g) = style.glow {
+    // The effects, after the outline as CT_ShapeProperties orders them, in
+    // CT_EffectList's order: the glow, then the outer shadow (#2332).
+    if style.glow.is_some() || style.shadow.is_some() {
         writer.write_event(Event::Start(BytesStart::new("a:effectLst")))?;
+    }
+    let color_alpha = |writer: &mut Writer<W>, color: super::shape::Color, a: f64| -> Result<(), quick_xml::Error> {
+        let mut srgb = BytesStart::new("a:srgbClr");
+        srgb.push_attribute(("val", color.to_hex().as_str()));
+        writer.write_event(Event::Start(srgb))?;
+        let mut alpha = BytesStart::new("a:alpha");
+        alpha.push_attribute(("val", ((a * 100_000.0).round() as i64).to_string().as_str()));
+        writer.write_event(Event::Empty(alpha))?;
+        writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
+        Ok(())
+    };
+    if let Some(g) = style.glow {
         let mut glow = BytesStart::new("a:glow");
         glow.push_attribute(("rad", emu(g.radius).as_str()));
         writer.write_event(Event::Start(glow))?;
-        let mut srgb = BytesStart::new("a:srgbClr");
-        srgb.push_attribute(("val", g.color.to_hex().as_str()));
-        writer.write_event(Event::Start(srgb))?;
-        let mut alpha = BytesStart::new("a:alpha");
-        alpha.push_attribute(("val", ((g.alpha * 100_000.0).round() as i64).to_string().as_str()));
-        writer.write_event(Event::Empty(alpha))?;
-        writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
+        color_alpha(writer, g.color, g.alpha)?;
         writer.write_event(Event::End(BytesEnd::new("a:glow")))?;
+    }
+    if let Some(sh) = style.shadow {
+        let dist = sh.dx.hypot(sh.dy);
+        let dir = sh.dy.atan2(sh.dx).to_degrees().rem_euclid(360.0);
+        let mut el = BytesStart::new("a:outerShdw");
+        el.push_attribute(("blurRad", emu(sh.blur).as_str()));
+        el.push_attribute(("dist", emu(dist).as_str()));
+        el.push_attribute(("dir", ((dir * 60_000.0).round() as i64).to_string().as_str()));
+        el.push_attribute(("algn", "ctr"));
+        el.push_attribute(("rotWithShape", "0"));
+        writer.write_event(Event::Start(el))?;
+        color_alpha(writer, sh.color, sh.alpha)?;
+        writer.write_event(Event::End(BytesEnd::new("a:outerShdw")))?;
+    }
+    if style.glow.is_some() || style.shadow.is_some() {
         writer.write_event(Event::End(BytesEnd::new("a:effectLst")))?;
     }
     Ok(())

@@ -519,9 +519,21 @@ impl GraphicStyles {
                     ),
                     None => String::new(),
                 };
+                let shadow = match s.shadow {
+                    Some(sh) => format!(
+                        " draw:shadow=\"visible\" draw:shadow-offset-x=\"{}pt\" draw:shadow-offset-y=\"{}pt\" \
+                         draw:shadow-color=\"#{}\" draw:shadow-opacity=\"{}%\" loext:shadow-blur=\"{}pt\"",
+                        snap(page_x(sh.dx)),
+                        snap(page_x(sh.dy)),
+                        sh.color.to_hex().to_lowercase(),
+                        (sh.alpha * 100.0).round(),
+                        snap(page_x(sh.blur))
+                    ),
+                    None => String::new(),
+                };
                 format!(
                     "<style:style style:name=\"{}{}\" style:family=\"graphic\">\
-                     <style:graphic-properties {fill} {stroke}{glow}/></style:style>",
+                     <style:graphic-properties {fill} {stroke}{glow}{shadow}/></style:style>",
                     self.prefix,
                     i + 1
                 )

@@ -197,7 +197,7 @@ mod tests {
             w: 50.0,
             h: 50.0,
             rotation: 0.0,
-            style: ShapeStyle { glow: None, fill: Some(fill), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle { glow: None, shadow: None, fill: Some(fill), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         }
     }
 

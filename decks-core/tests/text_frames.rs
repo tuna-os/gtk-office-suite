@@ -14,7 +14,7 @@ use decks_core::engine::text_body::Frame;
 use decks_core::engine::{read_pptx, write_pptx, Deck, SlideObject};
 
 fn navy() -> ShapeStyle {
-    ShapeStyle { glow: None, fill: Some(Color(0x09, 0x3B, 0x5C)), gradient: None, stroke: Some(Stroke { color: Color(0xFF, 0xFF, 0xFF), width: 3.0 }), fill_src: None, stroke_src: None }
+    ShapeStyle { glow: None, shadow: None, fill: Some(Color(0x09, 0x3B, 0x5C)), gradient: None, stroke: Some(Stroke { color: Color(0xFF, 0xFF, 0xFF), width: 3.0 }), fill_src: None, stroke_src: None }
 }
 
 fn tile(text: &str, x: f64) -> SlideObject {

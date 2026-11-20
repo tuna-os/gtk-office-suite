@@ -40,7 +40,7 @@ fn filled(kind: ShapeKind, (x, y, w, h): (f64, f64, f64, f64), fill: Color) -> S
     // an authored shape has no outline, and the writer materialises that
     // as an explicit no-line, so the source states it too (DCK-006).
     let fill_src = Some(FillSrc::Color(ColorRef::Rgb(fill.to_hex())));
-    SlideObject::Shape { kind, x, y, w, h, rotation: 0.0, style: ShapeStyle { glow: None, fill: Some(fill), gradient: None, stroke: None, fill_src, stroke_src: Some(StrokeSrc::NoLine) } }
+    SlideObject::Shape { kind, x, y, w, h, rotation: 0.0, style: ShapeStyle { glow: None, shadow: None, fill: Some(fill), gradient: None, stroke: None, fill_src, stroke_src: Some(StrokeSrc::NoLine) } }
 }
 
 fn none() -> Vec<SlideObject> {
@@ -58,7 +58,7 @@ fn ocean() -> Vec<SlideObject> {
         w: 960.0,
         h: 540.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, fill, gradient: Some(gradient), stroke: None, fill_src: None, stroke_src: Some(StrokeSrc::NoLine) },
+        style: ShapeStyle { glow: None, shadow: None, fill, gradient: Some(gradient), stroke: None, fill_src: None, stroke_src: Some(StrokeSrc::NoLine) },
     }]
 }
 

@@ -1588,7 +1588,7 @@ fn impress_sees_our_odp_on_the_decks_own_page() {
         deck.page_size = Some(size);
         // Painted by us, so its look doesn't depend on each format's
         // default style in Impress.
-        let style = decks_core::engine::shape::ShapeStyle { glow: None, fill: Some(decks_core::engine::shape::Color(0x20, 0x40, 0x60)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+        let style = decks_core::engine::shape::ShapeStyle { glow: None, shadow: None, fill: Some(decks_core::engine::shape::Color(0x20, 0x40, 0x60)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
         deck.slides[0].objects = vec![SlideObject::Shape {
             kind: decks_core::engine::shape::ShapeKind::Rect,
             x: 0.0,
@@ -1682,7 +1682,7 @@ fn impress_turns_our_odp_gradient_into_the_same_drawingml_gradient() {
             stops: vec![GradientStop { pos: 0.0, color: Color(0x0B, 0x3D, 0x6B) }, GradientStop { pos: 1.0, color: Color(0x13, 0x8D, 0x9C) }],
             angle,
         };
-        let style = ShapeStyle { glow: None, fill: gradient.mean(), gradient: Some(gradient.clone()), stroke: None, fill_src: None, stroke_src: None };
+        let style = ShapeStyle { glow: None, shadow: None, fill: gradient.mean(), gradient: Some(gradient.clone()), stroke: None, fill_src: None, stroke_src: None };
         let mut deck = Deck::new();
         deck.slides[0].objects = vec![SlideObject::Shape { kind: ShapeKind::Rect, x: 100.0, y: 100.0, w: 300.0, h: 200.0, rotation: 0.0, style }];
         let dir = tempfile::tempdir().unwrap();
@@ -1715,7 +1715,7 @@ fn impress_keeps_a_master_view_edit() {
     let (slides, masters) = decks_core::templates::deck(3).unwrap();
     let c = decks_core::DecksController::new(slides, masters);
     c.edit_master(c.slide_id_at(0).unwrap()).unwrap();
-    let style = ShapeStyle { glow: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+    let style = ShapeStyle { glow: None, shadow: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
     let mslide = c.slide_id_at(0).unwrap();
     c.add_object(mslide, SlideObject::Shape { kind: ShapeKind::Triangle, x: 860.0, y: 20.0, w: 80.0, h: 80.0, rotation: 0.0, style: style.clone() });
     c.finish_master().unwrap();
@@ -1937,7 +1937,7 @@ fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
         w: 160.0,
         h: 100.0,
         rotation,
-        style: ShapeStyle { glow: None, fill: Some(fill), gradient: None, stroke: Some(Stroke { color: line, width: 3.0 }), fill_src: None, stroke_src: None },
+        style: ShapeStyle { glow: None, shadow: None, fill: Some(fill), gradient: None, stroke: Some(Stroke { color: line, width: 3.0 }), fill_src: None, stroke_src: None },
     };
     let mut deck = Deck::new();
     deck.slides[0].objects = vec![
@@ -2106,7 +2106,7 @@ fn a_freeform_survives_impress_in_both_formats() {
         w: 200.0,
         h: 200.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+        style: ShapeStyle { glow: None, shadow: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
     }];
     for ext in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();

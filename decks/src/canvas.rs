@@ -1164,6 +1164,37 @@ fn paint_path(
     fill: bool,
     stroke: bool,
 ) {
+    // The shadow, under everything: the shape's path moved by the offset
+    // and filled in the shadow's colour, its edge softened to the blur
+    // radius by translucent strokes, as for the glow below (#2332). A shape
+    // with no fill casts its outline's shadow.
+    if let (true, Some(sh)) = (fill, style.shadow) {
+        const PASSES: u32 = 6;
+        let (r, g, b) = sh.color.to_f64();
+        let path = cr.copy_path().unwrap();
+        cr.save().unwrap();
+        cr.new_path();
+        cr.translate(sh.dx * scale, sh.dy * scale);
+        cr.append_path(&path);
+        let blur = sh.blur * scale;
+        if blur > 0.0 {
+            for i in (1..=PASSES).rev() {
+                cr.set_source_rgba(r, g, b, sh.alpha / (2 * PASSES) as f64);
+                cr.set_line_width(2.0 * blur * i as f64 / PASSES as f64);
+                cr.stroke_preserve().unwrap();
+            }
+        }
+        cr.set_source_rgba(r, g, b, sh.alpha);
+        if style.fill.is_some() || style.gradient.is_some() {
+            cr.fill().unwrap();
+        } else {
+            cr.set_line_width(style.stroke.map_or(1.0, |s| s.width * scale).max(0.5));
+            cr.stroke().unwrap();
+        }
+        cr.restore().unwrap();
+        cr.new_path();
+        cr.append_path(&path);
+    }
     // The glow, under the shape: the outline stroked ever narrower in the
     // glow's colour, each pass a share of its opacity, so it is densest at
     // the edge and fades out to the radius, as a blurred halo does (#2332).
@@ -1502,7 +1533,7 @@ mod freeform_tests {
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
         {
             let cr = cairo::Context::new(&surface).unwrap();
-            let style = ShapeStyle { glow: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+            let style = ShapeStyle { glow: None, shadow: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
             super::draw_shape(&cr, &ShapeKind::Freeform(vec![wedge]), &style, (0.0, 0.0, 100.0, 100.0), 1.0);
         }
         let stride = surface.stride() as usize;
@@ -1533,7 +1564,7 @@ mod font_tests {
             w: 200.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle { glow: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle { glow: None, shadow: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
         let slide = Slide { hidden: false,
             title: String::new(),
@@ -2021,7 +2052,7 @@ mod line_tests {
             let cr = cairo::Context::new(&surface).unwrap();
             cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.paint().unwrap();
-            let style = ShapeStyle { glow: None,
+            let style = ShapeStyle { glow: None, shadow: None,
                 fill: Some(Color(68, 114, 196)),
                 gradient: None,
                 stroke: Some(Stroke { color: Color(255, 255, 255), width: 2.0 }),
