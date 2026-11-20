@@ -141,6 +141,7 @@ jobs:
             tests/test_installed_check.py \
             tests/test_core_shell_split.py \
             tests/test_release_evidence.py \
+            tests/test_check_oci_ref.py \
             tests/test_flathub_manifests.py \
             tests/test_overview_video.py \
             tests/test_upgrade_check.py \
@@ -243,6 +244,7 @@ jobs:
             tests/test_installed_check.py \
             tests/test_core_shell_split.py \
             tests/test_release_evidence.py \
+            tests/test_check_oci_ref.py \
             tests/test_flathub_manifests.py \
             tests/test_overview_video.py \
             tests/test_upgrade_check.py \

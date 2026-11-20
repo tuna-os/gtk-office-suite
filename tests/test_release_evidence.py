@@ -55,3 +55,24 @@ def test_the_workflow_does_not_swallow_a_missing_kind():
     step = step[: step.index("- uses:")]
     assert "evidence.py" in step and "| tee" in step
     assert "set -o pipefail" in step, "the evidence.py | tee pipe must fail when evidence.py does"
+
+
+def test_a_published_release_gathers_its_evidence():
+    """publish-flatpak.yml publishes the release with GITHUB_TOKEN, which
+    raises no `release: published` event, so release-evidence.yml never ran
+    for v2.1.62 or v2.1.63 (#1209). The release job has to dispatch it on the
+    tag, with attach on, and needs `actions: write` to."""
+    import yaml
+
+    path = os.path.join(REPO, ".github", "workflows", "publish-flatpak.yml")
+    with open(path) as f:
+        release = yaml.safe_load(f)["jobs"]["release"]
+    assert release["permissions"].get("actions") == "write"
+    script = "\n".join(step.get("run", "") for step in release["steps"])
+    dispatch = script[script.index("gh workflow run release-evidence.yml"):]
+    dispatch = dispatch[: dispatch.index("\n", dispatch.index("attach"))]
+    assert '--ref "$GITHUB_REF_NAME"' in dispatch
+    assert '-f tag="$GITHUB_REF_NAME"' in dispatch
+    assert "-f attach=true" in dispatch
+    # Only after the release is public: release-evidence attaches to it.
+    assert script.index("--draft=false") < script.index("gh workflow run release-evidence.yml")
