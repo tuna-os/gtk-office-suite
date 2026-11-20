@@ -176,15 +176,21 @@ The questions those answer:
   upstream's own diff since `lifafa/fork/UPSTREAM_BASE` (hyprlab/hylki
   `b5650f58`, the upstream commit the import was built on) three-way, and
   leaves conflict markers where the fork changed the same lines.
-- [ ] One upstream merge done this way end to end before the switch. A dry
+- [x] One upstream merge done this way end to end before the switch. A dry
   run on 2026-11-13 (98 upstream commits, to `a86e1282`) changed 296 files
   and left 36 conflicting hunks in 23, most where this repository reworked
   Lifafa (the in-tree relm, gtk4 0.11, A2); resolving them and the build is
   its own pull request. tuna-os/lifafa also has three fork fixes since the
   import to carry (`66f86c48`, `dd0ddadd`, `76d5bc62`).
-- [ ] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
+  Done in #2213: hyprlab/hylki to `1c86b250`, 307 files, the conflicts
+  resolved there and built and tested by `lifafa.yml`, with the three fork
+  fixes carried.
+- [x] Lifafa: sending fixes upstream (MAINTAINING.md's first rule) still
   works from a monorepo: a branch of hyprlab/hylki with the change applied,
-  not a branch of this repository. Write the steps down.
+  not a branch of this repository. Write the steps down. (`lifafa/fork/MAINTAINING.md`,
+  "Sending a change upstream": work in a hyprlab/hylki clone, carry a change
+  made in `lifafa/` across with `git diff --relative=lifafa` and `git apply`,
+  and ship it early as the identical change through a suite pull request.)
 - [ ] Mandelbrot: record which Fractal release it is based on, and whether
   Fractal changes are pulled in, and how.
 
