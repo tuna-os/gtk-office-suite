@@ -138,7 +138,8 @@
   },
   "letters/floating-image-gap": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "letters/font-families": {
     "A": "green",
@@ -226,7 +227,8 @@
     "C": "green"
   },
   "letters/odt-list-hanging": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "letters/odt-page-break-spacing": {
     "A": "amber",
@@ -285,7 +287,8 @@
   },
   "letters/table-cell-content-control": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/table-cell-list-indent": {
     "A": "green",
@@ -294,15 +297,18 @@
   },
   "letters/table-cell-numbered-list-indent": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "letters/table-row-min-height-page-break": {
     "A": "amber",
-    "B": "green"
+    "B": "green",
+    "C": "amber"
   },
   "letters/table-row-split": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/text-color": {
     "A": "green",
@@ -317,12 +323,12 @@
   "letters/underline-position": {
     "A": "green",
     "B": "green",
-    "C": "red"
+    "C": "green"
   },
   "letters/url-path-wrapping": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/alignment": {
     "A": "green",
@@ -357,7 +363,7 @@
   "tables/chart-multi": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/chart-pie": {
     "A": "green",
@@ -381,7 +387,8 @@
   },
   "tables/default-row-height": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/edited-journey": {
     "A": "green",
@@ -399,7 +406,8 @@
   },
   "tables/fit-to-width": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "red"
   },
   "tables/frozen": {
     "A": "green",
@@ -408,7 +416,8 @@
   },
   "tables/horizontal-pagination": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/hyperlink-theme-colors": {
     "A": "amber",
@@ -427,11 +436,13 @@
   },
   "tables/oversized-unheaded-instructions": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "red"
   },
   "tables/paginated-columns": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "red"
   },
   "tables/pivot-crosstab": {
     "A": "green",
@@ -440,23 +451,28 @@
   },
   "tables/print-fit-page": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "amber"
   },
   "tables/print-scale": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "amber"
   },
   "tables/tall-unheaded-postcodes": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/tall-unprinted-sheet": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "red"
   },
   "tables/unheaded-bordered-musts": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "red"
   },
   "tables/unprinted-headings": {
     "A": "green",
@@ -469,7 +485,8 @@
   },
   "tables/wide-borderless-hyperlinks": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wide-column-no-headings": {
     "A": "amber",
@@ -478,31 +495,38 @@
   },
   "tables/wide-column-right-align": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "amber"
   },
   "tables/wide-unheaded-complaint-log": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wide-unheaded-consumption-estimates": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wide-unheaded-contact-list": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wide-unheaded-deep-sea-stock": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/wide-unheaded-transactions": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "red"
   },
   "tables/worksheet-image": {
     "A": "red",
-    "B": "red"
+    "B": "red",
+    "C": "amber"
   },
   "tables/wrap-merged": {
     "A": "amber",
@@ -512,7 +536,7 @@
   "tables/wrap-text": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/wrap-wide-default-font": {
     "A": "amber",

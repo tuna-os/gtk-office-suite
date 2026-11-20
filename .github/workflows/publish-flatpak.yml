@@ -1,10 +1,12 @@
 name: Publish Flatpaks
 
-# Build/publish body lives in tuna-os/.github's reusable publish-flatpak.yml
-# (tunaos#1183 recommendation #2). This file just keeps the repo's own
-# trigger policy and fans the three apps out over the reusable workflow via
-# a caller-side matrix -- `uses:` jobs support `strategy.matrix` same as any
-# other job.
+# Letters, Tables and Decks, built once per app and architecture behind the
+# evidence and soak gates, pushed to ghcr.io/tuna-os/<app>, indexed in the
+# TunaOS remote, and attached to the tag's release. It used to call
+# tuna-os/.github's reusable publish-flatpak.yml once per app; that workflow
+# is made for one app per run, and three in one run mixed their images up
+# (see the `build` job). Mandelbrot, alone in its run, still uses it
+# (publish-mandelbrot.yml); the central-index action is still the org's.
 
 on:
   push:
@@ -48,59 +50,32 @@ jobs:
       contents: read
       packages: write
 
-  publish:
+  # Each app, per architecture, built once from the tag in the GNOME SDK:
+  # the OCI image the remote serves, the .flatpak bundle and the /app
+  # tarball the release carries all come from this one build.
+  #
+  # Every artifact is named after its app *and* architecture. The org's
+  # reusable publish-flatpak.yml, which this job and `publish` replace,
+  # names them after the architecture only (oci-x86_64, bundle-x86_64).
+  # Called once per app in one run, the three apps' artifacts shared those
+  # names, and each app published whichever survived: ghcr.io/tuna-os/tables
+  # held Decks for x86_64 in v2.1.62 and v2.1.63, letters held Decks in
+  # v2.1.62, and Letters' and Tables' x86_64 bundles were missing from the
+  # v2.1.63 release.
+  #
+  # A *skipped* gate must not block the manual build-only path, but a
+  # failed one must block the tag. `needs` alone would skip this job in
+  # both cases, and `always()` would build through a failure — so name the
+  # two results explicitly. A publishing dispatch needs both to have
+  # passed, not merely not failed.
+  build:
     needs: [evidence, soak]
-    # A *skipped* gate must not block the manual build-only path, but a
-    # failed one must block the tag. `needs` alone would skip this job in
-    # both cases, and `always()` would publish through a failure — so name
-    # the two results explicitly. A publishing dispatch needs both to have
-    # passed, not merely not failed.
     if: >-
       ${{ !cancelled()
           && needs.evidence.result != 'failure'
           && needs.soak.result != 'failure'
           && (github.event_name != 'workflow_dispatch' || !inputs.publish
               || (needs.evidence.result == 'success' && needs.soak.result == 'success')) }}
-    strategy:
-      matrix:
-        app: [letters, tables, decks]
-    # What the reusable workflow does with them: `contents: write` uploads
-    # the bundles to the GitHub release, `packages: write` pushes the OCI
-    # images to GHCR.
-    permissions:
-      contents: write
-      packages: write
-    # Pinned to a reviewed commit, not @main: a job holding write scopes
-    # and the index deploy key must not run whatever the shared branch
-    # holds at publish time (#286, #1007). Renovate proposes digest bumps;
-    # review the tuna-os/.github diff before merging one.
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@6c76230bdd69e19634d9c74d5e3edbd8eacadd9f # main  # zizmor: ignore[ref-version-mismatch] pinned to a reviewed main commit; Renovate bumps the digest, so main may be ahead
-    with:
-      app-id: org.tunaos.${{ matrix.app }}
-      manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-      repo-name: tuna-os/${{ matrix.app }}
-      attach-bundles: true
-      # Not `A && B || C`: if B (inputs.publish) is false that's falsy, so
-      # `||` would fall through to C and publish anyway regardless of the
-      # toggle (caught by testing on mariner, tuna-os/mariner#17).
-      publish: ${{ (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
-    # Only the docs deploy key the called workflow pushes the index with,
-    # not `inherit` (every repository and organisation secret). GITHUB_TOKEN
-    # is passed implicitly, limited by `permissions` above.
-    secrets:
-      FLATPAK_INDEX_DEPLOY_KEY: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
-
-  # The /app tree of each app as a tarball on the release, for remotes that
-  # repackage the vendor's own download (FlatPark, extra-data) instead of
-  # building from source. Built from the tag in the GNOME SDK, like the
-  # bundles, so the published bytes match the tag they are filed under.
-  # FlatPark's resolvers read `<app>-<arch>.tar.gz` from the latest release
-  # and check `bin/<app>` inside it.
-  tarballs:
-    needs: [evidence, soak]
-    if: >-
-      ${{ !cancelled() && startsWith(github.ref, 'refs/tags/')
-          && needs.evidence.result == 'success' && needs.soak.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +87,10 @@ jobs:
       options: --privileged
     permissions:
       contents: read
+    env:
+      APP: ${{ matrix.app }}
+      APP_ID: org.tunaos.${{ matrix.app }}
+      ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -132,23 +111,49 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-          bundle: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
+          bundle: org.tunaos.${{ matrix.app }}-${{ matrix.arch }}.flatpak
           arch: ${{ matrix.arch }}
           cache: false
           upload-artifact: false
-      - name: Pack the /app tree
-        env:
-          APP: ${{ matrix.app }}
-          ARCH: ${{ matrix.arch }}
+
+      # The image the remote serves, from the same repository as the bundle.
+      # Its org.flatpak.ref label is checked, so an image can never be filed
+      # under another app's name again.
+      - name: Export the OCI image
         run: |
           set -euo pipefail
-          flatpak install --user -y --noninteractive --bundle "$APP-$ARCH.flatpak"
-          files="$(flatpak info --user --show-location "org.tunaos.$APP")/files"
+          flatpak build-bundle --oci --arch="$ARCH" repo "oci-$APP-$ARCH" "$APP_ID"
+          test -s "oci-$APP-$ARCH/index.json"
+          python3 tools/release/check_oci_ref.py "oci-$APP-$ARCH" "app/$APP_ID/$ARCH/"
+
+      # The /app tree of each app as a tarball on the release, for remotes
+      # that repackage the vendor's own download (FlatPark, extra-data)
+      # instead of building from source. FlatPark's resolvers read
+      # `<app>-<arch>.tar.gz` from the latest release and check `bin/<app>`
+      # inside it.
+      - name: Pack the /app tree
+        run: |
+          set -euo pipefail
+          flatpak install --user -y --noninteractive --bundle "$APP_ID-$ARCH.flatpak"
+          files="$(flatpak info --user --show-location "$APP_ID")/files"
           [ -x "$files/bin/$APP" ] || { echo "::error::bin/$APP missing from the built app"; exit 1; }
           # Recorded owner 0: FlatPark's apply_extra unpacks as root with
           # every capability dropped, where restoring another uid fails.
           tar --owner=0 --group=0 --numeric-owner -C "$files" -czf "$APP-$ARCH.tar.gz" .
           sha256sum "$APP-$ARCH.tar.gz" | tee "$APP-$ARCH.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: oci-${{ matrix.app }}-${{ matrix.arch }}
+          path: oci-${{ matrix.app }}-${{ matrix.arch }}/
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: bundle-${{ matrix.app }}-${{ matrix.arch }}
+          path: org.tunaos.${{ matrix.app }}-${{ matrix.arch }}.flatpak
+          retention-days: 7
+          if-no-files-found: error
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: tarball-${{ matrix.app }}-${{ matrix.arch }}
@@ -158,28 +163,137 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # Push each image to ghcr.io/tuna-os/<app> and update its entry in the
+  # central index, as the reusable workflow did: `latest-<arch>`, the tag's
+  # `<tag>-<arch>`, and `latest` following x86_64. Only a tag, or a dispatch
+  # with `publish`, gets here; a build-only dispatch stops at `build`.
+  publish:
+    needs: [evidence, soak, build]
+    if: >-
+      ${{ !cancelled()
+          && needs.evidence.result != 'failure'
+          && needs.soak.result != 'failure'
+          && (github.event_name != 'workflow_dispatch' || !inputs.publish
+              || (needs.evidence.result == 'success' && needs.soak.result == 'success'))
+          && needs.build.result == 'success'
+          && (github.event_name == 'push' || inputs.publish) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write  # GHCR push (skopeo login + copy)
+    env:
+      IMAGE: ghcr.io/tuna-os/${{ matrix.app }}
+      APP: ${{ matrix.app }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      # The checker, from this run's revision; nothing from the build is run.
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/release
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: oci-${{ matrix.app }}-${{ matrix.arch }}
+          path: oci-${{ matrix.app }}-${{ matrix.arch }}
+      - name: Check the image is this app's
+        run: python3 tools/release/check_oci_ref.py "oci-$APP-$ARCH" "app/org.tunaos.$APP/$ARCH/"
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          # Some runners' default container auth path is not writable.
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
+        run: echo "$GITHUB_TOKEN" | skopeo login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: Push OCI to the registry
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
+        run: |
+          set -euo pipefail
+          dir="oci-$APP-$ARCH"
+          skopeo copy "oci:$dir" "docker://$IMAGE:latest-$ARCH"
+          if [[ "$REF" == refs/tags/* ]]; then
+            skopeo copy "oci:$dir" "docker://$IMAGE:$REF_NAME-$ARCH"
+          fi
+          if [ "$ARCH" = x86_64 ]; then
+            skopeo copy "oci:$dir" "docker://$IMAGE:latest"
+          fi
+
+      # The reusable workflow's index action, from the reviewed commit of
+      # tuna-os/.github that lifafa-flatpak.yml checks out (#286, #1007).
+      # Checked out rather than named in `uses:`, so actions.lock pins it
+      # through actions/checkout. Keep the two commits in step.
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: tuna-os/.github
+          ref: 4078f531ac74703f203bde835ef6c25e9321b97b
+          path: tuna-os-github
+          persist-credentials: false
+
+      - name: Update the central index
+        uses: ./tuna-os-github/.github/actions/publish-flatpak-index  # zizmor: ignore[self-repository] a checkout of tuna-os/.github, not this repository
+        with:
+          oci-dir: oci-${{ matrix.app }}-${{ matrix.arch }}
+          repo-name: tuna-os/${{ matrix.app }}
+          registry: ghcr.io
+          tags: latest
+          ssh-key: ${{ secrets.FLATPAK_INDEX_DEPLOY_KEY }}
+
   # autorelease.yml creates the release as a draft, so nothing reading
   # `releases/latest` sees it before its downloads are attached. This
-  # attaches the tarballs and then publishes it, only once the Flatpaks
-  # were published and every tarball was built.
+  # attaches the bundles and tarballs and then publishes it, only once the
+  # Flatpaks were published and every app was built.
+  #
+  # Publishing it with GITHUB_TOKEN raises no `release: published` event
+  # (GitHub starts no workflow from that token's events), so
+  # release-evidence.yml and overview-videos.yml, which wait for that event,
+  # never ran for a release made this way, and v2.1.62 and v2.1.63 went out
+  # without their evidence (#1209). A workflow_dispatch is the one event the
+  # token may raise, so this dispatches both on the tag.
   release:
-    needs: [publish, tarballs]
+    needs: [publish, build]
     if: >-
       ${{ !cancelled() && startsWith(github.ref, 'refs/tags/')
-          && needs.publish.result == 'success' && needs.tarballs.result == 'success' }}
+          && needs.publish.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: write   # dispatch the release's evidence and overview videos
     steps:
       - uses: actions/download-artifact@v8.0.2
         with:
           pattern: tarball-*
           merge-multiple: true
-      - name: Attach the tarballs and publish the release
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: bundle-*
+          merge-multiple: true
+      - name: Attach the bundles and tarballs and publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release upload "$GITHUB_REF_NAME" --clobber -R "$GITHUB_REPOSITORY" -- *.tar.gz *.tar.gz.sha256
+          # Every app and architecture, or none: a release missing one is
+          # what the shared artifact names produced (v2.1.63).
+          test "$(ls org.tunaos.*-*.flatpak | wc -l)" -eq 6
+          test "$(ls ./*.tar.gz | wc -l)" -eq 6
+          gh release upload "$GITHUB_REF_NAME" --clobber -R "$GITHUB_REPOSITORY" -- \
+            org.tunaos.*.flatpak *.tar.gz *.tar.gz.sha256
           gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
           gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' >> "$GITHUB_STEP_SUMMARY"
+      - name: Gather the release's evidence and overview videos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-evidence.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            -f tag="$GITHUB_REF_NAME" -f attach=true
+          gh workflow run overview-videos.yml -R "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"

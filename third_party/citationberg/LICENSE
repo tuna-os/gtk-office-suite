@@ -1,0 +1,8 @@
+citationberg is dual-licensed under either of
+
+* Apache License, Version 2.0 (LICENSE-APACHE)
+* MIT license (LICENSE-MIT)
+
+at your option. NOTICE lists the licenses of the CSL styles and locales in
+tests/. This file was added when the crate was vendored (#225); the published
+archive and upstream repository carry only the two files above.

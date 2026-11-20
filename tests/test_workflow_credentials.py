@@ -27,7 +27,6 @@ WORKFLOWS = os.path.join(REPO_ROOT, ".github", "workflows")
 PUBLISH = os.path.join(WORKFLOWS, "publish-flatpak.yml")
 FEATURE = os.path.join(WORKFLOWS, "feature-verification.yml")
 WRITE_SCOPES = {"contents", "packages", "pull-requests", "actions", "id-token"}
-FULL_SHA = re.compile(r"@[0-9a-f]{40}$")
 
 
 def workflow(path):
@@ -57,20 +56,28 @@ class PublishFlatpakCredentials(unittest.TestCase):
         )
 
     def test_publish_job_has_exactly_the_scopes_it_uses(self):
-        self.assertEqual(writes(self.publish.get("permissions")), {"contents", "packages"})
+        self.assertEqual(writes(self.publish.get("permissions")), {"packages"})
 
-    def test_shared_workflow_is_pinned_to_a_commit(self):
-        uses = str(self.publish.get("uses", ""))
-        self.assertTrue(
-            FULL_SHA.search(uses),
-            f"{uses!r} is a branch or tag; a job holding write scopes and the "
-            "index deploy key must run a reviewed commit",
-        )
+    def test_build_job_holds_no_writes(self):
+        self.assertEqual(writes(self.wf["jobs"]["build"].get("permissions")), set())
+
+    def test_shared_index_action_is_pinned_to_a_commit(self):
+        """The index action comes from a checkout of tuna-os/.github; a job
+        holding write scopes and the index deploy key must run a reviewed
+        commit of it, not a branch."""
+        checkouts = [
+            step.get("with") or {} for step in self.publish["steps"]
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+            and (step.get("with") or {}).get("repository") == "tuna-os/.github"
+        ]
+        self.assertTrue(checkouts, "the publish job no longer checks out tuna-os/.github")
+        for checkout in checkouts:
+            ref = str(checkout.get("ref", ""))
+            self.assertTrue(re.fullmatch(r"[0-9a-f]{40}", ref), f"{ref!r} is not a commit")
 
     def test_secrets_are_named_not_inherited(self):
-        secrets = self.publish.get("secrets")
-        self.assertNotEqual(secrets, "inherit")
-        self.assertEqual(set(secrets or {}), {"FLATPAK_INDEX_DEPLOY_KEY"})
+        text = yaml.safe_dump(self.publish)
+        self.assertEqual(set(re.findall(r"secrets\.([A-Z_]+)", text)), {"FLATPAK_INDEX_DEPLOY_KEY"})
 
 
 class FeatureVerificationCredentials(unittest.TestCase):

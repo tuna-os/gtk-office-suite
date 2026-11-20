@@ -89,6 +89,8 @@ bench = false
 [workspace]
 
 # Mirror the product's collaboration security backports (#1043).
+# citationberg: quick-xml 0.41 for typst's CSL parser (#225).
 [patch.crates-io]
 loro-internal = { path = "../third_party/loro-internal" }
 serde_columnar = { path = "../third_party/serde_columnar" }
+citationberg = { path = "../third_party/citationberg" }

@@ -47,9 +47,11 @@ install -Dm755 native/tuta-unofficial-sdk/target/release/tuta-helper ~/.local/bi
 
 The SDK repository has its own `Cargo.lock`, tests and CI; its README
 describes the protocol and lists its SDK patches. Moving to a new release is
-a submodule bump to its tag. `.github/workflows/tuta-helper.yml` checks that
-the submodule sits on a release tag and that the helper builds and answers
-as `hylki-tuta`.
+a submodule bump to its tag. In tuna-os/lifafa, `tuta-helper.yml` checked
+that the submodule sat on a release tag and that the helper built and
+answered as `hylki-tuta`. In the suite, `lifafa-flatpak.yml` builds it into
+the Flatpak, and the tag and answer checks are not ported yet (the cutover's
+step 1).
 
 ## Proton helper
 
@@ -71,10 +73,12 @@ install -Dm755 native/proton-unofficial-sdk/hylki-proton ~/.local/bin/hylki-prot
 The SDK repository has its own tests, which run offline against
 go-proton-api's in-process server, and its own CI; dependency bumps and
 `go mod vendor` happen there. Its README describes the JSON it speaks.
-Moving to a new release is a submodule bump to its tag.
-`.github/workflows/proton-helper.yml` checks that the submodule sits on a
-release tag, that the helper builds offline, and that run as `hylki-proton`
-it answers every operation the app sends with the envelope the app parses.
+Moving to a new release is a submodule bump to its tag. In tuna-os/lifafa,
+`proton-helper.yml` checked that the submodule sat on a release tag, that the
+helper built offline, and that, run as `hylki-proton`, it answered every
+operation the app sends with the envelope the app parses. In the suite,
+`lifafa-flatpak.yml` builds it offline into the Flatpak, and the other checks
+are not ported yet (the cutover's step 1).
 
 ## Flatpak
 
