@@ -42,7 +42,7 @@ judging — these must never flake.
 # one-time deps (Ubuntu)
 sudo apt-get install xvfb dbus at-spi2-core matchbox-window-manager python3-dogtail \
   python3-pytest python3-pil python3-requests
-python3 -m pip install --break-system-packages mss
+python3 -m pip install --break-system-packages -r tests/gui/requirements-capture.txt
 
 # run (always starts its own private Xvfb on a display it allocates;
 # GUI_TEST_REUSE_DISPLAY=1 to watch it on yours instead)
