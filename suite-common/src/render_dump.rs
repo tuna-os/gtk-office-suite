@@ -49,6 +49,16 @@ pub fn export_pdf_path(options: &glib::VariantDict) -> Result<Option<std::path::
     }
 }
 
+/// Whether a held capture (`GTK_OFFICE_RENDER_HOLD`) must wait for the
+/// window to be maximized. Under Broadway (Tier B) maximizing is how the
+/// window takes the browser's size. Tier C (a real GNOME session,
+/// tools/render-lab/vm/run.sh) sets the window to Tier A's size through
+/// the app's settings instead, and sets `GTK_OFFICE_RENDER_SIZED`: nothing
+/// maximizes it there, so the wait timed out after 15 s on every document.
+fn wait_for_maximized(hold: bool) -> bool {
+    hold && std::env::var_os("GTK_OFFICE_RENDER_SIZED").is_none()
+}
+
 /// Headless `--export-pdf` driver: like `schedule`, but activates the app's
 /// `test-export-pdf` action — which writes the PDF named by `EXPORT_PDF_ENV`
 /// and does nothing else — instead of `test-render-dump`, then quits.
@@ -79,7 +89,7 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
         let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         if !ready && elapsed < std::time::Duration::from_secs(15) {
@@ -163,7 +173,7 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
         let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         // Give up waiting after 15 s and capture what there is; the lab's
