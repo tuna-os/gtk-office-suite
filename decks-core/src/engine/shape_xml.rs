@@ -1067,6 +1067,9 @@ mod tests {
         assert!(out.contains(&format!("{:02X}{:02X}{:02X}", accent.0, accent.1, accent.2)), "{out}");
         assert_eq!(out.matches("<a:srgbClr").count(), 2, "the modified one too: {out}");
         assert_eq!(inline_scheme_colors("<a:srgbClr val=\"123456\"/>", &theme), "<a:srgbClr val=\"123456\"/>");
+        // A truncated part: the text before the unterminated tag once, then
+        // the tag as it was.
+        assert_eq!(inline_scheme_colors("<c:a/><a:schemeClr val", &theme), "<c:a/><a:schemeClr val");
     }
 
     #[test]
