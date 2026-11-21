@@ -190,11 +190,7 @@ pub fn save_sheets_to_xlsx_bytes(
                         // ("'00123"), which is an editing convention,
                         // not part of the value — writing it would put
                         // the apostrophe in the saved cell.
-                        match &format {
-                            Some(f) => sheet.write_string_with_format(r as u32, c as u16, &text, f),
-                            None => sheet.write_string(r as u32, c as u16, &text),
-                        }
-                        .map_err(|e| format!("Write error: {}", e))?;
+                        write_text(sheet, sh, r, c, &text, format.as_ref(), &wb_font)?;
                     }
                     Some(TypedValue::Empty) => {
                         match &format {
@@ -219,11 +215,7 @@ pub fn save_sheets_to_xlsx_bytes(
                             }
                             .map_err(|e| format!("Write error: {}", e))?;
                         } else {
-                            match &format {
-                                Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
-                                None => sheet.write_string(r as u32, c as u16, val),
-                            }
-                            .map_err(|e| format!("Write error: {}", e))?;
+                            write_text(sheet, sh, r, c, val, format.as_ref(), &wb_font)?;
                         }
                     }
                 }
@@ -634,6 +626,71 @@ fn with_sheet_font<'a>(
     std::borrow::Cow::Owned(s)
 }
 
+/// A text cell, run by run when it is rich text.
+fn write_text(
+    sheet: &mut rust_xlsxwriter::Worksheet,
+    sh: &SheetModel,
+    r: usize,
+    c: usize,
+    text: &str,
+    format: Option<&rust_xlsxwriter::Format>,
+    wb_font: &(String, f64),
+) -> Result<(), String> {
+    let (row, col) = (r as u32, c as u16);
+    let written = match sh.rich_runs(r, c, text) {
+        Some(runs) => {
+            let cell_style = with_sheet_font(&sh.styles[r][c], sh, wb_font);
+            let formats: Vec<rust_xlsxwriter::Format> = runs.iter().map(|run| run_format(run.font.as_ref(), &cell_style, wb_font)).collect();
+            let parts: Vec<(&rust_xlsxwriter::Format, &str)> =
+                formats.iter().zip(runs).filter(|(_, run)| !run.text.is_empty()).map(|(f, run)| (f, run.text.as_str())).collect();
+            match format {
+                Some(f) => sheet.write_rich_string_with_format(row, col, &parts, f),
+                None => sheet.write_rich_string(row, col, &parts),
+            }
+        }
+        None => match format {
+            Some(f) => sheet.write_string_with_format(row, col, text, f),
+            None => sheet.write_string(row, col, text),
+        },
+    };
+    written.map(|_| ()).map_err(|e| format!("Write error: {}", e))
+}
+
+/// The font of one run of a rich-text cell; a run without a font of its
+/// own writes the cell's, as Excel reads a run with no `rPr`.
+fn run_format(font: Option<&crate::sheet::RunFont>, cell: &crate::style::CellStyle, wb_font: &(String, f64)) -> rust_xlsxwriter::Format {
+    use rust_xlsxwriter::{Color, Format, FormatUnderline};
+    let own = crate::sheet::RunFont {
+        family: cell.font_family.clone(),
+        size: cell.font_size,
+        bold: cell.bold,
+        italic: cell.italic,
+        underline: cell.underline,
+        strikethrough: cell.strikethrough,
+        color: cell.color,
+    };
+    let font = font.unwrap_or(&own);
+    let mut f = Format::new()
+        .set_font_name(font.family.as_deref().unwrap_or(&wb_font.0))
+        .set_font_size(font.size.unwrap_or(wb_font.1));
+    if font.bold {
+        f = f.set_bold();
+    }
+    if font.italic {
+        f = f.set_italic();
+    }
+    if font.underline {
+        f = f.set_underline(FormatUnderline::Single);
+    }
+    if font.strikethrough {
+        f = f.set_font_strikethrough();
+    }
+    if let Some(c) = font.color {
+        f = f.set_font_color(Color::RGB(((c.0 as u32) << 16) | ((c.1 as u32) << 8) | c.2 as u32));
+    }
+    f
+}
+
 fn cell_format(
     nf: &suite_common_core::format::NumberFormat,
     style: &crate::style::CellStyle,
@@ -864,6 +921,30 @@ mod tests {
         assert_eq!(back.styles[0][0], styled);
         assert_eq!(back.styles[1][1].h_align, HAlign::Right);
         assert!(back.styles[2][2].is_default());
+    }
+
+    /// A rich-text cell's runs survive a save and reopen.
+    #[test]
+    fn rich_text_round_trips_through_xlsx() {
+        use crate::sheet::{RunFont, TextRun};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rich.xlsx").to_string_lossy().into_owned();
+        let mut sheet = SheetModel::new("S", 2, 2, 0);
+        sheet.data[0][1] = "Claim Form\nv2.5.1".into();
+        let runs = vec![
+            TextRun { text: "Claim Form\n".into(), font: Some(RunFont { bold: true, size: Some(14.0), ..RunFont::default() }) },
+            TextRun { text: "v2.5.1".into(), font: Some(RunFont { italic: true, size: Some(10.0), family: Some("Verdana".into()), ..RunFont::default() }) },
+        ];
+        sheet.rich_text.insert((0, 1), runs);
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_workbook(&path).unwrap();
+        let back = sheets[0].rich_runs(0, 1, "Claim Form\nv2.5.1").expect("the runs read back");
+        let (title, version) = (back[0].font.as_ref().unwrap(), back[1].font.as_ref().unwrap());
+        assert!(title.bold && !title.italic);
+        assert_eq!(title.size, Some(14.0));
+        assert!(version.italic && !version.bold);
+        assert_eq!((version.family.as_deref(), version.size), (Some("Verdana"), Some(10.0)));
     }
 
     /// #920 (tables/wrap-text): a narrow column holding a wrapped cell —
