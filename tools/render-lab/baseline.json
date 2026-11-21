@@ -39,6 +39,9 @@
   "decks/layout-rules": {
     "A": "green"
   },
+  "decks/line-spacing": {
+    "A": "green"
+  },
   "decks/master-slide-number": {
     "A": "green"
   },
@@ -326,7 +329,7 @@
     "C": "green"
   },
   "letters/table-cell-numbered-list-indent": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
