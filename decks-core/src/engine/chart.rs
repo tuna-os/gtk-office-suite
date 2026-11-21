@@ -804,11 +804,20 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
             .iter()
             .filter(|c| c.local == "catAx")
             .any(|ax| ax.child("scaling").and_then(|s| s.child("orientation")).and_then(|o| o.attr("val")) == Some("maxMin"));
-    // A percent format on the labels, or on the values the labels show.
+    // A percent format on the labels, or, when the labels state none of
+    // their own (none, or one linked to the source), on the values they
+    // show: labels formatted `0.0` over `0%` cells read "0.7", as
+    // PowerPoint shows them.
     let pct = |code: Option<&str>| code.is_some_and(scales_by_percent);
-    let label_fmt = |d: Option<&El>| pct(d.and_then(|d| d.child("numFmt")).and_then(|f| f.attr("formatCode")));
+    // Some(own format) when the labels state one not linked to the source.
+    fn own_fmt(d: Option<&El>) -> Option<&str> {
+        d.and_then(|d| d.child("numFmt"))
+            .filter(|f| f.attr("sourceLinked") != Some("1"))
+            .and_then(|f| f.attr("formatCode"))
+    }
+    let stated: Vec<&str> = std::iter::once(group.child("dLbls")).chain(sers.iter().map(|s| s.child("dLbls"))).filter_map(own_fmt).collect();
     let value_fmt = ser.child("val").and_then(|v| v.find("formatCode")).map(|f| f.deep_text());
-    let percent = labels && (label_fmt(group.child("dLbls")) || sers.iter().any(|s| label_fmt(s.child("dLbls"))) || pct(value_fmt.as_deref()));
+    let percent = labels && if stated.is_empty() { pct(value_fmt.as_deref()) } else { stated.iter().any(|c| pct(Some(c))) };
     // The chart's text: each property from the first `c:txPr` that states
     // it, the chart's own, then its axes', then its data labels'.
     let axis = |name: &str| plot.children.iter().find(|c| c.local == name).and_then(|ax| ax.child("txPr"));
@@ -1266,6 +1275,19 @@ mod tests {
         assert_eq!((c.text_color, c.text_size), (Some([255, 255, 255]), Some(900)), "the axis's text, past the chart's empty txPr");
         let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
         assert_eq!(back, c, "a save keeps it");
+    }
+
+    /// Labels that state a format of their own keep it over the cells':
+    /// `0.0` labels over `0%` values read "0.7", as PowerPoint shows them.
+    /// Labels linked to the source, or stating none, take the cells' `0%`.
+    #[test]
+    fn a_labels_own_format_wins_over_the_cells() {
+        let own = HORIZONTAL.replace(r#"<c:numFmt formatCode="0%" sourceLinked="0"/>"#, r#"<c:numFmt formatCode="0.0" sourceLinked="0"/>"#);
+        assert!(!parse_chart_space(&own).unwrap().percent, "an explicit 0.0 is not a percent");
+        let linked = HORIZONTAL.replace(r#"<c:numFmt formatCode="0%" sourceLinked="0"/>"#, r#"<c:numFmt formatCode="General" sourceLinked="1"/>"#);
+        assert!(parse_chart_space(&linked).unwrap().percent, "linked labels take the cells' 0%");
+        let none = HORIZONTAL.replace(r#"<c:numFmt formatCode="0%" sourceLinked="0"/>"#, "");
+        assert!(parse_chart_space(&none).unwrap().percent, "labels with no format take the cells' 0%");
     }
 
     /// The adults' nature survey's distance bar, reduced: one category,
