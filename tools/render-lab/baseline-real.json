@@ -150,12 +150,12 @@
     "C": "amber"
   },
   "letters/real-affordable-housing-supply-data-dictionary": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
   "letters/real-annex-a-annual-report-form": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -210,7 +210,7 @@
     "C": "amber"
   },
   "letters/real-opt-out-form-accessible-version": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "green"
   },
@@ -265,7 +265,7 @@
     "C": "green"
   },
   "letters/real-social-housing-sales-data-dictionary": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },

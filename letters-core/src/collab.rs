@@ -50,6 +50,19 @@
 //! scratch copy first, and an update that would put any of that into it is
 //! an error before it is anyone's live state.
 //!
+//! # Pictures
+//!
+//! A picture run holds a path, and the writers read that path when the
+//! document is saved. An update is bytes from someone else, so a path it
+//! brings names a file on this machine that the peer chose: saved, that
+//! file would be in the package, where the peer reads it once the document
+//! comes back. So a replica keeps the paths this side put into the document
+//! itself (those of the document it started from or joined with, and of
+//! its own inserts), and hands out a picture with any other path without
+//! it ([`Replica::rebuild`], [`Replica::paragraphs`]): the run keeps its
+//! place, its size and its alt text. The bytes of a picture are not
+//! replicated, so a peer's picture was never drawn here.
+//!
 //! # Undo (ADR 0011)
 //!
 //! Undo stays local, as the ADR says: the history holds the user's own
@@ -67,11 +80,14 @@
 //!   stay as the local file had them.
 //! - A remote update is read in full by the dry run, so an import costs time
 //!   in proportion to the document.
+//! - A peer's picture has no path here (see Pictures). When this side
+//!   inserts that run again (a paste, the undo of a delete), it goes out
+//!   without its path, and its owner then sees no picture either.
 //! - Offsets in this module are the model's sequence offsets. The mapping
 //!   from `GtkTextBuffer` offsets to them is the shell's, and is not
 //!   exercised here.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use loro::event::Diff;
@@ -500,11 +516,19 @@ fn attrs_in(marks: &HashMap<String, LoroValue>) -> impl Iterator<Item = Attr> + 
     attrs().filter(|a| marks.contains_key(a.name()))
 }
 
+/// The picture paths `paragraphs` hold.
+fn picture_paths(paragraphs: &[Paragraph]) -> impl Iterator<Item = String> + '_ {
+    paragraphs.iter().flat_map(|p| &p.runs).filter_map(|run| run.style.image.clone())
+}
+
 /// One peer's copy of the shared document.
 pub struct Replica {
     doc: LoroDoc,
     text: LoroText,
     meta: LoroMap,
+    /// The picture paths this side put into the document itself (module
+    /// docs, Pictures). A path a peer's update brings is not one of them.
+    pictures: HashSet<String>,
 }
 
 impl Replica {
@@ -513,7 +537,19 @@ impl Replica {
         doc.config_text_style(style_config());
         let text = doc.get_text(BODY);
         let meta = doc.get_map(DOC);
-        Ok(Replica { doc, text, meta })
+        Ok(Replica { doc, text, meta, pictures: HashSet::new() })
+    }
+
+    /// `paragraphs` as this side may hold them: a picture whose path this
+    /// side did not put into the document loses the path. The path is
+    /// left empty, not absent, so the run is still an object and every
+    /// offset is where it was; an empty path names no file.
+    fn own_pictures_only(&self, paragraphs: &mut [Paragraph]) {
+        for run in paragraphs.iter_mut().flat_map(|p| &mut p.runs) {
+            if run.style.image.as_ref().is_some_and(|path| !self.pictures.contains(path)) {
+                run.style.image = Some(String::new());
+            }
+        }
     }
 
     /// Start a shared document from `doc`, as peer `peer`. A document with
@@ -522,7 +558,8 @@ impl Replica {
     pub fn new(peer: u64, doc: &Document) -> Result<Self, CollabError> {
         check_document_level(doc)?;
         check_paragraphs(&doc.paragraphs)?;
-        let me = Self::with_doc(LoroDoc::new(), peer)?;
+        let mut me = Self::with_doc(LoroDoc::new(), peer)?;
+        me.pictures.extend(picture_paths(&doc.paragraphs));
         let first = doc.paragraphs.first().map(|p| p.style.clone()).unwrap_or_default();
         me.meta.insert(FIRST, para_json(&first)?).map_err(loro_err)?;
         me.meta.insert(PAGE, json(&doc.page)?).map_err(loro_err)?;
@@ -536,16 +573,20 @@ impl Replica {
     /// A second peer on a copy of this document.
     pub fn fork(&self, peer: u64) -> Result<Replica, CollabError> {
         self.doc.commit();
-        Self::with_doc(self.doc.fork(), peer)
+        let mut fork = Self::with_doc(self.doc.fork(), peer)?;
+        fork.pictures.clone_from(&self.pictures);
+        Ok(fork)
     }
 
     /// A peer that has only the history in `updates` (from
     /// [`Replica::export_all`]): the whole document replayed from its ops,
-    /// and `base` with the paragraphs and page it holds.
+    /// and `base` with the paragraphs and page it holds. The pictures of
+    /// `base` are this side's own; any other comes without its path.
     pub fn from_updates(peer: u64, updates: &[u8], base: &Document) -> Result<(Replica, Document), CollabError> {
         let doc = LoroDoc::new();
         doc.import(updates).map_err(decode_error)?;
-        let me = Self::with_doc(doc, peer)?;
+        let mut me = Self::with_doc(doc, peer)?;
+        me.pictures.extend(picture_paths(&base.paragraphs));
         let document = me.rebuild(base)?;
         Ok((me, document))
     }
@@ -557,10 +598,12 @@ impl Replica {
     /// document has never seen and is never used for it again. The
     /// document is read before it is anyone's live state, so a snapshot
     /// that is not a Letters document, or holds what is refused, is an
-    /// error here.
+    /// error here. The pictures of `base` are this side's own; any other
+    /// comes without its path.
     pub fn from_snapshot(peer: u64, snapshot: &[u8], base: &Document) -> Result<(Replica, Document), CollabError> {
         let doc = LoroDoc::from_snapshot(snapshot).map_err(decode_error)?;
-        let me = Self::with_doc(doc, peer)?;
+        let mut me = Self::with_doc(doc, peer)?;
+        me.pictures.extend(picture_paths(&base.paragraphs));
         let document = me.rebuild(base)?;
         Ok((me, document))
     }
@@ -641,20 +684,25 @@ impl Replica {
         Ok(report)
     }
 
-    /// The paragraphs of the (merged) document.
+    /// The paragraphs of the (merged) document. A picture a peer put in
+    /// comes without its path (module docs, Pictures).
     pub fn paragraphs(&self) -> Result<Vec<Paragraph>, CollabError> {
         self.doc.commit();
-        Ok(read_view(&self.text, &self.meta)?.paragraphs)
+        let mut paragraphs = read_view(&self.text, &self.meta)?.paragraphs;
+        self.own_pictures_only(&mut paragraphs);
+        Ok(paragraphs)
     }
 
     /// `base` with the paragraphs and the page this replica's document
     /// holds: the document the editor shows. `base` is the local file, whose
     /// other parts (the base font, heading styles) the document does not
-    /// carry; it must hold nothing that is refused either.
+    /// carry; it must hold nothing that is refused either. A picture a peer
+    /// put in comes without its path (module docs, Pictures).
     pub fn rebuild(&self, base: &Document) -> Result<Document, CollabError> {
         check_document_level(base)?;
         self.doc.commit();
-        let view = read_view(&self.text, &self.meta)?;
+        let mut view = read_view(&self.text, &self.meta)?;
+        self.own_pictures_only(&mut view.paragraphs);
         let mut document = base.clone();
         document.paragraphs = view.paragraphs;
         document.page = view.page;
@@ -736,7 +784,11 @@ impl Replica {
     pub fn record(&mut self, before: &Document, op: &Op) -> Result<(), CollabError> {
         Self::check_op(before, op)?;
         match op {
-            Op::Insert { at, content } => self.insert(*at, content)?,
+            Op::Insert { at, content } => {
+                // A picture this side inserts is its own.
+                self.pictures.extend(picture_paths(content));
+                self.insert(*at, content)?;
+            }
             Op::Delete { at, len } => {
                 if *len == 0 {
                     return Ok(());
