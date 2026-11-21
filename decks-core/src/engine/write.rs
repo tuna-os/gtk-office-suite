@@ -613,11 +613,12 @@ fn write_geometry_and_paint<W: std::io::Write>(
         }
         Ok(())
     };
-    let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> Result<(), quick_xml::Error> {
+    // `fill` adds the fill's opacity; an outline's colour has none.
+    let solid = |writer: &mut Writer<W>, color: super::shape::Color, fill: bool| -> Result<(), quick_xml::Error> {
         writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
         let mut srgb = BytesStart::new("a:srgbClr");
         srgb.push_attribute(("val", color.to_hex().as_str()));
-        if fill_alpha.is_some() {
+        if fill && fill_alpha.is_some() {
             writer.write_event(Event::Start(srgb))?;
             alpha_el(writer)?;
             writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
@@ -690,7 +691,7 @@ fn write_geometry_and_paint<W: std::io::Write>(
         }
         (Some(super::theme::FillSrc::Color(r)), None, _) => solid_ref(writer, r, true)?,
         (Some(super::theme::FillSrc::NoFill), None, _) => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
-        (None, None, Some(c)) => solid(writer, c)?,
+        (None, None, Some(c)) => solid(writer, c, true)?,
         (None, None, None) => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
     }
     let mut ln = BytesStart::new("a:ln");
@@ -713,7 +714,7 @@ fn write_geometry_and_paint<W: std::io::Write>(
             // Model units, as write_xfrm writes coordinates.
             ln.push_attribute(("w", emu(stroke.width).as_str()));
             writer.write_event(Event::Start(ln))?;
-            solid(writer, stroke.color)?;
+            solid(writer, stroke.color, false)?;
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }

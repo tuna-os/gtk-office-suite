@@ -56,6 +56,32 @@ fn a_translucent_fill_survives_an_odp_save() {
     assert_eq!(back.fill_alpha, Some(0.75));
 }
 
+/// The fill's opacity is the fill's: an outline beside it stays opaque,
+/// literal or carried (review on #2350).
+#[test]
+fn a_translucent_fills_outline_stays_opaque() {
+    use decks_core::engine::shape::Stroke;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("s.pptx");
+    let mut d = deck(None);
+    if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
+        style.stroke = Some(Stroke { color: Color(0x20, 0x30, 0x40), width: 2.0 });
+    }
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
+    let slide = {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut s).unwrap();
+        s
+    };
+    let ln = &slide[slide.find("<a:ln").expect("an outline")..];
+    let ln = &ln[..ln.find("</a:ln>").unwrap()];
+    assert!(!ln.contains("a:alpha"), "{ln}");
+    let back = style(&read_pptx(path.to_str().unwrap()).unwrap());
+    assert_eq!(back.fill_alpha, Some(0.75));
+    assert_eq!(back.stroke.map(|s| s.color), Some(Color(0x20, 0x30, 0x40)));
+}
+
 #[test]
 fn an_opaque_fill_states_no_opacity() {
     let dir = tempfile::tempdir().unwrap();
