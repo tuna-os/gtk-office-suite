@@ -165,6 +165,19 @@ fn place_inner(
         if let (Some(decks_core::engine::Spacing::Units(u)), true) = (st.line_spacing, line_h > 0.0) {
             layout.set_line_spacing((u * text_scale / line_h) as f32);
         }
+        // Pango spaces the lines after the first; PowerPoint and Impress
+        // give the first line the same pitch, so a paragraph at 130% stands
+        // 30% of a line further from the one before it (the CNSC deck's
+        // outline: 66 px between one-line bullets where both draw 80).
+        // More than single goes above the line; less comes off its advance.
+        let pitch = match layout.line_spacing() {
+            f if f > 0.0 => f as f64,
+            _ => 1.0,
+        };
+        let first_extra = (pitch - 1.0) * line_h;
+        if first_extra > 0.0 {
+            y += first_extra;
+        }
         // Space above the first paragraph is not drawn: the inset is the
         // box's top margin, as PowerPoint lays it out.
         if i > 0 {
@@ -208,8 +221,8 @@ fn place_inner(
         let h = layout.pixel_size().1 as f64;
         placed.push(Placed { layout, marker, x: g.text_x, y });
         // Pango tightens the lines after a paragraph's first; the first
-        // line's share of the reduction comes off the advance.
-        let first_cut = fit.map_or(0.0, |a| a.line_reduction) * line_h;
+        // line's share comes off the advance.
+        let first_cut = (-first_extra).max(0.0);
         y += h - first_cut + st.space_after.resolve(line_h / scale) * scale;
     }
     let content_h = y;
@@ -428,6 +441,29 @@ mod tests {
 
     fn runs(text: &str) -> Vec<Run> {
         vec![Run { text: text.into(), style: RunStyle::default() }]
+    }
+
+    /// A paragraph at 150% stands half a line further from the one before
+    /// it, its first line included, as PowerPoint and Impress set it.
+    #[test]
+    fn proportional_spacing_gives_the_first_line_its_share() {
+        use decks_core::engine::Spacing;
+        let at = |spacing: Option<Spacing>| {
+            let para = ParaStyle { line_spacing: spacing, ..Default::default() };
+            let body = TextBody {
+                paras: vec![para.clone(), para],
+                insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }),
+                ..Default::default()
+            };
+            let placed = place(&ctx(), "One\nTwo", &runs("One\nTwo"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
+            (placed[0].y, placed[1].y)
+        };
+        let (a0, a1) = at(None);
+        let (b0, b1) = at(Some(Spacing::Lines(1.5)));
+        let line = a1 - a0;
+        assert!(line > 0.0);
+        assert!((b0 - a0 - line * 0.5).abs() < 1.0, "the first line gains half a line above it: {a0} {b0} {line}");
+        assert!((b1 - b0 - line * 1.5).abs() < 1.0, "the next paragraph is a line and a half on: {b0} {b1} {line}");
     }
 
     #[test]
