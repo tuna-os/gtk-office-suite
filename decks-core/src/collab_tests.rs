@@ -307,6 +307,72 @@ fn builds_follow_their_object_through_concurrent_reorders() {
     }
 }
 
+fn image(path: &str) -> SlideObject {
+    SlideObject::Image { path: path.into(), x: 1.0, y: 2.0, w: 30.0, h: 40.0, rotation: 0.0, crop: Default::default() }
+}
+
+fn background(path: &str) -> Option<crate::engine::BackgroundPicture> {
+    Some(crate::engine::BackgroundPicture { path: path.into(), fill: Default::default() })
+}
+
+/// Each slide's background picture path and its picture objects' paths.
+fn pictures(deck: &[Slide]) -> Vec<(Option<&str>, Vec<&str>)> {
+    deck.iter()
+        .map(|s| {
+            let objects = s.objects.iter().filter_map(|o| match o {
+                SlideObject::Image { path, .. } => Some(path.as_str()),
+                _ => None,
+            });
+            (s.background_picture.as_ref().map(|p| p.path.as_str()), objects.collect())
+        })
+        .collect()
+}
+
+/// A picture holds a path, and the writers read that path on save. A path
+/// a peer's update brings would name a file on this machine that the peer
+/// chose, so it does not reach this side's deck: a picture object keeps its
+/// place and its box with an empty path, and a background picture is left
+/// out. This side's own pictures, from its deck and its own edits, keep
+/// theirs.
+#[test]
+fn a_peers_picture_comes_without_its_path() {
+    let mut deck = base();
+    deck[0].objects.push(image("logo.png"));
+    deck[1].background_picture = background("paper.jpg");
+    let mut mine = Replica::new(1, &mut deck).unwrap();
+    let (mut theirs, mut their_deck) = Replica::from_updates(2, &mine.export_all()).unwrap();
+    assert_eq!(pictures(&their_deck), [(None, vec![""]), (None, vec![]), (None, vec![])], "a peer takes none of mine either");
+
+    // The peer puts in a picture and a background whose paths name files
+    // on my machine.
+    let (first, third) = (their_deck[0].ids.slide, their_deck[2].ids.slide);
+    let chosen = SlideProps { background_picture: background("/home/me/Documents/passport.jpg"), ..SlideProps::of(&their_deck[2]) };
+    let id = next_id(&their_deck);
+    edit(
+        &mut their_deck,
+        &mut theirs,
+        vec![
+            Op::InsertObject { slide: first, at: 0, id, object: Box::new(image("/home/me/.ssh/id_ed25519")) },
+            Op::SetSlide { slide: third, props: Box::new(chosen) },
+        ],
+    );
+    assert_eq!(
+        pictures(&theirs.rebuild().unwrap()),
+        [(None, vec!["/home/me/.ssh/id_ed25519", ""]), (None, vec![]), (Some("/home/me/Documents/passport.jpg"), vec![])],
+        "the peer's own pictures are its own"
+    );
+
+    mine.merge_from(&theirs).unwrap();
+    let mut deck = mine.rebuild().unwrap();
+    assert_eq!(pictures(&deck), [(None, vec!["", "logo.png"]), (Some("paper.jpg"), vec![]), (None, vec![])]);
+    assert!(matches!(&deck[0].objects[0], SlideObject::Image { w, h, .. } if *w == 30.0 && *h == 40.0), "still a picture object, of its box");
+
+    // A picture I put in myself is mine, also next to the peer's.
+    let (first, id) = (deck[0].ids.slide, next_id(&deck));
+    edit(&mut deck, &mut mine, vec![Op::InsertObject { slide: first, at: 0, id, object: Box::new(image("holiday.png")) }]);
+    assert_eq!(pictures(&mine.rebuild().unwrap())[0], (None, vec!["holiday.png", "", "logo.png"]));
+}
+
 #[test]
 fn every_kind_of_object_survives_the_document() {
     let mut deck = base();

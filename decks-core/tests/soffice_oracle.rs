@@ -1899,7 +1899,7 @@ fn a_picture_crop_survives_impress_both_ways() {
     let dir = tempfile::tempdir().unwrap();
     let png = dir.path().join("photo.png");
     std::fs::write(&png, picture_support::picture(400, 300, 7)).unwrap();
-    let crop = decks_core::engine::Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
+    let crop = decks_core::engine::Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2, ..Default::default() };
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Image {
         path: png.to_string_lossy().to_string(),
