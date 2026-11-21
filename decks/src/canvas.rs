@@ -419,7 +419,13 @@ pub fn document_font_description(
     master: Option<&MasterSlide>,
     base_pt: f64,
 ) -> pango::FontDescription {
-    let mut desc = pango::FontDescription::from_string(master_font_family(master));
+    // The family is a name, not a description string: `from_string` reads
+    // trailing style words, so "Segoe UI Semilight" became Segoe UI at
+    // semilight weight, a lighter and narrower face than the regular one
+    // PowerPoint and Impress fall back to when the font is missing, and a
+    // banner that wraps in both fitted on one line.
+    let mut desc = pango::FontDescription::new();
+    desc.set_family(master_font_family(master));
     desc.set_absolute_size(base_pt * 96.0 / 72.0 * pango::SCALE as f64);
     desc
 }
@@ -441,12 +447,15 @@ pub fn set_styled_text(
     runs: &[Run],
     scale: f64,
 ) {
+    // A word too long for its line breaks without a hyphen in PowerPoint
+    // and Impress ("TECHNOLOG" over "Y"); Pango adds one by default.
+    let attrs = pango::AttrList::new();
+    attrs.insert(pango::AttrInt::new_insert_hyphens(false));
     if runs.is_empty() {
         layout.set_text(text);
-        layout.set_attributes(None);
+        layout.set_attributes(Some(&attrs));
         return;
     }
-    let attrs = pango::AttrList::new();
     let mut buf = String::new();
     for run in runs {
         let start = buf.len() as u32;
@@ -2112,6 +2121,41 @@ mod font_tests {
     }
 
     #[test]
+    fn a_word_broken_across_lines_gets_no_hyphen() {
+        let l = layout();
+        let mut d = pango::FontDescription::from_string("Sans");
+        d.set_absolute_size(20.0 * pango::SCALE as f64);
+        l.set_font_description(Some(&d));
+        l.set_width(60 * pango::SCALE);
+        l.set_wrap(pango::WrapMode::WordChar);
+        set_styled_text(&l, "TECHNOLOGY", &[], 1.0);
+        assert!(l.line_count() > 1, "the word must break to test anything");
+        let shown: String = (0..l.line_count())
+            .map(|i| {
+                let line = l.line_readonly(i).unwrap();
+                let (start, len) = (line.start_index() as usize, line.length() as usize);
+                l.text()[start..start + len].to_string()
+            })
+            .collect();
+        assert_eq!(shown, "TECHNOLOGY");
+        // Pango draws an inserted hyphen as an extra glyph on the line's end;
+        // with hyphens off each line holds exactly its own characters.
+        let hyphenated = (0..l.line_count()).any(|i| {
+            let line = l.line_readonly(i).unwrap();
+            line.runs().iter().any(|r| r.glyph_string().num_glyphs() > r.item().num_chars())
+        });
+        assert!(!hyphenated, "no hyphen glyph was added");
+    }
+
+    #[test]
+    fn a_family_named_after_a_weight_keeps_its_whole_name() {
+        let m = master(7, "Segoe UI Semilight");
+        let desc = document_font_description(Some(&m), 18.0);
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Segoe UI Semilight"));
+        assert_eq!(desc.weight(), pango::Weight::Normal);
+    }
+
+    #[test]
     fn the_description_carries_the_size_it_was_asked_for() {
         let desc = document_font_description(None, 18.0);
         assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
@@ -2137,7 +2181,8 @@ mod font_tests {
         l.set_attributes(Some(&pango::AttrList::new()));
         set_styled_text(&l, "just text", &[], 1.0);
         assert_eq!(l.text(), "just text");
-        assert!(l.attributes().is_none(), "a stale attribute list survived");
+        let kinds: Vec<_> = l.attributes().map(|a| a.attributes().iter().map(|x| x.type_()).collect()).unwrap_or_default();
+        assert_eq!(kinds, vec![pango::AttrType::InsertHyphens], "a stale attribute list survived");
     }
 
     /// The drawn string is the runs concatenated — the same string the model
