@@ -30,6 +30,10 @@ struct RawPara {
     /// direct edge; `Some(None)` is a direct edge the model drops
     /// (nil, or an unmodelled look), which still suppresses the style's.
     borders: [Option<Option<RawBorder>>; 4],
+    /// Each legacy form checkbox's state in the paragraph, in order
+    /// (`w:ffData/w:checkBox`: `w:checked` over `w:default`). rdocx gives
+    /// the FORMCHECKBOX field but not its state.
+    checks: Vec<(Option<bool>, Option<bool>)>,
 }
 
 /// A tab stop as the file spells it: its position in twips, its
@@ -163,6 +167,7 @@ fn raw_paragraph_props(path: &str) -> RawParas {
         // a tab character inside a run. Only the former has a position,
         // so the flag is what keeps a tabbed line from inventing stops.
         let mut in_tabs = false;
+        let mut in_checkbox = false;
         // The paragraph whose properties the scan is inside, if the scan
         // pushed one for it: `w:p` inside a text box (`w:txbxContent`)
         // is not a body paragraph, so it pushes none and sets none of
@@ -233,6 +238,12 @@ fn raw_paragraph_props(path: &str) -> RawParas {
                     }
                     "w:txbxContent" => txbx_depth += 1,
                     "w:tabs" => in_tabs = true,
+                    "w:checkBox" => {
+                        if let Some(last) = last_mut(&mut out, list) {
+                            last.checks.push((None, None));
+                            in_checkbox = true;
+                        }
+                    }
                     "w:p" => {
                         // A skipped paragraph (in a text box, or nested
                         // past the tables the scan pairs) clears the
@@ -268,6 +279,7 @@ fn raw_paragraph_props(path: &str) -> RawParas {
                     "w:tbl" => table_depth = table_depth.saturating_sub(1),
                     "w:txbxContent" => txbx_depth = txbx_depth.saturating_sub(1),
                     "w:tabs" => in_tabs = false,
+                    "w:checkBox" => in_checkbox = false,
                     "w:p" => {
                         if txbx_depth == 0 {
                             in_para = false;
@@ -297,6 +309,17 @@ fn raw_paragraph_props(path: &str) -> RawParas {
                     "w:sectPr" => {
                         if let Some(para) = sect_owner(&out, in_para, ppr_depth, table_depth, txbx_depth, list, sect_change) {
                             out.sections.push(RawSection { para, ..Default::default() });
+                        }
+                    }
+                    "w:checkBox" => {
+                        if let Some(last) = last_mut(&mut out, list) {
+                            last.checks.push((None, None));
+                        }
+                    }
+                    "w:default" | "w:checked" if in_checkbox => {
+                        let on = on_off(&e);
+                        if let Some(state) = last_mut(&mut out, list).and_then(|l| l.checks.last_mut()) {
+                            if e.name().as_ref() == "w:checked" { state.1 = Some(on) } else { state.0 = Some(on) }
                         }
                     }
                     // A `w:p` with nothing in it is still a paragraph.
@@ -3337,6 +3360,8 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
 
     let base = read_base_font(doc);
     let mut runs = Vec::new();
+    // Legacy form checkboxes met so far, to take each one's state.
+    let mut checkboxes = 0usize;
     for (idx, r) in p.runs().enumerate() {
         // Inline images: extract bytes to a cache file so the model's
         // image path is always locally readable.
@@ -3397,7 +3422,18 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             }
             continue;
         }
-        let text = r.text();
+        // A legacy form checkbox (a FORMCHECKBOX field) has no result
+        // text: it is drawn as a box, ticked when checked, as Word and
+        // LibreOffice draw it. Dropped, a declaration form's "tick at
+        // least one" boxes were not there at all.
+        let checkbox = r.items().into_iter().any(|item| matches!(item, rdocx::RunItemRef::Field(f) if f.name().eq_ignore_ascii_case("FORMCHECKBOX")));
+        let text = if checkbox {
+            let checked = raw.and_then(|raw| raw.checks.get(checkboxes)).is_some_and(|&(default, checked)| checked.or(default).unwrap_or(false));
+            checkboxes += 1;
+            if checked { "\u{2612}" } else { "\u{2610}" }.to_string()
+        } else {
+            r.text()
+        };
         if text.is_empty() { continue; }
         // A style's font, size and colour (a heading style's 16pt blue)
         // are the run's too; only what differs from the body font is
@@ -4026,6 +4062,32 @@ mod tests {
 
     fn para(text: &str) -> String {
         format!("<w:p><w:r><w:t>{text}</w:t></w:r></w:p>")
+    }
+
+    /// A legacy form checkbox (`FORMCHECKBOX`, its state in `w:ffData`)
+    /// reads as a box, ticked when checked or checked by default, in the
+    /// body and in a table cell. It has no result text, so it read as
+    /// nothing: the crime supervisor form's "tick at least one of the
+    /// boxes below" had no boxes.
+    #[test]
+    fn a_legacy_form_checkbox_reads_as_a_box() {
+        let boxed = |state: &str| {
+            format!(
+                "<w:r><w:fldChar w:fldCharType=\"begin\"><w:ffData><w:name w:val=\"C\"/><w:enabled/><w:checkBox><w:sizeAuto/>{state}</w:checkBox></w:ffData></w:fldChar></w:r>\
+                 <w:r><w:instrText xml:space=\"preserve\"> FORMCHECKBOX </w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
+            )
+        };
+        let line = format!(
+            "<w:p><w:r><w:t xml:space=\"preserve\">a </w:t></w:r>{}<w:r><w:t xml:space=\"preserve\"> b </w:t></w:r>{}<w:r><w:t xml:space=\"preserve\"> c </w:t></w:r>{}</w:p>",
+            boxed("<w:default w:val=\"0\"/>"),
+            boxed("<w:default w:val=\"0\"/><w:checked/>"),
+            boxed("<w:default w:val=\"1\"/>"),
+        );
+        let body = format!("{line}<w:tbl><w:tr><w:tc>{line}</w:tc></w:tr></w:tbl>");
+        let dir = tempfile::tempdir().unwrap();
+        let d = read(docx_with_body(dir.path(), &body, "boxes.docx").to_str().unwrap()).unwrap();
+        let texts: Vec<String> = d.paragraphs.iter().map(|p| p.text()).filter(|t| !t.is_empty()).collect();
+        assert_eq!(texts, ["a \u{2610} b \u{2612} c \u{2612}", "a \u{2610} b \u{2612} c \u{2612}"], "{texts:?}");
     }
 
     /// A page break before a table starts the table on the new page: the
