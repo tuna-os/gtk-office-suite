@@ -1946,6 +1946,7 @@ fn recovery_rich_state_round_trip() {
                     accent: None,
                     cell_margins: None,
                     style_id: None,
+                    file_bold: None,
                 },
             },
         ],

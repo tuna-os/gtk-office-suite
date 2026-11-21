@@ -88,6 +88,12 @@ pub struct TableData {
     /// - Accent 1". `accent` is that style's colour.
     #[serde(default)]
     pub style_id: Option<String>,
+    /// What the package's own definition of that style (`ppt/tableStyles.xml`)
+    /// says of the header row's and the first column's weight
+    /// (`a:firstRow/a:tcTxStyle b="on"`, `a:firstCol`). `None` where the
+    /// package doesn't define the style: its built-in look then applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_bold: Option<(bool, bool)>,
 }
 
 /// The default table style's GUID: "Medium Style 2 - Accent 1".
@@ -241,7 +247,13 @@ impl TableData {
         // fonts), so in those only a run's own `b="1"` makes header text
         // bold. PowerPoint bolds them all; the render lab's reference is
         // Impress.
-        let bold = self.family() == StyleFamily::LightStyle1 && ((self.first_row && r == 0) || (self.first_col && c == 0));
+        // A package that defines the style itself is drawn as it says:
+        // Impress reads `ppt/tableStyles.xml`, and PowerPoint's own Medium
+        // Style 2 there bolds the header (the PMC Vanguard deck).
+        let bold = match self.file_bold {
+            Some((row, col)) => (row && self.first_row && r == 0) || (col && self.first_col && c == 0),
+            None => self.family() == StyleFamily::LightStyle1 && ((self.first_row && r == 0) || (self.first_col && c == 0)),
+        };
         let (fill, text, _office_bold) = match self.family() {
             StyleFamily::MediumStyle2 => (
                 Some(if header { accent } else if banded { accent.tint(40_000) } else { accent.tint(20_000) }),
@@ -305,6 +317,7 @@ mod tests {
             accent: Some(Color(0x4F, 0x81, 0xBD)),
             cell_margins: None,
             style_id: None,
+            file_bold: None,
         }
     }
 
@@ -398,6 +411,18 @@ mod tests {
         // Without banding every body row is the same.
         let t = table(true, false);
         assert_eq!(t.cell_paint(1, 0).fill, t.cell_paint(2, 0).fill);
+    }
+
+    /// A package that defines its style says how heavy the header is: the
+    /// PMC Vanguard deck's own Medium Style 2 bolds it, where the built-in
+    /// look (as Impress draws it without the definition) keeps it regular.
+    #[test]
+    fn the_packages_own_style_decides_the_headers_weight() {
+        let mut t = table(true, true);
+        assert!(!t.cell_paint(0, 0).bold, "built in, Medium Style 2 keeps the weight");
+        t.file_bold = Some((true, false));
+        assert!(t.cell_paint(0, 0).bold, "the file's firstRow b=on");
+        assert!(!t.cell_paint(1, 0).bold, "a body cell stays regular");
     }
 
     #[test]
