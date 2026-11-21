@@ -77,6 +77,10 @@ pub(super) fn master_shapes(
     let mut in_bg = false;
     let mut in_text = false;
     let mut in_rpr = false;
+    // The groups the walker is inside: a layout's logo is often a group
+    // whose children are placed in its own child space (`a:chOff`).
+    let mut groups: Vec<GroupFrame> = Vec::new();
+    let mut in_grp_pr = false;
     // (x, y, w, h, prst, has_ph, text)
     struct Pending {
         x: f64,
@@ -98,6 +102,8 @@ pub(super) fn master_shapes(
         /// A connector (`p:cxnSp`); `sp_index` is then its index into
         /// `cxn_paints`.
         connector: bool,
+        /// Clockwise degrees (`a:xfrm rot`).
+        rotation: f64,
     }
     let paints = sp_styles(xml, theme, scale.x);
     let cxn_paints = cxn_styles(xml, theme, scale.x);
@@ -114,6 +120,13 @@ pub(super) fn master_shapes(
             self.runs.push(Run { text, style: self.cur_style.clone() });
         }
     }
+    // A finished shape's frame, through the groups it sits in, in model
+    // units.
+    fn placed(mut p: Pending, groups: &[GroupFrame], scale: SlideScale) -> Pending {
+        let ((x, y, w, h), rotation) = in_groups(groups, (p.x, p.y, p.w, p.h), p.rotation);
+        (p.x, p.y, p.w, p.h, p.rotation) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y, rotation);
+        p
+    }
     let mut cur: Option<Pending> = None;
     while let Ok(ev) = reader.read_event_into(&mut buf) {
         match ev {
@@ -127,6 +140,18 @@ pub(super) fn master_shapes(
             }
             Event::Start(ref e) | Event::Empty(ref e) => match e.name().as_ref() {
                 "p:bg" => in_bg = true,
+                "p:grpSp" => groups.push(GroupFrame::default()),
+                "p:grpSpPr" if cur.is_none() && matches!(ev, Event::Start(_)) => in_grp_pr = true,
+                "a:xfrm" | "a:off" | "a:ext" | "a:chOff" | "a:chExt" if in_grp_pr => {
+                    if let Some(g) = groups.last_mut() {
+                        g.note(e);
+                    }
+                }
+                "a:xfrm" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.rotation = parse_rotation(e).unwrap_or(0.0);
+                    }
+                }
                 // A line break inside the paragraph, as on a slide.
                 "a:br" => {
                     if let Some(p) = cur.as_mut() {
@@ -154,6 +179,7 @@ pub(super) fn master_shapes(
                         picture: false,
                         embed: None,
                         connector: false,
+                        rotation: 0.0,
                     });
                     sp_count += 1;
                 }
@@ -175,6 +201,7 @@ pub(super) fn master_shapes(
                         picture: false,
                         embed: None,
                         connector: true,
+                        rotation: 0.0,
                     });
                     cxn_count += 1;
                 }
@@ -193,6 +220,7 @@ pub(super) fn master_shapes(
                         picture: true,
                         embed: None,
                         connector: false,
+                        rotation: 0.0,
                     });
                 }
                 "a:blip" => {
@@ -216,10 +244,10 @@ pub(super) fn master_shapes(
                     if let Some(p) = cur.as_mut() {
                         let (x, y) = parse_coords(e, "x", "y");
                         if let Some(x) = x {
-                            p.x = x * scale.x;
+                            p.x = x;
                         }
                         if let Some(y) = y {
-                            p.y = y * scale.y;
+                            p.y = y;
                         }
                     }
                 }
@@ -227,10 +255,10 @@ pub(super) fn master_shapes(
                     if let Some(p) = cur.as_mut() {
                         let (w, h) = parse_coords(e, "cx", "cy");
                         if let Some(w) = w {
-                            p.w = w * scale.x;
+                            p.w = w;
                         }
                         if let Some(h) = h {
-                            p.h = h * scale.y;
+                            p.h = h;
                         }
                     }
                 }
@@ -256,6 +284,17 @@ pub(super) fn master_shapes(
                             // Lowercase and without the '#', matching the
                             // slide walker and `RunStyle`'s documented form.
                             p.cur_style.color = Some(val.value.to_lowercase());
+                        }
+                    }
+                }
+                // A theme colour on a run (`accent2`: the CNSC logo's
+                // orange), resolved against the part's theme.
+                "a:schemeClr" if in_rpr => {
+                    if let Some(p) = cur.as_mut() {
+                        if let Some(val) = e.attributes().filter_map(|a| a.ok()).find(|a| a.key.as_ref() == "val") {
+                            if let Some(color) = theme.slot(&val.value.to_lowercase()) {
+                                p.cur_style.color = Some(color.to_hex().to_lowercase());
+                            }
                         }
                     }
                 }
@@ -285,17 +324,21 @@ pub(super) fn master_shapes(
                 _ => {}
             },
             Event::End(ref e) => match e.name().as_ref() {
+                "p:grpSpPr" => in_grp_pr = false,
+                "p:grpSp" => {
+                    groups.pop();
+                }
                 "p:pic" => {
                     // A master's or layout's picture (a logo, a band of
                     // colour), where it stands among its shapes.
-                    if let Some(p) = cur.take() {
+                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)) {
                         if let Some(path) = p.embed.as_deref().filter(|_| !p.has_ph && p.w > 0.0 && p.h > 0.0).and_then(&mut *pictures) {
-                            shapes.push(SlideObject::Image { path, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, crop: Default::default() });
+                            shapes.push(SlideObject::Image { path, x: p.x, y: p.y, w: p.w, h: p.h, rotation: p.rotation, crop: Default::default() });
                         }
                     }
                 }
                 "p:cxnSp" => {
-                    if let Some(p) = cur.take().filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
+                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)).filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
                         let paint = cxn_paints.get(p.sp_index).cloned().unwrap_or_default();
                         // A connector with a flat box (a bent or curved one
                         // whose ends are level) is a straight segment: drawn
@@ -304,7 +347,7 @@ pub(super) fn master_shapes(
                         if (p.w == 0.0 || p.h == 0.0) && !crate::engine::shape::is_line(&kind) {
                             kind = ShapeKind::from_prst("line");
                         }
-                        shapes.push(SlideObject::Shape { kind, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, style: paint.style });
+                        shapes.push(SlideObject::Shape { kind, x: p.x, y: p.y, w: p.w, h: p.h, rotation: p.rotation, style: paint.style });
                     }
                 }
                 "p:bg" => in_bg = false,
@@ -316,7 +359,7 @@ pub(super) fn master_shapes(
                     }
                 }
                 "p:sp" => {
-                    if let Some(p) = cur.take() {
+                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)) {
                         // A line has no height (or width) of its own.
                         let line = crate::engine::shape::is_line(&ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect")));
                         let sized = if line { p.w > 0.0 || p.h > 0.0 } else { p.w > 0.0 && p.h > 0.0 };
@@ -330,7 +373,7 @@ pub(super) fn master_shapes(
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
-                                    rotation: 0.0,
+                                    rotation: p.rotation,
                                     runs: p.runs,
                                     body: Default::default(),
                                 });
@@ -346,7 +389,7 @@ pub(super) fn master_shapes(
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
-                                    rotation: 0.0,
+                                    rotation: p.rotation,
                                     style: paint.style,
                                 });
                             }
