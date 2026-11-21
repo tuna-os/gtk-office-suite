@@ -821,7 +821,7 @@ mod tests {
 
     #[test]
     fn a_crop_scales_the_source_up_and_shifts_it_inside_a_clipped_box() {
-        let crop = decks_core::engine::Crop { left: 0.25, top: 0.0, right: 0.25, bottom: 0.0 };
+        let crop = decks_core::engine::Crop { left: 0.25, top: 0.0, right: 0.25, bottom: 0.0, ..Default::default() };
         let typst = picture("p.png", 200.0, 100.0, &crop);
         // Half the width is kept, so the whole source is drawn twice as wide
         // (400pt) and moved left by the cropped quarter (100pt).
