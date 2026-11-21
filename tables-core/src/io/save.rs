@@ -469,6 +469,19 @@ pub fn save_sheets_to_xlsx_bytes(
             }
         }
 
+        // Pictures at their anchor cell and offset, at the size they were
+        // drawn: a saved workbook used to drop every logo it opened with.
+        // A picture whose bytes rust_xlsxwriter can't read (EMF, a corrupt
+        // file) is left out rather than failing the save.
+        for pic in &sh.pictures {
+            let Ok(image) = rust_xlsxwriter::Image::new_from_buffer(&pic.data) else { continue };
+            let image = image.set_scale_to_size(pic.width_px.max(1.0), pic.height_px.max(1.0), false);
+            let (dx, dy) = (pic.offset_px.0.max(0.0).round() as u32, pic.offset_px.1.max(0.0).round() as u32);
+            sheet
+                .insert_image_with_offset(pic.anchor.0 as u32, pic.anchor.1 as u16, &image, dx, dy)
+                .map_err(|e| format!("Picture error: {e}"))?;
+        }
+
         for ch in &sh.charts {
             use crate::sheet::{ChartKind, LegendPosition};
             use rust_xlsxwriter::{Chart, ChartLegendPosition, ChartType as XType};
@@ -864,6 +877,30 @@ mod tests {
         assert_eq!(back.styles[0][0], styled);
         assert_eq!(back.styles[1][1].h_align, HAlign::Right);
         assert!(back.styles[2][2].is_default());
+    }
+
+    /// A sheet's pictures survive a save and reopen: same cell, offset and
+    /// size, same bytes.
+    #[test]
+    fn pictures_round_trip_through_xlsx() {
+        use crate::sheet::SheetPicture;
+        // A 4x2 PNG.
+        let png: std::sync::Arc<[u8]> = vec![137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 4, 0, 0, 0, 2, 8, 2, 0, 0, 0, 240, 202, 234, 52, 0, 0, 0, 17, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 0, 71, 12, 72, 236, 255, 0, 103, 178, 7, 249, 38, 56, 227, 143, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130].into();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pic.xlsx").to_string_lossy().into_owned();
+        let mut sheet = SheetModel::new("S", 6, 4, 0);
+        sheet.data[0][0] = "logo below".into();
+        sheet.pictures.push(SheetPicture { anchor: (2, 1), offset_px: (10.0, 4.0), width_px: 120.0, height_px: 60.0, data: png.clone() });
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_workbook(&path).unwrap();
+        let pics = &sheets[0].pictures;
+        assert_eq!(pics.len(), 1, "the picture is saved");
+        let p = &pics[0];
+        assert_eq!(p.anchor, (2, 1));
+        assert!((p.offset_px.0 - 10.0).abs() < 1.5 && (p.offset_px.1 - 4.0).abs() < 1.5, "{:?}", p.offset_px);
+        assert!((p.width_px - 120.0).abs() < 1.5 && (p.height_px - 60.0).abs() < 1.5, "{} x {}", p.width_px, p.height_px);
+        assert_eq!(&p.data[..], &png[..]);
     }
 
     /// #920 (tables/wrap-text): a narrow column holding a wrapped cell —
