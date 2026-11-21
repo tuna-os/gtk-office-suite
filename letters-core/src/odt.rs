@@ -2266,10 +2266,13 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 // setting in Writer: a style that sets
                                 // either has none of its parent's other
                                 // (a heading's space above, and no
-                                // space after from Normal).
+                                // space after from Normal), but the
+                                // document default's, which
+                                // `inherited_spacing` fills in. So each
+                                // is flagged as stated on its own.
                                 sets: [
-                                    ["fo:margin-top", "fo:space-before", "fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
-                                    ["fo:margin-top", "fo:space-before", "fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
+                                    ["fo:margin-top", "fo:space-before"].iter().any(|a| attr_val(&e, a).is_some()),
+                                    ["fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
                                     attr_val(&e, "fo:line-height").is_some(),
                                 ],
                                 sets_indent: ["fo:margin-left", "fo:margin-right", "fo:text-indent"].map(|a| attr_val(&e, a).is_some()),
@@ -3084,7 +3087,15 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
                 if st.sets[1] && after.is_none() {
                     after = Some(st.space_after_pt);
                 }
-                spacing_settled = auto.contextual.contains_key(&n) || named.contextual.contains_key(&n);
+                // A style that states its space above or below settles
+                // both: what it leaves out is the document default's, not
+                // its parent's. Measured in LibreOffice 24.2: a 6pt
+                // `fo:margin-top` under a named parent's 20pt
+                // `fo:margin-bottom` has nothing below, under only the
+                // default style's 20pt it has 20pt below. The data
+                // dictionary's blank line between its tables states 6pt
+                // above and keeps the default's 8pt below, which was lost.
+                spacing_settled = st.sets[0] || st.sets[1] || auto.contextual.contains_key(&n) || named.contextual.contains_key(&n);
             }
             if st.sets[2] && line.is_none() {
                 line = Some(st.line_spacing);
@@ -4227,6 +4238,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                 }
                 "draw:frame" | "draw:custom-shape" | "draw:rect" => {
+                    // A floating frame holds its paragraph open a line tall,
+                    // the line of the text around its anchor: the span it
+                    // sits in, as Writer sizes it. The opt-out form floats
+                    // each answer box from a paragraph whose only content is
+                    // a 10pt Arial span around the frame; sized by the
+                    // paragraph's 12pt instead, every row stood 3pt taller.
+                    let mark = span_stack.last().map(|l| (l.font_size_hp, l.font_family.clone())).unwrap_or_default();
                     if frame.as_ref().is_some_and(|f| f.depth == frame_depth && f.text_box.is_some()) {
                         let f = frame.take().expect("the frame just checked");
                         // A shape that is neither a rectangle nor holds text
@@ -4247,6 +4265,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                     // One placed as a character floats at its
                                     // paragraph.
                                     image_anchor: Some(f.anchor.unwrap_or_default()),
+                                    font_size_hp: mark.0,
+                                    font_family: mark.1,
                                     ..Default::default()
                                 },
                             });
@@ -4270,6 +4290,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                     image_extent_emu: f.extent,
                                     image_sides_emu: f.sides,
                                     image_anchor: f.anchor,
+                                    font_size_hp: mark.0.filter(|_| f.anchor.is_some()),
+                                    font_family: mark.1.filter(|_| f.anchor.is_some()),
                                     ..Default::default()
                                 },
                             });
@@ -6711,6 +6733,20 @@ mod tests {
         let st = |i: usize| &d.paragraphs[i].style;
         assert_eq!((st(0).space_before_pt, st(0).space_after_pt, st(0).line_height), (24.0, 0.0, None), "the heading's own");
         assert_eq!((st(1).space_after_pt, st(1).line_height), (12.0, Some(LineHeight::Exact(16.0))), "Normal's own");
+        // What it leaves out is the document default's, though: under a
+        // default 8pt below, a blank line stating only 6pt above keeps the
+        // 8pt (LibreOffice 24.2; the social housing data dictionary).
+        let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"8pt\"/></style:default-style>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"/>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:paragraph-properties fo:margin-top=\"6pt\"/></style:style>\
+             </office:automatic-styles><office:body><office:text><text:p text:style-name=\"P1\"/><text:p text:style-name=\"Normal\">x</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let st = |i: usize| &d.paragraphs[i].style;
+        assert_eq!((st(0).space_before_pt, st(0).space_after_pt), (6.0, 8.0), "its own above, the default's below");
+        assert_eq!((st(1).space_before_pt, st(1).space_after_pt), (0.0, 8.0));
     }
 
     /// A span named by a style of styles.xml takes its look, with what its
@@ -7143,6 +7179,29 @@ mod tests {
         assert_eq!(tb.padding_emu, [45_720, 91_440, 45_720, 91_440]);
         let a = boxes[0].style.image_anchor.unwrap();
         assert_eq!((a.h_from, a.h_align, a.v_from, a.y_emu, a.wrap), (AnchorFrame::Margin, Some(AnchorAlign::End), AnchorFrame::Text, 91_440, crate::model::Wrap::Parallel));
+    }
+
+    /// A floating frame's run carries the look of the span around it: the
+    /// paragraph it floats from is a line of that text tall, as in Writer.
+    /// The opt-out form wraps each answer box in a 10pt Arial span in a
+    /// paragraph otherwise empty; read without it, the line took the
+    /// paragraph's 12pt and every form row stood 3pt taller than Writer's.
+    #[test]
+    fn a_floating_frame_carries_the_look_of_the_span_around_it() {
+        let content = "<office:document-content><office:automatic-styles>\
+            <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties style:font-name=\"Arial\" fo:font-size=\"10pt\"/></style:style>\
+            <style:style style:name=\"a1\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"parallel\" style:vertical-rel=\"paragraph\"/></style:style>\
+            </office:automatic-styles><office:body><office:text>\
+            <text:p><text:span text:style-name=\"T1\"><draw:frame draw:style-name=\"a1\" text:anchor-type=\"paragraph\" svg:width=\"2in\" svg:height=\"0.3in\"><draw:text-box><text:p/></draw:text-box></draw:frame></text:span></text:p>\
+            <text:p><draw:frame draw:style-name=\"a1\" text:anchor-type=\"paragraph\" svg:width=\"2in\" svg:height=\"0.3in\"><draw:text-box><text:p/></draw:text-box></draw:frame></text:p>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let look = |p: usize| {
+            let r = d.paragraphs[p].runs.iter().find(|r| r.style.text_box.is_some()).expect("the box");
+            (r.style.font_size_hp, r.style.font_family.clone())
+        };
+        assert_eq!(look(0), (Some(20), Some("Arial".into())), "the 10pt Arial span's");
+        assert_eq!(look(1), (None, None), "outside a span, the paragraph's own");
     }
 
     /// A frame whose style fills it only with `fo:background-color` is
