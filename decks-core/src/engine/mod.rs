@@ -41,7 +41,7 @@ mod timing;
 mod write;
 
 pub use model::{BackgroundPicture, Crop, Deck, FillRect, MasterSlide, SkippedSlide, Slide, SlideObject, Transition, LINE_BREAK, MODEL_UNITS_PER_INCH, shown_slides, slide_page_size_pt};
-pub use text_body::{shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
+pub use text_body::{fit_like_impress, shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.

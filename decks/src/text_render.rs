@@ -9,7 +9,7 @@
 
 use crate::canvas::set_styled_text;
 use decks_core::engine::text_body::{markers, paragraph_lead_styles, paragraphs};
-use decks_core::engine::{shrink_font_to_fit, Autofit, ParaAlign, Run, TextBody};
+use decks_core::engine::{fit_like_impress, Autofit, ParaAlign, Run, TextBody};
 use gtk4::{cairo, pango};
 
 /// A bullet or number: its layout, left edge, and how far below the
@@ -46,16 +46,17 @@ fn place(
 ) -> Vec<Placed> {
     // A `normAutofit` box is measured, not trusted: the file's
     // `fontScale`/`lnSpcReduction` are the last editor's stale cache (see
-    // `shrink_font_to_fit`), so the fit is recomputed from full size and
+    // `shrink_font_to_fit`'s note), so the fit is recomputed from full size and
     // only ever shrinks.
+    // Impress's search (`fit_like_impress`): it closes the line spacing
+    // before it shrinks the type further, and measures the text 0.5 mm
+    // (1.89 model units at 96 per inch) short.
     let fit = match body.autofit {
         Some(_) => {
             let inner_h = content_box(body, (rect.2, rect.3), scale).1;
-            let s = shrink_font_to_fit(inner_h, &mut |s| {
-                let trial_fit = Some(Autofit { font_scale: s, line_reduction: 0.0 });
-                place_inner(cr, text, runs, body, rect, scale, desc, trial_fit).1
-            });
-            Some(Autofit { font_scale: s, line_reduction: 0.0 })
+            Some(fit_like_impress(inner_h, 0.5 / 25.4 * decks_core::engine::MODEL_UNITS_PER_INCH * scale, None, &mut |trial| {
+                place_inner(cr, text, runs, body, rect, scale, desc, Some(trial)).1
+            }))
         }
         None => None,
     };
@@ -106,6 +107,9 @@ fn place_inner(
 
     // The recomputed fit draws every size smaller; a plain box draws at
     // full size with default line spacing.
+    // Impress also rounds a shrunk box's type to whole points; the model's
+    // sizes are the slide's, scaled to its 960 units, so that rounding (at
+    // most half a point) is not repeated here.
     let (font_k, line_factor) = match fit {
         Some(a) => (a.font_scale, (1.0 - a.line_reduction) as f32),
         None => (1.0, 0.0),
@@ -489,7 +493,13 @@ mod tests {
         let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
         assert!(block(&a) > 40.0, "the unshrunk block overflows: {}", block(&a));
         let b = place(&ctx(), "a\nb", &big, &fit, rect, 1.0, &desc());
-        assert!(block(&b) <= 40.0, "the recomputed fit fits: {}", block(&b));
+        // Fitted as Impress fits it: its lines' pitch, spacing closed to
+        // as little as 80%, within the box and Impress's 0.5 mm (1.89 px
+        // here); the last line's glyphs may reach below by what the
+        // closed spacing took off it.
+        let last = b.last().unwrap().layout.pixel_size().1 as f64;
+        assert!(block(&b) <= 40.0 + 1.9 + 0.2 * last, "the recomputed fit fits: {} (last line {last})", block(&b));
+        assert!(block(&b) < block(&a) / 3.0, "shrunk, not clipped: {} from {}", block(&b), block(&a));
         assert!(b[1].y - b[0].y < a[1].y - a[0].y, "its lines are closer");
     }
 
