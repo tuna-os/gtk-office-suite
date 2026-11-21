@@ -2398,6 +2398,33 @@ def decks(img):
     slash.line.width = Pt(3)
     save(p, "pay-centre-reduced-connector-rules",
          "Three navy tiles, each split by a white 1.5pt rule across its middle; one red 3pt diagonal below them")
+    # DCK-004, reduced from the HR and reporting decks: the rule under every
+    # slide's title is on the layout, as a connector (p:cxnSp) or as a
+    # `line` preset p:sp with zero height. The master/layout reader took
+    # neither, so the rule was missing from every slide.
+    from lxml import etree
+
+    p = deck()
+    layout = p.slide_layouts[6]
+    ns = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    rules = [
+        f"""<p:cxnSp {ns}><p:nvCxnSpPr><p:cNvPr id="90" name="Title rule"/><p:cNvCxnSpPr/><p:nvPr userDrawn="1"/></p:nvCxnSpPr>
+        <p:spPr><a:xfrm><a:off x="731520" y="1371600"/><a:ext cx="10728960" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+        <a:ln w="38100"><a:solidFill><a:srgbClr val="1F4E79"/></a:solidFill></a:ln></p:spPr></p:cxnSp>""",
+        f"""<p:sp {ns}><p:nvSpPr><p:cNvPr id="91" name="Footer rule"/><p:cNvSpPr/><p:nvPr userDrawn="1"/></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="731520" y="6126480"/><a:ext cx="10728960" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+        <a:ln w="19050"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln></p:spPr></p:sp>""",
+    ]
+    tree = layout.shapes._spTree
+    for xml in rules:
+        tree.append(etree.fromstring(xml))
+    s = p.slides.add_slide(layout)
+    tb = s.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(10), Inches(0.9)).text_frame
+    fixed_box(tb)
+    tb.text = "Layout rules"
+    tb.paragraphs[0].runs[0].font.size = Pt(32)
+    save(p, "layout-rules",
+         "A 32pt title over a navy 3pt rule across the slide, and a red 1.5pt rule near the bottom; both rules come from the layout")
     # DCK-004, reduced from the same deck's figure tiles (#1397): each tile
     # is a top-anchored box that opens with two empty 14pt paragraphs and
     # then the figure. Dropping the leading paragraphs drew the figure at
@@ -2426,6 +2453,67 @@ def decks(img):
             run.font.color.rgb = RGBColor(255, 255, 255)
     save(p, "pay-centre-reduced-leading-blank-paragraphs",
          "Three navy tiles, each with a bold white 14pt figure two blank lines below the tile's top edge")
+
+    # DCK-004, reduced from the CCRM deck's closing slide: its section
+    # layout overrides the master's colour map (bg1 = dk1, tx1 = lt1), so
+    # the slide is navy with white text, and its icon is saved only as SVG
+    # (asvg:svgBlip, no PNG on the blip). Decks drew a white slide with
+    # dark text and no icon.
+    import re
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    p = deck()
+    layout = p.slide_layouts[6]
+    s = p.slides.add_slide(layout)
+    tb = s.shapes.add_textbox(Inches(1), Inches(0.6), Inches(8), Inches(1.2)).text_frame
+    fixed_box(tb)
+    tb.text = "Questions"
+    run = tb.paragraphs[0].runs[0]
+    run.font.size, run.font.bold = Pt(40), True
+    rpr = run._r.get_or_add_rPr()
+    rpr.append(etree.fromstring('<a:solidFill xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:schemeClr val="tx1"/></a:solidFill>'))
+    s.shapes.add_picture(img, Inches(3.5), Inches(2.2), Inches(3), Inches(3))
+    path = os.path.join(d, "section-colour-map-svg.pptx")
+    p.save(path)
+    icon = (
+        '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">'
+        '<rect x="30" y="8" width="58" height="40" rx="4" fill="#00c0f0"/><circle cx="30" cy="58" r="12" fill="#00c0f0"/>'
+        '<path d="M8 92a22 18 0 0 1 44 0z" fill="#00c0f0"/></svg>'
+    )
+    with ZipFile(path) as zin:
+        items = [(i, zin.read(i.filename)) for i in zin.infolist()]
+    media = next(i.filename for i, _ in items if i.filename.startswith("ppt/media/"))
+    svg_name = re.sub(r"\.\w+$", ".svg", media)
+    layout_part = "ppt/slideLayouts/slideLayout7.xml"
+    with ZipFile(path, "w", ZIP_DEFLATED) as zout:
+        for info, data in items:
+            name = info.filename
+            if name == media:
+                zout.writestr(svg_name, icon)
+                continue
+            if name.endswith(".rels") or name.endswith(".xml"):
+                text = data.decode("utf-8")
+                text = text.replace(media.split("/")[-1], svg_name.split("/")[-1])
+                if name == "[Content_Types].xml" and 'Extension="svg"' not in text:
+                    text = text.replace("<Default ", '<Default Extension="svg" ContentType="image/svg+xml"/><Default ', 1)
+                if name.startswith("ppt/slides/slide") and name.endswith(".xml"):
+                    text = re.sub(
+                        r'<a:blip r:embed="(\w+)"\s*/>',
+                        r'<a:blip><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="\1"/></a:ext></a:extLst></a:blip>',
+                        text,
+                    )
+                if name == layout_part:
+                    text = re.sub(r"(<p:cSld[^>]*>)", r'\1<p:bg><p:bgPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>', text, count=1)
+                    text = re.sub(
+                        r"<p:clrMapOvr>.*?</p:clrMapOvr>",
+                        '<p:clrMapOvr><a:overrideClrMapping bg1="dk1" tx1="lt1" bg2="dk2" tx2="lt2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>',
+                        text,
+                        flags=re.S,
+                    )
+                data = text.encode("utf-8")
+            zout.writestr(info, data)
+    add("decks", "section-colour-map-svg", path,
+        "A dark slide (its layout maps bg1 to dk1) with a white bold 40pt 'Questions' and a cyan SVG speech-bubble icon below it")
 
     # DCK-004, reduced from the 2024-2025 delegated authorities report: its
     # theme was saved on a machine in a dark mode, so lt1 is the system
