@@ -144,6 +144,17 @@ fn place_inner(
                 .or_else(|| lead.get(i).cloned().flatten())
                 .unwrap_or_default();
             set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], text_scale);
+        } else if para_text.ends_with(decks_core::engine::LINE_BREAK) {
+            // A break that ends the paragraph starts a line of its own,
+            // empty but as tall as the text before it: PowerPoint and
+            // Impress count it, so a centred title ending in `<a:br/>`
+            // sits half a line higher. Pango ends the paragraph at a final
+            // line separator; a zero-width space after it opens that line.
+            let mut runs = para.to_vec();
+            if let Some(last) = runs.last_mut() {
+                last.text.push('\u{200B}');
+            }
+            set_styled_text(&layout, &format!("{para_text}\u{200B}"), &runs, text_scale);
         } else {
             set_styled_text(&layout, &para_text, para, text_scale);
         }
@@ -414,6 +425,20 @@ mod tests {
 
     fn runs(text: &str) -> Vec<Run> {
         vec![Run { text: text.into(), style: RunStyle::default() }]
+    }
+
+    /// A break that ends the paragraph opens an empty line as tall as the
+    /// text: a centred title ending in `<a:br/>` sits half a line higher,
+    /// as Impress draws it (21.6 pt higher for 36 pt text, measured).
+    #[test]
+    fn a_trailing_break_is_a_line_of_its_own() {
+        let body = TextBody { anchor: Anchor::Middle, insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
+        let plain = place(&ctx(), "Title", &runs("Title"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
+        let broken = format!("Title{}", decks_core::engine::LINE_BREAK);
+        let with = place(&ctx(), &broken, &runs(&broken), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
+        let line = plain[0].layout.pixel_size().1 as f64;
+        assert_eq!(with[0].layout.line_count(), 2, "the break's empty line");
+        assert!((plain[0].y - with[0].y - line / 2.0).abs() < 1.0, "half a line higher: {} vs {}", plain[0].y, with[0].y);
     }
 
     #[test]
