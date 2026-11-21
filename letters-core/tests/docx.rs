@@ -2732,6 +2732,45 @@ fn a_list_label_takes_its_levels_face() {
     assert_eq!(rt.paragraphs[4].style.list_label_font, None, "not a list item");
 }
 
+/// `w:textAlignment top` is read from the paragraph or its style, and
+/// written back: it decides where a list label's extra height goes.
+#[test]
+fn text_aligned_to_the_top_is_read_and_kept() {
+    let d = Document::from_plain_text("own\nstyled\nplain");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let mut n = 0;
+        *body = body
+            .split("<w:p>")
+            .enumerate()
+            .map(|(i, part)| {
+                if i == 0 {
+                    return part.to_string();
+                }
+                n += 1;
+                let ppr = match n {
+                    1 => "<w:pPr><w:textAlignment w:val=\"top\"/></w:pPr>",
+                    2 => "<w:pPr><w:pStyle w:val=\"TopText\"/></w:pPr>",
+                    _ => "",
+                };
+                format!("<w:p>{ppr}{part}")
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        assert_eq!(n, 3, "fixture shape changed: {body}");
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        *styles = styles.replace(
+            "</w:styles>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"TopText\"><w:name w:val=\"Top Text\"/><w:pPr><w:textAlignment w:val=\"top\"/></w:pPr></w:style></w:styles>",
+        );
+    });
+    let tops: Vec<bool> = rt.paragraphs.iter().map(|p| p.style.text_align_top).collect();
+    assert_eq!(tops, [true, true, false]);
+    let again = round_trip(&rt);
+    let tops: Vec<bool> = again.paragraphs.iter().map(|p| p.style.text_align_top).collect();
+    assert_eq!(tops, [true, true, false], "a save kept it");
+}
+
 /// A list item numbered by its own `w:numPr` takes its level's indent
 /// over its paragraph style's, as Word and Writer resolve it: a "List
 /// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One

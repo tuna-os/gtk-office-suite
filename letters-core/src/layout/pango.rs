@@ -67,6 +67,28 @@ fn with_fallback(family: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
+/// The ascent and descent, in points, of `family` itself at `size_pt`,
+/// whatever face draws a given character: what a line set in it is as tall
+/// as. Writer sizes a line by the font a portion asks for, so a list label
+/// in Noto Sans Symbols makes its line as tall as Noto Sans Symbols is,
+/// though that face has no "\u{25cf}" and another draws it
+/// (bullet-symbol-font-line-height). Shaping the label instead measured the
+/// fallback face's line, a third shorter.
+pub(super) fn face_metrics_pt(family: &str, size_pt: f64) -> Option<(f64, f64)> {
+    thread_local! {
+        static SHAPER: PangoShaper = PangoShaper::new();
+    }
+    SHAPER.with(|s| {
+        let mut desc = pango::FontDescription::new();
+        desc.set_family(&with_fallback(family));
+        desc.set_size(to_units(size_pt));
+        let font = s.context.load_font(&desc)?;
+        let m = font.metrics(None);
+        let (a, d) = (to_pt(m.ascent()), to_pt(m.descent()));
+        (a.is_finite() && d.is_finite() && a > 0.0).then_some((a, d))
+    })
+}
+
 impl PangoShaper {
     pub fn new() -> Self {
         let font_map = pangocairo::FontMap::new();
@@ -1673,6 +1695,41 @@ mod tests {
         assert!(gap(&tall) > gap(&plain) + 0.05, "a DejaVu Sans label did not make its line taller: {plain:?} {tall:?}");
         assert!(tall[2].1 > plain[2].1 + 0.1, "the paragraph after the list did not move down: {plain:?} {tall:?}");
         assert!(tall[0].1 >= plain[0].1, "the first item's baseline moved up: {plain:?} {tall:?}");
+    }
+
+    /// Text set to the top of its line (`w:textAlignment top`) keeps the
+    /// body's ascent when a taller label grows the line: the first item's
+    /// baseline stays where an unlabelled one would be, and the extra
+    /// height still pushes what follows down.
+    #[test]
+    fn a_top_aligned_item_puts_its_labels_extra_height_below() {
+        let baselines = |face: Option<&str>, top: bool| {
+            let mut d = doc(3, "item");
+            for p in &mut d.paragraphs[..2] {
+                p.style.list = crate::model::ListKind::Bullet;
+                p.style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+                p.style.list_label_font = face.map(str::to_string);
+                p.style.text_align_top = top;
+            }
+            let t = Typeset::new(d, LayoutOptions::default());
+            t.tree().pages[0]
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Line { source: Source::Paragraph(_), line: 0, baseline_pt, .. } => Some(*baseline_pt),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let plain = baselines(None, true);
+        let centred = baselines(Some("DejaVu Sans"), false);
+        let top = baselines(Some("DejaVu Sans"), true);
+        assert!((top[0] - plain[0]).abs() < 0.01, "the first baseline moved: {plain:?} {top:?}");
+        assert!(centred[0] > top[0] + 0.05, "a label above the text was not lower than one below: {centred:?} {top:?}");
+        assert!(top[2] > plain[2] + 0.1, "the label's height went nowhere: {plain:?} {top:?}");
+        // Top-aligned, the line is as tall as the taller of text and label;
+        // on a shared baseline, as tall as the larger ascent and descent.
+        assert!(top[1] - top[0] <= centred[1] - centred[0] + 0.01, "a top-aligned line grew past a baseline-aligned one: {centred:?} {top:?}");
     }
 
     /// A table of contents laid out: each page number ends at the right

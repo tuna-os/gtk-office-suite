@@ -2254,6 +2254,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     if p.style.keep_lines {
                         cp = cp.keep_together(true);
                     }
+                    if p.style.text_align_top {
+                        cp = cp.text_alignment(rdocx::ParagraphTextAlignment::Top);
+                    }
                     if let Some(control) = p.style.widow_control {
                         cp = cp.widow_control(control);
                     }
@@ -2398,6 +2401,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
         if para.style.keep_lines {
             p = p.keep_together(true);
+        }
+        if para.style.text_align_top {
+            p = p.text_alignment(rdocx::ParagraphTextAlignment::Top);
         }
         if let Some(control) = para.style.widow_control {
             p = p.widow_control(control);
@@ -3671,6 +3677,10 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 .and_then(|text| bullet_glyph(&text))
                 .map(|glyph| ListLabel { prefix: glyph, format: NumberFormat::None, suffix: String::new() }),
             list_label_font: numbering.and_then(|(num_id, level)| level_font(doc, num_id, level)),
+            text_align_top: match p.text_alignment() {
+                Some(a) => a == rdocx::ParagraphTextAlignment::Top,
+                None => styled.text_alignment.as_deref() == Some("top"),
+            },
             named_style, own_look, page_break_before, keep_with_next, keep_lines, widow_control,
             line_height: para_line_height(
                 p.line_spacing_multiple(),

@@ -537,6 +537,11 @@ pub struct ParaStyle {
     /// "1.1" paragraphs hang their number 0.5in).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub list_hanging_pt: Option<f64>,
+    /// Text set to the top of a taller line (OOXML `w:textAlignment`
+    /// `top`): a list label's extra height goes below the text, not
+    /// above it, as Writer lays such a line out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub text_align_top: bool,
     /// Line spacing multiplier (1.0, 1.15, 1.5, 2.0). Applies to every
     /// line unless `line_height` fixes the height.
     pub line_spacing: f32,
@@ -629,7 +634,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_label_font: None, list_hanging_pt: None, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_label_font: None, list_hanging_pt: None, text_align_top: false, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
     }
 }
 

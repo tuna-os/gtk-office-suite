@@ -982,9 +982,16 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
     // lays it out: the line is as tall as that face needs (a "o" in Courier
     // New, a bullet in Noto Sans Symbols adds a pixel or two a line, and
     // dcms-business-appointment-rules' page ran 9px short of LibreOffice's).
+    // Text set to the line's top (`ParaStyle::text_align_top`) keeps its
+    // own ascent: the label's extra height goes below it.
     if let Some(label) = label_line(p, opts, shaper) {
-        lines[0].ascent_pt = lines[0].ascent_pt.max(label.ascent_pt);
-        lines[0].descent_pt = lines[0].descent_pt.max(label.descent_pt);
+        let first = &mut lines[0];
+        if p.style.text_align_top {
+            first.descent_pt = first.descent_pt.max(label.ascent_pt + label.descent_pt - first.ascent_pt);
+        } else {
+            first.ascent_pt = first.ascent_pt.max(label.ascent_pt);
+            first.descent_pt = first.descent_pt.max(label.descent_pt);
+        }
     }
     Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal: 1 }
 }
@@ -998,6 +1005,15 @@ fn label_line(p: &Paragraph, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> O
     let mut run = crate::model::Run::plain(text);
     run.style.font_family = Some(face.clone());
     run.style.font_size_hp = p.runs.iter().find(|r| !r.text.is_empty()).and_then(|r| r.style.font_size_hp);
+    // The face's own height, as Writer takes it, not that of whichever face
+    // has the label's glyph (`pango::face_metrics_pt`).
+    #[cfg(feature = "render")]
+    {
+        let size = run.style.font_size_hp.map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
+        if let Some((ascent_pt, descent_pt)) = pango::face_metrics_pt(face, size) {
+            return Some(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt, descent_pt, objects: Vec::new(), text_pt: None });
+        }
+    }
     let runs = [run];
     let mut req = paragraph_request(p, 1000.0, opts);
     req.runs = &runs;
