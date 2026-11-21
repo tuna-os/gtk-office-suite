@@ -104,8 +104,14 @@ pub(super) fn master_shapes(
         connector: bool,
         /// Clockwise degrees (`a:xfrm rot`).
         rotation: f64,
+        /// Its size in its own EMU, before groups and scale: the space a
+        /// custom geometry's unsized path is drawn in.
+        raw: (f64, f64),
     }
     let paints = sp_styles(xml, theme, scale.x);
+    // Each p:sp's own paths (`a:custGeom`): a logo's mark drawn as itself,
+    // not as the rectangle its frame is.
+    let geometries = super::super::shape_xml::sp_geometries(xml);
     let cxn_paints = cxn_styles(xml, theme, scale.x);
     let mut sp_count = 0usize;
     let mut cxn_count = 0usize;
@@ -123,6 +129,7 @@ pub(super) fn master_shapes(
     // A finished shape's frame, through the groups it sits in, in model
     // units.
     fn placed(mut p: Pending, groups: &[GroupFrame], scale: SlideScale) -> Pending {
+        p.raw = (p.w, p.h);
         let ((x, y, w, h), rotation) = in_groups(groups, (p.x, p.y, p.w, p.h), p.rotation);
         (p.x, p.y, p.w, p.h, p.rotation) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y, rotation);
         p
@@ -180,6 +187,7 @@ pub(super) fn master_shapes(
                         embed: None,
                         connector: false,
                         rotation: 0.0,
+                        raw: (0.0, 0.0),
                     });
                     sp_count += 1;
                 }
@@ -202,6 +210,7 @@ pub(super) fn master_shapes(
                         embed: None,
                         connector: true,
                         rotation: 0.0,
+                        raw: (0.0, 0.0),
                     });
                     cxn_count += 1;
                 }
@@ -221,6 +230,7 @@ pub(super) fn master_shapes(
                         embed: None,
                         connector: false,
                         rotation: 0.0,
+                        raw: (0.0, 0.0),
                     });
                 }
                 "a:blip" => {
@@ -379,7 +389,17 @@ pub(super) fn master_shapes(
                                 });
                             } else {
                                 let paint = paints.get(p.sp_index).cloned().unwrap_or_default();
-                                let mut kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect"));
+                                let mut kind = match geometries.get(p.sp_index).cloned().flatten() {
+                                    Some(mut paths) => {
+                                        for path in &mut paths {
+                                            if path.w <= 0.0 || path.h <= 0.0 {
+                                                (path.w, path.h) = (p.raw.0.max(1.0), p.raw.1.max(1.0));
+                                            }
+                                        }
+                                        ShapeKind::Freeform(paths)
+                                    }
+                                    None => ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect")),
+                                };
                                 if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
                                     *radius = adj.clamp(0.0, 0.5);
                                 }

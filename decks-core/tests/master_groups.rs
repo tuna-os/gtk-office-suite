@@ -43,3 +43,23 @@ fn a_grouped_turned_word_is_placed_by_its_group_in_its_theme_colour() {
     });
     assert_eq!(after, Some((0.0, 0.0)));
 }
+
+/// The mark under the word is a custom geometry (`a:custGeom`); it was
+/// drawn as the rectangle its frame is.
+#[test]
+fn a_layouts_custom_geometry_is_drawn_with_its_own_paths() {
+    use decks_core::engine::shape::ShapeKind;
+    let layout = LAYOUT.replace(
+        r#"<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:sp>
+</p:spTree>"#,
+        r#"<a:custGeom><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="10" y="5"/></a:lnTo><a:lnTo><a:pt x="0" y="10"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>
+</p:spTree>"#,
+    );
+    assert_ne!(layout, LAYOUT, "the fixture changed");
+    let (_, shapes) = parse_master_shapes(&layout);
+    let kind = shapes.iter().find_map(|o| match o {
+        SlideObject::Shape { kind, .. } => Some(kind.clone()),
+        _ => None,
+    });
+    assert!(matches!(kind, Some(ShapeKind::Freeform(ref p)) if !p.is_empty()), "{kind:?}");
+}
