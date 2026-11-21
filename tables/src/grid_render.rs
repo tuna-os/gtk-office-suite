@@ -1020,10 +1020,13 @@ mod tests {
     }
 }
 
+/// A decoded picture beside a handle on the bytes it was decoded from.
+type DecodedPicture = (std::sync::Weak<[u8]>, Option<gtk4::cairo::ImageSurface>);
+
 thread_local! {
     /// Decoded sheet pictures, by the address of their shared bytes: a
     /// redraw paints them again without decoding the file each frame.
-    static PICTURES: std::cell::RefCell<std::collections::HashMap<usize, (std::sync::Weak<[u8]>, Option<gtk4::cairo::ImageSurface>)>> =
+    static PICTURES: std::cell::RefCell<std::collections::HashMap<usize, DecodedPicture>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
