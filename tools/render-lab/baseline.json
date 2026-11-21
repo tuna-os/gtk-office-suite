@@ -14,6 +14,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/chart-horizontal-percent": {
+    "A": "green"
+  },
   "decks/delegated-authorities-reduced-dark-mode-window": {
     "A": "green",
     "B": "green",

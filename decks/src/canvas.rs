@@ -908,6 +908,13 @@ pub fn draw_object(
                     point_colors: &colors,
                     no_legend: chart.no_legend,
                     transparent: chart.transparent,
+                    horizontal: chart.horizontal,
+                    reversed: chart.reversed,
+                    percent: chart.percent,
+                    text_color: chart.text_color.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                    // Hundredths of a point; the chart is drawn in the
+                    // slide's own units, which are points.
+                    text_px: chart.text_size.map(|v| v as f64 / 100.0),
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {

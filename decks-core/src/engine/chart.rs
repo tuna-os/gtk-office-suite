@@ -47,8 +47,9 @@ pub struct ChartData {
     /// `chart:ring`); 0 is a pie.
     #[serde(default)]
     pub hole: u8,
-    /// A pie's slice colours as RGB, by category, where the file sets
-    /// them (`c:dPt`, `chart:data-point`).
+    /// A pie's slice colours, or a one-series bar chart's bar colours, as
+    /// RGB by category, where the file sets them (`c:dPt`, the series'
+    /// own fill, `chart:data-point`).
     #[serde(default)]
     pub point_colors: Vec<Option<[u8; 3]>>,
     /// No legend where one would be drawn: the file has none.
@@ -58,6 +59,22 @@ pub struct ChartData {
     /// `draw:fill="none"`).
     #[serde(default)]
     pub transparent: bool,
+    /// A bar chart's bars lie horizontally (`c:barDir val="bar"`).
+    #[serde(default)]
+    pub horizontal: bool,
+    /// The categories run the other way: a horizontal chart's first at the
+    /// top (`c:catAx/c:scaling/c:orientation val="maxMin"`).
+    #[serde(default)]
+    pub reversed: bool,
+    /// Values are labelled as percentages (a `0%` number format).
+    #[serde(default)]
+    pub percent: bool,
+    /// The chart's text colour as RGB (`c:txPr`'s `a:defRPr`), where set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_color: Option<[u8; 3]>,
+    /// The chart's text size in hundredths of a point (`a:defRPr sz`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_size: Option<u32>,
 }
 
 impl ChartData {
@@ -86,6 +103,11 @@ impl ChartData {
             point_colors: Vec::new(),
             no_legend: false,
             transparent: false,
+            horizontal: false,
+            reversed: false,
+            percent: false,
+            text_color: None,
+            text_size: None,
         }
     }
 
@@ -135,6 +157,11 @@ impl ChartData {
             || self.point_colors.iter().any(Option::is_some)
             || self.no_legend
             || self.transparent
+            || self.horizontal
+            || self.reversed
+            || self.percent
+            || self.text_color.is_some()
+            || self.text_size.is_some()
     }
 
     /// Whether a legend is drawn: a named series, a pie's categories or
@@ -365,10 +392,40 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
         })
         .collect();
     let dlbls = if chart.labels {
-        "<c:dLbls><c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/><c:showCatName val=\"0\"/>\
-         <c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/></c:dLbls>"
+        format!(
+            "<c:dLbls>{}<c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/><c:showCatName val=\"0\"/>\
+             <c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/></c:dLbls>",
+            if chart.percent { "<c:numFmt formatCode=\"0%\" sourceLinked=\"0\"/>" } else { "" }
+        )
     } else {
-        ""
+        String::new()
+    };
+    // Each point's own colour (a pie's slices, a one-series bar chart's
+    // bars), as the file set it.
+    let dpts: String = chart
+        .point_colors
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            let [r, g, b] = (*c)?;
+            Some(format!(
+                "<c:dPt><c:idx val=\"{i}\"/>{}<c:bubble3D val=\"0\"/><c:spPr><a:solidFill>\
+                 <a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill></c:spPr></c:dPt>",
+                if chart.kind == ChartKind::Bar { "<c:invertIfNegative val=\"0\"/>" } else { "" }
+            ))
+        })
+        .collect();
+    // A horizontal chart's categories down the left and its values along
+    // the bottom; reversed, the first category is at the top.
+    let category_axis = || {
+        let mut ax = cat_ax();
+        if chart.horizontal {
+            ax = ax.replacen("<c:axPos val=\"b\"/>", "<c:axPos val=\"l\"/>", 1);
+        }
+        if chart.reversed {
+            ax = ax.replacen("<c:orientation val=\"minMax\"/>", "<c:orientation val=\"maxMin\"/>", 1);
+        }
+        ax
     };
     let grouping = if chart.stacked { "stacked" } else { "clustered" };
     let overlap = if chart.stacked { "<c:overlap val=\"100\"/>" } else { "" };
@@ -378,15 +435,16 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     };
     let plot = match chart.kind {
         ChartKind::Bar => format!(
-            "<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"{grouping}\"/><c:varyColors val=\"0\"/>\
-             {head}<c:invertIfNegative val=\"0\"/>{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"150\"/>{overlap}{ids}</c:barChart>{}{}",
-            cat_ax(),
-            value_axis(AX_2, "l", AX_1, true, "between")
+            "<c:barChart><c:barDir val=\"{}\"/><c:grouping val=\"{grouping}\"/><c:varyColors val=\"0\"/>\
+             {head}<c:invertIfNegative val=\"0\"/>{dpts}{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"150\"/>{overlap}{ids}</c:barChart>{}{}",
+            if chart.horizontal { "bar" } else { "col" },
+            category_axis(),
+            value_axis(AX_2, if chart.horizontal { "b" } else { "l" }, AX_1, true, "between")
         ),
         ChartKind::Line => format!(
             "<c:lineChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
              {head}{cat}{val}<c:smooth val=\"0\"/></c:ser>{more}{dlbls}<c:marker val=\"1\"/>{ids}</c:lineChart>{}{}",
-            cat_ax(),
+            category_axis(),
             value_axis(AX_2, "l", AX_1, true, "between")
         ),
         ChartKind::Area => format!(
@@ -396,18 +454,6 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
             value_axis(AX_2, "l", AX_1, true, "midCat")
         ),
         ChartKind::Pie => {
-            let dpts: String = chart
-                .point_colors
-                .iter()
-                .enumerate()
-                .filter_map(|(i, c)| {
-                    let [r, g, b] = (*c)?;
-                    Some(format!(
-                        "<c:dPt><c:idx val=\"{i}\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>\
-                         <a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill></c:spPr></c:dPt>"
-                    ))
-                })
-                .collect();
             if chart.hole > 0 {
                 format!(
                     "<c:doughnutChart><c:varyColors val=\"1\"/>{head}{dpts}{cat}{val}</c:ser>{dlbls}\
@@ -435,6 +481,15 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
         }
     };
     let background = if chart.transparent { "<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>" } else { "" };
+    let text = if chart.text_color.is_some() || chart.text_size.is_some() {
+        format!(
+            "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr{}>{}</a:defRPr></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr>",
+            chart.text_size.map(|v| format!(" sz=\"{v}\"")).unwrap_or_default(),
+            chart.text_color.map(|[r, g, b]| format!("<a:solidFill><a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill>")).unwrap_or_default()
+        )
+    } else {
+        String::new()
+    };
     let legend = if chart.shows_legend() {
         "<c:legend><c:legendPos val=\"r\"/><c:overlay val=\"0\"/></c:legend>"
     } else {
@@ -447,7 +502,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
          xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
          <c:date1904 val=\"0\"/><c:roundedCorners val=\"0\"/>\
          <c:chart><c:autoTitleDeleted val=\"1\"/><c:plotArea><c:layout/>{plot}</c:plotArea>{legend}\
-         <c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/></c:chart>{background}</c:chartSpace>"
+         <c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/></c:chart>{background}{text}</c:chartSpace>"
     )
 }
 
@@ -678,14 +733,17 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
     } else {
         0
     };
-    // A slice's colour where the file gives it as RGB (`a:srgbClr`); a
-    // theme colour keeps the accent.
-    let point_colors: Vec<Option<[u8; 3]>> = if kind == ChartKind::Pie {
-        let mut colors = vec![None; n.min(10_000)];
+    // A slice's (or a one-series bar chart's bar's) colour where the file
+    // gives it as RGB (`a:srgbClr`; the reader resolves theme colours to
+    // RGB before this), else the series' own fill for a bar.
+    let rgb_of = |sp: Option<&El>| sp.and_then(|sp| sp.child("solidFill")).and_then(|f| f.child("srgbClr")).and_then(|c| c.attr("val")).and_then(hex_rgb);
+    let one_bar = kind == ChartKind::Bar && sers.len() == 1;
+    let point_colors: Vec<Option<[u8; 3]>> = if kind == ChartKind::Pie || one_bar {
+        let base = if one_bar { rgb_of(ser.child("spPr")) } else { None };
+        let mut colors = vec![base; n.min(10_000)];
         for dpt in ser.children.iter().filter(|c| c.local == "dPt") {
             let idx = dpt.child("idx").and_then(|i| i.attr("val")).and_then(|v| v.parse::<usize>().ok());
-            let rgb = dpt.child("spPr").and_then(|sp| sp.child("solidFill")).and_then(|f| f.child("srgbClr")).and_then(|c| c.attr("val")).and_then(hex_rgb);
-            if let (Some(i), Some(rgb)) = (idx, rgb) {
+            if let (Some(i), Some(rgb)) = (idx, rgb_of(dpt.child("spPr"))) {
                 if i < colors.len() {
                     colors[i] = Some(rgb);
                 }
@@ -701,16 +759,65 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
     let grouping = group.child("grouping").and_then(|g| g.attr("val")).unwrap_or("");
     let stacked = kind == ChartKind::Bar && matches!(grouping, "stacked" | "percentStacked");
     // Labels shown for the chart group, or for every series of it.
-    let shows = |d: Option<&El>| d.and_then(|d| d.child("showVal")).and_then(|v| v.attr("val")).is_some_and(|v| v == "1" || v == "true");
+    // A DrawingML boolean (`CT_Boolean`) with no `val` is true.
+    let on = |e: &El| e.attr("val").is_none_or(|v| v == "1" || v == "true");
+    let shows = |d: Option<&El>| d.and_then(|d| d.child("showVal")).is_some_and(on);
     let labels = shows(group.child("dLbls")) || (!sers.is_empty() && sers.iter().all(|s| shows(s.child("dLbls"))));
     let hide_value_axis = kind != ChartKind::Pie
         && plot
             .children
             .iter()
             .filter(|c| c.local == "valAx")
-            .any(|ax| ax.child("delete").and_then(|d| d.attr("val")).is_some_and(|v| v == "1" || v == "true"))
+            .any(|ax| ax.child("delete").is_some_and(on))
         && kind != ChartKind::Scatter;
-    let mut c = ChartData { kind, series, points, more, stacked, labels, hide_value_axis, hole, point_colors, no_legend: false, transparent };
+    let horizontal = kind == ChartKind::Bar && group.child("barDir").and_then(|d| d.attr("val")) == Some("bar");
+    let reversed = kind != ChartKind::Pie
+        && plot
+            .children
+            .iter()
+            .filter(|c| c.local == "catAx")
+            .any(|ax| ax.child("scaling").and_then(|s| s.child("orientation")).and_then(|o| o.attr("val")) == Some("maxMin"));
+    // A percent format on the labels, or on the values the labels show.
+    let pct = |code: Option<&str>| code.is_some_and(|c| c.contains('%'));
+    let label_fmt = |d: Option<&El>| pct(d.and_then(|d| d.child("numFmt")).and_then(|f| f.attr("formatCode")));
+    let value_fmt = ser.child("val").and_then(|v| v.find("formatCode")).map(|f| f.deep_text());
+    let percent = labels && (label_fmt(group.child("dLbls")) || sers.iter().any(|s| label_fmt(s.child("dLbls"))) || pct(value_fmt.as_deref()));
+    // The chart's text: each property from the first `c:txPr` that states
+    // it, the chart's own, then its axes', then its data labels'.
+    let axis = |name: &str| plot.children.iter().find(|c| c.local == name).and_then(|ax| ax.child("txPr"));
+    let def_rprs: Vec<&El> = [
+        root.find("chartSpace").unwrap_or(&root).child("txPr"),
+        axis("catAx"),
+        axis("valAx"),
+        group.child("dLbls").and_then(|d| d.child("txPr")),
+        ser.child("dLbls").and_then(|d| d.child("txPr")),
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|t| t.find("defRPr"))
+    .collect();
+    let text_color = def_rprs
+        .iter()
+        .find_map(|d| d.child("solidFill").and_then(|f| f.child("srgbClr")).and_then(|c| c.attr("val")).and_then(hex_rgb));
+    let text_size = def_rprs.iter().find_map(|d| d.attr("sz").and_then(|v| v.parse::<u32>().ok()).filter(|v| (100..=40000).contains(v)));
+    let mut c = ChartData {
+        kind,
+        series,
+        points,
+        more,
+        stacked,
+        labels,
+        hide_value_axis,
+        hole,
+        point_colors,
+        no_legend: false,
+        transparent,
+        horizontal,
+        reversed,
+        percent,
+        text_color,
+        text_size,
+    };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
 }
@@ -1015,7 +1122,24 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
     };
     let transparent = style_graphic(chart.attr("chart:style-name"), "draw:fill").as_deref() == Some("none");
     let has_legend = chart.child_q("chart:legend").is_some();
-    let mut c = ChartData { kind, series: series_name, points, more, stacked, labels, hide_value_axis, hole, point_colors, no_legend: false, transparent };
+    let mut c = ChartData {
+        kind,
+        series: series_name,
+        points,
+        more,
+        stacked,
+        labels,
+        hide_value_axis,
+        hole,
+        point_colors,
+        no_legend: false,
+        transparent,
+        horizontal: false,
+        reversed: false,
+        percent: false,
+        text_color: None,
+        text_size: None,
+    };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
 }
@@ -1025,6 +1149,32 @@ mod tests {
     use super::*;
 
     const KINDS: [ChartKind; 5] = [ChartKind::Bar, ChartKind::Line, ChartKind::Pie, ChartKind::Scatter, ChartKind::Area];
+
+    /// The children's nature survey's side chart, reduced: horizontal bars
+    /// (first category at the top), white bars and text, percent labels.
+    const HORIZONTAL: &str = r#"<c:chartSpace xmlns:c="c" xmlns:a="a"><c:chart><c:plotArea><c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/>
+<c:ser><c:idx val="0"/><c:tx><c:v>Series 1</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></c:spPr>
+<c:dLbls><c:numFmt formatCode="0%" sourceLinked="0"/><c:showVal val="1"/></c:dLbls>
+<c:cat><c:strLit><c:pt idx="0"><c:v>Garden</c:v></c:pt><c:pt idx="1"><c:v>Park</c:v></c:pt></c:strLit></c:cat>
+<c:val><c:numLit><c:formatCode>0%</c:formatCode><c:pt idx="0"><c:v>0.81</c:v></c:pt><c:pt idx="1"><c:v>0.66</c:v></c:pt></c:numLit></c:val></c:ser>
+</c:barChart><c:catAx><c:scaling><c:orientation val="maxMin"/></c:scaling><c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr sz="900" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:defRPr></a:pPr></a:p></c:txPr></c:catAx><c:valAx/></c:plotArea></c:chart>
+<c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr/></a:pPr></a:p></c:txPr></c:chartSpace>"#;
+
+    #[test]
+    fn a_horizontal_percent_bar_chart_reads_and_round_trips() {
+        let c = parse_chart_space(HORIZONTAL).expect("a bar chart");
+        assert!(c.horizontal && c.reversed && c.percent && c.labels, "{c:?}");
+        assert_eq!(c.point_colors, vec![Some([255, 255, 255]); 2], "a one-series bar chart's fill colours its bars");
+        assert_eq!((c.text_color, c.text_size), (Some([255, 255, 255]), Some(900)), "the axis's text, past the chart's empty txPr");
+        let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
+        assert_eq!(back, c, "a save keeps it");
+    }
+
+    #[test]
+    fn a_column_chart_is_not_horizontal() {
+        let c = parse_chart_space(&chart_space_xml(&ChartData::sample(ChartKind::Bar))).unwrap();
+        assert!(!c.horizontal && !c.reversed && !c.percent);
+    }
 
     #[test]
     fn every_kind_reads_back_from_its_drawingml_part() {

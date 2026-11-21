@@ -977,7 +977,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .get(&c.rel_id)
                                     .map(|t| part_path(&slide_dir.to_string_lossy(), t))
                                     .map(|p| archive.optional_part_to_string(&p, &mut budget))
-                                    .and_then(|xml| super::chart::parse_chart_space(&xml));
+                                    .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
                                 if let Some(chart) = chart {
                                     objects.push(SlideObject::Chart {
                                         x: c.x * scale.x,
