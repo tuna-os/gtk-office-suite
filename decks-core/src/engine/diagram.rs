@@ -60,10 +60,16 @@ pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: imp
                 if !shapes.contains(&format!("=\"{}\"", r.id)) {
                     continue;
                 }
-                shapes = shapes.replace(&format!("r:embed=\"{}\"", r.id), &format!("r:embed=\"{id}\""));
-                shapes = shapes.replace(&format!("r:link=\"{}\"", r.id), &format!("r:link=\"{id}\""));
-                let target = relative_to(slide_dir, &part_path(dir, &r.target));
-                extra_rels.push_str(&format!(r#"<Relationship Id="{id}" Type="{}" Target="{target}"/>"#, r.kind));
+                for attr in ["r:embed", "r:link", "r:id"] {
+                    shapes = shapes.replace(&format!("{attr}=\"{}\"", r.id), &format!("{attr}=\"{id}\""));
+                }
+                // An external target (a hyperlink's URL) is kept as written.
+                let rel = if r.external {
+                    format!(r#"<Relationship Id="{id}" Type="{}" Target="{}" TargetMode="External"/>"#, r.kind, r.target)
+                } else {
+                    format!(r#"<Relationship Id="{id}" Type="{}" Target="{}"/>"#, r.kind, relative_to(slide_dir, &part_path(dir, &r.target)))
+                };
+                extra_rels.push_str(&rel);
             }
             Some(shapes)
         });
@@ -94,7 +100,10 @@ fn relative_to(dir: &str, part: &str) -> String {
 struct Rel {
     id: String,
     kind: String,
+    /// As written: escaped as it was in the XML, so it can be written back.
     target: String,
+    /// `TargetMode="External"`: a URL, not a part.
+    external: bool,
 }
 
 fn relationships(rels: &str) -> Vec<Rel> {
@@ -104,7 +113,7 @@ fn relationships(rels: &str) -> Vec<Rel> {
             // The split took the space before the first attribute.
             let r = format!(" {}", &r[..r.find('>').unwrap_or(r.len())]);
             let get = |k: &str| attr(&r, k).map(str::to_string);
-            Some(Rel { id: get("Id")?, kind: get("Type")?, target: get("Target")? })
+            Some(Rel { id: get("Id")?, kind: get("Type")?, target: get("Target")?, external: get("TargetMode").as_deref() == Some("External") })
         })
         .collect()
 }
@@ -254,5 +263,22 @@ mod tests {
         let (out, extra) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
         assert!(out.contains(r#"<a:blip r:embed="dgm0_rId1"/>"#), "{out}");
         assert_eq!(extra, r#"<Relationship Id="dgm0_rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>"#);
+    }
+
+    /// A hyperlink on a diagram's text names its URL in the drawing's
+    /// relationships: its r:id is renamed with it, the URL kept as written.
+    #[test]
+    fn a_hyperlinks_relationship_follows_it_into_the_slide() {
+        let drawing = DRAWING.replace("<a:r><a:t>Communication", r#"<a:r><a:rPr><a:hlinkClick r:id="rId2"/></a:rPr><a:t>Communication"#);
+        let drawing_rels = r#"<Relationships><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org/a?b=1&amp;c=2" TargetMode="External"/></Relationships>"#;
+        let read = |name: &str| match name {
+            "ppt/diagrams/data1.xml" => DATA.to_string(),
+            "ppt/diagrams/drawing1.xml" => drawing.clone(),
+            "ppt/diagrams/_rels/drawing1.xml.rels" => drawing_rels.to_string(),
+            _ => String::new(),
+        };
+        let (out, extra) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:hlinkClick r:id="dgm0_rId2"/>"#), "{out}");
+        assert_eq!(extra, r#"<Relationship Id="dgm0_rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org/a?b=1&amp;c=2" TargetMode="External"/>"#);
     }
 }
