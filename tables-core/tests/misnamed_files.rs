@@ -34,3 +34,16 @@ fn a_semicolon_table_named_ods_takes_its_delimiter() {
     let (_, sheets) = tables_core::io::load_workbook(&path).expect("read as text");
     assert_eq!((sheets[0].cell(1, 0), sheets[0].cell(1, 2)), ("1", "3"));
 }
+
+#[test]
+fn delimited_text_is_told_apart_from_workbooks() {
+    let dir = tempfile::tempdir().unwrap();
+    let csv = write(dir.path(), "t.csv", b"a,b\n");
+    let text_named_xlsx = write(dir.path(), "t.xlsx", b"a,b\n");
+    let zip_named_xlsx = write(dir.path(), "z.xlsx", b"PK\x03\x04rest");
+    let other = write(dir.path(), "t.txt", b"a,b\n");
+    assert!(tables_core::io::is_delimited_text(&csv));
+    assert!(tables_core::io::is_delimited_text(&text_named_xlsx));
+    assert!(!tables_core::io::is_delimited_text(&zip_named_xlsx));
+    assert!(!tables_core::io::is_delimited_text(&other), "only what load_workbook reads as text");
+}

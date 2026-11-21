@@ -654,6 +654,22 @@ pub fn load_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
     }
 }
 
+/// Whether `load_workbook` reads `path` as delimited text: a .csv or .tsv,
+/// or text named as a workbook. Such a file carries no column widths, so
+/// Tables sizes its columns to their contents as Calc's CSV import does.
+pub fn is_delimited_text(path: &str) -> bool {
+    let extension = std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "csv" | "tsv" => true,
+        "xlsx" | "xlsm" | "xls" | "ods" => sniff(path) == Some(Content::Text),
+        _ => false,
+    }
+}
+
 /// A delimited text file named as a workbook, as one sheet.
 fn load_text_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
     use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
