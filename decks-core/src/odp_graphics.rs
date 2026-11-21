@@ -95,7 +95,10 @@ pub(crate) fn fill_attrs(style: &ShapeStyle, gradients: &[LinearGradient]) -> St
         return format!("draw:fill=\"gradient\" draw:fill-gradient-name=\"{}\"", gradient_name(i));
     }
     match style.fill {
-        Some(c) => format!("draw:fill=\"solid\" draw:fill-color=\"{}\"", hex(c)),
+        Some(c) => match style.fill_alpha {
+            Some(a) => format!("draw:fill=\"solid\" draw:fill-color=\"{}\" draw:opacity=\"{}%\"", hex(c), (a * 100.0).round()),
+            None => format!("draw:fill=\"solid\" draw:fill-color=\"{}\"", hex(c)),
+        },
         None => "draw:fill=\"none\"".to_string(),
     }
 }
@@ -124,6 +127,8 @@ struct Props {
     shadow_color: Option<Color>,
     shadow_opacity: Option<f64>,
     shadow_blur_pt: Option<f64>,
+    /// The fill's opacity (`draw:opacity`), 0..1.
+    opacity: Option<f64>,
 }
 
 impl Props {
@@ -143,6 +148,7 @@ impl Props {
         self.shadow_color = self.shadow_color.or(base.shadow_color);
         self.shadow_opacity = self.shadow_opacity.or(base.shadow_opacity);
         self.shadow_blur_pt = self.shadow_blur_pt.or(base.shadow_blur_pt);
+        self.opacity = self.opacity.or(base.opacity);
     }
 }
 
@@ -216,6 +222,9 @@ impl GraphicDefs {
                         }
                         if let Some(c) = attr(&e, "draw:shadow-color").as_deref().and_then(color) {
                             p.shadow_color = Some(c);
+                        }
+                        if let Some(o) = attr(&e, "draw:opacity").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
+                            p.opacity = Some((o / 100.0).clamp(0.0, 1.0));
                         }
                         if let Some(o) = attr(&e, "draw:shadow-opacity").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
                             p.shadow_opacity = Some((o / 100.0).clamp(0.0, 1.0));
@@ -325,7 +334,9 @@ impl GraphicDefs {
             // LibreOffice keeps a shadow's offset fixed to the page.
             rotate_with_shape: false,
         });
-        Some(ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src })
+        // A solid fill's opacity; opaque is no statement.
+        let fill_alpha = (p.fill.as_deref() == Some("solid")).then_some(p.opacity).flatten().filter(|a| *a < 1.0);
+        Some(ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src, fill_alpha })
     }
 }
 
