@@ -463,6 +463,70 @@ fn replicas_in_one_process_merge_through_the_dry_run() {
     assert!(!a.replica.merge_from(&b.replica).unwrap().changed(), "nothing left to take");
 }
 
+// ------------------------------------------------------------------ pictures
+
+fn picture(path: &str) -> Run {
+    Run { text: "a scan".into(), style: RunStyle { image: Some(path.into()), image_extent_emu: Some((914_400, 457_200)), ..Default::default() } }
+}
+
+/// Each picture of `doc`: its alt text and its path.
+fn pictures(doc: &Document) -> Vec<(&str, &str)> {
+    doc.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image.as_deref().map(|path| (r.text.as_str(), path))).collect()
+}
+
+/// A picture run holds a path, and the writers read that path on save. A
+/// path a peer's update brings would name a file on this machine that the
+/// peer chose, so it does not reach this side's document: the run keeps
+/// its place, its size and its alt text, with an empty path. This side's
+/// own pictures, from its file and from its own inserts, keep theirs.
+#[test]
+fn a_peers_picture_comes_without_its_path() {
+    let base = sample();
+    let mut mine = Replica::new(1, &base).unwrap();
+    // The peer joined from its own copy of the file, and puts in a picture
+    // whose path names a file on my machine.
+    let (mut theirs, their_doc) = Replica::from_snapshot(2, &mine.export_snapshot().unwrap(), &base).unwrap();
+    let chosen = picture("/home/me/.ssh/id_ed25519");
+    let insert = |run: Run| Op::Insert { at: 0, content: vec![Paragraph { style: ParaStyle::default(), runs: vec![run] }] };
+    theirs.record(&their_doc, &insert(chosen.clone())).unwrap();
+    let their_doc = theirs.rebuild(&base).unwrap();
+    assert_eq!(pictures(&their_doc), [("a scan", "/home/me/.ssh/id_ed25519"), ("a dot", "dot.png")], "the peer's own picture is its own");
+
+    assert!(mine.merge_from(&theirs).unwrap().changed());
+    let document = mine.rebuild(&base).unwrap();
+    assert_eq!(pictures(&document), [("a scan", ""), ("a dot", "dot.png")]);
+    let run = &document.paragraphs[0].runs[0];
+    assert!(is_object(run) && run.style.image_extent_emu == chosen.style.image_extent_emu, "still an object, of its size");
+    assert_eq!(sequence_text(&document), sequence_text(&their_doc), "every offset is where the peer has it");
+    assert_eq!(mine.paragraphs().unwrap(), document.paragraphs);
+
+    // A picture I put in myself is mine, also next to the peer's.
+    mine.record(&document, &insert(picture("holiday.png"))).unwrap();
+    assert_eq!(pictures(&mine.rebuild(&base).unwrap()), [("a scan", "holiday.png"), ("a scan", ""), ("a dot", "dot.png")]);
+}
+
+/// A snapshot and a replay are a peer's bytes too. The joiner's pictures
+/// are those of the file it opened; a picture the session holds beyond
+/// them comes without its path.
+#[test]
+fn a_joiner_takes_no_picture_path_its_file_did_not_hold() {
+    let file = sample();
+    let mut shared = file.clone();
+    shared.paragraphs[0].runs.push(picture("/home/me/Documents/passport.jpg"));
+    let starter = Replica::new(1, &shared).unwrap();
+    let kept = [("a scan", ""), ("a dot", "dot.png")];
+
+    let (joined, document) = Replica::from_snapshot(2, &starter.export_snapshot().unwrap(), &file).unwrap();
+    assert_eq!(pictures(&document), kept);
+    assert_eq!(joined.paragraphs().unwrap(), document.paragraphs);
+    let (_, replayed) = Replica::from_updates(3, &starter.export_all().unwrap(), &file).unwrap();
+    assert_eq!(pictures(&replayed), kept);
+    assert_eq!(sequence_text(&document), sequence_text(&shared), "every offset is where the starter has it");
+
+    // The starter, and a copy of its replica in its own process, keep it.
+    assert_eq!(starter.fork(4).unwrap().rebuild(&shared).unwrap(), shared);
+}
+
 #[test]
 fn a_snapshot_that_is_not_a_letters_document_is_refused() {
     let other = LoroDoc::new();

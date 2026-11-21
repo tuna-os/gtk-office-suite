@@ -50,6 +50,8 @@ pub struct SheetXlsxProps {
     /// Resolved cell styles, including protection, 0-based `(row, col, style)`.
     /// Cells whose resolved style equals the model defaults are absent.
     pub cell_styles: Vec<(usize, usize, super::XfStyle)>,
+    /// Cells whose shared string is rich text, 0-based `(row, col, runs)`.
+    pub rich_text: Vec<(usize, usize, Vec<crate::sheet::TextRun>)>,
     /// Cell notes, 0-based `(row, col, text)`: xlsx's `comments` part,
     /// ODF's `office:annotation`.
     pub notes: Vec<(usize, usize, String)>,
@@ -480,6 +482,9 @@ pub fn read_sheet_props_from_xlsx(
     let theme_xml = zip.optional_part_to_string("xl/theme/theme1.xml", &mut budget);
     let xf_styles = super::xlsx_styles::parse_cell_styles_with_theme(&styles_xml, &theme_xml);
     let default_font = super::xlsx_styles::default_font(&styles_xml);
+    // After the styles: a run's theme colours resolve against the palette
+    // they set.
+    let rich_strings = super::xlsx_styles::rich_shared_strings(&zip.optional_part_to_string("xl/sharedStrings.xml", &mut budget));
 
     for name in names {
         let Some(part) = parts.get(name) else { continue };
@@ -495,6 +500,15 @@ pub fn read_sheet_props_from_xlsx(
                 .filter(|(_, _, x)| *x != super::XfStyle::default())
                 .collect(),
             default_font: default_font.clone(),
+            rich_text: if rich_strings.iter().any(Option::is_some) {
+                super::xlsx_styles::shared_string_cells(&xml)
+                    .into_iter()
+                    .filter(|&(r, c, _)| r < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS)
+                    .filter_map(|(r, c, i)| Some((r, c, rich_strings.get(i)?.clone()?)))
+                    .collect()
+            } else {
+                Vec::new()
+            },
             ..SheetXlsxProps::default()
         };
 
@@ -1237,6 +1251,23 @@ impl OdfPageSetups {
 pub fn read_sheet_props_from_ods(
     path: &str,
 ) -> std::collections::HashMap<String, SheetXlsxProps> {
+    read_sheet_props_from_ods_within(path, None)
+}
+
+/// [`read_sheet_props_from_ods`], keeping to the rows and columns each
+/// sheet opens at (`sizes`, by sheet name; a sheet it does not name gets
+/// nothing). Without `sizes` the bound is the grid.
+///
+/// The bound is applied here and not by the caller, because a repeat count
+/// multiplies: a row repeated 4096 times that holds one styled cell
+/// repeated 4096 times is 16.7 million styles from one element, and a file
+/// of a kilobyte held enough of them to end the process before the caller
+/// saw a single one. Rows past the bound are not read at all: a file can
+/// name 4096 more of them with every 110 bytes.
+pub(super) fn read_sheet_props_from_ods_within(
+    path: &str,
+    sizes: Option<&std::collections::HashMap<String, (usize, usize)>>,
+) -> std::collections::HashMap<String, SheetXlsxProps> {
     let mut out = std::collections::HashMap::new();
     let Ok(f) = std::fs::File::open(path) else {
         return out;
@@ -1287,6 +1318,11 @@ pub fn read_sheet_props_from_ods(
     for table in split_elements(&xml, "table:table") {
         let head = table.split('>').next().unwrap_or("");
         let Some(name) = xml_attr(head, "table:name") else { continue };
+        let (max_rows, max_cols) = match sizes {
+            Some(sizes) => sizes.get(name).copied().unwrap_or((0, 0)),
+            None => (crate::sheet::SHEET_MAX_ROWS, crate::sheet::SHEET_MAX_COLS),
+        };
+        let (max_rows, max_cols) = (max_rows.min(crate::sheet::SHEET_MAX_ROWS), max_cols.min(crate::sheet::SHEET_MAX_COLS));
         let body = table.split("</table:table>").next().unwrap_or("");
         let mut props = SheetXlsxProps { default_font: default_font.clone(), ..SheetXlsxProps::default() };
         props.protection = odf_sheet_protection(head, body);
@@ -1296,20 +1332,24 @@ pub fn read_sheet_props_from_ods(
         // Columns: each element covers `number-columns-repeated` of them.
         let mut col = 0usize;
         for tag in split_elements(body, "table:table-column") {
+            if col >= max_cols {
+                break;
+            }
             let tag = tag.split('>').next().unwrap_or("");
             let repeat = odf_repeat(tag, "table:number-columns-repeated");
+            let within = col..(col + repeat).min(max_cols);
             if let Some(px) = xml_attr(tag, "table:style-name").and_then(|s| col_styles.get(s)) {
-                for i in 0..repeat {
-                    props.col_widths.insert(col + i, *px);
+                for c in within.clone() {
+                    props.col_widths.insert(c, *px);
                 }
             }
             if let Some(s) = xml_attr(tag, "table:default-cell-style-name") {
-                for i in 0..repeat {
-                    col_cell_style.insert(col + i, s);
+                for c in within.clone() {
+                    col_cell_style.insert(c, s);
                 }
             }
             if odf_hidden(tag) {
-                props.hidden_cols.extend(col..(col + repeat).min(crate::sheet::SHEET_MAX_COLS));
+                props.hidden_cols.extend(within);
             }
             col += repeat;
         }
@@ -1320,11 +1360,15 @@ pub fn read_sheet_props_from_ods(
         // column, so they are counted rather than skipped.
         let mut row = 0usize;
         for row_block in split_elements(body, "table:table-row") {
+            if row >= max_rows {
+                break;
+            }
             let head = row_block.split('>').next().unwrap_or("");
             let repeat = odf_repeat(head, "table:number-rows-repeated");
+            let rows_within = row..(row + repeat).min(max_rows);
             if let Some(px) = xml_attr(head, "table:style-name").and_then(|s| row_styles.get(s)) {
-                for i in 0..repeat {
-                    props.row_heights.insert(row + i, *px);
+                for r in rows_within.clone() {
+                    props.row_heights.insert(r, *px);
                 }
             }
             // A long repeated run is the sheet's empty tail, nothing to fit.
@@ -1332,7 +1376,7 @@ pub fn read_sheet_props_from_ods(
                 props.fit_rows.extend((row..row + repeat).filter(|&r| r < crate::sheet::SHEET_MAX_ROWS));
             }
             if odf_hidden(head) {
-                props.hidden_rows.extend(row..(row + repeat).min(crate::sheet::SHEET_MAX_ROWS));
+                props.hidden_rows.extend(rows_within.clone());
             }
             let cells = row_block.split("</table:table-row>").next().unwrap_or("");
             let mut c = 0usize;
@@ -1366,14 +1410,18 @@ pub fn read_sheet_props_from_ods(
                 // cells nobody has.
                 let has_value = tag.contains("office:value-type=");
                 if has_value || (crepeat == 1 && repeat == 1) {
-                    for i in 0..crepeat {
-                        let style_name = xml_attr(tag, "table:style-name").or_else(|| col_cell_style.get(&(c + i)).copied());
+                    for column in c..(c + crepeat).min(max_cols) {
+                        let style_name = xml_attr(tag, "table:style-name").or_else(|| col_cell_style.get(&column).copied());
                         let Some(x) = style_name.and_then(|n| cell_styles.get(n)) else { continue };
                         if *x == super::XfStyle::default() {
                             continue;
                         }
-                        for r in row..row + repeat {
-                            props.cell_styles.push((r, c + i, x.clone()));
+                        // With no sizes given the bound is the grid, which
+                        // is 17 thousand million cells: a sheet opens with
+                        // at most MAX_SHEET_CELLS, so no more are styled.
+                        let room = crate::sheet::MAX_SHEET_CELLS.saturating_sub(props.cell_styles.len());
+                        for r in rows_within.clone().take(room) {
+                            props.cell_styles.push((r, column, x.clone()));
                         }
                     }
                 }

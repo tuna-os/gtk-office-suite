@@ -1,0 +1,1 @@
+- Collaboration (the `collab` feature, in no released build): a picture that another person in a shared Letters document or Decks deck puts in no longer brings a file path of their choosing. The path named a file on the receiving computer, and a save put that file into the document (#2230).
