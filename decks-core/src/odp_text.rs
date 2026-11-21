@@ -110,7 +110,7 @@ impl TextStyles {
 
     fn para_name(&mut self, st: &ParaStyle) -> Option<String> {
         // Level and bullet belong to the list; the rest to the paragraph.
-        let key = ParaStyle { level: 0, bullet: Bullet::None, ..st.clone() };
+        let key = ParaStyle { level: 0, bullet: Bullet::None, end_run: None, ..st.clone() };
         if key == ParaStyle::default() {
             return None;
         }
