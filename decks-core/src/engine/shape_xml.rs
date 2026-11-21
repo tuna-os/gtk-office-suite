@@ -742,6 +742,10 @@ fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>, th
                 if let Some(sz) = rpr.attr("sz").and_then(|v| v.parse::<u32>().ok()) {
                     style.font_size_hp = Some((sz / 50) as u16);
                 }
+                // Its own typeface (`a:latin`), theme fonts resolved: a
+                // table set in Arial on a Calibri theme was drawn in the
+                // theme's face.
+                style.font_family = rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t));
                 style.link = rpr
                     .child("a:hlinkClick")
                     .filter(|h| h.attr("action").is_none_or(str::is_empty))
@@ -774,6 +778,18 @@ pub(crate) fn table_style_bold(xml: &str) -> std::collections::HashMap<String, (
             Some((id, (bold("a:firstRow"), bold("a:firstCol"))))
         })
         .collect()
+}
+
+/// A cell edge (`a:lnL` and the like): a line in its colour and width
+/// (EMU, default 12700, 1 pt), or an explicit no-line. An edge stating
+/// neither is the style's, `None`.
+fn cell_edge(ln: &Node, theme: &Theme) -> Option<super::table::CellEdge> {
+    let width_pt = ln.attr("w").and_then(|v| v.parse::<f64>().ok()).unwrap_or(12700.0) / 12700.0;
+    if ln.child("a:noFill").is_some() {
+        return Some(super::table::CellEdge { color: None, width_pt });
+    }
+    let color = first_color(ln.child("a:solidFill")?, theme, None)?;
+    Some(super::table::CellEdge { color: Some(color), width_pt })
 }
 
 /// Every table in a part's graphic frames.
@@ -830,6 +846,8 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                                     .and_then(|p| p.attr("anchor"))
                                     .and_then(super::text_body::Anchor::from_drawingml)
                                     .unwrap_or_default(),
+                                no_fill: tc.child("a:tcPr").is_some_and(|p| p.child("a:noFill").is_some()),
+                                edges: ["a:lnL", "a:lnR", "a:lnT", "a:lnB"].map(|k| tc.child("a:tcPr").and_then(|p| p.child(k)).and_then(|ln| cell_edge(ln, theme))),
                                 margins: tc.child("a:tcPr").filter(|p| ["marL", "marT", "marR", "marB"].iter().any(|k| p.attr(k).is_some())).map(|p| {
                                     let m = |k: &str, d: f64| p.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
                                     (m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0))
@@ -1093,6 +1111,32 @@ mod tests {
         assert!(d.rows[0][0].runs[0].style.bold);
         assert_eq!(d.rows[0][1].fill, Some(Color(0xFF, 0, 0)));
         assert_eq!(d.accent, Some(Color(0x4F, 0x81, 0xBD)));
+    }
+
+    /// The backlog-reduction deck's table: Arial runs on a Calibri theme,
+    /// and every cell boxed in its own half-point black line over a
+    /// stated no-fill.
+    #[test]
+    fn a_cell_keeps_its_typeface_its_edges_and_its_no_fill() {
+        use super::super::table::CellEdge;
+        let ln = |k: &str, inner: &str| format!(r#"<a:{k} w="6350">{inner}</a:{k}>"#);
+        let black = r#"<a:solidFill><a:srgbClr val="000000"/></a:solidFill>"#;
+        let xml = format!(
+            r#"<p:spTree><p:graphicFrame><p:xfrm><a:off x="0" y="0"/><a:ext cx="2438400" cy="914400"/></p:xfrm>
+          <a:graphic><a:graphicData><a:tbl><a:tblPr bandRow="1"/><a:tblGrid><a:gridCol w="2438400"/></a:tblGrid>
+          <a:tr h="914400"><a:tc><a:txBody><a:p><a:r><a:rPr sz="1400"><a:latin typeface="Arial"/></a:rPr><a:t>1</a:t></a:r></a:p></a:txBody>
+          <a:tcPr>{}{}{}<a:noFill/></a:tcPr></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#,
+            ln("lnL", black),
+            ln("lnR", black),
+            ln("lnB", "<a:noFill/>"),
+        );
+        let t = frame_tables(&xml, &theme(THEME_2007), &Default::default(), super::super::SlideScale::default());
+        let cell = &t[0].table.rows[0][0];
+        assert_eq!(cell.runs[0].style.font_family.as_deref(), Some("Arial"));
+        let line = CellEdge { color: Some(Color(0, 0, 0)), width_pt: 0.5 };
+        assert_eq!(cell.edges, [Some(line), Some(line), None, Some(CellEdge { color: None, width_pt: 0.5 })]);
+        assert!(cell.no_fill);
+        assert_eq!(t[0].table.cell_paint(0, 0).fill, None, "the band doesn't paint a cell that states no fill");
     }
 
     #[test]
