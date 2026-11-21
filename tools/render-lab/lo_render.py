@@ -29,15 +29,46 @@ def soffice():
     sys.exit("lo_render: LibreOffice (soffice) not found")
 
 
-def to_pdf(src, outdir, profile):
+def csv_filter(src):
+    """Calc's CSV import filter for `src` when it is delimited text whatever
+    its name says (a GOV.UK statistics download served as .xlsx is a Latin-1
+    CSV), else None. Without it LibreOffice's type detection opens such a
+    file in Writer, and the Tables reference is a page of monospace text.
+    The delimiter and character set are chosen as Tables' reader chooses
+    them (tables-core io::load_delimited_into_engine)."""
+    with open(src, "rb") as f:
+        head = f.read(65536)
+    if head[:4] == b"PK\x03\x04" or head[:8] == bytes.fromhex("D0CF11E0A1B11AE1"):
+        return None
+    try:
+        text = head.decode("utf-8")
+        charset = 76  # UTF-8
+    except UnicodeDecodeError as e:
+        if e.start >= len(head) - 3 and len(head) == 65536:
+            # A multi-byte character cut by the read, not Latin-1.
+            text = head[: e.start].decode("utf-8")
+            charset = 76
+        else:
+            text = head.decode("latin-1")
+            charset = 12  # ISO-8859-1
+    first = text.splitlines()[0] if text else ""
+    delim = max([",", "\t", ";"], key=lambda d: (first.count(d), d == ","))
+    if delim not in first:
+        delim = ","
+    return f"Text - txt - csv (StarCalc):{ord(delim)},34,{charset},1"
+
+
+def to_pdf(src, outdir, profile, app=None):
     # A private profile per run: a shared one serializes conversions and
     # carries state (recent files, first-start dialogs) between runs.
+    infilter = csv_filter(src) if app == "tables" else None
     subprocess.run(
         [
             soffice(),
             f"-env:UserInstallation=file://{profile}",
             "--headless",
             "--norestore",
+            *([f"--infilter={infilter}"] if infilter else []),
             "--convert-to",
             "pdf",
             "--outdir",
@@ -93,7 +124,7 @@ def main():
                 continue
             dest = os.path.join(args.out, fx["app"], fx["feature"])
             try:
-                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile)
+                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile, fx["app"])
                 n = rasterize(pdf, dest)
                 print(f"lo  {fx['app']}/{fx['feature']}: {n} page(s)")
             except Exception as e:  # keep going; the report shows the gap
