@@ -200,6 +200,13 @@ pub(super) fn master_shapes(
                         p.embed = parse_blip_embed(e);
                     }
                 }
+                // An SVG-only picture (`asvg:svgBlip`), unless the blip
+                // named a PNG fallback.
+                n if n.ends_with(":svgBlip") => {
+                    if let Some(p) = cur.as_mut().filter(|p| p.picture && p.embed.is_none()) {
+                        p.embed = parse_blip_embed(e);
+                    }
+                }
                 "p:ph" => {
                     if let Some(p) = cur.as_mut() {
                         p.has_ph = true;
