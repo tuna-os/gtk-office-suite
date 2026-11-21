@@ -90,6 +90,10 @@ impl RunProps {
             // whole numbers dropped up to half a point, so a 19.84 pt run
             // (our 18 pt on an 11-inch page) read back as 19.5 pt.
             font_size_hp: self.sz.map(|s| (s as f64 / 50.0).round() as u16),
+            // The file's own hundredths where they're off the half-point
+            // grid: our 18 pt saved on a 28 cm ODP page is sz="1984", and
+            // rounding that to 20 pt first read it back as 18.14 pt.
+            font_size_cpt: self.sz.filter(|s| !s.is_multiple_of(50)),
             color: self.color.clone(),
             font_family: self.latin.clone(),
             caps: self.cap.as_deref() == Some("all"),

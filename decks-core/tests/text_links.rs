@@ -74,6 +74,7 @@ fn deck_with_links() -> Deck {
                 accent: None,
                 cell_margins: None,
                 style_id: None,
+                file_bold: None,
             },
         },
     ];

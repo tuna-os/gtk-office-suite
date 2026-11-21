@@ -24,7 +24,7 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{cxn_styles, frame_charts, frame_tables, sp_geometries, sp_styles, theme as read_theme, Theme};
+use super::shape_xml::{cxn_styles, frame_charts, frame_tables, sp_geometries, sp_styles, table_style_bold, theme as read_theme, Theme};
 use super::text_xml::{sp_texts, Inherited};
 use crate::layouts::PlaceholderKey;
 
@@ -240,6 +240,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // read before any of them. A package that declares no size gets the one
     // our own writer emits, which is what the old fixed divisor assumed.
     let declared = parse_slide_size(&presentation_xml);
+    // The package's own table style definitions, where it carries them.
+    let table_styles = table_style_bold(&archive.optional_part_to_string("ppt/tableStyles.xml", &mut budget));
     let scale = match declared {
         Some((cx, cy)) => SlideScale::from_emu(cx, cy),
         None => SlideScale::default(),
@@ -472,6 +474,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // Tables live in p:graphicFrame, which the walker used to skip.
         let mut tables = frame_tables(&slide_xml, &slide_theme, &slide_link_rels, scale);
         for t in &mut tables {
+            t.table.file_bold = t.table.style_id.as_deref().and_then(|id| table_styles.get(&id.trim().to_ascii_uppercase())).copied();
             t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
                 cell.runs = scale.text_runs(&cell.runs);
@@ -1013,7 +1016,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .get(&c.rel_id)
                                     .map(|t| part_path(&slide_dir.to_string_lossy(), t))
                                     .map(|p| archive.optional_part_to_string(&p, &mut budget))
-                                    .and_then(|xml| super::chart::parse_chart_space(&xml));
+                                    .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
                                 if let Some(chart) = chart {
                                     objects.push(SlideObject::Chart {
                                         x: c.x * scale.x,
