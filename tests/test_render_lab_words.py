@@ -57,6 +57,19 @@ class MatchWordsTest(unittest.TestCase):
         found, _, lost = self.compare.match_words(ours, ref)
         self.assertEqual((found, lost), (1.0, 0))
 
+    def test_a_letter_ocr_dropped_at_the_edge_still_joins(self):
+        # The same page read "ousing" for "housing" in the run.
+        def at(text, left):
+            return (text, left + 10, 100, ("1", "1", "0"), (left, 95, 20, 10))
+
+        ref = [at("ousing", 68), at("statistics", 110), at("communitiesgovuk", 170)]
+        ours = [at("housingstatisticscommunitiesgovuk", 61)]
+        found, _, lost = self.compare.match_words(ref, ours)
+        self.assertEqual((found, lost), (1.0, 0))
+        # But a short word inside a longer one is not the same text.
+        found, _, _ = self.compare.match_words([at("port", 61), at("al", 90)], [at("portaldata", 61)])
+        self.assertEqual(found, 0.0)
+
     def test_a_joined_read_elsewhere_on_the_page_is_not_the_same_words(self):
         def at(text, left, top, line=0):
             return (text, left + 10, top + 5, ("1", "1", str(line)), (left, top, 20, 10))

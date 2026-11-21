@@ -522,6 +522,9 @@ def rescue_unread(ref_grey, ours_grey, box):
 JOIN_MAX = 6
 JOIN_MIN_CHARS = 6
 JOIN_TOL = 40.0
+# The share of the longer text the shorter must cover when they differ by
+# a letter or two OCR lost at an edge ("ousing" for "housing").
+JOIN_COVER = 0.85
 
 
 def join_matches(ref, ours, dist, taken):
@@ -538,7 +541,15 @@ def join_matches(ref, ours, dist, taken):
     JOIN_TOL of it, is paired with it: each reference word of the run, or
     the one reference word, takes the distance between the run's and the
     word's top-left corners. Updates `dist` (ref index -> distance) and
-    `taken` (ours indices) in place."""
+    `taken` (ours indices) in place. The texts may differ by what OCR
+    dropped at an edge (the same page read "ousing" there): the shorter
+    inside the longer, covering JOIN_COVER of it."""
+
+    def same(a, b):
+        if a == b:
+            return True
+        short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+        return len(short) >= 8 and short in long_ and len(short) >= JOIN_COVER * len(long_)
 
     def lines(words, free):
         by_line = {}
@@ -564,29 +575,23 @@ def join_matches(ref, ours, dist, taken):
     # Several reference words, one of ours.
     free_ref = [i for i in range(len(ref)) if i not in dist]
     free_ours = [j for j in range(len(ours)) if j not in taken]
-    by_text = {}
-    for j in free_ours:
-        by_text.setdefault(ours[j][0], []).append(j)
     for run, text in sorted(runs(ref, free_ref), key=lambda r: -len(r[0])):
         if any(i in dist for i in run):
             continue
         at = corner(ref[run[0]])
-        best = min(((near(at, corner(ours[j])), j) for j in by_text.get(text, []) if j not in taken), default=None)
+        best = min(((near(at, corner(ours[j])), j) for j in free_ours if j not in taken and same(ours[j][0], text)), default=None)
         if best and best[0] <= JOIN_TOL:
             for i in run:
                 dist[i] = best[0]
             taken.add(best[1])
     # One reference word, several of ours.
     free_ref = [i for i in range(len(ref)) if i not in dist]
-    by_text = {}
-    for i in free_ref:
-        by_text.setdefault(ref[i][0], []).append(i)
     free_ours = [j for j in range(len(ours)) if j not in taken]
     for run, text in sorted(runs(ours, free_ours), key=lambda r: -len(r[0])):
         if any(j in taken for j in run):
             continue
         at = corner(ours[run[0]])
-        best = min(((near(at, corner(ref[i])), i) for i in by_text.get(text, []) if i not in dist), default=None)
+        best = min(((near(at, corner(ref[i])), i) for i in free_ref if i not in dist and same(ref[i][0], text)), default=None)
         if best and best[0] <= JOIN_TOL:
             dist[best[1]] = best[0]
             taken.update(run)
