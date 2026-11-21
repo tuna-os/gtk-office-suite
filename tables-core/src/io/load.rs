@@ -631,6 +631,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             sheet.charts.push(spec);
         }
     }
+    for (owner, picture) in super::read_pictures(path, &sheets) {
+        if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
+            sheet.pictures.push(picture);
+        }
+    }
     for (owner, rule) in super::read_cond_rules_detailed(path).0 {
         if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
             sheet.cond_rules.push(rule);

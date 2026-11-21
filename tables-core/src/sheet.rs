@@ -953,6 +953,21 @@ pub struct ChartSeries {
     pub color: Option<String>,
 }
 
+/// A picture floating over a sheet (`xdr:pic` in a drawing part), as it
+/// was read: drawn over the cells, but not yet written back on save (the
+/// package scan reports it as a loss).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SheetPicture {
+    /// The cell its top-left corner sits in, (row, col).
+    pub anchor: (usize, usize),
+    /// Its corner's offset into that cell, in pixels.
+    pub offset_px: (f64, f64),
+    pub width_px: f64,
+    pub height_px: f64,
+    /// The image file's bytes (PNG, JPEG, GIF…), shared between copies.
+    pub data: std::sync::Arc<[u8]>,
+}
+
 /// One embedded chart: kind, title, series, axes, legend, and placement.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
@@ -1377,6 +1392,8 @@ pub struct SheetModel {
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
+    /// Pictures floating over this sheet, as read from xlsx.
+    pub pictures: Vec<SheetPicture>,
     /// Pivot tables defined on this sheet.
     pub pivot_tables: Vec<PivotTableSpec>,
     /// Sheet protection status.
@@ -1468,6 +1485,7 @@ impl SheetModel {
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
+            pictures: Vec::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],

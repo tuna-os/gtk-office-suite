@@ -629,6 +629,30 @@ pub fn draw_grid(
         }
         draw_cell_text(cr, sheet, mr, mc, (x, y, w, h), cell_text);
     }
+    // Pictures float above the cells at their anchor (offset into it),
+    // under the charts, scaled to the size the file gives them.
+    for picture in sheet.pictures.iter().filter(|p| in_pane(p.anchor.0, p.anchor.1)) {
+        let x = tables_core::sheet::col_x(picture.anchor.1, scroll_x, sheet) + picture.offset_px.0;
+        let y = tables_core::sheet::row_y(picture.anchor.0, scroll_y, sheet) + picture.offset_px.1;
+        let (w, h) = (picture.width_px, picture.height_px);
+        if x > width || y > height || x + w < ROW_HEADER_WIDTH || y + h < COL_HEADER_HEIGHT {
+            continue;
+        }
+        let Some(surface) = picture_surface(&picture.data) else {
+            continue;
+        };
+        let (iw, ih) = (surface.width() as f64, surface.height() as f64);
+        if iw < 1.0 || ih < 1.0 {
+            continue;
+        }
+        cr.save().unwrap();
+        cr.translate(x, y);
+        cr.scale(w / iw, h / ih);
+        cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+        cr.source().set_filter(gtk4::cairo::Filter::Good);
+        cr.paint().unwrap();
+        cr.restore().unwrap();
+    }
     // Charts float above the cells at their anchor. They were read from
     // xlsx and saved back, but only ever drawn in the chart dialog's preview
     // (render lab `tables/chart`).
@@ -839,6 +863,23 @@ mod tests {
         assert!(inked_rows >= 6, "the text stops short of the edge: {inked_rows} rows inked at the right");
     }
 
+    /// A sheet picture's file decodes to its own pixel size, once: a second
+    /// redraw gets the same surface back, and bytes that aren't an image
+    /// give none rather than failing the draw.
+    #[test]
+    fn a_sheet_picture_decodes_once() {
+        let img = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 7, 3).unwrap();
+        let mut png = Vec::new();
+        img.write_to_png(&mut png).unwrap();
+        let data: std::sync::Arc<[u8]> = png.into();
+        let first = picture_surface(&data).expect("a PNG decodes");
+        assert_eq!((first.width(), first.height()), (7, 3));
+        let again = picture_surface(&data).unwrap();
+        assert_eq!(first.to_raw_none(), again.to_raw_none(), "decoded once");
+        let junk: std::sync::Arc<[u8]> = b"not an image".to_vec().into();
+        assert!(picture_surface(&junk).is_none());
+    }
+
     #[test]
     fn wrapped_merged_cells_fit_to_the_merged_width() {
         suite_common::gtk_test::run(|| {
@@ -977,4 +1018,45 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("no cells"), "{err}");
     }
+}
+
+thread_local! {
+    /// Decoded sheet pictures, by the address of their shared bytes: a
+    /// redraw paints them again without decoding the file each frame.
+    static PICTURES: std::cell::RefCell<std::collections::HashMap<usize, (std::sync::Weak<[u8]>, Option<gtk4::cairo::ImageSurface>)>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// A sheet picture's image as a cairo surface, decoded once.
+fn picture_surface(data: &std::sync::Arc<[u8]>) -> Option<gtk4::cairo::ImageSurface> {
+    let key = std::sync::Arc::as_ptr(data) as *const u8 as usize;
+    PICTURES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((weak, surface)) = cache.get(&key) {
+            if weak.upgrade().is_some_and(|d| std::sync::Arc::ptr_eq(&d, data)) {
+                return surface.clone();
+            }
+        }
+        // Forget the pictures whose sheets are gone.
+        cache.retain(|_, (weak, _)| weak.strong_count() > 0);
+        let surface = decode_picture(data);
+        cache.insert(key, (std::sync::Arc::downgrade(data), surface.clone()));
+        surface
+    })
+}
+
+fn decode_picture(data: &[u8]) -> Option<gtk4::cairo::ImageSurface> {
+    use gtk4::gdk::prelude::GdkCairoContextExt;
+    use gtk4::gdk_pixbuf::prelude::PixbufLoaderExt;
+    let loader = gtk4::gdk_pixbuf::PixbufLoader::new();
+    loader.write(data).ok()?;
+    loader.close().ok()?;
+    let pixbuf = loader.pixbuf()?;
+    let surface = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
+    {
+        let cr = gtk4::cairo::Context::new(&surface).ok()?;
+        cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+        cr.paint().ok()?;
+    }
+    Some(surface)
 }
