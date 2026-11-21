@@ -201,7 +201,17 @@ fn text_rect_as_insets(sp: &str) -> String {
     // A turned text rectangle is not a plain inset; keep the shape's box.
     let turned = attr_in(tx_xml, "dsp:txXfrm", "rot").is_some_and(|r| r != "0");
     let (Some((x, y, w, h)), Some((tx, ty, tw, th)), false) = (shape, rect(tx_xml), turned) else { return out };
-    let delta = [(tx - x), (ty - y), (x + w - tx - tw), (y + h - ty - th)].map(|d| d.max(0.0));
+    // The preset's own text rectangle (a rounded rectangle's, clear of its
+    // corners) is drawn already (ShapeKind::text_inset); only what the
+    // diagram's rectangle adds beyond it becomes an inset.
+    let mut kind = attr_in(sp, "a:prstGeom", "prst").map_or(super::shape::ShapeKind::Rect, super::shape::ShapeKind::from_prst);
+    if let super::shape::ShapeKind::RoundRect { radius } = &mut kind {
+        if let Some(adj) = attr_in(sp, "a:gd", "fmla").and_then(|f| f.strip_prefix("val ")?.trim().parse::<f64>().ok()) {
+            *radius = (adj / 100_000.0).clamp(0.0, 0.5);
+        }
+    }
+    let (pl, pt, pr, pb) = kind.text_inset(w, h);
+    let delta = [(tx - x) - pl, (ty - y) - pt, (x + w - tx - tw) - pr, (y + h - ty - th) - pb].map(|d| if d > 1.0 { d } else { 0.0 });
     let Some(b) = out.find("<a:bodyPr") else { return out };
     let tag_end = b + out[b..].find('>').unwrap_or(0);
     let tag = &out[b..tag_end];
@@ -297,6 +307,25 @@ mod tests {
         let read_turned = |name: &str| if name == "ppt/diagrams/drawing1.xml" { turned.clone() } else { read(name) };
         let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read_turned);
         assert!(out.contains("<a:bodyPr/>") && !out.contains("txXfrm"), "a turned rectangle is dropped, not inset: {out}");
+    }
+
+    /// A rounded rectangle's text rectangle is its preset's own: nothing
+    /// is added on top of what the preset draws (the CCRM deck's boxes).
+    #[test]
+    fn a_presets_own_text_rectangle_adds_no_inset() {
+        // A 1359966 x 1256575 rounded rectangle (default corner) and the
+        // text rectangle PowerPoint saved for it.
+        let drawing = DRAWING
+            .replace(r#"<a:off x="0" y="10"/><a:ext cx="1000" cy="900"/>"#, r#"<a:off x="3927010" y="2081"/><a:ext cx="1359966" cy="1256575"/>"#)
+            .replace(r#"prst="rect""#, r#"prst="roundRect""#)
+            .replace(r#"<a:off x="5" y="15"/><a:ext cx="990" cy="890"/>"#, r#"<a:off x="3988351" y="63422"/><a:ext cx="1237284" cy="1133893"/>"#);
+        let read = |name: &str| match name {
+            "ppt/diagrams/data1.xml" => DATA.to_string(),
+            "ppt/diagrams/drawing1.xml" => drawing.clone(),
+            _ => String::new(),
+        };
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:bodyPr lIns="91440" tIns="45720" rIns="91440" bIns="45720"/>"#), "{out}");
     }
 
     #[test]
