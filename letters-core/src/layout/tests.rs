@@ -384,13 +384,14 @@ fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
     assert!(tall > LINE * 2.0, "the long cell wraps: {tall}");
     assert_eq!(cells[3].5, LINE + CELL_RULE_PT, "a one-line row is its line plus a rule");
     assert!(cells[..3].iter().all(|c| c.5 == tall), "the whole row takes the tallest cell's height");
-    assert_eq!(cells[3].3, 72.0 + tall, "row two starts below row one");
+    assert_eq!(cells[0].3, 72.0 + CELL_RULE_PT, "the table's top rule stands above its first row, as in Writer");
+    assert_eq!(cells[3].3, 72.0 + CELL_RULE_PT + tall, "row two starts below row one");
     // The paragraph after the table starts below it.
     let after = t.pages[0].items.iter().find_map(|i| match i {
         Item::Line { text, top_pt, .. } if text == "after" => Some(*top_pt),
         _ => None,
     });
-    assert_eq!(after, Some(72.0 + tall + LINE + CELL_RULE_PT), "below both rows");
+    assert_eq!(after, Some(72.0 + CELL_RULE_PT + tall + LINE + CELL_RULE_PT), "below both rows");
 }
 
 /// A table is drawn with the file's column widths: a narrow number column
@@ -1174,6 +1175,37 @@ fn the_larger_of_space_after_and_space_before_separates_paragraphs() {
     d.paragraphs[2].style.space_before_pt = 4.0;
     let tops: Vec<f64> = line_items(&lay(&d).pages[0]).iter().map(|l| l.3).collect();
     assert_eq!(tops, vec![72.0, 72.0 + LINE + 24.0, 72.0 + 2.0 * LINE + 24.0 + 10.0]);
+}
+
+/// A paragraph's own page break keeps its space before on the new page
+/// in a Writer document and drops it in a Word one, as LibreOffice lays
+/// each out: an explanatory note's clauses each open a page 24pt below
+/// the margin, and began at it (render-real `explanatory-note-2`).
+#[test]
+fn a_page_break_keeps_the_space_before_in_a_writer_document_only() {
+    let top_of_second_page = |space_adds: bool| {
+        let mut d = doc_of(2, "x");
+        d.space_adds = space_adds;
+        d.paragraphs[1].style.page_break_before = true;
+        d.paragraphs[1].style.space_before_pt = 24.0;
+        let t = lay(&d);
+        line_items(&t.pages[1])[0].3
+    };
+    assert_eq!(top_of_second_page(true), 72.0 + 24.0, "odt: below the margin by its space before");
+    assert_eq!(top_of_second_page(false), 72.0, "docx: at the margin");
+    // A section starting on a new page (an odt style's new master page)
+    // is the paragraph's own break too; text that runs over is not.
+    let mut d = doc_of(2, "x");
+    d.space_adds = true;
+    d.paragraphs[1].style.space_before_pt = 24.0;
+    sectioned(&mut d, &[0, 1], &[PageGeometry::default(), PageGeometry::default()]);
+    assert_eq!(line_items(&lay(&d).pages[1])[0].3, 72.0 + 24.0, "a section's first paragraph");
+    let mut d = doc_of(80, "x");
+    d.space_adds = true;
+    for p in &mut d.paragraphs {
+        p.style.space_before_pt = 6.0;
+    }
+    assert_eq!(line_items(&lay(&d).pages[1])[0].3, 72.0, "run over: at the margin");
 }
 
 /// In a document whose spacing adds up (`Document::space_adds`, every

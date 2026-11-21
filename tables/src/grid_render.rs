@@ -87,6 +87,29 @@ fn pango_text_width(cr: &Context, text: &str) -> f64 {
     header_layout(cr, text).pixel_size().0 as f64
 }
 
+/// A cell's border with the edges inside its merged block taken off: a
+/// merge draws as one cell, so only the block's outline shows, as in Excel
+/// and Calc. The EWCO claim form's notes box (B4:E13) is bordered cell by
+/// cell, and drew its inner lines through the merged text.
+fn block_edges(border: &CellBorder, merge: Option<(usize, usize, usize, usize)>, r: usize, c: usize) -> CellBorder {
+    let mut b = border.clone();
+    if let Some((mr, mc, rs, cs)) = merge {
+        if r != mr {
+            b.top = BorderStyle::None;
+        }
+        if c != mc {
+            b.left = BorderStyle::None;
+        }
+        if r + 1 != mr + rs.max(1) {
+            b.bottom = BorderStyle::None;
+        }
+        if c + 1 != mc + cs.max(1) {
+            b.right = BorderStyle::None;
+        }
+    }
+    b
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_border_line(cr: &Context, style: &BorderStyle, color: (f64, f64, f64), x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
     if *style == BorderStyle::None { return; }
@@ -171,6 +194,41 @@ const CELL_PAD_V: f64 = 2.0;
 
 /// The Pango layout for a cell's text in its style: font, weight, slant,
 /// underline and strikethrough, alignment, and wrapping within `width`.
+/// Pango attributes for each run of a rich-text cell that has a font of
+/// its own: the EWCO claim form's title is a bold line over a small italic
+/// version, one cell drawn as one font until runs were read.
+fn run_attributes(attrs: &pango::AttrList, runs: &[tables_core::sheet::TextRun], cell_font: &pango::FontDescription) {
+    let mut start = 0u32;
+    for run in runs {
+        let end = start + run.text.len() as u32;
+        if let Some(f) = &run.font {
+            let mut font = cell_font.clone();
+            if let Some(family) = &f.family {
+                font.set_family(family);
+            }
+            if let Some(size) = f.size {
+                font.set_size((size * pango::SCALE as f64) as i32);
+            }
+            font.set_weight(if f.bold { pango::Weight::Bold } else { pango::Weight::Normal });
+            font.set_style(if f.italic { pango::Style::Italic } else { pango::Style::Normal });
+            let ranged = |mut a: pango::Attribute| {
+                a.set_start_index(start);
+                a.set_end_index(end);
+                attrs.insert(a);
+            };
+            ranged(pango::AttrFontDesc::new(&font).into());
+            ranged(pango::AttrInt::new_underline(if f.underline { pango::Underline::Single } else { pango::Underline::None }).into());
+            ranged(pango::AttrInt::new_strikethrough(f.strikethrough).into());
+            if let Some(color) = f.color {
+                let (r, g, b) = color.to_f64();
+                let c16 = |v: f64| (v * 65535.0).round() as u16;
+                ranged(pango::AttrColor::new_foreground(c16(r), c16(g), c16(b)).into());
+            }
+        }
+        start = end;
+    }
+}
+
 fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str, width: f64) -> pango::Layout {
     use tables_core::style::HAlign;
     let style = &sheet.styles[r][c];
@@ -186,16 +244,17 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
         font.set_style(pango::Style::Italic);
     }
     layout.set_font_description(Some(&font));
-    if style.underline || style.strikethrough {
-        let attrs = pango::AttrList::new();
-        if style.underline {
-            attrs.insert(pango::AttrInt::new_underline(pango::Underline::Single));
-        }
-        if style.strikethrough {
-            attrs.insert(pango::AttrInt::new_strikethrough(true));
-        }
-        layout.set_attributes(Some(&attrs));
+    let attrs = pango::AttrList::new();
+    if style.underline {
+        attrs.insert(pango::AttrInt::new_underline(pango::Underline::Single));
     }
+    if style.strikethrough {
+        attrs.insert(pango::AttrInt::new_strikethrough(true));
+    }
+    if let Some(runs) = sheet.rich_runs(r, c, text) {
+        run_attributes(&attrs, runs, &font);
+    }
+    layout.set_attributes(Some(&attrs));
     layout.set_text(text);
     layout.set_width(
         ((width - CELL_PAD_LEFT - CELL_PAD_RIGHT - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32,
@@ -498,7 +557,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(px, py, pw, ph);
     cr.clip();
-    let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
+    let mut bordered: Vec<(f64, f64, f64, f64, CellBorder)> = Vec::new();
     // Text spilling into empty neighbours is drawn after every cell of the
     // pane, or their backgrounds would paint over it.
     let mut spilled: Vec<(usize, usize, CellRect)> = Vec::new();
@@ -537,7 +596,12 @@ pub fn draw_grid(
             } else {
                 cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
-            cr.rectangle(cx, cy, cw, rh);
+            // On whole pixels: a row 66.95 pt tall leaves every row after
+            // it on a half pixel, and two antialiased half-covered edges
+            // let the dark canvas through as a grey seam between each pair
+            // of filled cells (render-real `ewco-claim-form`).
+            let (x0, y0) = (cx.round(), cy.round());
+            cr.rectangle(x0, y0, (cx + cw).round() - x0, (cy + rh).round() - y0);
             cr.fill().unwrap();
 
             // A merged block draws as one cell: no gridlines inside it, and
@@ -571,7 +635,7 @@ pub fn draw_grid(
             // 3 px edge reaches into the neighbouring cell, whose fill
             // would otherwise paint over it.
             if !border.is_none() {
-                bordered.push((cx, cy, cw, rh, border));
+                bordered.push((cx, cy, cw, rh, block_edges(border, merge, r, c)));
             }
 
             // Active cell border (a merged block's is the selection outline)
@@ -614,8 +678,8 @@ pub fn draw_grid(
     for &(r, c, rect) in &spilled {
         draw_cell_text(cr, sheet, r, c, rect, cell_text);
     }
-    for &(x, y, w, h, border) in &bordered {
-        draw_border_edges(cr, x, y, w, h, border, is_dark);
+    for (x, y, w, h, border) in &bordered {
+        draw_border_edges(cr, *x, *y, *w, *h, border, is_dark);
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.
@@ -804,6 +868,20 @@ pub fn render_sheet_pdf(
 mod tests {
     use super::*;
     use tables_core::style::VAlign;
+
+    #[test]
+    fn a_merged_block_keeps_only_its_outline() {
+        let boxed = CellBorder::all(BorderStyle::Solid, (0.0, 0.0, 0.0));
+        let block = Some((3, 1, 10, 4)); // B4:E13
+        let inner = block_edges(&boxed, block, 6, 2);
+        assert!(inner.is_none(), "a cell inside the block draws no edge");
+        let corner = block_edges(&boxed, block, 3, 1);
+        assert_eq!((corner.top, corner.left), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!((corner.bottom, corner.right), (BorderStyle::None, BorderStyle::None));
+        let far = block_edges(&boxed, block, 12, 4);
+        assert_eq!((far.bottom, far.right), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!(block_edges(&boxed, None, 6, 2), boxed, "an unmerged cell keeps all four");
+    }
 
     /// Calibri 11's line box (17.9 px) in a 20 px row: bottom-aligned text
     /// starts just above the row, leaving its descent line 2 px clear of the

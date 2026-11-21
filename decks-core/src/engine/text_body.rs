@@ -257,6 +257,60 @@ pub fn shrink_font_to_fit(inner_h: f64, measure: &mut dyn FnMut(f64) -> f64) -> 
     lo
 }
 
+/// Shrink-to-fit for a `normAutofit` box as Impress computes it
+/// (LibreOffice 24.2, `SdrTextObj::autoFitTextForCompatibility`): ten
+/// halvings of the font scale between 0 and 100%, each candidate's font
+/// height floored to 0.1 pt (`base_pt`, the box's text size, when known),
+/// and at each one the line spacing tried at 100%, 90% and 80% until the
+/// text fits. The answer is the tightest combination that fits (the
+/// smallest box-to-text ratio of at least 1), else the closest. The text's
+/// height is measured `allowance` shorter (Impress's 0.5 mm), so text that
+/// overflows by less than that is not shrunk.
+///
+/// `measure` lays the text out at a font scale and line-spacing reduction
+/// and returns its height in the units of `inner_h`. Unlike
+/// [`shrink_font_to_fit`], which scales the font alone, this settles on the
+/// sizes Impress draws: on a title with a trailing break Impress keeps
+/// 39 pt (88.5% of 44 pt) and closes the spacing, where scaling the font
+/// alone took it to 33 pt.
+pub fn fit_like_impress(inner_h: f64, allowance: f64, base_pt: Option<f64>, measure: &mut dyn FnMut(Autofit) -> f64) -> Autofit {
+    let fit_of = |h: f64| if h - allowance > 0.0 { inner_h / (h - allowance) } else { f64::INFINITY };
+    let full = Autofit { font_scale: 1.0, line_reduction: 0.0 };
+    let first = fit_of(measure(full));
+    if first >= 1.0 {
+        return full;
+    }
+    let (mut lo, mut hi) = (0.0_f64, 100.0_f64);
+    let (mut best, mut best_fit) = (Autofit { font_scale: 0.01, line_reduction: 0.0 }, first);
+    for _ in 0..10 {
+        let mid = lo + (hi - lo) * 0.5;
+        let scale = match base_pt.filter(|b| *b > 0.0) {
+            Some(b) => ((b * mid / 100.0 * 10.0).floor() / 10.0) / b * 100.0,
+            None => mid,
+        };
+        let mut fit = 0.0;
+        for spacing in [100.0, 90.0, 80.0] {
+            if fit >= 1.0 {
+                continue;
+            }
+            let trial = Autofit { font_scale: (scale / 100.0).max(0.01), line_reduction: 1.0 - spacing / 100.0 };
+            fit = fit_of(measure(trial));
+            if spacing == 100.0 {
+                if fit > 1.0 {
+                    lo = scale;
+                } else {
+                    hi = scale;
+                }
+            }
+            if (best_fit < 1.0 && fit > best_fit) || (fit >= 1.0 && fit < best_fit) {
+                best = trial;
+                best_fit = fit;
+            }
+        }
+    }
+    best
+}
+
 /// A text box's paragraph layout and placement.
 ///
 /// `paras` runs parallel to the box's paragraphs (its text split on
@@ -534,6 +588,25 @@ mod tests {
     #[test]
     fn no_runs_is_one_empty_paragraph() {
         assert_eq!(paragraphs(&[]).len(), 1);
+    }
+
+    /// Impress's fit, against LibreOffice 24.2's own: a 136.8 pt box of
+    /// n paragraphs of 20 pt text (line pitch 1.2), laid out at whole
+    /// points as Impress lays it out. 12, 13 and 14 paragraphs close the
+    /// spacing to 90% rather than shrink the type further, as measured.
+    /// (The counts whose search lands on a half point are left out: the
+    /// model's rounding of the tie, not the search, decides them.)
+    #[test]
+    fn the_fit_closes_the_spacing_as_impress_does() {
+        let measured = [(6, 19, 0.0), (8, 14, 0.0), (10, 11, 0.0), (12, 10, 0.1), (13, 9, 0.1), (14, 9, 0.1)];
+        for (n, size, reduction) in measured {
+            let got = fit_like_impress(136.8, 1.417, Some(20.0), &mut |a| n as f64 * (20.0 * a.font_scale).round() * 1.2 * (1.0 - a.line_reduction));
+            assert_eq!((20.0 * got.font_scale).round() as u32, size, "{n} paragraphs: {got:?}");
+            assert!((got.line_reduction - reduction).abs() < 1e-9, "{n} paragraphs: {got:?}");
+        }
+        // Text that fits keeps its sizes and spacing.
+        let fits = fit_like_impress(136.8, 1.417, Some(20.0), &mut |a| 5.0 * 20.0 * a.font_scale * 1.2);
+        assert!(fits.is_identity());
     }
 
     #[test]
