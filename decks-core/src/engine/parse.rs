@@ -52,7 +52,7 @@ use self::geometry::{
     slide_is_hidden, GroupFrame,
 };
 use self::layout::{
-    layout_path_of, layout_theme, parse_color_map, parse_layout_background, read_layout,
+    layout_path_of, layout_theme, parse_color_map, parse_override_color_map, parse_layout_background, read_layout,
     read_layout_placeholders,
 };
 use self::master::{master_shapes, parse_c_sld_name};
@@ -338,7 +338,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // (DCK-006), not the package's first theme part. A chain that names
     // no theme resolves against the default theme.
     let mut themes: std::collections::HashMap<String, Theme> = std::collections::HashMap::new();
-    let mut layout_theme_paths: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
+    let mut layout_theme_paths: std::collections::HashMap<String, (Option<String>, std::collections::BTreeMap<String, String>)> =
+        std::collections::HashMap::new();
     // The retained model themes (`Deck.themes`), in package order, and the
     // theme part path each id was read from: masters that share one part
     // share one entry. Built with the masters below.
@@ -456,6 +457,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             Some(lp) => layout_theme(&mut archive, &mut budget, lp, &mut layout_theme_paths, &mut themes),
             None => (Theme::default(), None),
         };
+        // The slide's own colour map, when it overrides its layout's.
+        let slide_remap = parse_override_color_map(&slide_xml);
+        let slide_theme = if slide_remap.is_empty() { slide_theme } else { slide_theme.with_remap(&slide_remap) };
         let mut objects = Vec::new();
         let mut object_ids: Vec<Option<u32>> = Vec::new();
         let sp_paint = sp_styles(&slide_xml, &slide_theme, scale.x);
@@ -663,6 +667,17 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     background_blip = parse_blip_embed(e);
                                 }
                             }
+                            // A picture saved only as SVG (Office 2016+) names
+                            // its part on `asvg:svgBlip` inside the blip's
+                            // extensions; a PNG fallback on the blip itself,
+                            // when there is one, is kept.
+                            n if n.ends_with(":svgBlip") => {
+                                if let Some(pic) = current_picture.as_mut().filter(|p| p.embed_id.is_none()) {
+                                    pic.embed_id = parse_blip_embed(e);
+                                } else if in_bg_blip && background_blip.is_none() {
+                                    background_blip = parse_blip_embed(e);
+                                }
+                            }
                             "a:srcRect" => {
                                 if let Some(pic) = current_picture.as_mut() {
                                     pic.crop = parse_src_rect(e);
@@ -805,6 +820,17 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         pic.embed_id = Some(embed);
                                     }
                                 } else if in_bg_blip {
+                                    background_blip = parse_blip_embed(e);
+                                }
+                            }
+                            // A picture saved only as SVG (Office 2016+) names
+                            // its part on `asvg:svgBlip` inside the blip's
+                            // extensions; a PNG fallback on the blip itself,
+                            // when there is one, is kept.
+                            n if n.ends_with(":svgBlip") => {
+                                if let Some(pic) = current_picture.as_mut().filter(|p| p.embed_id.is_none()) {
+                                    pic.embed_id = parse_blip_embed(e);
+                                } else if in_bg_blip && background_blip.is_none() {
                                     background_blip = parse_blip_embed(e);
                                 }
                             }
@@ -1173,7 +1199,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     let xml = if lp == layout_path { layout_xml.clone() } else { read_part(&mut archive, &mut budget, lp) };
                     let rels = rels_of(&mut archive, &mut budget, lp);
                     let mut pictures = |id: &str| part_picture(&mut archive, &mut budget, lp, &rels, id);
-                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &resolving, &mut pictures));
+                    // A layout's own colour map recolours its background
+                    // and decorations.
+                    let remap = parse_override_color_map(&xml);
+                    let layout_theme = base_theme.with_remap(if remap.is_empty() { &color_map } else { &remap });
+                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &layout_theme, &mut pictures));
                 }
                 // What this writer wrote for a master with no layouts: one
                 // empty blank layout. It is no layout.

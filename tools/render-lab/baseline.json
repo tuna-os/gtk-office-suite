@@ -67,6 +67,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/section-colour-map-svg": {
+    "A": "green"
+  },
   "decks/shape-effects": {
     "A": "amber"
   },

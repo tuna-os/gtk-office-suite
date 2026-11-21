@@ -64,14 +64,15 @@ pub(super) fn layout_theme(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
     layout_path: &str,
-    theme_path_of: &mut std::collections::HashMap<String, Option<String>>,
+    theme_path_of: &mut std::collections::HashMap<String, (Option<String>, std::collections::BTreeMap<String, String>)>,
     themes: &mut std::collections::HashMap<String, Theme>,
 ) -> (Theme, Option<String>) {
     if !theme_path_of.contains_key(layout_path) {
         let (_, theme) = layout_master_theme_paths(archive, budget, layout_path);
-        theme_path_of.insert(layout_path.to_string(), theme);
+        let layout_xml = archive.optional_part_to_string(layout_path, budget);
+        theme_path_of.insert(layout_path.to_string(), (theme, parse_override_color_map(&layout_xml)));
     }
-    let path = theme_path_of.get(layout_path).and_then(|t| t.clone());
+    let (path, remap) = theme_path_of.get(layout_path).cloned().unwrap_or_default();
     let theme = path
         .as_deref()
         .map(|p| {
@@ -82,7 +83,20 @@ pub(super) fn layout_theme(
             themes.get(p).cloned().unwrap_or_default()
         })
         .unwrap_or_default();
+    // A layout that overrides the master's colour map (a dark section
+    // layout: bg1 = dk1, tx1 = lt1) recolours the slides on it.
+    let theme = if remap.is_empty() { theme } else { theme.with_remap(&remap) };
     (theme, path)
+}
+
+/// A layout's or slide's own colour map (`p:clrMapOvr/a:overrideClrMapping`),
+/// over the master's. Empty for `a:masterClrMapping` or none: the part
+/// follows the colour map above it.
+pub(super) fn parse_override_color_map(xml: &str) -> std::collections::BTreeMap<String, String> {
+    let Some(at) = xml.find("<a:overrideClrMapping") else { return Default::default() };
+    let tag = &xml[at..];
+    let end = tag.find('>').map_or(tag.len(), |e| e + 1);
+    parse_color_map(&tag[..end].replacen("<a:overrideClrMapping", "<p:clrMap", 1))
 }
 
 /// A master part's colour map (`p:clrMap`): presentation names (`bg1`,

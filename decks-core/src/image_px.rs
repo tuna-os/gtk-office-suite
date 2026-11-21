@@ -44,7 +44,7 @@ pub fn media_type(path: &str) -> (&'static str, &'static str) {
     media_type_for_extension(path)
         .or_else(|| {
             use std::io::Read;
-            let mut head = [0u8; 16];
+            let mut head = [0u8; 512];
             let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).ok()?;
             media_type_for_bytes(&head[..n])
         })
@@ -65,8 +65,15 @@ fn media_type_for_extension(path: &str) -> Option<(&'static str, &'static str)> 
     })
 }
 
+/// SVG text: an `<svg` root, after an XML declaration or comment if any.
+fn is_svg(b: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(b);
+    let t = text.trim_start_matches('\u{feff}').trim_start();
+    t.starts_with("<svg") || ((t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg"))
+}
+
 /// The format a file's first bytes announce, for the formats above
-/// whose files start with a signature (SVG, being text, does not).
+/// whose files start with a signature, and SVG by its root element.
 fn media_type_for_bytes(b: &[u8]) -> Option<(&'static str, &'static str)> {
     Some(if b.starts_with(b"\x89PNG\r\n\x1a\n") {
         ("png", "image/png")
@@ -80,6 +87,8 @@ fn media_type_for_bytes(b: &[u8]) -> Option<(&'static str, &'static str)> {
         ("bmp", "image/bmp")
     } else if b.starts_with(b"II*\0") || b.starts_with(b"MM\0*") {
         ("tiff", "image/tiff")
+    } else if is_svg(b) {
+        ("svg", "image/svg+xml")
     } else {
         return None;
     })
@@ -110,5 +119,14 @@ mod tests {
         let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 17, 8, 0x01, 0x2C, 0x01, 0x90];
         assert_eq!(pixel_size(&jpeg), Some((400, 300)));
         assert_eq!(pixel_size(b"not an image"), None);
+    }
+
+    #[test]
+    fn svg_text_is_named_svg_not_png() {
+        use super::media_type_for_bytes;
+        let svg = br#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"/>"#;
+        assert_eq!(media_type_for_bytes(svg), Some(("svg", "image/svg+xml")));
+        assert_eq!(media_type_for_bytes(b"<svg/>"), Some(("svg", "image/svg+xml")));
+        assert_eq!(media_type_for_bytes(b"<html>"), None);
     }
 }
