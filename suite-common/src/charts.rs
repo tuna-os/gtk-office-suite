@@ -670,7 +670,7 @@ fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], 
     let slot = (bottom - top_y) / count as f64;
     let n = if opts.stacked { 1.0 } else { series.len() as f64 };
     let bar_h = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
-    for i in 0..categories.len() {
+    for (i, lines) in wrapped.iter().enumerate() {
         let row = if opts.reversed { i } else { count - 1 - i };
         let start = top_y + row as f64 * slot + (slot - n * bar_h) / 2.0;
         let mut base = 0.0;
@@ -697,7 +697,6 @@ fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], 
                 }
             }
         }
-        let lines = &wrapped[i];
         let first = top_y + row as f64 * slot + slot / 2.0 - (lines.len() as f64 - 1.0) * line_h / 2.0 + line_h * 0.3;
         for (j, line) in lines.iter().enumerate().filter(|_| !opts.hide_category_axis) {
             show(cr, left - 8.0 - text_w(cr, line), first + j as f64 * line_h, line);
