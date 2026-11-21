@@ -1014,7 +1014,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .map(|t| part_path(&slide_dir.to_string_lossy(), t))
                                     .map(|p| archive.optional_part_to_string(&p, &mut budget))
                                     .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
-                                if let Some(chart) = chart {
+                                if let Some(mut chart) = chart {
+                                    // Its text size onto the model's slide,
+                                    // as every run's is: a 9 pt label on a
+                                    // 13.33-inch deck is 6.75 pt here.
+                                    chart.text_size = chart.text_size.map(|v| ((v as f64) * scale.text_factor()).round().max(1.0) as u32);
                                     objects.push(SlideObject::Chart {
                                         x: c.x * scale.x,
                                         y: c.y * scale.y,
