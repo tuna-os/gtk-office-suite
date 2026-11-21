@@ -238,7 +238,10 @@ fn raw_paragraph_props(path: &str) -> RawParas {
                     }
                     "w:txbxContent" => txbx_depth += 1,
                     "w:tabs" => in_tabs = true,
-                    "w:checkBox" => {
+                    // A text box's checkboxes are not its paragraph's: the
+                    // reader matches them to that paragraph's fields by
+                    // position.
+                    "w:checkBox" if txbx_depth == 0 => {
                         if let Some(last) = last_mut(&mut out, list) {
                             last.checks.push((None, None));
                             in_checkbox = true;
@@ -311,7 +314,7 @@ fn raw_paragraph_props(path: &str) -> RawParas {
                             out.sections.push(RawSection { para, ..Default::default() });
                         }
                     }
-                    "w:checkBox" => {
+                    "w:checkBox" if txbx_depth == 0 => {
                         if let Some(last) = last_mut(&mut out, list) {
                             last.checks.push((None, None));
                         }
