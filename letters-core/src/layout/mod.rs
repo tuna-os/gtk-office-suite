@@ -1397,6 +1397,12 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     let rule_pt = if ruled { doc.table_rule_widths.get(&first.table).copied().unwrap_or(CELL_RULE_PT) } else { 0.0 };
     let opts = flow.opts.clone();
     flow.y += std::mem::take(&mut flow.pending_after);
+    // A row's height holds the rule under it; the table's top rule stands
+    // above its first row, as Writer stands a cell's text its top border's
+    // width below the border. Without it every ruled table's text sat a
+    // rule higher than Writer's, and a page of tables gained the room for
+    // a line LibreOffice moves to the next page.
+    flow.y += rule_pt;
 
     let mut tall: Vec<Tall> = Vec::new();
 

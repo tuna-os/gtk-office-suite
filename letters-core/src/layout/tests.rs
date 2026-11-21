@@ -384,13 +384,14 @@ fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
     assert!(tall > LINE * 2.0, "the long cell wraps: {tall}");
     assert_eq!(cells[3].5, LINE + CELL_RULE_PT, "a one-line row is its line plus a rule");
     assert!(cells[..3].iter().all(|c| c.5 == tall), "the whole row takes the tallest cell's height");
-    assert_eq!(cells[3].3, 72.0 + tall, "row two starts below row one");
+    assert_eq!(cells[0].3, 72.0 + CELL_RULE_PT, "the table's top rule stands above its first row, as in Writer");
+    assert_eq!(cells[3].3, 72.0 + CELL_RULE_PT + tall, "row two starts below row one");
     // The paragraph after the table starts below it.
     let after = t.pages[0].items.iter().find_map(|i| match i {
         Item::Line { text, top_pt, .. } if text == "after" => Some(*top_pt),
         _ => None,
     });
-    assert_eq!(after, Some(72.0 + tall + LINE + CELL_RULE_PT), "below both rows");
+    assert_eq!(after, Some(72.0 + CELL_RULE_PT + tall + LINE + CELL_RULE_PT), "below both rows");
 }
 
 /// A table is drawn with the file's column widths: a narrow number column
