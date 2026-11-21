@@ -954,8 +954,9 @@ pub struct ChartSeries {
 }
 
 /// A picture floating over a sheet (`xdr:pic` in a drawing part), as it
-/// was read: drawn over the cells, but not yet written back on save (the
-/// package scan reports it as a loss).
+/// was read: drawn over the cells and written back on save at the same
+/// anchor, offset and size. Pictures the reader skips (hidden, grouped,
+/// not PNG/JPEG/GIF) and shapes are not kept; the package scan says so.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SheetPicture {
     /// The cell its top-left corner sits in, (row, col).

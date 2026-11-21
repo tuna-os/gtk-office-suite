@@ -477,9 +477,9 @@ pub fn save_sheets_to_xlsx_bytes(
             let Ok(image) = rust_xlsxwriter::Image::new_from_buffer(&pic.data) else { continue };
             let image = image.set_scale_to_size(pic.width_px.max(1.0), pic.height_px.max(1.0), false);
             let (dx, dy) = (pic.offset_px.0.max(0.0).round() as u32, pic.offset_px.1.max(0.0).round() as u32);
-            sheet
-                .insert_image_with_offset(pic.anchor.0 as u32, pic.anchor.1 as u16, &image, dx, dy)
-                .map_err(|e| format!("Picture error: {e}"))?;
+            // Left out, as an unreadable one is, rather than failing the
+            // whole save over a picture (a cell past the sheet's limits).
+            let _ = sheet.insert_image_with_offset(pic.anchor.0 as u32, pic.anchor.1 as u16, &image, dx, dy);
         }
 
         for ch in &sh.charts {
