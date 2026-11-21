@@ -162,19 +162,68 @@ fn shapes_of(drawing: &str) -> Option<String> {
     let open = drawing.find("<dsp:spTree")?;
     let body_start = open + drawing[open..].find('>')? + 1;
     let body_end = drawing.rfind("</dsp:spTree>")?;
-    let mut body = drawing[body_start..body_end].to_string();
-    while let Some(s) = body.find("<dsp:txXfrm") {
-        let e = match body[s..].find("</dsp:txXfrm>") {
-            Some(n) => s + n + "</dsp:txXfrm>".len(),
-            None => s + body[s..].find("/>")? + 2,
-        };
-        body.replace_range(s..e, "");
+    let mut body = String::new();
+    let mut rest = &drawing[body_start..body_end];
+    // Each shape's text rectangle (dsp:txXfrm) as insets on its text, then
+    // dropped: its offset and size would otherwise read as the shape's.
+    while let Some(s) = rest.find("<dsp:sp ").or_else(|| rest.find("<dsp:sp>")) {
+        let e = s + rest[s..].find("</dsp:sp>")? + "</dsp:sp>".len();
+        body.push_str(&rest[..s]);
+        body.push_str(&text_rect_as_insets(&rest[s..e]));
+        rest = &rest[e..];
     }
+    body.push_str(rest);
     // The tree's own group properties are not a shape.
     for el in ["nvGrpSpPr", "grpSpPr"] {
         strip_leading(&mut body, el);
     }
     Some(body.replace("<dsp:", "<p:").replace("</dsp:", "</p:"))
+}
+
+/// A drawing shape `sp` with its text rectangle (`dsp:txXfrm`) turned into
+/// its body's insets: PowerPoint lays a diagram shape's text out in that
+/// rectangle, which may sit well inside the shape (a label beside an icon,
+/// an arc's caption off to one side). The rectangle is then removed.
+fn text_rect_as_insets(sp: &str) -> String {
+    let Some(t) = sp.find("<dsp:txXfrm") else { return sp.to_string() };
+    let end = match (sp[t..].find("</dsp:txXfrm>"), sp[t..].find("/>")) {
+        (Some(n), _) => t + n + "</dsp:txXfrm>".len(),
+        (None, Some(n)) => t + n + 2,
+        (None, None) => return sp.to_string(),
+    };
+    let rect = |xml: &str| -> Option<(f64, f64, f64, f64)> {
+        let n = |el: &str, k: &str| attr_in(xml, el, k).and_then(|v| v.parse::<f64>().ok());
+        Some((n("a:off", "x")?, n("a:off", "y")?, n("a:ext", "cx")?, n("a:ext", "cy")?))
+    };
+    let tx_xml = &sp[t..end];
+    let shape = sp.find("<dsp:spPr").and_then(|p| sp[p..].find("</dsp:spPr>").map(|q| &sp[p..p + q])).and_then(rect);
+    let mut out = format!("{}{}", &sp[..t], &sp[end..]);
+    // A turned text rectangle is not a plain inset; keep the shape's box.
+    let turned = attr_in(tx_xml, "dsp:txXfrm", "rot").is_some_and(|r| r != "0");
+    let (Some((x, y, w, h)), Some((tx, ty, tw, th)), false) = (shape, rect(tx_xml), turned) else { return out };
+    let delta = [(tx - x), (ty - y), (x + w - tx - tw), (y + h - ty - th)].map(|d| d.max(0.0));
+    let Some(b) = out.find("<a:bodyPr") else { return out };
+    let tag_end = b + out[b..].find('>').unwrap_or(0);
+    let tag = &out[b..tag_end];
+    let own = |k: &str, d: f64| attr(tag, k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
+    let insets = [("lIns", own("lIns", 91440.0) + delta[0]), ("tIns", own("tIns", 45720.0) + delta[1]), ("rIns", own("rIns", 91440.0) + delta[2]), ("bIns", own("bIns", 45720.0) + delta[3])];
+    // The tag without its own insets, then the combined ones.
+    let mut new_tag = tag.to_string();
+    for (k, _) in insets {
+        if let Some(v) = attr(&new_tag, k) {
+            new_tag = new_tag.replacen(&format!(" {k}=\"{v}\""), "", 1);
+        }
+    }
+    let self_closing = new_tag.ends_with('/');
+    let mut new_tag = new_tag.trim_end_matches('/').to_string();
+    for (k, v) in insets {
+        new_tag.push_str(&format!(" {k}=\"{}\"", v.round() as i64));
+    }
+    if self_closing {
+        new_tag.push('/');
+    }
+    out.replace_range(b..tag_end, &new_tag);
+    out
 }
 
 /// Remove element `dsp:<el>` (empty or with content) if `body` starts
@@ -235,6 +284,19 @@ mod tests {
         assert_eq!(inline(&slide, RELS, "ppt/slides", |_| String::new()).0, slide);
         let table = r#"<p:spTree><p:graphicFrame><a:tbl/></p:graphicFrame></p:spTree>"#;
         assert_eq!(inline(table, RELS, "ppt/slides", read).0, table);
+    }
+
+    /// A diagram shape's text rectangle becomes its text's insets: here
+    /// 5 EMU in from the left and top, 5 from the right and bottom, over
+    /// the body's own defaults.
+    #[test]
+    fn a_text_rectangle_becomes_the_texts_insets() {
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:bodyPr lIns="91445" tIns="45725" rIns="91445" bIns="45725"/>"#), "{out}");
+        let turned = DRAWING.replace("<dsp:txXfrm>", r#"<dsp:txXfrm rot="5400000">"#);
+        let read_turned = |name: &str| if name == "ppt/diagrams/drawing1.xml" { turned.clone() } else { read(name) };
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read_turned);
+        assert!(out.contains("<a:bodyPr/>") && !out.contains("txXfrm"), "a turned rectangle is dropped, not inset: {out}");
     }
 
     #[test]
