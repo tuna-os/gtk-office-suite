@@ -2807,3 +2807,36 @@ fn a_cells_own_border_colour_wins_over_its_tables() {
     assert!(!rt.table_unruled.contains(&id), "ruled");
     assert_eq!(rt.table_rule_colors.get(&id), None, "black, as its cells say: {:?}", rt.table_rule_colors);
 }
+
+/// A list item in a table cell resolves its indent as one in the body
+/// does: its own `w:ind w:left="405"` over its level's 0.5in, so its text
+/// stands at 405 twips. It kept the raw left, and the layout added the
+/// list's indent on top: the outside-appointments decision's numbers stood
+/// 24 px right of Word's and Writer's.
+#[test]
+fn a_list_item_in_a_cell_keeps_its_own_indent() {
+    let mut d = Document::from_plain_text("after");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    d.insert_table_at(0, 1, 1);
+    let doctored = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").expect("a numbering part");
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"93\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/>\
+             <w:pPr><w:ind w:left=\"720\" w:hanging=\"360\"/></w:pPr></w:lvl></w:abstractNum>",
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"93\"><w:abstractNumId w:val=\"93\"/></w:num></w:numbering>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("<w:tc>").expect("a cell") + "<w:tc>".len();
+        let end = at + body[at..].find("</w:tc>").unwrap();
+        body.replace_range(
+            at..end,
+            "<w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"93\"/></w:numPr><w:ind w:left=\"405\"/></w:pPr><w:r><w:t>Do not lobby</w:t></w:r></w:p>",
+        );
+    });
+    let item = doctored.paragraphs.iter().find(|p| p.style.table_cell.is_some()).expect("the cell");
+    assert_eq!(item.style.list, ListKind::Numbered);
+    let text_at = item.style.left_indent_pt + letters_core::lists::text_indent_pt(0);
+    assert!((text_at - 20.25).abs() < 0.01, "text at its own 405 twips: {text_at}");
+}
