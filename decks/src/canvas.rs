@@ -1,11 +1,11 @@
 // canvas.rs — Slide canvas rendering and image loading.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use decks_core::engine::Run;
-use decks_core::engine::{BackgroundPicture, MasterSlide, Slide, SlideObject};
 use gtk4::cairo;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use decks_core::engine::{BackgroundPicture, Slide, SlideObject, MasterSlide};
+use decks_core::engine::Run;
 
 // ── Image loading with cache ─────────────────────────────────────────
 
@@ -45,16 +45,8 @@ fn mean_rgb(path: &str, surf: &cairo::ImageSurface) -> Option<(f64, f64, f64)> {
         for x in 0..N as usize {
             // Opaque ARGB32: BGRA in memory on little-endian.
             let px = &data[y * stride + x * 4..y * stride + x * 4 + 4];
-            let (b, g, r) = if cfg!(target_endian = "little") {
-                (px[0], px[1], px[2])
-            } else {
-                (px[3], px[2], px[1])
-            };
-            sum = (
-                sum.0 + f64::from(r),
-                sum.1 + f64::from(g),
-                sum.2 + f64::from(b),
-            );
+            let (b, g, r) = if cfg!(target_endian = "little") { (px[0], px[1], px[2]) } else { (px[3], px[2], px[1]) };
+            sum = (sum.0 + f64::from(r), sum.1 + f64::from(g), sum.2 + f64::from(b));
         }
     }
     let n = f64::from(N * N) * 255.0;
@@ -68,16 +60,9 @@ fn mean_rgb(path: &str, surf: &cairo::ImageSurface) -> Option<(f64, f64, f64)> {
 /// Impress stretch a background picture. Returns its mean colour, which
 /// text over it contrasts with; `None` when the picture cannot be loaded
 /// (the background colour under it then stays what is seen).
-pub fn draw_background_picture(
-    cr: &cairo::Context,
-    picture: &BackgroundPicture,
-    (ox, oy, w, h): (f64, f64, f64, f64),
-) -> Option<(f64, f64, f64)> {
+pub fn draw_background_picture(cr: &cairo::Context, picture: &BackgroundPicture, (ox, oy, w, h): (f64, f64, f64, f64)) -> Option<(f64, f64, f64)> {
     let surf = load_image(&picture.path)?;
-    let (iw, ih) = (
-        f64::from(surf.width()).max(1.0),
-        f64::from(surf.height()).max(1.0),
-    );
+    let (iw, ih) = (f64::from(surf.width()).max(1.0), f64::from(surf.height()).max(1.0));
     let (px, py, pw, ph) = picture.fill.place(ox, oy, w, h);
     cr.save().ok()?;
     cr.rectangle(ox, oy, w, h);
@@ -92,32 +77,22 @@ pub fn draw_background_picture(
         cr.fill().is_ok()
     };
     cr.restore().ok()?;
-    if painted {
-        mean_rgb(&picture.path, &surf)
-    } else {
-        None
-    }
+    if painted { mean_rgb(&picture.path, &surf) } else { None }
 }
 
 pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     let cached = IMAGE_CACHE.with(|cache| cache.borrow().get(path).cloned());
-    if let Some(surf) = cached {
-        return Some(surf);
-    }
+    if let Some(surf) = cached { return Some(surf); }
     if path.ends_with(".png") {
         if let Ok(mut file) = std::fs::File::open(path) {
             if let Ok(surf) = cairo::ImageSurface::create_from_png(&mut file) {
-                IMAGE_CACHE.with(|c| {
-                    c.borrow_mut().insert(path.to_string(), surf.clone());
-                });
+                IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surf.clone()); });
                 return Some(surf);
             }
         }
     }
     if let Some(surf) = load_svg(path) {
-        IMAGE_CACHE.with(|c| {
-            c.borrow_mut().insert(path.to_string(), surf.clone());
-        });
+        IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surf.clone()); });
         return Some(surf);
     }
     // Sniff the format from the bytes: images extracted from a pptx are
@@ -125,16 +100,10 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     // extension came from the untrusted document), and `image::open`
     // guesses by extension only, so every imported picture failed to load
     // and was drawn as the `<image>` placeholder (render lab `decks/image`).
-    let img = image::ImageReader::open(path)
-        .ok()?
-        .with_guessed_format()
-        .ok()?
-        .decode()
-        .ok()?;
+    let img = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok()?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut surface =
-        cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).ok()?;
+    let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).ok()?;
     {
         // Cairo's ARGB32 is premultiplied, native-endian (BGRA in memory
         // on little-endian), with a row stride that can exceed w * 4.
@@ -153,9 +122,7 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
         }
     }
     surface.flush();
-    IMAGE_CACHE.with(|c| {
-        c.borrow_mut().insert(path.to_string(), surface.clone());
-    });
+    IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surface.clone()); });
     Some(surface)
 }
 
@@ -170,9 +137,7 @@ fn load_svg(path: &str) -> Option<cairo::ImageSurface> {
     let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
     let text = String::from_utf8_lossy(&head[..n]);
     let t = text.trim_start_matches('\u{feff}').trim_start();
-    if !(t.starts_with("<svg")
-        || (t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg"))
-    {
+    if !(t.starts_with("<svg") || (t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg")) {
         return None;
     }
     let (_, w, h) = gtk4::gdk_pixbuf::Pixbuf::file_info(path)?;
@@ -180,13 +145,9 @@ fn load_svg(path: &str) -> Option<cairo::ImageSurface> {
     // The long side at 2048 px: an icon drawn small, or artwork filling a
     // slide, both stay crisp, and memory stays bounded.
     let k = 2048.0 / w.max(h);
-    let (pw, ph) = (
-        (w * k).round().max(1.0) as i32,
-        (h * k).round().max(1.0) as i32,
-    );
+    let (pw, ph) = ((w * k).round().max(1.0) as i32, (h * k).round().max(1.0) as i32);
     let pixbuf = gtk4::gdk_pixbuf::Pixbuf::from_file_at_scale(path, pw, ph, true).ok()?;
-    let surface =
-        cairo::ImageSurface::create(cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
     {
         let cr = cairo::Context::new(&surface).ok()?;
         cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
@@ -214,12 +175,7 @@ pub fn slide_geometry(canvas_w: f64, canvas_h: f64) -> (f64, f64, f64, f64) {
     let scale = (canvas_w / 960.0).min(canvas_h / 540.0).max(0.05) * 0.92;
     let slide_w = 960.0 * scale;
     let slide_h = 540.0 * scale;
-    (
-        (canvas_w - slide_w) / 2.0,
-        (canvas_h - slide_h) / 2.0,
-        slide_w,
-        slide_h,
-    )
+    ((canvas_w - slide_w) / 2.0, (canvas_h - slide_h) / 2.0, slide_w, slide_h)
 }
 
 // ── Coordinate conversion ────────────────────────────────────────────
@@ -256,9 +212,7 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
             }
             // The true outline: a click in an ellipse's bounding-box
             // corner is not a click on the ellipse.
-            SlideObject::Shape {
-                kind, x, y, w, h, ..
-            } => {
+            SlideObject::Shape { kind, x, y, w, h, .. } => {
                 if decks_core::engine::shape::contains(kind, *w, *h, sx - *x, sy - *y) {
                     return Some(oi);
                 }
@@ -268,14 +222,10 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
                     return Some(oi);
                 }
             }
-            SlideObject::Circle {
-                x: cx, y: cy, r, ..
-            } => {
+            SlideObject::Circle { x: cx, y: cy, r, .. } => {
                 let dx = sx - *cx;
                 let dy = sy - *cy;
-                if dx * dx + dy * dy <= *r * *r {
-                    return Some(oi);
-                }
+                if dx * dx + dy * dy <= *r * *r { return Some(oi); }
             }
         }
     }
@@ -302,10 +252,8 @@ pub const HANDLE_SIZE: f64 = 8.0;
 /// Returns handle hit under canvas coords (cx, cy) if within threshold of object's handles.
 pub fn hit_test_handles(
     obj: &SlideObject,
-    cx: f64,
-    cy: f64,
-    canvas_w: f64,
-    canvas_h: f64,
+    cx: f64, cy: f64,
+    canvas_w: f64, canvas_h: f64,
 ) -> Option<SelectionHandle> {
     let (ox, oy, slide_w, slide_h) = slide_geometry(canvas_w, canvas_h);
     let (x, y, w, h) = decks_core::undo::obj_bounds(obj);
@@ -347,14 +295,7 @@ pub fn hit_test_handles(
     None
 }
 
-pub fn draw_handles(
-    cr: &cairo::Context,
-    sx: f64,
-    sy: f64,
-    sw: f64,
-    sh: f64,
-    accent: (f64, f64, f64),
-) {
+pub fn draw_handles(cr: &cairo::Context, sx: f64, sy: f64, sw: f64, sh: f64, accent: (f64, f64, f64)) {
     let (ar, ag, ab) = accent;
 
     // Bounding stroke
@@ -441,10 +382,7 @@ pub fn master_for<'a>(
         Some(id) => masters.iter().find(|m| m.id == id)?,
         None => masters.first()?,
     };
-    let own_look = slide
-        .layout_id
-        .and_then(|lid| m.layouts.iter().find(|l| l.id == lid))
-        .is_some_and(|l| l.background.is_some() || !l.shapes.is_empty());
+    let own_look = slide.layout_id.and_then(|lid| m.layouts.iter().find(|l| l.id == lid)).is_some_and(|l| l.background.is_some() || !l.shapes.is_empty());
     Some(if own_look {
         std::borrow::Cow::Owned(decks_core::layouts::effective_master(m, slide.layout_id))
     } else {
@@ -467,9 +405,7 @@ pub fn master_for<'a>(
 /// furniture, not the author's content, and a deck whose master asks for a
 /// display face should not restyle them.
 pub fn master_font_family(master: Option<&MasterSlide>) -> &str {
-    master
-        .map(|m| m.font_family())
-        .unwrap_or(MasterSlide::DEFAULT_FONT)
+    master.map(|m| m.font_family()).unwrap_or(MasterSlide::DEFAULT_FONT)
 }
 
 /// The pango description slide text is drawn with, at `base_pt` points.
@@ -499,7 +435,12 @@ pub fn document_font_description(
 ///
 /// `scale` converts a run's point size to the canvas's current zoom; it is
 /// the same factor the caller used for the layout's base font.
-pub fn set_styled_text(layout: &pango::Layout, text: &str, runs: &[Run], scale: f64) {
+pub fn set_styled_text(
+    layout: &pango::Layout,
+    text: &str,
+    runs: &[Run],
+    scale: f64,
+) {
     if runs.is_empty() {
         layout.set_text(text);
         layout.set_attributes(None);
@@ -529,12 +470,7 @@ pub fn set_styled_text(layout: &pango::Layout, text: &str, runs: &[Run], scale: 
         }
         // The run's own typeface (pptx a:latin, theme fonts resolved; odp
         // fo:font-family). Without it every run took the master's font.
-        if let Some(family) = run
-            .style
-            .font_family
-            .as_deref()
-            .filter(|f| !f.trim().is_empty())
-        {
+        if let Some(family) = run.style.font_family.as_deref().filter(|f| !f.trim().is_empty()) {
             add(pango::AttrString::new_family(family).into());
         }
         if run.style.strikethrough {
@@ -565,11 +501,7 @@ fn hex_rgb16(hex: &str) -> Option<(u16, u16, u16)> {
     if hex.len() != 6 {
         return None;
     }
-    let c = |i: usize| {
-        u8::from_str_radix(&hex[i..i + 2], 16)
-            .ok()
-            .map(|v| v as u16 * 257)
-    };
+    let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok().map(|v| v as u16 * 257);
     Some((c(0)?, c(2)?, c(4)?))
 }
 
@@ -594,36 +526,21 @@ pub fn master_decoration_layout(
     scale: f64,
 ) -> pango::Layout {
     let layout = pangocairo::functions::create_layout(cr);
-    layout.set_font_description(Some(&document_font_description(Some(master), 11.0 * scale)));
+    layout.set_font_description(Some(&document_font_description(
+        Some(master),
+        11.0 * scale,
+    )));
     set_styled_text(&layout, text, runs, scale);
     layout
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    slides: &[Slide],
-    slide: usize,
-    selected: Option<usize>,
-    masters: &[MasterSlide],
-    accent: (f64, f64, f64),
+    cr: &cairo::Context, width: f64, height: f64,
+    slides: &[Slide], slide: usize, selected: Option<usize>,
+    masters: &[MasterSlide], accent: (f64, f64, f64),
 ) {
-    draw_slide_multi(
-        cr,
-        width,
-        height,
-        slides,
-        slide,
-        &selected
-            .into_iter()
-            .collect::<std::collections::HashSet<_>>(),
-        None,
-        masters,
-        accent,
-        None,
-    );
+    draw_slide_multi(cr, width, height, slides, slide, &selected.into_iter().collect::<std::collections::HashSet<_>>(), None, masters, accent, None);
 }
 
 /// What surrounds a slide: the editor's (grey, a shadow and a border, a
@@ -660,38 +577,15 @@ pub fn slide_frame(width: f64, height: f64, chrome: Chrome) -> (f64, f64, f64, f
 
 /// A whole slide as a show presents it: black around it, no editor
 /// marks. Used by the audience and presenter windows.
-pub fn draw_slide_show(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    slides: &[Slide],
-    index: usize,
-    masters: &[MasterSlide],
-) {
+pub fn draw_slide_show(cr: &cairo::Context, width: f64, height: f64, slides: &[Slide], index: usize, masters: &[MasterSlide]) {
     draw_slide_in(cr, width, height, slides, index, masters, Chrome::Show);
 }
 
 /// A whole slide with `chrome` around it, without editor marks.
-pub fn draw_slide_in(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    slides: &[Slide],
-    index: usize,
-    masters: &[MasterSlide],
-    chrome: Chrome,
-) {
+pub fn draw_slide_in(cr: &cairo::Context, width: f64, height: f64, slides: &[Slide], index: usize, masters: &[MasterSlide], chrome: Chrome) {
     let objects: Vec<decks_core::magic_move::FrameObject> = slides
         .get(index)
-        .map(|s| {
-            s.objects
-                .iter()
-                .map(|o| decks_core::magic_move::FrameObject {
-                    object: o.clone(),
-                    opacity: 1.0,
-                })
-                .collect()
-        })
+        .map(|s| s.objects.iter().map(|o| decks_core::magic_move::FrameObject { object: o.clone(), opacity: 1.0 }).collect())
         .unwrap_or_default();
     draw_slide_objects(cr, width, height, slides, index, masters, chrome, &objects);
 }
@@ -742,13 +636,8 @@ pub type SlideFrame = ((f64, f64, f64, f64), (f64, f64, f64));
 /// decorations. Returns the slide's frame on the canvas and the background
 /// colour text contrasts with. Shared by the editor and Magic Move frames.
 pub fn draw_slide_base(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    slides: &[Slide],
-    slide: usize,
-    masters: &[MasterSlide],
-    chrome: Chrome,
+    cr: &cairo::Context, width: f64, height: f64,
+    slides: &[Slide], slide: usize, masters: &[MasterSlide], chrome: Chrome,
 ) -> SlideFrame {
     suite_common::use_ui_font_rendering(cr);
     let (ox, oy, slide_w, slide_h) = slide_frame(width, height, chrome);
@@ -774,10 +663,7 @@ pub fn draw_slide_base(
     if slide < slides.len() {
         let slide_bg = &slides[slide].background;
         let master = master_for(slides, slide, masters);
-        let master_bg = master
-            .as_deref()
-            .map(|m| m.background.as_str())
-            .unwrap_or("");
+        let master_bg = master.as_deref().map(|m| m.background.as_str()).unwrap_or("");
         let bg: &str = decks_core::layouts::resolve_background(slide_bg, None, master_bg);
         let resolved_bg = if bg == "#ffffff" {
             (1.0, 1.0, 1.0)
@@ -786,21 +672,14 @@ pub fn draw_slide_base(
             let g = u8::from_str_radix(&bg[3..5], 16).unwrap_or(255) as f64 / 255.0;
             let b = u8::from_str_radix(&bg[5..7], 16).unwrap_or(255) as f64 / 255.0;
             (r, g, b)
-        } else {
-            (1.0, 1.0, 1.0)
-        };
+        } else { (1.0, 1.0, 1.0) };
         cr.set_source_rgb(resolved_bg.0, resolved_bg.1, resolved_bg.2);
         slide_bg_rgb = resolved_bg;
-    } else {
-        cr.set_source_rgb(1.0, 1.0, 1.0);
-    }
+    } else { cr.set_source_rgb(1.0, 1.0, 1.0); }
     cr.rectangle(ox, oy, slide_w, slide_h);
     cr.fill().unwrap();
     // A picture the slide's background is filled with, over its colour.
-    if let Some(picture) = slides
-        .get(slide)
-        .and_then(|s| s.background_picture.as_ref())
-    {
+    if let Some(picture) = slides.get(slide).and_then(|s| s.background_picture.as_ref()) {
         if let Some(mean) = draw_background_picture(cr, picture, (ox, oy, slide_w, slide_h)) {
             slide_bg_rgb = mean;
         }
@@ -830,13 +709,12 @@ pub fn draw_slide_base(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.fill().unwrap();
                 }
-                SlideObject::TextBox {
-                    text, x, y, runs, ..
-                } => {
+                SlideObject::TextBox { text, x, y, runs, .. } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     cr.set_source_rgba(0.3, 0.3, 0.3, 0.4);
-                    let layout = master_decoration_layout(cr, master, text, runs, slide_w / 960.0);
+                    let layout =
+                        master_decoration_layout(cr, master, text, runs, slide_w / 960.0);
                     cr.move_to(sx + 4.0, sy + 4.0);
                     pangocairo::functions::show_layout(cr, &layout);
                 }
@@ -844,13 +722,7 @@ pub fn draw_slide_base(
                 // carries its own paint, and a picture (a logo, a band of
                 // colour) is itself: drawn as on a slide.
                 SlideObject::Shape { .. } | SlideObject::Image { .. } => {
-                    draw_object(
-                        cr,
-                        obj,
-                        (ox, oy, slide_w, slide_h),
-                        slide_bg_rgb,
-                        Some(master),
-                    );
+                    draw_object(cr, obj, (ox, oy, slide_w, slide_h), slide_bg_rgb, Some(master));
                 }
                 _ => {}
             }
@@ -864,19 +736,9 @@ pub fn draw_slide_base(
 /// An empty layout placeholder, while editing: a dashed outline and its
 /// prompt ("Click to add title"), dimmed. Never drawn in a show, a
 /// thumbnail or an export, which is where an empty box is simply empty.
-fn draw_placeholder_prompt(
-    cr: &cairo::Context,
-    obj: &SlideObject,
-    rect: (f64, f64, f64, f64),
-    scale: f64,
-    bg: (f64, f64, f64),
-) {
-    let SlideObject::TextBox { text, body, .. } = obj else {
-        return;
-    };
-    let Some(role) = body.placeholder.filter(|_| text.is_empty()) else {
-        return;
-    };
+fn draw_placeholder_prompt(cr: &cairo::Context, obj: &SlideObject, rect: (f64, f64, f64, f64), scale: f64, bg: (f64, f64, f64)) {
+    let SlideObject::TextBox { text, body, .. } = obj else { return };
+    let Some(role) = body.placeholder.filter(|_| text.is_empty()) else { return };
     let dark = 0.299 * bg.0 + 0.587 * bg.1 + 0.114 * bg.2 < 0.5;
     let ink = if dark { 1.0 } else { 0.0 };
     let (x, y, w, h) = rect;
@@ -887,11 +749,7 @@ fn draw_placeholder_prompt(
     cr.rectangle(x, y, w, h);
     let _ = cr.stroke();
     let layout = pangocairo::functions::create_layout(cr);
-    let size = if role == decks_core::layouts::Placeholder::Title {
-        28.0
-    } else {
-        18.0
-    };
+    let size = if role == decks_core::layouts::Placeholder::Title { 28.0 } else { 18.0 };
     // The editor's furniture, like the "Slide N" caption: not the author's font.
     let mut desc = pango::FontDescription::from_string("Sans");
     desc.set_absolute_size(size * scale * pango::SCALE as f64);
@@ -916,21 +774,15 @@ pub struct TextPreview {
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide_multi(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    slides: &[Slide],
-    slide: usize,
-    selected_indices: &std::collections::HashSet<usize>,
+    cr: &cairo::Context, width: f64, height: f64,
+    slides: &[Slide], slide: usize, selected_indices: &std::collections::HashSet<usize>,
     marquee: Option<(f64, f64, f64, f64)>,
-    masters: &[MasterSlide],
-    accent: (f64, f64, f64),
+    masters: &[MasterSlide], accent: (f64, f64, f64),
     preview: Option<&TextPreview>,
 ) {
     suite_common::use_ui_font_rendering(cr);
     let (ar, ag, ab) = accent;
-    let ((ox, oy, slide_w, slide_h), slide_bg_rgb) =
-        draw_slide_base(cr, width, height, slides, slide, masters, Chrome::Editor);
+    let ((ox, oy, slide_w, slide_h), slide_bg_rgb) = draw_slide_base(cr, width, height, slides, slide, masters, Chrome::Editor);
 
     // Draw objects
     if slide < slides.len() {
@@ -1020,23 +872,14 @@ pub fn draw_object(
     }
 
     match obj {
-        SlideObject::TextBox {
-            text, runs, body, ..
-        } => {
+        SlideObject::TextBox { text, runs, body, .. } => {
             // The shape the text sits in, under it.
             if let Some(frame) = &body.frame {
-                draw_shape(
-                    cr,
-                    &frame.kind,
-                    &frame.style,
-                    (sx, sy, sw, sh),
-                    slide_w / 960.0,
-                );
+                draw_shape(cr, &frame.kind, &frame.style, (sx, sy, sw, sh), slide_w / 960.0);
             }
             // The colour for runs that name none; runs read from a
             // file carry the colour their styles resolve to.
-            let luminance =
-                0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
+            let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
             if luminance < 0.5 {
                 cr.set_source_rgb(0.95, 0.95, 0.95);
             } else {
@@ -1045,24 +888,9 @@ pub fn draw_object(
             let scale = slide_w / 960.0;
             let desc = document_font_description(master, 18.0 * scale);
             if !body.is_plain() {
-                crate::text_render::draw_text_body(
-                    cr,
-                    text,
-                    runs,
-                    body,
-                    (sx, sy, sw, sh),
-                    scale,
-                    &desc,
-                );
+                crate::text_render::draw_text_body(cr, text, runs, body, (sx, sy, sw, sh), scale, &desc);
             } else {
-                let (layout, (lx, ly)) = crate::text_render::plain_layout(
-                    cr,
-                    text,
-                    runs,
-                    (sx, sy, sw, sh),
-                    scale,
-                    &desc,
-                );
+                let (layout, (lx, ly)) = crate::text_render::plain_layout(cr, text, runs, (sx, sy, sw, sh), scale, &desc);
                 cr.move_to(lx, ly);
                 pangocairo::functions::show_layout(cr, &layout);
             }
@@ -1105,76 +933,43 @@ pub fn draw_object(
                 let colors: Vec<Option<(f64, f64, f64)>> = chart
                     .point_colors
                     .iter()
-                    .map(|c| {
-                        c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0))
-                    })
+                    .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
                     .collect();
                 let series_colors: Vec<Option<(f64, f64, f64)>> = chart
                     .series_colors
                     .iter()
-                    .map(|c| {
-                        c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0))
-                    })
+                    .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
                     .collect();
-                let opts =
-                    suite_common::charts::Options {
-                        stacked: chart.stacked,
-                        labels: chart.labels,
-                        hide_value_axis: chart.hide_value_axis,
-                        hole: chart.hole as f64 / 100.0,
-                        point_colors: &colors,
-                        no_legend: chart.no_legend,
-                        transparent: chart.transparent,
-                        horizontal: chart.horizontal,
-                        reversed: chart.reversed,
-                        percent: chart.percent,
-                        text_color: chart.text_color.map(|[r, g, b]| {
-                            (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)
-                        }),
-                        // Hundredths of a point; the chart is drawn in the
-                        // slide's own units, which are points.
-                        text_px: chart.text_size.map(|v| v as f64 / 100.0),
-                        series_colors: &series_colors,
-                        gap: chart.gap.map(f64::from),
-                        hide_category_axis: chart.hide_category_axis,
-                        title: chart.title.as_ref().map(|t| t.text.as_str()),
-                        title_px: chart
-                            .title
-                            .as_ref()
-                            .and_then(|t| t.size)
-                            .map(|v| v as f64 / 100.0),
-                        title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
-                        title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| {
-                            (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)
-                        }),
-                    };
-                suite_common::charts::draw_chart_with(
-                    cr,
-                    &categories,
-                    &series,
-                    chart.kind,
-                    w,
-                    h,
-                    &opts,
-                );
+                let opts = suite_common::charts::Options {
+                    stacked: chart.stacked,
+                    labels: chart.labels,
+                    hide_value_axis: chart.hide_value_axis,
+                    hole: chart.hole as f64 / 100.0,
+                    point_colors: &colors,
+                    no_legend: chart.no_legend,
+                    transparent: chart.transparent,
+                    horizontal: chart.horizontal,
+                    reversed: chart.reversed,
+                    percent: chart.percent,
+                    text_color: chart.text_color.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                    // Hundredths of a point; the chart is drawn in the
+                    // slide's own units, which are points.
+                    text_px: chart.text_size.map(|v| v as f64 / 100.0),
+                    series_colors: &series_colors,
+                    gap: chart.gap.map(f64::from),
+                    hide_category_axis: chart.hide_category_axis,
+                    title: chart.title.as_ref().map(|t| t.text.as_str()),
+                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0),
+                    title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
+                    title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                };
+                suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {
-                suite_common::charts::draw_chart(
-                    cr,
-                    &chart.points,
-                    chart.kind,
-                    w,
-                    h,
-                    chart.legend(),
-                );
+                suite_common::charts::draw_chart(cr, &chart.points, chart.kind, w, h, chart.legend());
             }
             cr.restore().unwrap();
         }
-        SlideObject::Circle {
-            x: cx_slide,
-            y: cy_slide,
-            r: r_slide,
-            ..
-        } => {
+        SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
             let cx = ox + (cx_slide / 960.0) * slide_w;
             let cy = oy + (cy_slide / 540.0) * slide_h;
             let radius = (r_slide / 540.0) * slide_h;
@@ -1186,8 +981,7 @@ pub fn draw_object(
             if let Some(img_surf) = load_image(path) {
                 // What PowerPoint and Impress draw: the part of the source
                 // the crop leaves, stretched to the picture's box.
-                let (cx, cy, cw, ch) =
-                    crop.source_rect(img_surf.width() as f64, img_surf.height() as f64);
+                let (cx, cy, cw, ch) = crop.source_rect(img_surf.width() as f64, img_surf.height() as f64);
                 // A picture with no area, or cropped to none, draws nothing:
                 // its scale would be 0 or infinite, which Cairo refuses.
                 if [sw, sh, cw, ch].iter().all(|v| v.is_finite() && *v > 0.0) {
@@ -1209,10 +1003,7 @@ pub fn draw_object(
                 cr.set_font_size(11.0);
                 let txt = "<image>";
                 let ext = cr.text_extents(txt).unwrap();
-                cr.move_to(
-                    sx + (sw - ext.width()) / 2.0,
-                    sy + (sh + ext.height()) / 2.0,
-                );
+                cr.move_to(sx + (sw - ext.width()) / 2.0, sy + (sh + ext.height()) / 2.0);
                 cr.show_text(txt).unwrap();
             }
         }
@@ -1226,15 +1017,7 @@ pub fn draw_object(
 fn text_box_frame(obj: &SlideObject, frame: (f64, f64, f64, f64)) -> ((f64, f64, f64, f64), f64) {
     let (ox, oy, slide_w, slide_h) = frame;
     let (x, y, w, h) = decks_core::undo::obj_bounds(obj);
-    (
-        (
-            ox + (x / 960.0) * slide_w,
-            oy + (y / 540.0) * slide_h,
-            (w / 960.0) * slide_w,
-            (h / 540.0) * slide_h,
-        ),
-        obj.rotation(),
-    )
+    ((ox + (x / 960.0) * slide_w, oy + (y / 540.0) * slide_h, (w / 960.0) * slide_w, (h / 540.0) * slide_h), obj.rotation())
 }
 
 /// The caret (a bar) or selection (a tint) of a text box being edited,
@@ -1247,12 +1030,7 @@ fn draw_text_range(
     range: (usize, usize),
     (ar, ag, ab): (f64, f64, f64),
 ) {
-    let SlideObject::TextBox {
-        text, runs, body, ..
-    } = obj
-    else {
-        return;
-    };
+    let SlideObject::TextBox { text, runs, body, .. } = obj else { return };
     let (rect, rot) = text_box_frame(obj, frame);
     let (sx, sy, sw, sh) = rect;
     let _ = cr.save();
@@ -1279,18 +1057,8 @@ fn draw_text_range(
 /// The byte offset in text box `obj`'s text under the canvas point
 /// `(cx, cy)`, the box drawn in the slide `frame`: where a double-click
 /// puts the caret. A rotated box is measured in its own frame.
-pub fn text_offset_at(
-    obj: &SlideObject,
-    frame: (f64, f64, f64, f64),
-    master: Option<&MasterSlide>,
-    (cx, cy): (f64, f64),
-) -> Option<usize> {
-    let SlideObject::TextBox {
-        text, runs, body, ..
-    } = obj
-    else {
-        return None;
-    };
+pub fn text_offset_at(obj: &SlideObject, frame: (f64, f64, f64, f64), master: Option<&MasterSlide>, (cx, cy): (f64, f64)) -> Option<usize> {
+    let SlideObject::TextBox { text, runs, body, .. } = obj else { return None };
     let (rect, rot) = text_box_frame(obj, frame);
     let (sx, sy, sw, sh) = rect;
     let (mx, my) = (sx + sw / 2.0, sy + sh / 2.0);
@@ -1302,21 +1070,13 @@ pub fn text_offset_at(
     suite_common::use_ui_font_rendering(&cr);
     let scale = frame.2 / 960.0;
     let desc = document_font_description(master, 18.0 * scale);
-    Some(crate::text_render::offset_at(
-        &cr, text, runs, body, rect, scale, &desc, point,
-    ))
+    Some(crate::text_render::offset_at(&cr, text, runs, body, rect, scale, &desc, point))
 }
 
 /// Smart guides (decks_core::guides) in the accent colour: solid lines
 /// for alignment, and for equal spacing and matched sizes a line with end
 /// ticks across each measured gap or side.
-pub fn draw_guides(
-    cr: &cairo::Context,
-    width: f64,
-    height: f64,
-    guides: &[decks_core::guides::Guide],
-    accent: (f64, f64, f64),
-) {
+pub fn draw_guides(cr: &cairo::Context, width: f64, height: f64, guides: &[decks_core::guides::Guide], accent: (f64, f64, f64)) {
     use decks_core::guides::GuideKind;
     if guides.is_empty() {
         return;
@@ -1355,12 +1115,7 @@ pub fn draw_guides(
 }
 
 /// Handles for a single selection, an outline for one of several.
-fn draw_selection(
-    cr: &cairo::Context,
-    count: usize,
-    rect: (f64, f64, f64, f64),
-    accent: (f64, f64, f64),
-) {
+fn draw_selection(cr: &cairo::Context, count: usize, rect: (f64, f64, f64, f64), accent: (f64, f64, f64)) {
     let (sx, sy, sw, sh) = rect;
     if count == 1 {
         draw_handles(cr, sx, sy, sw, sh, accent);
@@ -1482,13 +1237,7 @@ pub fn draw_shape(
 /// half the radius, as DrawingML's `blurRad` and LibreOffice draw it), then
 /// painted through in the colour. False, with nothing painted, when the
 /// mask would be too big to blur.
-fn blurred(
-    cr: &cairo::Context,
-    blur: f64,
-    filled: bool,
-    stroke: Option<f64>,
-    (r, g, b, a): (f64, f64, f64, f64),
-) -> bool {
+fn blurred(cr: &cairo::Context, blur: f64, filled: bool, stroke: Option<f64>, (r, g, b, a): (f64, f64, f64, f64)) -> bool {
     let m = cr.matrix();
     // The radius in device pixels, along the context's scale.
     let dev_blur = blur * (m.xx() * m.yy() - m.xy() * m.yx()).abs().sqrt();
@@ -1500,41 +1249,17 @@ fn blurred(
     }
     let corners = [(x1, y1), (x2, y1), (x1, y2), (x2, y2)].map(|(x, y)| cr.user_to_device(x, y));
     let pad = (2.0 * dev_blur).ceil() + 2.0;
-    let bx = corners
-        .iter()
-        .map(|c| c.0)
-        .fold(f64::INFINITY, f64::min)
-        .floor()
-        - pad;
-    let by = corners
-        .iter()
-        .map(|c| c.1)
-        .fold(f64::INFINITY, f64::min)
-        .floor()
-        - pad;
-    let ex = corners
-        .iter()
-        .map(|c| c.0)
-        .fold(f64::NEG_INFINITY, f64::max)
-        .ceil()
-        + pad;
-    let ey = corners
-        .iter()
-        .map(|c| c.1)
-        .fold(f64::NEG_INFINITY, f64::max)
-        .ceil()
-        + pad;
+    let bx = corners.iter().map(|c| c.0).fold(f64::INFINITY, f64::min).floor() - pad;
+    let by = corners.iter().map(|c| c.1).fold(f64::INFINITY, f64::min).floor() - pad;
+    let ex = corners.iter().map(|c| c.0).fold(f64::NEG_INFINITY, f64::max).ceil() + pad;
+    let ey = corners.iter().map(|c| c.1).fold(f64::NEG_INFINITY, f64::max).ceil() + pad;
     let (w, h) = (ex - bx, ey - by);
     if !(w > 0.0 && h > 0.0 && w * h <= 16_000_000.0) {
         return false;
     }
-    let Ok(mut mask) = cairo::ImageSurface::create(cairo::Format::A8, w as i32, h as i32) else {
-        return false;
-    };
+    let Ok(mut mask) = cairo::ImageSurface::create(cairo::Format::A8, w as i32, h as i32) else { return false };
     {
-        let Ok(mc) = cairo::Context::new(&mask) else {
-            return false;
-        };
+        let Ok(mc) = cairo::Context::new(&mask) else { return false };
         let path = cr.copy_path().unwrap();
         mc.translate(-bx, -by);
         mc.transform(m);
@@ -1552,27 +1277,18 @@ fn blurred(
     let stride = mask.stride() as usize;
     let (w, h) = (w as usize, h as usize);
     {
-        let Ok(mut data) = mask.data() else {
-            return false;
-        };
+        let Ok(mut data) = mask.data() else { return false };
         // Three box passes of this half-width give a Gaussian of sigma
         // blur / 2.
         let sigma = dev_blur / 2.0;
-        let radius = (((12.0 * sigma * sigma / 3.0 + 1.0).sqrt() - 1.0) / 2.0)
-            .round()
-            .max(1.0) as usize;
+        let radius = (((12.0 * sigma * sigma / 3.0 + 1.0).sqrt() - 1.0) / 2.0).round().max(1.0) as usize;
         let mut line = Vec::new();
         for _ in 0..3 {
             for y in 0..h {
                 box_blur(&mut data[y * stride..y * stride + w], 1, radius, &mut line);
             }
             for x in 0..w {
-                box_blur(
-                    &mut data[x..(h - 1) * stride + x + 1],
-                    stride,
-                    radius,
-                    &mut line,
-                );
+                box_blur(&mut data[x..(h - 1) * stride + x + 1], stride, radius, &mut line);
             }
         }
     }
@@ -1593,13 +1309,7 @@ fn box_blur(data: &mut [u8], step: usize, radius: usize, line: &mut Vec<u32>) {
     line.clear();
     line.extend((0..n).map(|i| data[i * step] as u32));
     let width = (2 * radius + 1) as u32;
-    let at = |i: isize| {
-        if i < 0 || i as usize >= n {
-            0
-        } else {
-            line[i as usize]
-        }
-    };
+    let at = |i: isize| if i < 0 || i as usize >= n { 0 } else { line[i as usize] };
     let mut sum: u32 = (-(radius as isize)..=radius as isize).map(at).sum();
     for i in 0..n {
         data[i * step] = ((sum + width / 2) / width) as u8;
@@ -1615,19 +1325,13 @@ fn box_blur(data: &mut [u8], step: usize, radius: usize, line: &mut Vec<u32>) {
 ///
 /// `area` is whether the path encloses anything: a line has none, so its
 /// shadow is its outline's even when its style carries a fill.
-fn paint_effects(
-    cr: &cairo::Context,
-    style: &decks_core::engine::shape::ShapeStyle,
-    scale: f64,
-    area: bool,
-) {
+fn paint_effects(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, scale: f64, area: bool) {
     // The shadow, under everything: the shape's path moved by the offset
     // and filled in the shadow's colour, blurred to its radius (#2332). A
     // shape with no fill casts its outline's shadow.
     // A shape with neither fill nor outline casts no shadow of its own;
     // PowerPoint and LibreOffice shadow its text instead.
-    let casts =
-        (area && (style.fill.is_some() || style.gradient.is_some())) || style.stroke.is_some();
+    let casts = (area && (style.fill.is_some() || style.gradient.is_some())) || style.stroke.is_some();
     if let (true, Some(sh)) = (casts, style.shadow) {
         let (r, g, b) = sh.color.to_f64();
         let path = cr.copy_path().unwrap();
@@ -1670,15 +1374,7 @@ fn paint_effects(
         let reach = glow.radius * scale;
         let filled = area && (style.fill.is_some() || style.gradient.is_some());
         let outline = style.stroke.map_or(0.0, |s| s.width * scale);
-        if reach > 0.0
-            && !blurred(
-                cr,
-                reach / 2.0,
-                filled,
-                Some(reach + outline),
-                (r, g, b, glow.alpha),
-            )
-        {
+        if reach > 0.0 && !blurred(cr, reach / 2.0, filled, Some(reach + outline), (r, g, b, glow.alpha)) {
             const PASSES: u32 = 8;
             for i in (1..=PASSES).rev() {
                 cr.set_source_rgba(r, g, b, glow.alpha / PASSES as f64);
@@ -1690,9 +1386,7 @@ fn paint_effects(
 }
 
 /// The style without its effects, for layers painted after `paint_effects`.
-fn without_effects(
-    style: &decks_core::engine::shape::ShapeStyle,
-) -> std::borrow::Cow<'_, decks_core::engine::shape::ShapeStyle> {
+fn without_effects(style: &decks_core::engine::shape::ShapeStyle) -> std::borrow::Cow<'_, decks_core::engine::shape::ShapeStyle> {
     if style.glow.is_none() && style.shadow.is_none() {
         return std::borrow::Cow::Borrowed(style);
     }
@@ -1721,12 +1415,7 @@ fn paint_path(
             let (dx, dy) = (a.cos(), a.sin());
             let half = (w * dx.abs() + h * dy.abs()) / 2.0;
             let (cx, cy) = (x + w / 2.0, y + h / 2.0);
-            let pattern = cairo::LinearGradient::new(
-                cx - dx * half,
-                cy - dy * half,
-                cx + dx * half,
-                cy + dy * half,
-            );
+            let pattern = cairo::LinearGradient::new(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
             for stop in &grad.stops {
                 let (r, g, b) = stop.color.to_f64();
                 pattern.add_color_stop_rgb(stop.pos, r, g, b);
@@ -1752,11 +1441,7 @@ fn paint_path(
 /// Add a freeform path to the current path, its own `w`×`h` space
 /// stretched to the box `(x, y, w, h)`. An arc and a quadratic curve are
 /// drawn as the cubic Béziers they are.
-fn trace_freeform(
-    cr: &cairo::Context,
-    path: &decks_core::engine::freeform::FreePath,
-    (x, y, w, h): (f64, f64, f64, f64),
-) {
+fn trace_freeform(cr: &cairo::Context, path: &decks_core::engine::freeform::FreePath, (x, y, w, h): (f64, f64, f64, f64)) {
     use decks_core::engine::freeform::{arc_as_cubics, PathCmd};
     let (sx, sy) = (w / path.w.max(1e-9), h / path.h.max(1e-9));
     let at = |px: f64, py: f64| (x + px * sx, y + py * sy);
@@ -1780,24 +1465,15 @@ fn trace_freeform(
                 cur = (px, py);
             }
             PathCmd::Quad(qx, qy, px, py) => {
-                let c1 = (
-                    cur.0 + 2.0 / 3.0 * (qx - cur.0),
-                    cur.1 + 2.0 / 3.0 * (qy - cur.1),
-                );
+                let c1 = (cur.0 + 2.0 / 3.0 * (qx - cur.0), cur.1 + 2.0 / 3.0 * (qy - cur.1));
                 let c2 = (px + 2.0 / 3.0 * (qx - px), py + 2.0 / 3.0 * (qy - py));
                 let ((a1, b1), (a2, b2), (a, b)) = (at(c1.0, c1.1), at(c2.0, c2.1), at(px, py));
                 cr.curve_to(a1, b1, a2, b2, a, b);
                 cur = (px, py);
             }
-            PathCmd::Arc {
-                wr,
-                hr,
-                start,
-                swing,
-            } => {
+            PathCmd::Arc { wr, hr, start, swing } => {
                 for [c1, c2, e] in arc_as_cubics(cur, wr, hr, start, swing) {
-                    let ((a1, b1), (a2, b2), (a, b)) =
-                        (at(c1.0, c1.1), at(c2.0, c2.1), at(e.0, e.1));
+                    let ((a1, b1), (a2, b2), (a, b)) = (at(c1.0, c1.1), at(c2.0, c2.1), at(e.0, e.1));
                     cr.curve_to(a1, b1, a2, b2, a, b);
                     cur = e;
                 }
@@ -1823,68 +1499,46 @@ pub fn draw_table(
     // A merged cell is drawn once, over every column and row it spans; a
     // cell it covers draws nothing of its own.
     let owners = table.owners();
-    let owner = |r: usize, c: usize| {
-        owners
-            .get(r)
-            .and_then(|o| o.get(c))
-            .copied()
-            .unwrap_or((r, c))
-    };
+    let owner = |r: usize, c: usize| owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
     // A cell's text, laid out to its width (`cw`) in its paint.
     // A cell's text as a text body: its paragraph styles and anchor, at
     // its own margins, else the table's (model units).
-    let body_of =
-        |r: usize, c: usize| -> Option<(String, Vec<Run>, decks_core::engine::TextBody)> {
-            let cell = table.rows.get(r)?.get(c)?;
-            let (l, t, rr, b) = cell.margins.unwrap_or((mx, my, mx, my));
-            let body = decks_core::engine::TextBody {
-                paras: cell.paras.clone(),
-                anchor: cell.anchor,
-                insets: Some(decks_core::engine::Insets {
-                    left: l,
-                    top: t,
-                    right: rr,
-                    bottom: b,
-                }),
-                ..Default::default()
-            };
-            // The style's bold header, on each run that doesn't state itself
-            // regular (b="0").
-            let mut runs = cell.runs.clone();
-            if table.cell_paint(r, c).bold {
-                for run in runs.iter_mut().filter(|run| !run.style.regular) {
-                    run.style.bold = true;
-                }
-            }
-            Some((cell.text(), runs, body))
+    let body_of = |r: usize, c: usize| -> Option<(String, Vec<Run>, decks_core::engine::TextBody)> {
+        let cell = table.rows.get(r)?.get(c)?;
+        let (l, t, rr, b) = cell.margins.unwrap_or((mx, my, mx, my));
+        let body = decks_core::engine::TextBody {
+            paras: cell.paras.clone(),
+            anchor: cell.anchor,
+            insets: Some(decks_core::engine::Insets { left: l, top: t, right: rr, bottom: b }),
+            ..Default::default()
         };
+        // The style's bold header, on each run that doesn't state itself
+        // regular (b="0").
+        let mut runs = cell.runs.clone();
+        if table.cell_paint(r, c).bold {
+            for run in runs.iter_mut().filter(|run| !run.style.regular) {
+                run.style.bold = true;
+            }
+        }
+        Some((cell.text(), runs, body))
+    };
     // A row is as tall as the file says, or as its text needs: a height in
     // a table is a least height, which PowerPoint and Impress grow to fit
     // what wraps. A merged cell over several rows does not grow one.
     for (r, row_h) in rows.iter_mut().enumerate() {
         for c in 0..cols.len() {
-            let one_row = table
-                .rows
-                .get(r)
-                .and_then(|row| row.get(c))
-                .is_some_and(|cell| cell.span().1 == 1);
+            let one_row = table.rows.get(r).and_then(|row| row.get(c)).is_some_and(|cell| cell.span().1 == 1);
             if owner(r, c) != (r, c) || !one_row {
                 continue;
             }
             let cw: f64 = cols.iter().skip(c).take(table.rows[r][c].span().0).sum();
             if let Some((text, runs, body)) = body_of(r, c) {
-                *row_h = row_h.max(crate::text_render::text_body_height(
-                    cr, &text, &runs, &body, cw, scale, font,
-                ));
+                *row_h = row_h.max(crate::text_render::text_body_height(cr, &text, &runs, &body, cw, scale, font));
             }
         }
     }
     let spanned = |r: usize, c: usize| {
-        let (cs, rs) = table
-            .rows
-            .get(r)
-            .and_then(|row| row.get(c))
-            .map_or((1, 1), |cell| cell.span());
+        let (cs, rs) = table.rows.get(r).and_then(|row| row.get(c)).map_or((1, 1), |cell| cell.span());
         let w: f64 = cols.iter().skip(c).take(cs).sum();
         let h: f64 = rows.iter().skip(r).take(rs).sum();
         (w, h)
@@ -1912,15 +1566,7 @@ pub fn draw_table(
                 cr.save().unwrap();
                 cr.rectangle(cx, cy, *cw, *rh);
                 cr.clip();
-                crate::text_render::draw_text_body(
-                    cr,
-                    &text,
-                    &runs,
-                    &body,
-                    (cx, cy, *cw, *rh),
-                    scale,
-                    font,
-                );
+                crate::text_render::draw_text_body(cr, &text, &runs, &body, (cx, cy, *cw, *rh), scale, font);
                 cr.restore().unwrap();
             }
             cx += col_w;
@@ -1934,18 +1580,8 @@ pub fn draw_table(
     cr.set_source_rgb(lr, lg, lb);
     let width = |pt: f64| (pt * 960.0 / 720.0 * scale).max(1.0);
     cr.set_line_width(width(rules.width_pt));
-    let col_x: Vec<f64> = std::iter::once(x)
-        .chain(cols.iter().scan(x, |at, cw| {
-            *at += cw;
-            Some(*at)
-        }))
-        .collect();
-    let row_y: Vec<f64> = std::iter::once(y)
-        .chain(rows.iter().scan(y, |at, rh| {
-            *at += rh;
-            Some(*at)
-        }))
-        .collect();
+    let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
+    let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
     let (right, bottom) = (col_x[cols.len()], row_y[rows.len()]);
     for r in 0..rows.len() {
         for c in 0..cols.len() {
@@ -1982,11 +1618,7 @@ pub fn draw_table(
 /// through `draw_slide` rather than a separate export path: what we compare
 /// against LibreOffice must be what the user sees.
 pub fn render_slide_png(
-    slides: &[Slide],
-    masters: &[MasterSlide],
-    index: usize,
-    width: i32,
-    path: &std::path::Path,
+    slides: &[Slide], masters: &[MasterSlide], index: usize, width: i32, path: &std::path::Path,
 ) -> Result<(), String> {
     let height = width * 540 / 960;
     // draw_slide insets the slide to 92% of the canvas; size the canvas so
@@ -1997,24 +1629,13 @@ pub fn render_slide_png(
         .map_err(|e| e.to_string())?;
     {
         let cr = cairo::Context::new(&full).map_err(|e| e.to_string())?;
-        draw_slide(
-            &cr,
-            canvas_w,
-            canvas_h,
-            slides,
-            index,
-            None,
-            masters,
-            (0.0, 0.5, 1.0),
-        );
+        draw_slide(&cr, canvas_w, canvas_h, slides, index, None, masters, (0.0, 0.5, 1.0));
     }
     let (ox, oy, _, _) = slide_geometry(canvas_w, canvas_h);
-    let out = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-        .map_err(|e| e.to_string())?;
+    let out = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|e| e.to_string())?;
     {
         let cr = cairo::Context::new(&out).map_err(|e| e.to_string())?;
-        cr.set_source_surface(&full, -ox.round(), -oy.round())
-            .map_err(|e| e.to_string())?;
+        cr.set_source_surface(&full, -ox.round(), -oy.round()).map_err(|e| e.to_string())?;
         cr.paint().map_err(|e| e.to_string())?;
     }
     let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
@@ -2029,9 +1650,7 @@ pub fn render_slide_png(
 /// uses (no selection, slide-number badge or editor surround), so the PDF is
 /// what the audience sees. Used by the headless `--export-pdf` hook.
 pub fn render_slides_pdf(
-    slides: &[Slide],
-    masters: &[MasterSlide],
-    path: &std::path::Path,
+    slides: &[Slide], masters: &[MasterSlide], path: &std::path::Path,
 ) -> Result<(), String> {
     if slides.is_empty() {
         return Err("no slides to export".to_string());
@@ -2041,9 +1660,7 @@ pub fn render_slides_pdf(
         .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
     // PDF 1.4 like Letters' export: no compressed object streams, so the
     // page tree is plain text a test can count.
-    surface
-        .restrict(cairo::PdfVersion::_1_4)
-        .map_err(|e| e.to_string())?;
+    surface.restrict(cairo::PdfVersion::_1_4).map_err(|e| e.to_string())?;
     let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
     // Model units are 1/96in; PDF points are 1/72in.
     const MODEL_W: f64 = 960.0;
@@ -2052,9 +1669,7 @@ pub fn render_slides_pdf(
     for index in decks_core::engine::shown_slides(slides) {
         // A slide of another aspect keeps its own page size; today every
         // slide shares the model's size, but the call is per-page anyway.
-        surface
-            .set_size(page_w, page_h)
-            .map_err(|e| e.to_string())?;
+        surface.set_size(page_w, page_h).map_err(|e| e.to_string())?;
         cr.save().map_err(|e| e.to_string())?;
         cr.scale(page_w / MODEL_W, page_h / MODEL_H);
         draw_slide_in(&cr, MODEL_W, MODEL_H, slides, index, masters, Chrome::Show);
@@ -2081,10 +1696,7 @@ mod table_tests {
         let table = TableData {
             col_widths: vec![60.0],
             row_heights: vec![20.0],
-            rows: vec![vec![TableCell {
-                runs: vec![Run::plain("several words that wrap over lines")],
-                ..Default::default()
-            }]],
+            rows: vec![vec![TableCell { runs: vec![Run::plain("several words that wrap over lines")], ..Default::default() }]],
             style_id: Some("{5940675A-B579-460E-94D1-54222C63F5DA}".into()),
             ..Default::default()
         };
@@ -2098,10 +1710,7 @@ mod table_tests {
         let data = surface.data().unwrap();
         // The grid's left rule, at x = 10, reaches well below the file's
         // 20 units.
-        let lowest = (0..200)
-            .rev()
-            .find(|&y| data[y * stride + 10 * 4 + 3] > 0)
-            .unwrap();
+        let lowest = (0..200).rev().find(|&y| data[y * stride + 10 * 4 + 3] > 0).unwrap();
         assert!(lowest > 45, "the rule ends at y = {lowest}");
     }
 }
@@ -2118,40 +1727,15 @@ mod freeform_tests {
         let wedge = FreePath {
             w: 100.0,
             h: 100.0,
-            cmds: vec![
-                PathCmd::Move(0.0, 0.0),
-                PathCmd::Line(100.0, 0.0),
-                PathCmd::Arc {
-                    wr: 100.0,
-                    hr: 100.0,
-                    start: 0.0,
-                    swing: 90.0,
-                },
-                PathCmd::Close,
-            ],
+            cmds: vec![PathCmd::Move(0.0, 0.0), PathCmd::Line(100.0, 0.0), PathCmd::Arc { wr: 100.0, hr: 100.0, start: 0.0, swing: 90.0 }, PathCmd::Close],
             fill: true,
             stroke: true,
         };
         let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
         {
             let cr = cairo::Context::new(&surface).unwrap();
-            let style = ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(Color(255, 0, 0)),
-                gradient: None,
-                stroke: None,
-                fill_src: None,
-                stroke_src: None,
-            };
-            super::draw_shape(
-                &cr,
-                &ShapeKind::Freeform(vec![wedge]),
-                &style,
-                (0.0, 0.0, 100.0, 100.0),
-                1.0,
-            );
+            let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(255, 0, 0)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
+            super::draw_shape(&cr, &ShapeKind::Freeform(vec![wedge]), &style, (0.0, 0.0, 100.0, 100.0), 1.0);
         }
         let stride = surface.stride() as usize;
         let data = surface.data().unwrap();
@@ -2181,46 +1765,21 @@ mod font_tests {
             w: 200.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(c),
-                gradient: None,
-                stroke: None,
-                fill_src: None,
-                stroke_src: None,
-            },
+            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
-        let slide = Slide {
-            hidden: false,
+        let slide = Slide { hidden: false,
             title: String::new(),
             background: "#ffffff".into(),
             background_picture: None,
-            objects: vec![
-                sq(400.0, 100.0, Color(220, 0, 0)),
-                sq(400.0, 300.0, Color(0, 0, 220)),
-            ],
+            objects: vec![sq(400.0, 100.0, Color(220, 0, 0)), sq(400.0, 300.0, Color(0, 0, 220))],
             notes: String::new(),
             master_id: None,
             transition: Default::default(),
             builds: vec![
-                Build {
-                    object: 10,
-                    effect: BuildEffect::Move(Edge::Left),
-                    out: false,
-                },
-                Build {
-                    object: 11,
-                    effect: BuildEffect::Dissolve,
-                    out: false,
-                },
+                Build { object: 10, effect: BuildEffect::Move(Edge::Left), out: false },
+                Build { object: 11, effect: BuildEffect::Dissolve, out: false },
             ],
-            ids: decks_core::ops::SlideIds {
-                slide: 1,
-                objects: vec![10, 11],
-                deleted: vec![],
-            },
+            ids: decks_core::ops::SlideIds { slide: 1, objects: vec![10, 11], deleted: vec![] },
             layout_id: None,
         };
         let slides = [slide];
@@ -2230,16 +1789,7 @@ mod font_tests {
             {
                 let cr = cairo::Context::new(&surface).unwrap();
                 let objects = decks_core::builds::frame(&slides[0], step, t);
-                draw_slide_objects(
-                    &cr,
-                    w as f64,
-                    h as f64,
-                    &slides,
-                    0,
-                    &[],
-                    Chrome::Show,
-                    &objects,
-                );
+                draw_slide_objects(&cr, w as f64, h as f64, &slides, 0, &[], Chrome::Show, &objects);
             }
             surface
         };
@@ -2251,37 +1801,17 @@ mod font_tests {
         };
         // Move in from the left, half way: from x = -200 to 400, now at 100.
         let mut first = draw(0, 0.5);
-        assert_eq!(
-            px(&mut first, 150, 150),
-            (220, 0, 0),
-            "the red square half way in"
-        );
-        assert_eq!(
-            px(&mut first, 450, 150),
-            (255, 255, 255),
-            "not yet at its place"
-        );
-        assert_eq!(
-            px(&mut first, 450, 350),
-            (255, 255, 255),
-            "the blue one waits for its click"
-        );
+        assert_eq!(px(&mut first, 150, 150), (220, 0, 0), "the red square half way in");
+        assert_eq!(px(&mut first, 450, 150), (255, 255, 255), "not yet at its place");
+        assert_eq!(px(&mut first, 450, 350), (255, 255, 255), "the blue one waits for its click");
         // After the first build, the second dissolves in.
         let mut second = draw(1, 0.5);
         assert_eq!(px(&mut second, 450, 150), (220, 0, 0));
         let (r, _, b) = px(&mut second, 450, 350);
-        assert!(
-            b > 200 && (100..160).contains(&r),
-            "half-faded blue: {:?}",
-            (r, b)
-        );
+        assert!(b > 200 && (100..160).contains(&r), "half-faded blue: {:?}", (r, b));
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/render-frames");
         std::fs::create_dir_all(&dir).unwrap();
-        first
-            .write_to_png(
-                &mut std::fs::File::create(dir.join("build-move-in-midpoint.png")).unwrap(),
-            )
-            .unwrap();
+        first.write_to_png(&mut std::fs::File::create(dir.join("build-move-in-midpoint.png")).unwrap()).unwrap();
     }
 
     /// The headless `--export-pdf` PDF is the presented slides: one PDF page
@@ -2291,11 +1821,7 @@ mod font_tests {
         let mut two = slide(Some(7));
         two.objects.push(SlideObject::TextBox {
             text: "Hello export".into(),
-            x: 100.0,
-            y: 100.0,
-            w: 400.0,
-            h: 100.0,
-            rotation: 0.0,
+            x: 100.0, y: 100.0, w: 400.0, h: 100.0, rotation: 0.0,
             runs: vec![decks_core::engine::Run::plain("Hello export")],
             body: Default::default(),
         });
@@ -2307,19 +1833,11 @@ mod font_tests {
         render_slides_pdf(&slides, &masters, &path).expect("export two slides");
         let bytes = std::fs::read(&path).unwrap();
         assert!(bytes.starts_with(b"%PDF"), "a real PDF");
-        assert!(
-            bytes.len() > 1000,
-            "text and pages take space: {}",
-            bytes.len()
-        );
+        assert!(bytes.len() > 1000, "text and pages take space: {}", bytes.len());
         let text = String::from_utf8_lossy(&bytes);
-        let page_objects =
-            text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+        let page_objects = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
         assert_eq!(page_objects, 2, "one PDF page per slide");
-        assert!(
-            text.contains("/MediaBox [ 0 0 720 405 ]"),
-            "pages are the model slide in points"
-        );
+        assert!(text.contains("/MediaBox [ 0 0 720 405 ]"), "pages are the model slide in points");
         // That the slide's text lands on the page is checked by rasterising
         // the PDF (pdftoppm) and looking, not here: Cairo may subset fonts.
     }
@@ -2330,21 +1848,18 @@ mod font_tests {
         let mut hidden = slide(Some(7));
         hidden.hidden = true;
         let slides = [slide(Some(7)), hidden, slide(Some(7))];
-        let dir =
-            std::env::temp_dir().join(format!("decks-export-pdf-hidden-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("decks-export-pdf-hidden-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("out.pdf");
         render_slides_pdf(&slides, &[master(7, "Sans")], &path).expect("export");
         let text = String::from_utf8_lossy(&std::fs::read(&path).unwrap()).into_owned();
-        let page_objects =
-            text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+        let page_objects = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
         assert_eq!(page_objects, 2, "the hidden slide has no page");
     }
 
     #[test]
     fn exporting_no_slides_is_an_error_not_an_empty_pdf() {
-        let dir =
-            std::env::temp_dir().join(format!("decks-export-pdf-empty-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("decks-export-pdf-empty-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let err = render_slides_pdf(&[], &[master(7, "Sans")], &dir.join("out.pdf")).unwrap_err();
         assert!(err.contains("no slides"), "{err}");
@@ -2364,8 +1879,7 @@ mod font_tests {
     }
 
     fn slide(master_id: Option<u64>) -> Slide {
-        Slide {
-            hidden: false,
+        Slide { hidden: false,
             title: "S".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -2392,8 +1906,7 @@ mod font_tests {
             cr.rectangle(4.0, 0.0, 4.0, 4.0);
             cr.fill().unwrap();
         }
-        pic.write_to_png(&mut std::fs::File::create(&path).unwrap())
-            .unwrap();
+        pic.write_to_png(&mut std::fs::File::create(&path).unwrap()).unwrap();
         path.to_string_lossy().into_owned()
     }
 
@@ -2425,24 +1938,12 @@ mod font_tests {
     fn a_background_picture_fills_the_slide() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = slide(None);
-        s.background_picture = Some(BackgroundPicture {
-            path: two_tone_png(dir.path()),
-            fill: Default::default(),
-        });
+        s.background_picture = Some(BackgroundPicture { path: two_tone_png(dir.path()), fill: Default::default() });
         let (px, bg) = export_pixels(s, &[(20, 20), (200, 270), (760, 270), (940, 520)]);
         let (navy, yellow) = ([23, 42, 69], [255, 217, 0]);
-        assert!(
-            near(px[0], navy) && near(px[1], navy),
-            "left half navy: {px:?}"
-        );
-        assert!(
-            near(px[2], yellow) && near(px[3], yellow),
-            "right half yellow: {px:?}"
-        );
-        assert!(
-            bg.2 < 0.5,
-            "the contrast colour is the picture's mean, not white: {bg:?}"
-        );
+        assert!(near(px[0], navy) && near(px[1], navy), "left half navy: {px:?}");
+        assert!(near(px[2], yellow) && near(px[3], yellow), "right half yellow: {px:?}");
+        assert!(bg.2 < 0.5, "the contrast colour is the picture's mean, not white: {bg:?}");
     }
 
     /// `a:fillRect` places the stretched picture: a left inset of -100%
@@ -2453,19 +1954,10 @@ mod font_tests {
     fn a_background_picture_honours_its_fill_rect() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = slide(None);
-        let fill = decks_core::engine::FillRect {
-            left: -1.0,
-            ..Default::default()
-        };
-        s.background_picture = Some(BackgroundPicture {
-            path: two_tone_png(dir.path()),
-            fill,
-        });
+        let fill = decks_core::engine::FillRect { left: -1.0, ..Default::default() };
+        s.background_picture = Some(BackgroundPicture { path: two_tone_png(dir.path()), fill });
         let (px, _) = export_pixels(s, &[(300, 20), (940, 520)]);
-        assert!(
-            px.iter().all(|p| near(*p, [255, 217, 0])),
-            "all yellow: {px:?}"
-        );
+        assert!(px.iter().all(|p| near(*p, [255, 217, 0])), "all yellow: {px:?}");
     }
 
     /// Pictures imported from a pptx live in extensionless temp files
@@ -2477,14 +1969,12 @@ mod font_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("picture"); // no extension
         let img = image::RgbaImage::from_pixel(3, 2, image::Rgba([255, 0, 0, 128]));
-        img.save_with_format(&path, image::ImageFormat::Png)
-            .unwrap();
+        img.save_with_format(&path, image::ImageFormat::Png).unwrap();
 
         let surf = load_image(path.to_str().unwrap()).expect("extensionless png should load");
         assert_eq!((surf.width(), surf.height()), (3, 2));
         // BGRA, premultiplied: red 255 at alpha 128 is stored as 128.
-        surf.with_data(|data| assert_eq!(&data[0..4], &[0, 0, 128, 128]))
-            .unwrap();
+        surf.with_data(|data| assert_eq!(&data[0..4], &[0, 0, 128, 128])).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2496,17 +1986,8 @@ mod font_tests {
         let cr = cairo::Context::new(&surface).unwrap();
         let layout = pangocairo::functions::create_layout(&cr);
         let runs = vec![
-            Run {
-                text: "plain ".into(),
-                style: Default::default(),
-            },
-            Run {
-                text: "red".into(),
-                style: RunStyle {
-                    color: Some("C80000".into()),
-                    ..Default::default()
-                },
-            },
+            Run { text: "plain ".into(), style: Default::default() },
+            Run { text: "red".into(), style: RunStyle { color: Some("C80000".into()), ..Default::default() } },
         ];
         set_styled_text(&layout, "plain red", &runs, 1.0);
         let attrs = layout.attributes().expect("attributes set");
@@ -2518,11 +1999,7 @@ mod font_tests {
         assert_eq!(fg.len(), 1, "one coloured run, one foreground attribute");
         let c = fg[0].downcast_ref::<pango::AttrColor>().unwrap().color();
         assert_eq!((c.red(), c.green(), c.blue()), (0xC8 * 257, 0, 0));
-        assert_eq!(
-            (fg[0].start_index(), fg[0].end_index()),
-            (6, 9),
-            "only the red run"
-        );
+        assert_eq!((fg[0].start_index(), fg[0].end_index()), (6, 9), "only the red run");
         assert_eq!(hex_rgb16("#0000c8"), Some((0, 0, 0xC8 * 257)));
         assert_eq!(hex_rgb16("bad"), None);
     }
@@ -2535,34 +2012,14 @@ mod font_tests {
         let cr = cairo::Context::new(&surface).unwrap();
         let layout = pangocairo::functions::create_layout(&cr);
         let runs = vec![
-            Run {
-                text: "plain ".into(),
-                style: Default::default(),
-            },
-            Run {
-                text: "serif".into(),
-                style: RunStyle {
-                    font_family: Some("Liberation Serif".into()),
-                    ..Default::default()
-                },
-            },
+            Run { text: "plain ".into(), style: Default::default() },
+            Run { text: "serif".into(), style: RunStyle { font_family: Some("Liberation Serif".into()), ..Default::default() } },
         ];
         set_styled_text(&layout, "plain serif", &runs, 1.0);
         let attrs = layout.attributes().expect("attributes set");
-        let fam: Vec<_> = attrs
-            .attributes()
-            .into_iter()
-            .filter(|a| a.type_() == pango::AttrType::Family)
-            .collect();
+        let fam: Vec<_> = attrs.attributes().into_iter().filter(|a| a.type_() == pango::AttrType::Family).collect();
         assert_eq!(fam.len(), 1);
-        assert_eq!(
-            fam[0]
-                .downcast_ref::<pango::AttrString>()
-                .unwrap()
-                .value()
-                .as_str(),
-            "Liberation Serif"
-        );
+        assert_eq!(fam[0].downcast_ref::<pango::AttrString>().unwrap().value().as_str(), "Liberation Serif");
         assert_eq!((fam[0].start_index(), fam[0].end_index()), (6, 11));
     }
 
@@ -2571,9 +2028,7 @@ mod font_tests {
         let masters = vec![master(7, "A"), master(8, "B")];
         let slides = vec![slide(Some(8))];
         assert_eq!(
-            master_for(&slides, 0, &masters)
-                .map(|m| m.default_font.clone())
-                .as_deref(),
+            master_for(&slides, 0, &masters).map(|m| m.default_font.clone()).as_deref(),
             Some("B")
         );
     }
@@ -2587,10 +2042,7 @@ mod font_tests {
         let slides = vec![slide(Some(99))];
         assert!(master_for(&slides, 0, &masters).is_none());
         // ...and the font falls back rather than panicking on the id.
-        assert_eq!(
-            master_font_family(master_for(&slides, 0, &masters).as_deref()),
-            "Sans"
-        );
+        assert_eq!(master_font_family(master_for(&slides, 0, &masters).as_deref()), "Sans");
     }
 
     #[test]
@@ -2606,9 +2058,7 @@ mod font_tests {
         let masters = vec![master(7, "A")];
         let slides = vec![slide(None)];
         assert_eq!(
-            master_for(&slides, 0, &masters)
-                .map(|m| m.default_font.clone())
-                .as_deref(),
+            master_for(&slides, 0, &masters).map(|m| m.default_font.clone()).as_deref(),
             Some("A")
         );
     }
@@ -2649,23 +2099,14 @@ mod font_tests {
     fn the_masters_font_reaches_the_description_the_renderer_draws_with() {
         let m = master(7, "Liberation Serif");
         let desc = document_font_description(Some(&m), 18.0);
-        assert_eq!(
-            desc.family().map(|f| f.to_string()).as_deref(),
-            Some("Liberation Serif")
-        );
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Liberation Serif"));
     }
 
     #[test]
     fn the_description_carries_the_size_it_was_asked_for() {
         let desc = document_font_description(None, 18.0);
-        assert_eq!(
-            desc.family().map(|f| f.to_string()).as_deref(),
-            Some("Sans")
-        );
-        assert_eq!(
-            desc.size(),
-            (18.0 * 96.0 / 72.0 * pango::SCALE as f64) as i32
-        );
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
+        assert_eq!(desc.size(), (18.0 * 96.0 / 72.0 * pango::SCALE as f64) as i32);
         assert!(desc.is_size_absolute());
     }
 
@@ -2675,10 +2116,7 @@ mod font_tests {
     }
 
     fn run(text: &str, style: RunStyle) -> Run {
-        Run {
-            text: text.to_string(),
-            style,
-        }
+        Run { text: text.to_string(), style }
     }
 
     /// A box with no runs is plain text, not a styled box that happens to
@@ -2703,13 +2141,7 @@ mod font_tests {
             "ignored when runs are present",
             &[
                 run("Plain ", RunStyle::default()),
-                run(
-                    "Bold",
-                    RunStyle {
-                        bold: true,
-                        ..RunStyle::default()
-                    },
-                ),
+                run("Bold", RunStyle { bold: true, ..RunStyle::default() }),
             ],
             1.0,
         );
@@ -2728,19 +2160,11 @@ mod font_tests {
             "",
             &[
                 run("Plain ", RunStyle::default()),
-                run(
-                    "Bold",
-                    RunStyle {
-                        bold: true,
-                        ..RunStyle::default()
-                    },
-                ),
+                run("Bold", RunStyle { bold: true, ..RunStyle::default() }),
             ],
             1.0,
         );
-        let attrs = l
-            .attributes()
-            .expect("styled runs produce an attribute list");
+        let attrs = l.attributes().expect("styled runs produce an attribute list");
         let bold: Vec<_> = attrs
             .attributes()
             .into_iter()
@@ -2778,10 +2202,7 @@ mod font_tests {
                 run("ACME ", RunStyle::default()),
                 run(
                     "Confidential",
-                    RunStyle {
-                        bold: true,
-                        ..RunStyle::default()
-                    },
+                    RunStyle { bold: true, ..RunStyle::default() },
                 ),
             ],
             1.0,
@@ -2832,26 +2253,14 @@ mod line_tests {
             let cr = cairo::Context::new(&surface).unwrap();
             cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.paint().unwrap();
-            let style = ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
+            let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None,
                 fill: Some(Color(68, 114, 196)),
                 gradient: None,
-                stroke: Some(Stroke {
-                    color: Color(255, 255, 255),
-                    width: 2.0,
-                }),
+                stroke: Some(Stroke { color: Color(255, 255, 255), width: 2.0 }),
                 fill_src: None,
                 stroke_src: None,
             };
-            draw_shape(
-                &cr,
-                &ShapeKind::Other("line".into()),
-                &style,
-                (10.0, 5.0, 80.0, 30.0),
-                1.0,
-            );
+            draw_shape(&cr, &ShapeKind::Other("line".into()), &style, (10.0, 5.0, 80.0, 30.0), 1.0);
         }
         let mut surface = surface;
         let stride = surface.stride() as usize;
@@ -2860,11 +2269,7 @@ mod line_tests {
             let i = y * stride + x * 4;
             (data[i + 2], data[i + 1], data[i])
         };
-        assert_eq!(
-            px(50, 20),
-            (255, 255, 255),
-            "the middle of the diagonal, in white"
-        );
+        assert_eq!(px(50, 20), (255, 255, 255), "the middle of the diagonal, in white");
         assert_eq!(px(80, 5), (0, 0, 0), "no box: its top edge is not drawn");
         assert_eq!(px(70, 30), (0, 0, 0), "nothing filled below the line");
     }
@@ -2876,16 +2281,7 @@ mod handle_tests {
     use decks_core::engine::SlideObject;
 
     fn text_box(x: f64, y: f64, w: f64, h: f64) -> SlideObject {
-        SlideObject::TextBox {
-            text: "Text".into(),
-            x,
-            y,
-            w,
-            h,
-            rotation: 0.0,
-            runs: vec![],
-            body: Default::default(),
-        }
+        SlideObject::TextBox { text: "Text".into(), x, y, w, h, rotation: 0.0, runs: vec![], body: Default::default() }
     }
 
     /// Canvas point of slide point (x, y) on a canvas `cw`×`ch`.
@@ -2906,15 +2302,9 @@ mod handle_tests {
         assert_eq!(hit_test_handles(&obj, mx, my, cw, ch), None);
         // Its handles are still there, on its edges.
         let (tx, ty) = at(300.0, 150.0, cw, ch);
-        assert_eq!(
-            hit_test_handles(&obj, tx, ty, cw, ch),
-            Some(SelectionHandle::TopCenter)
-        );
+        assert_eq!(hit_test_handles(&obj, tx, ty, cw, ch), Some(SelectionHandle::TopCenter));
         let (bx, by) = at(400.0, 190.0, cw, ch);
-        assert_eq!(
-            hit_test_handles(&obj, bx, by, cw, ch),
-            Some(SelectionHandle::BottomRight)
-        );
+        assert_eq!(hit_test_handles(&obj, bx, by, cw, ch), Some(SelectionHandle::BottomRight));
     }
 
     /// A box at full size keeps the handles' whole 8px reach.
@@ -2923,10 +2313,7 @@ mod handle_tests {
         let (cw, ch) = (1600.0, 900.0);
         let obj = text_box(200.0, 150.0, 360.0, 60.0);
         let (tx, ty) = at(380.0, 150.0, cw, ch);
-        assert_eq!(
-            hit_test_handles(&obj, tx, ty + 7.5, cw, ch),
-            Some(SelectionHandle::TopCenter)
-        );
+        assert_eq!(hit_test_handles(&obj, tx, ty + 7.5, cw, ch), Some(SelectionHandle::TopCenter));
         assert_eq!(hit_test_handles(&obj, tx, ty + 8.5, cw, ch), None);
     }
 }

@@ -69,11 +69,7 @@ mod tests {
             // when disposed, so the release below is this module's.
             let host = gtk::DrawingArea::new();
             let a = reused(&host, "first");
-            assert_eq!(
-                a,
-                reused(&host, "first"),
-                "the same name finds the same popover"
-            );
+            assert_eq!(a, reused(&host, "first"), "the same name finds the same popover");
             let b = reused(&host, "second");
             assert_ne!(a, b, "another name gets its own");
             let mut children = 0;
@@ -98,10 +94,7 @@ mod tests {
             drop(host);
             window.destroy();
             drop(window);
-            assert!(
-                a.parent().is_none() && b.parent().is_none(),
-                "the host's destruction releases them"
-            );
+            assert!(a.parent().is_none() && b.parent().is_none(), "the host's destruction releases them");
         });
     }
 }

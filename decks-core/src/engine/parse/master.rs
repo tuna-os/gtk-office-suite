@@ -111,10 +111,7 @@ pub(super) fn master_shapes(
             }
             close_paragraphs(&mut self.runs, self.pending_breaks);
             self.pending_breaks = 0;
-            self.runs.push(Run {
-                text,
-                style: self.cur_style.clone(),
-            });
+            self.runs.push(Run { text, style: self.cur_style.clone() });
         }
     }
     let mut cur: Option<Pending> = None;
@@ -268,7 +265,8 @@ pub(super) fn master_shapes(
                         .filter_map(|a| a.ok())
                         .find(|a| a.key.as_ref() == "val")
                     {
-                        background = Some(format!("#{}", val.value.to_lowercase()));
+                        background =
+                            Some(format!("#{}", val.value.to_lowercase()));
                     }
                 }
                 // A theme-slot background, resolved against the part's
@@ -291,29 +289,13 @@ pub(super) fn master_shapes(
                     // A master's or layout's picture (a logo, a band of
                     // colour), where it stands among its shapes.
                     if let Some(p) = cur.take() {
-                        if let Some(path) = p
-                            .embed
-                            .as_deref()
-                            .filter(|_| !p.has_ph && p.w > 0.0 && p.h > 0.0)
-                            .and_then(&mut *pictures)
-                        {
-                            shapes.push(SlideObject::Image {
-                                path,
-                                x: p.x,
-                                y: p.y,
-                                w: p.w,
-                                h: p.h,
-                                rotation: 0.0,
-                                crop: Default::default(),
-                            });
+                        if let Some(path) = p.embed.as_deref().filter(|_| !p.has_ph && p.w > 0.0 && p.h > 0.0).and_then(&mut *pictures) {
+                            shapes.push(SlideObject::Image { path, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, crop: Default::default() });
                         }
                     }
                 }
                 "p:cxnSp" => {
-                    if let Some(p) = cur
-                        .take()
-                        .filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0))
-                    {
+                    if let Some(p) = cur.take().filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
                         let paint = cxn_paints.get(p.sp_index).cloned().unwrap_or_default();
                         // A connector with a flat box (a bent or curved one
                         // whose ends are level) is a straight segment: drawn
@@ -322,15 +304,7 @@ pub(super) fn master_shapes(
                         if (p.w == 0.0 || p.h == 0.0) && !crate::engine::shape::is_line(&kind) {
                             kind = ShapeKind::from_prst("line");
                         }
-                        shapes.push(SlideObject::Shape {
-                            kind,
-                            x: p.x,
-                            y: p.y,
-                            w: p.w,
-                            h: p.h,
-                            rotation: 0.0,
-                            style: paint.style,
-                        });
+                        shapes.push(SlideObject::Shape { kind, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, style: paint.style });
                     }
                 }
                 "p:bg" => in_bg = false,
@@ -344,14 +318,8 @@ pub(super) fn master_shapes(
                 "p:sp" => {
                     if let Some(p) = cur.take() {
                         // A line has no height (or width) of its own.
-                        let line = crate::engine::shape::is_line(&ShapeKind::from_prst(
-                            p.prst.as_deref().unwrap_or("rect"),
-                        ));
-                        let sized = if line {
-                            p.w > 0.0 || p.h > 0.0
-                        } else {
-                            p.w > 0.0 && p.h > 0.0
-                        };
+                        let line = crate::engine::shape::is_line(&ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect")));
+                        let sized = if line { p.w > 0.0 || p.h > 0.0 } else { p.w > 0.0 && p.h > 0.0 };
                         if !p.has_ph && sized {
                             let text = text_of(&p.runs);
                             let has_text = !text.trim().is_empty();
@@ -368,11 +336,8 @@ pub(super) fn master_shapes(
                                 });
                             } else {
                                 let paint = paints.get(p.sp_index).cloned().unwrap_or_default();
-                                let mut kind =
-                                    ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect"));
-                                if let (ShapeKind::RoundRect { radius }, Some(adj)) =
-                                    (&mut kind, paint.round_adj)
-                                {
+                                let mut kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect"));
+                                if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
                                     *radius = adj.clamp(0.0, 0.5);
                                 }
                                 shapes.push(SlideObject::Shape {

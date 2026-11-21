@@ -59,11 +59,7 @@ fn behaviours(b: &Build, spid: u32, id: &mut u32) -> String {
                 "<p:animEffect transition=\"{dir}\" filter=\"fade\"><p:cBhvr><p:cTn id=\"{}\" dur=\"500\"/>{tgt}</p:cBhvr></p:animEffect>",
                 next()
             );
-            if b.out {
-                format!("{fade}{set}")
-            } else {
-                format!("{set}{fade}")
-            }
+            if b.out { format!("{fade}{set}") } else { format!("{set}{fade}") }
         }
         BuildEffect::Move(edge) => {
             let (attr, off) = match edge {
@@ -72,11 +68,7 @@ fn behaviours(b: &Build, spid: u32, id: &mut u32) -> String {
                 Edge::Top => ("ppt_y", "0-#ppt_h/2"),
                 Edge::Bottom => ("ppt_y", "1+#ppt_h/2"),
             };
-            let (from, to) = if b.out {
-                (format!("#{attr}"), off.to_string())
-            } else {
-                (off.to_string(), format!("#{attr}"))
-            };
+            let (from, to) = if b.out { (format!("#{attr}"), off.to_string()) } else { (off.to_string(), format!("#{attr}")) };
             let anim = format!(
                 "<p:anim calcmode=\"lin\" valueType=\"num\"><p:cBhvr additive=\"base\"><p:cTn id=\"{}\" dur=\"500\" fill=\"hold\"/>{tgt}\
                  <p:attrNameLst><p:attrName>{attr}</p:attrName></p:attrNameLst></p:cBhvr>\
@@ -84,11 +76,7 @@ fn behaviours(b: &Build, spid: u32, id: &mut u32) -> String {
                  <p:tav tm=\"100000\"><p:val><p:strVal val=\"{to}\"/></p:val></p:tav></p:tavLst></p:anim>",
                 next()
             );
-            if b.out {
-                format!("{anim}{set}")
-            } else {
-                format!("{set}{anim}")
-            }
+            if b.out { format!("{anim}{set}") } else { format!("{set}{anim}") }
         }
     }
 }
@@ -148,20 +136,12 @@ pub(crate) fn read_builds(slide_xml: &str, object_of: impl Fn(u32) -> Option<u64
         e.attributes()
             .flatten()
             .find(|a| a.key.as_ref() == k)
-            .and_then(|a| {
-                a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                    .ok()
-                    .map(|v| v.into_owned())
-            })
+            .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned()))
     };
     let finish = |effect: &mut Option<(bool, u32, u32, Option<u32>)>, out: &mut Vec<Build>| {
         if let Some((is_out, id, sub, Some(spid))) = effect.take() {
             if let Some(object) = object_of(spid) {
-                out.push(Build {
-                    object,
-                    effect: effect_of(id, sub),
-                    out: is_out,
-                });
+                out.push(Build { object, effect: effect_of(id, sub), out: is_out });
             }
         }
     };
@@ -194,12 +174,8 @@ pub(crate) fn read_builds(slide_xml: &str, object_of: impl Fn(u32) -> Option<u64
                     "exit" => Some(true),
                     _ => None,
                 }) {
-                    let id = attr(&e, "presetID")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(10);
-                    let sub = attr(&e, "presetSubtype")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0);
+                    let id = attr(&e, "presetID").and_then(|v| v.parse().ok()).unwrap_or(10);
+                    let sub = attr(&e, "presetSubtype").and_then(|v| v.parse().ok()).unwrap_or(0);
                     if !empty {
                         effect = Some((is_out, id, sub, None));
                         depth_in_effect = 0;
@@ -230,26 +206,10 @@ mod tests {
         // Builds name stable object ids; the writer maps those to cNvPr
         // ids and the reader maps them back.
         let builds = vec![
-            Build {
-                object: 11,
-                effect: BuildEffect::Dissolve,
-                out: false,
-            },
-            Build {
-                object: 10,
-                effect: BuildEffect::Move(Edge::Left),
-                out: false,
-            },
-            Build {
-                object: 12,
-                effect: BuildEffect::Appear,
-                out: false,
-            },
-            Build {
-                object: 11,
-                effect: BuildEffect::Move(Edge::Bottom),
-                out: true,
-            },
+            Build { object: 11, effect: BuildEffect::Dissolve, out: false },
+            Build { object: 10, effect: BuildEffect::Move(Edge::Left), out: false },
+            Build { object: 12, effect: BuildEffect::Appear, out: false },
+            Build { object: 11, effect: BuildEffect::Move(Edge::Bottom), out: true },
         ];
         let xml = timing_xml(&builds, |id| id as u32 - 8).unwrap();
         let slide = format!("<p:sld xmlns:p=\"p\"><p:cSld/>{xml}</p:sld>");
@@ -269,14 +229,6 @@ mod tests {
               <p:tgtEl><p:spTgt spid="99"/></p:tgtEl></p:cBhvr></p:set></p:childTnLst></p:cTn></p:par>
             </p:childTnLst></p:cTn></p:par></p:tnLst></p:timing></p:sld>"#;
         let back = read_builds(slide, |spid| (spid == 7).then_some(70));
-        assert_eq!(
-            back,
-            vec![Build {
-                object: 70,
-                effect: BuildEffect::Dissolve,
-                out: false
-            }],
-            "emphasis is not a build"
-        );
+        assert_eq!(back, vec![Build { object: 70, effect: BuildEffect::Dissolve, out: false }], "emphasis is not a build");
     }
 }

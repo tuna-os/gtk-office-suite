@@ -11,12 +11,7 @@
 use gtk4::cairo::{Context, Format, ImageSurface};
 use suite_common_core::charts::{nice_axis, ChartKind};
 
-pub fn render_chart(
-    data: &[(String, f64)],
-    kind: ChartKind,
-    width: i32,
-    height: i32,
-) -> ImageSurface {
+pub fn render_chart(data: &[(String, f64)], kind: ChartKind, width: i32, height: i32) -> ImageSurface {
     render_chart_named(data, kind, width, height, None)
 }
 
@@ -42,13 +37,7 @@ pub fn render_chart_named(
 
 /// As [`render_chart_named`], with any number of series over the same
 /// categories (see [`draw_chart_series`]).
-pub fn render_chart_series(
-    categories: &[String],
-    series: &[Series],
-    kind: ChartKind,
-    width: i32,
-    height: i32,
-) -> ImageSurface {
+pub fn render_chart_series(categories: &[String], series: &[Series], kind: ChartKind, width: i32, height: i32) -> ImageSurface {
     let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
     let cr = Context::new(&surface).unwrap();
     crate::use_ui_font_rendering(&cr);
@@ -62,27 +51,10 @@ pub fn render_chart_series(
 /// units, on a white ground: what [`render_chart_named`] draws onto a
 /// surface, for a caller with a context of its own (a slide on the canvas
 /// or in a PDF, where it stays vector).
-pub fn draw_chart(
-    cr: &Context,
-    data: &[(String, f64)],
-    kind: ChartKind,
-    width: f64,
-    height: f64,
-    series_name: Option<&str>,
-) {
+pub fn draw_chart(cr: &Context, data: &[(String, f64)], kind: ChartKind, width: f64, height: f64, series_name: Option<&str>) {
     let categories: Vec<String> = data.iter().map(|d| d.0.clone()).collect();
     let values: Vec<f64> = data.iter().map(|d| d.1).collect();
-    draw_chart_series(
-        cr,
-        &categories,
-        &[Series {
-            name: series_name,
-            values: &values,
-        }],
-        kind,
-        width,
-        height,
-    );
+    draw_chart_series(cr, &categories, &[Series { name: series_name, values: &values }], kind, width, height);
 }
 
 /// One series of a chart: its values, one per category (a missing one is
@@ -98,11 +70,7 @@ impl Series<'_> {
         self.values.get(i).copied().filter(|v| v.is_finite())
     }
     fn max(&self) -> f64 {
-        self.values
-            .iter()
-            .copied()
-            .filter(|v| v.is_finite())
-            .fold(0.0, f64::max)
+        self.values.iter().copied().filter(|v| v.is_finite()).fold(0.0, f64::max)
     }
 }
 
@@ -111,23 +79,8 @@ impl Series<'_> {
 /// a line, area or set of markers per series, each series in the next of
 /// the theme's accents, and a legend row per named series. A pie draws
 /// its first series. With one series it is exactly [`draw_chart`].
-pub fn draw_chart_series(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    kind: ChartKind,
-    width: f64,
-    height: f64,
-) {
-    draw_chart_with(
-        cr,
-        categories,
-        series,
-        kind,
-        width,
-        height,
-        &Options::default(),
-    );
+pub fn draw_chart_series(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64) {
+    draw_chart_with(cr, categories, series, kind, width, height, &Options::default());
 }
 
 /// How a chart's series are laid out beyond their kind, as a presentation's
@@ -184,15 +137,7 @@ pub struct Options<'a> {
 
 /// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
 /// apply to column charts; a hidden value axis to columns, lines and areas.
-pub fn draw_chart_with(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    kind: ChartKind,
-    width: f64,
-    height: f64,
-    opts: &Options,
-) {
+pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64, opts: &Options) {
     let _ = cr.save();
     if !opts.transparent {
         cr.set_source_rgb(1.0, 1.0, 1.0);
@@ -201,24 +146,14 @@ pub fn draw_chart_with(
     }
     // Chart text is Calibri 10 pt (Carlito where Calibri isn't
     // installed), as Excel and Calc draw a chart that names no font.
-    cr.select_font_face(
-        "Calibri",
-        gtk4::cairo::FontSlant::Normal,
-        gtk4::cairo::FontWeight::Normal,
-    );
+    cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
     cr.set_font_size(opts.text_px.unwrap_or(CHART_TEXT_PX));
     TEXT.with(|t| t.set(opts.text_color.unwrap_or(CHART_TEXT)));
     let (w, mut h) = (width, height);
     // The title first, over the plot, which takes the room below it.
     if let Some(title) = opts.title.filter(|t| !t.trim().is_empty()) {
-        let px = opts
-            .title_px
-            .unwrap_or(opts.text_px.unwrap_or(CHART_TEXT_PX) * 1.4);
-        let weight = if opts.title_bold {
-            gtk4::cairo::FontWeight::Bold
-        } else {
-            gtk4::cairo::FontWeight::Normal
-        };
+        let px = opts.title_px.unwrap_or(opts.text_px.unwrap_or(CHART_TEXT_PX) * 1.4);
+        let weight = if opts.title_bold { gtk4::cairo::FontWeight::Bold } else { gtk4::cairo::FontWeight::Normal };
         let _ = cr.save();
         cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, weight);
         cr.set_font_size(px);
@@ -276,26 +211,11 @@ pub struct Decor<'a> {
 
 /// As [`render_chart_series`], with the title, axis titles and legend
 /// position of `decor` (see [`draw_chart_decorated`]).
-pub fn render_chart_decorated(
-    categories: &[String],
-    series: &[Series],
-    kind: ChartKind,
-    width: i32,
-    height: i32,
-    decor: &Decor,
-) -> ImageSurface {
+pub fn render_chart_decorated(categories: &[String], series: &[Series], kind: ChartKind, width: i32, height: i32, decor: &Decor) -> ImageSurface {
     let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
     let cr = Context::new(&surface).unwrap();
     crate::use_ui_font_rendering(&cr);
-    draw_chart_decorated(
-        &cr,
-        categories,
-        series,
-        kind,
-        width as f64,
-        height as f64,
-        decor,
-    );
+    draw_chart_decorated(&cr, categories, series, kind, width as f64, height as f64, decor);
     drop(cr);
     surface.flush();
     surface
@@ -314,25 +234,13 @@ const LEGEND_GAP: f64 = 18.0;
 /// its left side, and the legend where `decor.legend` puts it, in a row for
 /// the top and bottom and a column for the left. With nothing asked for
 /// (no titles, a legend at the right) it is [`draw_chart_series`] exactly.
-pub fn draw_chart_decorated(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    kind: ChartKind,
-    width: f64,
-    height: f64,
-    decor: &Decor,
-) {
+pub fn draw_chart_decorated(cr: &Context, categories: &[String], series: &[Series], kind: ChartKind, width: f64, height: f64, decor: &Decor) {
     let title = decor.title.trim();
     let x_title = decor.x_title.map(str::trim).filter(|t| !t.is_empty());
     let y_title = decor.y_title.map(str::trim).filter(|t| !t.is_empty());
     // A pie has no axes and keeps its legend where it is.
     let pie = kind == ChartKind::Pie;
-    let (x_title, y_title) = if pie {
-        (None, None)
-    } else {
-        (x_title, y_title)
-    };
+    let (x_title, y_title) = if pie { (None, None) } else { (x_title, y_title) };
     let legend = if pie { LegendPos::Right } else { decor.legend };
     if title.is_empty() && x_title.is_none() && y_title.is_none() && legend == LegendPos::Right {
         return draw_chart_series(cr, categories, series, kind, width, height);
@@ -342,11 +250,7 @@ pub fn draw_chart_decorated(
     cr.set_source_rgb(1.0, 1.0, 1.0);
     cr.rectangle(0.0, 0.0, width, height);
     let _ = cr.fill();
-    cr.select_font_face(
-        "Calibri",
-        gtk4::cairo::FontSlant::Normal,
-        gtk4::cairo::FontWeight::Normal,
-    );
+    cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
     cr.set_font_size(CHART_TEXT_PX);
 
     // A legend outside the plot takes its names from the plot's own.
@@ -357,17 +261,9 @@ pub fn draw_chart_decorated(
     };
     let entries = legend_entries(series);
     let own_legend = matches!(legend, LegendPos::Top | LegendPos::Bottom | LegendPos::Left);
-    let plot_series: Vec<Series> = if legend == LegendPos::Right {
-        series.to_vec()
-    } else {
-        series.iter().map(|s| Series { name: None, ..*s }).collect()
-    };
+    let plot_series: Vec<Series> = if legend == LegendPos::Right { series.to_vec() } else { series.iter().map(|s| Series { name: None, ..*s }).collect() };
 
-    let mut margin = (
-        if title.is_empty() { 0.0 } else { TITLE_H },
-        0.0_f64,
-        if y_title.is_some() { AXIS_TITLE } else { 0.0 },
-    ); // top, bottom, left
+    let mut margin = (if title.is_empty() { 0.0 } else { TITLE_H }, 0.0_f64, if y_title.is_some() { AXIS_TITLE } else { 0.0 }); // top, bottom, left
     if x_title.is_some() {
         margin.1 += AXIS_TITLE;
     }
@@ -378,10 +274,7 @@ pub fn draw_chart_decorated(
             _ => margin.2 += legend_width(cr, &entries, key) + 14.0,
         }
     }
-    let (plot_w, plot_h) = (
-        (width - margin.2).max(1.0),
-        (height - margin.0 - margin.1).max(1.0),
-    );
+    let (plot_w, plot_h) = ((width - margin.2).max(1.0), (height - margin.0 - margin.1).max(1.0));
 
     // The plot, in its own rectangle.
     let _ = cr.save();
@@ -390,40 +283,10 @@ pub fn draw_chart_decorated(
     cr.clip();
     if !series.is_empty() {
         match kind {
-            ChartKind::Bar => draw_bars(
-                cr,
-                categories,
-                &plot_series,
-                plot_w,
-                plot_h,
-                &Options::default(),
-            ),
-            ChartKind::Line => draw_category(
-                cr,
-                categories,
-                &plot_series,
-                plot_w,
-                plot_h,
-                Style::Line,
-                &Options::default(),
-            ),
-            ChartKind::Area => draw_category(
-                cr,
-                categories,
-                &plot_series,
-                plot_w,
-                plot_h,
-                Style::Area,
-                &Options::default(),
-            ),
-            ChartKind::Pie => draw_pie(
-                cr,
-                categories,
-                &plot_series[0],
-                plot_w,
-                plot_h,
-                &Options::default(),
-            ),
+            ChartKind::Bar => draw_bars(cr, categories, &plot_series, plot_w, plot_h, &Options::default()),
+            ChartKind::Line => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Line, &Options::default()),
+            ChartKind::Area => draw_category(cr, categories, &plot_series, plot_w, plot_h, Style::Area, &Options::default()),
+            ChartKind::Pie => draw_pie(cr, categories, &plot_series[0], plot_w, plot_h, &Options::default()),
             ChartKind::Scatter => draw_scatter(cr, categories, &plot_series, plot_w, plot_h),
         }
     }
@@ -432,29 +295,15 @@ pub fn draw_chart_decorated(
     // The legend outside the plot.
     if own_legend && !entries.is_empty() {
         match legend {
-            LegendPos::Left => draw_legend(
-                cr,
-                8.0 + if y_title.is_some() { AXIS_TITLE } else { 0.0 },
-                margin.0 + plot_h / 2.0,
-                &entries,
-                key,
-            ),
+            LegendPos::Left => draw_legend(cr, 8.0 + if y_title.is_some() { AXIS_TITLE } else { 0.0 }, margin.0 + plot_h / 2.0, &entries, key),
             _ => {
                 let offset = |k: Key| match k {
                     Key::Square => 12.0,
                     Key::Marker => 14.0,
                     Key::Line => 34.0,
                 };
-                let row_w: f64 = entries
-                    .iter()
-                    .map(|(n, _)| offset(key) + text_w(cr, n))
-                    .sum::<f64>()
-                    + LEGEND_GAP * (entries.len() - 1) as f64;
-                let mid = if legend == LegendPos::Top {
-                    margin.0 - LEGEND_STRIP / 2.0
-                } else {
-                    height - if x_title.is_some() { AXIS_TITLE } else { 0.0 } - LEGEND_STRIP / 2.0
-                };
+                let row_w: f64 = entries.iter().map(|(n, _)| offset(key) + text_w(cr, n)).sum::<f64>() + LEGEND_GAP * (entries.len() - 1) as f64;
+                let mid = if legend == LegendPos::Top { margin.0 - LEGEND_STRIP / 2.0 } else { height - if x_title.is_some() { AXIS_TITLE } else { 0.0 } - LEGEND_STRIP / 2.0 };
                 let mut x = margin.2 + (plot_w - row_w) / 2.0;
                 for entry in &entries {
                     draw_legend(cr, x, mid, std::slice::from_ref(entry), key);
@@ -466,27 +315,14 @@ pub fn draw_chart_decorated(
 
     // Titles last, in the room reserved for them.
     if !title.is_empty() {
-        cr.select_font_face(
-            "Calibri",
-            gtk4::cairo::FontSlant::Normal,
-            gtk4::cairo::FontWeight::Bold,
-        );
+        cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
         cr.set_font_size(CHART_TEXT_PX * 1.3);
         show(cr, (width - text_w(cr, title)) / 2.0, TITLE_H * 0.68, title);
-        cr.select_font_face(
-            "Calibri",
-            gtk4::cairo::FontSlant::Normal,
-            gtk4::cairo::FontWeight::Normal,
-        );
+        cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
         cr.set_font_size(CHART_TEXT_PX);
     }
     if let Some(t) = x_title {
-        show(
-            cr,
-            margin.2 + (plot_w - text_w(cr, t)) / 2.0,
-            height - 6.0,
-            t,
-        );
+        show(cr, margin.2 + (plot_w - text_w(cr, t)) / 2.0, height - 6.0, t);
     }
     if let Some(t) = y_title {
         let _ = cr.save();
@@ -562,11 +398,7 @@ fn legend_entries<'a>(series: &[Series<'a>]) -> Vec<(&'a str, (f64, f64, f64))> 
 
 /// The legend rows in each series' colour under `opts`.
 fn legend_in<'a>(series: &[Series<'a>], opts: &Options) -> Vec<(&'a str, (f64, f64, f64))> {
-    series
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| Some((s.name?, series_color(opts, i))))
-        .collect()
+    series.iter().enumerate().filter_map(|(i, s)| Some((s.name?, series_color(opts, i)))).collect()
 }
 
 /// The legend's width for the widest of `names`, at the right of the
@@ -578,10 +410,7 @@ fn legend_width(cr: &Context, names: &[(&str, (f64, f64, f64))], key: Key) -> f6
         Key::Square => 12.0,
         Key::Marker => 14.0,
     };
-    names
-        .iter()
-        .map(|(n, _)| text_w(cr, n) + sample + 13.0)
-        .fold(0.0, f64::max)
+    names.iter().map(|(n, _)| text_w(cr, n) + sample + 13.0).fold(0.0, f64::max)
 }
 
 /// A scatter point's marker in `color`: a filled circle with a darker rim,
@@ -605,11 +434,7 @@ const LEGEND_ROW: f64 = 19.0;
 /// sits at `mid`).
 fn draw_legend(cr: &Context, x: f64, mid: f64, entries: &[(&str, (f64, f64, f64))], key: Key) {
     // One entry exactly at `mid`, as the single-series legend always sat.
-    let y0 = if entries.len() == 1 {
-        mid
-    } else {
-        mid - LEGEND_ROW * entries.len() as f64 / 2.0 + LEGEND_ROW * 0.5
-    };
+    let y0 = if entries.len() == 1 { mid } else { mid - LEGEND_ROW * entries.len() as f64 / 2.0 + LEGEND_ROW * 0.5 };
     for (k, (name, color)) in entries.iter().enumerate() {
         let mid = y0 + k as f64 * LEGEND_ROW;
         set(cr, *color);
@@ -650,16 +475,10 @@ impl ValueAxis {
         (self.top / self.step).round() as usize
     }
     fn label(&self, i: usize) -> String {
-        format!(
-            "{:.*}",
-            if self.step < 1.0 { 1 } else { 0 },
-            i as f64 * self.step
-        )
+        format!("{:.*}", if self.step < 1.0 { 1 } else { 0 }, i as f64 * self.step)
     }
     fn widest(&self, cr: &Context) -> f64 {
-        (0..=self.ticks())
-            .map(|i| text_w(cr, &self.label(i)))
-            .fold(0.0, f64::max)
+        (0..=self.ticks()).map(|i| text_w(cr, &self.label(i))).fold(0.0, f64::max)
     }
 }
 
@@ -674,44 +493,27 @@ fn draw_value_axis(cr: &Context, axis: &ValueAxis, left: f64, right: f64, top_y:
         cr.line_to(right, y);
         cr.stroke().unwrap();
         let t = axis.label(i);
-        show(
-            cr,
-            left - 6.0 - text_w(cr, &t),
-            y + CHART_TEXT_PX * 0.35,
-            &t,
-        );
+        show(cr, left - 6.0 - text_w(cr, &t), y + CHART_TEXT_PX * 0.35, &t);
     }
 }
 
 /// A data label's text: the value as a cache writes it, a whole number
 /// without a fraction.
 fn value_label(v: f64) -> String {
-    if v.fract() == 0.0 && v.abs() < 1e15 {
-        format!("{}", v as i64)
-    } else {
-        format!("{v}")
-    }
+    if v.fract() == 0.0 && v.abs() < 1e15 { format!("{}", v as i64) } else { format!("{v}") }
 }
 
 /// A data label as the chart's number format reads it: a percentage
 /// rounded to a whole percent, else the value.
 fn label_for(v: f64, opts: &Options) -> String {
-    if opts.percent {
-        format!("{}%", (v * 100.0).round() as i64)
-    } else {
-        value_label(v)
-    }
+    if opts.percent { format!("{}%", (v * 100.0).round() as i64) } else { value_label(v) }
 }
 
 /// The colour of series `k`'s bar in category `i`: a one-series chart's
 /// bars take their points' own colours, as the file sets them.
 fn bar_color(series: &[Series], opts: &Options, k: usize, i: usize) -> (f64, f64, f64) {
     if series.len() == 1 {
-        opts.point_colors
-            .get(i)
-            .copied()
-            .flatten()
-            .unwrap_or_else(|| series_color(opts, 0))
+        opts.point_colors.get(i).copied().flatten().unwrap_or_else(|| series_color(opts, 0))
     } else {
         series_color(opts, k)
     }
@@ -719,11 +521,7 @@ fn bar_color(series: &[Series], opts: &Options, k: usize, i: usize) -> (f64, f64
 
 /// Series `k`'s colour: the file's, else the accent.
 fn series_color(opts: &Options, k: usize) -> (f64, f64, f64) {
-    opts.series_colors
-        .get(k)
-        .copied()
-        .flatten()
-        .unwrap_or_else(|| accent(k))
+    opts.series_colors.get(k).copied().flatten().unwrap_or_else(|| accent(k))
 }
 
 /// The largest value of any series.
@@ -734,52 +532,23 @@ fn max_of(series: &[Series]) -> f64 {
 /// A clustered column chart: value axis from 0 with round ticks and
 /// horizontal gridlines, categories under the bars, and the legend at the
 /// right when a series has a name.
-fn draw_bars(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    w: f64,
-    h: f64,
-    opts: &Options,
-) {
+fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, opts: &Options) {
     if opts.horizontal {
         return draw_horizontal_bars(cr, categories, series, w, h, opts);
     }
     // Stacked, the axis reaches the tallest category's sum of positives.
     let max = if opts.stacked {
         (0..categories.len())
-            .map(|i| {
-                series
-                    .iter()
-                    .filter_map(|s| s.at(i))
-                    .filter(|v| *v > 0.0)
-                    .sum::<f64>()
-            })
+            .map(|i| series.iter().filter_map(|s| s.at(i)).filter(|v| *v > 0.0).sum::<f64>())
             .fold(0.0, f64::max)
     } else {
         max_of(series)
     };
     let axis = ValueAxis::new(max);
-    let legend = if opts.no_legend {
-        Vec::new()
-    } else {
-        legend_in(series, opts)
-    };
-    let legend_w = legend
-        .iter()
-        .map(|(n, _)| text_w(cr, n) + 30.0)
-        .fold(0.0, f64::max);
-    let axis_w = if opts.hide_value_axis {
-        0.0
-    } else {
-        axis.widest(cr) + 4.0
-    };
-    let (left, right, top_y, bottom) = (
-        axis_w + 10.0,
-        w - 10.0 - legend_w,
-        12.0,
-        h - CHART_TEXT_PX - 14.0,
-    );
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
+    let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
+    let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
+    let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y || categories.is_empty() {
         return;
     }
@@ -792,18 +561,10 @@ fn draw_bars(
     // as Excel's default: one series' bar is 40% of the slot. Stacked, the
     // slot holds one column the width of one series' bar.
     let slot = (right - left) / categories.len() as f64;
-    let n = if opts.stacked {
-        1.0
-    } else {
-        series.len() as f64
-    };
+    let n = if opts.stacked { 1.0 } else { series.len() as f64 };
     let bar_w = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
     for (i, cat) in categories.iter().enumerate() {
-        let at = if opts.reversed {
-            categories.len() - 1 - i
-        } else {
-            i
-        };
+        let at = if opts.reversed { categories.len() - 1 - i } else { i };
         let start = left + at as f64 * slot + (slot - n * bar_w) / 2.0;
         let mut base = 0.0;
         for (k, s) in series.iter().enumerate() {
@@ -824,35 +585,18 @@ fn draw_bars(
                 if opts.stacked {
                     // In the segment, white on the accent, as PowerPoint's
                     // default centred label reads.
-                    show_in(
-                        cr,
-                        (1.0, 1.0, 1.0),
-                        x + (bar_w - tw) / 2.0,
-                        (y_of(from) + y_of(to)) / 2.0 + CHART_TEXT_PX * 0.35,
-                        &t,
-                    );
+                    show_in(cr, (1.0, 1.0, 1.0), x + (bar_w - tw) / 2.0, (y_of(from) + y_of(to)) / 2.0 + CHART_TEXT_PX * 0.35, &t);
                 } else {
                     show(cr, x + (bar_w - tw) / 2.0, y_of(to) - 3.0, &t);
                 }
             }
         }
         if !opts.hide_category_axis {
-            show(
-                cr,
-                left + at as f64 * slot + (slot - text_w(cr, cat)) / 2.0,
-                bottom + 4.0 + CHART_TEXT_PX,
-                cat,
-            );
+            show(cr, left + at as f64 * slot + (slot - text_w(cr, cat)) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
         }
     }
 
-    draw_legend(
-        cr,
-        right + 12.0,
-        (top_y + bottom) / 2.0,
-        &legend,
-        Key::Square,
-    );
+    draw_legend(cr, right + 12.0, (top_y + bottom) / 2.0, &legend, Key::Square);
 }
 
 /// `text` broken at spaces into lines no wider than `max_w` where it can
@@ -878,68 +622,27 @@ fn wrap_to(cr: &Context, text: &str, max_w: f64) -> Vec<String> {
 /// right-aligned against the plot, values along the bottom with vertical
 /// gridlines, and each bar's label just past its end. The first category is
 /// at the bottom, as Excel draws it, unless the chart is reversed.
-fn draw_horizontal_bars(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    w: f64,
-    h: f64,
-    opts: &Options,
-) {
+fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, opts: &Options) {
     let max = if opts.stacked {
         (0..categories.len())
-            .map(|i| {
-                series
-                    .iter()
-                    .filter_map(|s| s.at(i))
-                    .filter(|v| *v > 0.0)
-                    .sum::<f64>()
-            })
+            .map(|i| series.iter().filter_map(|s| s.at(i)).filter(|v| *v > 0.0).sum::<f64>())
             .fold(0.0, f64::max)
     } else {
         max_of(series)
     };
     let axis = ValueAxis::new(max);
-    let legend = if opts.no_legend {
-        Vec::new()
-    } else {
-        legend_in(series, opts)
-    };
-    let legend_w = legend
-        .iter()
-        .map(|(n, _)| text_w(cr, n) + 30.0)
-        .fold(0.0, f64::max);
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
+    let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
     // Category labels wrap at spaces to fit 45% of the width, as Calc and
     // PowerPoint break a long one over lines.
     let max_w = w * 0.45;
     let wrapped: Vec<Vec<String>> = categories.iter().map(|c| wrap_to(cr, c, max_w)).collect();
-    let cat_w = if opts.hide_category_axis {
-        0.0
-    } else {
-        wrapped
-            .iter()
-            .flatten()
-            .map(|l| text_w(cr, l))
-            .fold(0.0, f64::max)
-    };
+    let cat_w = if opts.hide_category_axis { 0.0 } else { wrapped.iter().flatten().map(|l| text_w(cr, l)).fold(0.0, f64::max) };
     let line_h = cr.font_matrix().xx() * 1.15;
     // Room past the longest bar for its label.
-    let label_w = if opts.labels {
-        text_w(cr, &label_for(axis.top, opts)) + 6.0
-    } else {
-        0.0
-    };
-    let axis_h = if opts.hide_value_axis {
-        0.0
-    } else {
-        CHART_TEXT_PX + 8.0
-    };
-    let (left, right, top_y, bottom) = (
-        cat_w + 16.0,
-        w - 10.0 - legend_w - label_w,
-        10.0,
-        h - 10.0 - axis_h,
-    );
+    let label_w = if opts.labels { text_w(cr, &label_for(axis.top, opts)) + 6.0 } else { 0.0 };
+    let axis_h = if opts.hide_value_axis { 0.0 } else { CHART_TEXT_PX + 8.0 };
+    let (left, right, top_y, bottom) = (cat_w + 16.0, w - 10.0 - legend_w - label_w, 10.0, h - 10.0 - axis_h);
     if right <= left || bottom <= top_y || categories.is_empty() {
         return;
     }
@@ -953,12 +656,7 @@ fn draw_horizontal_bars(
             cr.line_to(x, bottom);
             cr.stroke().unwrap();
             let t = axis.label(i);
-            show(
-                cr,
-                x - text_w(cr, &t) / 2.0,
-                bottom + 4.0 + CHART_TEXT_PX,
-                &t,
-            );
+            show(cr, x - text_w(cr, &t) / 2.0, bottom + 4.0 + CHART_TEXT_PX, &t);
         }
     }
     // The category axis line, where the bars start.
@@ -970,11 +668,7 @@ fn draw_horizontal_bars(
 
     let count = categories.len();
     let slot = (bottom - top_y) / count as f64;
-    let n = if opts.stacked {
-        1.0
-    } else {
-        series.len() as f64
-    };
+    let n = if opts.stacked { 1.0 } else { series.len() as f64 };
     let bar_h = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
     for (i, cat) in categories.iter().enumerate() {
         let row = if opts.reversed { i } else { count - 1 - i };
@@ -997,44 +691,21 @@ fn draw_horizontal_bars(
                 let ty = y + bar_h / 2.0 + CHART_TEXT_PX * 0.35;
                 if opts.stacked {
                     let tw = text_w(cr, &t);
-                    show_in(
-                        cr,
-                        (1.0, 1.0, 1.0),
-                        (x_of(from) + x_of(to) - tw) / 2.0,
-                        ty,
-                        &t,
-                    );
+                    show_in(cr, (1.0, 1.0, 1.0), (x_of(from) + x_of(to) - tw) / 2.0, ty, &t);
                 } else {
                     show(cr, x_of(to) + 4.0, ty, &t);
                 }
             }
         }
         let lines = &wrapped[i];
-        let first = top_y + row as f64 * slot + slot / 2.0
-            - (lines.len() as f64 - 1.0) * line_h / 2.0
-            + line_h * 0.3;
-        for (j, line) in lines
-            .iter()
-            .enumerate()
-            .filter(|_| !opts.hide_category_axis)
-        {
-            show(
-                cr,
-                left - 8.0 - text_w(cr, line),
-                first + j as f64 * line_h,
-                line,
-            );
+        let first = top_y + row as f64 * slot + slot / 2.0 - (lines.len() as f64 - 1.0) * line_h / 2.0 + line_h * 0.3;
+        for (j, line) in lines.iter().enumerate().filter(|_| !opts.hide_category_axis) {
+            show(cr, left - 8.0 - text_w(cr, line), first + j as f64 * line_h, line);
         }
         let _ = cat;
     }
 
-    draw_legend(
-        cr,
-        w - legend_w + 2.0,
-        (top_y + bottom) / 2.0,
-        &legend,
-        Key::Square,
-    );
+    draw_legend(cr, w - legend_w + 2.0, (top_y + bottom) / 2.0, &legend, Key::Square);
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1047,38 +718,13 @@ enum Style {
 /// of each category's slot; an area's categories sit on the axis ticks, the
 /// first at the left edge and the last at the right, as in Excel and Calc.
 /// Series are drawn in order, a later area in front of an earlier one.
-fn draw_category(
-    cr: &Context,
-    categories: &[String],
-    series: &[Series],
-    w: f64,
-    h: f64,
-    style: Style,
-    opts: &Options,
-) {
+fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, style: Style, opts: &Options) {
     let axis = ValueAxis::new(max_of(series));
-    let key = if style == Style::Line {
-        Key::Line
-    } else {
-        Key::Square
-    };
-    let legend = if opts.no_legend {
-        Vec::new()
-    } else {
-        legend_in(series, opts)
-    };
+    let key = if style == Style::Line { Key::Line } else { Key::Square };
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
     let legend_w = legend_width(cr, &legend, key);
-    let axis_w = if opts.hide_value_axis {
-        0.0
-    } else {
-        axis.widest(cr) + 4.0
-    };
-    let (left, right, top_y, bottom) = (
-        axis_w + 10.0,
-        w - 10.0 - legend_w,
-        12.0,
-        h - CHART_TEXT_PX - 14.0,
-    );
+    let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
+    let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y || categories.is_empty() {
         return;
     }
@@ -1126,12 +772,7 @@ fn draw_category(
     }
     for (i, cat) in categories.iter().enumerate() {
         if !opts.hide_category_axis {
-            show(
-                cr,
-                x_of(i) - text_w(cr, cat) / 2.0,
-                bottom + 4.0 + CHART_TEXT_PX,
-                cat,
-            );
+            show(cr, x_of(i) - text_w(cr, cat) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
         }
     }
     draw_legend(cr, right + 12.0, h / 2.0 + 3.0, &legend, key);
@@ -1140,27 +781,13 @@ fn draw_category(
 /// A pie: slices clockwise from twelve o'clock in the theme's accents, and
 /// a legend naming each category at the right, as in Excel and Calc.
 fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64, opts: &Options) {
-    let data: Vec<(&String, f64)> = categories
-        .iter()
-        .enumerate()
-        .map(|(i, c)| (c, series.at(i).unwrap_or(0.0)))
-        .collect();
+    let data: Vec<(&String, f64)> = categories.iter().enumerate().map(|(i, c)| (c, series.at(i).unwrap_or(0.0))).collect();
     let total: f64 = data.iter().map(|d| d.1.max(0.0)).sum();
     if total <= 0.0 {
         return;
     }
-    let color = |i: usize| {
-        opts.point_colors
-            .get(i)
-            .copied()
-            .flatten()
-            .unwrap_or_else(|| accent(i))
-    };
-    let legend_w = if opts.no_legend {
-        0.0
-    } else {
-        data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0
-    };
+    let color = |i: usize| opts.point_colors.get(i).copied().flatten().unwrap_or_else(|| accent(i));
+    let legend_w = if opts.no_legend { 0.0 } else { data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0 };
     let plot_w = (w - legend_w - 10.0).max(1.0);
     let r = ((plot_w.min(h) - 27.0) / 2.0).max(1.0);
     let (cx, cy) = (plot_w / 2.0 + 5.0, h / 2.0);
@@ -1186,12 +813,7 @@ fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64
             let mid = angle + sweep / 2.0;
             let rad = (r + inner) / 2.0 + if inner > 0.0 { 0.0 } else { r * 0.15 };
             let t = label_for(*val, opts);
-            show(
-                cr,
-                cx + rad * mid.cos() - text_w(cr, &t) / 2.0,
-                cy + rad * mid.sin() + CHART_TEXT_PX * 0.35,
-                &t,
-            );
+            show(cr, cx + rad * mid.cos() - text_w(cr, &t) / 2.0, cy + rad * mid.sin() + CHART_TEXT_PX * 0.35, &t);
         }
         angle += sweep;
     }
@@ -1215,29 +837,16 @@ fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64
 /// point a marker, as Calc and Excel draw one without lines. The
 /// categories are the x values every series shares.
 fn draw_scatter(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64) {
-    let xs: Vec<Option<f64>> = categories
-        .iter()
-        .map(|c| c.trim().parse::<f64>().ok().filter(|x| x.is_finite()))
-        .collect();
+    let xs: Vec<Option<f64>> = categories.iter().map(|c| c.trim().parse::<f64>().ok().filter(|x| x.is_finite())).collect();
     let points: Vec<Vec<(f64, f64)>> = series
         .iter()
-        .map(|s| {
-            xs.iter()
-                .enumerate()
-                .filter_map(|(i, x)| Some((((*x)?), s.at(i)?)))
-                .collect()
-        })
+        .map(|s| xs.iter().enumerate().filter_map(|(i, x)| Some((((*x)?), s.at(i)?))).collect())
         .collect();
     let y_axis = ValueAxis::new(points.iter().flatten().map(|p| p.1).fold(0.0, f64::max));
     let x_axis = ValueAxis::new(points.iter().flatten().map(|p| p.0).fold(0.0, f64::max));
     let legend = legend_entries(series);
     let legend_w = legend_width(cr, &legend, Key::Marker);
-    let (left, right, top_y, bottom) = (
-        y_axis.widest(cr) + 14.0,
-        w - 10.0 - legend_w,
-        12.0,
-        h - CHART_TEXT_PX - 14.0,
-    );
+    let (left, right, top_y, bottom) = (y_axis.widest(cr) + 14.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y {
         return;
     }
@@ -1252,12 +861,7 @@ fn draw_scatter(cr: &Context, categories: &[String], series: &[Series], w: f64, 
         cr.line_to(x, bottom);
         cr.stroke().unwrap();
         let t = x_axis.label(i);
-        show(
-            cr,
-            x - text_w(cr, &t) / 2.0,
-            bottom + 4.0 + CHART_TEXT_PX,
-            &t,
-        );
+        show(cr, x - text_w(cr, &t) / 2.0, bottom + 4.0 + CHART_TEXT_PX, &t);
     }
     for (k, pts) in points.iter().enumerate() {
         for (x, y) in pts {
@@ -1272,25 +876,14 @@ mod tests {
     use super::*;
 
     fn data() -> Vec<(String, f64)> {
-        vec![
-            ("1".into(), 3.0),
-            ("2.5".into(), 7.0),
-            ("4".into(), 5.0),
-            ("6".into(), 9.0),
-        ]
+        vec![("1".into(), 3.0), ("2.5".into(), 7.0), ("4".into(), 5.0), ("6".into(), 9.0)]
     }
 
     /// Every kind draws something in the series colour inside the frame,
     /// and survives no data at all.
     #[test]
     fn every_kind_draws_and_none_panics_on_nothing() {
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Pie,
-            ChartKind::Scatter,
-        ] {
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Pie, ChartKind::Scatter] {
             let mut s = render_chart_named(&data(), kind, 340, 227, Some("Column B"));
             let (w, stride) = (s.width() as usize, s.stride() as usize);
             let px = s.data().unwrap();
@@ -1307,13 +900,7 @@ mod tests {
     fn count(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> usize {
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
-        (0..h)
-            .map(|y| {
-                (0..w)
-                    .filter(|x| px[y * stride + x * 4..][..3] == [b, g, r])
-                    .count()
-            })
-            .sum()
+        (0..h).map(|y| (0..w).filter(|x| px[y * stride + x * 4..][..3] == [b, g, r]).count()).sum()
     }
 
     fn draw(categories: &[String], series: &[Series], kind: ChartKind) -> ImageSurface {
@@ -1333,35 +920,14 @@ mod tests {
         let d = data();
         let categories: Vec<String> = d.iter().map(|p| p.0.clone()).collect();
         let values: Vec<f64> = d.iter().map(|p| p.1).collect();
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Pie,
-            ChartKind::Scatter,
-        ] {
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Pie, ChartKind::Scatter] {
             let mut a = render_chart_named(&d, kind, 400, 260, Some("Column B"));
-            let mut b = draw(
-                &categories,
-                &[Series {
-                    name: Some("Column B"),
-                    values: &values,
-                }],
-                kind,
-            );
-            assert!(
-                a.data().unwrap().iter().eq(b.data().unwrap().iter()),
-                "{kind:?}"
-            );
+            let mut b = draw(&categories, &[Series { name: Some("Column B"), values: &values }], kind);
+            assert!(a.data().unwrap().iter().eq(b.data().unwrap().iter()), "{kind:?}");
         }
     }
 
-    fn draw_with(
-        categories: &[String],
-        series: &[Series],
-        kind: ChartKind,
-        opts: &Options,
-    ) -> ImageSurface {
+    fn draw_with(categories: &[String], series: &[Series], kind: ChartKind, opts: &Options) -> ImageSurface {
         let s = ImageSurface::create(Format::ARgb32, 400, 260).unwrap();
         {
             let cr = Context::new(&s).unwrap();
@@ -1375,9 +941,7 @@ mod tests {
     fn columns_with(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> Vec<usize> {
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
-        (0..w)
-            .filter(|x| (0..h).any(|y| px[y * stride + x * 4..][..3] == [b, g, r]))
-            .collect()
+        (0..w).filter(|x| (0..h).any(|y| px[y * stride + x * 4..][..3] == [b, g, r])).collect()
     }
 
     /// The first row that holds `rgb` anywhere.
@@ -1393,33 +957,16 @@ mod tests {
     fn a_title_sits_over_the_plot() {
         let categories: Vec<String> = ["A", "B"].iter().map(|s| s.to_string()).collect();
         let a = [3.0, 5.0];
-        let one = [Series {
-            name: None,
-            values: &a,
-        }];
-        let plain = Options {
-            no_legend: true,
-            ..Options::default()
-        };
-        let titled = Options {
-            title: Some("Satisfaction"),
-            title_bold: true,
-            title_color: Some((1.0, 0.0, 0.0)),
-            ..plain
-        };
+        let one = [Series { name: None, values: &a }];
+        let plain = Options { no_legend: true, ..Options::default() };
+        let titled = Options { title: Some("Satisfaction"), title_bold: true, title_color: Some((1.0, 0.0, 0.0)), ..plain };
         let mut p = draw_with(&categories, &one, ChartKind::Bar, &plain);
         let mut t = draw_with(&categories, &one, ChartKind::Bar, &titled);
         assert_eq!(top_row_with(&mut p, (0xff, 0, 0)), None);
         let red = top_row_with(&mut t, (0xff, 0, 0)).expect("the title in its colour");
-        let (bar_p, bar_t) = (
-            top_row_with(&mut p, (0x4f, 0x81, 0xbd)).unwrap(),
-            top_row_with(&mut t, (0x4f, 0x81, 0xbd)).unwrap(),
-        );
+        let (bar_p, bar_t) = (top_row_with(&mut p, (0x4f, 0x81, 0xbd)).unwrap(), top_row_with(&mut t, (0x4f, 0x81, 0xbd)).unwrap());
         assert!(red < bar_t, "the title is above the bars");
-        assert!(
-            bar_t > bar_p + 10,
-            "the plot gives the title room: {bar_p} → {bar_t}"
-        );
+        assert!(bar_t > bar_p + 10, "the plot gives the title room: {bar_p} → {bar_t}");
     }
 
     /// Default options are the plain chart, pixel for pixel.
@@ -1427,23 +974,11 @@ mod tests {
     fn default_options_are_the_plain_chart() {
         let categories: Vec<String> = ["1", "2", "3"].iter().map(|s| s.to_string()).collect();
         let (a, b) = ([3.0, 5.0, 4.0], [4.0, 2.0, 6.0]);
-        let two = [
-            Series {
-                name: Some("North"),
-                values: &a,
-            },
-            Series {
-                name: Some("South"),
-                values: &b,
-            },
-        ];
+        let two = [Series { name: Some("North"), values: &a }, Series { name: Some("South"), values: &b }];
         for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area] {
             let mut plain = draw(&categories, &two, kind);
             let mut with = draw_with(&categories, &two, kind, &Options::default());
-            assert!(
-                plain.data().unwrap().iter().eq(with.data().unwrap().iter()),
-                "{kind:?}"
-            );
+            assert!(plain.data().unwrap().iter().eq(with.data().unwrap().iter()), "{kind:?}");
         }
     }
 
@@ -1453,38 +988,16 @@ mod tests {
     fn stacked_series_share_one_column() {
         let categories: Vec<String> = ["May", "June"].iter().map(|s| s.to_string()).collect();
         let (a, b) = ([951.0, 3623.0], [123.0, 587.0]);
-        let two = [
-            Series {
-                name: Some("$48"),
-                values: &a,
-            },
-            Series {
-                name: Some("$418"),
-                values: &b,
-            },
-        ];
-        let stacked = Options {
-            stacked: true,
-            ..Options::default()
-        };
+        let two = [Series { name: Some("$48"), values: &a }, Series { name: Some("$418"), values: &b }];
+        let stacked = Options { stacked: true, ..Options::default() };
         let mut s = draw_with(&categories, &two, ChartKind::Bar, &stacked);
-        let (first, second) = (
-            columns_with(&mut s, (0x4f, 0x81, 0xbd)),
-            columns_with(&mut s, (0xc0, 0x50, 0x4d)),
-        );
+        let (first, second) = (columns_with(&mut s, (0x4f, 0x81, 0xbd)), columns_with(&mut s, (0xc0, 0x50, 0x4d)));
         // The legend's keys carry both accents too; compare the plot's columns.
         let plot = |v: Vec<usize>| v.into_iter().filter(|x| *x < 300).collect::<Vec<_>>();
         assert!(!plot(second.clone()).is_empty());
-        assert_eq!(
-            plot(first),
-            plot(second),
-            "stacked segments sit in the same columns"
-        );
+        assert_eq!(plot(first), plot(second), "stacked segments sit in the same columns");
         let mut side = draw_with(&categories, &two, ChartKind::Bar, &Options::default());
-        let (f, g) = (
-            columns_with(&mut side, (0x4f, 0x81, 0xbd)),
-            columns_with(&mut side, (0xc0, 0x50, 0x4d)),
-        );
+        let (f, g) = (columns_with(&mut side, (0x4f, 0x81, 0xbd)), columns_with(&mut side, (0xc0, 0x50, 0x4d)));
         assert_ne!(plot(f), plot(g), "clustered columns stand side by side");
     }
 
@@ -1494,27 +1007,12 @@ mod tests {
     fn a_transparent_coloured_doughnut() {
         let categories: Vec<String> = ["Done", "Left"].iter().map(|s| s.to_string()).collect();
         let a = [1.0, 3.0];
-        let one = [Series {
-            name: None,
-            values: &a,
-        }];
+        let one = [Series { name: None, values: &a }];
         let colors = [Some((0.0, 176.0 / 255.0, 240.0 / 255.0)), None];
-        let opts = Options {
-            hole: 0.5,
-            point_colors: &colors,
-            no_legend: true,
-            transparent: true,
-            ..Options::default()
-        };
+        let opts = Options { hole: 0.5, point_colors: &colors, no_legend: true, transparent: true, ..Options::default() };
         let mut s = draw_with(&categories, &one, ChartKind::Pie, &opts);
-        assert!(
-            count(&mut s, (0x00, 0xb0, 0xf0)) > 0,
-            "the file's slice colour"
-        );
-        assert!(
-            count(&mut s, (0xc0, 0x50, 0x4d)) > 0,
-            "the uncoloured slice keeps its accent"
-        );
+        assert!(count(&mut s, (0x00, 0xb0, 0xf0)) > 0, "the file's slice colour");
+        assert!(count(&mut s, (0xc0, 0x50, 0x4d)) > 0, "the uncoloured slice keeps its accent");
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
         let alpha = |x: usize, y: usize| px[y * stride + x * 4 + 3];
@@ -1528,31 +1026,13 @@ mod tests {
     fn a_hidden_value_axis_draws_no_gridlines() {
         let categories: Vec<String> = ["1", "2"].iter().map(|s| s.to_string()).collect();
         let a = [3.0, 5.0];
-        let one = [Series {
-            name: None,
-            values: &a,
-        }];
+        let one = [Series { name: None, values: &a }];
         let grid = |s: &mut ImageSurface| {
             let (r, g, b) = GRID;
-            count(
-                s,
-                (
-                    (r * 255.0).round() as u8,
-                    (g * 255.0).round() as u8,
-                    (b * 255.0).round() as u8,
-                ),
-            )
+            count(s, ((r * 255.0).round() as u8, (g * 255.0).round() as u8, (b * 255.0).round() as u8))
         };
         let mut shown = draw_with(&categories, &one, ChartKind::Bar, &Options::default());
-        let mut hidden = draw_with(
-            &categories,
-            &one,
-            ChartKind::Bar,
-            &Options {
-                hide_value_axis: true,
-                ..Options::default()
-            },
-        );
+        let mut hidden = draw_with(&categories, &one, ChartKind::Bar, &Options { hide_value_axis: true, ..Options::default() });
         assert!(grid(&mut shown) > 0);
         assert_eq!(grid(&mut hidden), 0);
     }
@@ -1564,31 +1044,11 @@ mod tests {
     fn a_second_series_is_drawn_in_the_second_accent() {
         let categories: Vec<String> = ["1", "2", "3"].iter().map(|s| s.to_string()).collect();
         let (a, b) = ([3.0, 5.0, 4.0], [4.0, 2.0, 6.0]);
-        let two = [
-            Series {
-                name: Some("North"),
-                values: &a,
-            },
-            Series {
-                name: Some("South"),
-                values: &b,
-            },
-        ];
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Scatter,
-        ] {
+        let two = [Series { name: Some("North"), values: &a }, Series { name: Some("South"), values: &b }];
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Scatter] {
             let mut s = draw(&categories, &two, kind);
-            assert!(
-                count(&mut s, (0x4f, 0x81, 0xbd)) > 0,
-                "{kind:?}: the first series"
-            );
-            assert!(
-                count(&mut s, (0xc0, 0x50, 0x4d)) > 0,
-                "{kind:?}: the second series"
-            );
+            assert!(count(&mut s, (0x4f, 0x81, 0xbd)) > 0, "{kind:?}: the first series");
+            assert!(count(&mut s, (0xc0, 0x50, 0x4d)) > 0, "{kind:?}: the second series");
         }
         // Clustered columns: two series' bars together are 2/3.5 of a slot
         // where one series' is 1/2.5, so each is narrower than alone.
@@ -1608,21 +1068,8 @@ mod tests {
     fn a_short_series_leaves_gaps() {
         let categories: Vec<String> = ["a", "b", "c", "d"].iter().map(|s| s.to_string()).collect();
         let short = [2.0, f64::NAN];
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Pie,
-            ChartKind::Scatter,
-        ] {
-            draw(
-                &categories,
-                &[Series {
-                    name: None,
-                    values: &short,
-                }],
-                kind,
-            );
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Pie, ChartKind::Scatter] {
+            draw(&categories, &[Series { name: None, values: &short }], kind);
             draw(&categories, &[], kind);
         }
     }
@@ -1636,10 +1083,7 @@ mod tests {
 
     /// The rows and columns `rgb` is drawn in: (first row, last row, first
     /// column, last column, count), or None.
-    fn extent(
-        s: &mut ImageSurface,
-        (r, g, b): (u8, u8, u8),
-    ) -> Option<(usize, usize, usize, usize, usize)> {
+    fn extent(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> Option<(usize, usize, usize, usize, usize)> {
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
         let mut found: Option<(usize, usize, usize, usize, usize)> = None;
@@ -1648,9 +1092,7 @@ mod tests {
                 if px[y * stride + x * 4..][..3] == [b, g, r] {
                     found = Some(match found {
                         None => (y, y, x, x, 1),
-                        Some((y0, y1, x0, x1, n)) => {
-                            (y0.min(y), y1.max(y), x0.min(x), x1.max(x), n + 1)
-                        }
+                        Some((y0, y1, x0, x1, n)) => (y0.min(y), y1.max(y), x0.min(x), x1.max(x), n + 1),
                     });
                 }
             }
@@ -1684,14 +1126,7 @@ mod tests {
         let (r, g, b) = grid_colour();
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
-        let rows: Vec<usize> = (0..h)
-            .filter(|y| {
-                (0..w)
-                    .filter(|x| px[y * stride + x * 4..][..3] == [b, g, r])
-                    .count()
-                    >= 100
-            })
-            .collect();
+        let rows: Vec<usize> = (0..h).filter(|y| (0..w).filter(|x| px[y * stride + x * 4..][..3] == [b, g, r]).count() >= 100).collect();
         (*rows.first().expect("no gridline"), *rows.last().unwrap())
     }
 
@@ -1702,43 +1137,17 @@ mod tests {
     #[test]
     fn with_nothing_asked_it_is_draw_chart_series_exactly() {
         let (a, b) = two();
-        let series = [
-            Series {
-                name: Some("Sales"),
-                values: &a,
-            },
-            Series {
-                name: Some("Plan"),
-                values: &b,
-            },
-        ];
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
         let cats: Vec<String> = (1..=4).map(|i| format!("Q{i}")).collect();
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Scatter,
-            ChartKind::Pie,
-        ] {
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Scatter, ChartKind::Pie] {
             let mut plain = draw(&cats, &series, kind);
             // draw() is 400x260, as decorated() is.
             let mut same = decorated(&series, kind, &Decor::default());
             assert_eq!(bytes(&mut plain), bytes(&mut same), "{kind:?}");
         }
-        let mut pie_bottom = decorated(
-            &series,
-            ChartKind::Pie,
-            &Decor {
-                legend: LegendPos::Bottom,
-                ..Decor::default()
-            },
-        );
+        let mut pie_bottom = decorated(&series, ChartKind::Pie, &Decor { legend: LegendPos::Bottom, ..Decor::default() });
         let mut pie_right = decorated(&series, ChartKind::Pie, &Decor::default());
-        assert_eq!(
-            bytes(&mut pie_bottom),
-            bytes(&mut pie_right),
-            "a pie's legend stays at its right"
-        );
+        assert_eq!(bytes(&mut pie_bottom), bytes(&mut pie_right), "a pie's legend stays at its right");
     }
 
     /// A title takes the room over the plot and an x title the room under
@@ -1746,41 +1155,12 @@ mod tests {
     #[test]
     fn a_title_and_an_x_title_make_room_for_themselves() {
         let (a, b) = two();
-        let series = [
-            Series {
-                name: Some("Sales"),
-                values: &a,
-            },
-            Series {
-                name: Some("Plan"),
-                values: &b,
-            },
-        ];
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
         let (first, last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor::default()));
-        let (t_first, t_last) = grid_rows(&mut decorated(
-            &series,
-            ChartKind::Bar,
-            &Decor {
-                title: "Sales by quarter",
-                ..Decor::default()
-            },
-        ));
-        assert!(
-            t_first >= first + 25 && t_last == last,
-            "title: {first}..{last} -> {t_first}..{t_last}"
-        );
-        let (x_first, x_last) = grid_rows(&mut decorated(
-            &series,
-            ChartKind::Bar,
-            &Decor {
-                x_title: Some("Quarter"),
-                ..Decor::default()
-            },
-        ));
-        assert!(
-            x_first == first && x_last + 15 <= last,
-            "x title: {first}..{last} -> {x_first}..{x_last}"
-        );
+        let (t_first, t_last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor { title: "Sales by quarter", ..Decor::default() }));
+        assert!(t_first >= first + 25 && t_last == last, "title: {first}..{last} -> {t_first}..{t_last}");
+        let (x_first, x_last) = grid_rows(&mut decorated(&series, ChartKind::Bar, &Decor { x_title: Some("Quarter"), ..Decor::default() }));
+        assert!(x_first == first && x_last + 15 <= last, "x title: {first}..{last} -> {x_first}..{x_last}");
     }
 
     /// The legend's keys are where the position says. The second series is
@@ -1788,30 +1168,9 @@ mod tests {
     #[test]
     fn the_legend_sits_where_it_is_asked() {
         let (a, b) = two();
-        let series = [
-            Series {
-                name: Some("Sales"),
-                values: &a,
-            },
-            Series {
-                name: Some("Plan"),
-                values: &b,
-            },
-        ];
+        let series = [Series { name: Some("Sales"), values: &a }, Series { name: Some("Plan"), values: &b }];
         let key = (0xc0, 0x50, 0x4d);
-        let at = |pos| {
-            extent(
-                &mut decorated(
-                    &series,
-                    ChartKind::Bar,
-                    &Decor {
-                        legend: pos,
-                        ..Decor::default()
-                    },
-                ),
-                key,
-            )
-        };
+        let at = |pos| extent(&mut decorated(&series, ChartKind::Bar, &Decor { legend: pos, ..Decor::default() }), key);
         assert_eq!(at(LegendPos::None), None, "no legend, no key");
         let right = at(LegendPos::Right).expect("a key at the right");
         assert!(right.2 > 300, "right: {right:?}");
@@ -1822,10 +1181,7 @@ mod tests {
         let bottom = at(LegendPos::Bottom).expect("a key below");
         assert!(bottom.0 > 260 - 30, "bottom: {bottom:?}");
         // A row is centred under the plot, not pushed into a corner.
-        assert!(
-            (100..300).contains(&(bottom.2 + (bottom.3 - bottom.2) / 2)),
-            "bottom: {bottom:?}"
-        );
+        assert!((100..300).contains(&(bottom.2 + (bottom.3 - bottom.2) / 2)), "bottom: {bottom:?}");
     }
 
     /// Titles, long ones included, and a legend row wider than the chart
@@ -1833,37 +1189,11 @@ mod tests {
     #[test]
     fn long_titles_and_tiny_charts_do_not_panic() {
         let (a, b) = two();
-        let series = [
-            Series {
-                name: Some("A series with a very long name indeed"),
-                values: &a,
-            },
-            Series {
-                name: Some("Another one"),
-                values: &b,
-            },
-        ];
+        let series = [Series { name: Some("A series with a very long name indeed"), values: &a }, Series { name: Some("Another one"), values: &b }];
         let long = "A chart title far too long to fit in the width this chart has, with 見出し and שלום in it";
-        for kind in [
-            ChartKind::Bar,
-            ChartKind::Line,
-            ChartKind::Area,
-            ChartKind::Scatter,
-            ChartKind::Pie,
-        ] {
-            for legend in [
-                LegendPos::None,
-                LegendPos::Top,
-                LegendPos::Bottom,
-                LegendPos::Left,
-                LegendPos::Right,
-            ] {
-                let decor = Decor {
-                    title: long,
-                    x_title: Some(long),
-                    y_title: Some(long),
-                    legend,
-                };
+        for kind in [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Scatter, ChartKind::Pie] {
+            for legend in [LegendPos::None, LegendPos::Top, LegendPos::Bottom, LegendPos::Left, LegendPos::Right] {
+                let decor = Decor { title: long, x_title: Some(long), y_title: Some(long), legend };
                 let cats: Vec<String> = (1..=4).map(|i| format!("Q{i}")).collect();
                 for (w, h) in [(400, 260), (60, 40), (1, 1)] {
                     render_chart_decorated(&cats, &series, kind, w, h, &decor);

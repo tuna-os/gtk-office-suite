@@ -42,11 +42,7 @@ pub fn section(items: &[(&str, &str)]) -> gio::Menu {
 /// unparented on close, as `crate::popover` explains: a widget that draws
 /// its own accessible children (the Tables grid) hides a popover inside it
 /// from screen readers, and an unparented popover can crash GTK 4.14 (#1192).
-pub fn attach_context_menu(
-    widget: &impl IsA<gtk::Widget>,
-    model: &gio::Menu,
-    before: impl Fn(f64, f64) + 'static,
-) {
+pub fn attach_context_menu(widget: &impl IsA<gtk::Widget>, model: &gio::Menu, before: impl Fn(f64, f64) + 'static) {
     let widget = widget.as_ref().clone();
     let model = model.clone();
     let before = std::rc::Rc::new(before);

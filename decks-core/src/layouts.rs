@@ -18,7 +18,8 @@
 use crate::engine::{MasterSlide, Slide, SlideObject, TextBody};
 
 /// What a placeholder holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Placeholder {
     Title,
     Subtitle,
@@ -167,27 +168,11 @@ pub struct Layout {
 }
 
 fn ph(role: Placeholder, x: f64, y: f64, w: f64, h: f64) -> LayoutPlaceholder {
-    LayoutPlaceholder {
-        id: 0,
-        role,
-        x,
-        y,
-        w,
-        h,
-        source_ty: String::new(),
-        source_idx: None,
-    }
+    LayoutPlaceholder { id: 0, role, x, y, w, h, source_ty: String::new(), source_idx: None }
 }
 
 fn layout(name: &str, kind: LayoutKind, placeholders: Vec<LayoutPlaceholder>) -> Layout {
-    Layout {
-        id: 0,
-        name: name.into(),
-        kind,
-        background: None,
-        shapes: Vec::new(),
-        placeholders,
-    }
+    Layout { id: 0, name: name.into(), kind, background: None, shapes: Vec::new(), placeholders }
 }
 
 /// The standard layouts a new master gets (PowerPoint's and Keynote's
@@ -196,44 +181,15 @@ pub fn standard() -> Vec<Layout> {
     use LayoutKind as K;
     use Placeholder as P;
     vec![
-        layout(
-            "Title Slide",
-            K::Title,
-            vec![
-                ph(P::Title, 80.0, 150.0, 800.0, 130.0),
-                ph(P::Subtitle, 80.0, 300.0, 800.0, 60.0),
-            ],
-        ),
-        layout(
-            "Title and Content",
-            K::TitleAndContent,
-            vec![
-                ph(P::Title, 80.0, 40.0, 800.0, 90.0),
-                ph(P::Body, 80.0, 150.0, 800.0, 320.0),
-            ],
-        ),
-        layout(
-            "Section Header",
-            K::SectionHeader,
-            vec![
-                ph(P::Title, 80.0, 200.0, 800.0, 100.0),
-                ph(P::Body, 80.0, 310.0, 800.0, 60.0),
-            ],
-        ),
+        layout("Title Slide", K::Title, vec![ph(P::Title, 80.0, 150.0, 800.0, 130.0), ph(P::Subtitle, 80.0, 300.0, 800.0, 60.0)]),
+        layout("Title and Content", K::TitleAndContent, vec![ph(P::Title, 80.0, 40.0, 800.0, 90.0), ph(P::Body, 80.0, 150.0, 800.0, 320.0)]),
+        layout("Section Header", K::SectionHeader, vec![ph(P::Title, 80.0, 200.0, 800.0, 100.0), ph(P::Body, 80.0, 310.0, 800.0, 60.0)]),
         layout(
             "Two Content",
             K::TwoContent,
-            vec![
-                ph(P::Title, 80.0, 40.0, 800.0, 90.0),
-                ph(P::Body, 80.0, 150.0, 390.0, 320.0),
-                ph(P::Body, 490.0, 150.0, 390.0, 320.0),
-            ],
+            vec![ph(P::Title, 80.0, 40.0, 800.0, 90.0), ph(P::Body, 80.0, 150.0, 390.0, 320.0), ph(P::Body, 490.0, 150.0, 390.0, 320.0)],
         ),
-        layout(
-            "Title Only",
-            K::TitleOnly,
-            vec![ph(P::Title, 80.0, 40.0, 800.0, 90.0)],
-        ),
+        layout("Title Only", K::TitleOnly, vec![ph(P::Title, 80.0, 40.0, 800.0, 90.0)]),
         layout("Blank", K::Blank, vec![]),
     ]
 }
@@ -243,9 +199,7 @@ pub fn standard() -> Vec<Layout> {
 /// the master's. The layout is resolved by stable id; an unknown id draws
 /// the bare master rather than a positional guess.
 pub fn effective_master(master: &MasterSlide, layout_id: Option<u64>) -> MasterSlide {
-    let Some(l) = layout_id.and_then(|id| master.layout_by_id(id)) else {
-        return master.clone();
-    };
+    let Some(l) = layout_id.and_then(|id| master.layout_by_id(id)) else { return master.clone() };
     let mut m = master.clone();
     if let Some(bg) = &l.background {
         m.background = bg.clone();
@@ -265,13 +219,8 @@ pub const FALLBACK_BACKGROUND: &str = "#ffffff";
 /// layout's, else its master's, else [`FALLBACK_BACKGROUND`]. Empty
 /// means absent at every level — never white smuggled in at import.
 /// An explicit white slide on a coloured master stays white.
-pub fn resolve_background<'a>(
-    slide_bg: &'a str,
-    layout_bg: Option<&'a str>,
-    master_bg: &'a str,
-) -> &'a str {
-    crate::engine::resolver::stated_background(slide_bg, layout_bg, master_bg)
-        .unwrap_or(FALLBACK_BACKGROUND)
+pub fn resolve_background<'a>(slide_bg: &'a str, layout_bg: Option<&'a str>, master_bg: &'a str) -> &'a str {
+    crate::engine::resolver::stated_background(slide_bg, layout_bg, master_bg).unwrap_or(FALLBACK_BACKGROUND)
 }
 
 /// The placeholder a slide object fills, if any.
@@ -292,10 +241,7 @@ pub fn empty_placeholder(p: &LayoutPlaceholder) -> SlideObject {
         h: p.h,
         rotation: 0.0,
         runs: vec![],
-        body: TextBody {
-            placeholder: Some(p.role),
-            ..Default::default()
-        },
+        body: TextBody { placeholder: Some(p.role), ..Default::default() },
     }
 }
 
@@ -312,9 +258,7 @@ pub fn empty_placeholder(p: &LayoutPlaceholder) -> SlideObject {
 pub fn arrange(s: &Slide, layout: &Layout) -> Vec<SlideObject> {
     let key_of = |o: &SlideObject| -> Option<(Placeholder, Option<PlaceholderKey>)> {
         match o {
-            SlideObject::TextBox { body, .. } => body
-                .placeholder
-                .map(|role| (role, body.placeholder_key.clone())),
+            SlideObject::TextBox { body, .. } => body.placeholder.map(|role| (role, body.placeholder_key.clone())),
             _ => None,
         }
     };
@@ -340,9 +284,7 @@ pub fn arrange(s: &Slide, layout: &Layout) -> Vec<SlideObject> {
         .objects
         .iter()
         .map(|o| {
-            let Some((role, key)) = key_of(o) else {
-                return o.clone();
-            };
+            let Some((role, key)) = key_of(o) else { return o.clone() };
             // Best keyed match first; role fallback only when no keyed
             // place is left for this box.
             let mut best: Option<(u8, usize)> = None;
@@ -359,18 +301,10 @@ pub fn arrange(s: &Slide, layout: &Layout) -> Vec<SlideObject> {
             let place = best
                 .map(|(_, i)| (i, layout.placeholders[i].clone()))
                 .or_else(|| {
-                    layout
-                        .placeholders
-                        .iter()
-                        .enumerate()
-                        .find(|(i, p)| !used[*i] && p.role == role)
-                        .map(|(i, p)| (i, p.clone()))
+                    layout.placeholders.iter().enumerate().find(|(i, p)| !used[*i] && p.role == role).map(|(i, p)| (i, p.clone()))
                 });
             let mut o = o.clone();
-            if let SlideObject::TextBox {
-                x, y, w, h, body, ..
-            } = &mut o
-            {
+            if let SlideObject::TextBox { x, y, w, h, body, .. } = &mut o {
                 match place {
                     Some((i, p)) => {
                         used[i] = true;
@@ -403,16 +337,12 @@ mod tests {
             h: 4.0,
             rotation: 0.0,
             runs: vec![],
-            body: TextBody {
-                placeholder: role,
-                ..Default::default()
-            },
+            body: TextBody { placeholder: role, ..Default::default() },
         }
     }
 
     fn slide(objects: Vec<SlideObject>) -> Slide {
-        Slide {
-            hidden: false,
+        Slide { hidden: false,
             title: "s".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -430,31 +360,20 @@ mod tests {
     fn arranging_moves_fills_and_never_drops() {
         let layouts = standard();
         let two = &layouts[3];
-        let s = slide(vec![
-            boxed(Some(Placeholder::Title), "Hello"),
-            boxed(None, "free text"),
-            boxed(Some(Placeholder::Subtitle), "sub"),
-        ]);
+        let s = slide(vec![boxed(Some(Placeholder::Title), "Hello"), boxed(None, "free text"), boxed(Some(Placeholder::Subtitle), "sub")]);
         let out = arrange(&s, two);
         // Title moved; free text untouched; the subtitle, with no place on
         // Two Content, stays where it was as a plain box; two bodies added.
         assert_eq!(out.len(), 5);
         match &out[0] {
-            SlideObject::TextBox {
-                x, y, text, body, ..
-            } => {
-                assert_eq!(
-                    (*x, *y, text.as_str(), body.placeholder),
-                    (80.0, 40.0, "Hello", Some(Placeholder::Title))
-                );
+            SlideObject::TextBox { x, y, text, body, .. } => {
+                assert_eq!((*x, *y, text.as_str(), body.placeholder), (80.0, 40.0, "Hello", Some(Placeholder::Title)));
             }
             o => panic!("{o:?}"),
         }
         assert_eq!(format!("{:?}", out[1]), format!("{:?}", s.objects[1]));
         match &out[2] {
-            SlideObject::TextBox { x, text, body, .. } => {
-                assert_eq!((*x, text.as_str(), body.placeholder), (1.0, "sub", None))
-            }
+            SlideObject::TextBox { x, text, body, .. } => assert_eq!((*x, text.as_str(), body.placeholder), (1.0, "sub", None)),
             o => panic!("{o:?}"),
         }
         let added: Vec<(f64, Option<Placeholder>)> = out[3..]
@@ -464,13 +383,7 @@ mod tests {
                 o => panic!("{o:?}"),
             })
             .collect();
-        assert_eq!(
-            added,
-            vec![
-                (80.0, Some(Placeholder::Body)),
-                (490.0, Some(Placeholder::Body))
-            ]
-        );
+        assert_eq!(added, vec![(80.0, Some(Placeholder::Body)), (490.0, Some(Placeholder::Body))]);
     }
 
     #[test]
@@ -480,13 +393,7 @@ mod tests {
             name: "M".into(),
             background: "#ffffff".into(),
             default_font: "Sans".into(),
-            shapes: vec![SlideObject::Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 1.0,
-                h: 1.0,
-                rotation: 0.0,
-            }],
+            shapes: vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }],
             theme_id: None,
             color_map: Default::default(),
             layouts: standard(),
@@ -495,13 +402,7 @@ mod tests {
         crate::ops::ensure_all_ids(&mut Vec::new(), &mut masters);
         let mut m = masters.pop().unwrap();
         m.layouts[2].background = Some("#102030".into());
-        m.layouts[2].shapes.push(SlideObject::Rect {
-            x: 5.0,
-            y: 5.0,
-            w: 1.0,
-            h: 1.0,
-            rotation: 0.0,
-        });
+        m.layouts[2].shapes.push(SlideObject::Rect { x: 5.0, y: 5.0, w: 1.0, h: 1.0, rotation: 0.0 });
         let third = m.layouts[2].id;
         let first = m.layouts[0].id;
         let e = effective_master(&m, Some(third));
@@ -509,11 +410,7 @@ mod tests {
         assert_eq!(e.shapes.len(), 2);
         assert_eq!(effective_master(&m, Some(first)).background, "#ffffff");
         assert_eq!(effective_master(&m, None).shapes.len(), 1);
-        assert_eq!(
-            effective_master(&m, Some(u64::MAX)).shapes.len(),
-            1,
-            "an unknown layout id draws the bare master"
-        );
+        assert_eq!(effective_master(&m, Some(u64::MAX)).shapes.len(), 1, "an unknown layout id draws the bare master");
     }
 
     #[test]
@@ -522,10 +419,7 @@ mod tests {
             assert_eq!(Placeholder::from_pptx(Some(p.to_pptx())), Some(p));
             assert_eq!(Placeholder::from_odf(p.to_odf()), Some(p));
         }
-        assert_eq!(
-            Placeholder::from_pptx(Some("ctrTitle")),
-            Some(Placeholder::Title)
-        );
+        assert_eq!(Placeholder::from_pptx(Some("ctrTitle")), Some(Placeholder::Title));
         assert_eq!(Placeholder::from_pptx(Some("sldNum")), None);
         for l in standard() {
             assert_eq!(LayoutKind::from_pptx(Some(l.kind.to_pptx())), l.kind);
@@ -534,14 +428,8 @@ mod tests {
 
     #[test]
     fn backgrounds_resolve_slide_over_layout_over_master_over_fallback() {
-        assert_eq!(
-            resolve_background("#112233", Some("#445566"), "#778899"),
-            "#112233"
-        );
-        assert_eq!(
-            resolve_background("", Some("#445566"), "#778899"),
-            "#445566"
-        );
+        assert_eq!(resolve_background("#112233", Some("#445566"), "#778899"), "#112233");
+        assert_eq!(resolve_background("", Some("#445566"), "#778899"), "#445566");
         assert_eq!(resolve_background("", None, "#778899"), "#778899");
         assert_eq!(resolve_background("", None, ""), FALLBACK_BACKGROUND);
         // An explicit white slide on a coloured master stays white.
@@ -560,42 +448,16 @@ mod tests {
             background: None,
             shapes: Vec::new(),
             placeholders: vec![
-                LayoutPlaceholder {
-                    id: 1,
-                    role: Placeholder::Body,
-                    x: 10.0,
-                    y: 10.0,
-                    w: 100.0,
-                    h: 100.0,
-                    source_ty: "obj".into(),
-                    source_idx: Some(1),
-                },
-                LayoutPlaceholder {
-                    id: 2,
-                    role: Placeholder::Body,
-                    x: 200.0,
-                    y: 10.0,
-                    w: 100.0,
-                    h: 100.0,
-                    source_ty: "obj".into(),
-                    source_idx: Some(2),
-                },
+                LayoutPlaceholder { id: 1, role: Placeholder::Body, x: 10.0, y: 10.0, w: 100.0, h: 100.0, source_ty: "obj".into(), source_idx: Some(1) },
+                LayoutPlaceholder { id: 2, role: Placeholder::Body, x: 200.0, y: 10.0, w: 100.0, h: 100.0, source_ty: "obj".into(), source_idx: Some(2) },
             ],
         };
         let keyed = |idx: u32, text: &str| SlideObject::TextBox {
             text: text.into(),
-            x: 1.0,
-            y: 2.0,
-            w: 3.0,
-            h: 4.0,
-            rotation: 0.0,
-            runs: vec![],
+            x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, runs: vec![],
             body: TextBody {
                 placeholder: Some(Placeholder::Body),
-                placeholder_key: Some(PlaceholderKey {
-                    ty: "obj".into(),
-                    idx: Some(idx),
-                }),
+                placeholder_key: Some(PlaceholderKey { ty: "obj".into(), idx: Some(idx) }),
                 ..Default::default()
             },
         };
@@ -607,28 +469,15 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            at,
-            vec![("second", 200.0), ("first", 10.0)],
-            "index wins over position: {at:?}"
-        );
+        assert_eq!(at, vec![("second", 200.0), ("first", 10.0)], "index wins over position: {at:?}");
         // Keyless boxes still match nth-of-role.
         layout.placeholders[0].source_ty.clear();
         layout.placeholders[1].source_ty.clear();
-        let out = arrange(
-            &slide(vec![
-                boxed(Some(Placeholder::Body), "a"),
-                boxed(Some(Placeholder::Body), "b"),
-            ]),
-            &layout,
-        );
-        let texts: Vec<&str> = out
-            .iter()
-            .filter_map(|o| match o {
-                SlideObject::TextBox { text, .. } => Some(text.as_str()),
-                _ => None,
-            })
-            .collect();
+        let out = arrange(&slide(vec![boxed(Some(Placeholder::Body), "a"), boxed(Some(Placeholder::Body), "b")]), &layout);
+        let texts: Vec<&str> = out.iter().filter_map(|o| match o {
+            SlideObject::TextBox { text, .. } => Some(text.as_str()),
+            _ => None,
+        }).collect();
         assert_eq!(texts, vec!["a", "b"]);
     }
 }

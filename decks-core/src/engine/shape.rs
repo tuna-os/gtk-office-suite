@@ -52,8 +52,7 @@ impl ColorModulation for Color {
             return self;
         }
         let (h, s, l) = rgb_to_hsl(self);
-        let l = l * lum_mod.unwrap_or(100_000) as f64 / 100_000.0
-            + lum_off.unwrap_or(0) as f64 / 100_000.0;
+        let l = l * lum_mod.unwrap_or(100_000) as f64 / 100_000.0 + lum_off.unwrap_or(0) as f64 / 100_000.0;
         hsl_to_rgb(h, s, l.clamp(0.0, 1.0))
     }
 }
@@ -61,26 +60,14 @@ impl ColorModulation for Color {
 fn map_linear(c: Color, f: impl Fn(f64) -> f64) -> Color {
     let to_lin = |c: u8| {
         let c = c as f64 / 255.0;
-        if c <= 0.04045 {
-            c / 12.92
-        } else {
-            ((c + 0.055) / 1.055).powf(2.4)
-        }
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
     };
     let to_srgb = |c: f64| {
         let c = c.clamp(0.0, 1.0);
-        let v = if c <= 0.003_130_8 {
-            c * 12.92
-        } else {
-            1.055 * c.powf(1.0 / 2.4) - 0.055
-        };
+        let v = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
         (v * 255.0).round() as u8
     };
-    Color(
-        to_srgb(f(to_lin(c.0))),
-        to_srgb(f(to_lin(c.1))),
-        to_srgb(f(to_lin(c.2))),
-    )
+    Color(to_srgb(f(to_lin(c.0))), to_srgb(f(to_lin(c.1))), to_srgb(f(to_lin(c.2))))
 }
 
 fn rgb_to_hsl(c: Color) -> (f64, f64, f64) {
@@ -91,11 +78,7 @@ fn rgb_to_hsl(c: Color) -> (f64, f64, f64) {
         return (0.0, 0.0, l);
     }
     let d = max - min;
-    let s = if l > 0.5 {
-        d / (2.0 - max - min)
-    } else {
-        d / (max + min)
-    };
+    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
     let h = if max == r {
         (g - b) / d + if g < b { 6.0 } else { 0.0 }
     } else if max == g {
@@ -111,11 +94,7 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {
     if s == 0.0 {
         return Color(to(l), to(l), to(l));
     }
-    let q = if l < 0.5 {
-        l * (1.0 + s)
-    } else {
-        l + s - l * s
-    };
+    let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
     let p = 2.0 * l - q;
     let hue = |mut t: f64| {
         if t < 0.0 {
@@ -142,14 +121,13 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {
 /// kept by name, so it is written back unchanged, and drawn with its
 /// outline from `preset_polygon` or BetterOffice's presets (`outline`), or
 /// as its bounding rectangle when neither has one.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum ShapeKind {
     Rect,
     /// Corner radius as a fraction of the shorter side (DrawingML `adj`,
     /// default 16667 = 1/6).
-    RoundRect {
-        radius: f64,
-    },
+    RoundRect { radius: f64 },
     Ellipse,
     Triangle,
     Diamond,
@@ -210,7 +188,8 @@ impl ShapeKind {
 }
 
 /// An outline.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Stroke {
     pub color: Color,
     /// In model units, like x/y/w/h (so it scales with the slide as they
@@ -219,14 +198,16 @@ pub struct Stroke {
 }
 
 /// A stop in a gradient: `pos` from 0.0 (start) to 1.0 (end).
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GradientStop {
     pub pos: f64,
     pub color: Color,
 }
 
 /// A linear gradient across a shape's box.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct LinearGradient {
     pub stops: Vec<GradientStop>,
     /// Direction the colours run, in degrees clockwise from left-to-right
@@ -242,9 +223,7 @@ impl LinearGradient {
         if n == 0.0 {
             return None;
         }
-        let avg = |f: fn(&Color) -> u8| {
-            (self.stops.iter().map(|s| f(&s.color) as f64).sum::<f64>() / n).round() as u8
-        };
+        let avg = |f: fn(&Color) -> u8| (self.stops.iter().map(|s| f(&s.color) as f64).sum::<f64>() / n).round() as u8;
         Some(Color(avg(|c| c.0), avg(|c| c.1), avg(|c| c.2)))
     }
 }
@@ -262,7 +241,8 @@ impl LinearGradient {
 /// before, and the writers carry it back byte-stable. The writers prefer
 /// a carried reference whenever one is present, so a save keeps the
 /// live theme link instead of freezing the resolved colour.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ShapeStyle {
     pub fill: Option<Color>,
     pub gradient: Option<LinearGradient>,
@@ -288,7 +268,8 @@ pub struct ShapeStyle {
 
 /// An outer shadow: its offset from the shape (dx right, dy down) and blur
 /// radius, in the same units as a stroke's width, its colour and opacity.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Shadow {
     pub dx: f64,
     pub dy: f64,
@@ -308,7 +289,8 @@ fn rotates_by_default() -> bool {
 
 /// A glow: how far it reaches past the outline, in the same units as a
 /// stroke's width, its colour and its opacity (0..1).
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Glow {
     pub radius: f64,
     pub color: Color,
@@ -327,10 +309,7 @@ impl Default for ShapeStyle {
         ShapeStyle {
             fill: Some(accent1),
             gradient: None,
-            stroke: Some(Stroke {
-                color: line,
-                width: 1.0,
-            }),
+            stroke: Some(Stroke { color: line, width: 1.0 }),
             fill_src: Some(FillSrc::Color(ColorRef::Rgb(accent1.to_hex()))),
             stroke_src: Some(StrokeSrc::Color(ColorRef::Rgb(line.to_hex()))),
             glow: None,
@@ -354,21 +333,12 @@ pub fn polygon(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Point>> {
     match kind {
         ShapeKind::Other(prst) => Some(
             preset_polygon(prst, w, h)
-                .or_else(|| {
-                    borrowed_outline(prst, w, h)
-                        .filter(|layers| layers.len() == 1 && layers[0].len() == 1)
-                        .map(|mut layers| layers.remove(0).remove(0))
-                })
+                .or_else(|| borrowed_outline(prst, w, h).filter(|layers| layers.len() == 1 && layers[0].len() == 1).map(|mut layers| layers.remove(0).remove(0)))
                 .unwrap_or_else(|| vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
         ),
         ShapeKind::Rect => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Triangle => Some(vec![(w / 2.0, 0.0), (w, h), (0.0, h)]),
-        ShapeKind::Diamond => Some(vec![
-            (w / 2.0, 0.0),
-            (w, h / 2.0),
-            (w / 2.0, h),
-            (0.0, h / 2.0),
-        ]),
+        ShapeKind::Diamond => Some(vec![(w / 2.0, 0.0), (w, h / 2.0), (w / 2.0, h), (0.0, h / 2.0)]),
         ShapeKind::RoundRect { .. } | ShapeKind::Ellipse => None,
         // Its paths are drawn (`freeform`); it is picked by its box.
         ShapeKind::Freeform(_) => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
@@ -392,11 +362,7 @@ pub fn outline(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Vec<Vec<Point>>>>
 
 /// Presets BetterOffice draws, but not as Office and LibreOffice do: these
 /// stay their box rather than take a wrong outline.
-const BORROWED_WRONG: [&str; 3] = [
-    "upDownArrow",
-    "flowChartManualInput",
-    "flowChartOffpageConnector",
-];
+const BORROWED_WRONG: [&str; 3] = ["upDownArrow", "flowChartManualInput", "flowChartOffpageConnector"];
 
 /// Segments a curve is flattened into: under a pixel off the true curve
 /// for any shape on a slide.
@@ -414,24 +380,11 @@ fn borrowed_outline(prst: &str, w: f64, h: f64) -> Option<Vec<Vec<Vec<Point>>>> 
     }
     let adjustments = ooxml_drawingml::preset_geometry_default_adjustments(prst);
     let aspect = w / h;
-    let layers: Vec<Vec<ooxml_drawingml::GeometryPathCommand>> =
-        match ooxml_drawingml::preset_geometry_layers(prst, &adjustments, aspect) {
-            Some(layers) => layers
-                .into_iter()
-                .filter(|layer| layer.fill != PresetPathFill::None)
-                .map(|layer| layer.commands)
-                .collect(),
-            None => vec![ooxml_drawingml::preset_geometry_to_path(
-                prst,
-                &adjustments,
-                aspect,
-            )?],
-        };
-    let layers: Vec<Vec<Vec<Point>>> = layers
-        .into_iter()
-        .map(|commands| flatten(commands, w, h))
-        .filter(|layer| !layer.is_empty())
-        .collect();
+    let layers: Vec<Vec<ooxml_drawingml::GeometryPathCommand>> = match ooxml_drawingml::preset_geometry_layers(prst, &adjustments, aspect) {
+        Some(layers) => layers.into_iter().filter(|layer| layer.fill != PresetPathFill::None).map(|layer| layer.commands).collect(),
+        None => vec![ooxml_drawingml::preset_geometry_to_path(prst, &adjustments, aspect)?],
+    };
+    let layers: Vec<Vec<Vec<Point>>> = layers.into_iter().map(|commands| flatten(commands, w, h)).filter(|layer| !layer.is_empty()).collect();
     (!layers.is_empty()).then_some(layers)
 }
 
@@ -460,30 +413,17 @@ fn flatten(commands: Vec<ooxml_drawingml::GeometryPathCommand>, w: f64, h: f64) 
                 for i in 1..=CURVE_STEPS {
                     let t = i as f64 / CURVE_STEPS as f64;
                     let u = 1.0 - t;
-                    current.push((
-                        u * u * x0 + 2.0 * u * t * cpx + t * t * x,
-                        u * u * y0 + 2.0 * u * t * cpy + t * t * y,
-                    ));
+                    current.push((u * u * x0 + 2.0 * u * t * cpx + t * t * x, u * u * y0 + 2.0 * u * t * cpy + t * t * y));
                 }
                 at = (x, y);
             }
-            C::Cubic {
-                cp1x,
-                cp1y,
-                cp2x,
-                cp2y,
-                x,
-                y,
-            } => {
+            C::Cubic { cp1x, cp1y, cp2x, cp2y, x, y } => {
                 let (x0, y0) = at;
                 for i in 1..=CURVE_STEPS {
                     let t = i as f64 / CURVE_STEPS as f64;
                     let u = 1.0 - t;
                     let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
-                    current.push((
-                        a * x0 + b * cp1x + c * cp2x + d * x,
-                        a * y0 + b * cp1y + c * cp2y + d * y,
-                    ));
+                    current.push((a * x0 + b * cp1x + c * cp2x + d * x, a * y0 + b * cp1y + c * cp2y + d * y));
                 }
                 at = (x, y);
             }
@@ -500,12 +440,7 @@ fn flatten(commands: Vec<ooxml_drawingml::GeometryPathCommand>, w: f64, h: f64) 
     }
     subpaths
         .into_iter()
-        .map(|poly| {
-            poly.into_iter()
-                .filter(|(x, y)| x.is_finite() && y.is_finite())
-                .map(|(x, y)| (x * w, y * h))
-                .collect::<Vec<_>>()
-        })
+        .map(|poly| poly.into_iter().filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| (x * w, y * h)).collect::<Vec<_>>())
         .filter(|poly| poly.len() > 2)
         .collect()
 }
@@ -543,37 +478,13 @@ pub fn preset_polygon(prst: &str, w: f64, h: f64) -> Option<Vec<Point>> {
             // adj1 50000: the shaft is half the width; adj2 50000: the
             // head is half the shorter side long.
             let (dx, head) = (w * 0.25, ss * 0.5);
-            let up = vec![
-                (cx, 0.0),
-                (w, head),
-                (cx + dx, head),
-                (cx + dx, h),
-                (cx - dx, h),
-                (cx - dx, head),
-                (0.0, head),
-            ];
-            if prst == "upArrow" {
-                up
-            } else {
-                up.into_iter().map(|(x, y)| (x, h - y)).collect()
-            }
+            let up = vec![(cx, 0.0), (w, head), (cx + dx, head), (cx + dx, h), (cx - dx, h), (cx - dx, head), (0.0, head)];
+            if prst == "upArrow" { up } else { up.into_iter().map(|(x, y)| (x, h - y)).collect() }
         }
         "rightArrow" | "leftArrow" => {
             let (dy, head) = (h * 0.25, ss * 0.5);
-            let right = vec![
-                (0.0, cy - dy),
-                (w - head, cy - dy),
-                (w - head, 0.0),
-                (w, cy),
-                (w - head, h),
-                (w - head, cy + dy),
-                (0.0, cy + dy),
-            ];
-            if prst == "rightArrow" {
-                right
-            } else {
-                right.into_iter().map(|(x, y)| (w - x, y)).collect()
-            }
+            let right = vec![(0.0, cy - dy), (w - head, cy - dy), (w - head, 0.0), (w, cy), (w - head, h), (w - head, cy + dy), (0.0, cy + dy)];
+            if prst == "rightArrow" { right } else { right.into_iter().map(|(x, y)| (w - x, y)).collect() }
         }
         "homePlate" => {
             let x = w - ss * 0.5;
@@ -581,14 +492,7 @@ pub fn preset_polygon(prst: &str, w: f64, h: f64) -> Option<Vec<Point>> {
         }
         "chevron" => {
             let x = ss * 0.5;
-            vec![
-                (0.0, 0.0),
-                (w - x, 0.0),
-                (w, cy),
-                (w - x, h),
-                (0.0, h),
-                (x, cy),
-            ]
+            vec![(0.0, 0.0), (w - x, 0.0), (w, cy), (w - x, h), (0.0, h), (x, cy)]
         }
         "parallelogram" => {
             let x = ss * 0.25;
@@ -600,44 +504,15 @@ pub fn preset_polygon(prst: &str, w: f64, h: f64) -> Option<Vec<Point>> {
         }
         "hexagon" => {
             let x = ss * 0.25;
-            vec![
-                (0.0, cy),
-                (x, 0.0),
-                (w - x, 0.0),
-                (w, cy),
-                (w - x, h),
-                (x, h),
-            ]
+            vec![(0.0, cy), (x, 0.0), (w - x, 0.0), (w, cy), (w - x, h), (x, h)]
         }
         "octagon" => {
             let x = ss * 0.29289;
-            vec![
-                (x, 0.0),
-                (w - x, 0.0),
-                (w, x),
-                (w, h - x),
-                (w - x, h),
-                (x, h),
-                (0.0, h - x),
-                (0.0, x),
-            ]
+            vec![(x, 0.0), (w - x, 0.0), (w, x), (w, h - x), (w - x, h), (x, h), (0.0, h - x), (0.0, x)]
         }
         "plus" => {
             let x = ss * 0.25;
-            vec![
-                (x, 0.0),
-                (w - x, 0.0),
-                (w - x, x),
-                (w, x),
-                (w, h - x),
-                (w - x, h - x),
-                (w - x, h),
-                (x, h),
-                (x, h - x),
-                (0.0, h - x),
-                (0.0, x),
-                (x, x),
-            ]
+            vec![(x, 0.0), (w - x, 0.0), (w - x, x), (w, x), (w, h - x), (w - x, h - x), (w - x, h), (x, h), (x, h - x), (0.0, h - x), (0.0, x), (x, x)]
         }
         "mathPlus" => {
             // adj1 23520: the bars' thickness; they reach 73490/100000 of
@@ -645,61 +520,25 @@ pub fn preset_polygon(prst: &str, w: f64, h: f64) -> Option<Vec<Point>> {
             let (dx1, dy1, t) = (w * 0.36745, h * 0.36745, ss * 0.1176);
             let (x1, x2, x3, x4) = (cx - dx1, cx - t, cx + t, cx + dx1);
             let (y1, y2, y3, y4) = (cy - dy1, cy - t, cy + t, cy + dy1);
-            vec![
-                (x1, y2),
-                (x2, y2),
-                (x2, y1),
-                (x3, y1),
-                (x3, y2),
-                (x4, y2),
-                (x4, y3),
-                (x3, y3),
-                (x3, y4),
-                (x2, y4),
-                (x2, y3),
-                (x1, y3),
-            ]
+            vec![(x1, y2), (x2, y2), (x2, y1), (x3, y1), (x3, y2), (x4, y2), (x4, y3), (x3, y3), (x3, y4), (x2, y4), (x2, y3), (x1, y3)]
         }
         "snip2DiagRect" => {
             // adj1 0 snips the top-left and bottom-right corners (not at
             // all), adj2 16667 the other two.
             let d = ss * 0.16667;
-            vec![
-                (0.0, 0.0),
-                (w - d, 0.0),
-                (w, d),
-                (w, h),
-                (d, h),
-                (0.0, h - d),
-            ]
+            vec![(0.0, 0.0), (w - d, 0.0), (w, d), (w, h), (d, h), (0.0, h - d)]
         }
         "pentagon" | "star5" => {
             // A regular pentagon, or star, point up, stretched to the box.
-            let outer: Vec<(f64, f64)> = (0..5)
-                .map(|k| angle_point(-90.0 + 72.0 * k as f64, 1.0))
-                .collect();
+            let outer: Vec<(f64, f64)> = (0..5).map(|k| angle_point(-90.0 + 72.0 * k as f64, 1.0)).collect();
             let points: Vec<(f64, f64)> = if prst == "pentagon" {
                 outer.clone()
             } else {
-                (0..10)
-                    .map(|k| {
-                        angle_point(
-                            -90.0 + 36.0 * k as f64,
-                            if k % 2 == 0 { 1.0 } else { 0.381966 },
-                        )
-                    })
-                    .collect()
+                (0..10).map(|k| angle_point(-90.0 + 36.0 * k as f64, if k % 2 == 0 { 1.0 } else { 0.381966 })).collect()
             };
-            let (x0, x1) = outer
-                .iter()
-                .fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
-            let (y0, y1) = outer
-                .iter()
-                .fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-            points
-                .into_iter()
-                .map(|(x, y)| ((x - x0) / (x1 - x0) * w, (y - y0) / (y1 - y0) * h))
-                .collect()
+            let (x0, x1) = outer.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
+            let (y0, y1) = outer.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
+            points.into_iter().map(|(x, y)| ((x - x0) / (x1 - x0) * w, (y - y0) / (y1 - y0) * h)).collect()
         }
         _ => return None,
     })
@@ -770,20 +609,14 @@ mod tests {
         // Against the values Office itself shows, to within rounding.
         let near = |a: Color, b: Color| {
             let d = |x: u8, y: u8| (x as i16 - y as i16).abs();
-            assert!(
-                d(a.0, b.0) <= 1 && d(a.1, b.1) <= 1 && d(a.2, b.2) <= 1,
-                "{a:?} vs {b:?}"
-            );
+            assert!(d(a.0, b.0) <= 1 && d(a.1, b.1) <= 1 && d(a.2, b.2) <= 1, "{a:?} vs {b:?}");
         };
         let accent = Color(0x44, 0x72, 0xC4);
         assert_eq!(accent.lum(None, None), accent);
         // lumMod 50%: Office's "darker 50%" of accent 1.
         near(accent.lum(Some(50_000), None), Color(0x1F, 0x38, 0x64));
         // lumMod 20% + lumOff 80%: "lighter 80%".
-        near(
-            accent.lum(Some(20_000), Some(80_000)),
-            Color(0xDA, 0xE3, 0xF3),
-        );
+        near(accent.lum(Some(20_000), Some(80_000)), Color(0xDA, 0xE3, 0xF3));
     }
 
     #[test]
@@ -807,46 +640,17 @@ mod tests {
     fn presets_real_decks_use_have_their_own_outline() {
         let (w, h) = (200.0, 100.0);
         let rect = polygon(&ShapeKind::Rect, w, h).unwrap();
-        for p in [
-            "upArrow",
-            "downArrow",
-            "leftArrow",
-            "rightArrow",
-            "homePlate",
-            "chevron",
-            "parallelogram",
-            "trapezoid",
-            "rtTriangle",
-            "hexagon",
-            "octagon",
-            "plus",
-            "mathPlus",
-            "snip2DiagRect",
-            "pentagon",
-            "star5",
-            "flowChartDecision",
-        ] {
+        for p in ["upArrow", "downArrow", "leftArrow", "rightArrow", "homePlate", "chevron", "parallelogram", "trapezoid", "rtTriangle", "hexagon", "octagon", "plus", "mathPlus", "snip2DiagRect", "pentagon", "star5", "flowChartDecision"] {
             let poly = polygon(&ShapeKind::Other(p.into()), w, h).unwrap();
             assert_ne!(poly, rect, "{p}");
             for (x, y) in &poly {
-                assert!(
-                    (-1e-9..=w + 1e-9).contains(x) && (-1e-9..=h + 1e-9).contains(y),
-                    "{p}: ({x}, {y})"
-                );
+                assert!((-1e-9..=w + 1e-9).contains(x) && (-1e-9..=h + 1e-9).contains(y), "{p}: ({x}, {y})");
             }
         }
-        assert_eq!(
-            polygon(&ShapeKind::Other("star5".into()), w, h)
-                .unwrap()
-                .len(),
-            10
-        );
+        assert_eq!(polygon(&ShapeKind::Other("star5".into()), w, h).unwrap().len(), 10);
         // An unknown preset is still drawn as its box. (Not "cloud": BetterOffice
         // draws that one since 0.5.)
-        assert_eq!(
-            polygon(&ShapeKind::Other("notAPreset".into()), w, h).unwrap(),
-            rect
-        );
+        assert_eq!(polygon(&ShapeKind::Other("notAPreset".into()), w, h).unwrap(), rect);
     }
 
     /// The presets only BetterOffice draws have their own outline too,
@@ -855,75 +659,31 @@ mod tests {
     fn borrowed_presets_have_their_own_outline() {
         let (w, h) = (200.0, 100.0);
         let rect = vec![vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]];
-        for p in [
-            "star4",
-            "star6",
-            "star8",
-            "star12",
-            "star24",
-            "heptagon",
-            "decagon",
-            "dodecagon",
-            "leftRightArrow",
-            "bentArrow",
-            "corner",
-            "foldedCorner",
-            "noSmoking",
-            "donut",
-            "cube",
-            "ribbon",
-            "ellipseRibbon",
-            "flowChartTerminator",
-            "wedgeRoundRectCallout",
-            "wedgeEllipseCallout",
-            "cloudCallout",
-            "mathMultiply",
-        ] {
-            let layers = outline(&ShapeKind::Other(p.into()), w, h)
-                .unwrap_or_else(|| panic!("{p}: no outline"));
+        for p in ["star4", "star6", "star8", "star12", "star24", "heptagon", "decagon", "dodecagon", "leftRightArrow", "bentArrow", "corner", "foldedCorner", "noSmoking", "donut", "cube", "ribbon", "ellipseRibbon", "flowChartTerminator", "wedgeRoundRectCallout", "wedgeEllipseCallout", "cloudCallout", "mathMultiply"] {
+            let layers = outline(&ShapeKind::Other(p.into()), w, h).unwrap_or_else(|| panic!("{p}: no outline"));
             assert_ne!(layers, vec![rect.clone()], "{p}");
             for (x, y) in layers.iter().flatten().flatten() {
                 // Callouts reach outside their box with their tail.
                 if !p.contains("Callout") {
-                    assert!(
-                        (-1e-6..=w + 1e-6).contains(x) && (-1e-6..=h + 1e-6).contains(y),
-                        "{p}: ({x}, {y})"
-                    );
+                    assert!((-1e-6..=w + 1e-6).contains(x) && (-1e-6..=h + 1e-6).contains(y), "{p}: ({x}, {y})");
                 }
             }
         }
         let donut = ShapeKind::Other("donut".into());
-        assert_eq!(
-            outline(&donut, w, h).unwrap(),
-            vec![outline(&donut, w, h).unwrap()[0].clone()]
-        );
+        assert_eq!(outline(&donut, w, h).unwrap(), vec![outline(&donut, w, h).unwrap()[0].clone()]);
         assert_eq!(outline(&donut, w, h).unwrap()[0].len(), 2);
         assert!(contains(&donut, w, h, 10.0, 50.0), "the ring");
         assert!(!contains(&donut, w, h, 100.0, 50.0), "the hole");
         // Our own outlines still come first.
-        assert_eq!(
-            outline(&ShapeKind::Other("chevron".into()), w, h).unwrap(),
-            vec![vec![
-                polygon(&ShapeKind::Other("chevron".into()), w, h).unwrap()
-            ]]
-        );
+        assert_eq!(outline(&ShapeKind::Other("chevron".into()), w, h).unwrap(), vec![vec![polygon(&ShapeKind::Other("chevron".into()), w, h).unwrap()]]);
         // A ribbon crosses itself; the crossing is filled, not a hole.
         let ribbon = ShapeKind::Other("ribbon".into());
         assert!(contains(&ribbon, w, h, 100.0, 60.0), "the front");
         // A cube is its faces, one layer each.
-        assert_eq!(
-            outline(&ShapeKind::Other("cube".into()), w, h)
-                .unwrap()
-                .len(),
-            3
-        );
+        assert_eq!(outline(&ShapeKind::Other("cube".into()), w, h).unwrap().len(), 3);
         // The presets BetterOffice gets wrong stay their box.
         for p in BORROWED_WRONG {
-            assert_eq!(
-                outline(&ShapeKind::Other(p.into()), w, h).unwrap(),
-                vec![rect.clone()],
-                "{p}"
-            );
+            assert_eq!(outline(&ShapeKind::Other(p.into()), w, h).unwrap(), vec![rect.clone()], "{p}");
         }
     }
 
@@ -935,10 +695,7 @@ mod tests {
         let (w, h) = (40.0, 80.0);
         assert!(contains(&up, w, h, 20.0, 2.0), "the point");
         assert!(contains(&up, w, h, 20.0, 78.0), "the shaft's foot");
-        assert!(
-            !contains(&up, w, h, 1.0, 79.0) && !contains(&up, w, h, 39.0, 79.0),
-            "beside the shaft"
-        );
+        assert!(!contains(&up, w, h, 1.0, 79.0) && !contains(&up, w, h, 39.0, 79.0), "beside the shaft");
         assert!(!contains(&up, w, h, 1.0, 1.0), "beside the point");
     }
 
@@ -952,20 +709,10 @@ mod tests {
 
     #[test]
     fn presets_round_trip_by_name_and_unknown_ones_are_kept() {
-        for p in [
-            "rect",
-            "roundRect",
-            "ellipse",
-            "triangle",
-            "diamond",
-            "star5",
-        ] {
+        for p in ["rect", "roundRect", "ellipse", "triangle", "diamond", "star5"] {
             assert_eq!(ShapeKind::from_prst(p).prst(), p);
         }
-        assert_eq!(
-            ShapeKind::from_prst("star5"),
-            ShapeKind::Other("star5".into())
-        );
+        assert_eq!(ShapeKind::from_prst("star5"), ShapeKind::Other("star5".into()));
     }
 
     #[test]

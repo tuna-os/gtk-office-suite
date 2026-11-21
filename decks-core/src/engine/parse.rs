@@ -24,16 +24,14 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{
-    cxn_styles, frame_charts, frame_tables, sp_geometries, sp_styles, theme as read_theme, Theme,
-};
+use super::shape_xml::{cxn_styles, frame_charts, frame_tables, sp_geometries, sp_styles, theme as read_theme, Theme};
 use super::text_xml::{sp_texts, Inherited};
 use crate::layouts::PlaceholderKey;
 
-use quick_xml::events::{BytesRef, BytesStart, BytesText, Event};
-use quick_xml::Reader;
 use std::fs::File;
 use std::path::Path;
+use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
+use quick_xml::Reader;
 use suite_common_core::document::{Run, RunStyle};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 #[path = "parse/geometry.rs"]
@@ -47,22 +45,23 @@ mod pictures;
 #[path = "parse/transitions.rs"]
 mod transitions;
 
+pub use geometry::{parse_slide_size, SlideScale};
+pub use master::{parse_master_shapes, parse_master_shapes_scaled};
 use self::geometry::{
     in_groups, is_tx_box_attr, parse_blip_embed, parse_coords, parse_prst_geom, parse_rotation,
     slide_is_hidden, GroupFrame,
 };
 use self::layout::{
-    layout_path_of, layout_theme, parse_color_map, parse_layout_background,
-    parse_override_color_map, read_layout, read_layout_placeholders,
+    layout_path_of, layout_theme, parse_color_map, parse_override_color_map, parse_layout_background, read_layout,
+    read_layout_placeholders,
 };
 use self::master::{master_shapes, parse_c_sld_name};
 use self::pictures::{
-    parse_fill_rect, parse_src_rect, part_path, part_picture, resolve_and_extract_picture,
+    part_path, part_picture, parse_fill_rect, parse_src_rect, resolve_and_extract_picture,
     PendingPicture, PictureRect,
 };
 use self::transitions::parse_transition;
-pub use geometry::{parse_slide_size, SlideScale};
-pub use master::{parse_master_shapes, parse_master_shapes_scaled};
+
 
 /// Close the paragraph a shape has been accumulating, so the next one starts
 /// on a new line.
@@ -94,16 +93,10 @@ fn close_paragraphs(runs: &mut [Run], count: usize) {
 /// (#1998). A click action (`ppaction://` jumps to a slide, a program, a
 /// macro) is not an address, and neither is a relationship that is not
 /// external: those are not kept, and the save warning says so.
-pub(crate) fn run_link(
-    e: &BytesStart,
-    links: &std::collections::HashMap<String, String>,
-) -> Option<String> {
+pub(crate) fn run_link(e: &BytesStart, links: &std::collections::HashMap<String, String>) -> Option<String> {
     let mut id = None;
     for a in e.attributes().flatten() {
-        let value = a
-            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-            .ok()?
-            .into_owned();
+        let value = a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?.into_owned();
         match a.key.as_ref() {
             "r:id" => id = Some(value),
             "action" if !value.is_empty() => return None,
@@ -187,28 +180,19 @@ impl PendingShape {
             // n closed paragraphs since the last run: the n-1 empty ones
             // between, then this one.
             for k in 0..self.pending_breaks {
-                self.line_paras
-                    .push((cur + 1 + k).saturating_sub(self.pending_breaks));
+                self.line_paras.push((cur + 1 + k).saturating_sub(self.pending_breaks));
             }
         }
         close_paragraphs(&mut self.runs, self.pending_breaks);
         self.pending_breaks = 0;
-        self.runs.push(Run {
-            text,
-            style: self.cur_style.clone(),
-        });
+        self.runs.push(Run { text, style: self.cur_style.clone() });
         self.run_refs.push(self.runs_seen.checked_sub(1));
     }
 
     /// The runs styled as the file resolves them (inherited defaults under
     /// their own properties), and the text body for the lines kept.
-    fn resolve(
-        &self,
-        st: Option<&super::text_xml::SpText>,
-    ) -> (Vec<Run>, super::text_body::TextBody) {
-        let Some(st) = st else {
-            return (self.runs.clone(), Default::default());
-        };
+    fn resolve(&self, st: Option<&super::text_xml::SpText>) -> (Vec<Run>, super::text_body::TextBody) {
+        let Some(st) = st else { return (self.runs.clone(), Default::default()) };
         let runs = self
             .runs
             .iter()
@@ -216,13 +200,7 @@ impl PendingShape {
             .map(|(r, i)| match i.and_then(|i| st.runs.get(i)) {
                 // The resolved look, with the run's own link: a link is
                 // never inherited, so the resolver does not carry it.
-                Some(p) => Run {
-                    text: r.text.clone(),
-                    style: RunStyle {
-                        link: r.style.link.clone(),
-                        ..p.style()
-                    },
-                },
+                Some(p) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..p.style() } },
                 None => r.clone(),
             })
             .collect();
@@ -230,12 +208,12 @@ impl PendingShape {
     }
 }
 
+
 /// The placeholders of a slide layout and of the master it belongs to, for
 /// resolving slide placeholders that carry no geometry of their own.
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
-    let mut archive =
-        zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
     // A PPTX arrives from a download or an attachment. Every part below is
     // read under one budget, so neither a single member claiming to
     // decompress to gigabytes nor a hundred medium ones can exhaust memory
@@ -267,8 +245,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         None => SlideScale::default(),
     };
     // Kept once on the deck (DCK-006) so a save writes the same size back.
-    let page_size =
-        declared.filter(|&(cx, cy)| cx > 0.0 && cy > 0.0 && (cx, cy) != SlideScale::DEFAULT_EMU);
+    let page_size = declared.filter(|&(cx, cy)| cx > 0.0 && cy > 0.0 && (cx, cy) != SlideScale::DEFAULT_EMU);
 
     // 2. Read presentation.xml.rels to resolve slide relationship IDs to paths
     let rels_xml = archive
@@ -298,21 +275,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 "Id" => {
-                                    id = attr
-                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                        .ok()
-                                        .map(|v| v.into_owned());
+                                    id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 }
                                 "Target" => {
-                                    target = attr
-                                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                        .ok()
-                                        .map(|v| v.into_owned());
+                                    target = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 }
                                 "Type" => {
-                                    if let Ok(v) =
-                                        attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                    {
+                                    if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                         if v.contains("relationships/slide") {
                                             is_slide = true;
                                         }
@@ -349,9 +318,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     if name.as_ref() == "p:sldId" {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == "r:id" {
-                                if let Ok(val) =
-                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                {
+                                if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                     ordered_slide_rids.push(val.into_owned());
                                 }
                             }
@@ -371,10 +338,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // (DCK-006), not the package's first theme part. A chain that names
     // no theme resolves against the default theme.
     let mut themes: std::collections::HashMap<String, Theme> = std::collections::HashMap::new();
-    let mut layout_theme_paths: std::collections::HashMap<
-        String,
-        (Option<String>, std::collections::BTreeMap<String, String>),
-    > = std::collections::HashMap::new();
+    let mut layout_theme_paths: std::collections::HashMap<String, (Option<String>, std::collections::BTreeMap<String, String>)> =
+        std::collections::HashMap::new();
     // The retained model themes (`Deck.themes`), in package order, and the
     // theme part path each id was read from: masters that share one part
     // share one entry. Built with the masters below.
@@ -395,10 +360,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // resolved after the slide loop, when `archive` is free again).
     let mut slide_layout_paths: Vec<Option<String>> = Vec::new();
     #[allow(clippy::type_complexity)]
-    let mut placeholder_cache: std::collections::HashMap<
-        String,
-        (Vec<Placeholder>, Vec<Placeholder>, Inherited),
-    > = std::collections::HashMap::new();
+    let mut placeholder_cache: std::collections::HashMap<String, (Vec<Placeholder>, Vec<Placeholder>, Inherited)> =
+        std::collections::HashMap::new();
 
     for (slide_index, r_id) in ordered_slide_rids.iter().enumerate() {
         let target_path = match slide_paths.get(r_id) {
@@ -419,38 +382,23 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let slide_xml = match archive.part_to_string(&target_path, &mut budget) {
             Ok(xml) => xml,
             Err(e) => {
-                skipped_slides.push(super::model::SkippedSlide {
-                    part: target_path.clone(),
-                    reason: e.to_string(),
-                });
+                skipped_slides.push(super::model::SkippedSlide { part: target_path.clone(), reason: e.to_string() });
                 continue;
             }
         };
 
         // Check if there's a slide relationship file (for images)
-        let slide_dir = Path::new(&target_path)
-            .parent()
-            .unwrap_or(Path::new("ppt/slides"));
-        let slide_filename = Path::new(&target_path)
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-        let slide_rels_path = format!(
-            "{}/_rels/{}.rels",
-            slide_dir.to_string_lossy(),
-            slide_filename
-        );
-
+        let slide_dir = Path::new(&target_path).parent().unwrap_or(Path::new("ppt/slides"));
+        let slide_filename = Path::new(&target_path).file_name().unwrap_or_default().to_string_lossy();
+        let slide_rels_path = format!("{}/_rels/{}.rels", slide_dir.to_string_lossy(), slide_filename);
+        
         let mut slide_rels_xml = archive.optional_part_to_string(&slide_rels_path, &mut budget);
         // SmartArt as the shapes PowerPoint drew for it, before any pass
         // reads the slide (diagram.rs). The drawings' own relationships
         // (a picture fill) join the slide's under fresh ids.
-        let (slide_xml, drawing_rels) = super::diagram::inline(
-            &slide_xml,
-            &slide_rels_xml,
-            &slide_dir.to_string_lossy(),
-            |part| archive.optional_part_to_string(part, &mut budget),
-        );
+        let (slide_xml, drawing_rels) = super::diagram::inline(&slide_xml, &slide_rels_xml, &slide_dir.to_string_lossy(), |part| {
+            archive.optional_part_to_string(part, &mut budget)
+        });
         if !drawing_rels.is_empty() {
             match slide_rels_xml.rfind("</Relationships>") {
                 Some(at) => slide_rels_xml.insert_str(at, &drawing_rels),
@@ -461,8 +409,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut slide_image_rels = std::collections::HashMap::new();
         // The slide's external hyperlink targets by relationship id, for
         // the `a:hlinkClick`s on its text runs (#1998).
-        let mut slide_link_rels: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
+        let mut slide_link_rels: std::collections::HashMap<String, String> = std::collections::HashMap::new();
         if !slide_rels_xml.is_empty() {
             let mut reader = Reader::from_str(&slide_rels_xml);
             reader.config_mut().trim_text(true);
@@ -477,21 +424,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let mut external = false;
                             let mut hyperlink = false;
                             for attr in e.attributes().flatten() {
-                                let value = || {
-                                    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                                        .ok()
-                                        .map(|v| v.into_owned())
-                                };
+                                let value = || attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 match attr.key.as_ref() {
                                     "Id" => id = value(),
                                     "Target" => target = value(),
-                                    "TargetMode" => {
-                                        external = value().as_deref() == Some("External")
-                                    }
-                                    "Type" => {
-                                        hyperlink =
-                                            value().is_some_and(|t| t.ends_with("/hyperlink"))
-                                    }
+                                    "TargetMode" => external = value().as_deref() == Some("External"),
+                                    "Type" => hyperlink = value().is_some_and(|t| t.ends_with("/hyperlink")),
                                     _ => {}
                                 }
                             }
@@ -516,22 +454,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // below through the same cache.
         let layout_path = layout_path_of(&slide_image_rels);
         let (slide_theme, _) = match layout_path.as_deref() {
-            Some(lp) => layout_theme(
-                &mut archive,
-                &mut budget,
-                lp,
-                &mut layout_theme_paths,
-                &mut themes,
-            ),
+            Some(lp) => layout_theme(&mut archive, &mut budget, lp, &mut layout_theme_paths, &mut themes),
             None => (Theme::default(), None),
         };
         // The slide's own colour map, when it overrides its layout's.
         let slide_remap = parse_override_color_map(&slide_xml);
-        let slide_theme = if slide_remap.is_empty() {
-            slide_theme
-        } else {
-            slide_theme.with_remap(&slide_remap)
-        };
+        let slide_theme = if slide_remap.is_empty() { slide_theme } else { slide_theme.with_remap(&slide_remap) };
         let mut objects = Vec::new();
         let mut object_ids: Vec<Option<u32>> = Vec::new();
         let sp_paint = sp_styles(&slide_xml, &slide_theme, scale.x);
@@ -547,9 +475,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
                 cell.runs = scale.text_runs(&cell.runs);
-                cell.margins = cell
-                    .margins
-                    .map(|(l, t, r, b)| (l * scale.x, t * scale.y, r * scale.x, b * scale.y));
+                cell.margins = cell.margins.map(|(l, t, r, b)| (l * scale.x, t * scale.y, r * scale.x, b * scale.y));
             }
         }
         let charts = frame_charts(&slide_xml);
@@ -559,18 +485,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // inherit their geometry from. Read once per layout.
         if let Some(lp) = &layout_path {
             if !placeholder_cache.contains_key(lp) {
-                let found =
-                    read_layout_placeholders(&mut archive, &mut budget, lp, &slide_theme, scale.x);
+                let found = read_layout_placeholders(&mut archive, &mut budget, lp, &slide_theme, scale.x);
                 placeholder_cache.insert(lp.clone(), found);
             }
         }
         let no_inheritance = Inherited::default();
-        let (layout_phs, master_phs, inherited): (&[Placeholder], &[Placeholder], &Inherited) =
-            layout_path
-                .as_ref()
-                .and_then(|lp| placeholder_cache.get(lp))
-                .map(|(l, m, i)| (l.as_slice(), m.as_slice(), i))
-                .unwrap_or((&[], &[], &no_inheritance));
+        let (layout_phs, master_phs, inherited): (&[Placeholder], &[Placeholder], &Inherited) = layout_path
+            .as_ref()
+            .and_then(|lp| placeholder_cache.get(lp))
+            .map(|(l, m, i)| (l.as_slice(), m.as_slice(), i))
+            .unwrap_or((&[], &[], &no_inheritance));
         // Paragraph and run styles of every p:sp, with what the layout and
         // master give them (Nth p:sp, like the paint).
         let sp_text = sp_texts(&slide_xml, &slide_theme, inherited, scale);
@@ -627,18 +551,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.line_break();
                                 }
                             }
-                            "a:blipFill"
-                                if in_bg
-                                    && current_shape.is_none()
-                                    && current_picture.is_none() =>
-                            {
-                                in_bg_blip = true
-                            }
+                            "a:blipFill" if in_bg && current_shape.is_none() && current_picture.is_none() => in_bg_blip = true,
                             "a:fillRect" if in_bg_blip => background_fill = parse_fill_rect(e),
                             "p:grpSp" => groups.push(GroupFrame::default()),
-                            "p:grpSpPr" if current_shape.is_none() && current_picture.is_none() => {
-                                in_grp_pr = true
-                            }
+                            "p:grpSpPr" if current_shape.is_none() && current_picture.is_none() => in_grp_pr = true,
                             "a:chOff" | "a:chExt" if in_grp_pr => {
                                 if let Some(g) = groups.last_mut() {
                                     g.note(e);
@@ -680,13 +596,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:xfrm" => {
                                 let rot = parse_rotation(e);
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if rot.is_some() {
-                                        shape.rotation = rot;
-                                    }
+                                    if rot.is_some() { shape.rotation = rot; }
                                 } else if let Some(pic) = current_picture.as_mut() {
-                                    if rot.is_some() {
-                                        pic.rotation = rot;
-                                    }
+                                    if rot.is_some() { pic.rotation = rot; }
                                 } else if in_grp_pr {
                                     // The group's own rotation and flips (#1989).
                                     if let Some(g) = groups.last_mut() {
@@ -697,19 +609,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:off" => {
                                 let (x, y) = parse_coords(e, "x", "y");
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if x.is_some() {
-                                        shape.x = x;
-                                    }
-                                    if y.is_some() {
-                                        shape.y = y;
-                                    }
+                                    if x.is_some() { shape.x = x; }
+                                    if y.is_some() { shape.y = y; }
                                 } else if let Some(pic) = current_picture.as_mut() {
-                                    if x.is_some() {
-                                        pic.x = x;
-                                    }
-                                    if y.is_some() {
-                                        pic.y = y;
-                                    }
+                                    if x.is_some() { pic.x = x; }
+                                    if y.is_some() { pic.y = y; }
                                 } else if in_grp_pr {
                                     if let Some(g) = groups.last_mut() {
                                         g.note(e);
@@ -719,19 +623,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:ext" => {
                                 let (w, h) = parse_coords(e, "cx", "cy");
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if w.is_some() {
-                                        shape.w = w;
-                                    }
-                                    if h.is_some() {
-                                        shape.h = h;
-                                    }
+                                    if w.is_some() { shape.w = w; }
+                                    if h.is_some() { shape.h = h; }
                                 } else if let Some(pic) = current_picture.as_mut() {
-                                    if w.is_some() {
-                                        pic.w = w;
-                                    }
-                                    if h.is_some() {
-                                        pic.h = h;
-                                    }
+                                    if w.is_some() { pic.w = w; }
+                                    if h.is_some() { pic.h = h; }
                                 } else if in_grp_pr {
                                     if let Some(g) = groups.last_mut() {
                                         g.note(e);
@@ -777,9 +673,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             // extensions; a PNG fallback on the blip itself,
                             // when there is one, is kept.
                             n if n.ends_with(":svgBlip") => {
-                                if let Some(pic) =
-                                    current_picture.as_mut().filter(|p| p.embed_id.is_none())
-                                {
+                                if let Some(pic) = current_picture.as_mut().filter(|p| p.embed_id.is_none()) {
                                     pic.embed_id = parse_blip_embed(e);
                                 } else if in_bg_blip && background_blip.is_none() {
                                     background_blip = parse_blip_embed(e);
@@ -862,7 +756,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .filter_map(|a| a.ok())
                                     .find(|a| a.key.as_ref() == "val")
                                 {
-                                    let hex = val.value.to_lowercase();
+                                    let hex =
+                                        val.value.to_lowercase();
                                     if in_rpr {
                                         if let Some(shape) = current_shape.as_mut() {
                                             shape.cur_style.color = Some(hex);
@@ -875,19 +770,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:off" => {
                                 let (x, y) = parse_coords(e, "x", "y");
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if x.is_some() {
-                                        shape.x = x;
-                                    }
-                                    if y.is_some() {
-                                        shape.y = y;
-                                    }
+                                    if x.is_some() { shape.x = x; }
+                                    if y.is_some() { shape.y = y; }
                                 } else if let Some(pic) = current_picture.as_mut() {
-                                    if x.is_some() {
-                                        pic.x = x;
-                                    }
-                                    if y.is_some() {
-                                        pic.y = y;
-                                    }
+                                    if x.is_some() { pic.x = x; }
+                                    if y.is_some() { pic.y = y; }
                                 } else if in_grp_pr {
                                     if let Some(g) = groups.last_mut() {
                                         g.note(e);
@@ -897,19 +784,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:ext" => {
                                 let (w, h) = parse_coords(e, "cx", "cy");
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if w.is_some() {
-                                        shape.w = w;
-                                    }
-                                    if h.is_some() {
-                                        shape.h = h;
-                                    }
+                                    if w.is_some() { shape.w = w; }
+                                    if h.is_some() { shape.h = h; }
                                 } else if let Some(pic) = current_picture.as_mut() {
-                                    if w.is_some() {
-                                        pic.w = w;
-                                    }
-                                    if h.is_some() {
-                                        pic.h = h;
-                                    }
+                                    if w.is_some() { pic.w = w; }
+                                    if h.is_some() { pic.h = h; }
                                 } else if in_grp_pr {
                                     if let Some(g) = groups.last_mut() {
                                         g.note(e);
@@ -950,9 +829,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             // extensions; a PNG fallback on the blip itself,
                             // when there is one, is kept.
                             n if n.ends_with(":svgBlip") => {
-                                if let Some(pic) =
-                                    current_picture.as_mut().filter(|p| p.embed_id.is_none())
-                                {
+                                if let Some(pic) = current_picture.as_mut().filter(|p| p.embed_id.is_none()) {
                                     pic.embed_id = parse_blip_embed(e);
                                 } else if in_bg_blip && background_blip.is_none() {
                                     background_blip = parse_blip_embed(e);
@@ -970,7 +847,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .filter_map(|a| a.ok())
                                     .find(|a| a.key.as_ref() == "val")
                                 {
-                                    background = format!("#{}", val.value.to_lowercase());
+                                    background = format!(
+                                        "#{}",
+                                        val.value.to_lowercase()
+                                    );
                                 }
                             }
                             // A theme-slot background (`a:schemeClr`),
@@ -982,8 +862,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .filter_map(|a| a.ok())
                                     .find(|a| a.key.as_ref() == "val")
                                 {
-                                    if let Some(color) = slide_theme.slot(&val.value.to_lowercase())
-                                    {
+                                    if let Some(color) = slide_theme.slot(&val.value.to_lowercase()) {
                                         background = format!("#{}", color.to_hex());
                                     }
                                 }
@@ -1017,29 +896,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let paint = cxn_paint.get(cxn_index).cloned().unwrap_or_default();
                             cxn_index += 1;
                             if let Some(shape) = current_shape.take() {
-                                let ((x, y, w, h), rotation) = in_groups(
-                                    &groups,
-                                    (
-                                        shape.x.unwrap_or(0.0),
-                                        shape.y.unwrap_or(0.0),
-                                        shape.w.unwrap_or(0.0),
-                                        shape.h.unwrap_or(0.0),
-                                    ),
-                                    shape.rotation.unwrap_or(0.0),
-                                );
-                                let (x, y, w, h) =
-                                    (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
-                                let kind =
-                                    ShapeKind::from_prst(shape.prst.as_deref().unwrap_or("line"));
-                                objects.push(SlideObject::Shape {
-                                    kind,
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                    style: paint.style,
-                                });
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
+                                let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
+                                let kind = ShapeKind::from_prst(shape.prst.as_deref().unwrap_or("line"));
+                                objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                             }
                         } else if name.as_ref() == "p:sp" {
                             // This shape's fill and outline, resolved by the
@@ -1052,19 +912,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 // A placeholder that paints nothing itself is
                                 // drawn with its layout's (or master's)
                                 // placeholder fill and outline.
-                                let paint = super::shape_xml::placeholder_or_own(
-                                    paint,
-                                    shape.ph.as_ref().and_then(|k| inherited.paint(k)),
-                                );
+                                let paint = super::shape_xml::placeholder_or_own(paint, shape.ph.as_ref().and_then(|k| inherited.paint(k)));
                                 let text = text_of(&shape.runs);
                                 let has_text = !text.trim().is_empty();
                                 // A title, subtitle or body placeholder is a
                                 // layout slot (decks_core::layouts): kept even
                                 // empty, when the editor shows its prompt and
                                 // a show draws nothing.
-                                let role = shape.ph.as_ref().and_then(|k| {
-                                    crate::layouts::Placeholder::from_pptx(Some(&k.ty))
-                                });
+                                let role = shape.ph.as_ref().and_then(|k| crate::layouts::Placeholder::from_pptx(Some(&k.ty)));
                                 if let Some(key) = &shape.ph {
                                     // Any other empty placeholder (a date, a
                                     // footer) is a prompt, not content:
@@ -1074,12 +929,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         buf.clear();
                                         continue;
                                     }
-                                    if [shape.x, shape.y, shape.w, shape.h]
-                                        .iter()
-                                        .any(Option::is_none)
-                                    {
-                                        if let Some(r) = inherited_rect(key, layout_phs, master_phs)
-                                        {
+                                    if [shape.x, shape.y, shape.w, shape.h].iter().any(Option::is_none) {
+                                        if let Some(r) = inherited_rect(key, layout_phs, master_phs) {
                                             shape.x = shape.x.or(Some(r.x));
                                             shape.y = shape.y.or(Some(r.y));
                                             shape.w = shape.w.or(Some(r.w));
@@ -1090,8 +941,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 // Its kind: its own paths (a custom geometry,
                                 // a path of no size in the shape's EMU), or
                                 // its preset with the corner the paint read.
-                                let (raw_w, raw_h) =
-                                    (shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0));
+                                let (raw_w, raw_h) = (shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0));
                                 let kind_of = |prst: Option<String>| match geometry.clone() {
                                     Some(mut paths) => {
                                         for p in &mut paths {
@@ -1102,84 +952,41 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         ShapeKind::Freeform(paths)
                                     }
                                     None => {
-                                        let mut kind = ShapeKind::from_prst(
-                                            &prst.unwrap_or_else(|| "rect".to_string()),
-                                        );
-                                        if let (ShapeKind::RoundRect { radius }, Some(adj)) =
-                                            (&mut kind, paint.round_adj)
-                                        {
+                                        let mut kind = ShapeKind::from_prst(&prst.unwrap_or_else(|| "rect".to_string()));
+                                        if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
                                             *radius = adj.clamp(0.0, 0.5);
                                         }
                                         kind
                                     }
                                 };
-                                let ((x, y, w, h), rotation) = in_groups(
-                                    &groups,
-                                    (
-                                        shape.x.unwrap_or(0.0),
-                                        shape.y.unwrap_or(0.0),
-                                        shape.w.unwrap_or(0.0),
-                                        shape.h.unwrap_or(0.0),
-                                    ),
-                                    shape.rotation.unwrap_or(0.0),
-                                );
-                                let (x, y, w, h) =
-                                    (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
+                                let ((x, y, w, h), rotation) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)), shape.rotation.unwrap_or(0.0));
+                                let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
 
-                                if shape.is_tx_box
-                                    || (shape.has_tx_body && has_text)
-                                    || role.is_some()
-                                {
+                                if shape.is_tx_box || (shape.has_tx_body && has_text) || role.is_some() {
                                     let (runs, mut body) = shape.resolve(text_style);
                                     body.placeholder = role;
                                     // The source placeholder this box fills,
                                     // so a later layout application matches
                                     // it by stable identity (DCK-006).
-                                    body.placeholder_key =
-                                        shape.ph.as_ref().map(|k| PlaceholderKey {
-                                            ty: k.ty.clone(),
-                                            idx: k.idx,
-                                        });
+                                    body.placeholder_key = shape.ph.as_ref().map(|k| PlaceholderKey { ty: k.ty.clone(), idx: k.idx });
                                     // A shape holding text keeps its own
                                     // paint under the text: a navy tile's
                                     // white figures used to lose the tile.
-                                    let painted = paint.style.fill.is_some()
-                                        || paint.style.gradient.is_some()
-                                        || paint.style.stroke.is_some();
+                                    let painted = paint.style.fill.is_some() || paint.style.gradient.is_some() || paint.style.stroke.is_some();
                                     if painted {
-                                        body.frame = Some(super::text_body::Frame {
-                                            kind: kind_of(shape.prst.clone()),
-                                            style: paint.style.clone(),
-                                        });
+                                        body.frame = Some(super::text_body::Frame { kind: kind_of(shape.prst.clone()), style: paint.style.clone() });
                                     }
                                     let blank = role.is_some() && !has_text;
                                     let text = if blank { String::new() } else { text };
                                     let runs = if blank { Vec::new() } else { runs };
-                                    objects.push(SlideObject::TextBox {
-                                        text,
-                                        x,
-                                        y,
-                                        w,
-                                        h,
-                                        rotation,
-                                        runs: scale.text_runs(&runs),
-                                        body: scale.text_body(body),
-                                    });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body: scale.text_body(body) });
                                 } else {
                                     // The shape as the file draws it: its own
                                     // preset and paint. It used to become a
                                     // plain Rect or a Circle of the width's
                                     // diameter, painted in the app's colours.
                                     let kind = kind_of(shape.prst.clone());
-                                    objects.push(SlideObject::Shape {
-                                        kind,
-                                        x,
-                                        y,
-                                        w,
-                                        h,
-                                        rotation,
-                                        style: paint.style,
-                                    });
+                                    objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                                 }
                             }
                         } else if name.as_ref() == "p:graphicFrame" {
@@ -1201,14 +1008,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     .get(&c.rel_id)
                                     .map(|t| part_path(&slide_dir.to_string_lossy(), t))
                                     .map(|p| archive.optional_part_to_string(&p, &mut budget))
-                                    .and_then(|xml| {
-                                        super::chart::parse_chart_space(
-                                            &super::shape_xml::inline_scheme_colors(
-                                                &xml,
-                                                &slide_theme,
-                                            ),
-                                        )
-                                    });
+                                    .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
                                 if let Some(chart) = chart {
                                     objects.push(SlideObject::Chart {
                                         x: c.x * scale.x,
@@ -1224,29 +1024,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
-                                    let ((x, y, w, h), rotation) = in_groups(
-                                        &groups,
-                                        (
-                                            pic.x.unwrap_or(0.0),
-                                            pic.y.unwrap_or(0.0),
-                                            pic.w.unwrap_or(0.0),
-                                            pic.h.unwrap_or(0.0),
-                                        ),
-                                        pic.rotation.unwrap_or(0.0),
-                                    );
-                                    let (x, y, w, h) =
-                                        (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
+                                    let ((x, y, w, h), rotation) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)), pic.rotation.unwrap_or(0.0));
+                                    let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
 
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
-                                        PictureRect {
-                                            x,
-                                            y,
-                                            w,
-                                            h,
-                                            rotation,
-                                            crop: pic.crop,
-                                        },
+                                        PictureRect { x, y, w, h, rotation, crop: pic.crop },
                                         &slide_image_rels,
                                         &mut archive,
                                         &mut budget,
@@ -1310,11 +1093,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // a later reorder keeps every reference.
         let slide_id = fresh;
         fresh += 1;
-        let mut ids = crate::ops::SlideIds {
-            slide: slide_id,
-            objects: Vec::new(),
-            deleted: Vec::new(),
-        };
+        let mut ids = crate::ops::SlideIds { slide: slide_id, objects: Vec::new(), deleted: Vec::new() };
         for _ in &objects {
             ids.objects.push(fresh);
             fresh += 1;
@@ -1325,13 +1104,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // (`loss::pptx_drops`, missing-pictures).
         let background_picture = background_blip
             .as_deref()
-            .and_then(|id| {
-                part_picture(&mut archive, &mut budget, &target_path, &slide_rels_xml, id)
-            })
-            .map(|path| crate::engine::BackgroundPicture {
-                path,
-                fill: background_fill,
-            });
+            .and_then(|id| part_picture(&mut archive, &mut budget, &target_path, &slide_rels_xml, id))
+            .map(|path| crate::engine::BackgroundPicture { path, fill: background_fill });
         slides.push(Slide {
             // The name the slide carries, falling back to a positional
             // label. The fallback is why the loss was invisible: the reader
@@ -1351,12 +1125,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             // read; `None` meanwhile falls back to the first master.
             master_id: None,
             transition: parse_transition(&slide_xml),
-            builds: super::timing::read_builds(&slide_xml, |spid| {
-                object_ids
-                    .iter()
-                    .position(|id| *id == Some(spid))
-                    .and_then(|i| ids.objects.get(i).copied())
-            }),
+            builds: super::timing::read_builds(&slide_xml, |spid| object_ids.iter().position(|id| *id == Some(spid)).and_then(|i| ids.objects.get(i).copied())),
             ids,
             layout_id: None,
             hidden: slide_is_hidden(&slide_xml),
@@ -1371,12 +1140,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     {
         // Layout part -> (master, layout); `None` for a master this writer
         // wrote without layouts (one empty blank layout, which is no layout).
-        let mut slot_of: std::collections::HashMap<String, (usize, Option<usize>)> =
-            std::collections::HashMap::new();
-        let read_part = |archive: &mut zip::ZipArchive<File>,
-                         budget: &mut ZipBudget,
-                         name: &str|
-         -> String { archive.optional_part_to_string(name, budget) };
+        let mut slot_of: std::collections::HashMap<String, (usize, Option<usize>)> = std::collections::HashMap::new();
+        let read_part = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, name: &str| -> String {
+            archive.optional_part_to_string(name, budget)
+        };
         let targets = |rels: &str, kind: &str| -> Vec<String> {
             rels.split("Target=\"")
                 .skip(1)
@@ -1385,23 +1152,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
                 .collect()
         };
-        let rels_of =
-            |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str| -> String {
-                let dir = Path::new(part).parent().unwrap_or(Path::new("ppt"));
-                let file = Path::new(part)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                archive.optional_part_to_string(
-                    &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
-                    budget,
-                )
-            };
+        let rels_of = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str| -> String {
+            let dir = Path::new(part).parent().unwrap_or(Path::new("ppt"));
+            let file = Path::new(part).file_name().unwrap_or_default().to_string_lossy().to_string();
+            archive.optional_part_to_string(&format!("{}/_rels/{}.rels", dir.to_string_lossy(), file), budget)
+        };
         for (i, layout_path) in slide_layout_paths.iter().enumerate() {
-            let Some(layout_path) = layout_path else {
-                continue;
-            };
+            let Some(layout_path) = layout_path else { continue };
             if !slot_of.contains_key(layout_path) {
                 let layout_xml = read_part(&mut archive, &mut budget, layout_path);
                 if layout_xml.is_empty() {
@@ -1409,14 +1166,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 }
                 let layout_rels = rels_of(&mut archive, &mut budget, layout_path);
                 let master_path = targets(&layout_rels, "slideMaster").into_iter().next();
-                let master_xml = master_path
-                    .as_deref()
-                    .map(|p| read_part(&mut archive, &mut budget, p))
-                    .unwrap_or_default();
-                let master_rels = master_path
-                    .as_deref()
-                    .map(|p| rels_of(&mut archive, &mut budget, p))
-                    .unwrap_or_default();
+                let master_xml = master_path.as_deref().map(|p| read_part(&mut archive, &mut budget, p)).unwrap_or_default();
+                let master_rels = master_path.as_deref().map(|p| rels_of(&mut archive, &mut budget, p)).unwrap_or_default();
                 // The theme this master inherits from (DCK-006): the part
                 // its relationships name, cached by part path so the slides
                 // above resolved the same theme. A master with no theme
@@ -1425,25 +1176,20 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 // failing — and the master's colour map rides on the
                 // resolving copy, not on the retained part.
                 let theme_path = targets(&master_rels, "theme").into_iter().next();
-                let base_theme = theme_path
-                    .as_deref()
-                    .map(|tp| {
-                        if !themes.contains_key(tp) {
-                            let tx = read_part(&mut archive, &mut budget, tp);
-                            themes.insert(tp.to_string(), read_theme(&tx));
-                        }
-                        themes.get(tp).cloned().unwrap_or_default()
-                    })
-                    .unwrap_or_default();
+                let base_theme = theme_path.as_deref().map(|tp| {
+                    if !themes.contains_key(tp) {
+                        let tx = read_part(&mut archive, &mut budget, tp);
+                        themes.insert(tp.to_string(), read_theme(&tx));
+                    }
+                    themes.get(tp).cloned().unwrap_or_default()
+                }).unwrap_or_default();
                 let color_map = parse_color_map(&master_xml);
                 let resolving = base_theme.with_remap(&color_map);
                 // The body font the theme answers with, kept absent (not
                 // Sans) when the theme names none.
                 let theme_font = resolving.fonts().1;
                 let (master_bg, shapes) = match master_path.as_deref() {
-                    Some(mp) => master_shapes(&master_xml, scale, &resolving, &mut |id| {
-                        part_picture(&mut archive, &mut budget, mp, &master_rels, id)
-                    }),
+                    Some(mp) => master_shapes(&master_xml, scale, &resolving, &mut |id| part_picture(&mut archive, &mut budget, mp, &master_rels, id)),
                     None => master_shapes(&master_xml, scale, &resolving, &mut |_| None),
                 };
                 // The master's layouts in its own order; a layout its master
@@ -1455,28 +1201,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 let master_phs = parse_placeholders(&master_xml);
                 let mut layouts = Vec::new();
                 for lp in &layout_paths {
-                    let xml = if lp == layout_path {
-                        layout_xml.clone()
-                    } else {
-                        read_part(&mut archive, &mut budget, lp)
-                    };
+                    let xml = if lp == layout_path { layout_xml.clone() } else { read_part(&mut archive, &mut budget, lp) };
                     let rels = rels_of(&mut archive, &mut budget, lp);
-                    let mut pictures =
-                        |id: &str| part_picture(&mut archive, &mut budget, lp, &rels, id);
+                    let mut pictures = |id: &str| part_picture(&mut archive, &mut budget, lp, &rels, id);
                     // A layout's own colour map recolours its background
                     // and decorations.
                     let remap = parse_override_color_map(&xml);
-                    let layout_theme =
-                        base_theme.with_remap(if remap.is_empty() { &color_map } else { &remap });
-                    layouts.push(read_layout(
-                        &xml,
-                        lp,
-                        &master_phs,
-                        master_bg.as_deref(),
-                        scale,
-                        &layout_theme,
-                        &mut pictures,
-                    ));
+                    let layout_theme = base_theme.with_remap(if remap.is_empty() { &color_map } else { &remap });
+                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &layout_theme, &mut pictures));
                 }
                 // What this writer wrote for a master with no layouts: one
                 // empty blank layout. It is no layout.
@@ -1502,11 +1234,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 let mi = masters.len();
                 // A layout-less master keeps a layout's background, as the
                 // one blank layout carried the master's.
-                let layout_bg = if none {
-                    parse_layout_background(&layout_xml, scale, &resolving)
-                } else {
-                    None
-                };
+                let layout_bg = if none { parse_layout_background(&layout_xml, scale, &resolving) } else { None };
                 // The retained theme entry, shared by masters that name the
                 // same part: one entry per part, ids from the session space.
                 let theme_id = theme_path.as_deref().map(|tp| {
@@ -1556,9 +1284,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             // `None` and falls back to the first master.
             if let (Some(s), Some(&(mi, layout))) = (slides.get_mut(i), slot_of.get(layout_path)) {
                 s.master_id = Some(masters[mi].id);
-                s.layout_id = layout
-                    .and_then(|j| masters[mi].layouts.get(j))
-                    .map(|l| l.id);
+                s.layout_id = layout.and_then(|j| masters[mi].layouts.get(j)).map(|l| l.id);
             }
         }
     }
@@ -1577,8 +1303,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     }
 
     if slides.is_empty() {
-        slides.push(Slide {
-            hidden: false,
+        slides.push(Slide { hidden: false,
             title: "Slide 1".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -1596,13 +1321,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // later edit adds) gets a session id here, still once per document.
     crate::ops::ensure_all_ids(&mut slides, &mut masters);
     crate::ops::ensure_theme_ids(&slides, &masters, &mut model_themes);
-    Ok(Deck {
-        slides,
-        masters,
-        page_size,
-        themes: model_themes,
-        skipped_slides,
-    })
+    Ok(Deck { slides, masters, page_size, themes: model_themes, skipped_slides })
 }
 
 /// A shape's `p:cNvPr id`.
@@ -1610,12 +1329,7 @@ fn cnvpr_id(e: &BytesStart) -> Option<u32> {
     e.attributes()
         .flatten()
         .find(|a| a.key.as_ref() == "id")
-        .and_then(|a| {
-            a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                .ok()?
-                .parse()
-                .ok()
-        })
+        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?.parse().ok())
 }
 
 #[cfg(test)]
@@ -1629,35 +1343,28 @@ mod tests {
     fn reopening_a_pptx_does_not_unpack_its_picture_again() {
         let dir = tempfile::tempdir().unwrap();
         let png: &[u8] = &[
-            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0,
-            0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0, 12, b'I', b'D',
-            b'A', b'T', 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 0, 3, 0, 1, 0x9e, 0xdd, 0x22,
-            0x71, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D',
+            b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0,
+            12, b'I', b'D', b'A', b'T', 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 0, 3, 0,
+            1, 0x9e, 0xdd, 0x22, 0x71, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42,
+            0x60, 0x82,
         ];
         let src = dir.path().join("pic.png");
         std::fs::write(&src, png).unwrap();
         let mut deck = Deck::new();
         deck.slides[0].objects.push(SlideObject::Image {
             path: src.to_string_lossy().to_string(),
-            x: 10.0,
-            y: 20.0,
-            w: 30.0,
-            h: 40.0,
-            rotation: 0.0,
-            crop: Default::default(),
+            x: 10.0, y: 20.0, w: 30.0, h: 40.0,
+            rotation: 0.0, crop: Default::default()
         });
         let path = dir.path().join("pic.pptx");
         write_pptx(path.to_str().unwrap(), &deck).unwrap();
 
         let unpacked = |deck: &Deck| {
-            let found: Vec<String> = deck.slides[0]
-                .objects
-                .iter()
-                .filter_map(|o| match o {
-                    SlideObject::Image { path, .. } => Some(path.clone()),
-                    _ => None,
-                })
-                .collect();
+            let found: Vec<String> = deck.slides[0].objects.iter().filter_map(|o| match o {
+                SlideObject::Image { path, .. } => Some(path.clone()),
+                _ => None,
+            }).collect();
             assert_eq!(found.len(), 1, "expected one picture, got {found:?}");
             found[0].clone()
         };
@@ -1667,10 +1374,7 @@ mod tests {
             assert_eq!(unpacked(&read_pptx(path.to_str().unwrap()).unwrap()), first);
         }
         let cache = suite_common_core::media_cache::process_dir().unwrap();
-        assert!(
-            Path::new(&first).starts_with(&cache),
-            "{first} not in {cache:?}"
-        );
+        assert!(Path::new(&first).starts_with(&cache), "{first} not in {cache:?}");
     }
 
     #[test]
@@ -1678,25 +1382,17 @@ mod tests {
         let mut deck = Deck::new();
         deck.slides[0].objects.push(SlideObject::TextBox {
             text: "Hello Slide".into(),
-            x: 100.0,
-            y: 100.0,
-            w: 300.0,
-            h: 50.0,
+            x: 100.0, y: 100.0, w: 300.0, h: 50.0,
             runs: vec![],
             rotation: 0.0,
             body: Default::default(),
         });
         deck.slides[0].objects.push(SlideObject::Rect {
-            x: 150.0,
-            y: 200.0,
-            w: 200.0,
-            h: 100.0,
+            x: 150.0, y: 200.0, w: 200.0, h: 100.0,
             rotation: 0.0,
         });
         deck.slides[0].objects.push(SlideObject::Circle {
-            x: 400.0,
-            y: 300.0,
-            r: 50.0,
+            x: 400.0, y: 300.0, r: 50.0,
             rotation: 0.0,
         });
 
@@ -1706,11 +1402,7 @@ mod tests {
 
         // Write
         let write_res = write_pptx(&path_str, &deck);
-        assert!(
-            write_res.is_ok(),
-            "Write pptx failed: {:?}",
-            write_res.err()
-        );
+        assert!(write_res.is_ok(), "Write pptx failed: {:?}", write_res.err());
 
         // Read
         let read_res = read_pptx(&path_str);
@@ -1731,15 +1423,7 @@ mod tests {
         // shapes, in the colours they were written in.
         use crate::engine::shape::{Color, ShapeKind};
         match &slide.objects[1] {
-            SlideObject::Shape {
-                kind: ShapeKind::Rect,
-                x,
-                y,
-                w,
-                h,
-                style,
-                ..
-            } => {
+            SlideObject::Shape { kind: ShapeKind::Rect, x, y, w, h, style, .. } => {
                 assert!((x - 150.0).abs() < 0.1);
                 assert!((y - 200.0).abs() < 0.1);
                 assert!((w - 200.0).abs() < 0.1);
@@ -1750,15 +1434,7 @@ mod tests {
         }
 
         match &slide.objects[2] {
-            SlideObject::Shape {
-                kind: ShapeKind::Ellipse,
-                x,
-                y,
-                w,
-                h,
-                style,
-                ..
-            } => {
+            SlideObject::Shape { kind: ShapeKind::Ellipse, x, y, w, h, style, .. } => {
                 // Circle (400, 300) r 50 is the box (350, 250, 100, 100).
                 assert!((x - 350.0).abs() < 0.1 && (y - 250.0).abs() < 0.1);
                 assert!((w - 100.0).abs() < 0.1 && (h - 100.0).abs() < 0.1);
@@ -1778,69 +1454,37 @@ mod slide_size_tests {
     fn transitions_are_read_including_powerpoints_morph() {
         let sld = |t: &str| format!("<p:sld xmlns:p=\"p\"><p:cSld><p:spTree/></p:cSld>{t}</p:sld>");
         assert_eq!(parse_transition(&sld("")), Transition::None);
-        assert_eq!(
-            parse_transition(&sld("<p:transition spd=\"med\"><p:fade/></p:transition>")),
-            Transition::Fade
-        );
-        assert_eq!(
-            parse_transition(&sld("<p:transition><p:push dir=\"u\"/></p:transition>")),
-            Transition::Push
-        );
-        assert_eq!(
-            parse_transition(&sld("<p:transition><p:wipe/></p:transition>")),
-            Transition::Wipe
-        );
-        assert_eq!(
-            parse_transition(&sld("<p:transition><p:dissolve/></p:transition>")),
-            Transition::Fade,
-            "one we don't draw"
-        );
+        assert_eq!(parse_transition(&sld("<p:transition spd=\"med\"><p:fade/></p:transition>")), Transition::Fade);
+        assert_eq!(parse_transition(&sld("<p:transition><p:push dir=\"u\"/></p:transition>")), Transition::Push);
+        assert_eq!(parse_transition(&sld("<p:transition><p:wipe/></p:transition>")), Transition::Wipe);
+        assert_eq!(parse_transition(&sld("<p:transition><p:dissolve/></p:transition>")), Transition::Fade, "one we don't draw");
         // As PowerPoint writes Morph: the Choice first, a fade Fallback.
         let morph = "<mc:AlternateContent xmlns:mc=\"mc\"><mc:Choice xmlns:p159=\"x\" Requires=\"p159\">\
             <p:transition spd=\"slow\"><p159:morph option=\"byObject\"/></p:transition></mc:Choice>\
             <mc:Fallback><p:transition spd=\"slow\"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>";
         assert_eq!(parse_transition(&sld(morph)), Transition::MagicMove);
         // Sound on a transition is not a kind.
-        assert_eq!(
-            parse_transition(&sld("<p:transition><p:sndAc/><p:push/></p:transition>")),
-            Transition::Push
-        );
+        assert_eq!(parse_transition(&sld("<p:transition><p:sndAc/><p:push/></p:transition>")), Transition::Push);
         assert_eq!(
             parse_transition(&sld("<p:transition><p:sndAc><p:stSnd><p:snd/></p:stSnd></p:sndAc><p:wipe/></p:transition>")),
             Transition::Wipe
         );
     }
 
+
     #[test]
     fn text_sizes_scale_with_the_slide_like_its_geometry() {
         use suite_common_core::document::{Run, RunStyle};
         // Our own 10in slide: sizes are untouched, including "no size".
         let ours = SlideScale::default();
-        let runs = vec![Run {
-            text: "a".into(),
-            style: RunStyle {
-                font_size_hp: Some(48),
-                ..Default::default()
-            },
-        }];
+        let runs = vec![Run { text: "a".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
         assert_eq!(ours.text_runs(&runs)[0].style.font_size_hp, Some(48));
         // A 13.33in (12192000 EMU) deck maps onto the 10in model at 0.75.
         let wide = SlideScale::from_emu(12_192_000.0, 6_858_000.0);
         assert!((wide.text_factor() - 0.75).abs() < 1e-9);
-        let plain = vec![Run {
-            text: "b".into(),
-            style: RunStyle::default(),
-        }];
-        assert_eq!(
-            wide.text_runs(&runs)[0].style.font_size_hp,
-            Some(36),
-            "24 pt -> 18 pt"
-        );
-        assert_eq!(
-            wide.text_runs(&plain)[0].style.font_size_hp,
-            Some(27),
-            "the 18 pt default -> 13.5 pt"
-        );
+        let plain = vec![Run { text: "b".into(), style: RunStyle::default() }];
+        assert_eq!(wide.text_runs(&runs)[0].style.font_size_hp, Some(36), "24 pt -> 18 pt");
+        assert_eq!(wide.text_runs(&plain)[0].style.font_size_hp, Some(27), "the 18 pt default -> 13.5 pt");
     }
 
     use super::*;
@@ -1931,14 +1575,7 @@ mod master_tests {
         assert_eq!(bg.as_deref(), Some("#1a2b3c"));
         assert_eq!(shapes.len(), 1, "placeholder must be skipped: {shapes:?}");
         match &shapes[0] {
-            SlideObject::Shape {
-                kind: ShapeKind::Rect,
-                x,
-                y,
-                w,
-                h,
-                ..
-            } => {
+            SlideObject::Shape { kind: ShapeKind::Rect, x, y, w, h, .. } => {
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
                 assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
             }
@@ -1959,43 +1596,20 @@ mod master_tests {
             </p:spTree></p:cSld></p:sldMaster>"##;
         let (_, shapes) = parse_master_shapes(xml);
         match &shapes[0] {
-            SlideObject::Shape {
-                kind: ShapeKind::Rect,
-                style,
-                ..
-            } => {
+            SlideObject::Shape { kind: ShapeKind::Rect, style, .. } => {
                 assert_eq!(style.fill, Some(Color(0xE0, 0x1B, 0x24)));
                 assert_eq!(style.stroke, None);
             }
             other => panic!("expected the red bar, got {other:?}"),
         }
         match &shapes[1] {
-            SlideObject::Shape {
-                kind: ShapeKind::Ellipse,
-                style,
-                ..
-            } => {
+            SlideObject::Shape { kind: ShapeKind::Ellipse, style, .. } => {
                 let want = LinearGradient {
-                    stops: vec![
-                        GradientStop {
-                            pos: 0.0,
-                            color: Color(0x0B, 0x3D, 0x6B),
-                        },
-                        GradientStop {
-                            pos: 1.0,
-                            color: Color(0x13, 0x8D, 0x9C),
-                        },
-                    ],
+                    stops: vec![GradientStop { pos: 0.0, color: Color(0x0B, 0x3D, 0x6B) }, GradientStop { pos: 1.0, color: Color(0x13, 0x8D, 0x9C) }],
                     angle: 90.0,
                 };
                 assert_eq!(style.gradient.as_ref(), Some(&want));
-                assert_eq!(
-                    style.stroke,
-                    Some(Stroke {
-                        color: Color(0xB5, 0x5A, 0x3C),
-                        width: 2.0
-                    })
-                );
+                assert_eq!(style.stroke, Some(Stroke { color: Color(0xB5, 0x5A, 0x3C), width: 2.0 }));
             }
             other => panic!("expected the gradient ellipse, got {other:?}"),
         }
@@ -2044,6 +1658,7 @@ mod master_tests {
 </p:spTree></p:cSld></p:notes>"##;
         assert_eq!(extract_notes_text(xml), "the real notes");
     }
+
 
     /// Build a minimal notesSlide part around raw txBody XML so entity and
     /// break handling can be tested without going through `notes_slide_xml`.
@@ -2101,9 +1716,8 @@ mod master_tests {
 
     #[test]
     fn notes_extract_soft_break_becomes_newline() {
-        let xml = notes_with_txbody(
-            "<a:p><a:r><a:t>one</a:t></a:r><a:br/><a:r><a:t>two</a:t></a:r></a:p>",
-        );
+        let xml =
+            notes_with_txbody("<a:p><a:r><a:t>one</a:t></a:r><a:br/><a:r><a:t>two</a:t></a:r></a:p>");
         assert_eq!(extract_notes_text(&xml), "one\ntwo");
     }
 
@@ -2143,15 +1757,7 @@ mod master_tests {
         let (_, shapes) = parse_master_shapes(xml);
         assert_eq!(shapes.len(), 1);
         match &shapes[0] {
-            SlideObject::TextBox {
-                text,
-                x,
-                y,
-                w,
-                h,
-                runs,
-                ..
-            } => {
+            SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                 assert_eq!(text, "Deck title");
                 // The decoration's styling is read, not discarded: this
                 // asserted `runs.is_empty()` while the master walker parsed
@@ -2256,6 +1862,7 @@ mod master_tests {
         ));
         assert_eq!(text, "Only line");
     }
+
 }
 
 #[cfg(test)]
@@ -2272,10 +1879,7 @@ mod theme_font_tests {
             <a:majorFont><a:latin typeface=\"Heading Face\"/></a:majorFont>\
             <a:minorFont><a:latin typeface=\"Body Face\"/></a:minorFont>\
             </a:fontScheme></a:themeElements></a:theme>";
-        assert_eq!(
-            theme(xml).fonts(),
-            (Some("Heading Face".into()), Some("Body Face".into()))
-        );
+        assert_eq!(theme(xml).fonts(), (Some("Heading Face".into()), Some("Body Face".into())));
     }
 
     /// `a:cs` and `a:ea` sit beside `a:latin` inside the same scheme, and
@@ -2299,11 +1903,9 @@ mod theme_font_tests {
     /// pptx this writer produced until now — has to fall back, not fail.
     #[test]
     fn a_part_with_no_font_scheme_answers_nothing() {
-        assert_eq!(
-            theme("<a:theme><a:themeElements/></a:theme>").fonts(),
-            (None, None)
-        );
+        assert_eq!(theme("<a:theme><a:themeElements/></a:theme>").fonts(), (None, None));
         assert_eq!(theme("").fonts(), (None, None));
         assert_eq!(theme("not xml at all <<<").fonts(), (None, None));
     }
 }
+

@@ -30,18 +30,12 @@ pub(super) struct Node {
 
 impl Node {
     pub(super) fn attr(&self, key: &str) -> Option<&str> {
-        self.attrs
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v.as_str())
+        self.attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
     pub(super) fn child(&self, name: &str) -> Option<&Node> {
         self.children.iter().find(|c| c.name == name)
     }
-    pub(super) fn children_named<'a>(
-        &'a self,
-        name: &'a str,
-    ) -> impl Iterator<Item = &'a Node> + 'a {
+    pub(super) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> + 'a {
         self.children.iter().filter(move |c| c.name == name)
     }
     /// Every descendant named `name`, in document order, not descending
@@ -85,10 +79,7 @@ fn element(e: &BytesStart) -> Node {
             .attributes()
             .flatten()
             .filter_map(|a| {
-                let v = a
-                    .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                    .ok()?
-                    .into_owned();
+                let v = a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?.into_owned();
                 Some((a.key.as_ref().to_string(), v))
             })
             .collect(),
@@ -284,11 +275,7 @@ impl Theme {
         super::theme::Theme {
             id,
             name: self.name.clone(),
-            colors: self
-                .colors
-                .iter()
-                .map(|(k, v)| (k.clone(), v.to_hex()))
-                .collect(),
+            colors: self.colors.iter().map(|(k, v)| (k.clone(), v.to_hex())).collect(),
             major_font: self.major_font.clone(),
             minor_font: self.minor_font.clone(),
             source: source.to_string(),
@@ -301,12 +288,7 @@ impl Theme {
 pub(crate) fn theme(theme_xml: &str) -> Theme {
     let mut theme = Theme::default();
     let root = parse_tree(theme_xml);
-    if let Some(name) = root
-        .child("a:theme")
-        .and_then(|t| t.attr("name"))
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-    {
+    if let Some(name) = root.child("a:theme").and_then(|t| t.attr("name")).map(str::trim).filter(|n| !n.is_empty()) {
         theme.name = name.to_string();
     }
     if let Some(scheme) = root.find("a:clrScheme") {
@@ -317,9 +299,7 @@ pub(crate) fn theme(theme_xml: &str) -> Theme {
                 _ => None,
             });
             if let Some(c) = value {
-                theme
-                    .colors
-                    .insert(slot.name.trim_start_matches("a:").to_string(), c);
+                theme.colors.insert(slot.name.trim_start_matches("a:").to_string(), c);
             }
         }
     }
@@ -463,10 +443,7 @@ pub(crate) fn inline_scheme_colors(xml: &str, theme: &Theme) -> String {
         let element = &tail[..end];
         let root = parse_tree(&format!(r#"<x xmlns:a="a">{element}</x>"#));
         match root.find("x").and_then(|x| first_color(x, theme, None)) {
-            Some(c) => out.push_str(&format!(
-                r#"<a:srgbClr val="{:02X}{:02X}{:02X}"/>"#,
-                c.0, c.1, c.2
-            )),
+            Some(c) => out.push_str(&format!(r#"<a:srgbClr val="{:02X}{:02X}{:02X}"/>"#, c.0, c.1, c.2)),
             None => out.push_str(element),
         }
         rest = &tail[end..];
@@ -493,15 +470,8 @@ fn fill_of(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Fil
                 .child("a:gsLst")?
                 .children_named("a:gs")
                 .filter_map(|gs| {
-                    let pos = gs
-                        .attr("pos")
-                        .and_then(|v| v.parse::<f64>().ok())
-                        .unwrap_or(0.0)
-                        / 100_000.0;
-                    Some(GradientStop {
-                        pos: pos.clamp(0.0, 1.0),
-                        color: first_color(gs, theme, placeholder)?,
-                    })
+                    let pos = gs.attr("pos").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 100_000.0;
+                    Some(GradientStop { pos: pos.clamp(0.0, 1.0), color: first_color(gs, theme, placeholder)? })
                 })
                 .collect();
             if stops.is_empty() {
@@ -522,9 +492,7 @@ fn fill_of(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Fil
 
 /// The fill among `node`'s children (a `p:spPr`, or a style list entry).
 fn fill_among(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Fill> {
-    node.children
-        .iter()
-        .find_map(|c| fill_of(c, theme, placeholder))
+    node.children.iter().find_map(|c| fill_of(c, theme, placeholder))
 }
 
 /// A direct `a:solidFill` colour statement as its source states it
@@ -535,15 +503,9 @@ fn fill_among(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<
 /// The caller passes the `a:solidFill` node itself.
 fn direct_color_ref(node: &Node) -> Option<super::theme::ColorRef> {
     use super::theme::{ColorMod, ColorRef, ThemeColor};
-    let c = node
-        .children
-        .iter()
-        .find(|c| COLOR_ELEMENTS.contains(&c.name.as_str()))?;
+    let c = node.children.iter().find(|c| COLOR_ELEMENTS.contains(&c.name.as_str()))?;
     match c.name.as_str() {
-        "a:srgbClr" => c
-            .attr("val")
-            .and_then(Color::from_hex)
-            .map(|c| ColorRef::Rgb(c.to_hex())),
+        "a:srgbClr" => c.attr("val").and_then(Color::from_hex).map(|c| ColorRef::Rgb(c.to_hex())),
         "a:sysClr" => system_color(c).map(|c| ColorRef::Rgb(c.to_hex())),
         "a:prstClr" => match c.attr("val") {
             Some("black") => Some(ColorRef::Rgb("000000".to_string())),
@@ -570,21 +532,14 @@ fn direct_color_ref(node: &Node) -> Option<super::theme::ColorRef> {
                     _ => continue,
                 });
             }
-            Some(ColorRef::Theme(ThemeColor {
-                slot: slot.to_string(),
-                mods,
-            }))
+            Some(ColorRef::Theme(ThemeColor { slot: slot.to_string(), mods }))
         }
         _ => None,
     }
 }
 
 /// A line (`a:ln`): its colour (None = no line) and width in EMU.
-fn line_of(
-    ln: &Node,
-    theme: &Theme,
-    placeholder: Option<Color>,
-) -> (Option<Option<Color>>, Option<f64>) {
+fn line_of(ln: &Node, theme: &Theme, placeholder: Option<Color>) -> (Option<Option<Color>>, Option<f64>) {
     let width = ln.attr("w").and_then(|v| v.parse::<f64>().ok());
     let color = match fill_among(ln, theme, placeholder) {
         Some(Fill::None) => Some(None),
@@ -601,11 +556,7 @@ fn line_of(
 /// An `a:glow`: its radius (EMU, scaled as a stroke width is), its colour
 /// and the colour's `a:alpha` (100% when unstated). None without a colour.
 fn glow_of(glow: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Glow> {
-    let radius = glow
-        .attr("rad")
-        .and_then(|r| r.parse::<f64>().ok())
-        .unwrap_or(0.0)
-        * scale;
+    let radius = glow.attr("rad").and_then(|r| r.parse::<f64>().ok()).unwrap_or(0.0) * scale;
     let color = first_color(glow, theme, None)?;
     let alpha = glow
         .children
@@ -613,11 +564,7 @@ fn glow_of(glow: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Glow>
         .find_map(|c| c.child("a:alpha"))
         .and_then(|a| a.attr("val")?.parse::<f64>().ok())
         .map_or(1.0, |v| (v / 100_000.0).clamp(0.0, 1.0));
-    (radius > 0.0).then_some(super::shape::Glow {
-        radius,
-        color,
-        alpha,
-    })
+    (radius > 0.0).then_some(super::shape::Glow { radius, color, alpha })
 }
 
 /// A colour element's `a:alpha` as 0..1, 1 when unstated.
@@ -634,11 +581,7 @@ fn alpha_of(effect: &Node) -> f64 {
 /// clockwise from right) as an offset, `blurRad` (EMU), the colour and its
 /// alpha; distances scaled as a stroke width is. None without a colour.
 fn shadow_of(shdw: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Shadow> {
-    let num = |k: &str| {
-        shdw.attr(k)
-            .and_then(|v| v.parse::<f64>().ok())
-            .unwrap_or(0.0)
-    };
+    let num = |k: &str| shdw.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
     let (dist, dir) = (num("dist") * scale, (num("dir") / 60_000.0).to_radians());
     let color = first_color(shdw, theme, None)?;
     // `rotWithShape` is true unless stated (CT_OuterShadowEffect).
@@ -655,19 +598,7 @@ fn shadow_of(shdw: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Sha
 
 /// Whether `spPr` states no fill of its own, so a fillRef's applies.
 fn own_fill_absent(sppr: Option<&Node>) -> bool {
-    sppr.is_none_or(|p| {
-        !p.children.iter().any(|c| {
-            matches!(
-                c.name.as_str(),
-                "a:noFill"
-                    | "a:solidFill"
-                    | "a:gradFill"
-                    | "a:blipFill"
-                    | "a:pattFill"
-                    | "a:grpFill"
-            )
-        })
-    })
+    sppr.is_none_or(|p| !p.children.iter().any(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill" | "a:gradFill" | "a:blipFill" | "a:pattFill" | "a:grpFill")))
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -683,10 +614,7 @@ pub(crate) struct SpStyle {
 /// drawn with (the green panel a section layout gives its side body).
 pub(crate) fn placeholder_paint(sp: &Node, theme: &Theme, scale: f64) -> Option<SpStyle> {
     let sppr = sp.child("p:spPr")?;
-    let states = sppr
-        .children
-        .iter()
-        .any(|c| matches!(c.name.as_str(), "a:solidFill" | "a:gradFill" | "a:ln"));
+    let states = sppr.children.iter().any(|c| matches!(c.name.as_str(), "a:solidFill" | "a:gradFill" | "a:ln"));
     states.then(|| resolve_sp(sp, theme, scale, None))
 }
 
@@ -696,11 +624,7 @@ pub(crate) fn placeholder_paint(sp: &Node, theme: &Theme, scale: f64) -> Option<
 /// placeholder's fill keeps it removed.
 pub(crate) fn placeholder_or_own(own: SpStyle, inherited: Option<&SpStyle>) -> SpStyle {
     let s = &own.style;
-    let states = s.fill.is_some()
-        || s.gradient.is_some()
-        || s.stroke.is_some()
-        || s.fill_src.is_some()
-        || s.stroke_src.is_some();
+    let states = s.fill.is_some() || s.gradient.is_some() || s.stroke.is_some() || s.fill_src.is_some() || s.stroke_src.is_some();
     match inherited {
         Some(p) if !states => p.clone(),
         _ => own,
@@ -723,11 +647,7 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
     // no reference and the resolved cache stays canonical.
     let fill_src = match sppr {
         Some(p) if p.child("a:grpFill").is_some() => None,
-        Some(p) => match p
-            .children
-            .iter()
-            .find(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill"))
-        {
+        Some(p) => match p.children.iter().find(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill")) {
             Some(n) if n.name == "a:noFill" => Some(FillSrc::NoFill),
             Some(n) => direct_color_ref(n).map(FillSrc::Color),
             None => None,
@@ -759,11 +679,7 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
     // or a direct colour. A width-only line, a style reference or no
     // statement leaves no reference (see `fill_src`).
     let stroke_src = match sppr.and_then(|p| p.child("a:ln")) {
-        Some(ln) => match ln
-            .children
-            .iter()
-            .find(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill"))
-        {
+        Some(ln) => match ln.children.iter().find(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill")) {
             Some(n) if n.name == "a:noFill" => Some(StrokeSrc::NoLine),
             Some(n) => direct_color_ref(n).map(StrokeSrc::Color),
             None => None,
@@ -771,9 +687,7 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
         None => None,
     };
     // Line: the shape's own a:ln (colour and width each), else lnRef's.
-    let (mut color, mut width) = sppr
-        .and_then(|p| p.child("a:ln"))
-        .map_or((None, None), |ln| line_of(ln, theme, None));
+    let (mut color, mut width) = sppr.and_then(|p| p.child("a:ln")).map_or((None, None), |ln| line_of(ln, theme, None));
     if color.is_none() || width.is_none() {
         if let Some((idx, ref_color)) = reference("a:lnRef") {
             if idx == 0 {
@@ -786,30 +700,17 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
         }
     }
     // A stated outline with no width anywhere is DrawingML's default, 9525 EMU.
-    let stroke = color.flatten().map(|color| Stroke {
-        color,
-        width: width.unwrap_or(9525.0) * scale,
-    });
+    let stroke = color.flatten().map(|color| Stroke { color, width: width.unwrap_or(9525.0) * scale });
 
     let round_adj = sppr
         .and_then(|p| p.find("a:gd"))
         .filter(|gd| gd.attr("name") == Some("adj"))
-        .and_then(|gd| {
-            gd.attr("fmla")?
-                .strip_prefix("val ")?
-                .trim()
-                .parse::<f64>()
-                .ok()
-        })
+        .and_then(|gd| gd.attr("fmla")?.strip_prefix("val ")?.trim().parse::<f64>().ok())
         .map(|v| v / 100_000.0);
 
     let effects = sppr.and_then(|p| p.child("a:effectLst"));
-    let glow = effects
-        .and_then(|e| e.child("a:glow"))
-        .and_then(|g| glow_of(g, theme, scale));
-    let shadow = effects
-        .and_then(|e| e.child("a:outerShdw"))
-        .and_then(|s| shadow_of(s, theme, scale));
+    let glow = effects.and_then(|e| e.child("a:glow")).and_then(|g| glow_of(g, theme, scale));
+    let shadow = effects.and_then(|e| e.child("a:outerShdw")).and_then(|s| shadow_of(s, theme, scale));
 
     // A solid fill's opacity: its own colour's a:alpha, else the
     // fillRef colour's. Opaque is no statement.
@@ -817,26 +718,12 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
         (Some(_), None) => {
             let own = sppr.and_then(|p| p.child("a:solidFill"));
             let by_ref = || style.and_then(|st| st.child("a:fillRef"));
-            own.or_else(|| own_fill_absent(sppr).then(by_ref).flatten())
-                .map(alpha_of)
-                .filter(|a| *a < 1.0)
+            own.or_else(|| own_fill_absent(sppr).then(by_ref).flatten()).map(alpha_of).filter(|a| *a < 1.0)
         }
         _ => None,
     };
 
-    SpStyle {
-        style: ShapeStyle {
-            glow,
-            shadow,
-            fill,
-            gradient,
-            stroke,
-            fill_src,
-            stroke_src,
-            fill_alpha,
-        },
-        round_adj,
-    }
+    SpStyle { style: ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src, fill_alpha }, round_adj }
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────
@@ -855,36 +742,19 @@ pub(crate) struct FrameTable {
 
 /// A table cell's runs. `links` are the part's external hyperlink
 /// relationships, for an `a:hlinkClick` on a run (#1998).
-fn runs_of(
-    tx_body: &Node,
-    links: &std::collections::HashMap<String, String>,
-    theme: &Theme,
-) -> Vec<suite_common_core::document::Run> {
+fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>, theme: &Theme) -> Vec<suite_common_core::document::Run> {
     use suite_common_core::document::{Run, RunStyle};
     let mut runs = Vec::new();
     for (pi, p) in tx_body.children_named("a:p").enumerate() {
         if pi > 0 {
-            runs.push(Run {
-                text: "\n".into(),
-                style: RunStyle::default(),
-            });
+            runs.push(Run { text: "\n".into(), style: RunStyle::default() });
         }
-        for r in p
-            .children
-            .iter()
-            .filter(|c| c.name == "a:r" || c.name == "a:br")
-        {
+        for r in p.children.iter().filter(|c| c.name == "a:r" || c.name == "a:br") {
             // A line break inside the paragraph, on the run before it.
             if r.name == "a:br" {
-                match runs
-                    .last_mut()
-                    .filter(|last: &&mut Run| !last.text.ends_with('\n'))
-                {
+                match runs.last_mut().filter(|last: &&mut Run| !last.text.ends_with('\n')) {
                     Some(last) => last.text.push(super::LINE_BREAK),
-                    None => runs.push(Run {
-                        text: super::LINE_BREAK.to_string(),
-                        style: RunStyle::default(),
-                    }),
+                    None => runs.push(Run { text: super::LINE_BREAK.to_string(), style: RunStyle::default() }),
                 }
                 continue;
             }
@@ -897,10 +767,7 @@ fn runs_of(
                 style.regular = matches!(rpr.attr("b"), Some("0") | Some("false"));
                 style.italic = on("i");
                 // The run's own colour: over the style's header white.
-                style.color = rpr
-                    .child("a:solidFill")
-                    .and_then(|f| first_color(f, theme, None))
-                    .map(|c| c.to_hex().to_lowercase());
+                style.color = rpr.child("a:solidFill").and_then(|f| first_color(f, theme, None)).map(|c| c.to_hex().to_lowercase());
                 if let Some(sz) = rpr.attr("sz").and_then(|v| v.parse::<u32>().ok()) {
                     style.font_size_hp = Some((sz / 50) as u16);
                 }
@@ -923,12 +790,7 @@ fn runs_of(
 
 /// Every table in a part's graphic frames.
 /// `links` are the part's external hyperlink relationships, by id.
-pub(crate) fn frame_tables(
-    xml: &str,
-    theme: &Theme,
-    links: &std::collections::HashMap<String, String>,
-    scale: super::SlideScale,
-) -> Vec<FrameTable> {
+pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::HashMap<String, String>, scale: super::SlideScale) -> Vec<FrameTable> {
     use super::table::{TableCell, TableData};
     let root = parse_tree(xml);
     let mut frames = Vec::new();
@@ -938,49 +800,28 @@ pub(crate) fn frame_tables(
         .enumerate()
         .filter_map(|(index, frame)| {
             let xfrm = frame.child("p:xfrm")?;
-            let num = |n: Option<&Node>, k: &str| {
-                n.and_then(|n| n.attr(k))
-                    .and_then(|v| v.parse::<f64>().ok())
-            };
+            let num = |n: Option<&Node>, k: &str| n.and_then(|n| n.attr(k)).and_then(|v| v.parse::<f64>().ok());
             let (off, ext) = (xfrm.child("a:off"), xfrm.child("a:ext"));
             let tbl = frame.find("a:tbl")?;
             let tbl_pr = tbl.child("a:tblPr");
             let flag = |k: &str| matches!(tbl_pr.and_then(|p| p.attr(k)), Some("1") | Some("true"));
-            let style_id = tbl_pr
-                .and_then(|p| p.child("a:tableStyleId"))
-                .map(|n| n.text.trim().to_string());
+            let style_id = tbl_pr.and_then(|p| p.child("a:tableStyleId")).map(|n| n.text.trim().to_string());
             let style = style_id.as_deref().and_then(super::table::builtin_style);
             let col_widths = tbl
                 .child("a:tblGrid")
-                .map(|g| {
-                    g.children_named("a:gridCol")
-                        .filter_map(|c| c.attr("w")?.parse().ok())
-                        .collect()
-                })
+                .map(|g| g.children_named("a:gridCol").filter_map(|c| c.attr("w")?.parse().ok()).collect())
                 .unwrap_or_default();
             let mut row_heights = Vec::new();
             let rows = tbl
                 .children_named("a:tr")
                 .map(|tr| {
-                    row_heights.push(
-                        tr.attr("h")
-                            .and_then(|v| v.parse::<f64>().ok())
-                            .unwrap_or(0.0),
-                    );
+                    row_heights.push(tr.attr("h").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0));
                     tr.children_named("a:tc")
                         .map(|tc| {
-                            let span = |k: &str| {
-                                tc.attr(k)
-                                    .and_then(|v| v.parse::<u32>().ok())
-                                    .unwrap_or(1)
-                                    .clamp(1, 1000)
-                            };
+                            let span = |k: &str| tc.attr(k).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1000);
                             let set = |k: &str| matches!(tc.attr(k), Some("1" | "true"));
                             TableCell {
-                                runs: tc
-                                    .child("a:txBody")
-                                    .map(|b| runs_of(b, links, theme))
-                                    .unwrap_or_default(),
+                                runs: tc.child("a:txBody").map(|b| runs_of(b, links, theme)).unwrap_or_default(),
                                 fill: tc
                                     .child("a:tcPr")
                                     .and_then(|p| p.child("a:solidFill"))
@@ -993,47 +834,18 @@ pub(crate) fn frame_tables(
                                 // defaults for any it leaves out.
                                 paras: tc
                                     .child("a:txBody")
-                                    .map(|b| {
-                                        b.children_named("a:p")
-                                            .map(|p| {
-                                                super::text_xml::own_para_style(
-                                                    p.child("a:pPr"),
-                                                    theme,
-                                                    scale,
-                                                )
-                                            })
-                                            .collect()
-                                    })
-                                    .filter(|ps: &Vec<super::text_body::ParaStyle>| {
-                                        ps.iter()
-                                            .any(|p| *p != super::text_body::ParaStyle::default())
-                                    })
+                                    .map(|b| b.children_named("a:p").map(|p| super::text_xml::own_para_style(p.child("a:pPr"), theme, scale)).collect())
+                                    .filter(|ps: &Vec<super::text_body::ParaStyle>| ps.iter().any(|p| *p != super::text_body::ParaStyle::default()))
                                     .unwrap_or_default(),
                                 anchor: tc
                                     .child("a:tcPr")
                                     .and_then(|p| p.attr("anchor"))
                                     .and_then(super::text_body::Anchor::from_drawingml)
                                     .unwrap_or_default(),
-                                margins: tc
-                                    .child("a:tcPr")
-                                    .filter(|p| {
-                                        ["marL", "marT", "marR", "marB"]
-                                            .iter()
-                                            .any(|k| p.attr(k).is_some())
-                                    })
-                                    .map(|p| {
-                                        let m = |k: &str, d: f64| {
-                                            p.attr(k)
-                                                .and_then(|v| v.parse::<f64>().ok())
-                                                .unwrap_or(d)
-                                        };
-                                        (
-                                            m("marL", 91440.0),
-                                            m("marT", 45720.0),
-                                            m("marR", 91440.0),
-                                            m("marB", 45720.0),
-                                        )
-                                    }),
+                                margins: tc.child("a:tcPr").filter(|p| ["marL", "marT", "marR", "marB"].iter().any(|k| p.attr(k).is_some())).map(|p| {
+                                    let m = |k: &str, d: f64| p.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
+                                    (m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0))
+                                }),
                             }
                         })
                         .collect()
@@ -1086,11 +898,7 @@ pub(crate) fn frame_charts(xml: &str) -> Vec<FrameChart> {
     fn chart_ref(n: &Node) -> Option<&Node> {
         n.children.iter().find_map(|c| {
             let local = c.name.rsplit(':').next().unwrap_or(&c.name);
-            if local == "chart" && c.attr("r:id").is_some() {
-                Some(c)
-            } else {
-                chart_ref(c)
-            }
+            if local == "chart" && c.attr("r:id").is_some() { Some(c) } else { chart_ref(c) }
         })
     }
     frames
@@ -1098,14 +906,9 @@ pub(crate) fn frame_charts(xml: &str) -> Vec<FrameChart> {
         .enumerate()
         .filter_map(|(index, frame)| {
             let xfrm = frame.child("p:xfrm")?;
-            let num = |n: Option<&Node>, k: &str| {
-                n.and_then(|n| n.attr(k))
-                    .and_then(|v| v.parse::<f64>().ok())
-            };
+            let num = |n: Option<&Node>, k: &str| n.and_then(|n| n.attr(k)).and_then(|v| v.parse::<f64>().ok());
             let (off, ext) = (xfrm.child("a:off"), xfrm.child("a:ext"));
-            let rel_id = chart_ref(frame.child("a:graphic")?)?
-                .attr("r:id")?
-                .to_string();
+            let rel_id = chart_ref(frame.child("a:graphic")?)?.attr("r:id")?.to_string();
             Some(FrameChart {
                 index,
                 x: num(off, "x").unwrap_or(0.0),
@@ -1136,8 +939,7 @@ fn styles_of(xml: &str, tag: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {
     // Every p:sp in document order, as `find_all` finds them, each with the
     // fill of the group it is in: a shape filled `a:grpFill` takes it.
     let mut out = Vec::new();
-    let mut stack: Vec<(std::slice::Iter<'_, Node>, Option<Fill>)> =
-        vec![(root.children.iter(), None)];
+    let mut stack: Vec<(std::slice::Iter<'_, Node>, Option<Fill>)> = vec![(root.children.iter(), None)];
     while let Some((level, group_fill)) = stack.last_mut() {
         let group_fill = group_fill.clone();
         match level.next() {
@@ -1148,9 +950,7 @@ fn styles_of(xml: &str, tag: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {
             Some(c) => {
                 // A group's own fill, or the one around it, for its shapes.
                 let fill = if c.name == "p:grpSp" {
-                    c.child("p:grpSpPr")
-                        .and_then(|p| fill_among(p, theme, None))
-                        .or(group_fill)
+                    c.child("p:grpSpPr").and_then(|p| fill_among(p, theme, None)).or(group_fill)
                 } else {
                     group_fill
                 };
@@ -1168,13 +968,7 @@ pub(crate) fn sp_geometries(xml: &str) -> Vec<Option<Vec<super::freeform::FreePa
     let root = parse_tree(xml);
     let mut sps = Vec::new();
     root.find_all("p:sp", &mut sps);
-    sps.into_iter()
-        .map(|sp| {
-            sp.child("p:spPr")
-                .and_then(|p| p.child("a:custGeom"))
-                .and_then(cust_geom)
-        })
-        .collect()
+    sps.into_iter().map(|sp| sp.child("p:spPr").and_then(|p| p.child("a:custGeom")).and_then(cust_geom)).collect()
 }
 
 /// The paths of one `a:custGeom`: each `a:path` in `a:pathLst`. A
@@ -1189,10 +983,7 @@ pub(super) fn cust_geom(geom: &Node) -> Option<Vec<super::freeform::FreePath>> {
     for path in geom.child("a:pathLst")?.children_named("a:path") {
         let mut cmds = Vec::new();
         for c in &path.children {
-            let pts: Option<Vec<(f64, f64)>> = c
-                .children_named("a:pt")
-                .map(|p| Some((num(p, "x")?, num(p, "y")?)))
-                .collect();
+            let pts: Option<Vec<(f64, f64)>> = c.children_named("a:pt").map(|p| Some((num(p, "x")?, num(p, "y")?))).collect();
             let cmd = match (c.name.as_str(), pts?.as_slice()) {
                 ("a:moveTo", [a]) => PathCmd::Move(a.0, a.1),
                 ("a:lnTo", [a]) => PathCmd::Line(a.0, a.1),
@@ -1232,57 +1023,24 @@ mod tests {
         let xml = r#"<c:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></c:spPr><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill>"#;
         let out = inline_scheme_colors(xml, &theme);
         assert!(!out.contains("schemeClr"), "{out}");
-        let accent = first_color(
-            &parse_tree(r#"<x xmlns:a="a"><a:schemeClr val="accent1"/></x>"#).children[0],
-            &theme,
-            None,
-        )
-        .unwrap();
-        assert!(
-            out.contains(&format!("{:02X}{:02X}{:02X}", accent.0, accent.1, accent.2)),
-            "{out}"
-        );
-        assert_eq!(
-            out.matches("<a:srgbClr").count(),
-            2,
-            "the modified one too: {out}"
-        );
-        assert_eq!(
-            inline_scheme_colors("<a:srgbClr val=\"123456\"/>", &theme),
-            "<a:srgbClr val=\"123456\"/>"
-        );
+        let accent = first_color(&parse_tree(r#"<x xmlns:a="a"><a:schemeClr val="accent1"/></x>"#).children[0], &theme, None).unwrap();
+        assert!(out.contains(&format!("{:02X}{:02X}{:02X}", accent.0, accent.1, accent.2)), "{out}");
+        assert_eq!(out.matches("<a:srgbClr").count(), 2, "the modified one too: {out}");
+        assert_eq!(inline_scheme_colors("<a:srgbClr val=\"123456\"/>", &theme), "<a:srgbClr val=\"123456\"/>");
     }
 
     #[test]
     fn a_placeholder_takes_its_layouts_paint_only_when_it_states_none() {
         let theme = Theme::default();
         let sp = |sppr: &str| {
-            let root = parse_tree(&format!(
-                r#"<p:sp xmlns:a="a" xmlns:p="p"><p:spPr>{sppr}</p:spPr></p:sp>"#
-            ));
+            let root = parse_tree(&format!(r#"<p:sp xmlns:a="a" xmlns:p="p"><p:spPr>{sppr}</p:spPr></p:sp>"#));
             resolve_sp(root.find("p:sp").unwrap(), &theme, 1.0, None)
         };
         let layout = sp(r#"<a:solidFill><a:srgbClr val="2E5E2E"/></a:solidFill>"#);
         let green = Some(Color(0x2E, 0x5E, 0x2E));
-        assert_eq!(
-            placeholder_or_own(sp(""), Some(&layout)).style.fill,
-            green,
-            "states nothing: the layout's"
-        );
-        assert_eq!(
-            placeholder_or_own(sp("<a:noFill/>"), Some(&layout))
-                .style
-                .fill,
-            None,
-            "an explicit noFill stays"
-        );
-        assert_eq!(
-            placeholder_or_own(sp(r#"<a:ln><a:noFill/></a:ln>"#), Some(&layout))
-                .style
-                .fill,
-            None,
-            "a stated outline is a statement"
-        );
+        assert_eq!(placeholder_or_own(sp(""), Some(&layout)).style.fill, green, "states nothing: the layout's");
+        assert_eq!(placeholder_or_own(sp("<a:noFill/>"), Some(&layout)).style.fill, None, "an explicit noFill stays");
+        assert_eq!(placeholder_or_own(sp(r#"<a:ln><a:noFill/></a:ln>"#), Some(&layout)).style.fill, None, "a stated outline is a statement");
         assert_eq!(placeholder_or_own(sp(""), None).style.fill, None);
     }
 
@@ -1294,17 +1052,9 @@ mod tests {
             <a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{616DA210-FB5B-4158-B5E0-FEB733F419BA}</a:tableStyleId></a:tblPr>
             <a:tblGrid><a:gridCol w="100"/></a:tblGrid><a:tr h="50"><a:tc><a:txBody><a:p><a:r><a:t>Year</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
             </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let tables = frame_tables(
-            xml,
-            &Theme::default(),
-            &Default::default(),
-            super::super::SlideScale::default(),
-        );
+        let tables = frame_tables(xml, &Theme::default(), &Default::default(), super::super::SlideScale::default());
         let t = &tables[0].table;
-        assert_eq!(
-            t.style_id.as_deref(),
-            Some("{616DA210-FB5B-4158-B5E0-FEB733F419BA}")
-        );
+        assert_eq!(t.style_id.as_deref(), Some("{616DA210-FB5B-4158-B5E0-FEB733F419BA}"));
         assert_eq!(t.family(), super::super::table::StyleFamily::LightStyle3);
     }
 
@@ -1354,12 +1104,7 @@ mod tests {
           <a:tr h="914400"><a:tc><a:txBody><a:p><a:r><a:rPr b="1"/><a:t>Head </a:t></a:r><a:r><a:t>one</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>
             <a:tc><a:txBody><a:p><a:r><a:t>R1C2</a:t></a:r></a:p></a:txBody><a:tcPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:tcPr></a:tc></a:tr>
           </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let t = frame_tables(
-            xml,
-            &theme(THEME_2007),
-            &Default::default(),
-            super::super::SlideScale::default(),
-        );
+        let t = frame_tables(xml, &theme(THEME_2007), &Default::default(), super::super::SlideScale::default());
         assert_eq!(t.len(), 1);
         let f = &t[0];
         assert_eq!((f.index, f.x, f.w), (0, 914400.0, 7315200.0));
@@ -1378,11 +1123,7 @@ mod tests {
         let t = theme(THEME_2007);
         assert_eq!(t.slot("accent1"), Some(Color(0x4F, 0x81, 0xBD)));
         assert_eq!(t.slot("tx1"), Some(Color(0, 0, 0)));
-        assert_eq!(
-            t.slot("accent2"),
-            Some(Color(0xED, 0x7D, 0x31)),
-            "unstated slots keep the default"
-        );
+        assert_eq!(t.slot("accent2"), Some(Color(0xED, 0x7D, 0x31)), "unstated slots keep the default");
     }
 
     /// DCK-004: the 2024-2025 delegated authorities report's theme was
@@ -1399,11 +1140,7 @@ mod tests {
         let t = theme(xml);
         assert_eq!(t.slot("bg1"), Some(Color(0xFF, 0xFF, 0xFF)));
         assert_eq!(t.slot("tx1"), Some(Color(0, 0, 0)));
-        assert_eq!(
-            t.slot("dk2"),
-            Some(Color(0x00, 0x78, 0xD7)),
-            "other system colours keep their last colour"
-        );
+        assert_eq!(t.slot("dk2"), Some(Color(0x00, 0x78, 0xD7)), "other system colours keep their last colour");
     }
 
     #[test]
@@ -1420,10 +1157,7 @@ mod tests {
         // Line style 1: 9525 EMU of accent 1 shaded 95%.
         let st = s.stroke.unwrap();
         assert!((st.width - 9525.0).abs() < 1e-9);
-        assert_eq!(
-            st.color,
-            Color(0x4F, 0x81, 0xBD).shade(95_000).sat_mod(105_000)
-        );
+        assert_eq!(st.color, Color(0x4F, 0x81, 0xBD).shade(95_000).sat_mod(105_000));
     }
 
     #[test]
@@ -1434,10 +1168,7 @@ mod tests {
             REFS,
         );
         let s = &sp_styles(&xml, &theme(THEME_2007), 0.1)[0].style;
-        assert_eq!(
-            (s.fill, s.gradient.is_none()),
-            (Some(Color(0xDC, 0x28, 0x28)), true)
-        );
+        assert_eq!((s.fill, s.gradient.is_none()), (Some(Color(0xDC, 0x28, 0x28)), true));
         let st = s.stroke.unwrap();
         assert_eq!(st.color, Color(0, 0, 0));
         assert!((st.width - 2540.0).abs() < 1e-9, "25400 EMU at scale 0.1");
@@ -1446,15 +1177,9 @@ mod tests {
     #[test]
     fn a_line_width_alone_takes_its_colour_from_the_reference() {
         let xml = sp(r#"<a:ln w="38100"/>"#, REFS);
-        let st = sp_styles(&xml, &theme(THEME_2007), 1.0)[0]
-            .style
-            .stroke
-            .unwrap();
+        let st = sp_styles(&xml, &theme(THEME_2007), 1.0)[0].style.stroke.unwrap();
         assert!((st.width - 38100.0).abs() < 1e-9);
-        assert_eq!(
-            st.color,
-            Color(0x4F, 0x81, 0xBD).shade(95_000).sat_mod(105_000)
-        );
+        assert_eq!(st.color, Color(0x4F, 0x81, 0xBD).shade(95_000).sat_mod(105_000));
     }
 
     #[test]
@@ -1483,15 +1208,8 @@ mod tests {
                 mods: vec![super::super::theme::ColorMod::Shade(50_000)],
             })))
         );
-        assert_eq!(
-            s.fill,
-            Some(Color(0x44, 0x72, 0xC4).shade(50_000)),
-            "the resolved cache agrees with the reference"
-        );
-        assert_eq!(
-            &s.stroke_src,
-            &Some(StrokeSrc::Color(ColorRef::Rgb("112233".into())))
-        );
+        assert_eq!(s.fill, Some(Color(0x44, 0x72, 0xC4).shade(50_000)), "the resolved cache agrees with the reference");
+        assert_eq!(&s.stroke_src, &Some(StrokeSrc::Color(ColorRef::Rgb("112233".into()))));
     }
 
     #[test]
@@ -1499,10 +1217,7 @@ mod tests {
         use super::super::theme::{FillSrc, StrokeSrc};
         let xml = sp(r#"<a:noFill/><a:ln><a:noFill/></a:ln>"#, "");
         let s = &sp_styles(&xml, &Theme::default(), 1.0)[0].style;
-        assert_eq!(
-            (&s.fill_src, &s.stroke_src),
-            (&Some(FillSrc::NoFill), &Some(StrokeSrc::NoLine))
-        );
+        assert_eq!((&s.fill_src, &s.stroke_src), (&Some(FillSrc::NoFill), &Some(StrokeSrc::NoLine)));
         let bare = sp("", "");
         let s = &sp_styles(&bare, &Theme::default(), 1.0)[0].style;
         assert_eq!((&s.fill_src, &s.stroke_src), (&None, &None));
@@ -1511,18 +1226,12 @@ mod tests {
     #[test]
     fn a_colour_map_remaps_presentation_names() {
         let base = theme(THEME_2007);
-        let map: std::collections::BTreeMap<String, String> = [("tx1", "accent1"), ("bg1", "lt1")]
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
+        let map: std::collections::BTreeMap<String, String> =
+            [("tx1", "accent1"), ("bg1", "lt1")].iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         let themed = base.with_remap(&map);
         assert_eq!(themed.slot("tx1"), base.slot("accent1"));
         assert_eq!(themed.slot("bg1"), base.slot("lt1"));
-        assert_eq!(
-            Theme::default().slot("tx1"),
-            Some(Color(0, 0, 0)),
-            "no map: the standard mapping"
-        );
+        assert_eq!(Theme::default().slot("tx1"), Some(Color(0, 0, 0)), "no map: the standard mapping");
     }
 
     #[test]
@@ -1548,10 +1257,7 @@ mod tests {
         let styles = sp_styles(&xml, &Theme::default(), 1.0);
         assert_eq!(styles.len(), 2);
         assert_eq!(styles[0].round_adj, Some(0.25));
-        assert_eq!(
-            styles[0].style.fill,
-            Some(Color(0x44, 0x72, 0xC4).lum(Some(75_000), None))
-        );
+        assert_eq!(styles[0].style.fill, Some(Color(0x44, 0x72, 0xC4).lum(Some(75_000), None)));
         assert_eq!(styles[1].style.fill, None);
     }
 }

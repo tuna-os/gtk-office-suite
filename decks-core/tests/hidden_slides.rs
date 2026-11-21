@@ -70,8 +70,7 @@ fn a_shown_slide_writes_no_show_attribute() {
     write_pptx(path.to_str().unwrap(), &Deck::new()).unwrap();
     let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
     let mut xml = String::new();
-    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml)
-        .unwrap();
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml).unwrap();
     assert!(!xml.contains("show="), "{xml}");
 }
 

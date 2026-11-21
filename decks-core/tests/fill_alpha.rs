@@ -19,16 +19,7 @@ fn deck(fill_src: Option<FillSrc>) -> Deck {
         w: 200.0,
         h: 100.0,
         rotation: 0.0,
-        style: ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: Some(0.75),
-            fill: Some(Color(0xC0, 0x50, 0x4D)),
-            gradient: None,
-            stroke: None,
-            fill_src,
-            stroke_src: None,
-        },
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: Some(0.75), fill: Some(Color(0xC0, 0x50, 0x4D)), gradient: None, stroke: None, fill_src, stroke_src: None },
     }];
     d
 }
@@ -74,17 +65,13 @@ fn a_translucent_fills_outline_stays_opaque() {
     let path = dir.path().join("s.pptx");
     let mut d = deck(None);
     if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
-        style.stroke = Some(Stroke {
-            color: Color(0x20, 0x30, 0x40),
-            width: 2.0,
-        });
+        style.stroke = Some(Stroke { color: Color(0x20, 0x30, 0x40), width: 2.0 });
     }
     write_pptx(path.to_str().unwrap(), &d).unwrap();
     let slide = {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
         let mut s = String::new();
-        std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut s)
-            .unwrap();
+        std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut s).unwrap();
         s
     };
     let ln = &slide[slide.find("<a:ln").expect("an outline")..];
@@ -104,8 +91,5 @@ fn an_opaque_fill_states_no_opacity() {
         style.fill_alpha = None;
     }
     write_pptx(path.to_str().unwrap(), &d).unwrap();
-    assert_eq!(
-        style(&read_pptx(path.to_str().unwrap()).unwrap()).fill_alpha,
-        None
-    );
+    assert_eq!(style(&read_pptx(path.to_str().unwrap()).unwrap()).fill_alpha, None);
 }

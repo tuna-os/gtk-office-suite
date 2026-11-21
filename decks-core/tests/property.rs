@@ -16,8 +16,8 @@
 // DecksController round-trip test) — that's a pre-existing engine.rs
 // characteristic, not something this property should re-litigate.
 
-use decks_core::engine::{read_pptx, write_pptx, Deck, Slide, SlideObject};
 use proptest::prelude::*;
+use decks_core::engine::{read_pptx, write_pptx, Deck, Slide, SlideObject};
 
 fn text_strategy() -> impl Strategy<Value = String> {
     prop::collection::vec("[a-z]{1,8}", 1..5).prop_map(|words| words.join(" "))
@@ -26,15 +26,13 @@ fn text_strategy() -> impl Strategy<Value = String> {
 fn unicode_text_strategy() -> impl Strategy<Value = String> {
     prop::collection::vec(
         prop_oneof![
-            Just('a'),
-            Just('\u{0301}'),
+            Just('a'), Just('\u{0301}'),
             prop::char::range('\u{4e00}', '\u{4eff}'),
             prop::char::range('\u{05d0}', '\u{05ea}'),
             prop::char::range('\u{1f600}', '\u{1f64f}'),
         ],
         1..12,
-    )
-    .prop_map(|chars| chars.into_iter().collect())
+    ).prop_map(|chars| chars.into_iter().collect())
 }
 
 fn slide_strategy() -> impl Strategy<Value = Vec<String>> {
@@ -48,8 +46,7 @@ fn deck_strategy() -> impl Strategy<Value = Vec<Vec<String>>> {
 fn build_deck(slides: &[Vec<String>]) -> Deck {
     let slides = slides
         .iter()
-        .map(|texts| Slide {
-            hidden: false,
+        .map(|texts| Slide { hidden: false,
             title: "Slide".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -57,10 +54,7 @@ fn build_deck(slides: &[Vec<String>]) -> Deck {
                 .iter()
                 .map(|t| SlideObject::TextBox {
                     text: t.clone(),
-                    x: 10.0,
-                    y: 10.0,
-                    w: 100.0,
-                    h: 20.0,
+                    x: 10.0, y: 10.0, w: 100.0, h: 20.0,
                     runs: vec![],
                     rotation: 0.0,
                     body: Default::default(),
@@ -74,13 +68,7 @@ fn build_deck(slides: &[Vec<String>]) -> Deck {
             layout_id: None,
         })
         .collect();
-    Deck {
-        slides,
-        masters: vec![],
-        page_size: None,
-        themes: Vec::new(),
-        skipped_slides: Vec::new(),
-    }
+    Deck { slides, masters: vec![], page_size: None, themes: Vec::new(), skipped_slides: Vec::new() }
 }
 
 proptest! {

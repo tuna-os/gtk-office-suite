@@ -7,15 +7,11 @@
 #![allow(dead_code)]
 
 use gtk4::cairo;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Parser, Event, Tag, TagEnd, Options};
 
 pub fn render_markdown(
-    cr: &cairo::Context,
-    text: &str,
-    x: f64,
-    y: f64,
-    _max_width: f64,
-    _font_size: f64,
+    cr: &cairo::Context, text: &str, x: f64, y: f64,
+    _max_width: f64, _font_size: f64,
 ) -> f64 {
     let layout = pangocairo::functions::create_layout(cr);
     let desc = pango::FontDescription::from_string("Sans 14");
@@ -60,26 +56,14 @@ pub fn render_markdown(
 
 #[allow(clippy::too_many_arguments)]
 fn render_text(
-    cr: &cairo::Context,
-    layout: &pango::Layout,
-    text_str: &str,
-    x: f64,
-    cy: &mut f64,
-    bold: bool,
-    italic: bool,
-    is_code: bool,
+    cr: &cairo::Context, layout: &pango::Layout, text_str: &str,
+    x: f64, cy: &mut f64, bold: bool, italic: bool, is_code: bool,
 ) {
     layout.set_text(text_str);
     let attrs = pango::AttrList::new();
-    if bold {
-        attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
-    }
-    if italic {
-        attrs.insert(pango::AttrInt::new_style(pango::Style::Italic));
-    }
-    if is_code {
-        attrs.insert(pango::AttrString::new_family("Monospace"));
-    }
+    if bold { attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold)); }
+    if italic { attrs.insert(pango::AttrInt::new_style(pango::Style::Italic)); }
+    if is_code { attrs.insert(pango::AttrString::new_family("Monospace")); }
     layout.set_attributes(Some(&attrs));
     cr.move_to(x, *cy);
     pangocairo::functions::show_layout(cr, layout);

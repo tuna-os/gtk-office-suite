@@ -18,14 +18,7 @@ fn chart_at(kind: ChartKind, x: f64, y: f64) -> SlideObject {
         chart.series = "Revenue & <costs>".into();
         chart.points[1] = ("Q2 \"late\"".into(), -1.25);
     }
-    SlideObject::Chart {
-        x,
-        y,
-        w: 400.0,
-        h: 250.0,
-        rotation: 0.0,
-        chart,
-    }
+    SlideObject::Chart { x, y, w: 400.0, h: 250.0, rotation: 0.0, chart }
 }
 
 /// Two slides: a bar and a pie chart around a text box, then a line, an
@@ -71,9 +64,7 @@ fn objects(d: &Deck) -> Vec<Vec<String>> {
             s.objects
                 .iter()
                 .map(|o| match o {
-                    SlideObject::Chart {
-                        x, y, w, h, chart, ..
-                    } => {
+                    SlideObject::Chart { x, y, w, h, chart, .. } => {
                         format!("{} {} {} {} {:?}", r(*x), r(*y), r(*w), r(*h), chart)
                     }
                     SlideObject::TextBox { text, .. } => format!("text {text:?}"),
@@ -104,10 +95,7 @@ fn every_kind_of_chart_survives_pptx_and_odp() {
 
 fn part(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> String {
     let mut s = String::new();
-    zip.by_name(name)
-        .unwrap_or_else(|_| panic!("{name} is in the package"))
-        .read_to_string(&mut s)
-        .unwrap();
+    zip.by_name(name).unwrap_or_else(|_| panic!("{name} is in the package")).read_to_string(&mut s).unwrap();
     s
 }
 
@@ -137,12 +125,7 @@ fn a_pptx_chart_is_a_typed_chart_part_its_slide_relates_to() {
         "slide 2's first chart is the deck's third: {rels}"
     );
     let slide = part(&mut zip, "ppt/slides/slide1.xml");
-    assert!(
-        slide.contains(
-            "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"
-        ),
-        "{slide}"
-    );
+    assert!(slide.contains("<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">"), "{slide}");
 }
 
 /// An odp chart is an embedded chart object the manifest names.
@@ -160,17 +143,11 @@ fn an_odp_chart_is_an_embedded_object_the_manifest_names() {
             )),
             "Object {n}: {manifest}"
         );
-        assert!(
-            manifest.contains(&format!("manifest:full-path=\"Object {n}/content.xml\"")),
-            "{manifest}"
-        );
+        assert!(manifest.contains(&format!("manifest:full-path=\"Object {n}/content.xml\"")), "{manifest}");
     }
     assert!(part(&mut zip, "Object 2/content.xml").contains("chart:class=\"chart:circle\""));
     let content = part(&mut zip, "content.xml");
-    assert!(
-        content.contains("<draw:object xlink:href=\"./Object 1\""),
-        "{content}"
-    );
+    assert!(content.contains("<draw:object xlink:href=\"./Object 1\""), "{content}");
 }
 
 /// A picture Impress writes beside a chart object, its stand-in for

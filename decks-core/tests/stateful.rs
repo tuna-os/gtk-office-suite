@@ -37,17 +37,15 @@ const STEPS: usize = 200;
 /// seed adds it here, so the regression is permanent rather than
 /// something the nightly might happen to hit again.
 const FIXED_SEEDS: &[u64] = &[
-    1, 2, 3, 7, 11, 20260907, 20260911, 0xDEADBEEF, 0x5EED, 42, 99, 1337, 8675309, 0xC0FFEE,
-    314159, 271828,
+    1, 2, 3, 7, 11, 20260907, 20260911, 0xDEADBEEF,
+    0x5EED, 42, 99, 1337, 8675309, 0xC0FFEE, 314159, 271828,
 ];
 
 struct Rng(u64);
 
 impl Rng {
     fn new(seed: u64) -> Self {
-        Rng(seed
-            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-            .wrapping_add(0x1234_5678))
+        Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(0x1234_5678))
     }
 
     fn next_u64(&mut self) -> u64 {
@@ -77,55 +75,17 @@ enum Command {
     DeleteSlide(usize),
     MoveSlideUp(usize),
     MoveSlideDown(usize),
-    AddTextBox {
-        slide: usize,
-        text: String,
-    },
-    AddRect {
-        slide: usize,
-    },
-    AddCircle {
-        slide: usize,
-    },
-    DeleteObject {
-        slide: usize,
-        index: usize,
-    },
-    MoveObject {
-        slide: usize,
-        index: usize,
-        dx: f64,
-        dy: f64,
-    },
-    ResizeObject {
-        slide: usize,
-        index: usize,
-        w: f64,
-        h: f64,
-    },
-    RotateObject {
-        slide: usize,
-        index: usize,
-        angle: f64,
-    },
-    ChangeText {
-        slide: usize,
-        index: usize,
-        text: String,
-    },
-    Align {
-        slide: usize,
-        mode: AlignMode,
-    },
-    Distribute {
-        slide: usize,
-        mode: DistributeMode,
-    },
-    ZOrder {
-        slide: usize,
-        index: usize,
-        op: ZOrderOp,
-    },
+    AddTextBox { slide: usize, text: String },
+    AddRect { slide: usize },
+    AddCircle { slide: usize },
+    DeleteObject { slide: usize, index: usize },
+    MoveObject { slide: usize, index: usize, dx: f64, dy: f64 },
+    ResizeObject { slide: usize, index: usize, w: f64, h: f64 },
+    RotateObject { slide: usize, index: usize, angle: f64 },
+    ChangeText { slide: usize, index: usize, text: String },
+    Align { slide: usize, mode: AlignMode },
+    Distribute { slide: usize, mode: DistributeMode },
+    ZOrder { slide: usize, index: usize, op: ZOrderOp },
     Undo,
     UndoThenRedo,
 }
@@ -216,8 +176,7 @@ fn generate(rng: &mut Rng, controller: &DecksController) -> Command {
 }
 
 fn blank_slide() -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: String::new(),
         background: String::new(),
         background_picture: None,
@@ -286,13 +245,7 @@ fn apply(controller: &DecksController, command: &Command) -> Result<(), String> 
             if let Some(id) = sid(*slide) {
                 controller.add_object(
                     id,
-                    SlideObject::Rect {
-                        x: 20.0,
-                        y: 20.0,
-                        w: 100.0,
-                        h: 80.0,
-                        rotation: 0.0,
-                    },
+                    SlideObject::Rect { x: 20.0, y: 20.0, w: 100.0, h: 80.0, rotation: 0.0 },
                 );
             }
         }
@@ -300,12 +253,7 @@ fn apply(controller: &DecksController, command: &Command) -> Result<(), String> 
             if let Some(id) = sid(*slide) {
                 controller.add_object(
                     id,
-                    SlideObject::Circle {
-                        x: 50.0,
-                        y: 50.0,
-                        r: 30.0,
-                        rotation: 0.0,
-                    },
+                    SlideObject::Circle { x: 50.0, y: 50.0, r: 30.0, rotation: 0.0 },
                 );
             }
         }
@@ -314,12 +262,7 @@ fn apply(controller: &DecksController, command: &Command) -> Result<(), String> 
                 controller.delete_object(id, oid);
             }
         }
-        Command::MoveObject {
-            slide,
-            index,
-            dx,
-            dy,
-        } => {
+        Command::MoveObject { slide, index, dx, dy } => {
             if let (Some(id), Some(oid)) = (sid(*slide), oid(*slide, *index)) {
                 controller.move_object(id, oid, *dx, *dy);
             }
@@ -333,11 +276,7 @@ fn apply(controller: &DecksController, command: &Command) -> Result<(), String> 
                 }
             }
         }
-        Command::RotateObject {
-            slide,
-            index,
-            angle,
-        } => {
+        Command::RotateObject { slide, index, angle } => {
             if let (Some(id), Some(oid)) = (sid(*slide), oid(*slide, *index)) {
                 controller.rotate_object(id, oid, *angle);
             }
@@ -351,17 +290,13 @@ fn apply(controller: &DecksController, command: &Command) -> Result<(), String> 
         }
         Command::Align { slide, mode } => {
             if let Some(id) = sid(*slide) {
-                let oids: Vec<u64> = (0..object_count(controller, *slide))
-                    .filter_map(|i| oid(*slide, i))
-                    .collect();
+                let oids: Vec<u64> = (0..object_count(controller, *slide)).filter_map(|i| oid(*slide, i)).collect();
                 controller.align_objects(id, &oids, *mode);
             }
         }
         Command::Distribute { slide, mode } => {
             if let Some(id) = sid(*slide) {
-                let oids: Vec<u64> = (0..object_count(controller, *slide))
-                    .filter_map(|i| oid(*slide, i))
-                    .collect();
+                let oids: Vec<u64> = (0..object_count(controller, *slide)).filter_map(|i| oid(*slide, i)).collect();
                 controller.distribute_objects(id, &oids, *mode);
             }
         }
@@ -531,7 +466,8 @@ fn run_seed(seed: u64, steps: usize) -> Result<(), String> {
     for step in 0..steps {
         let command = generate(&mut rng, &controller);
         trace.push(command.clone());
-        let outcome = apply(&controller, &command).and_then(|()| check_invariants(&controller));
+        let outcome = apply(&controller, &command)
+            .and_then(|()| check_invariants(&controller));
         if let Err(reason) = outcome {
             let minimal = minimize(&trace, step);
             // Report the *minimized* trace's own reason. Dropping
@@ -583,9 +519,7 @@ fn a_seed_replays_identically() {
     let commands = |seed: u64| {
         let mut rng = Rng::new(seed);
         let controller = fresh();
-        (0..16)
-            .map(|_| generate(&mut rng, &controller))
-            .collect::<Vec<_>>()
+        (0..16).map(|_| generate(&mut rng, &controller)).collect::<Vec<_>>()
     };
     assert_eq!(commands(20260911), commands(20260911));
     assert_ne!(commands(1), commands(2));
@@ -596,10 +530,7 @@ fn the_run_invariant_rejects_a_text_box_that_disagrees_with_itself() {
     // An invariant that cannot fail reads exactly like one that never
     // fires, so this shows the check catching what it is there for.
     let controller = fresh();
-    controller.add_object(
-        controller.slide_id_at(0).unwrap(),
-        text_box("hello", 0.0, 0.0),
-    );
+    controller.add_object(controller.slide_id_at(0).unwrap(), text_box("hello", 0.0, 0.0));
     assert!(check_invariants(&controller).is_ok());
 
     {
@@ -654,9 +585,7 @@ fn undo_stops_at_the_history_limit_and_keeps_selections_in_step() {
     let mut seen = Vec::new();
     for i in 0..UNDO_LIMIT + extra {
         seen.push(controller.selection());
-        let id = controller
-            .add_slide(i + 1, blank_slide())
-            .expect("slide added");
+        let id = controller.add_slide(i + 1, blank_slide()).expect("slide added");
         assert!(controller.select_slide(id));
     }
     let total = 1 + UNDO_LIMIT + extra;
@@ -668,21 +597,10 @@ fn undo_stops_at_the_history_limit_and_keeps_selections_in_step() {
         // The step just undone was the add at this position: the selection
         // comes back to what it was before that add.
         let step = UNDO_LIMIT + extra - undone;
-        assert_eq!(
-            controller.selection(),
-            seen[step],
-            "undo {undone} restores the selection before add {step}"
-        );
+        assert_eq!(controller.selection(), seen[step], "undo {undone} restores the selection before add {step}");
     }
-    assert_eq!(
-        undone, UNDO_LIMIT,
-        "the oldest steps are gone, the newest are all kept"
-    );
-    assert_eq!(
-        controller.slides.borrow().len(),
-        1 + extra,
-        "the forgotten adds stay done"
-    );
+    assert_eq!(undone, UNDO_LIMIT, "the oldest steps are gone, the newest are all kept");
+    assert_eq!(controller.slides.borrow().len(), 1 + extra, "the forgotten adds stay done");
     assert!(!controller.can_undo());
 
     let mut redone = 0;

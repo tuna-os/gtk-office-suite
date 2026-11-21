@@ -12,78 +12,24 @@ use gtk4 as gtk;
 
 /// (icon name, SVG) for every icon in suite-common/icons/.
 pub const ICONS: &[(&str, &[u8])] = &[
-    (
-        "office-border-symbolic",
-        include_bytes!("../icons/office-border-symbolic.svg"),
-    ),
-    (
-        "office-chart-symbolic",
-        include_bytes!("../icons/office-chart-symbolic.svg"),
-    ),
-    (
-        "office-column-delete-symbolic",
-        include_bytes!("../icons/office-column-delete-symbolic.svg"),
-    ),
-    (
-        "office-column-hide-symbolic",
-        include_bytes!("../icons/office-column-hide-symbolic.svg"),
-    ),
-    (
-        "office-column-insert-symbolic",
-        include_bytes!("../icons/office-column-insert-symbolic.svg"),
-    ),
-    (
-        "office-columns-symbolic",
-        include_bytes!("../icons/office-columns-symbolic.svg"),
-    ),
-    (
-        "office-comment-symbolic",
-        include_bytes!("../icons/office-comment-symbolic.svg"),
-    ),
-    (
-        "office-filter-symbolic",
-        include_bytes!("../icons/office-filter-symbolic.svg"),
-    ),
-    (
-        "office-highlight-symbolic",
-        include_bytes!("../icons/office-highlight-symbolic.svg"),
-    ),
-    (
-        "office-line-spacing-symbolic",
-        include_bytes!("../icons/office-line-spacing-symbolic.svg"),
-    ),
-    (
-        "office-merge-cells-symbolic",
-        include_bytes!("../icons/office-merge-cells-symbolic.svg"),
-    ),
-    (
-        "office-name-symbolic",
-        include_bytes!("../icons/office-name-symbolic.svg"),
-    ),
-    (
-        "office-number-format-symbolic",
-        include_bytes!("../icons/office-number-format-symbolic.svg"),
-    ),
-    (
-        "office-row-delete-symbolic",
-        include_bytes!("../icons/office-row-delete-symbolic.svg"),
-    ),
-    (
-        "office-row-hide-symbolic",
-        include_bytes!("../icons/office-row-hide-symbolic.svg"),
-    ),
-    (
-        "office-row-insert-symbolic",
-        include_bytes!("../icons/office-row-insert-symbolic.svg"),
-    ),
-    (
-        "office-shapes-symbolic",
-        include_bytes!("../icons/office-shapes-symbolic.svg"),
-    ),
-    (
-        "office-table-symbolic",
-        include_bytes!("../icons/office-table-symbolic.svg"),
-    ),
+    ("office-border-symbolic", include_bytes!("../icons/office-border-symbolic.svg")),
+    ("office-chart-symbolic", include_bytes!("../icons/office-chart-symbolic.svg")),
+    ("office-column-delete-symbolic", include_bytes!("../icons/office-column-delete-symbolic.svg")),
+    ("office-column-hide-symbolic", include_bytes!("../icons/office-column-hide-symbolic.svg")),
+    ("office-column-insert-symbolic", include_bytes!("../icons/office-column-insert-symbolic.svg")),
+    ("office-columns-symbolic", include_bytes!("../icons/office-columns-symbolic.svg")),
+    ("office-comment-symbolic", include_bytes!("../icons/office-comment-symbolic.svg")),
+    ("office-filter-symbolic", include_bytes!("../icons/office-filter-symbolic.svg")),
+    ("office-highlight-symbolic", include_bytes!("../icons/office-highlight-symbolic.svg")),
+    ("office-line-spacing-symbolic", include_bytes!("../icons/office-line-spacing-symbolic.svg")),
+    ("office-merge-cells-symbolic", include_bytes!("../icons/office-merge-cells-symbolic.svg")),
+    ("office-name-symbolic", include_bytes!("../icons/office-name-symbolic.svg")),
+    ("office-number-format-symbolic", include_bytes!("../icons/office-number-format-symbolic.svg")),
+    ("office-row-delete-symbolic", include_bytes!("../icons/office-row-delete-symbolic.svg")),
+    ("office-row-hide-symbolic", include_bytes!("../icons/office-row-hide-symbolic.svg")),
+    ("office-row-insert-symbolic", include_bytes!("../icons/office-row-insert-symbolic.svg")),
+    ("office-shapes-symbolic", include_bytes!("../icons/office-shapes-symbolic.svg")),
+    ("office-table-symbolic", include_bytes!("../icons/office-table-symbolic.svg")),
 ];
 
 /// Make the suite's icons available by name to every widget on `display`.
@@ -98,8 +44,7 @@ pub const ICONS: &[(&str, &[u8])] = &[
 pub fn install(display: &gtk::gdk::Display) {
     static REGISTER: std::sync::Once = std::sync::Once::new();
     REGISTER.call_once(|| {
-        gtk::gio::resources_register_include!("suite-icons.gresource")
-            .expect("the suite icons resource is valid");
+        gtk::gio::resources_register_include!("suite-icons.gresource").expect("the suite icons resource is valid");
     });
     gtk::IconTheme::for_display(display).add_resource_path(RESOURCE_PATH);
 }
@@ -120,13 +65,8 @@ mod tests {
             let display = gtk4::gdk::Display::default().expect("a display");
             super::install(&display);
             let theme = gtk4::IconTheme::for_display(&display);
-            assert!(
-                theme.has_icon("document-new-symbolic"),
-                "the Adwaita icon theme is not installed"
-            );
-            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap();
+            assert!(theme.has_icon("document-new-symbolic"), "the Adwaita icon theme is not installed");
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
             let mut missing = Vec::new();
             for dir in ["letters/src", "tables/src", "decks/src", "suite-common/src"] {
                 for name in symbolic_names(&root.join(dir)) {
@@ -151,8 +91,7 @@ mod tests {
             } else if path.extension().is_some_and(|e| e == "rs") {
                 let text = std::fs::read_to_string(&path).unwrap();
                 for piece in text.split('"').skip(1).step_by(2) {
-                    let named = piece.starts_with(|c: char| c.is_ascii_lowercase())
-                        && piece.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+                    let named = piece.starts_with(|c: char| c.is_ascii_lowercase()) && piece.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
                     if named && piece.ends_with("-symbolic") {
                         out.push(piece.to_string());
                     }
@@ -169,26 +108,14 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("icons");
         let mut files: Vec<String> = std::fs::read_dir(dir)
             .unwrap()
-            .map(|e| {
-                e.unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .trim_end_matches(".svg")
-                    .to_string()
-            })
+            .map(|e| e.unwrap().file_name().to_string_lossy().trim_end_matches(".svg").to_string())
             .collect();
         files.sort();
         let names: Vec<String> = super::ICONS.iter().map(|(n, _)| n.to_string()).collect();
         assert_eq!(files, names);
         for (name, svg) in super::ICONS {
-            assert!(
-                name.starts_with("office-") && name.ends_with("-symbolic"),
-                "{name}"
-            );
-            assert!(
-                std::str::from_utf8(svg).unwrap().starts_with("<svg"),
-                "{name}"
-            );
+            assert!(name.starts_with("office-") && name.ends_with("-symbolic"), "{name}");
+            assert!(std::str::from_utf8(svg).unwrap().starts_with("<svg"), "{name}");
         }
     }
 }

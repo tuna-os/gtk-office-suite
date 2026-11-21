@@ -51,10 +51,7 @@ fn staging_path(location: &gio::File) -> Result<PathBuf, String> {
     let key = glib::compute_checksum_for_string(glib::ChecksumType::Sha256, &uri)
         .map(|s| s[..16].to_string())
         .unwrap_or_else(|| "location".into());
-    let dir = glib::user_cache_dir()
-        .join("tunaos-office")
-        .join("remote")
-        .join(key);
+    let dir = glib::user_cache_dir().join("tunaos-office").join("remote").join(key);
     std::fs::create_dir_all(&dir).map_err(|e| format!("Can't stage {uri}: {e}"))?;
     Ok(dir.join(name))
 }
@@ -70,15 +67,7 @@ fn native_path(location: &gio::File) -> Option<PathBuf> {
 }
 
 fn remember(path: &Path, location: &gio::File, etag: Option<String>) {
-    STAGED.with(|s| {
-        s.borrow_mut().insert(
-            path.to_path_buf(),
-            Remote {
-                location: location.clone(),
-                etag,
-            },
-        )
-    });
+    STAGED.with(|s| s.borrow_mut().insert(path.to_path_buf(), Remote { location: location.clone(), etag }));
 }
 
 /// A local path to read the document at `location` from: its own path, or
@@ -92,10 +81,7 @@ pub fn open_location(location: &gio::File) -> Result<PathBuf, String> {
         .map_err(|e| format!("Can't read {}: {}", location.uri(), e.message()))?;
     let path = staging_path(location)?;
     std::fs::write(&path, &bytes).map_err(|e| format!("Can't stage {}: {e}", location.uri()))?;
-    let etag = etag
-        .map(|t| t.to_string())
-        .filter(|t| !t.is_empty())
-        .or_else(|| current_etag(location));
+    let etag = etag.map(|t| t.to_string()).filter(|t| !t.is_empty()).or_else(|| current_etag(location));
     remember(&path, location, etag);
     Ok(path)
 }
@@ -116,11 +102,7 @@ pub fn save_location(location: &gio::File) -> Result<PathBuf, String> {
 /// After the app has written `path`: if it stands for a remote location,
 /// upload it there. A local path needs nothing.
 pub fn commit_save(path: &Path) -> Result<(), String> {
-    let Some((location, etag)) = STAGED.with(|s| {
-        s.borrow()
-            .get(path)
-            .map(|r| (r.location.clone(), r.etag.clone()))
-    }) else {
+    let Some((location, etag)) = STAGED.with(|s| s.borrow().get(path).map(|r| (r.location.clone(), r.etag.clone()))) else {
         return Ok(());
     };
     let bytes = std::fs::read(path).map_err(|e| format!("Can't read the saved copy: {e}"))?;
@@ -135,13 +117,7 @@ pub fn commit_save(path: &Path) -> Result<(), String> {
         }
     }
     let new_etag = location
-        .replace_contents(
-            &bytes,
-            etag.as_deref(),
-            false,
-            gio::FileCreateFlags::NONE,
-            None::<&gio::Cancellable>,
-        )
+        .replace_contents(&bytes, etag.as_deref(), false, gio::FileCreateFlags::NONE, None::<&gio::Cancellable>)
         .map_err(|e| {
             if e.matches(gio::IOErrorEnum::WrongEtag) {
                 format!("{CHANGED_ELSEWHERE} ({}).", location.uri())
@@ -150,10 +126,7 @@ pub fn commit_save(path: &Path) -> Result<(), String> {
             }
         })?;
     // Some backends don't return the new etag from the upload: ask.
-    let new_etag = new_etag
-        .map(|t| t.to_string())
-        .filter(|t| !t.is_empty())
-        .or_else(|| current_etag(&location));
+    let new_etag = new_etag.map(|t| t.to_string()).filter(|t| !t.is_empty()).or_else(|| current_etag(&location));
     remember(path, &location, new_etag);
     Ok(())
 }
@@ -161,11 +134,7 @@ pub fn commit_save(path: &Path) -> Result<(), String> {
 /// The location's etag as the backend reports it now, if it has one.
 fn current_etag(location: &gio::File) -> Option<String> {
     location
-        .query_info(
-            gio::FILE_ATTRIBUTE_ETAG_VALUE,
-            gio::FileQueryInfoFlags::NONE,
-            None::<&gio::Cancellable>,
-        )
+        .query_info(gio::FILE_ATTRIBUTE_ETAG_VALUE, gio::FileQueryInfoFlags::NONE, None::<&gio::Cancellable>)
         .ok()
         .and_then(|info| info.etag())
         .map(|t| t.to_string())
@@ -226,28 +195,15 @@ mod tests {
         let resource = gio::Resource::from_data(&glib::Bytes::from_owned(resource_bytes)).unwrap();
         gio::resources_register(&resource);
         let file = gio::File::for_uri("resource:///org/tunaos/test/sheet.csv");
-        assert!(
-            file.path().is_none(),
-            "the test needs a location with no local path"
-        );
+        assert!(file.path().is_none(), "the test needs a location with no local path");
         let staged = open_location(&file).unwrap();
-        assert_eq!(
-            staged.file_name().unwrap(),
-            "sheet.csv",
-            "the name, so the format is still known"
-        );
+        assert_eq!(staged.file_name().unwrap(), "sheet.csv", "the name, so the format is still known");
         assert_eq!(std::fs::read(&staged).unwrap(), b"not a local file");
-        assert_eq!(
-            remote_uri(&staged).as_deref(),
-            Some("resource:///org/tunaos/test/sheet.csv")
-        );
+        assert_eq!(remote_uri(&staged).as_deref(), Some("resource:///org/tunaos/test/sheet.csv"));
         // A resource is read-only: saving back says so rather than
         // pretending it saved.
         let err = commit_save(&staged).unwrap_err();
-        assert!(
-            err.contains("resource:///org/tunaos/test/sheet.csv"),
-            "{err}"
-        );
+        assert!(err.contains("resource:///org/tunaos/test/sheet.csv"), "{err}");
     }
 
     #[test]

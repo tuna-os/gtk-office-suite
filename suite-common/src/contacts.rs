@@ -64,39 +64,16 @@ fn read_all() -> Vec<Person> {
         return Vec::new();
     };
     let names = bus_names(&conn);
-    let (Some(sources), Some(factory)) = (
-        people::eds_bus_name(&names, SOURCES),
-        people::eds_bus_name(&names, FACTORY),
-    ) else {
+    let (Some(sources), Some(factory)) = (people::eds_bus_name(&names, SOURCES), people::eds_bus_name(&names, FACTORY)) else {
         return Vec::new();
     };
     let books = people::eds_address_books(&registry(&conn, &sources));
-    books
-        .iter()
-        .flat_map(|uid| read_book(&conn, &factory, uid))
-        .collect()
+    books.iter().flat_map(|uid| read_book(&conn, &factory, uid)).collect()
 }
 
-fn call(
-    conn: &gio::DBusConnection,
-    dest: &str,
-    path: &str,
-    iface: &str,
-    method: &str,
-    args: Option<&glib::Variant>,
-) -> Option<glib::Variant> {
-    conn.call_sync(
-        Some(dest),
-        path,
-        iface,
-        method,
-        args,
-        None,
-        gio::DBusCallFlags::NONE,
-        TIMEOUT_MS,
-        gio::Cancellable::NONE,
-    )
-    .ok()
+fn call(conn: &gio::DBusConnection, dest: &str, path: &str, iface: &str, method: &str, args: Option<&glib::Variant>) -> Option<glib::Variant> {
+    conn.call_sync(Some(dest), path, iface, method, args, None, gio::DBusCallFlags::NONE, TIMEOUT_MS, gio::Cancellable::NONE)
+        .ok()
 }
 
 /// The names on the session bus and those it can start: inside Flatpak the
@@ -104,16 +81,7 @@ fn call(
 fn bus_names(conn: &gio::DBusConnection) -> Vec<String> {
     ["ListNames", "ListActivatableNames"]
         .iter()
-        .filter_map(|method| {
-            call(
-                conn,
-                "org.freedesktop.DBus",
-                "/org/freedesktop/DBus",
-                "org.freedesktop.DBus",
-                method,
-                None,
-            )
-        })
+        .filter_map(|method| call(conn, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", method, None))
         .filter_map(|reply| reply.get::<(Vec<String>,)>())
         .flat_map(|(names,)| names)
         .collect()
@@ -123,14 +91,7 @@ fn bus_names(conn: &gio::DBusConnection) -> Vec<String> {
 fn registry(conn: &gio::DBusConnection, dest: &str) -> Vec<(String, String)> {
     type Props = HashMap<String, glib::Variant>;
     type Objects = HashMap<glib::variant::ObjectPath, HashMap<String, Props>>;
-    let Some(reply) = call(
-        conn,
-        dest,
-        "/org/gnome/evolution/dataserver/SourceManager",
-        "org.freedesktop.DBus.ObjectManager",
-        "GetManagedObjects",
-        None,
-    ) else {
+    let Some(reply) = call(conn, dest, "/org/gnome/evolution/dataserver/SourceManager", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects", None) else {
         return Vec::new();
     };
     let Some((objects,)) = reply.get::<(Objects,)>() else {
@@ -150,41 +111,20 @@ fn registry(conn: &gio::DBusConnection, dest: &str) -> Vec<(String, String)> {
 /// The people in one book: open it through the factory, ask for the cards
 /// with an address, and close it again.
 fn read_book(conn: &gio::DBusConnection, factory: &str, uid: &str) -> Vec<Person> {
-    let Some(reply) = call(
-        conn,
-        factory,
-        FACTORY_PATH,
-        FACTORY_IFACE,
-        "OpenAddressBook",
-        Some(&(uid.to_string(),).to_variant()),
-    ) else {
+    let Some(reply) = call(conn, factory, FACTORY_PATH, FACTORY_IFACE, "OpenAddressBook", Some(&(uid.to_string(),).to_variant())) else {
         return Vec::new();
     };
     // Returns (object path, bus name). Read with `str`, which takes a string
     // or an object path, so either typing of the first works.
-    let field = |i: usize| {
-        (i < reply.n_children())
-            .then(|| reply.child_value(i))
-            .and_then(|v| v.str().map(str::to_string))
-    };
+    let field = |i: usize| (i < reply.n_children()).then(|| reply.child_value(i)).and_then(|v| v.str().map(str::to_string));
     let (Some(path), Some(bus)) = (field(0), field(1)) else {
         return Vec::new();
     };
     call(conn, &bus, &path, BOOK_IFACE, "Open", None);
-    let cards = call(
-        conn,
-        &bus,
-        &path,
-        BOOK_IFACE,
-        "GetContactList",
-        Some(&(people::EDS_QUERY_WITH_EMAIL.to_string(),).to_variant()),
-    )
-    .and_then(|reply| reply.get::<(Vec<String>,)>())
-    .map(|(cards,)| cards)
-    .unwrap_or_default();
+    let cards = call(conn, &bus, &path, BOOK_IFACE, "GetContactList", Some(&(people::EDS_QUERY_WITH_EMAIL.to_string(),).to_variant()))
+        .and_then(|reply| reply.get::<(Vec<String>,)>())
+        .map(|(cards,)| cards)
+        .unwrap_or_default();
     call(conn, &bus, &path, BOOK_IFACE, "Close", None);
-    cards
-        .iter()
-        .filter_map(|card| people::from_vcard(card))
-        .collect()
+    cards.iter().filter_map(|card| people::from_vcard(card)).collect()
 }

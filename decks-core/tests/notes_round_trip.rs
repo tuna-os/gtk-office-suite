@@ -25,20 +25,10 @@ fn multi_paragraph_notes_come_back_exactly_from_pptx_and_odp() {
         decks_core::write_deck(path.to_str().unwrap(), &deck()).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
         assert_eq!(back.slides[0].notes, NOTES, "{ext}");
-        assert_eq!(
-            back.slides[1].notes, "",
-            "{ext}: a slide without notes stays without"
-        );
+        assert_eq!(back.slides[1].notes, "", "{ext}: a slide without notes stays without");
         // And a second save keeps them as they are.
         let again = dir.path().join(format!("again.{ext}"));
         decks_core::write_deck(again.to_str().unwrap(), &back).unwrap();
-        assert_eq!(
-            decks_core::read_deck(again.to_str().unwrap())
-                .unwrap()
-                .slides[0]
-                .notes,
-            NOTES,
-            "{ext}"
-        );
+        assert_eq!(decks_core::read_deck(again.to_str().unwrap()).unwrap().slides[0].notes, NOTES, "{ext}");
     }
 }

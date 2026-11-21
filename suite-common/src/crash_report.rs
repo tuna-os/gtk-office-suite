@@ -21,13 +21,7 @@
 /// The variable that turns the report on.
 pub const ENV: &str = "GTK_OFFICE_CRASH_BACKTRACE";
 
-const SIGNALS: [libc::c_int; 5] = [
-    libc::SIGSEGV,
-    libc::SIGBUS,
-    libc::SIGILL,
-    libc::SIGFPE,
-    libc::SIGABRT,
-];
+const SIGNALS: [libc::c_int; 5] = [libc::SIGSEGV, libc::SIGBUS, libc::SIGILL, libc::SIGFPE, libc::SIGABRT];
 
 /// Install the report if `GTK_OFFICE_CRASH_BACKTRACE` is set.
 pub fn install() {
@@ -102,29 +96,15 @@ mod tests {
             unreachable!("SIGSEGV returned");
         }
         let out = Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "crash_report::tests::a_segfault_prints_a_backtrace_and_still_dies_of_the_signal",
-                "--nocapture",
-            ])
+            .args(["--exact", "crash_report::tests::a_segfault_prints_a_backtrace_and_still_dies_of_the_signal", "--nocapture"])
             .env("CRASH_REPORT_CHILD", "1")
             .env(super::ENV, "1")
             .output()
             .unwrap();
         let err = String::from_utf8_lossy(&out.stderr);
-        assert!(
-            err.contains("=== fatal SIGSEGV"),
-            "no report on stderr:\n{err}"
-        );
-        assert!(
-            err.contains("a_segfault_prints_a_backtrace"),
-            "the backtrace names the crashing function:\n{err}"
-        );
+        assert!(err.contains("=== fatal SIGSEGV"), "no report on stderr:\n{err}");
+        assert!(err.contains("a_segfault_prints_a_backtrace"), "the backtrace names the crashing function:\n{err}");
         use std::os::unix::process::ExitStatusExt;
-        assert_eq!(
-            out.status.signal(),
-            Some(libc::SIGSEGV),
-            "the process still died of the signal"
-        );
+        assert_eq!(out.status.signal(), Some(libc::SIGSEGV), "the process still died of the signal");
     }
 }

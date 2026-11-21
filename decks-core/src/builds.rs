@@ -15,7 +15,8 @@ use crate::magic_move::{ease, FrameObject};
 use crate::undo::{obj_bounds, set_obj_origin};
 
 /// Where a moving build comes from (in) or goes to (out).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Edge {
     Left,
     Right,
@@ -24,7 +25,8 @@ pub enum Edge {
 }
 
 /// How an object builds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum BuildEffect {
     /// At once.
     Appear,
@@ -86,17 +88,8 @@ pub fn steps(slide: &Slide) -> usize {
 /// gone hides nothing.
 fn shown_after(slide: &Slide, object: u64, done: usize) -> bool {
     let mut shown = !slide.builds.iter().any(|b| b.object == object && !b.out)
-        || slide
-            .builds
-            .iter()
-            .position(|b| b.object == object && !b.out)
-            .is_some_and(|i| i < done);
-    if slide
-        .builds
-        .iter()
-        .enumerate()
-        .any(|(i, b)| b.object == object && b.out && i < done)
-    {
+        || slide.builds.iter().position(|b| b.object == object && !b.out).is_some_and(|i| i < done);
+    if slide.builds.iter().enumerate().any(|(i, b)| b.object == object && b.out && i < done) {
         shown = false;
     }
     shown
@@ -131,11 +124,7 @@ fn slid(o: &SlideObject, edge: Edge, amount: f64) -> SlideObject {
 pub fn frame(slide: &Slide, step: usize, t: f64) -> Vec<FrameObject> {
     let e = ease(t);
     // Before it starts, a build is just the slide as it stands.
-    let current = if t > 0.0 {
-        slide.builds.get(step)
-    } else {
-        None
-    };
+    let current = if t > 0.0 { slide.builds.get(step) } else { None };
     slide
         .objects
         .iter()
@@ -146,28 +135,14 @@ pub fn frame(slide: &Slide, step: usize, t: f64) -> Vec<FrameObject> {
                 // This object's build is playing.
                 let amount = if b.out { 1.0 - e } else { e };
                 return Some(match b.effect {
-                    BuildEffect::Appear => FrameObject {
-                        object: o.clone(),
-                        opacity: if (b.out && t < 1.0) || (!b.out && t > 0.0) {
-                            1.0
-                        } else {
-                            0.0
-                        },
-                    },
-                    BuildEffect::Dissolve => FrameObject {
-                        object: o.clone(),
-                        opacity: amount,
-                    },
-                    BuildEffect::Move(edge) => FrameObject {
-                        object: slid(o, edge, amount),
-                        opacity: 1.0,
-                    },
+                    BuildEffect::Appear => {
+                        FrameObject { object: o.clone(), opacity: if (b.out && t < 1.0) || (!b.out && t > 0.0) { 1.0 } else { 0.0 } }
+                    }
+                    BuildEffect::Dissolve => FrameObject { object: o.clone(), opacity: amount },
+                    BuildEffect::Move(edge) => FrameObject { object: slid(o, edge, amount), opacity: 1.0 },
                 });
             }
-            shown_after(slide, id, step).then(|| FrameObject {
-                object: o.clone(),
-                opacity: 1.0,
-            })
+            shown_after(slide, id, step).then(|| FrameObject { object: o.clone(), opacity: 1.0 })
         })
         .filter(|f| f.opacity > 0.0)
         .collect()
@@ -181,27 +156,19 @@ pub fn without_object(builds: &[Build], id: u64) -> Vec<Build> {
     builds.iter().filter(|b| b.object != id).copied().collect()
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::engine::shape::{ShapeKind, ShapeStyle};
 
     fn sq(x: f64) -> SlideObject {
-        SlideObject::Shape {
-            kind: ShapeKind::Rect,
-            x,
-            y: 100.0,
-            w: 50.0,
-            h: 50.0,
-            rotation: 0.0,
-            style: ShapeStyle::default(),
-        }
+        SlideObject::Shape { kind: ShapeKind::Rect, x, y: 100.0, w: 50.0, h: 50.0, rotation: 0.0, style: ShapeStyle::default() }
     }
 
     fn slide(builds: Vec<Build>) -> Slide {
         // Builds name objects by these stable ids, not z-positions.
-        Slide {
-            hidden: false,
+        Slide { hidden: false,
             title: String::new(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -210,80 +177,41 @@ mod tests {
             master_id: None,
             transition: Default::default(),
             builds,
-            ids: crate::ops::SlideIds {
-                slide: 1,
-                objects: vec![11, 12, 13],
-                deleted: vec![],
-            },
+            ids: crate::ops::SlideIds { slide: 1, objects: vec![11, 12, 13], deleted: vec![] },
             layout_id: None,
         }
     }
 
     fn xs(frame: &[FrameObject]) -> Vec<(f64, f64)> {
-        frame
-            .iter()
-            .map(|f| (obj_bounds(&f.object).0, f.opacity))
-            .collect()
+        frame.iter().map(|f| (obj_bounds(&f.object).0, f.opacity)).collect()
     }
 
     #[test]
     fn objects_that_build_in_wait_for_their_click() {
         let s = slide(vec![
-            Build {
-                object: 12,
-                effect: BuildEffect::Dissolve,
-                out: false,
-            },
-            Build {
-                object: 13,
-                effect: BuildEffect::Appear,
-                out: false,
-            },
+            Build { object: 12, effect: BuildEffect::Dissolve, out: false },
+            Build { object: 13, effect: BuildEffect::Appear, out: false },
         ]);
         assert_eq!(steps(&s), 2);
-        assert_eq!(
-            xs(&frame(&s, 0, 0.0)),
-            [(0.0, 1.0)],
-            "only the object without a build"
-        );
-        assert_eq!(
-            xs(&frame(&s, 0, 0.5)),
-            [(0.0, 1.0), (100.0, 0.5)],
-            "the first fading in"
-        );
+        assert_eq!(xs(&frame(&s, 0, 0.0)), [(0.0, 1.0)], "only the object without a build");
+        assert_eq!(xs(&frame(&s, 0, 0.5)), [(0.0, 1.0), (100.0, 0.5)], "the first fading in");
         assert_eq!(xs(&frame(&s, 1, 0.0)), [(0.0, 1.0), (100.0, 1.0)]);
-        assert_eq!(
-            xs(&frame(&s, 1, 0.5)),
-            [(0.0, 1.0), (100.0, 1.0), (200.0, 1.0)],
-            "appear is at once"
-        );
+        assert_eq!(xs(&frame(&s, 1, 0.5)), [(0.0, 1.0), (100.0, 1.0), (200.0, 1.0)], "appear is at once");
         assert_eq!(xs(&frame(&s, 2, 0.0)).len(), 3, "all built");
     }
 
     #[test]
     fn a_build_out_leaves_and_stays_gone() {
-        let s = slide(vec![Build {
-            object: 11,
-            effect: BuildEffect::Move(Edge::Left),
-            out: true,
-        }]);
+        let s = slide(vec![Build { object: 11, effect: BuildEffect::Move(Edge::Left), out: true }]);
         assert_eq!(xs(&frame(&s, 0, 0.0))[0], (0.0, 1.0));
         let mid = xs(&frame(&s, 0, 0.5));
-        assert_eq!(
-            mid[0],
-            (-25.0, 1.0),
-            "half way to beyond the left edge (x = -50)"
-        );
+        assert_eq!(mid[0], (-25.0, 1.0), "half way to beyond the left edge (x = -50)");
         assert_eq!(xs(&frame(&s, 1, 0.0)).len(), 2, "gone");
     }
 
     #[test]
     fn a_move_in_slides_from_beyond_the_edge() {
-        let s = slide(vec![Build {
-            object: 13,
-            effect: BuildEffect::Move(Edge::Right),
-            out: false,
-        }]);
+        let s = slide(vec![Build { object: 13, effect: BuildEffect::Move(Edge::Right), out: false }]);
         let at = |t| xs(&frame(&s, 0, t)).last().copied().unwrap();
         assert_eq!(xs(&frame(&s, 0, 0.0)).len(), 2, "not started: still hidden");
         assert!(at(0.001).0 > 959.0, "starts beyond the right edge");
@@ -293,31 +221,14 @@ mod tests {
 
     #[test]
     fn deleting_an_object_drops_only_its_builds_and_reorder_keeps_them() {
-        let b = |object| Build {
-            object,
-            effect: BuildEffect::Appear,
-            out: false,
-        };
-        assert_eq!(
-            without_object(&[b(11), b(12), b(13)], 12),
-            vec![b(11), b(13)]
-        );
+        let b = |object| Build { object, effect: BuildEffect::Appear, out: false };
+        assert_eq!(without_object(&[b(11), b(12), b(13)], 12), vec![b(11), b(13)]);
         // Reordering needs no rewrite: the same builds still name the same
         // objects whatever z-position they now hold.
-        assert_eq!(
-            without_object(&[b(11), b(13)], u64::MAX),
-            vec![b(11), b(13)]
-        );
+        assert_eq!(without_object(&[b(11), b(13)], u64::MAX), vec![b(11), b(13)]);
         let s = slide(vec![b(11), b(13)]);
         assert_eq!(s.builds[0].index_on(&s), Some(0));
         assert_eq!(s.builds[1].index_on(&s), Some(2));
-        assert_eq!(
-            Build {
-                object: 99,
-                ..b(99)
-            }
-            .index_on(&s),
-            None
-        );
+        assert_eq!(Build { object: 99, ..b(99) }.index_on(&s), None);
     }
 }

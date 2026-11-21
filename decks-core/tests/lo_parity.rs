@@ -20,8 +20,7 @@ struct Scenario {
 }
 
 fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: title.to_string(),
         background: "#ffffff".into(),
         background_picture: None,
@@ -36,16 +35,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
 }
 
 fn text_box(text: &str) -> SlideObject {
-    SlideObject::TextBox {
-        text: text.to_string(),
-        x: 100.0,
-        y: 100.0,
-        w: 400.0,
-        h: 80.0,
-        rotation: 0.0,
-        runs: vec![],
-        body: Default::default(),
-    }
+    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, runs: vec![], body: Default::default() }
 }
 
 fn all_text(deck: &Deck) -> Vec<String> {
@@ -104,28 +94,14 @@ fn scenarios() -> Vec<Scenario> {
         name: "shapes-survive",
         deck: {
             let mut d = Deck::new();
-            d.slides[0].objects.push(SlideObject::Rect {
-                x: 50.0,
-                y: 50.0,
-                w: 200.0,
-                h: 100.0,
-                rotation: 0.0,
-            });
-            d.slides[0].objects.push(SlideObject::Circle {
-                x: 400.0,
-                y: 200.0,
-                r: 60.0,
-                rotation: 0.0,
-            });
+            d.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 50.0, w: 200.0, h: 100.0, rotation: 0.0 });
+            d.slides[0].objects.push(SlideObject::Circle { x: 400.0, y: 200.0, r: 60.0, rotation: 0.0 });
             d.slides[0].objects.push(text_box("with shapes"));
             d
         },
         check: |d| {
             let objs = &d.slides[0].objects;
-            let rects = objs
-                .iter()
-                .filter(|o| matches!(o, SlideObject::Rect { .. }))
-                .count();
+            let rects = objs.iter().filter(|o| matches!(o, SlideObject::Rect { .. })).count();
             let shapes = objs.len();
             if shapes < 3 {
                 return Err(format!("only {shapes} objects survived (rects: {rects})"));
@@ -138,9 +114,7 @@ fn scenarios() -> Vec<Scenario> {
         name: "multiline-textbox",
         deck: {
             let mut d = Deck::new();
-            d.slides[0]
-                .objects
-                .push(text_box("first line\nsecond line"));
+            d.slides[0].objects.push(text_box("first line\nsecond line"));
             d
         },
         check: |d| expect_texts(d, &["first line", "second line"]),
@@ -150,9 +124,7 @@ fn scenarios() -> Vec<Scenario> {
         name: "unicode-text",
         deck: {
             let mut d = Deck::new();
-            d.slides[0]
-                .objects
-                .push(text_box("café 中文 — “quotes” ✨"));
+            d.slides[0].objects.push(text_box("café 中文 — “quotes” ✨"));
             d
         },
         check: |d| expect_texts(d, &["café", "中文"]),
@@ -181,17 +153,12 @@ fn scenarios() -> Vec<Scenario> {
             let mut d = Deck::new();
             d.slides[0].objects.push(text_box("s1"));
             for i in 2..=10 {
-                d.slides
-                    .push(slide(&format!("S{i}"), vec![text_box(&format!("s{i}"))]));
+                d.slides.push(slide(&format!("S{i}"), vec![text_box(&format!("s{i}"))]));
             }
             d
         },
         check: |d| {
-            if d.slides.len() == 10 {
-                Ok(())
-            } else {
-                Err(format!("{} slides != 10", d.slides.len()))
-            }
+            if d.slides.len() == 10 { Ok(()) } else { Err(format!("{} slides != 10", d.slides.len())) }
         },
     });
 
@@ -200,21 +167,13 @@ fn scenarios() -> Vec<Scenario> {
         deck: {
             let mut d = Deck::new();
             d.slides[0].objects.push(SlideObject::TextBox {
-                text: "top-left".into(),
-                x: 10.0,
-                y: 10.0,
-                w: 200.0,
-                h: 40.0,
+                text: "top-left".into(), x: 10.0, y: 10.0, w: 200.0, h: 40.0,
                 runs: vec![],
                 rotation: 0.0,
                 body: Default::default(),
             });
             d.slides[0].objects.push(SlideObject::TextBox {
-                text: "lower".into(),
-                x: 300.0,
-                y: 400.0,
-                w: 200.0,
-                h: 40.0,
+                text: "lower".into(), x: 300.0, y: 400.0, w: 200.0, h: 40.0,
                 runs: vec![],
                 rotation: 0.0,
                 body: Default::default(),
@@ -229,19 +188,9 @@ fn scenarios() -> Vec<Scenario> {
                     ys.push((text.clone(), *y));
                 }
             }
-            let top = ys
-                .iter()
-                .find(|(t, _)| t.contains("top-left"))
-                .ok_or("top-left missing")?;
-            let low = ys
-                .iter()
-                .find(|(t, _)| t.contains("lower"))
-                .ok_or("lower missing")?;
-            if top.1 < low.1 {
-                Ok(())
-            } else {
-                Err(format!("y-order wrong: {ys:?}"))
-            }
+            let top = ys.iter().find(|(t, _)| t.contains("top-left")).ok_or("top-left missing")?;
+            let low = ys.iter().find(|(t, _)| t.contains("lower")).ok_or("lower missing")?;
+            if top.1 < low.1 { Ok(()) } else { Err(format!("y-order wrong: {ys:?}")) }
         },
     });
 
@@ -252,29 +201,11 @@ fn scenarios() -> Vec<Scenario> {
             let mut d = Deck::new();
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "plain bold italic".into(),
-                x: 100.0,
-                y: 100.0,
-                w: 400.0,
-                h: 60.0,
+                x: 100.0, y: 100.0, w: 400.0, h: 60.0,
                 runs: vec![
-                    Run {
-                        text: "plain ".into(),
-                        style: RunStyle::default(),
-                    },
-                    Run {
-                        text: "bold ".into(),
-                        style: RunStyle {
-                            bold: true,
-                            ..Default::default()
-                        },
-                    },
-                    Run {
-                        text: "italic".into(),
-                        style: RunStyle {
-                            italic: true,
-                            ..Default::default()
-                        },
-                    },
+                    Run { text: "plain ".into(), style: RunStyle::default() },
+                    Run { text: "bold ".into(), style: RunStyle { bold: true, ..Default::default() } },
+                    Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
                 ],
                 rotation: 0.0,
                 body: Default::default(),
@@ -308,18 +239,11 @@ fn scenarios() -> Vec<Scenario> {
 }
 
 fn soffice_available() -> bool {
-    Command::new("soffice")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Command::new("soffice").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 fn baseline() -> usize {
-    include_str!("corpus/lo-parity-baseline.txt")
-        .trim()
-        .parse()
-        .expect("baseline int")
+    include_str!("corpus/lo-parity-baseline.txt").trim().parse().expect("baseline int")
 }
 
 #[test]
@@ -347,20 +271,14 @@ fn libreoffice_parity_ratchet() {
     }
     let out = Command::new("soffice")
         .arg("--headless")
-        .arg(format!(
-            "-env:UserInstallation=file://{}",
-            profile.display()
-        ))
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
         .args(["--convert-to", "pptx", "--outdir"])
         .arg(&out_dir)
         .args(&inputs)
         .output()
         .expect("run soffice");
     if !out.status.success() {
-        panic!(
-            "batch conversion failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        panic!("batch conversion failed: {}", String::from_utf8_lossy(&out.stderr));
     }
 
     let mut passed = 0usize;
@@ -387,14 +305,9 @@ fn libreoffice_parity_ratchet() {
         println!("  FAIL {name}: {e}");
     }
     let base = baseline();
-    assert!(
-        passed >= base,
-        "REGRESSION: {passed}/{total} below baseline {base}"
-    );
+    assert!(passed >= base, "REGRESSION: {passed}/{total} below baseline {base}");
     if passed > base {
-        println!(
-            "IMPROVEMENT: {passed} > baseline {base} — bump tests/corpus/lo-parity-baseline.txt"
-        );
+        println!("IMPROVEMENT: {passed} > baseline {base} — bump tests/corpus/lo-parity-baseline.txt");
     }
 }
 
@@ -404,13 +317,6 @@ fn libreoffice_parity_ratchet() {
 /// updating `tests/corpus/lo-parity-total.txt` as well as the baseline.
 #[test]
 fn the_recorded_total_is_the_corpus_size() {
-    let recorded: usize = include_str!("corpus/lo-parity-total.txt")
-        .trim()
-        .parse()
-        .expect("total int");
-    assert_eq!(
-        scenarios().len(),
-        recorded,
-        "the LibreOffice-authored scenarios changed size: update tests/corpus/lo-parity-total.txt"
-    );
+    let recorded: usize = include_str!("corpus/lo-parity-total.txt").trim().parse().expect("total int");
+    assert_eq!(scenarios().len(), recorded, "the LibreOffice-authored scenarios changed size: update tests/corpus/lo-parity-total.txt");
 }

@@ -8,17 +8,11 @@ use std::process::Command;
 use decks_core::engine::{write_pptx, Deck, SlideObject};
 
 fn soffice_available() -> bool {
-    Command::new("soffice")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    Command::new("soffice").arg("--version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 fn require_or_skip() -> bool {
-    if soffice_available() {
-        return true;
-    }
+    if soffice_available() { return true; }
     if std::env::var("REQUIRE_SOFFICE").is_ok() {
         panic!("REQUIRE_SOFFICE set but no soffice binary found");
     }
@@ -40,20 +34,14 @@ fn convert(input: &std::path::Path, to: &str) -> Result<std::path::PathBuf, Stri
     std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let out = Command::new("soffice")
         .arg("--headless")
-        .arg(format!(
-            "-env:UserInstallation=file://{}",
-            profile.display()
-        ))
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
         .args(["--convert-to", to, "--outdir"])
         .arg(&out_dir)
         .arg(input)
         .output()
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
-        return Err(format!(
-            "soffice failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
+        return Err(format!("soffice failed: {}", String::from_utf8_lossy(&out.stderr)));
     }
     let converted = out_dir
         .join(input.file_name().ok_or("input has no file name")?)
@@ -74,30 +62,19 @@ fn sample_deck() -> Deck {
     deck.slides[0].title = "Oracle Slide".into();
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "Impress must read this".into(),
-        x: 100.0,
-        y: 100.0,
-        w: 400.0,
-        h: 60.0,
+        x: 100.0, y: 100.0, w: 400.0, h: 60.0,
         rotation: 0.0,
         runs: vec![],
         body: Default::default(),
     });
-    deck.slides[0].objects.push(SlideObject::Rect {
-        x: 50.0,
-        y: 250.0,
-        w: 200.0,
-        h: 90.0,
-        rotation: 0.0,
-    });
+    deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 0.0 });
     deck.slides[0].notes = "speaker notes body".into();
     deck
 }
 
 #[test]
 fn impress_imports_our_pptx() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ours.pptx");
     write_pptx(path.to_str().unwrap(), &sample_deck()).expect("write pptx");
@@ -109,22 +86,16 @@ fn impress_imports_our_pptx() {
 
 #[test]
 fn impress_survives_multi_slide_deck() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = sample_deck();
     for i in 2..=5 {
-        deck.slides.push(decks_core::engine::Slide {
-            hidden: false,
+        deck.slides.push(decks_core::engine::Slide { hidden: false,
             title: format!("Slide {}", i),
             background: "#ffffff".into(),
             background_picture: None,
             objects: vec![SlideObject::TextBox {
                 text: format!("content {}", i),
-                x: 80.0,
-                y: 120.0,
-                w: 300.0,
-                h: 50.0,
+                x: 80.0, y: 120.0, w: 300.0, h: 50.0,
                 rotation: 0.0,
                 runs: vec![],
                 body: Default::default(),
@@ -149,9 +120,7 @@ use decks_core::engine::{read_pptx, Slide};
 
 /// Our pptx → Impress rewrites it as pptx → our reader. None = skipped.
 fn through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
-    if !require_or_skip() {
-        return None;
-    }
+    if !require_or_skip() { return None; }
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(format!("{stem}.pptx"));
     write_pptx(path.to_str().unwrap(), deck).expect("write pptx");
@@ -160,37 +129,26 @@ fn through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
     let profile = dir.path().join("prof");
     let st = Command::new("soffice")
         .arg("--headless")
-        .arg(format!(
-            "-env:UserInstallation=file://{}",
-            profile.display()
-        ))
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
         .args(["--convert-to", "pptx", "--outdir"])
         .arg(&out_dir)
         .arg(&path)
         .output()
         .expect("soffice runs");
-    assert!(
-        st.status.success(),
-        "{}",
-        String::from_utf8_lossy(&st.stderr)
-    );
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
     let rewritten = out_dir.join(format!("{stem}.pptx"));
     assert!(rewritten.exists(), "Impress produced no pptx");
     Some(read_pptx(rewritten.to_str().unwrap()).expect("we failed to read Impress pptx"))
 }
 
 fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: title.into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![SlideObject::TextBox {
             text: text.into(),
-            x: 100.0,
-            y: 100.0,
-            w: 500.0,
-            h: 60.0,
+            x: 100.0, y: 100.0, w: 500.0, h: 60.0,
             runs: vec![],
             rotation: 0.0,
             body: Default::default(),
@@ -220,9 +178,7 @@ fn all_text(slide: &Slide) -> String {
 fn text_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "hello from decks", "")];
-    let Some(rt) = through_impress(&deck, "text") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "text") else { return };
     assert!(
         all_text(&rt.slides[0]).contains("hello from decks"),
         "text lost: {:?}",
@@ -234,9 +190,7 @@ fn text_survives_impress_rewrite() {
 fn unicode_text_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "héllo — 中文 ✨", "")];
-    let Some(rt) = through_impress(&deck, "uni") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "uni") else { return };
     // Impress inserts soft line breaks on rewrite; compare content only.
     let text = all_text(&rt.slides[0]).replace('\n', " ");
     assert!(text.contains("héllo — 中文 ✨"), "unicode lost: {text:?}");
@@ -246,9 +200,7 @@ fn unicode_text_survives_impress_rewrite() {
 fn notes_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "body", "remember the demo")];
-    let Some(rt) = through_impress(&deck, "notes") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "notes") else { return };
     assert!(
         rt.slides[0].notes.contains("remember the demo"),
         "notes lost: {:?}",
@@ -260,9 +212,7 @@ fn notes_survive_impress_rewrite() {
 fn notes_unicode_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "body", "café — 東京")];
-    let Some(rt) = through_impress(&deck, "notesuni") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "notesuni") else { return };
     let notes = rt.slides[0].notes.replace('\n', " ");
     assert!(notes.contains("café — 東京"), "{notes:?}");
 }
@@ -273,9 +223,7 @@ fn slide_count_and_order_survive_impress_rewrite() {
     deck.slides = (1..=4)
         .map(|i| text_slide(&format!("S{i}"), &format!("content {i}"), ""))
         .collect();
-    let Some(rt) = through_impress(&deck, "order") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "order") else { return };
     assert_eq!(rt.slides.len(), 4, "slide count changed");
     for (i, slide) in rt.slides.iter().enumerate() {
         assert!(
@@ -290,50 +238,24 @@ fn slide_count_and_order_survive_impress_rewrite() {
 /// A rectangle as either model form: the editor's older `Rect`, or the
 /// `Shape` a file reads back as.
 fn is_rect(o: &SlideObject) -> bool {
-    matches!(
-        o,
-        SlideObject::Rect { .. }
-            | SlideObject::Shape {
-                kind: decks_core::engine::shape::ShapeKind::Rect,
-                ..
-            }
-    )
+    matches!(o, SlideObject::Rect { .. } | SlideObject::Shape { kind: decks_core::engine::shape::ShapeKind::Rect, .. })
 }
 
 /// An ellipse as either model form (`Circle`, or an ellipse `Shape`).
 fn is_ellipse(o: &SlideObject) -> bool {
-    matches!(
-        o,
-        SlideObject::Circle { .. }
-            | SlideObject::Shape {
-                kind: decks_core::engine::shape::ShapeKind::Ellipse,
-                ..
-            }
-    )
+    matches!(o, SlideObject::Circle { .. } | SlideObject::Shape { kind: decks_core::engine::shape::ShapeKind::Ellipse, .. })
 }
 
 #[test]
 fn shape_kinds_survive_impress_rewrite() {
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "shapes".into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![
-            SlideObject::Rect {
-                x: 100.0,
-                y: 100.0,
-                w: 200.0,
-                h: 100.0,
-                rotation: 0.0,
-            },
-            SlideObject::Circle {
-                x: 500.0,
-                y: 300.0,
-                r: 80.0,
-                rotation: 0.0,
-            },
+            SlideObject::Rect { x: 100.0, y: 100.0, w: 200.0, h: 100.0, rotation: 0.0 },
+            SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
         ],
         notes: String::new(),
         master_id: None,
@@ -342,15 +264,9 @@ fn shape_kinds_survive_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = through_impress(&deck, "shapes") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "shapes") else { return };
     let rects = rt.slides[0].objects.iter().filter(|o| is_rect(o)).count();
-    let circles = rt.slides[0]
-        .objects
-        .iter()
-        .filter(|o| is_ellipse(o))
-        .count();
+    let circles = rt.slides[0].objects.iter().filter(|o| is_ellipse(o)).count();
     assert!(rects >= 1, "rect lost: {:?}", rt.slides[0].objects);
     assert!(circles >= 1, "circle lost: {:?}", rt.slides[0].objects);
 }
@@ -358,18 +274,11 @@ fn shape_kinds_survive_impress_rewrite() {
 #[test]
 fn positions_approx_survive_impress_rewrite() {
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "pos".into(),
         background: "#ffffff".into(),
         background_picture: None,
-        objects: vec![SlideObject::Rect {
-            x: 240.0,
-            y: 180.0,
-            w: 320.0,
-            h: 120.0,
-            rotation: 0.0,
-        }],
+        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_id: None,
         transition: Default::default(),
@@ -377,9 +286,7 @@ fn positions_approx_survive_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = through_impress(&deck, "pos") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "pos") else { return };
     let Some((x, y, w, h)) = rt.slides[0]
         .objects
         .iter()
@@ -391,23 +298,15 @@ fn positions_approx_survive_impress_rewrite() {
     let (x, y, w, h) = (&x, &y, &w, &h);
     // EMU rounding through two converters: half-a-percent tolerance.
     let close = |a: f64, b: f64| (a - b).abs() < 6.0;
-    assert!(
-        close(*x, 240.0) && close(*y, 180.0),
-        "position drifted: {x},{y}"
-    );
-    assert!(
-        close(*w, 320.0) && close(*h, 120.0),
-        "size drifted: {w}x{h}"
-    );
+    assert!(close(*x, 240.0) && close(*y, 180.0), "position drifted: {x},{y}");
+    assert!(close(*w, 320.0) && close(*h, 120.0), "size drifted: {w}x{h}");
 }
 
 #[test]
 fn multiline_text_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "first line\nsecond line", "")];
-    let Some(rt) = through_impress(&deck, "multiline") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "multiline") else { return };
     let text = all_text(&rt.slides[0]);
     assert!(
         text.contains("first line") && text.contains("second line"),
@@ -420,8 +319,7 @@ fn empty_slide_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![
         text_slide("one", "content", ""),
-        Slide {
-            hidden: false,
+        Slide { hidden: false,
             title: "empty".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -435,9 +333,7 @@ fn empty_slide_survives_impress_rewrite() {
         },
         text_slide("three", "more", ""),
     ];
-    let Some(rt) = through_impress(&deck, "empty") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "empty") else { return };
     assert_eq!(rt.slides.len(), 3, "empty slide dropped");
 }
 
@@ -445,28 +341,18 @@ fn empty_slide_survives_impress_rewrite() {
 fn bold_run_survives_impress_rewrite() {
     use suite_common_core::document::{Run, RunStyle};
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "styled".into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![SlideObject::TextBox {
             text: "plain bolded".into(),
-            x: 100.0,
-            y: 100.0,
-            w: 500.0,
-            h: 60.0,
+            x: 100.0, y: 100.0, w: 500.0, h: 60.0,
             runs: vec![
-                Run {
-                    text: "plain ".into(),
-                    style: RunStyle::default(),
-                },
+                Run { text: "plain ".into(), style: RunStyle::default() },
                 Run {
                     text: "bolded".into(),
-                    style: RunStyle {
-                        bold: true,
-                        ..Default::default()
-                    },
+                    style: RunStyle { bold: true, ..Default::default() },
                 },
             ],
             rotation: 0.0,
@@ -479,9 +365,7 @@ fn bold_run_survives_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = through_impress(&deck, "boldrun") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "boldrun") else { return };
     let bold_text: String = rt.slides[0]
         .objects
         .iter()
@@ -495,47 +379,31 @@ fn bold_run_survives_impress_rewrite() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        bold_text.trim(),
-        "bolded",
-        "bold run lost: {:?}",
-        rt.slides[0].objects
-    );
+    assert_eq!(bold_text.trim(), "bolded", "bold run lost: {:?}", rt.slides[0].objects);
 }
 
 #[test]
 fn large_deck_survives_impress_rewrite() {
     let mut deck = Deck::new();
-    deck.slides = (0..20)
-        .map(|i| text_slide(&format!("S{i}"), &format!("t{i}"), ""))
-        .collect();
-    let Some(rt) = through_impress(&deck, "large") else {
-        return;
-    };
+    deck.slides = (0..20).map(|i| text_slide(&format!("S{i}"), &format!("t{i}"), "")).collect();
+    let Some(rt) = through_impress(&deck, "large") else { return };
     assert_eq!(rt.slides.len(), 20, "slides lost");
 }
 
 #[test]
 fn deck_converts_to_pdf_with_page_structure() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
-    deck.slides = (0..8)
-        .map(|i| text_slide(&format!("S{i}"), &format!("t{i}"), ""))
-        .collect();
+    deck.slides = (0..8).map(|i| text_slide(&format!("S{i}"), &format!("t{i}"), "")).collect();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("pdf.pptx");
     write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
     let pdf = convert(&path, "pdf").expect("Impress could not render to pdf");
     let bytes = std::fs::read(&pdf).unwrap();
-    let pages = bytes
-        .windows(6)
-        .filter(|w| w == b"/Page\x20" || w == b"/Page/")
-        .count();
+    let pages = bytes.windows(6).filter(|w| w == b"/Page\x20" || w == b"/Page/").count();
     assert!(bytes.len() > 1000, "suspiciously small pdf");
     // Count the page objects; layouts differ, so just require >= slides.
-    let count_marker = bytes.windows(7).filter(|w| w == b"/Count ").count();
+    let count_marker = bytes.windows(7).filter(|w| w == b"/Count " ).count();
     assert!(pages > 0 || count_marker > 0, "no page structure in pdf");
 }
 
@@ -545,9 +413,7 @@ fn background_color_survives_impress_rewrite() {
     let mut s = text_slide("bg", "colored", "");
     s.background = "#e8f0fe".into();
     deck.slides = vec![s];
-    let Some(rt) = through_impress(&deck, "bg") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "bg") else { return };
     assert_eq!(
         rt.slides[0].background.to_lowercase(),
         "#e8f0fe",
@@ -562,17 +428,13 @@ use suite_common_core::document::{Run, RunStyle};
 
 fn styled_run_slide(runs: Vec<Run>) -> Slide {
     let text = runs.iter().map(|r| r.text.as_str()).collect::<String>();
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: "styled".into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![SlideObject::TextBox {
             text,
-            x: 100.0,
-            y: 100.0,
-            w: 600.0,
-            h: 80.0,
+            x: 100.0, y: 100.0, w: 600.0, h: 80.0,
             runs,
             rotation: 0.0,
             body: Default::default(),
@@ -602,39 +464,16 @@ fn runs_of(slide: &Slide) -> Vec<Run> {
 fn italic_underline_runs_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![styled_run_slide(vec![
-        Run {
-            text: "it".into(),
-            style: RunStyle {
-                italic: true,
-                ..Default::default()
-            },
-        },
-        Run {
-            text: " and ".into(),
-            style: RunStyle::default(),
-        },
-        Run {
-            text: "un".into(),
-            style: RunStyle {
-                underline: true,
-                ..Default::default()
-            },
-        },
+        Run { text: "it".into(), style: RunStyle { italic: true, ..Default::default() } },
+        Run { text: " and ".into(), style: RunStyle::default() },
+        Run { text: "un".into(), style: RunStyle { underline: true, ..Default::default() } },
     ])];
-    let Some(rt) = through_impress(&deck, "itun") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "itun") else { return };
     let runs = runs_of(&rt.slides[0]);
-    let italic: String = runs
-        .iter()
-        .filter(|r| r.style.italic)
-        .map(|r| r.text.as_str())
-        .collect();
-    let underline: String = runs
-        .iter()
-        .filter(|r| r.style.underline)
-        .map(|r| r.text.as_str())
-        .collect();
+    let italic: String =
+        runs.iter().filter(|r| r.style.italic).map(|r| r.text.as_str()).collect();
+    let underline: String =
+        runs.iter().filter(|r| r.style.underline).map(|r| r.text.as_str()).collect();
     assert_eq!(italic.trim(), "it", "italic lost: {runs:?}");
     assert_eq!(underline.trim(), "un", "underline lost: {runs:?}");
 }
@@ -643,26 +482,15 @@ fn italic_underline_runs_survive_impress_rewrite() {
 fn run_font_size_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![styled_run_slide(vec![
-        Run {
-            text: "small".into(),
-            style: RunStyle::default(),
-        },
+        Run { text: "small".into(), style: RunStyle::default() },
         Run {
             text: "BIG".into(),
-            style: RunStyle {
-                font_size_hp: Some(64),
-                ..Default::default()
-            }, // 32pt
+            style: RunStyle { font_size_hp: Some(64), ..Default::default() }, // 32pt
         },
     ])];
-    let Some(rt) = through_impress(&deck, "fontsize") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "fontsize") else { return };
     let runs = runs_of(&rt.slides[0]);
-    let big = runs
-        .iter()
-        .find(|r| r.text.contains("BIG"))
-        .expect("BIG run lost");
+    let big = runs.iter().find(|r| r.text.contains("BIG")).expect("BIG run lost");
     assert_eq!(big.style.font_size_hp, Some(64), "font size lost: {runs:?}");
 }
 
@@ -671,19 +499,11 @@ fn run_color_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![styled_run_slide(vec![Run {
         text: "red text".into(),
-        style: RunStyle {
-            color: Some("cc0000".into()),
-            ..Default::default()
-        },
+        style: RunStyle { color: Some("cc0000".into()), ..Default::default() },
     }])];
-    let Some(rt) = through_impress(&deck, "runcolor") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "runcolor") else { return };
     let runs = runs_of(&rt.slides[0]);
-    let red = runs
-        .iter()
-        .find(|r| r.text.contains("red"))
-        .expect("run lost");
+    let red = runs.iter().find(|r| r.text.contains("red")).expect("run lost");
     assert_eq!(
         red.style.color.as_deref().map(str::to_lowercase),
         Some("cc0000".into()),
@@ -693,35 +513,30 @@ fn run_color_survives_impress_rewrite() {
 
 #[test]
 fn image_object_survives_impress_rewrite() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     // A 2x2 red PNG, generated inline so no fixture file is needed.
     let dir = tempfile::tempdir().unwrap();
     let png_path = dir.path().join("dot.png");
     let png: &[u8] = &[
-        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0,
-        0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0, 0xfd, 0xd4, 0x9a, 0x73, 0, 0, 0, 21, b'I', b'D', b'A',
-        b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30,
-        0x00, 0x00, 0x00, 0xff, 0xff, 0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9, 0, 0, 0, 0, b'I', b'E',
-        b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
     ];
     std::fs::write(&png_path, png).unwrap();
 
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "img".into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![SlideObject::Image {
             path: png_path.to_string_lossy().to_string(),
-            x: 100.0,
-            y: 100.0,
-            w: 200.0,
-            h: 150.0,
-            rotation: 0.0,
-            crop: Default::default(),
+            x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+            rotation: 0.0, crop: Default::default()
         }],
         notes: String::new(),
         master_id: None,
@@ -730,9 +545,7 @@ fn image_object_survives_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = through_impress(&deck, "image") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "image") else { return };
     let images = rt.slides[0]
         .objects
         .iter()
@@ -747,9 +560,7 @@ fn notes_map_to_their_slides_through_impress() {
     deck.slides = (1..=3)
         .map(|i| text_slide(&format!("S{i}"), &format!("body {i}"), &format!("note {i}")))
         .collect();
-    let Some(rt) = through_impress(&deck, "notesmap") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "notesmap") else { return };
     for (i, slide) in rt.slides.iter().enumerate() {
         assert!(
             slide.notes.contains(&format!("note {}", i + 1)),
@@ -766,9 +577,7 @@ use decks_core::odp;
 
 /// Our odp → Impress rewrites as odp → our reader.
 fn odp_through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
-    if !require_or_skip() {
-        return None;
-    }
+    if !require_or_skip() { return None; }
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(format!("{stem}.odp"));
     odp::write(deck, path.to_str().unwrap()).expect("write odp");
@@ -777,20 +586,13 @@ fn odp_through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
     let profile = dir.path().join("prof");
     let st = Command::new("soffice")
         .arg("--headless")
-        .arg(format!(
-            "-env:UserInstallation=file://{}",
-            profile.display()
-        ))
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
         .args(["--convert-to", "odp", "--outdir"])
         .arg(&out_dir)
         .arg(&path)
         .output()
         .expect("soffice runs");
-    assert!(
-        st.status.success(),
-        "{}",
-        String::from_utf8_lossy(&st.stderr)
-    );
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
     let rewritten = out_dir.join(format!("{stem}.odp"));
     assert!(rewritten.exists(), "Impress produced no odp");
     Some(odp::read(rewritten.to_str().unwrap()).expect("we failed to read Impress odp"))
@@ -800,13 +602,9 @@ fn odp_through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
 fn odp_text_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "hello from odp", "")];
-    let Some(rt) = odp_through_impress(&deck, "text") else {
-        return;
-    };
+    let Some(rt) = odp_through_impress(&deck, "text") else { return };
     assert!(
-        all_text(&rt.slides[0])
-            .replace('\n', " ")
-            .contains("hello from odp"),
+        all_text(&rt.slides[0]).replace('\n', " ").contains("hello from odp"),
         "text lost: {:?}",
         rt.slides[0].objects
     );
@@ -816,14 +614,9 @@ fn odp_text_survives_impress_rewrite() {
 fn odp_notes_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "body", "the odp note")];
-    let Some(rt) = odp_through_impress(&deck, "notes") else {
-        return;
-    };
+    let Some(rt) = odp_through_impress(&deck, "notes") else { return };
     assert!(
-        rt.slides[0]
-            .notes
-            .replace('\n', " ")
-            .contains("the odp note"),
+        rt.slides[0].notes.replace('\n', " ").contains("the odp note"),
         "notes lost: {:?}",
         rt.slides[0].notes
     );
@@ -832,18 +625,11 @@ fn odp_notes_survive_impress_rewrite() {
 #[test]
 fn odp_geometry_survives_impress_rewrite() {
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "g".into(),
         background: "#ffffff".into(),
         background_picture: None,
-        objects: vec![SlideObject::Rect {
-            x: 240.0,
-            y: 180.0,
-            w: 320.0,
-            h: 120.0,
-            rotation: 0.0,
-        }],
+        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_id: None,
         transition: Default::default(),
@@ -851,9 +637,7 @@ fn odp_geometry_survives_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = odp_through_impress(&deck, "geom") else {
-        return;
-    };
+    let Some(rt) = odp_through_impress(&deck, "geom") else { return };
     // Impress gives the rect its default graphic style, so it reads back
     // as a painted Shape.
     let Some(SlideObject::Rect { x, y, w, h, .. } | SlideObject::Shape { x, y, w, h, .. }) =
@@ -862,14 +646,8 @@ fn odp_geometry_survives_impress_rewrite() {
         panic!("rect lost: {:?}", rt.slides[0].objects)
     };
     let close = |a: f64, b: f64| (a - b).abs() < 6.0;
-    assert!(
-        close(*x, 240.0) && close(*y, 180.0),
-        "position drifted: {x},{y}"
-    );
-    assert!(
-        close(*w, 320.0) && close(*h, 120.0),
-        "size drifted: {w}x{h}"
-    );
+    assert!(close(*x, 240.0) && close(*y, 180.0), "position drifted: {x},{y}");
+    assert!(close(*w, 320.0) && close(*h, 120.0), "size drifted: {w}x{h}");
 }
 
 #[test]
@@ -878,15 +656,9 @@ fn odp_background_survives_impress_rewrite() {
     let mut s = text_slide("bg", "colored", "");
     s.background = "#e8f0fe".into();
     deck.slides = vec![s];
-    let Some(rt) = odp_through_impress(&deck, "bg") else {
-        return;
-    };
-    assert_eq!(
-        rt.slides[0].background.to_lowercase(),
-        "#e8f0fe",
-        "background lost: {}",
-        rt.slides[0].background
-    );
+    let Some(rt) = odp_through_impress(&deck, "bg") else { return };
+    assert_eq!(rt.slides[0].background.to_lowercase(), "#e8f0fe",
+        "background lost: {}", rt.slides[0].background);
 }
 
 #[test]
@@ -895,9 +667,7 @@ fn odp_slide_order_survives_impress_rewrite() {
     deck.slides = (1..=3)
         .map(|i| text_slide(&format!("S{i}"), &format!("content {i}"), ""))
         .collect();
-    let Some(rt) = odp_through_impress(&deck, "order") else {
-        return;
-    };
+    let Some(rt) = odp_through_impress(&deck, "order") else { return };
     assert_eq!(rt.slides.len(), 3);
     for (i, slide) in rt.slides.iter().enumerate() {
         assert!(
@@ -912,28 +682,18 @@ fn odp_slide_order_survives_impress_rewrite() {
 fn odp_bold_run_survives_impress_rewrite() {
     use suite_common_core::document::{Run as LRun, RunStyle as LRunStyle};
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "styled".into(),
         background: "#ffffff".into(),
         background_picture: None,
         objects: vec![SlideObject::TextBox {
             text: "plain bolded".into(),
-            x: 100.0,
-            y: 100.0,
-            w: 500.0,
-            h: 60.0,
+            x: 100.0, y: 100.0, w: 500.0, h: 60.0,
             runs: vec![
-                LRun {
-                    text: "plain ".into(),
-                    style: LRunStyle::default(),
-                },
+                LRun { text: "plain ".into(), style: LRunStyle::default() },
                 LRun {
                     text: "bolded".into(),
-                    style: LRunStyle {
-                        bold: true,
-                        ..Default::default()
-                    },
+                    style: LRunStyle { bold: true, ..Default::default() },
                 },
             ],
             rotation: 0.0,
@@ -946,37 +706,25 @@ fn odp_bold_run_survives_impress_rewrite() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = odp_through_impress(&deck, "boldrun") else {
-        return;
-    };
+    let Some(rt) = odp_through_impress(&deck, "boldrun") else { return };
     let bold: String = rt.slides[0]
         .objects
         .iter()
         .filter_map(|o| match o {
             SlideObject::TextBox { runs, .. } => Some(
-                runs.iter()
-                    .filter(|r| r.style.bold)
-                    .map(|r| r.text.as_str())
-                    .collect::<String>(),
+                runs.iter().filter(|r| r.style.bold).map(|r| r.text.as_str()).collect::<String>(),
             ),
             _ => None,
         })
         .collect();
-    assert_eq!(
-        bold.trim(),
-        "bolded",
-        "bold lost: {:?}",
-        rt.slides[0].objects
-    );
+    assert_eq!(bold.trim(), "bolded", "bold lost: {:?}", rt.slides[0].objects);
 }
 
 /// The reverse: an odp Impress writes (from our pptx) must open in our
 /// odp reader with the text intact.
 #[test]
 fn we_read_impress_authored_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "authored elsewhere", "")];
     let dir = tempfile::tempdir().unwrap();
@@ -985,9 +733,7 @@ fn we_read_impress_authored_odp() {
     let odp_path = convert(&path, "odp").expect("Impress could not convert to odp");
     let rt = odp::read(odp_path.to_str().unwrap()).expect("our odp reader failed");
     assert!(
-        rt.slides
-            .iter()
-            .any(|s| all_text(s).contains("authored elsewhere")),
+        rt.slides.iter().any(|s| all_text(s).contains("authored elsewhere")),
         "text lost reading Impress-authored odp"
     );
 }
@@ -999,9 +745,7 @@ fn we_read_impress_authored_odp() {
 /// placeholder prompts ("Click to edit …") as decoration content.
 #[test]
 fn masters_read_from_impress_pptx_without_placeholder_leakage() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.slides = vec![text_slide("T", "master mapping test", "")];
     let dir = tempfile::tempdir().unwrap();
@@ -1040,16 +784,10 @@ fn masters_read_from_impress_pptx_without_placeholder_leakage() {
 /// degree clockwise rect comes back as 330.
 #[test]
 fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Rect {
-        x: 100.0,
-        y: 200.0,
-        w: 300.0,
-        h: 100.0,
-        rotation: 30.0,
+        x: 100.0, y: 200.0, w: 300.0, h: 100.0, rotation: 30.0,
     });
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("rotated.odp");
@@ -1083,16 +821,10 @@ fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
 /// declines and silently reads as square.
 #[test]
 fn we_read_the_rotation_impress_writes_into_an_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Rect {
-        x: 100.0,
-        y: 200.0,
-        w: 300.0,
-        h: 100.0,
-        rotation: 30.0,
+        x: 100.0, y: 200.0, w: 300.0, h: 100.0, rotation: 30.0,
     });
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("src.pptx");
@@ -1133,19 +865,14 @@ fn we_read_the_rotation_impress_writes_into_an_odp() {
 /// it cannot resolve, which is what makes the assertion worth making.
 #[test]
 fn impress_keeps_the_master_we_write() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.masters[0].name = "House Style".into();
     deck.masters[0].background = "#204060".into();
     deck.slides[0].master_id = Some(deck.masters[0].id);
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "on the house master".into(),
-        x: 100.0,
-        y: 100.0,
-        w: 400.0,
-        h: 60.0,
+        x: 100.0, y: 100.0, w: 400.0, h: 60.0,
         rotation: 0.0,
         runs: vec![],
         body: Default::default(),
@@ -1156,10 +883,7 @@ fn impress_keeps_the_master_we_write() {
     write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
     let rewritten = convert(&as_pptx, "pptx").expect("Impress could not rewrite our pptx");
     let rt = read_pptx(rewritten.to_str().unwrap()).expect("read back");
-    assert!(
-        !rt.masters.is_empty(),
-        "Impress dropped the master from our pptx"
-    );
+    assert!(!rt.masters.is_empty(), "Impress dropped the master from our pptx");
     for s in &rt.slides {
         assert!(rt.master_of(s).is_some(), "a slide came back on no master");
     }
@@ -1169,17 +893,11 @@ fn impress_keeps_the_master_we_write() {
     odp::write(&odp_deck, as_odp.to_str().unwrap()).expect("write odp");
     let rewritten = convert(&as_odp, "odp").expect("Impress could not rewrite our odp");
     let rt = odp::read(rewritten.to_str().unwrap()).expect("read back");
-    assert!(
-        !rt.masters.is_empty(),
-        "Impress dropped the master from our odp"
-    );
+    assert!(!rt.masters.is_empty(), "Impress dropped the master from our odp");
     assert!(
         rt.masters.iter().any(|m| m.background == "#204060"),
         "the master's background is gone after an Impress rewrite: {:?}",
-        rt.masters
-            .iter()
-            .map(|m| (&m.name, &m.background))
-            .collect::<Vec<_>>(),
+        rt.masters.iter().map(|m| (&m.name, &m.background)).collect::<Vec<_>>(),
     );
 }
 
@@ -1194,30 +912,26 @@ fn impress_keeps_the_master_we_write() {
 /// the pptx reader says whether a picture arrived.
 #[test]
 fn impress_finds_the_picture_we_write_into_an_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     // A 2x2 red PNG, generated inline so no fixture file is needed.
     let dir = tempfile::tempdir().unwrap();
     let png_path = dir.path().join("dot.png");
     let png: &[u8] = &[
-        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0,
-        0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0, 0xfd, 0xd4, 0x9a, 0x73, 0, 0, 0, 21, b'I', b'D', b'A',
-        b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30,
-        0x00, 0x00, 0x00, 0xff, 0xff, 0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9, 0, 0, 0, 0, b'I', b'E',
-        b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
     ];
     std::fs::write(&png_path, png).unwrap();
 
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Image {
         path: png_path.to_string_lossy().to_string(),
-        x: 100.0,
-        y: 100.0,
-        w: 200.0,
-        h: 150.0,
-        rotation: 0.0,
-        crop: Default::default(),
+        x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+        rotation: 0.0, crop: Default::default()
     });
     let as_odp = dir.path().join("pictured.odp");
     odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
@@ -1242,29 +956,25 @@ fn impress_finds_the_picture_we_write_into_an_odp() {
 /// reader rather than the Empty one our own writer produces.
 #[test]
 fn we_read_the_picture_impress_writes_into_an_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let dir = tempfile::tempdir().unwrap();
     let png_path = dir.path().join("dot.png");
     let png: &[u8] = &[
-        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0,
-        0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0, 0xfd, 0xd4, 0x9a, 0x73, 0, 0, 0, 21, b'I', b'D', b'A',
-        b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30,
-        0x00, 0x00, 0x00, 0xff, 0xff, 0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9, 0, 0, 0, 0, b'I', b'E',
-        b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
     ];
     std::fs::write(&png_path, png).unwrap();
 
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Image {
         path: png_path.to_string_lossy().to_string(),
-        x: 100.0,
-        y: 100.0,
-        w: 200.0,
-        h: 150.0,
-        rotation: 0.0,
-        crop: Default::default(),
+        x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+        rotation: 0.0, crop: Default::default()
     });
     let src = dir.path().join("src.pptx");
     write_pptx(src.to_str().unwrap(), &deck).expect("write pptx");
@@ -1280,8 +990,7 @@ fn we_read_the_picture_impress_writes_into_an_odp() {
         })
         .collect();
     assert_eq!(
-        recovered.len(),
-        1,
+        recovered.len(), 1,
         "we did not read the picture out of an Impress-written odp: {:?}",
         rt.slides[0].objects,
     );
@@ -1298,18 +1007,13 @@ fn we_read_the_picture_impress_writes_into_an_odp() {
 /// keeps a default font was a guess.
 #[test]
 fn impress_carries_the_theme_font_from_our_pptx_into_an_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let dir = tempfile::tempdir().unwrap();
     let mut deck = Deck::new();
     deck.masters[0].default_font = "Liberation Serif".into();
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "body text".into(),
-        x: 100.0,
-        y: 100.0,
-        w: 300.0,
-        h: 80.0,
+        x: 100.0, y: 100.0, w: 300.0, h: 80.0,
         rotation: 0.0,
         runs: vec![],
         body: Default::default(),
@@ -1342,18 +1046,13 @@ fn impress_carries_the_theme_font_from_our_pptx_into_an_odp() {
 /// over it would have pinned someone else's bug as our contract.
 #[test]
 fn impress_keeps_the_font_we_write_into_an_odp() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let dir = tempfile::tempdir().unwrap();
     let mut deck = Deck::new();
     deck.masters[0].default_font = "Liberation Serif".into();
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "body text".into(),
-        x: 100.0,
-        y: 100.0,
-        w: 300.0,
-        h: 80.0,
+        x: 100.0, y: 100.0, w: 300.0, h: 80.0,
         rotation: 0.0,
         runs: vec![],
         body: Default::default(),
@@ -1385,8 +1084,7 @@ fn impress_keeps_the_font_we_write_into_an_odp() {
 #[test]
 fn impress_runs_in_one_paragraph_come_back_as_one_line() {
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "T".into(),
         background: String::new(),
         background_picture: None,
@@ -1400,16 +1098,10 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
             h: 60.0,
             rotation: 0.0,
             runs: vec![
-                Run {
-                    text: "Plain ".into(),
-                    style: RunStyle::default(),
-                },
+                Run { text: "Plain ".into(), style: RunStyle::default() },
                 Run {
                     text: "Bold".into(),
-                    style: RunStyle {
-                        bold: true,
-                        ..RunStyle::default()
-                    },
+                    style: RunStyle { bold: true, ..RunStyle::default() },
                 },
             ],
             body: Default::default(),
@@ -1419,9 +1111,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
         ids: Default::default(),
         layout_id: None,
     }];
-    let Some(rt) = through_impress(&deck, "tworuns") else {
-        return;
-    };
+    let Some(rt) = through_impress(&deck, "tworuns") else { return };
     let text = all_text(&rt.slides[0]);
     assert!(
         text.contains("Plain Bold"),
@@ -1453,8 +1143,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
         return;
     }
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "T".into(),
         background: String::new(),
         background_picture: None,
@@ -1470,15 +1159,9 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
             runs: vec![
                 Run {
                     text: "Bold one".into(),
-                    style: RunStyle {
-                        bold: true,
-                        ..RunStyle::default()
-                    },
+                    style: RunStyle { bold: true, ..RunStyle::default() },
                 },
-                Run {
-                    text: "\nplain two".into(),
-                    style: RunStyle::default(),
-                },
+                Run { text: "\nplain two".into(), style: RunStyle::default() },
             ],
             body: Default::default(),
         }],
@@ -1522,10 +1205,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
     let SlideObject::TextBox { text, runs, .. } = &rt.slides[0].objects[0] else {
         panic!("the pptx text box came back as a different object kind");
     };
-    assert!(
-        text.contains('\n'),
-        "pptx: the line break is gone: {text:?}"
-    );
+    assert!(text.contains('\n'), "pptx: the line break is gone: {text:?}");
     assert_eq!(
         runs.iter().map(|r| r.text.as_str()).collect::<String>(),
         *text,
@@ -1599,8 +1279,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
         return;
     }
     let mut deck = Deck::new();
-    deck.slides = vec![Slide {
-        hidden: false,
+    deck.slides = vec![Slide { hidden: false,
         title: "T".into(),
         background: String::new(),
         background_picture: None,
@@ -1648,10 +1327,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
     write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
     let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
     close(
-        geom(
-            &odp::read(to_odp.to_str().unwrap()).expect("read odp"),
-            "pptx->odp",
-        ),
+        geom(&odp::read(to_odp.to_str().unwrap()).expect("read odp"), "pptx->odp"),
         "pptx -> Impress -> odp",
     );
 
@@ -1659,10 +1335,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
     odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
     let to_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
     close(
-        geom(
-            &read_pptx(to_pptx.to_str().unwrap()).expect("read pptx"),
-            "odp->pptx",
-        ),
+        geom(&read_pptx(to_pptx.to_str().unwrap()).expect("read pptx"), "odp->pptx"),
         "odp -> Impress -> pptx",
     );
 }
@@ -1711,9 +1384,7 @@ fn a_slide_name_reaches_impress_from_our_pptx() {
 #[test]
 fn paragraph_styles_survive_impress_rewrite() {
     use decks_core::engine::{Bullet, ParaAlign, ParaStyle, TextBody};
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let bullet = |level: u8, c: &str| ParaStyle {
         level,
         bullet: Bullet::Char(c.into()),
@@ -1724,21 +1395,11 @@ fn paragraph_styles_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "Centred\nFirst\nSub".into(),
-        x: 60.0,
-        y: 60.0,
-        w: 600.0,
-        h: 300.0,
+        x: 60.0, y: 60.0, w: 600.0, h: 300.0,
         rotation: 0.0,
         runs: vec![],
         body: TextBody {
-            paras: vec![
-                ParaStyle {
-                    align: ParaAlign::Center,
-                    ..Default::default()
-                },
-                bullet(0, "•"),
-                bullet(1, "–"),
-            ],
+            paras: vec![ParaStyle { align: ParaAlign::Center, ..Default::default() }, bullet(0, "•"), bullet(1, "–")],
             ..Default::default()
         },
     });
@@ -1752,22 +1413,14 @@ fn paragraph_styles_survive_impress_rewrite() {
             .objects
             .iter()
             .find_map(|o| match o {
-                SlideObject::TextBox { text, body, .. } if text.contains("First") => {
-                    Some(body.clone())
-                }
+                SlideObject::TextBox { text, body, .. } if text.contains("First") => Some(body.clone()),
                 _ => None,
             })
             .unwrap_or_else(|| panic!("{kind}: the box is gone: {:?}", read.slides[0].objects));
         assert_eq!(body.para(0).align, ParaAlign::Center, "{kind}: {body:?}");
-        assert!(
-            matches!(body.para(1).bullet, Bullet::Char(_)),
-            "{kind}: {body:?}"
-        );
+        assert!(matches!(body.para(1).bullet, Bullet::Char(_)), "{kind}: {body:?}");
         assert_eq!(body.para(2).level, 1, "{kind}: {body:?}");
-        assert!(
-            matches!(body.para(2).bullet, Bullet::Char(_)),
-            "{kind}: {body:?}"
-        );
+        assert!(matches!(body.para(2).bullet, Bullet::Char(_)), "{kind}: {body:?}");
     }
 }
 
@@ -1777,9 +1430,7 @@ fn paragraph_styles_survive_impress_rewrite() {
 #[test]
 fn impress_takes_the_fallback_of_our_magic_move() {
     use decks_core::engine::Transition;
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     let mut second = deck.slides[0].clone();
     second.transition = Transition::MagicMove;
@@ -1790,11 +1441,7 @@ fn impress_takes_the_fallback_of_our_magic_move() {
     let back = convert(&path, "pptx").expect("Impress could not import our Morph");
     let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's pptx");
     assert_eq!(read.slides.len(), 2);
-    assert_ne!(
-        read.slides[1].transition,
-        Transition::None,
-        "the fade fallback was kept"
-    );
+    assert_ne!(read.slides[1].transition, Transition::None, "the fade fallback was kept");
 }
 
 /// Slide transitions we write to odp are ones LibreOffice keeps: after it
@@ -1805,25 +1452,21 @@ fn impress_takes_the_fallback_of_our_magic_move() {
 #[test]
 fn impress_keeps_our_odp_transitions() {
     use decks_core::engine::Transition;
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     let base = deck.slides[0].clone();
-    deck.slides = Transition::ALL
-        .iter()
-        .map(|t| Slide {
-            transition: *t,
-            ..base.clone()
-        })
-        .collect();
+    deck.slides = Transition::ALL.iter().map(|t| Slide { transition: *t, ..base.clone() }).collect();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("transitions.odp");
     decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write odp");
     let back = convert(&path, "odp").expect("Impress rewrites our odp");
     let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's odp");
     let got: Vec<Transition> = read.slides.iter().map(|s| s.transition).collect();
-    assert_eq!(got, Transition::ALL.to_vec(), "Impress's odp");
+    assert_eq!(
+        got,
+        Transition::ALL.to_vec(),
+        "Impress's odp"
+    );
 }
 
 /// The builds we write are ones LibreOffice understands: after it rewrites
@@ -1832,17 +1475,12 @@ fn impress_keeps_our_odp_transitions() {
 #[test]
 fn impress_keeps_our_object_builds() {
     use decks_core::builds::{Build, BuildEffect, Edge};
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     for (i, y) in [60.0, 200.0, 340.0].into_iter().enumerate() {
         deck.slides[0].objects.push(SlideObject::TextBox {
             text: format!("Point {}", i + 1),
-            x: 60.0,
-            y,
-            w: 400.0,
-            h: 60.0,
+            x: 60.0, y, w: 400.0, h: 60.0,
             rotation: 0.0,
             runs: vec![],
             body: Default::default(),
@@ -1851,68 +1489,28 @@ fn impress_keeps_our_object_builds() {
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
     let ids = deck.slides[0].ids.objects.clone();
     let builds = vec![
-        Build {
-            object: ids[0],
-            effect: BuildEffect::Appear,
-            out: false,
-        },
-        Build {
-            object: ids[1],
-            effect: BuildEffect::Dissolve,
-            out: false,
-        },
-        Build {
-            object: ids[2],
-            effect: BuildEffect::Move(Edge::Left),
-            out: false,
-        },
-        Build {
-            object: ids[0],
-            effect: BuildEffect::Dissolve,
-            out: true,
-        },
+        Build { object: ids[0], effect: BuildEffect::Appear, out: false },
+        Build { object: ids[1], effect: BuildEffect::Dissolve, out: false },
+        Build { object: ids[2], effect: BuildEffect::Move(Edge::Left), out: false },
+        Build { object: ids[0], effect: BuildEffect::Dissolve, out: true },
     ];
     deck.slides[0].builds = builds.clone();
-    let want: Vec<(String, BuildEffect, bool)> = builds
-        .iter()
-        .map(|b| {
-            (
-                format!(
-                    "Point {}",
-                    deck.slides[0].object_index(b.object).unwrap() + 1
-                ),
-                b.effect,
-                b.out,
-            )
-        })
-        .collect();
+    let want: Vec<(String, BuildEffect, bool)> =
+        builds.iter().map(|b| (format!("Point {}", deck.slides[0].object_index(b.object).unwrap() + 1), b.effect, b.out)).collect();
     // Both formats, each rewritten by LibreOffice in the same format.
     for kind in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("builds.{kind}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-        let back =
-            convert(&path, kind).unwrap_or_else(|e| panic!("Impress rewrites our {kind}: {e}"));
+        let back = convert(&path, kind).unwrap_or_else(|e| panic!("Impress rewrites our {kind}: {e}"));
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
         let texts: Vec<String> = read.slides[0]
             .objects
             .iter()
-            .map(|o| match o {
-                SlideObject::TextBox { text, .. } => text.clone(),
-                _ => String::new(),
-            })
+            .map(|o| match o { SlideObject::TextBox { text, .. } => text.clone(), _ => String::new() })
             .collect();
-        let got: Vec<(String, BuildEffect, bool)> = read.slides[0]
-            .builds
-            .iter()
-            .map(|b| {
-                (
-                    texts[read.slides[0].object_index(b.object).unwrap()].clone(),
-                    b.effect,
-                    b.out,
-                )
-            })
-            .collect();
+        let got: Vec<(String, BuildEffect, bool)> =
+            read.slides[0].builds.iter().map(|b| (texts[read.slides[0].object_index(b.object).unwrap()].clone(), b.effect, b.out)).collect();
         assert_eq!(got, want, "{kind}");
     }
 }
@@ -1932,13 +1530,7 @@ fn impress_sees_the_slide_size_we_kept() {
         let dir = tempfile::tempdir().unwrap();
         let mut deck = Deck::new();
         deck.page_size = Some(size);
-        deck.slides[0].objects = vec![SlideObject::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 960.0,
-            h: 540.0,
-            rotation: 0.0,
-        }];
+        deck.slides[0].objects = vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 960.0, h: 540.0, rotation: 0.0 }];
         let source = dir.path().join("source.pptx");
         write_pptx(source.to_str().unwrap(), &deck).expect("write the source");
         // Open and save, as the app does.
@@ -1949,25 +1541,18 @@ fn impress_sees_the_slide_size_we_kept() {
         write_pptx(saved.to_str().unwrap(), &opened).expect("save");
         for kind in ["pptx", "odp"] {
             let impress = |path: &std::path::Path| {
-                let back = convert(path, kind)
-                    .unwrap_or_else(|e| panic!("Impress rewrites {path:?} as {kind}: {e}"));
-                let read =
-                    decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+                let back = convert(path, kind).unwrap_or_else(|e| panic!("Impress rewrites {path:?} as {kind}: {e}"));
+                let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
                 let geometry = read.slides[0].objects.first().map(|o| format!("{o:?}"));
                 (read.page_size, geometry)
             };
             let (from_source, from_saved) = (impress(&source), impress(&saved));
-            let (cx, cy) = from_source
-                .0
-                .unwrap_or_else(|| panic!("{kind}: Impress lost the source's own size"));
+            let (cx, cy) = from_source.0.unwrap_or_else(|| panic!("{kind}: Impress lost the source's own size"));
             assert!(
                 (cx - 9_144_000.0).abs() > 100_000.0 || (cy - 5_143_500.0).abs() > 100_000.0,
                 "{kind}: the source already reads as our 16:9 default: {cx}x{cy}"
             );
-            assert_eq!(
-                from_saved, from_source,
-                "{kind} {size:?}: Impress sees our saved deck differently from its source"
-            );
+            assert_eq!(from_saved, from_source, "{kind} {size:?}: Impress sees our saved deck differently from its source");
         }
     }
 }
@@ -1979,24 +1564,12 @@ fn notes_paragraphs_survive_impress_in_both_formats() {
     // must keep every paragraph, in order, blank line included.
     let notes = "Open with the question.\nThen the three numbers — 12, 40, 7.\n\nPause for questions; café at 15:00.";
     let mut deck = Deck::new();
-    deck.slides = vec![
-        text_slide("T", "body", notes),
-        text_slide("U", "second", ""),
-    ];
-    let rewrites = [
-        ("pptx", through_impress(&deck, "notesparas")),
-        ("odp", odp_through_impress(&deck, "notesparas")),
-    ];
+    deck.slides = vec![text_slide("T", "body", notes), text_slide("U", "second", "")];
+    let rewrites = [("pptx", through_impress(&deck, "notesparas")), ("odp", odp_through_impress(&deck, "notesparas"))];
     for (kind, rt) in rewrites {
         let Some(rt) = rt else { return };
-        assert_eq!(
-            rt.slides[0].notes, notes,
-            "{kind}: Impress changed the notes"
-        );
-        assert_eq!(
-            rt.slides[1].notes, "",
-            "{kind}: a slide without notes gained some"
-        );
+        assert_eq!(rt.slides[0].notes, notes, "{kind}: Impress changed the notes");
+        assert_eq!(rt.slides[1].notes, "", "{kind}: a slide without notes gained some");
     }
 }
 
@@ -2015,16 +1588,7 @@ fn impress_sees_our_odp_on_the_decks_own_page() {
         deck.page_size = Some(size);
         // Painted by us, so its look doesn't depend on each format's
         // default style in Impress.
-        let style = decks_core::engine::shape::ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
-            fill: Some(decks_core::engine::shape::Color(0x20, 0x40, 0x60)),
-            gradient: None,
-            stroke: None,
-            fill_src: None,
-            stroke_src: None,
-        };
+        let style = decks_core::engine::shape::ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(decks_core::engine::shape::Color(0x20, 0x40, 0x60)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
         deck.slides[0].objects = vec![SlideObject::Shape {
             kind: decks_core::engine::shape::ShapeKind::Rect,
             x: 0.0,
@@ -2040,34 +1604,22 @@ fn impress_sees_our_odp_on_the_decks_own_page() {
             std::fs::create_dir_all(&sub).unwrap();
             let ours = sub.join(format!("deck.{ext}"));
             decks_core::write_deck(ours.to_str().unwrap(), &deck).expect("write");
-            let back =
-                convert(&ours, "odp").unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+            let back = convert(&ours, "odp").unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
             let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's odp");
-            let Some(SlideObject::Shape {
-                x, y, w, h, style, ..
-            }) = read.slides[0].objects.first().cloned()
-            else {
+            let Some(SlideObject::Shape { x, y, w, h, style, .. }) = read.slides[0].objects.first().cloned() else {
                 panic!("{ext}: the shape came back as {:?}", read.slides[0].objects)
             };
             seen.push((read.page_size, (x, y, w, h), style));
         }
         let (pptx, odp) = (&seen[0], &seen[1]);
         assert!(pptx.0.is_some(), "{size:?}: Impress lost the pptx's size");
-        assert_eq!(
-            odp.0, pptx.0,
-            "{size:?}: Impress sees our odp's page differently from our pptx's"
-        );
+        assert_eq!(odp.0, pptx.0, "{size:?}: Impress sees our odp's page differently from our pptx's");
         assert_eq!(odp.2, pptx.2, "{size:?}: the paint");
         // Impress keeps lengths in hundredths of a millimetre. EMU convert
         // to them exactly and our odp's points don't, so the two can differ
         // by that one unit, and by no more: here, in model units.
         let unit = 0.01 / 25.4 * 914_400.0 * 960.0 / size.0;
-        let g = [
-            (odp.1 .0, pptx.1 .0),
-            (odp.1 .1, pptx.1 .1),
-            (odp.1 .2, pptx.1 .2),
-            (odp.1 .3, pptx.1 .3),
-        ];
+        let g = [(odp.1 .0, pptx.1 .0), (odp.1 .1, pptx.1 .1), (odp.1 .2, pptx.1 .2), (odp.1 .3, pptx.1 .3)];
         assert!(
             g.iter().all(|(a, b)| (a - b).abs() <= unit + 1e-9),
             "{size:?}: Impress places our odp's shape at {:?}, our pptx's at {:?} (one 1/100 mm is {unit})",
@@ -2086,60 +1638,30 @@ fn impress_keeps_a_themes_decorations_in_both_formats() {
     }
     let look = |o: &SlideObject| -> String {
         match o {
-            SlideObject::Shape {
-                kind,
-                x,
-                y,
-                w,
-                h,
-                style,
-                ..
-            } => {
+            SlideObject::Shape { kind, x, y, w, h, style, .. } => {
                 let r = |v: &f64| v.round();
-                format!(
-                    "{kind:?} {} {} {} {} {:?} {:?}",
-                    r(x),
-                    r(y),
-                    r(w),
-                    r(h),
-                    style.fill,
-                    style.gradient
-                )
+                format!("{kind:?} {} {} {} {} {:?} {:?}", r(x), r(y), r(w), r(h), style.fill, style.gradient)
             }
             other => format!("{other:?}"),
         }
     };
     for (i, t) in decks_core::templates::templates().iter().enumerate() {
         let (slides, masters) = decks_core::templates::deck(i).unwrap();
-        let deck = Deck {
-            slides,
-            masters,
-            page_size: None,
-            themes: Vec::new(),
-            skipped_slides: Vec::new(),
-        };
+        let deck = Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
         let want: Vec<String> = deck.masters[0].shapes.iter().map(look).collect();
         for ext in ["pptx", "odp"] {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join(format!("theme.{ext}"));
             decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-            let back =
-                convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+            let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
             let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
             // Impress makes a master of each layout a slide uses (its own
             // model has no layouts), so the theme's decorations are on each
             // master a slide is on.
             for s in &read.slides {
-                let m = s
-                    .master_id
-                    .and_then(|id| read.masters.iter().find(|m| m.id == id))
-                    .unwrap_or(&read.masters[0]);
+                let m = s.master_id.and_then(|id| read.masters.iter().find(|m| m.id == id)).unwrap_or(&read.masters[0]);
                 let got: Vec<String> = m.shapes.iter().map(look).collect();
-                assert_eq!(
-                    got, want,
-                    "{} {ext}: the master's decorations through Impress",
-                    t.name
-                );
+                assert_eq!(got, want, "{} {ext}: the master's decorations through Impress", t.name);
             }
         }
     }
@@ -2157,62 +1679,24 @@ fn impress_turns_our_odp_gradient_into_the_same_drawingml_gradient() {
     use decks_core::engine::shape::{Color, GradientStop, LinearGradient, ShapeKind, ShapeStyle};
     for angle in [0.0, 90.0, 45.0] {
         let gradient = LinearGradient {
-            stops: vec![
-                GradientStop {
-                    pos: 0.0,
-                    color: Color(0x0B, 0x3D, 0x6B),
-                },
-                GradientStop {
-                    pos: 1.0,
-                    color: Color(0x13, 0x8D, 0x9C),
-                },
-            ],
+            stops: vec![GradientStop { pos: 0.0, color: Color(0x0B, 0x3D, 0x6B) }, GradientStop { pos: 1.0, color: Color(0x13, 0x8D, 0x9C) }],
             angle,
         };
-        let style = ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
-            fill: gradient.mean(),
-            gradient: Some(gradient.clone()),
-            stroke: None,
-            fill_src: None,
-            stroke_src: None,
-        };
+        let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: gradient.mean(), gradient: Some(gradient.clone()), stroke: None, fill_src: None, stroke_src: None };
         let mut deck = Deck::new();
-        deck.slides[0].objects = vec![SlideObject::Shape {
-            kind: ShapeKind::Rect,
-            x: 100.0,
-            y: 100.0,
-            w: 300.0,
-            h: 200.0,
-            rotation: 0.0,
-            style,
-        }];
+        deck.slides[0].objects = vec![SlideObject::Shape { kind: ShapeKind::Rect, x: 100.0, y: 100.0, w: 300.0, h: 200.0, rotation: 0.0, style }];
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("gradient.odp");
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write odp");
-        let back =
-            convert(&path, "pptx").unwrap_or_else(|e| panic!("Impress saves our odp as pptx: {e}"));
+        let back = convert(&path, "pptx").unwrap_or_else(|e| panic!("Impress saves our odp as pptx: {e}"));
         let read = read_pptx(back.to_str().unwrap()).expect("read Impress's pptx");
         match read.slides[0].objects.first() {
             Some(SlideObject::Shape { style, .. }) => {
-                let got = style
-                    .gradient
-                    .as_ref()
-                    .unwrap_or_else(|| panic!("{angle}: no gradient: {style:?}"));
+                let got = style.gradient.as_ref().unwrap_or_else(|| panic!("{angle}: no gradient: {style:?}"));
                 assert_eq!(got.angle, angle, "{angle}: Impress turned our gradient");
                 let colors: Vec<Color> = got.stops.iter().map(|s| s.color).collect();
-                assert_eq!(
-                    colors.first(),
-                    Some(&gradient.stops[0].color),
-                    "{angle}: start colour"
-                );
-                assert_eq!(
-                    colors.last(),
-                    Some(&gradient.stops[1].color),
-                    "{angle}: end colour"
-                );
+                assert_eq!(colors.first(), Some(&gradient.stops[0].color), "{angle}: start colour");
+                assert_eq!(colors.last(), Some(&gradient.stops[1].color), "{angle}: end colour");
             }
             other => panic!("{angle}: the shape came back as {other:?}"),
         }
@@ -2231,59 +1715,24 @@ fn impress_keeps_a_master_view_edit() {
     let (slides, masters) = decks_core::templates::deck(3).unwrap();
     let c = decks_core::DecksController::new(slides, masters);
     c.edit_master(c.slide_id_at(0).unwrap()).unwrap();
-    let style = ShapeStyle {
-        glow: None,
-        shadow: None,
-        fill_alpha: None,
-        fill: Some(Color(0xE0, 0x1B, 0x24)),
-        gradient: None,
-        stroke: None,
-        fill_src: None,
-        stroke_src: None,
-    };
+    let style = ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: None, stroke_src: None };
     let mslide = c.slide_id_at(0).unwrap();
-    c.add_object(
-        mslide,
-        SlideObject::Shape {
-            kind: ShapeKind::Triangle,
-            x: 860.0,
-            y: 20.0,
-            w: 80.0,
-            h: 80.0,
-            rotation: 0.0,
-            style: style.clone(),
-        },
-    );
+    c.add_object(mslide, SlideObject::Shape { kind: ShapeKind::Triangle, x: 860.0, y: 20.0, w: 80.0, h: 80.0, rotation: 0.0, style: style.clone() });
     c.finish_master().unwrap();
     let deck = c.deck();
     for ext in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("master.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-        let back =
-            convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
         let found = read.masters.iter().flat_map(|m| &m.shapes).any(|o| {
             matches!(o, SlideObject::Shape { kind: ShapeKind::Triangle, x, y, w, h, style: s, .. }
                 if x.round() == 860.0 && y.round() == 20.0 && w.round() == 80.0 && h.round() == 80.0 && s.fill == style.fill)
         });
-        assert!(
-            found,
-            "{ext}: the master's triangle through Impress: {:#?}",
-            read.masters
-        );
-        assert!(
-            read.slides
-                .iter()
-                .all(|s| !s.objects.iter().any(|o| matches!(
-                    o,
-                    SlideObject::Shape {
-                        kind: ShapeKind::Triangle,
-                        ..
-                    }
-                ))),
-            "{ext}: the triangle is on the master, not a slide"
-        );
+        assert!(found, "{ext}: the master's triangle through Impress: {:#?}", read.masters);
+        assert!(read.slides.iter().all(|s| !s.objects.iter().any(|o| matches!(o, SlideObject::Shape { kind: ShapeKind::Triangle, .. }))),
+            "{ext}: the triangle is on the master, not a slide");
     }
 }
 
@@ -2309,24 +1758,13 @@ fn impress_keeps_our_layouts_and_placeholders() {
                 let kind = s
                     .master_id
                     .and_then(|id| d.masters.iter().find(|m| m.id == id))
-                    .and_then(|m| {
-                        s.layout_id
-                            .and_then(|lid| m.layouts.iter().find(|l| l.id == lid))
-                    })
+                    .and_then(|m| s.layout_id.and_then(|lid| m.layouts.iter().find(|l| l.id == lid)))
                     .map(|l| format!("{:?}", l.kind));
                 let boxes: Vec<String> = s
                     .objects
                     .iter()
                     .filter_map(|o| match o {
-                        SlideObject::TextBox {
-                            text,
-                            x,
-                            y,
-                            w,
-                            h,
-                            body,
-                            ..
-                        } => Some(format!(
+                        SlideObject::TextBox { text, x, y, w, h, body, .. } => Some(format!(
                             "{:?} {:?} {} {} {} {} {:?}",
                             body.placeholder,
                             body.anchor,
@@ -2348,14 +1786,9 @@ fn impress_keeps_our_layouts_and_placeholders() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("layouts.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-        let back =
-            convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-        assert_eq!(
-            summary(&read),
-            want,
-            "{ext}: layouts and placeholders through Impress"
-        );
+        assert_eq!(summary(&read), want, "{ext}: layouts and placeholders through Impress");
     }
 }
 
@@ -2368,9 +1801,7 @@ fn charts_of(d: &Deck) -> Vec<String> {
         .iter()
         .flat_map(|s| &s.objects)
         .filter_map(|o| match o {
-            SlideObject::Chart {
-                x, y, w, h, chart, ..
-            } => Some(format!(
+            SlideObject::Chart { x, y, w, h, chart, .. } => Some(format!(
                 "{:?} {:?} {:?} {} {} {} {}",
                 chart.kind,
                 chart.series,
@@ -2414,14 +1845,9 @@ fn charts_through_impress(from: &str, to: &str) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(format!("charts.{from}"));
     decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-    let back =
-        convert(&path, to).unwrap_or_else(|e| panic!("Impress converts our {from} to {to}: {e}"));
+    let back = convert(&path, to).unwrap_or_else(|e| panic!("Impress converts our {from} to {to}: {e}"));
     let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-    assert_eq!(
-        charts_of(&read),
-        charts_of(&deck),
-        "{from} -> Impress -> {to}"
-    );
+    assert_eq!(charts_of(&read), charts_of(&deck), "{from} -> Impress -> {to}");
 }
 
 #[test]
@@ -2459,16 +1885,8 @@ fn the_crop(deck: &Deck) -> decks_core::engine::Crop {
 }
 
 fn close(a: decks_core::engine::Crop, b: decks_core::engine::Crop, what: &str) {
-    for (x, y, side) in [
-        (a.left, b.left, "left"),
-        (a.top, b.top, "top"),
-        (a.right, b.right, "right"),
-        (a.bottom, b.bottom, "bottom"),
-    ] {
-        assert!(
-            (x - y).abs() < 0.01,
-            "{what}: {side} crop {x} != {y} ({a:?} vs {b:?})"
-        );
+    for (x, y, side) in [(a.left, b.left, "left"), (a.top, b.top, "top"), (a.right, b.right, "right"), (a.bottom, b.bottom, "bottom")] {
+        assert!((x - y).abs() < 0.01, "{what}: {side} crop {x} != {y} ({a:?} vs {b:?})");
     }
 }
 
@@ -2477,58 +1895,31 @@ fn close(a: decks_core::engine::Crop, b: decks_core::engine::Crop, what: &str) {
 /// odp reader, and our odp → Impress's pptx → our pptx reader.
 #[test]
 fn a_picture_crop_survives_impress_both_ways() {
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let dir = tempfile::tempdir().unwrap();
     let png = dir.path().join("photo.png");
     std::fs::write(&png, picture_support::picture(400, 300, 7)).unwrap();
-    let crop = decks_core::engine::Crop {
-        left: 0.25,
-        top: 0.1,
-        right: 0.0,
-        bottom: 0.2,
-    };
+    let crop = decks_core::engine::Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
     let mut deck = Deck::new();
     deck.slides[0].objects.push(SlideObject::Image {
         path: png.to_string_lossy().to_string(),
-        x: 100.0,
-        y: 100.0,
-        w: 300.0,
-        h: 210.0,
-        rotation: 0.0,
-        crop,
+        x: 100.0, y: 100.0, w: 300.0, h: 210.0,
+        rotation: 0.0, crop,
     });
 
     let ours_pptx = dir.path().join("crop.pptx");
     write_pptx(ours_pptx.to_str().unwrap(), &deck).unwrap();
-    close(
-        the_crop(&read_pptx(ours_pptx.to_str().unwrap()).unwrap()),
-        crop,
-        "our own pptx",
-    );
+    close(the_crop(&read_pptx(ours_pptx.to_str().unwrap()).unwrap()), crop, "our own pptx");
     let impress_odp = convert(&ours_pptx, "odp").expect("Impress converts our pptx");
-    close(
-        the_crop(&odp::read(impress_odp.to_str().unwrap()).unwrap()),
-        crop,
-        "Impress's odp of our pptx",
-    );
+    close(the_crop(&odp::read(impress_odp.to_str().unwrap()).unwrap()), crop, "Impress's odp of our pptx");
 
     let odp_dir = dir.path().join("odp");
     std::fs::create_dir_all(&odp_dir).unwrap();
     let ours_odp = odp_dir.join("crop.odp");
     odp::write(&deck, ours_odp.to_str().unwrap()).unwrap();
-    close(
-        the_crop(&odp::read(ours_odp.to_str().unwrap()).unwrap()),
-        crop,
-        "our own odp",
-    );
+    close(the_crop(&odp::read(ours_odp.to_str().unwrap()).unwrap()), crop, "our own odp");
     let impress_pptx = convert(&ours_odp, "pptx").expect("Impress converts our odp");
-    close(
-        the_crop(&read_pptx(impress_pptx.to_str().unwrap()).unwrap()),
-        crop,
-        "Impress's pptx of our odp",
-    );
+    close(the_crop(&read_pptx(impress_pptx.to_str().unwrap()).unwrap()), crop, "Impress's pptx of our odp");
 }
 
 #[test]
@@ -2539,100 +1930,36 @@ fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
         return;
     }
     use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle, Stroke};
-    let shape =
-        |kind: ShapeKind, x: f64, rotation: f64, fill: Color, line: Color| SlideObject::Shape {
-            kind,
-            x,
-            y: 120.0,
-            w: 160.0,
-            h: 100.0,
-            rotation,
-            style: ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(fill),
-                gradient: None,
-                stroke: Some(Stroke {
-                    color: line,
-                    width: 3.0,
-                }),
-                fill_src: None,
-                stroke_src: None,
-            },
-        };
+    let shape = |kind: ShapeKind, x: f64, rotation: f64, fill: Color, line: Color| SlideObject::Shape {
+        kind,
+        x,
+        y: 120.0,
+        w: 160.0,
+        h: 100.0,
+        rotation,
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(fill), gradient: None, stroke: Some(Stroke { color: line, width: 3.0 }), fill_src: None, stroke_src: None },
+    };
     let mut deck = Deck::new();
     deck.slides[0].objects = vec![
-        shape(
-            ShapeKind::Rect,
-            20.0,
-            0.0,
-            Color(0xE0, 0x1B, 0x24),
-            Color(0x10, 0x20, 0x30),
-        ),
-        shape(
-            ShapeKind::RoundRect { radius: 0.25 },
-            200.0,
-            30.0,
-            Color(0x26, 0xA2, 0x69),
-            Color(0x40, 0x00, 0x40),
-        ),
-        shape(
-            ShapeKind::Ellipse,
-            380.0,
-            0.0,
-            Color(0x35, 0x84, 0xE4),
-            Color(0x80, 0x40, 0x00),
-        ),
-        shape(
-            ShapeKind::Triangle,
-            560.0,
-            315.0,
-            Color(0xF6, 0xD3, 0x2D),
-            Color(0x00, 0x00, 0x00),
-        ),
-        shape(
-            ShapeKind::Diamond,
-            740.0,
-            90.0,
-            Color(0x91, 0x41, 0xAC),
-            Color(0xFF, 0xFF, 0xFF),
-        ),
+        shape(ShapeKind::Rect, 20.0, 0.0, Color(0xE0, 0x1B, 0x24), Color(0x10, 0x20, 0x30)),
+        shape(ShapeKind::RoundRect { radius: 0.25 }, 200.0, 30.0, Color(0x26, 0xA2, 0x69), Color(0x40, 0x00, 0x40)),
+        shape(ShapeKind::Ellipse, 380.0, 0.0, Color(0x35, 0x84, 0xE4), Color(0x80, 0x40, 0x00)),
+        shape(ShapeKind::Triangle, 560.0, 315.0, Color(0xF6, 0xD3, 0x2D), Color(0x00, 0x00, 0x00)),
+        shape(ShapeKind::Diamond, 740.0, 90.0, Color(0x91, 0x41, 0xAC), Color(0xFF, 0xFF, 0xFF)),
     ];
     let want = deck.slides[0].objects.clone();
     for ext in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("shapes.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-        let back =
-            convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
         let got = &read.slides[0].objects;
-        assert_eq!(
-            got.len(),
-            want.len(),
-            "{ext}: the shapes came back as {got:?}"
-        );
+        assert_eq!(got.len(), want.len(), "{ext}: the shapes came back as {got:?}");
         for (w, g) in want.iter().zip(got) {
             let (
-                SlideObject::Shape {
-                    kind: wk,
-                    x: wx,
-                    y: wy,
-                    w: ww,
-                    h: wh,
-                    rotation: wr,
-                    style: ws,
-                },
-                SlideObject::Shape {
-                    kind: gk,
-                    x: gx,
-                    y: gy,
-                    w: gw,
-                    h: gh,
-                    rotation: gr,
-                    style: gs,
-                },
+                SlideObject::Shape { kind: wk, x: wx, y: wy, w: ww, h: wh, rotation: wr, style: ws },
+                SlideObject::Shape { kind: gk, x: gx, y: gy, w: gw, h: gh, rotation: gr, style: gs },
             ) = (w, g)
             else {
                 panic!("{ext}: {w:?} came back as {g:?}")
@@ -2645,20 +1972,11 @@ fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
                 _ => assert_eq!(wk, gk, "{what}: the preset"),
             }
             assert_eq!(gs.fill, ws.fill, "{what}: the fill");
-            let (Some(wl), Some(gl)) = (&ws.stroke, &gs.stroke) else {
-                panic!("{what}: the outline came back as {:?}", gs.stroke)
-            };
+            let (Some(wl), Some(gl)) = (&ws.stroke, &gs.stroke) else { panic!("{what}: the outline came back as {:?}", gs.stroke) };
             assert_eq!(gl.color, wl.color, "{what}: the outline colour");
-            assert!(
-                (gl.width - wl.width).abs() < 0.1,
-                "{what}: the outline width {}",
-                gl.width
-            );
+            assert!((gl.width - wl.width).abs() < 0.1, "{what}: the outline width {}", gl.width);
             let turn = (gr - wr).rem_euclid(360.0);
-            assert!(
-                turn < 0.1 || turn > 359.9,
-                "{what}: rotation {gr}, wrote {wr}"
-            );
+            assert!(turn < 0.1 || turn > 359.9, "{what}: rotation {gr}, wrote {wr}");
             for (a, b, n) in [(gx, wx, "x"), (gy, wy, "y"), (gw, ww, "w"), (gh, wh, "h")] {
                 assert!((a - b).abs() < 0.5, "{what}: {n} {a}, wrote {b}");
             }
@@ -2677,77 +1995,36 @@ fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
 #[test]
 fn text_and_run_styling_survive_a_conversion_between_the_two_formats() {
     use decks_core::odp;
-    if !require_or_skip() {
-        return;
-    }
+    if !require_or_skip() { return; }
     let mut deck = Deck::new();
     deck.slides = vec![styled_run_slide(vec![
-        Run {
-            text: "plain ".into(),
-            style: RunStyle::default(),
-        },
-        Run {
-            text: "bold".into(),
-            style: RunStyle {
-                bold: true,
-                ..Default::default()
-            },
-        },
-        Run {
-            text: " and ".into(),
-            style: RunStyle::default(),
-        },
-        Run {
-            text: "red".into(),
-            style: RunStyle {
-                color: Some("cc0000".into()),
-                ..Default::default()
-            },
-        },
+        Run { text: "plain ".into(), style: RunStyle::default() },
+        Run { text: "bold".into(), style: RunStyle { bold: true, ..Default::default() } },
+        Run { text: " and ".into(), style: RunStyle::default() },
+        Run { text: "red".into(), style: RunStyle { color: Some("cc0000".into()), ..Default::default() } },
     ])];
     let check = |rt: &Deck, what: &str| {
         let runs = runs_of(&rt.slides[0]);
         let text: String = runs.iter().map(|r| r.text.as_str()).collect();
-        assert_eq!(
-            text.trim(),
-            "plain bold and red",
-            "the text after {what}: {runs:?}"
-        );
-        let bold: String = runs
-            .iter()
-            .filter(|r| r.style.bold)
-            .map(|r| r.text.as_str())
-            .collect();
+        assert_eq!(text.trim(), "plain bold and red", "the text after {what}: {runs:?}");
+        let bold: String = runs.iter().filter(|r| r.style.bold).map(|r| r.text.as_str()).collect();
         assert_eq!(bold.trim(), "bold", "bold after {what}: {runs:?}");
-        let red = runs
-            .iter()
-            .find(|r| r.text.contains("red"))
-            .expect("the red run");
-        assert_eq!(
-            red.style.color.as_deref().map(str::to_lowercase),
-            Some("cc0000".into()),
-            "colour after {what}: {runs:?}"
-        );
+        let red = runs.iter().find(|r| r.text.contains("red")).expect("the red run");
+        assert_eq!(red.style.color.as_deref().map(str::to_lowercase), Some("cc0000".into()), "colour after {what}: {runs:?}");
     };
     let dir = tempfile::tempdir().unwrap();
 
     let as_odp = dir.path().join("styled.odp");
     odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
     let to_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
-    check(
-        &read_pptx(to_pptx.to_str().unwrap()).expect("read Impress's pptx"),
-        "odp -> Impress -> pptx",
-    );
+    check(&read_pptx(to_pptx.to_str().unwrap()).expect("read Impress's pptx"), "odp -> Impress -> pptx");
 
     let sub = dir.path().join("b");
     std::fs::create_dir_all(&sub).unwrap();
     let as_pptx = sub.join("styled.pptx");
     write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
     let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
-    check(
-        &odp::read(to_odp.to_str().unwrap()).expect("read Impress's odp"),
-        "pptx -> Impress -> odp",
-    );
+    check(&odp::read(to_odp.to_str().unwrap()).expect("read Impress's odp"), "pptx -> Impress -> odp");
 }
 
 /// A merged table cell survives Impress rewriting our pptx: the title still
@@ -2758,52 +2035,20 @@ fn a_merged_table_cell_survives_impress() {
         return;
     }
     use decks_core::engine::table::{TableCell, TableData};
-    let cell = |t: &str| TableCell {
-        runs: vec![suite_common_core::document::Run::plain(t)],
-        ..Default::default()
-    };
+    let cell = |t: &str| TableCell { runs: vec![suite_common_core::document::Run::plain(t)], ..Default::default() };
     let rows = vec![
-        vec![
-            TableCell {
-                col_span: 2,
-                ..cell("Title")
-            },
-            TableCell {
-                covered: true,
-                ..Default::default()
-            },
-        ],
+        vec![TableCell { col_span: 2, ..cell("Title") }, TableCell { covered: true, ..Default::default() }],
         vec![cell("a"), cell("b")],
     ];
-    let table = TableData {
-        col_widths: vec![200.0, 200.0],
-        row_heights: vec![40.0, 40.0],
-        rows,
-        first_row: true,
-        ..Default::default()
-    };
+    let table = TableData { col_widths: vec![200.0, 200.0], row_heights: vec![40.0, 40.0], rows, first_row: true, ..Default::default() };
     let mut deck = Deck::new();
-    deck.slides[0].objects = vec![SlideObject::Table {
-        x: 100.0,
-        y: 100.0,
-        w: 400.0,
-        h: 80.0,
-        rotation: 0.0,
-        table,
-    }];
+    deck.slides[0].objects = vec![SlideObject::Table { x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, table }];
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("spans.pptx");
     write_pptx(path.to_str().unwrap(), &deck).expect("write");
     let back = convert(&path, "pptx").expect("Impress rewrites our pptx");
     let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-    let t = read.slides[0]
-        .objects
-        .iter()
-        .find_map(|o| match o {
-            SlideObject::Table { table, .. } => Some(table.clone()),
-            _ => None,
-        })
-        .expect("a table");
+    let t = read.slides[0].objects.iter().find_map(|o| match o { SlideObject::Table { table, .. } => Some(table.clone()), _ => None }).expect("a table");
     assert_eq!(t.rows[0][0].span(), (2, 1), "{:?}", t.rows[0]);
     assert!(t.rows[0][1].covered, "{:?}", t.rows[0]);
     assert_eq!(t.rows[0][0].text(), "Title");
@@ -2849,17 +2094,7 @@ fn a_freeform_survives_impress_in_both_formats() {
     let wedge = FreePath {
         w: 1000.0,
         h: 1000.0,
-        cmds: vec![
-            PathCmd::Move(500.0, 500.0),
-            PathCmd::Line(1000.0, 500.0),
-            PathCmd::Arc {
-                wr: 500.0,
-                hr: 500.0,
-                start: 0.0,
-                swing: 90.0,
-            },
-            PathCmd::Close,
-        ],
+        cmds: vec![PathCmd::Move(500.0, 500.0), PathCmd::Line(1000.0, 500.0), PathCmd::Arc { wr: 500.0, hr: 500.0, start: 0.0, swing: 90.0 }, PathCmd::Close],
         fill: true,
         stroke: true,
     };
@@ -2871,32 +2106,15 @@ fn a_freeform_survives_impress_in_both_formats() {
         w: 200.0,
         h: 200.0,
         rotation: 0.0,
-        style: ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
-            fill: Some(Color(0x44, 0x72, 0xC4)),
-            gradient: None,
-            stroke: None,
-            fill_src: None,
-            stroke_src: None,
-        },
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
     }];
     for ext in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("freeform.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
-        let back =
-            convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-        let kinds: Vec<_> = read.slides[0]
-            .objects
-            .iter()
-            .filter_map(|o| match o {
-                SlideObject::Shape { kind, .. } => Some(kind.clone()),
-                _ => None,
-            })
-            .collect();
+        let kinds: Vec<_> = read.slides[0].objects.iter().filter_map(|o| match o { SlideObject::Shape { kind, .. } => Some(kind.clone()), _ => None }).collect();
         assert!(
             matches!(kinds.as_slice(), [ShapeKind::Freeform(p)] if p.len() == 1 && p[0].cmds.len() >= 3),
             "{ext}: {kinds:?}"

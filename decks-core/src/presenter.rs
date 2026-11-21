@@ -43,46 +43,29 @@ pub enum Advance {
 }
 
 impl Default for PresenterState {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 impl PresenterState {
     pub fn new() -> Self {
-        Self {
-            current_index: 0,
-            build_step: 0,
-            started_at: None,
-            display: DisplayTarget::Primary,
-        }
+        Self { current_index: 0, build_step: 0, started_at: None, display: DisplayTarget::Primary }
     }
 
-    pub fn current_index(&self) -> usize {
-        self.current_index
-    }
-    pub fn display(&self) -> &DisplayTarget {
-        &self.display
-    }
+    pub fn current_index(&self) -> usize { self.current_index }
+    pub fn display(&self) -> &DisplayTarget { &self.display }
 
     pub fn select_display(&mut self, display: DisplayTarget) {
         self.display = display;
     }
 
     pub fn start_at(&mut self, now: Instant) {
-        if self.started_at.is_none() {
-            self.started_at = Some(now);
-        }
+        if self.started_at.is_none() { self.started_at = Some(now); }
     }
 
-    pub fn stop(&mut self) {
-        self.started_at = None;
-    }
+    pub fn stop(&mut self) { self.started_at = None; }
 
     pub fn next(&mut self, deck: &Deck) -> bool {
-        let Some(to) = next_shown(deck, self.current_index) else {
-            return false;
-        };
+        let Some(to) = next_shown(deck, self.current_index) else { return false };
         self.current_index = to;
         true
     }
@@ -90,18 +73,14 @@ impl PresenterState {
     /// Jump to slide `index` (a show starts at the slide being edited),
     /// before any of its builds.
     pub fn go_to(&mut self, index: usize, deck: &Deck) -> bool {
-        if index >= deck.slides.len() || index == self.current_index {
-            return false;
-        }
+        if index >= deck.slides.len() || index == self.current_index { return false; }
         self.current_index = index;
         self.build_step = 0;
         true
     }
 
     /// Builds of the current slide already played.
-    pub fn build_step(&self) -> usize {
-        self.build_step
-    }
+    pub fn build_step(&self) -> usize { self.build_step }
 
     /// One click: the current slide's next build if it has one left,
     /// else the next slide; `None` at the end of the show.
@@ -123,21 +102,14 @@ impl PresenterState {
             self.build_step -= 1;
             return true;
         }
-        let Some(to) = previous_shown(deck, self.current_index) else {
-            return false;
-        };
+        let Some(to) = previous_shown(deck, self.current_index) else { return false };
         self.current_index = to;
-        self.build_step = deck
-            .slides
-            .get(self.current_index)
-            .map_or(0, crate::builds::steps);
+        self.build_step = deck.slides.get(self.current_index).map_or(0, crate::builds::steps);
         true
     }
 
     pub fn previous(&mut self, deck: &Deck) -> bool {
-        let Some(to) = previous_shown(deck, self.current_index) else {
-            return false;
-        };
+        let Some(to) = previous_shown(deck, self.current_index) else { return false };
         self.current_index = to;
         true
     }
@@ -146,10 +118,7 @@ impl PresenterState {
         let current = deck.slides.get(self.current_index)?;
         let next_index = next_shown(deck, self.current_index);
         let next = next_index.and_then(|i| deck.slides.get(i));
-        let elapsed = self
-            .started_at
-            .map(|start| now.saturating_duration_since(start))
-            .unwrap_or_default();
+        let elapsed = self.started_at.map(|start| now.saturating_duration_since(start)).unwrap_or_default();
         Some(PresenterSnapshot {
             current_index: self.current_index,
             current_title: current.title.clone(),
@@ -166,28 +135,19 @@ impl PresenterState {
 /// (`engine::shown_slides`); `None` at the end of the show. Public so the
 /// presenter display previews the slide a click will actually bring.
 pub fn next_shown(deck: &Deck, index: usize) -> Option<usize> {
-    crate::engine::shown_slides(&deck.slides)
-        .into_iter()
-        .find(|&i| i > index)
+    crate::engine::shown_slides(&deck.slides).into_iter().find(|&i| i > index)
 }
 
 /// The shown slide before `index`, stepping over hidden ones.
 fn previous_shown(deck: &Deck, index: usize) -> Option<usize> {
-    crate::engine::shown_slides(&deck.slides)
-        .into_iter()
-        .rev()
-        .find(|&i| i < index)
+    crate::engine::shown_slides(&deck.slides).into_iter().rev().find(|&i| i < index)
 }
 
 /// The presenter's clock: `m:ss`, or `h:mm:ss` from an hour on.
 pub fn format_elapsed(d: Duration) -> String {
     let s = d.as_secs();
     let (h, m, s) = (s / 3600, (s / 60) % 60, s % 60);
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m}:{s:02}")
-    }
+    if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m}:{s:02}") }
 }
 
 /// "Slide 3 of 12".
@@ -201,12 +161,7 @@ pub fn show_position(index: usize, count: usize, step: usize, steps: usize) -> S
     if steps == 0 {
         slide_counter(index, count)
     } else {
-        format!(
-            "{} · Build {} of {}",
-            slide_counter(index, count),
-            step,
-            steps
-        )
+        format!("{} · Build {} of {}", slide_counter(index, count), step, steps)
     }
 }
 
@@ -225,18 +180,9 @@ pub struct ShowLayout {
 /// the presenter display alone, on the first monitor.
 pub fn show_layout(monitors: usize, rehearse: bool) -> ShowLayout {
     match (rehearse, monitors) {
-        (true, _) => ShowLayout {
-            audience: None,
-            presenter: Some(0),
-        },
-        (false, 0 | 1) => ShowLayout {
-            audience: Some(0),
-            presenter: None,
-        },
-        (false, _) => ShowLayout {
-            audience: Some(1),
-            presenter: Some(0),
-        },
+        (true, _) => ShowLayout { audience: None, presenter: Some(0) },
+        (false, 0 | 1) => ShowLayout { audience: Some(0), presenter: None },
+        (false, _) => ShowLayout { audience: Some(1), presenter: Some(0) },
     }
 }
 
@@ -248,10 +194,9 @@ pub fn show_layout(monitors: usize, rehearse: bool) -> ShowLayout {
 /// or none, is [`show_layout`]'s automatic one. Rehearsing ignores it.
 pub fn show_layout_on(monitors: usize, rehearse: bool, chosen: Option<usize>) -> ShowLayout {
     match chosen {
-        Some(m) if !rehearse && m < monitors => ShowLayout {
-            audience: Some(m),
-            presenter: (0..monitors).find(|&p| p != m),
-        },
+        Some(m) if !rehearse && m < monitors => {
+            ShowLayout { audience: Some(m), presenter: (0..monitors).find(|&p| p != m) }
+        }
         _ => show_layout(monitors, rehearse),
     }
 }
@@ -264,16 +209,12 @@ pub fn show_layout_on(monitors: usize, rehearse: bool, chosen: Option<usize>) ->
 /// nothing: the show stays where the presenter can see it.
 pub fn layout_after_monitor_change(layout: ShowLayout, monitors: usize) -> Option<ShowLayout> {
     let back = |m: Option<usize>| m.map(|m| if m >= monitors { 0 } else { m });
-    let after = ShowLayout {
-        audience: back(layout.audience),
-        presenter: back(layout.presenter),
-    };
+    let after = ShowLayout { audience: back(layout.audience), presenter: back(layout.presenter) };
     (after != layout).then_some(after)
 }
 
 /// The status a show shows when its external display goes away.
-pub const DISPLAY_LOST: &str =
-    "The external display was disconnected. The show continues on this screen.";
+pub const DISPLAY_LOST: &str = "The external display was disconnected. The show continues on this screen.";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MissingMedia {
@@ -288,35 +229,22 @@ pub struct MissingMedia {
 /// Unused masters/layouts are not part of the show. This only checks presence,
 /// not whether an existing file can be decoded.
 pub fn missing_media(deck: &Deck) -> Vec<MissingMedia> {
-    deck.slides
-        .iter()
-        .enumerate()
-        .flat_map(|(slide_index, slide)| {
-            let master = deck.master_of(slide);
-            let layout = deck.layout_of(slide);
-            // Match effective_master's additive decorations without cloning a master.
-            let pictures = slide
-                .objects
-                .iter()
-                .chain(master.into_iter().flat_map(|m| m.shapes.iter()))
-                .chain(layout.into_iter().flat_map(|l| l.shapes.iter()))
-                .filter_map(|object| match object {
-                    SlideObject::Image { path, .. } => Some(path),
-                    _ => None,
-                });
-            slide
-                .background_picture
-                .as_ref()
-                .map(|p| &p.path)
-                .into_iter()
-                .chain(pictures)
-                .filter(|path| !Path::new(path).is_file())
-                .map(move |path| MissingMedia {
-                    slide_index,
-                    path: path.clone(),
-                })
-        })
-        .collect()
+    deck.slides.iter().enumerate().flat_map(|(slide_index, slide)| {
+        let master = deck.master_of(slide);
+        let layout = deck.layout_of(slide);
+        // Match effective_master's additive decorations without cloning a master.
+        let pictures = slide.objects.iter()
+            .chain(master.into_iter().flat_map(|m| m.shapes.iter()))
+            .chain(layout.into_iter().flat_map(|l| l.shapes.iter()))
+            .filter_map(|object| match object {
+                SlideObject::Image { path, .. } => Some(path),
+                _ => None,
+            });
+        slide.background_picture.as_ref().map(|p| &p.path).into_iter()
+            .chain(pictures)
+            .filter(|path| !Path::new(path).is_file())
+            .map(move |path| MissingMedia { slide_index, path: path.clone() })
+    }).collect()
 }
 
 #[cfg(test)]
@@ -327,77 +255,33 @@ mod tests {
     #[test]
     fn a_chosen_display_gets_the_slides_and_the_presenter_display_another() {
         // Projector on the laptop's own screen, presenter display on the other.
-        assert_eq!(
-            show_layout_on(2, false, Some(0)),
-            ShowLayout {
-                audience: Some(0),
-                presenter: Some(1)
-            }
-        );
-        assert_eq!(
-            show_layout_on(3, false, Some(2)),
-            ShowLayout {
-                audience: Some(2),
-                presenter: Some(0)
-            }
-        );
-        assert_eq!(
-            show_layout_on(1, false, Some(0)),
-            ShowLayout {
-                audience: Some(0),
-                presenter: None
-            }
-        );
+        assert_eq!(show_layout_on(2, false, Some(0)), ShowLayout { audience: Some(0), presenter: Some(1) });
+        assert_eq!(show_layout_on(3, false, Some(2)), ShowLayout { audience: Some(2), presenter: Some(0) });
+        assert_eq!(show_layout_on(1, false, Some(0)), ShowLayout { audience: Some(0), presenter: None });
         // Not connected, or automatic: the usual layout.
         assert_eq!(show_layout_on(2, false, Some(5)), show_layout(2, false));
         assert_eq!(show_layout_on(2, false, None), show_layout(2, false));
-        assert_eq!(
-            show_layout_on(2, true, Some(1)),
-            show_layout(2, true),
-            "a rehearsal is the presenter display alone"
-        );
+        assert_eq!(show_layout_on(2, true, Some(1)), show_layout(2, true), "a rehearsal is the presenter display alone");
         // And losing the chosen display falls back like any other.
         assert_eq!(
             layout_after_monitor_change(show_layout_on(3, false, Some(2)), 2),
-            Some(ShowLayout {
-                audience: Some(0),
-                presenter: Some(0)
-            })
+            Some(ShowLayout { audience: Some(0), presenter: Some(0) })
         );
     }
 
     #[test]
     fn a_lost_external_display_brings_the_show_back_to_the_primary_one() {
         let two = show_layout(2, false);
-        assert_eq!(
-            two,
-            ShowLayout {
-                audience: Some(1),
-                presenter: Some(0)
-            }
-        );
+        assert_eq!(two, ShowLayout { audience: Some(1), presenter: Some(0) });
         assert_eq!(layout_after_monitor_change(two, 2), None, "nothing lost");
-        assert_eq!(
-            layout_after_monitor_change(two, 3),
-            None,
-            "a monitor added changes nothing"
-        );
+        assert_eq!(layout_after_monitor_change(two, 3), None, "a monitor added changes nothing");
         assert_eq!(
             layout_after_monitor_change(two, 1),
-            Some(ShowLayout {
-                audience: Some(0),
-                presenter: Some(0)
-            }),
+            Some(ShowLayout { audience: Some(0), presenter: Some(0) }),
             "the slides come back to the laptop, the presenter display stays"
         );
         // Unplugged with no monitor reported at all, still the primary.
-        assert_eq!(
-            layout_after_monitor_change(two, 0),
-            Some(ShowLayout {
-                audience: Some(0),
-                presenter: Some(0)
-            })
-        );
+        assert_eq!(layout_after_monitor_change(two, 0), Some(ShowLayout { audience: Some(0), presenter: Some(0) }));
         // A one-monitor show or a rehearsal has nothing to lose.
         assert_eq!(layout_after_monitor_change(show_layout(1, false), 1), None);
         assert_eq!(layout_after_monitor_change(show_layout(2, true), 1), None);
@@ -406,32 +290,8 @@ mod tests {
     fn deck() -> Deck {
         Deck {
             slides: vec![
-                Slide {
-                    hidden: false,
-                    title: "Opening".into(),
-                    background: "#fff".into(),
-                    background_picture: None,
-                    objects: vec![],
-                    notes: "Welcome".into(),
-                    master_id: None,
-                    transition: Default::default(),
-                    builds: Vec::new(),
-                    ids: Default::default(),
-                    layout_id: None,
-                },
-                Slide {
-                    hidden: false,
-                    title: "Details".into(),
-                    background: "#fff".into(),
-                    background_picture: None,
-                    objects: vec![],
-                    notes: "Explain this".into(),
-                    master_id: None,
-                    transition: Default::default(),
-                    builds: Vec::new(),
-                    ids: Default::default(),
-                    layout_id: None,
-                },
+                Slide { hidden: false, title: "Opening".into(), background: "#fff".into(), background_picture: None, objects: vec![], notes: "Welcome".into(), master_id: None, transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout_id: None },
+                Slide { hidden: false, title: "Details".into(), background: "#fff".into(), background_picture: None, objects: vec![], notes: "Explain this".into(), master_id: None, transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout_id: None },
             ],
             masters: vec![],
             page_size: None,
@@ -452,34 +312,10 @@ mod tests {
 
     #[test]
     fn a_second_monitor_takes_the_audience_and_rehearsal_is_presenter_only() {
-        assert_eq!(
-            show_layout(1, false),
-            ShowLayout {
-                audience: Some(0),
-                presenter: None
-            }
-        );
-        assert_eq!(
-            show_layout(0, false),
-            ShowLayout {
-                audience: Some(0),
-                presenter: None
-            }
-        );
-        assert_eq!(
-            show_layout(2, false),
-            ShowLayout {
-                audience: Some(1),
-                presenter: Some(0)
-            }
-        );
-        assert_eq!(
-            show_layout(3, true),
-            ShowLayout {
-                audience: None,
-                presenter: Some(0)
-            }
-        );
+        assert_eq!(show_layout(1, false), ShowLayout { audience: Some(0), presenter: None });
+        assert_eq!(show_layout(0, false), ShowLayout { audience: Some(0), presenter: None });
+        assert_eq!(show_layout(2, false), ShowLayout { audience: Some(1), presenter: Some(0) });
+        assert_eq!(show_layout(3, true), ShowLayout { audience: None, presenter: Some(0) });
     }
 
     #[test]
@@ -487,16 +323,8 @@ mod tests {
         use crate::builds::{Build, BuildEffect};
         let mut d = deck();
         d.slides[0].builds = vec![
-            Build {
-                object: 0,
-                effect: BuildEffect::Appear,
-                out: false,
-            },
-            Build {
-                object: 1,
-                effect: BuildEffect::Dissolve,
-                out: false,
-            },
+            Build { object: 0, effect: BuildEffect::Appear, out: false },
+            Build { object: 1, effect: BuildEffect::Dissolve, out: false },
         ];
         let mut s = PresenterState::new();
         assert_eq!(s.advance(&d), Some(Advance::Build(0)));
@@ -505,11 +333,7 @@ mod tests {
         assert_eq!((s.current_index(), s.build_step()), (1, 0));
         assert_eq!(s.advance(&d), None, "the end of the show");
         assert!(s.back(&d));
-        assert_eq!(
-            (s.current_index(), s.build_step()),
-            (0, 2),
-            "back to the slide as it was left"
-        );
+        assert_eq!((s.current_index(), s.build_step()), (0, 2), "back to the slide as it was left");
         assert!(s.back(&d));
         assert_eq!(s.build_step(), 1);
         assert!(s.go_to(1, &d) && s.build_step() == 0);
@@ -532,9 +356,7 @@ mod tests {
         let start = Instant::now();
         state.start_at(start);
         state.select_display(DisplayTarget::External(1));
-        let view = state
-            .snapshot_at(&deck(), start + Duration::from_secs(12))
-            .unwrap();
+        let view = state.snapshot_at(&deck(), start + Duration::from_secs(12)).unwrap();
         assert_eq!(view.current_title, "Opening");
         assert_eq!(view.current_notes, "Welcome");
         assert_eq!(view.next_title.as_deref(), Some("Details"));
@@ -564,10 +386,7 @@ mod tests {
         deck.slides[1].hidden = true;
         let mut state = PresenterState::new();
         let view = state.snapshot_at(&deck, Instant::now()).unwrap();
-        assert_eq!(
-            (view.next_index, view.next_title.as_deref()),
-            (Some(2), Some("Close"))
-        );
+        assert_eq!((view.next_index, view.next_title.as_deref()), (Some(2), Some("Close")));
         assert_eq!(state.advance(&deck), Some(Advance::Slide(2)));
         assert_eq!(state.advance(&deck), None, "the end of the show");
         assert!(state.back(&deck));
@@ -581,22 +400,8 @@ mod tests {
     #[test]
     fn missing_media_is_reported_by_slide_and_path() {
         let mut deck = deck();
-        deck.slides[1].objects.push(SlideObject::Image {
-            path: "/missing/video.mp4".into(),
-            x: 0.0,
-            y: 0.0,
-            w: 1.0,
-            h: 1.0,
-            rotation: 0.0,
-            crop: Default::default(),
-        });
-        assert_eq!(
-            missing_media(&deck),
-            vec![MissingMedia {
-                slide_index: 1,
-                path: "/missing/video.mp4".into()
-            }]
-        );
+        deck.slides[1].objects.push(SlideObject::Image { path: "/missing/video.mp4".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0, crop: Default::default() });
+        assert_eq!(missing_media(&deck), vec![MissingMedia { slide_index: 1, path: "/missing/video.mp4".into() }]);
     }
 
     /// A slide's background picture is part of what a show draws, so a
@@ -604,29 +409,12 @@ mod tests {
     #[test]
     fn a_missing_background_picture_is_reported() {
         let mut deck = deck();
-        deck.slides[0].background_picture = Some(crate::engine::BackgroundPicture {
-            path: "/missing/bg.png".into(),
-            fill: Default::default(),
-        });
-        assert_eq!(
-            missing_media(&deck),
-            vec![MissingMedia {
-                slide_index: 0,
-                path: "/missing/bg.png".into()
-            }]
-        );
+        deck.slides[0].background_picture = Some(crate::engine::BackgroundPicture { path: "/missing/bg.png".into(), fill: Default::default() });
+        assert_eq!(missing_media(&deck), vec![MissingMedia { slide_index: 0, path: "/missing/bg.png".into() }]);
     }
 
     fn image(path: &str) -> SlideObject {
-        SlideObject::Image {
-            path: path.into(),
-            x: 0.0,
-            y: 0.0,
-            w: 1.0,
-            h: 1.0,
-            rotation: 0.0,
-            crop: Default::default(),
-        }
+        SlideObject::Image { path: path.into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0, crop: Default::default() }
     }
 
     #[test]
@@ -635,23 +423,13 @@ mod tests {
         let path = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
         let mut deck = deck();
         deck.masters.push(crate::engine::MasterSlide {
-            id: 0,
-            name: "Master".into(),
-            background: "#fff".into(),
-            default_font: "Sans".into(),
-            shapes: Vec::new(),
-            theme_id: None,
-            color_map: Default::default(),
-            layouts: Vec::new(),
+            id: 0, name: "Master".into(), background: "#fff".into(), default_font: "Sans".into(),
+            shapes: Vec::new(), theme_id: None, color_map: Default::default(), layouts: Vec::new(),
         });
         deck.masters[0].shapes.push(image(&path("master")));
         deck.masters[0].layouts = crate::layouts::standard();
-        deck.masters[0].layouts[0]
-            .shapes
-            .push(image(&path("layout")));
-        deck.masters[0].layouts[1]
-            .shapes
-            .push(image(&path("unused-layout")));
+        deck.masters[0].layouts[0].shapes.push(image(&path("layout")));
+        deck.masters[0].layouts[1].shapes.push(image(&path("unused-layout")));
         let mut unused = deck.masters[0].clone();
         unused.shapes = vec![image(&path("unused-master"))];
         deck.masters.push(unused);
@@ -660,42 +438,18 @@ mod tests {
         deck.slides[1].master_id = Some(deck.masters[0].id);
         deck.slides[0].layout_id = Some(deck.masters[0].layouts[0].id);
         deck.slides[1].objects.push(image(&path("slide")));
-        assert_eq!(
-            missing_media(&deck),
-            vec![
-                MissingMedia {
-                    slide_index: 0,
-                    path: path("master")
-                },
-                MissingMedia {
-                    slide_index: 0,
-                    path: path("layout")
-                },
-                MissingMedia {
-                    slide_index: 1,
-                    path: path("slide")
-                },
-                MissingMedia {
-                    slide_index: 1,
-                    path: path("master")
-                },
-            ]
-        );
+        assert_eq!(missing_media(&deck), vec![
+            MissingMedia { slide_index: 0, path: path("master") },
+            MissingMedia { slide_index: 0, path: path("layout") },
+            MissingMedia { slide_index: 1, path: path("slide") },
+            MissingMedia { slide_index: 1, path: path("master") },
+        ]);
         deck.slides[0].layout_id = Some(u64::MAX);
         deck.slides[1].master_id = Some(u64::MAX);
-        assert_eq!(
-            missing_media(&deck),
-            vec![
-                MissingMedia {
-                    slide_index: 0,
-                    path: path("master")
-                },
-                MissingMedia {
-                    slide_index: 1,
-                    path: path("slide")
-                },
-            ]
-        );
+        assert_eq!(missing_media(&deck), vec![
+            MissingMedia { slide_index: 0, path: path("master") },
+            MissingMedia { slide_index: 1, path: path("slide") },
+        ]);
         // `None` inherits the first master; only an unknown id excludes it.
         deck.slides[0].master_id = Some(u64::MAX);
         deck.slides[1].objects.clear();
@@ -708,28 +462,12 @@ mod tests {
         let path = file.path().to_string_lossy().into_owned();
         let mut deck = deck();
         deck.slides[0].objects.push(image(&path));
-        assert!(
-            missing_media(&deck).is_empty(),
-            "extensionless extracted assets are files too"
-        );
+        assert!(missing_media(&deck).is_empty(), "extensionless extracted assets are files too");
         file.close().unwrap();
-        assert_eq!(
-            missing_media(&deck),
-            vec![MissingMedia {
-                slide_index: 0,
-                path
-            }]
-        );
+        assert_eq!(missing_media(&deck), vec![MissingMedia { slide_index: 0, path }]);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().into_owned();
         deck.slides[0].objects = vec![image(&path)];
-        assert_eq!(
-            missing_media(&deck),
-            vec![MissingMedia {
-                slide_index: 0,
-                path
-            }],
-            "a directory is not an image file"
-        );
+        assert_eq!(missing_media(&deck), vec![MissingMedia { slide_index: 0, path }], "a directory is not an image file");
     }
 }

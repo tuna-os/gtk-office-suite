@@ -20,16 +20,7 @@ pub fn edited() -> (DecksController, SlideObject) {
         w: 80.0,
         h: 80.0,
         rotation: 0.0,
-        style: ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
-            fill: Some(Color(0xE0, 0x1B, 0x24)),
-            gradient: None,
-            stroke: None,
-            fill_src: Some(FillSrc::Color(ColorRef::Rgb("E01B24".into()))),
-            stroke_src: Some(StrokeSrc::NoLine),
-        },
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb("E01B24".into()))), stroke_src: Some(StrokeSrc::NoLine) },
     };
     c.edit_master(c.slide_id_at(0).unwrap()).unwrap();
     c.add_object(c.slide_id_at(0).unwrap(), triangle.clone());
@@ -41,33 +32,15 @@ pub fn edited() -> (DecksController, SlideObject) {
 fn a_master_view_edit_survives_pptx_and_odp() {
     let (c, triangle) = edited();
     let deck = c.deck();
-    assert_eq!(
-        deck.masters[0].shapes.last().map(|o| format!("{o:?}")),
-        Some(format!("{triangle:?}"))
-    );
+    assert_eq!(deck.masters[0].shapes.last().map(|o| format!("{o:?}")), Some(format!("{triangle:?}")));
     for ext in ["pptx", "odp"] {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(format!("edited.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
-        let shapes: Vec<String> = back.masters[0]
-            .shapes
-            .iter()
-            .map(|o| format!("{o:?}"))
-            .collect();
-        assert!(
-            shapes.contains(&format!("{triangle:?}")),
-            "{ext}: {shapes:#?}"
-        );
-        assert_eq!(
-            back.masters[0].shapes.len(),
-            deck.masters[0].shapes.len(),
-            "{ext}: nothing lost or added"
-        );
-        assert_eq!(
-            back.slides.len(),
-            deck.slides.len(),
-            "{ext}: the slides are the deck's, not the master view's"
-        );
+        let shapes: Vec<String> = back.masters[0].shapes.iter().map(|o| format!("{o:?}")).collect();
+        assert!(shapes.contains(&format!("{triangle:?}")), "{ext}: {shapes:#?}");
+        assert_eq!(back.masters[0].shapes.len(), deck.masters[0].shapes.len(), "{ext}: nothing lost or added");
+        assert_eq!(back.slides.len(), deck.slides.len(), "{ext}: the slides are the deck's, not the master view's");
     }
 }

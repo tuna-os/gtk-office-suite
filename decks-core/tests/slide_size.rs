@@ -21,13 +21,7 @@ fn deck(size: Option<(f64, f64)>) -> Deck {
     let mut d = Deck::new();
     d.page_size = size;
     d.slides[0].objects = vec![
-        SlideObject::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 960.0,
-            h: 540.0,
-            rotation: 0.0,
-        },
+        SlideObject::Rect { x: 0.0, y: 0.0, w: 960.0, h: 540.0, rotation: 0.0 },
         SlideObject::TextBox {
             text: "hello".into(),
             x: 96.0,
@@ -35,13 +29,7 @@ fn deck(size: Option<(f64, f64)>) -> Deck {
             w: 480.0,
             h: 108.0,
             rotation: 0.0,
-            runs: vec![Run {
-                text: "hello".into(),
-                style: RunStyle {
-                    font_size_hp: Some(48),
-                    ..Default::default()
-                },
-            }],
+            runs: vec![Run { text: "hello".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }],
             body: Default::default(),
         },
     ];
@@ -56,8 +44,7 @@ fn part(path: &std::path::Path, name: &str) -> String {
 }
 
 fn declared(path: &std::path::Path) -> (f64, f64) {
-    decks_core::engine::parse_slide_size(&part(path, "ppt/presentation.xml"))
-        .expect("a declared slide size")
+    decks_core::engine::parse_slide_size(&part(path, "ppt/presentation.xml")).expect("a declared slide size")
 }
 
 fn boxes(d: &Deck) -> Vec<(f64, f64, f64, f64)> {
@@ -65,9 +52,7 @@ fn boxes(d: &Deck) -> Vec<(f64, f64, f64, f64)> {
         .objects
         .iter()
         .map(|o| match o {
-            SlideObject::Rect { x, y, w, h, .. }
-            | SlideObject::Shape { x, y, w, h, .. }
-            | SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
+            SlideObject::Rect { x, y, w, h, .. } | SlideObject::Shape { x, y, w, h, .. } | SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
             other => panic!("unexpected {other:?}"),
         })
         .collect()
@@ -76,9 +61,7 @@ fn boxes(d: &Deck) -> Vec<(f64, f64, f64, f64)> {
 fn near(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
     // EMU are integers: a unit is 7500 to 13333.3 of them here, so a
     // rounded coordinate is off by under a ten-thousandth of a unit.
-    [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)]
-        .iter()
-        .all(|(p, q)| (p - q).abs() < 1e-3)
+    [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)].iter().all(|(p, q)| (p - q).abs() < 1e-3)
 }
 
 #[test]
@@ -94,11 +77,7 @@ fn a_4_3_or_custom_deck_keeps_its_size_through_open_save_and_reopen() {
         assert_eq!(opened.page_size, Some(size), "the size is kept on open");
         let saved = dir.path().join("saved.pptx");
         write_pptx(saved.to_str().unwrap(), &opened).unwrap();
-        assert_eq!(
-            declared(&saved),
-            size,
-            "the save writes the source's size, not ours"
-        );
+        assert_eq!(declared(&saved), size, "the save writes the source's size, not ours");
         let reopened = read_pptx(saved.to_str().unwrap()).unwrap();
         assert_eq!(reopened.page_size, Some(size));
 
@@ -106,10 +85,7 @@ fn a_4_3_or_custom_deck_keeps_its_size_through_open_save_and_reopen() {
         // full-bleed rectangle still covers it, in the file and the model.
         let rect = part(&saved, "ppt/slides/slide1.xml");
         let (cx, cy) = (size.0 as i64, size.1 as i64);
-        assert!(
-            rect.contains(&format!("<a:ext cx=\"{cx}\" cy=\"{cy}\"/>")),
-            "the full-bleed shape spans the slide: {rect}"
-        );
+        assert!(rect.contains(&format!("<a:ext cx=\"{cx}\" cy=\"{cy}\"/>")), "the full-bleed shape spans the slide: {rect}");
         for (got, want) in boxes(&reopened).into_iter().zip(boxes(&deck(Some(size)))) {
             assert!(near(got, want), "{size:?}: {got:?} is not {want:?}");
         }
@@ -118,21 +94,13 @@ fn a_4_3_or_custom_deck_keeps_its_size_through_open_save_and_reopen() {
             SlideObject::TextBox { runs, .. } => runs[0].style.font_size_hp,
             other => panic!("{other:?}"),
         };
-        assert_eq!(
-            hp(&reopened),
-            hp(&opened),
-            "{size:?}: the font size drifted"
-        );
+        assert_eq!(hp(&reopened), hp(&opened), "{size:?}: the font size drifted");
 
         // A second save changes nothing.
         let again = dir.path().join("again.pptx");
         write_pptx(again.to_str().unwrap(), &reopened).unwrap();
         for name in ["ppt/presentation.xml", "ppt/slides/slide1.xml"] {
-            assert_eq!(
-                part(&again, name),
-                part(&saved, name),
-                "{size:?}: {name} changed on a second save"
-            );
+            assert_eq!(part(&again, name), part(&saved, name), "{size:?}: {name} changed on a second save");
         }
     }
 }
@@ -144,19 +112,10 @@ fn a_deck_of_the_default_size_is_written_as_before() {
     write_pptx(path.to_str().unwrap(), &deck(None)).unwrap();
     assert_eq!(declared(&path), (9_144_000.0, 5_143_500.0));
     let back = read_pptx(path.to_str().unwrap()).unwrap();
-    assert_eq!(
-        back.page_size, None,
-        "our own size reads back as the default"
-    );
+    assert_eq!(back.page_size, None, "our own size reads back as the default");
     let slide = part(&path, "ppt/slides/slide1.xml");
-    assert!(
-        slide.contains("<a:ext cx=\"9144000\" cy=\"5143500\"/>"),
-        "{slide}"
-    );
-    assert!(
-        slide.contains("sz=\"2400\""),
-        "a 24 pt run is still sz=2400: {slide}"
-    );
+    assert!(slide.contains("<a:ext cx=\"9144000\" cy=\"5143500\"/>"), "{slide}");
+    assert!(slide.contains("sz=\"2400\""), "a 24 pt run is still sz=2400: {slide}");
 }
 
 #[test]
@@ -183,10 +142,7 @@ fn a_4_3_or_custom_deck_keeps_its_size_through_odp() {
         decks_core::write_deck(path.to_str().unwrap(), &deck(Some(size))).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
         let (cx, cy) = back.page_size.expect("the page size is read back");
-        assert!(
-            (cx - size.0).abs() < 1.0 && (cy - size.1).abs() < 1.0,
-            "{size:?}: read back as {cx}x{cy}"
-        );
+        assert!((cx - size.0).abs() < 1.0 && (cy - size.1).abs() < 1.0, "{size:?}: read back as {cx}x{cy}");
         for (got, want) in boxes(&back).into_iter().zip(boxes(&deck(Some(size)))) {
             assert!(near(got, want), "{size:?}: {got:?} is not {want:?}");
         }
@@ -216,11 +172,7 @@ fn the_size_is_the_decks_not_the_first_masters() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("two-master.pptx");
     write_pptx(path.to_str().unwrap(), &d).unwrap();
-    assert_eq!(
-        declared(&path),
-        size,
-        "the deck's size, whichever master is first"
-    );
+    assert_eq!(declared(&path), size, "the deck's size, whichever master is first");
     let back = read_pptx(path.to_str().unwrap()).unwrap();
     assert_eq!(back.page_size, Some(size));
     assert_eq!(back.masters.len(), 2);

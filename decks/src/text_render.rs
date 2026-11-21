@@ -52,16 +52,10 @@ fn place(
         Some(_) => {
             let inner_h = content_box(body, (rect.2, rect.3), scale).1;
             let s = shrink_font_to_fit(inner_h, &mut |s| {
-                let trial_fit = Some(Autofit {
-                    font_scale: s,
-                    line_reduction: 0.0,
-                });
+                let trial_fit = Some(Autofit { font_scale: s, line_reduction: 0.0 });
                 place_inner(cr, text, runs, body, rect, scale, desc, trial_fit).1
             });
-            Some(Autofit {
-                font_scale: s,
-                line_reduction: 0.0,
-            })
+            Some(Autofit { font_scale: s, line_reduction: 0.0 })
         }
         None => None,
     };
@@ -78,18 +72,10 @@ fn content_box(body: &TextBody, (bw, bh): (f64, f64), scale: f64) -> (f64, f64) 
 /// of the shape it is drawn on, as an oval's text wraps inside the oval.
 fn insets(body: &TextBody, (bw, bh): (f64, f64), scale: f64) -> (f64, f64, f64, f64) {
     let (l, t, r, b) = match body.insets {
-        Some(i) => (
-            i.left * scale,
-            i.top * scale,
-            i.right * scale,
-            i.bottom * scale,
-        ),
+        Some(i) => (i.left * scale, i.top * scale, i.right * scale, i.bottom * scale),
         None => (PLAIN_INSET, PLAIN_INSET, PLAIN_INSET, PLAIN_INSET),
     };
-    let (fl, ft, fr, fb) = body
-        .frame
-        .as_ref()
-        .map_or((0.0, 0.0, 0.0, 0.0), |f| f.kind.text_inset(bw, bh));
+    let (fl, ft, fr, fb) = body.frame.as_ref().map_or((0.0, 0.0, 0.0, 0.0), |f| f.kind.text_inset(bw, bh));
     (l + fl, t + ft, r + fr, b + fb)
 }
 
@@ -109,23 +95,13 @@ fn place_inner(
     let inner_w = (bw - l - r).max(8.0);
     let inner_h = bh - t - b;
     let paras: Vec<Vec<Run>> = if runs.is_empty() {
-        text.split('\n')
-            .map(|p| {
-                vec![Run {
-                    text: p.to_string(),
-                    style: Default::default(),
-                }]
-            })
-            .collect()
+        text.split('\n').map(|p| vec![Run { text: p.to_string(), style: Default::default() }]).collect()
     } else {
         paragraphs(runs)
     };
     let lead = paragraph_lead_styles(runs);
     let styles: Vec<_> = (0..paras.len()).map(|i| body.para(i)).collect();
-    let empty: Vec<bool> = paras
-        .iter()
-        .map(|p| p.iter().all(|r| r.text.trim().is_empty()))
-        .collect();
+    let empty: Vec<bool> = paras.iter().map(|p| p.iter().all(|r| r.text.trim().is_empty())).collect();
     let marks = markers(&styles, &empty);
 
     // The recomputed fit draws every size smaller; a plain box draws at
@@ -167,15 +143,7 @@ fn place_inner(
                 .or_else(|| para.first().map(|r| r.style.clone()))
                 .or_else(|| lead.get(i).cloned().flatten())
                 .unwrap_or_default();
-            set_styled_text(
-                &layout,
-                " ",
-                &[Run {
-                    text: " ".into(),
-                    style,
-                }],
-                text_scale,
-            );
+            set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], text_scale);
         } else {
             set_styled_text(&layout, &para_text, para, text_scale);
         }
@@ -198,33 +166,21 @@ fn place_inner(
             let ms = &st.marker;
             // A Wingdings or Symbol bullet draws as the Unicode glyph it
             // shows, in the text's font: those fonts aren't installed.
-            let (label, marker_font) =
-                match decks_core::engine::symbol_font::unicode_bullet(ms.font.as_deref(), label) {
-                    Some(glyph) => (glyph.to_string(), None),
-                    None => (label.to_string(), ms.font.clone()),
-                };
+            let (label, marker_font) = match decks_core::engine::symbol_font::unicode_bullet(ms.font.as_deref(), label) {
+                Some(glyph) => (glyph.to_string(), None),
+                None => (label.to_string(), ms.font.clone()),
+            };
             let label = &label;
             let style = decks_core::engine::RunStyle {
                 bold: false,
                 italic: false,
                 underline: false,
                 font_family: marker_font.or(first.font_family.clone()),
-                font_size_hp: ms
-                    .size
-                    .map(|s| (s.points(text_pt) * 2.0).round().max(1.0) as u16)
-                    .or(first.font_size_hp),
+                font_size_hp: ms.size.map(|s| (s.points(text_pt) * 2.0).round().max(1.0) as u16).or(first.font_size_hp),
                 color: ms.color.clone().or(first.color.clone()),
                 ..first.clone()
             };
-            set_styled_text(
-                &ml,
-                label,
-                &[Run {
-                    text: label.clone(),
-                    style,
-                }],
-                text_scale,
-            );
+            set_styled_text(&ml, label, &[Run { text: label.clone(), style }], text_scale);
             // A marker wider than the room it hangs in pushes the first
             // line past it, as LibreOffice lays it out: a bullet with no
             // margin to hang in (marL 0) otherwise sits on the text.
@@ -233,19 +189,10 @@ fn place_inner(
                 layout.set_indent(((g.first_indent + overlap) * pango::SCALE as f64) as i32);
             }
             let dy = (layout.baseline() - ml.baseline()) as f64 / pango::SCALE as f64;
-            Marker {
-                layout: ml,
-                x: mx,
-                dy,
-            }
+            Marker { layout: ml, x: mx, dy }
         });
         let h = layout.pixel_size().1 as f64;
-        placed.push(Placed {
-            layout,
-            marker,
-            x: g.text_x,
-            y,
-        });
+        placed.push(Placed { layout, marker, x: g.text_x, y });
         // Pango tightens the lines after a paragraph's first; the first
         // line's share of the reduction comes off the advance.
         let first_cut = fit.map_or(0.0, |a| a.line_reduction) * line_h;
@@ -344,26 +291,14 @@ fn stretches(
 ) -> Vec<Stretch> {
     if body.is_plain() {
         let (layout, (x, y)) = plain_layout(cr, text, runs, rect, scale, desc);
-        return vec![Stretch {
-            layout,
-            x,
-            y,
-            start: 0,
-            len: text.len(),
-        }];
+        return vec![Stretch { layout, x, y, start: 0, len: text.len() }];
     }
     let mut start = 0;
     place(cr, text, runs, body, rect, scale, desc)
         .into_iter()
         .zip(text.split('\n'))
         .map(|(p, para)| {
-            let s = Stretch {
-                layout: p.layout,
-                x: p.x,
-                y: p.y,
-                start,
-                len: para.len(),
-            };
+            let s = Stretch { layout: p.layout, x: p.x, y: p.y, start, len: para.len() };
             start += para.len() + 1;
             s
         })
@@ -391,12 +326,7 @@ pub fn range_rects(
         if start == end {
             if (ps..=pe).contains(&start) {
                 let (strong, _) = s.layout.cursor_pos((start - ps) as i32);
-                out.push((
-                    s.x + strong.x() as f64 / k,
-                    s.y + strong.y() as f64 / k,
-                    1.5,
-                    (strong.height() as f64 / k).max(1.0),
-                ));
+                out.push((s.x + strong.x() as f64 / k, s.y + strong.y() as f64 / k, 1.5, (strong.height() as f64 / k).max(1.0)));
                 break;
             }
             continue;
@@ -447,22 +377,22 @@ pub fn offset_at(
 ) -> usize {
     let all = stretches(cr, text, runs, body, rect, scale, desc);
     // The paragraph under the point, else the last one above it.
-    let Some(s) = all.iter().rev().find(|s| py >= s.y).or(all.first()) else {
+    let Some(s) = all
+        .iter()
+        .rev()
+        .find(|s| py >= s.y)
+        .or(all.first())
+    else {
         return 0;
     };
     let k = pango::SCALE as f64;
-    let (_, index, trailing) = s
-        .layout
-        .xy_to_index(((px - s.x) * k) as i32, ((py - s.y) * k) as i32);
+    let (_, index, trailing) = s.layout.xy_to_index(((px - s.x) * k) as i32, ((py - s.y) * k) as i32);
     let para = &text[s.start..s.start + s.len];
     let mut at = (index.max(0) as usize).min(para.len());
     while !para.is_char_boundary(at) {
         at -= 1;
     }
-    let at = para[at..]
-        .char_indices()
-        .nth(trailing.max(0) as usize)
-        .map_or(para.len(), |(i, _)| at + i);
+    let at = para[at..].char_indices().nth(trailing.max(0) as usize).map_or(para.len(), |(i, _)| at + i);
     s.start + at
 }
 
@@ -483,38 +413,17 @@ mod tests {
     }
 
     fn runs(text: &str) -> Vec<Run> {
-        vec![Run {
-            text: text.into(),
-            style: RunStyle::default(),
-        }]
+        vec![Run { text: text.into(), style: RunStyle::default() }]
     }
 
     #[test]
     fn a_bulleted_paragraph_draws_its_marker_in_the_hanging_indent() {
         let body = TextBody {
-            paras: vec![ParaStyle {
-                margin_left: 20.0,
-                indent: -20.0,
-                bullet: Bullet::Char("•".into()),
-                ..Default::default()
-            }],
-            insets: Some(Insets {
-                left: 0.0,
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-            }),
+            paras: vec![ParaStyle { margin_left: 20.0, indent: -20.0, bullet: Bullet::Char("•".into()), ..Default::default() }],
+            insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }),
             ..Default::default()
         };
-        let placed = place(
-            &ctx(),
-            "One",
-            &runs("One"),
-            &body,
-            (10.0, 10.0, 300.0, 100.0),
-            1.0,
-            &desc(),
-        );
+        let placed = place(&ctx(), "One", &runs("One"), &body, (10.0, 10.0, 300.0, 100.0), 1.0, &desc());
         assert_eq!(placed.len(), 1);
         assert_eq!(placed[0].x, 30.0, "text at the margin");
         let m = placed[0].marker.as_ref().expect("a marker");
@@ -529,94 +438,31 @@ mod tests {
         let body = TextBody {
             paras: vec![ParaStyle {
                 bullet: Bullet::Char("•".into()),
-                marker: MarkerStyle {
-                    font: Some("Serif".into()),
-                    size: Some(MarkerSize::Relative(0.5)),
-                    color: None,
-                },
+                marker: MarkerStyle { font: Some("Serif".into()), size: Some(MarkerSize::Relative(0.5)), color: None },
                 ..Default::default()
             }],
-            insets: Some(Insets {
-                left: 0.0,
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-            }),
+            insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }),
             ..Default::default()
         };
-        let big = vec![Run {
-            text: "One".into(),
-            style: RunStyle {
-                font_size_hp: Some(64),
-                ..Default::default()
-            },
-        }];
-        let placed = place(
-            &ctx(),
-            "One",
-            &big,
-            &body,
-            (0.0, 0.0, 300.0, 100.0),
-            1.0,
-            &desc(),
-        );
+        let big = vec![Run { text: "One".into(), style: RunStyle { font_size_hp: Some(64), ..Default::default() } }];
+        let placed = place(&ctx(), "One", &big, &body, (0.0, 0.0, 300.0, 100.0), 1.0, &desc());
         let m = placed[0].marker.as_ref().expect("a marker");
         let base = |l: &pango::Layout| l.baseline() as f64 / pango::SCALE as f64;
-        assert!(
-            base(&m.layout) < base(&placed[0].layout),
-            "the marker is smaller"
-        );
-        assert!(
-            (m.dy + base(&m.layout) - base(&placed[0].layout)).abs() < 1e-9,
-            "baselines line up"
-        );
+        assert!(base(&m.layout) < base(&placed[0].layout), "the marker is smaller");
+        assert!((m.dy + base(&m.layout) - base(&placed[0].layout)).abs() < 1e-9, "baselines line up");
         let attrs = m.layout.attributes().expect("styled");
-        assert!(
-            attrs
-                .attributes()
-                .iter()
-                .any(|a| a.type_() == pango::AttrType::Family),
-            "its own font"
-        );
+        assert!(attrs.attributes().iter().any(|a| a.type_() == pango::AttrType::Family), "its own font");
     }
 
     #[test]
     fn an_overflowing_autofit_box_shrinks_its_text_to_fit() {
-        let big = vec![Run {
-            text: "a\nb".into(),
-            style: RunStyle {
-                font_size_hp: Some(96),
-                ..Default::default()
-            },
-        }];
-        let plain = TextBody {
-            insets: Some(Insets {
-                left: 0.0,
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-            }),
-            ..Default::default()
-        };
-        let fit = TextBody {
-            autofit: Some(Autofit {
-                font_scale: 0.5,
-                line_reduction: 0.2,
-            }),
-            ..plain.clone()
-        };
+        let big = vec![Run { text: "a\nb".into(), style: RunStyle { font_size_hp: Some(96), ..Default::default() } }];
+        let plain = TextBody { insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
+        let fit = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
         let rect = (0.0, 0.0, 300.0, 40.0);
-        let block = |p: &[Placed]| {
-            p.last()
-                .map(|l| l.y + l.layout.pixel_size().1 as f64)
-                .unwrap_or(0.0)
-        };
+        let block = |p: &[Placed]| p.last().map(|l| l.y + l.layout.pixel_size().1 as f64).unwrap_or(0.0);
         let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
-        assert!(
-            block(&a) > 40.0,
-            "the unshrunk block overflows: {}",
-            block(&a)
-        );
+        assert!(block(&a) > 40.0, "the unshrunk block overflows: {}", block(&a));
         let b = place(&ctx(), "a\nb", &big, &fit, rect, 1.0, &desc());
         assert!(block(&b) <= 40.0, "the recomputed fit fits: {}", block(&b));
         assert!(b[1].y - b[0].y < a[1].y - a[0].y, "its lines are closer");
@@ -624,36 +470,13 @@ mod tests {
 
     #[test]
     fn a_stale_autofit_cache_is_recomputed_not_honoured() {
-        let big = vec![Run {
-            text: "a\nb".into(),
-            style: RunStyle {
-                font_size_hp: Some(48),
-                ..Default::default()
-            },
-        }];
-        let plain = TextBody {
-            insets: Some(Insets {
-                left: 0.0,
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-            }),
-            ..Default::default()
-        };
-        let stale = TextBody {
-            autofit: Some(Autofit {
-                font_scale: 0.5,
-                line_reduction: 0.2,
-            }),
-            ..plain.clone()
-        };
+        let big = vec![Run { text: "a\nb".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
+        let plain = TextBody { insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
+        let stale = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
         let rect = (0.0, 0.0, 300.0, 300.0);
         let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
         let b = place(&ctx(), "a\nb", &big, &stale, rect, 1.0, &desc());
-        assert_eq!(
-            b[0].y, a[0].y,
-            "text that fits is drawn at full size, not at the cached half"
-        );
+        assert_eq!(b[0].y, a[0].y, "text that fits is drawn at full size, not at the cached half");
         assert_eq!(b[0].layout.pixel_size(), a[0].layout.pixel_size());
     }
 
@@ -661,23 +484,10 @@ mod tests {
     fn a_middle_anchored_box_centres_its_block() {
         let body = TextBody {
             anchor: Anchor::Middle,
-            insets: Some(Insets {
-                left: 0.0,
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-            }),
+            insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }),
             ..Default::default()
         };
-        let placed = place(
-            &ctx(),
-            "a",
-            &runs("a"),
-            &body,
-            (0.0, 0.0, 300.0, 200.0),
-            1.0,
-            &desc(),
-        );
+        let placed = place(&ctx(), "a", &runs("a"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
         let h = placed[0].layout.pixel_size().1 as f64;
         assert!((placed[0].y - (200.0 - h) / 2.0).abs() < 1e-9);
     }
@@ -686,33 +496,16 @@ mod tests {
     fn each_paragraph_takes_its_own_alignment_and_stacks_below_the_last() {
         let body = TextBody {
             paras: vec![
-                ParaStyle {
-                    align: ParaAlign::Center,
-                    ..Default::default()
-                },
-                ParaStyle {
-                    align: ParaAlign::Right,
-                    ..Default::default()
-                },
+                ParaStyle { align: ParaAlign::Center, ..Default::default() },
+                ParaStyle { align: ParaAlign::Right, ..Default::default() },
             ],
             ..Default::default()
         };
-        let placed = place(
-            &ctx(),
-            "a\nb",
-            &runs("a\nb"),
-            &body,
-            (0.0, 0.0, 300.0, 200.0),
-            1.0,
-            &desc(),
-        );
+        let placed = place(&ctx(), "a\nb", &runs("a\nb"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
         assert_eq!(placed[0].layout.alignment(), pango::Alignment::Center);
         assert_eq!(placed[1].layout.alignment(), pango::Alignment::Right);
         assert!(placed[1].y > placed[0].y);
-        assert_eq!(
-            placed[0].x, PLAIN_INSET,
-            "no insets stated: the plain inset"
-        );
+        assert_eq!(placed[0].x, PLAIN_INSET, "no insets stated: the plain inset");
     }
 
     /// A bullet with no margin to hang in (marL 0, a negative indent)
@@ -720,40 +513,18 @@ mod tests {
     /// it (the pay-centre innovation deck's Wingdings squares).
     #[test]
     fn a_bullet_with_no_room_to_hang_pushes_its_first_line_over() {
-        let zero = Insets {
-            left: 0.0,
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-        };
+        let zero = Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
         let body = TextBody {
-            paras: vec![ParaStyle {
-                margin_left: 0.0,
-                indent: -30.0,
-                bullet: Bullet::Char("•".into()),
-                ..Default::default()
-            }],
+            paras: vec![ParaStyle { margin_left: 0.0, indent: -30.0, bullet: Bullet::Char("•".into()), ..Default::default() }],
             insets: Some(zero),
             ..Default::default()
         };
-        let placed = place(
-            &ctx(),
-            "text",
-            &runs("text"),
-            &body,
-            (0.0, 0.0, 300.0, 200.0),
-            1.0,
-            &desc(),
-        );
+        let placed = place(&ctx(), "text", &runs("text"), &body, (0.0, 0.0, 300.0, 200.0), 1.0, &desc());
         let m = placed[0].marker.as_ref().expect("a marker");
         assert_eq!(m.x, 0.0);
         let width = m.layout.pixel_extents().1.width();
         assert!(width > 0);
-        assert_eq!(
-            placed[0].layout.indent(),
-            width * pango::SCALE,
-            "the first line starts after the bullet"
-        );
+        assert_eq!(placed[0].layout.indent(), width * pango::SCALE, "the first line starts after the bullet");
     }
 
     /// An oval's text wraps inside the oval, in its inscribed rectangle,
@@ -763,124 +534,36 @@ mod tests {
     fn an_ovals_text_sits_in_its_inscribed_rectangle() {
         use decks_core::engine::shape::{ShapeKind, ShapeStyle};
         use decks_core::engine::text_body::Frame;
-        let zero = Insets {
-            left: 0.0,
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-        };
-        let oval = TextBody {
-            insets: Some(zero),
-            frame: Some(Frame {
-                kind: ShapeKind::Ellipse,
-                style: ShapeStyle::default(),
-            }),
-            ..Default::default()
-        };
-        let placed = place(
-            &ctx(),
-            "a",
-            &runs("a"),
-            &oval,
-            (0.0, 0.0, 400.0, 200.0),
-            1.0,
-            &desc(),
-        );
+        let zero = Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
+        let oval = TextBody { insets: Some(zero), frame: Some(Frame { kind: ShapeKind::Ellipse, style: ShapeStyle::default() }), ..Default::default() };
+        let placed = place(&ctx(), "a", &runs("a"), &oval, (0.0, 0.0, 400.0, 200.0), 1.0, &desc());
         let inset = 200.0 * (1.0 - std::f64::consts::FRAC_1_SQRT_2);
-        assert!(
-            (placed[0].x - inset).abs() < 0.01,
-            "{} vs {inset}",
-            placed[0].x
-        );
-        assert_eq!(
-            content_box(&oval, (400.0, 200.0), 1.0).0,
-            400.0 - 2.0 * inset
-        );
-        let square = TextBody {
-            frame: Some(Frame {
-                kind: ShapeKind::Rect,
-                style: ShapeStyle::default(),
-            }),
-            ..oval
-        };
-        assert_eq!(
-            place(
-                &ctx(),
-                "a",
-                &runs("a"),
-                &square,
-                (0.0, 0.0, 400.0, 200.0),
-                1.0,
-                &desc()
-            )[0]
-            .x,
-            0.0,
-            "a rectangle's is its box"
-        );
+        assert!((placed[0].x - inset).abs() < 0.01, "{} vs {inset}", placed[0].x);
+        assert_eq!(content_box(&oval, (400.0, 200.0), 1.0).0, 400.0 - 2.0 * inset);
+        let square = TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style: ShapeStyle::default() }), ..oval };
+        assert_eq!(place(&ctx(), "a", &runs("a"), &square, (0.0, 0.0, 400.0, 200.0), 1.0, &desc())[0].x, 0.0, "a rectangle's is its box");
     }
 
     /// DCK-007: the editor's caret, selection and click placement are
     /// measured on the layouts the canvas draws, plain or styled.
     #[test]
     fn a_selection_and_a_click_measure_the_text_the_canvas_draws() {
-        let zero = Insets {
-            left: 0.0,
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-        };
-        let body = TextBody {
-            paras: vec![
-                ParaStyle::default(),
-                ParaStyle {
-                    margin_left: 30.0,
-                    ..Default::default()
-                },
-            ],
-            insets: Some(zero),
-            ..Default::default()
-        };
+        let zero = Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 };
+        let body = TextBody { paras: vec![ParaStyle::default(), ParaStyle { margin_left: 30.0, ..Default::default() }], insets: Some(zero), ..Default::default() };
         let text = "Alpha Beta\nGamma";
         let runs = runs(text);
         let rect = (10.0, 10.0, 300.0, 200.0);
         let caret = range_rects(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (11, 11));
         assert_eq!(caret.len(), 1, "{caret:?}");
-        assert!(
-            (caret[0].0 - 40.0).abs() < 0.5,
-            "the second paragraph starts at its margin: {caret:?}"
-        );
+        assert!((caret[0].0 - 40.0).abs() < 0.5, "the second paragraph starts at its margin: {caret:?}");
         let sel = range_rects(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (6, 10));
         assert_eq!(sel.len(), 1, "{sel:?}");
-        assert!(
-            sel[0].0 > 10.0 && sel[0].2 > 0.0 && sel[0].1 < caret[0].1,
-            "{sel:?}"
-        );
-        assert!(
-            range_rects(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (6, 13)).len() >= 2,
-            "a selection across the break covers both"
-        );
+        assert!(sel[0].0 > 10.0 && sel[0].2 > 0.0 && sel[0].1 < caret[0].1, "{sel:?}");
+        assert!(range_rects(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (6, 13)).len() >= 2, "a selection across the break covers both");
         let (x, y, w, h) = sel[0];
-        let at = offset_at(
-            &ctx(),
-            text,
-            &runs,
-            &body,
-            rect,
-            1.0,
-            &desc(),
-            (x + w / 2.0, y + h / 2.0),
-        );
+        let at = offset_at(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (x + w / 2.0, y + h / 2.0));
         assert!((6..=10).contains(&at), "{at}");
-        let at = offset_at(
-            &ctx(),
-            text,
-            &runs,
-            &body,
-            rect,
-            1.0,
-            &desc(),
-            (caret[0].0 + 1.0, caret[0].1 + caret[0].3 / 2.0),
-        );
+        let at = offset_at(&ctx(), text, &runs, &body, rect, 1.0, &desc(), (caret[0].0 + 1.0, caret[0].1 + caret[0].3 / 2.0));
         assert!(at >= 11, "{at}");
         // The plain path: one layout at the canvas's own inset.
         let plain = TextBody::default();
@@ -894,46 +577,13 @@ mod tests {
     /// the figure's height, so it sits where three 14pt lines put it.
     #[test]
     fn a_leading_blank_paragraph_is_as_tall_as_the_run_it_was_written_in() {
-        let small = RunStyle {
-            font_size_hp: Some(14),
-            ..Default::default()
-        };
+        let small = RunStyle { font_size_hp: Some(14), ..Default::default() };
         let mut big = desc();
         big.set_absolute_size(36.0 * pango::SCALE as f64);
-        let body = TextBody {
-            paras: vec![ParaStyle::default(); 3],
-            ..Default::default()
-        };
-        let blank = place(
-            &ctx(),
-            "\n\n6",
-            &[Run {
-                text: "\n\n6".into(),
-                style: small.clone(),
-            }],
-            &body,
-            (0.0, 0.0, 300.0, 300.0),
-            1.0,
-            &big,
-        );
-        let full = place(
-            &ctx(),
-            "4\n5\n6",
-            &[Run {
-                text: "4\n5\n6".into(),
-                style: small,
-            }],
-            &body,
-            (0.0, 0.0, 300.0, 300.0),
-            1.0,
-            &big,
-        );
+        let body = TextBody { paras: vec![ParaStyle::default(); 3], ..Default::default() };
+        let blank = place(&ctx(), "\n\n6", &[Run { text: "\n\n6".into(), style: small.clone() }], &body, (0.0, 0.0, 300.0, 300.0), 1.0, &big);
+        let full = place(&ctx(), "4\n5\n6", &[Run { text: "4\n5\n6".into(), style: small }], &body, (0.0, 0.0, 300.0, 300.0), 1.0, &big);
         assert_eq!(blank.len(), 3);
-        assert!(
-            (blank[2].y - full[2].y).abs() < 1e-9,
-            "blank {} vs text {}",
-            blank[2].y,
-            full[2].y
-        );
+        assert!((blank[2].y - full[2].y).abs() < 1e-9, "blank {} vs text {}", blank[2].y, full[2].y);
     }
 }

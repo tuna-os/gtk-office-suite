@@ -35,10 +35,7 @@ fn measure<F: FnMut()>(name: &str, budget: Duration, mut operation: F) {
     let p50 = samples[SAMPLES / 2];
     let p95 = samples[(SAMPLES * 95).div_ceil(100) - 1];
     eprintln!("{name}: p50={p50:?} p95={p95:?} budget={budget:?} samples={samples:?}");
-    assert!(
-        p95 <= budget,
-        "{name}: p95 {p95:?} is over its {budget:?} budget; samples={samples:?}"
-    );
+    assert!(p95 <= budget, "{name}: p95 {p95:?} is over its {budget:?} budget; samples={samples:?}");
 }
 
 #[test]
@@ -49,22 +46,14 @@ fn an_image_heavy_deck_saves_and_opens_within_budget() {
         for format in ["pptx", "odp"] {
             let path = dir.path().join(format!("deck-{slides}.{format}"));
             let path = path.to_str().unwrap();
-            measure(
-                &format!("{slides}-slide {format} save"),
-                Duration::from_millis(save_budget),
-                || {
-                    decks_core::write_deck(path, &d).expect("save");
-                },
-            );
-            measure(
-                &format!("{slides}-slide {format} open"),
-                Duration::from_millis(open_budget),
-                || {
-                    let back = decks_core::read_deck(path).expect("open");
-                    assert_eq!(pictures(&back), slides, "{format} lost pictures");
-                    black_box(back);
-                },
-            );
+            measure(&format!("{slides}-slide {format} save"), Duration::from_millis(save_budget), || {
+                decks_core::write_deck(path, &d).expect("save");
+            });
+            measure(&format!("{slides}-slide {format} open"), Duration::from_millis(open_budget), || {
+                let back = decks_core::read_deck(path).expect("open");
+                assert_eq!(pictures(&back), slides, "{format} lost pictures");
+                black_box(back);
+            });
         }
     }
 }

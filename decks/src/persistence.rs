@@ -67,8 +67,7 @@ pub(crate) fn read_legacy_package(
     ext: &str,
 ) -> Result<decks_core::engine::Deck, String> {
     let tmp = suite_common::autosave::recovery_scratch_path(state_dir, ext);
-    std::fs::write(&tmp, bytes)
-        .map_err(|e| format!("could not stage the snapshot for recovery: {e}"))?;
+    std::fs::write(&tmp, bytes).map_err(|e| format!("could not stage the snapshot for recovery: {e}"))?;
     let deck = decks_core::read_deck(&tmp.to_string_lossy()).inspect_err(|_| {
         let _ = std::fs::remove_file(&tmp);
     })?;

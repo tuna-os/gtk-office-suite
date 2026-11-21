@@ -67,10 +67,7 @@ pub fn all_documents_filter() -> gtk::FileFilter {
 /// format, built from the app's declared `FORMATS` so the dialog cannot
 /// offer a format the app doesn't read or hide one it does (#1206).
 /// Suffixes rather than patterns, so `REPORT.DOCX` matches too.
-pub fn open_filters(
-    all_label: &str,
-    formats: &[suite_common_core::file_formats::FileFormat],
-) -> gio::ListStore {
+pub fn open_filters(all_label: &str, formats: &[suite_common_core::file_formats::FileFormat]) -> gio::ListStore {
     let list = gio::ListStore::new::<gtk::FileFilter>();
     let all = gtk::FileFilter::new();
     for format in formats {
@@ -85,16 +82,8 @@ pub fn open_filters(
         for extension in format.extensions {
             filter.add_suffix(extension);
         }
-        let extensions: Vec<String> = format
-            .extensions
-            .iter()
-            .map(|extension| format!(".{extension}"))
-            .collect();
-        filter.set_name(Some(&format!(
-            "{} ({})",
-            format.label,
-            extensions.join(", ")
-        )));
+        let extensions: Vec<String> = format.extensions.iter().map(|extension| format!(".{extension}")).collect();
+        filter.set_name(Some(&format!("{} ({})", format.label, extensions.join(", "))));
         list.append(&filter);
     }
     list
@@ -107,9 +96,7 @@ pub struct FileDialogHelper {
 
 impl FileDialogHelper {
     pub fn new(parent: &adw::ApplicationWindow) -> Self {
-        Self {
-            parent: parent.clone(),
-        }
+        Self { parent: parent.clone() }
     }
 
     /// Show open dialog with specified filters, return selected path.
@@ -127,11 +114,7 @@ impl FileDialogHelper {
         }
         let w = self.parent.clone();
         dlg.open(Some(&w), None::<&gio::Cancellable>, move |result| {
-            callback(result.ok().and_then(|f| {
-                crate::locations::open_location(&f)
-                    .map_err(|e| eprintln!("{e}"))
-                    .ok()
-            }))
+            callback(result.ok().and_then(|f| crate::locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok()))
         });
     }
 
@@ -153,11 +136,7 @@ impl FileDialogHelper {
         // A remote destination gets a staging path: the caller writes it,
         // then calls `locations::commit_save` to upload it.
         dlg.save(Some(&w), None::<&gio::Cancellable>, move |result| {
-            callback(result.ok().and_then(|f| {
-                crate::locations::save_location(&f)
-                    .map_err(|e| eprintln!("{e}"))
-                    .ok()
-            }))
+            callback(result.ok().and_then(|f| crate::locations::save_location(&f).map_err(|e| eprintln!("{e}")).ok()))
         });
     }
 

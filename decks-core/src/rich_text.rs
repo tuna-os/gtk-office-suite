@@ -119,13 +119,7 @@ impl RichText {
     /// The text of a text box, or `None` for any other object.
     pub fn of(obj: &SlideObject) -> Option<RichText> {
         match obj {
-            SlideObject::TextBox {
-                text, runs, body, ..
-            } => Some(RichText {
-                text: text.clone(),
-                runs: runs.clone(),
-                body: body.clone(),
-            }),
+            SlideObject::TextBox { text, runs, body, .. } => Some(RichText { text: text.clone(), runs: runs.clone(), body: body.clone() }),
             _ => None,
         }
     }
@@ -134,9 +128,7 @@ impl RichText {
     /// not a text box.
     pub fn write_to(&self, obj: &mut SlideObject) -> bool {
         match obj {
-            SlideObject::TextBox {
-                text, runs, body, ..
-            } => {
+            SlideObject::TextBox { text, runs, body, .. } => {
                 *text = self.text.clone();
                 *runs = self.runs.clone();
                 *body = self.body.clone();
@@ -207,9 +199,7 @@ impl RichText {
         } else {
             containing(start)
         };
-        pick.or(self.runs.last())
-            .map(|r| r.style.clone())
-            .unwrap_or_default()
+        pick.or(self.runs.last()).map(|r| r.style.clone()).unwrap_or_default()
     }
 
     /// The styles of the characters in `start..end`.
@@ -222,12 +212,7 @@ impl RichText {
         for r in &self.runs {
             let (s, e) = (pos, pos + r.text.len());
             pos = e;
-            if s < end
-                && e > start
-                && !r.text[start.saturating_sub(s).min(r.text.len())..(end - s).min(r.text.len())]
-                    .chars()
-                    .all(|c| c == '\n')
-            {
+            if s < end && e > start && !r.text[start.saturating_sub(s).min(r.text.len())..(end - s).min(r.text.len())].chars().all(|c| c == '\n') {
                 out.push(r.style.clone());
             }
         }
@@ -267,18 +252,9 @@ impl RichText {
     /// followed. A break inserted makes a paragraph styled like the one it
     /// splits; a break removed takes the second paragraph's style with
     /// it. Returns whether anything changed.
-    pub fn replace(
-        &mut self,
-        start: usize,
-        end: usize,
-        replacement: &str,
-        style: Option<RunStyle>,
-    ) -> Result<bool, RangeError> {
+    pub fn replace(&mut self, start: usize, end: usize, replacement: &str, style: Option<RunStyle>) -> Result<bool, RangeError> {
         let style = style.or_else(|| (!self.runs.is_empty()).then(|| self.inherited(start)));
-        let run = Run {
-            text: replacement.to_string(),
-            style: style.unwrap_or_default(),
-        };
+        let run = Run { text: replacement.to_string(), style: style.unwrap_or_default() };
         self.replace_runs(start, end, vec![run], &[])
     }
 
@@ -300,31 +276,18 @@ impl RichText {
     /// insertion adds is styled like the one it splits, then has
     /// `new_paras[i]`'s paragraph edits applied (pasted alignment and
     /// lists), where given.
-    pub fn replace_runs(
-        &mut self,
-        start: usize,
-        end: usize,
-        inserted: Vec<Run>,
-        new_paras: &[Vec<FormatEdit>],
-    ) -> Result<bool, RangeError> {
+    pub fn replace_runs(&mut self, start: usize, end: usize, inserted: Vec<Run>, new_paras: &[Vec<FormatEdit>]) -> Result<bool, RangeError> {
         self.check_range(start, end)?;
         let replacement: String = inserted.iter().map(|r| r.text.as_str()).collect();
-        let restyles = inserted
-            .iter()
-            .any(|r| !r.text.is_empty() && self.runs.is_empty() && r.style != RunStyle::default());
-        if self.text[start..end] == replacement
-            && !restyles
-            && (self.runs.is_empty() || self.styles_match(start, &inserted))
-        {
+        let restyles = inserted.iter().any(|r| !r.text.is_empty() && self.runs.is_empty() && r.style != RunStyle::default());
+        if self.text[start..end] == replacement && !restyles && (self.runs.is_empty() || self.styles_match(start, &inserted)) {
             return Ok(false);
         }
         // Paragraph styles first, against the text before the edit.
         let first_para = self.para_of(start);
         let removed = self.text[start..end].matches('\n').count();
         let added = replacement.matches('\n').count();
-        if (!self.body.paras.is_empty() && (removed != 0 || added != 0))
-            || (!new_paras.is_empty() && added != 0)
-        {
+        if (!self.body.paras.is_empty() && (removed != 0 || added != 0)) || (!new_paras.is_empty() && added != 0) {
             let mut paras = self.full_paras();
             let inherited = paras[first_para].clone();
             let fresh = (0..added).map(|i| {
@@ -334,25 +297,16 @@ impl RichText {
                 }
                 p
             });
-            paras.splice(
-                first_para + 1..first_para + removed + 1,
-                fresh.collect::<Vec<_>>(),
-            );
+            paras.splice(first_para + 1..first_para + removed + 1, fresh.collect::<Vec<_>>());
             self.body.paras = paras;
         }
         // Then the runs: a plain box stays plain while what is inserted
         // is plain.
         if !self.runs.is_empty() || restyles {
             if self.runs.is_empty() && !self.text.is_empty() {
-                self.runs.push(Run {
-                    text: self.text.clone(),
-                    style: RunStyle::default(),
-                });
+                self.runs.push(Run { text: self.text.clone(), style: RunStyle::default() });
             }
-            let typing = inserted
-                .first()
-                .map(|r| r.style.clone())
-                .unwrap_or_else(|| self.inherited(start));
+            let typing = inserted.first().map(|r| r.style.clone()).unwrap_or_else(|| self.inherited(start));
             let mut edited: Vec<Run> = Vec::with_capacity(self.runs.len() + inserted.len() + 1);
             let mut pos = 0;
             let mut placed = false;
@@ -390,10 +344,7 @@ impl RichText {
             put(&mut edited, &mut placed);
             // An emptied box keeps its typing style.
             if edited.is_empty() {
-                edited.push(Run {
-                    text: String::new(),
-                    style: typing,
-                });
+                edited.push(Run { text: String::new(), style: typing });
             }
             self.runs = edited;
         }
@@ -405,11 +356,7 @@ impl RichText {
     fn styles_match(&self, start: usize, inserted: &[Run]) -> bool {
         let mut at = start;
         inserted.iter().all(|r| {
-            let ok = r.text.is_empty()
-                || self
-                    .styles_in(at, at + r.text.len())
-                    .iter()
-                    .all(|s| *s == r.style);
+            let ok = r.text.is_empty() || self.styles_in(at, at + r.text.len()).iter().all(|s| *s == r.style);
             at += r.text.len();
             ok
         })
@@ -419,12 +366,7 @@ impl RichText {
     /// the characters (widened to whole grapheme clusters; a caret has
     /// none, see [`TextSession::format`]), the paragraphs touched, or the
     /// box. Never anything outside that. Returns whether anything changed.
-    pub fn format(
-        &mut self,
-        start: usize,
-        end: usize,
-        edit: &FormatEdit,
-    ) -> Result<bool, RangeError> {
+    pub fn format(&mut self, start: usize, end: usize, edit: &FormatEdit) -> Result<bool, RangeError> {
         self.check_range(start, end)?;
         Ok(match edit.scope() {
             EditScope::Characters => {
@@ -455,14 +397,7 @@ impl RichText {
             return false;
         }
         let plain = self.runs.is_empty();
-        let mut runs = if plain {
-            vec![Run {
-                text: self.text.clone(),
-                style: RunStyle::default(),
-            }]
-        } else {
-            self.runs.clone()
-        };
+        let mut runs = if plain { vec![Run { text: self.text.clone(), style: RunStyle::default() }] } else { self.runs.clone() };
         split_runs(&mut runs, start);
         split_runs(&mut runs, end);
         let mut pos = 0;
@@ -509,11 +444,7 @@ impl RichText {
             }
         }
         if self.body.paras.len() > self.para_count() {
-            return Err(format!(
-                "{} paragraph styles for {} paragraphs",
-                self.body.paras.len(),
-                self.para_count()
-            ));
+            return Err(format!("{} paragraph styles for {} paragraphs", self.body.paras.len(), self.para_count()));
         }
         Ok(())
     }
@@ -633,22 +564,16 @@ impl TextSession {
 
     /// The style typing replaces the selection with.
     pub fn typing_style(&self) -> RunStyle {
-        self.typing
-            .clone()
-            .unwrap_or_else(|| self.working.style_at(self.range.0, self.range.1))
+        self.typing.clone().unwrap_or_else(|| self.working.style_at(self.range.0, self.range.1))
     }
 
     /// What the selection looks like, for the editor's controls.
     pub fn format_here(&self) -> RangeFormat {
-        self.working
-            .format_at(self.range.0, self.range.1, self.typing.as_ref())
+        self.working.format_at(self.range.0, self.range.1, self.typing.as_ref())
     }
 
     fn remember(&mut self) {
-        self.undo.push(Step {
-            text: self.working.clone(),
-            range: self.range,
-        });
+        self.undo.push(Step { text: self.working.clone(), range: self.range });
         self.redo.clear();
     }
 
@@ -661,11 +586,7 @@ impl TextSession {
         if start == end && text.is_empty() {
             return Ok(false);
         }
-        let style = if (start, end) == self.range {
-            self.typing_style()
-        } else {
-            self.working.style_at(start, end)
-        };
+        let style = if (start, end) == self.range { self.typing_style() } else { self.working.style_at(start, end) };
         let word = start == end && !text.is_empty() && text.chars().all(char::is_alphanumeric);
         if !word || self.typing_at != Some(start) {
             self.remember();
@@ -683,11 +604,7 @@ impl TextSession {
 
     /// Insert styled runs (a paste) over the selection, each new
     /// paragraph given `new_paras`' paragraph edits.
-    pub fn insert_runs(
-        &mut self,
-        runs: Vec<Run>,
-        new_paras: &[Vec<FormatEdit>],
-    ) -> Result<bool, RangeError> {
+    pub fn insert_runs(&mut self, runs: Vec<Run>, new_paras: &[Vec<FormatEdit>]) -> Result<bool, RangeError> {
         let (start, end) = self.range;
         let len: usize = runs.iter().map(|r| r.text.len()).sum();
         let mut edited = self.working.clone();
@@ -729,13 +646,8 @@ impl TextSession {
 
     /// Undo the session's last step; the document is never touched.
     pub fn undo(&mut self) -> bool {
-        let Some(step) = self.undo.pop() else {
-            return false;
-        };
-        self.redo.push(Step {
-            text: std::mem::replace(&mut self.working, step.text),
-            range: self.range,
-        });
+        let Some(step) = self.undo.pop() else { return false };
+        self.redo.push(Step { text: std::mem::replace(&mut self.working, step.text), range: self.range });
         self.range = step.range;
         self.typing = None;
         self.typing_at = None;
@@ -743,13 +655,8 @@ impl TextSession {
     }
 
     pub fn redo(&mut self) -> bool {
-        let Some(step) = self.redo.pop() else {
-            return false;
-        };
-        self.undo.push(Step {
-            text: std::mem::replace(&mut self.working, step.text),
-            range: self.range,
-        });
+        let Some(step) = self.redo.pop() else { return false };
+        self.undo.push(Step { text: std::mem::replace(&mut self.working, step.text), range: self.range });
         self.range = step.range;
         self.typing = None;
         self.typing_at = None;
@@ -767,11 +674,7 @@ pub fn link_at(runs: &[Run], offset: usize) -> Option<&str> {
     for run in runs {
         let end = start + run.text.len();
         if offset < end {
-            return if offset >= start {
-                run.style.link.as_deref()
-            } else {
-                None
-            };
+            return if offset >= start { run.style.link.as_deref() } else { None };
         }
         start = end;
     }
@@ -784,10 +687,7 @@ pub fn link_at(runs: &[Run], offset: usize) -> Option<&str> {
 /// make a click launch a `file:` path or another program's scheme.
 pub fn is_followable(uri: &str) -> bool {
     let scheme = uri.split(':').next().unwrap_or("");
-    uri.contains(':')
-        && ["http", "https", "mailto"]
-            .iter()
-            .any(|ok| scheme.eq_ignore_ascii_case(ok))
+    uri.contains(':') && ["http", "https", "mailto"].iter().any(|ok| scheme.eq_ignore_ascii_case(ok))
 }
 
 #[cfg(test)]
@@ -796,78 +696,36 @@ mod tests {
     use crate::engine::{Anchor, Bullet, ParaAlign};
 
     fn bold() -> RunStyle {
-        RunStyle {
-            bold: true,
-            ..Default::default()
-        }
+        RunStyle { bold: true, ..Default::default() }
     }
 
     fn italic() -> RunStyle {
-        RunStyle {
-            italic: true,
-            ..Default::default()
-        }
+        RunStyle { italic: true, ..Default::default() }
     }
 
     fn run(text: &str, style: RunStyle) -> Run {
-        Run {
-            text: text.into(),
-            style,
-        }
+        Run { text: text.into(), style }
     }
 
     /// An imported mixed paragraph and a second, differently styled one.
     fn mixed() -> RichText {
-        let first = ParaStyle {
-            align: ParaAlign::Center,
-            ..Default::default()
-        };
-        let second = ParaStyle {
-            margin_left: 36.0,
-            bullet: Bullet::Char("•".into()),
-            indent: -36.0,
-            ..Default::default()
-        };
+        let first = ParaStyle { align: ParaAlign::Center, ..Default::default() };
+        let second = ParaStyle { margin_left: 36.0, bullet: Bullet::Char("•".into()), indent: -36.0, ..Default::default() };
         RichText {
             text: "Alpha Beta Gamma\nSecond".into(),
-            runs: vec![
-                run("Alpha ", bold()),
-                run("Beta", RunStyle::default()),
-                run(" Gamma\nSecond", italic()),
-            ],
-            body: TextBody {
-                paras: vec![first, second],
-                anchor: Anchor::Middle,
-                ..Default::default()
-            },
+            runs: vec![run("Alpha ", bold()), run("Beta", RunStyle::default()), run(" Gamma\nSecond", italic())],
+            body: TextBody { paras: vec![first, second], anchor: Anchor::Middle, ..Default::default() },
         }
     }
 
     fn spans(t: &RichText) -> Vec<(&str, bool, bool, bool)> {
-        t.runs
-            .iter()
-            .map(|r| {
-                (
-                    r.text.as_str(),
-                    r.style.bold,
-                    r.style.italic,
-                    r.style.underline,
-                )
-            })
-            .collect()
+        t.runs.iter().map(|r| (r.text.as_str(), r.style.bold, r.style.italic, r.style.underline)).collect()
     }
 
     #[test]
     fn a_click_finds_the_link_of_the_run_it_lands_in() {
-        let linked = RunStyle {
-            link: Some("https://example.com/a".into()),
-            ..Default::default()
-        };
-        let runs = vec![
-            run("See ", RunStyle::default()),
-            run("the page", linked),
-            run(" now", RunStyle::default()),
-        ];
+        let linked = RunStyle { link: Some("https://example.com/a".into()), ..Default::default() };
+        let runs = vec![run("See ", RunStyle::default()), run("the page", linked), run(" now", RunStyle::default())];
         // "See " is bytes 0..4, "the page" 4..12, " now" 12..16.
         assert_eq!(link_at(&runs, 0), None);
         assert_eq!(link_at(&runs, 3), None);
@@ -881,10 +739,7 @@ mod tests {
 
     #[test]
     fn a_link_in_a_multibyte_run_is_found_by_byte() {
-        let linked = RunStyle {
-            link: Some("mailto:a@b.example".into()),
-            ..Default::default()
-        };
+        let linked = RunStyle { link: Some("mailto:a@b.example".into()), ..Default::default() };
         // "é" is two bytes: the link run starts at byte 3.
         let runs = vec![run("é ", RunStyle::default()), run("café", linked)];
         assert_eq!(link_at(&runs, 2), None);
@@ -894,22 +749,10 @@ mod tests {
 
     #[test]
     fn only_web_and_mail_links_are_followed() {
-        for ok in [
-            "https://example.com",
-            "HTTP://example.com/x",
-            "mailto:a@b.example",
-        ] {
+        for ok in ["https://example.com", "HTTP://example.com/x", "mailto:a@b.example"] {
             assert!(is_followable(ok), "{ok}");
         }
-        for no in [
-            "file:///etc/passwd",
-            "javascript:alert(1)",
-            "smb://host/share",
-            "example.com",
-            "",
-            "https",
-            "x-https:y",
-        ] {
+        for no in ["file:///etc/passwd", "javascript:alert(1)", "smb://host/share", "example.com", "", "https", "x-https:y"] {
             assert!(!is_followable(no), "{no}");
         }
     }
@@ -920,31 +763,14 @@ mod tests {
         let before = t.clone();
         // "Beta" -> "Delta": in Beta's style; neighbours untouched.
         assert_eq!(t.replace(6, 10, "Delta", None), Ok(true));
-        assert_eq!(
-            spans(&t),
-            vec![
-                ("Alpha ", true, false, false),
-                ("Delta", false, false, false),
-                (" Gamma\nSecond", false, true, false)
-            ]
-        );
-        assert_eq!(
-            t.body, before.body,
-            "no break added or removed: paragraphs as they were"
-        );
+        assert_eq!(spans(&t), vec![("Alpha ", true, false, false), ("Delta", false, false, false), (" Gamma\nSecond", false, true, false)]);
+        assert_eq!(t.body, before.body, "no break added or removed: paragraphs as they were");
         t.check().unwrap();
         // A break inside the first paragraph: its style is copied to the
         // new paragraph; the second paragraph keeps its own.
         t.replace(5, 5, "\n", None).unwrap();
         assert_eq!(t.text, "Alpha\n Delta Gamma\nSecond");
-        assert_eq!(
-            t.body.paras,
-            vec![
-                before.body.paras[0].clone(),
-                before.body.paras[0].clone(),
-                before.body.paras[1].clone()
-            ]
-        );
+        assert_eq!(t.body.paras, vec![before.body.paras[0].clone(), before.body.paras[0].clone(), before.body.paras[1].clone()]);
         assert_eq!(t.body.anchor, Anchor::Middle);
         t.check().unwrap();
         // Joining the last two paragraphs drops the second's style only.
@@ -966,13 +792,7 @@ mod tests {
         assert_eq!(t.format(11, 14, &FormatEdit::Underline(true)), Ok(true));
         assert_eq!(
             spans(&t),
-            vec![
-                ("Alpha ", true, false, false),
-                ("Beta", false, false, false),
-                (" ", false, true, false),
-                ("Gam", false, true, true),
-                ("ma\nSecond", false, true, false)
-            ]
+            vec![("Alpha ", true, false, false), ("Beta", false, false, false), (" ", false, true, false), ("Gam", false, true, true), ("ma\nSecond", false, true, false)]
         );
         t.check().unwrap();
         // Undoing it by formatting back merges around the edit only.
@@ -980,56 +800,29 @@ mod tests {
         assert_eq!(t.runs, mixed().runs);
         // A paragraph edit from inside the second paragraph reaches it alone.
         let at = t.text.find("Sec").unwrap();
-        assert_eq!(
-            t.format(at, at, &FormatEdit::Align(ParaAlign::Right)),
-            Ok(true)
-        );
+        assert_eq!(t.format(at, at, &FormatEdit::Align(ParaAlign::Right)), Ok(true));
         assert_eq!(t.body.paras[0].align, ParaAlign::Center);
         assert_eq!(t.body.paras[1].align, ParaAlign::Right);
         // A selection ending just after a break does not reach the next
         // paragraph.
         let nl = t.text.find('\n').unwrap();
-        t.format(0, nl + 1, &FormatEdit::Align(ParaAlign::Justify))
-            .unwrap();
-        assert_eq!(
-            (t.body.paras[0].align, t.body.paras[1].align),
-            (ParaAlign::Justify, ParaAlign::Right)
-        );
+        t.format(0, nl + 1, &FormatEdit::Align(ParaAlign::Justify)).unwrap();
+        assert_eq!((t.body.paras[0].align, t.body.paras[1].align), (ParaAlign::Justify, ParaAlign::Right));
         // An object edit is not a text edit.
         assert_eq!(t.format(0, 3, &FormatEdit::X(4.0)), Ok(false));
         // Bad ranges are refused, not clamped.
-        assert_eq!(
-            t.format(4, 2, &FormatEdit::Bold(true)),
-            Err(RangeError::Reversed)
-        );
-        assert_eq!(
-            t.format(0, 999, &FormatEdit::Bold(true)),
-            Err(RangeError::OutOfBounds)
-        );
+        assert_eq!(t.format(4, 2, &FormatEdit::Bold(true)), Err(RangeError::Reversed));
+        assert_eq!(t.format(0, 999, &FormatEdit::Bold(true)), Err(RangeError::OutOfBounds));
     }
 
     #[test]
     fn a_plain_box_stays_plain_until_styled_and_an_emptied_box_keeps_its_style() {
-        let mut t = RichText {
-            text: "plain".into(),
-            runs: vec![],
-            body: TextBody::default(),
-        };
+        let mut t = RichText { text: "plain".into(), runs: vec![], body: TextBody::default() };
         t.replace(5, 5, " text", None).unwrap();
         assert!(t.runs.is_empty(), "plain typing keeps a plain box plain");
-        assert_eq!(
-            t.format(0, 5, &FormatEdit::Bold(false)),
-            Ok(false),
-            "no visible change, no runs"
-        );
+        assert_eq!(t.format(0, 5, &FormatEdit::Bold(false)), Ok(false), "no visible change, no runs");
         assert_eq!(t.format(0, 5, &FormatEdit::Bold(true)), Ok(true));
-        assert_eq!(
-            spans(&t),
-            vec![
-                ("plain", true, false, false),
-                (" text", false, false, false)
-            ]
-        );
+        assert_eq!(spans(&t), vec![("plain", true, false, false), (" text", false, false, false)]);
         t.replace(0, t.text.len(), "", None).unwrap();
         assert_eq!(t.runs, vec![run("", bold())], "the emptied box types bold");
         t.check().unwrap();
@@ -1059,26 +852,14 @@ mod tests {
         let fam = 3;
         let fam_end = fam + "👨\u{200d}👩\u{200d}👧".len();
         assert_eq!(grapheme_bounds(text, fam + 4, fam + 8), (fam, fam_end));
-        assert_eq!(
-            grapheme_bounds(text, 1, 1),
-            (0, 0),
-            "a caret inside a cluster sits at its start"
-        );
-        let mut t = RichText {
-            text: text.into(),
-            runs: vec![],
-            body: TextBody::default(),
-        };
+        assert_eq!(grapheme_bounds(text, 1, 1), (0, 0), "a caret inside a cluster sits at its start");
+        let mut t = RichText { text: text.into(), runs: vec![], body: TextBody::default() };
         t.format(0, 1, &FormatEdit::Bold(true)).unwrap();
-        assert_eq!(
-            t.runs[0].text, "e\u{301}",
-            "the accent stays with its letter"
-        );
+        assert_eq!(t.runs[0].text, "e\u{301}", "the accent stays with its letter");
         // Hebrew and its digits keep their logical order through a
         // range edit.
         let heb = text.find('ש').unwrap();
-        t.format(heb, heb + "שלום".len(), &FormatEdit::Italic(true))
-            .unwrap();
+        t.format(heb, heb + "שלום".len(), &FormatEdit::Italic(true)).unwrap();
         assert_eq!(t.text, text);
         assert!(t.runs.iter().any(|r| r.text == "שלום" && r.style.italic));
         t.check().unwrap();
@@ -1095,17 +876,9 @@ mod tests {
         // A caret after it: Ctrl+I sets the typing style only.
         s.set_range(10, 10).unwrap();
         assert!(s.format(&FormatEdit::Italic(true)));
-        assert_eq!(
-            s.working().text,
-            mixed().text,
-            "a caret format changes no text"
-        );
+        assert_eq!(s.working().text, mixed().text, "a caret format changes no text");
         s.replace(10, 10, "X").unwrap();
-        assert!(s
-            .working()
-            .runs
-            .iter()
-            .any(|r| r.text.contains('X') && r.style.bold && r.style.italic));
+        assert!(s.working().runs.iter().any(|r| r.text.contains('X') && r.style.bold && r.style.italic));
         // Typing a word is one undo step; the format before it another.
         s.replace(11, 11, "y").unwrap();
         assert!(s.undo());
@@ -1120,10 +893,7 @@ mod tests {
         s.replace(0, 5, "").unwrap();
         s.replace(0, 0, "Omega").unwrap();
         let first = &s.working().runs[0];
-        assert!(
-            first.text.starts_with("Omega ") && first.style.bold,
-            "{first:?}"
-        );
+        assert!(first.text.starts_with("Omega ") && first.style.bold, "{first:?}");
         s.working().check().unwrap();
         assert!(s.changed());
     }
@@ -1133,22 +903,12 @@ mod tests {
         let mut s = TextSession::new(1, 2, None, mixed());
         s.set_range(5, 5).unwrap();
         let runs = vec![run(" one\ntwo", RunStyle::default())];
-        assert_eq!(
-            s.insert_runs(runs, &[vec![], vec![FormatEdit::List(ListKind::Number)]]),
-            Ok(true)
-        );
+        assert_eq!(s.insert_runs(runs, &[vec![], vec![FormatEdit::List(ListKind::Number)]]), Ok(true));
         let w = s.working();
         assert_eq!(w.text, "Alpha one\ntwo Beta Gamma\nSecond");
         assert_eq!(w.body.paras.len(), 3);
-        assert_eq!(
-            w.body.paras[1].align,
-            ParaAlign::Center,
-            "inherits the split paragraph"
-        );
-        assert!(
-            matches!(w.body.paras[1].bullet, Bullet::AutoNum { .. }),
-            "with its own list"
-        );
+        assert_eq!(w.body.paras[1].align, ParaAlign::Center, "inherits the split paragraph");
+        assert!(matches!(w.body.paras[1].bullet, Bullet::AutoNum { .. }), "with its own list");
         w.check().unwrap();
         assert_eq!(s.range(), (13, 13));
     }

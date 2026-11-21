@@ -20,28 +20,18 @@
 /// slide's relationships part needs added for them. `rels` is that part;
 /// `read` reads a package part by name, empty if it is missing. A frame
 /// whose drawing can't be found is left as it was.
-pub(super) fn inline(
-    slide_xml: &str,
-    rels: &str,
-    slide_dir: &str,
-    mut read: impl FnMut(&str) -> String,
-) -> (String, String) {
+pub(super) fn inline(slide_xml: &str, rels: &str, slide_dir: &str, mut read: impl FnMut(&str) -> String) -> (String, String) {
     if !slide_xml.contains("relIds") {
         return (slide_xml.to_string(), String::new());
     }
     let mut extra_rels = String::new();
     let rels = relationships(rels);
-    let drawings: Vec<&Rel> = rels
-        .iter()
-        .filter(|r| r.kind.ends_with("/diagramDrawing"))
-        .collect();
+    let drawings: Vec<&Rel> = rels.iter().filter(|r| r.kind.ends_with("/diagramDrawing")).collect();
     let mut out = String::with_capacity(slide_xml.len());
     let mut rest = slide_xml;
     let mut nth = 0;
     while let Some(start) = rest.find("<p:graphicFrame") {
-        let Some(len) = rest[start..].find("</p:graphicFrame>") else {
-            break;
-        };
+        let Some(len) = rest[start..].find("</p:graphicFrame>") else { break };
         let end = start + len + "</p:graphicFrame>".len();
         let frame = &rest[start..end];
         out.push_str(&rest[..start]);
@@ -71,21 +61,13 @@ pub(super) fn inline(
                     continue;
                 }
                 for attr in ["r:embed", "r:link", "r:id"] {
-                    shapes = shapes
-                        .replace(&format!("{attr}=\"{}\"", r.id), &format!("{attr}=\"{id}\""));
+                    shapes = shapes.replace(&format!("{attr}=\"{}\"", r.id), &format!("{attr}=\"{id}\""));
                 }
                 // An external target (a hyperlink's URL) is kept as written.
                 let rel = if r.external {
-                    format!(
-                        r#"<Relationship Id="{id}" Type="{}" Target="{}" TargetMode="External"/>"#,
-                        r.kind, r.target
-                    )
+                    format!(r#"<Relationship Id="{id}" Type="{}" Target="{}" TargetMode="External"/>"#, r.kind, r.target)
                 } else {
-                    format!(
-                        r#"<Relationship Id="{id}" Type="{}" Target="{}"/>"#,
-                        r.kind,
-                        relative_to(slide_dir, &part_path(dir, &r.target))
-                    )
+                    format!(r#"<Relationship Id="{id}" Type="{}" Target="{}"/>"#, r.kind, relative_to(slide_dir, &part_path(dir, &r.target)))
                 };
                 extra_rels.push_str(&rel);
             }
@@ -131,12 +113,7 @@ fn relationships(rels: &str) -> Vec<Rel> {
             // The split took the space before the first attribute.
             let r = format!(" {}", &r[..r.find('>').unwrap_or(r.len())]);
             let get = |k: &str| attr(&r, k).map(str::to_string);
-            Some(Rel {
-                id: get("Id")?,
-                kind: get("Type")?,
-                target: get("Target")?,
-                external: get("TargetMode").as_deref() == Some("External"),
-            })
+            Some(Rel { id: get("Id")?, kind: get("Type")?, target: get("Target")?, external: get("TargetMode").as_deref() == Some("External") })
         })
         .collect()
 }
@@ -157,11 +134,7 @@ fn attr_in<'a>(xml: &'a str, element: &str, name: &str) -> Option<&'a str> {
 
 /// A relationship target, relative to the slide's folder, as a part name.
 fn part_path(slide_dir: &str, target: &str) -> String {
-    let mut parts: Vec<&str> = if target.starts_with('/') {
-        Vec::new()
-    } else {
-        slide_dir.split('/').filter(|s| !s.is_empty()).collect()
-    };
+    let mut parts: Vec<&str> = if target.starts_with('/') { Vec::new() } else { slide_dir.split('/').filter(|s| !s.is_empty()).collect() };
     for seg in target.split('/').filter(|s| !s.is_empty()) {
         match seg {
             ".." => {
@@ -179,12 +152,7 @@ fn frame_box(frame: &str) -> Option<(i64, i64, i64, i64)> {
     let x = frame.find("<p:xfrm")?;
     let xfrm = &frame[x..x + frame[x..].find("</p:xfrm>")?];
     let num = |el: &str, k: &str| attr_in(xfrm, el, k).and_then(|v| v.parse().ok());
-    Some((
-        num("a:off", "x")?,
-        num("a:off", "y")?,
-        num("a:ext", "cx")?,
-        num("a:ext", "cy")?,
-    ))
+    Some((num("a:off", "x")?, num("a:off", "y")?, num("a:ext", "cx")?, num("a:ext", "cy")?))
 }
 
 /// The drawing's shapes as slide shapes: its spTree's children with the
@@ -217,9 +185,7 @@ fn shapes_of(drawing: &str) -> Option<String> {
 /// rectangle, which may sit well inside the shape (a label beside an icon,
 /// an arc's caption off to one side). The rectangle is then removed.
 fn text_rect_as_insets(sp: &str) -> String {
-    let Some(t) = sp.find("<dsp:txXfrm") else {
-        return sp.to_string();
-    };
+    let Some(t) = sp.find("<dsp:txXfrm") else { return sp.to_string() };
     let end = match (sp[t..].find("</dsp:txXfrm>"), sp[t..].find("/>")) {
         (Some(n), _) => t + n + "</dsp:txXfrm>".len(),
         (None, Some(n)) => t + n + 2,
@@ -227,62 +193,30 @@ fn text_rect_as_insets(sp: &str) -> String {
     };
     let rect = |xml: &str| -> Option<(f64, f64, f64, f64)> {
         let n = |el: &str, k: &str| attr_in(xml, el, k).and_then(|v| v.parse::<f64>().ok());
-        Some((
-            n("a:off", "x")?,
-            n("a:off", "y")?,
-            n("a:ext", "cx")?,
-            n("a:ext", "cy")?,
-        ))
+        Some((n("a:off", "x")?, n("a:off", "y")?, n("a:ext", "cx")?, n("a:ext", "cy")?))
     };
     let tx_xml = &sp[t..end];
-    let shape = sp
-        .find("<dsp:spPr")
-        .and_then(|p| sp[p..].find("</dsp:spPr>").map(|q| &sp[p..p + q]))
-        .and_then(rect);
+    let shape = sp.find("<dsp:spPr").and_then(|p| sp[p..].find("</dsp:spPr>").map(|q| &sp[p..p + q])).and_then(rect);
     let mut out = format!("{}{}", &sp[..t], &sp[end..]);
     // A turned text rectangle is not a plain inset; keep the shape's box.
     let turned = attr_in(tx_xml, "dsp:txXfrm", "rot").is_some_and(|r| r != "0");
-    let (Some((x, y, w, h)), Some((tx, ty, tw, th)), false) = (shape, rect(tx_xml), turned) else {
-        return out;
-    };
+    let (Some((x, y, w, h)), Some((tx, ty, tw, th)), false) = (shape, rect(tx_xml), turned) else { return out };
     // The preset's own text rectangle (a rounded rectangle's, clear of its
     // corners) is drawn already (ShapeKind::text_inset); only what the
     // diagram's rectangle adds beyond it becomes an inset.
-    let mut kind = attr_in(sp, "a:prstGeom", "prst").map_or(
-        super::shape::ShapeKind::Rect,
-        super::shape::ShapeKind::from_prst,
-    );
+    let mut kind = attr_in(sp, "a:prstGeom", "prst").map_or(super::shape::ShapeKind::Rect, super::shape::ShapeKind::from_prst);
     if let super::shape::ShapeKind::RoundRect { radius } = &mut kind {
-        if let Some(adj) = attr_in(sp, "a:gd", "fmla")
-            .and_then(|f| f.strip_prefix("val ")?.trim().parse::<f64>().ok())
-        {
+        if let Some(adj) = attr_in(sp, "a:gd", "fmla").and_then(|f| f.strip_prefix("val ")?.trim().parse::<f64>().ok()) {
             *radius = (adj / 100_000.0).clamp(0.0, 0.5);
         }
     }
     let (pl, pt, pr, pb) = kind.text_inset(w, h);
-    let delta = [
-        (tx - x) - pl,
-        (ty - y) - pt,
-        (x + w - tx - tw) - pr,
-        (y + h - ty - th) - pb,
-    ]
-    .map(|d| if d > 1.0 { d } else { 0.0 });
-    let Some(b) = out.find("<a:bodyPr") else {
-        return out;
-    };
+    let delta = [(tx - x) - pl, (ty - y) - pt, (x + w - tx - tw) - pr, (y + h - ty - th) - pb].map(|d| if d > 1.0 { d } else { 0.0 });
+    let Some(b) = out.find("<a:bodyPr") else { return out };
     let tag_end = b + out[b..].find('>').unwrap_or(0);
     let tag = &out[b..tag_end];
-    let own = |k: &str, d: f64| {
-        attr(tag, k)
-            .and_then(|v| v.parse::<f64>().ok())
-            .unwrap_or(d)
-    };
-    let insets = [
-        ("lIns", own("lIns", 91440.0) + delta[0]),
-        ("tIns", own("tIns", 45720.0) + delta[1]),
-        ("rIns", own("rIns", 91440.0) + delta[2]),
-        ("bIns", own("bIns", 45720.0) + delta[3]),
-    ];
+    let own = |k: &str, d: f64| attr(tag, k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
+    let insets = [("lIns", own("lIns", 91440.0) + delta[0]), ("tIns", own("tIns", 45720.0) + delta[1]), ("rIns", own("rIns", 91440.0) + delta[2]), ("bIns", own("bIns", 45720.0) + delta[3])];
     // The tag without its own insets, then the combined ones.
     let mut new_tag = tag.to_string();
     for (k, _) in insets {
@@ -309,14 +243,10 @@ fn strip_leading(body: &mut String, el: &str) {
     let lead = body.len() - trimmed.len();
     let open = format!("<dsp:{el}");
     // `<dsp:grpSpPr` must not match `<dsp:grpSpPrX`.
-    if !trimmed.starts_with(&open)
-        || !matches!(trimmed[open.len()..].chars().next(), Some('>' | '/' | ' '))
-    {
+    if !trimmed.starts_with(&open) || !matches!(trimmed[open.len()..].chars().next(), Some('>' | '/' | ' ')) {
         return;
     }
-    let Some(tag_end) = trimmed.find('>') else {
-        return;
-    };
+    let Some(tag_end) = trimmed.find('>') else { return };
     let end = if trimmed[..tag_end].ends_with('/') {
         tag_end + 1
     } else {
@@ -354,23 +284,14 @@ mod tests {
         assert!(!out.contains("graphicFrame"), "{out}");
         assert!(out.contains(r#"<a:off x="100" y="200"/><a:ext cx="3000" cy="2000"/><a:chOff x="0" y="0"/><a:chExt cx="3000" cy="2000"/>"#), "{out}");
         assert!(out.contains(r#"<p:sp modelId="a"><p:nvSpPr>"#), "{out}");
-        assert!(
-            out.contains("<a:t>Communication</a:t></a:r></a:p></p:txBody></p:sp></p:grpSp>"),
-            "the text rectangle is dropped: {out}"
-        );
-        assert!(
-            !out.contains("dsp:") && !out.contains("cNvGrpSpPr/></p:nvGrpSpPr><p:grpSpPr/>"),
-            "{out}"
-        );
+        assert!(out.contains("<a:t>Communication</a:t></a:r></a:p></p:txBody></p:sp></p:grpSp>"), "the text rectangle is dropped: {out}");
+        assert!(!out.contains("dsp:") && !out.contains("cNvGrpSpPr/></p:nvGrpSpPr><p:grpSpPr/>"), "{out}");
     }
 
     #[test]
     fn a_frame_without_its_drawing_and_other_frames_stay_as_they_were() {
         let slide = format!("<p:spTree>{FRAME}</p:spTree>");
-        assert_eq!(
-            inline(&slide, RELS, "ppt/slides", |_| String::new()).0,
-            slide
-        );
+        assert_eq!(inline(&slide, RELS, "ppt/slides", |_| String::new()).0, slide);
         let table = r#"<p:spTree><p:graphicFrame><a:tbl/></p:graphicFrame></p:spTree>"#;
         assert_eq!(inline(table, RELS, "ppt/slides", read).0, table);
     }
@@ -380,34 +301,12 @@ mod tests {
     /// the body's own defaults.
     #[test]
     fn a_text_rectangle_becomes_the_texts_insets() {
-        let (out, _) = inline(
-            &format!("<p:spTree>{FRAME}</p:spTree>"),
-            RELS,
-            "ppt/slides",
-            read,
-        );
-        assert!(
-            out.contains(r#"<a:bodyPr lIns="91445" tIns="45725" rIns="91445" bIns="45725"/>"#),
-            "{out}"
-        );
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:bodyPr lIns="91445" tIns="45725" rIns="91445" bIns="45725"/>"#), "{out}");
         let turned = DRAWING.replace("<dsp:txXfrm>", r#"<dsp:txXfrm rot="5400000">"#);
-        let read_turned = |name: &str| {
-            if name == "ppt/diagrams/drawing1.xml" {
-                turned.clone()
-            } else {
-                read(name)
-            }
-        };
-        let (out, _) = inline(
-            &format!("<p:spTree>{FRAME}</p:spTree>"),
-            RELS,
-            "ppt/slides",
-            read_turned,
-        );
-        assert!(
-            out.contains("<a:bodyPr/>") && !out.contains("txXfrm"),
-            "a turned rectangle is dropped, not inset: {out}"
-        );
+        let read_turned = |name: &str| if name == "ppt/diagrams/drawing1.xml" { turned.clone() } else { read(name) };
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read_turned);
+        assert!(out.contains("<a:bodyPr/>") && !out.contains("txXfrm"), "a turned rectangle is dropped, not inset: {out}");
     }
 
     /// A rounded rectangle's text rectangle is its preset's own: nothing
@@ -417,46 +316,23 @@ mod tests {
         // A 1359966 x 1256575 rounded rectangle (default corner) and the
         // text rectangle PowerPoint saved for it.
         let drawing = DRAWING
-            .replace(
-                r#"<a:off x="0" y="10"/><a:ext cx="1000" cy="900"/>"#,
-                r#"<a:off x="3927010" y="2081"/><a:ext cx="1359966" cy="1256575"/>"#,
-            )
+            .replace(r#"<a:off x="0" y="10"/><a:ext cx="1000" cy="900"/>"#, r#"<a:off x="3927010" y="2081"/><a:ext cx="1359966" cy="1256575"/>"#)
             .replace(r#"prst="rect""#, r#"prst="roundRect""#)
-            .replace(
-                r#"<a:off x="5" y="15"/><a:ext cx="990" cy="890"/>"#,
-                r#"<a:off x="3988351" y="63422"/><a:ext cx="1237284" cy="1133893"/>"#,
-            );
+            .replace(r#"<a:off x="5" y="15"/><a:ext cx="990" cy="890"/>"#, r#"<a:off x="3988351" y="63422"/><a:ext cx="1237284" cy="1133893"/>"#);
         let read = |name: &str| match name {
             "ppt/diagrams/data1.xml" => DATA.to_string(),
             "ppt/diagrams/drawing1.xml" => drawing.clone(),
             _ => String::new(),
         };
-        let (out, _) = inline(
-            &format!("<p:spTree>{FRAME}</p:spTree>"),
-            RELS,
-            "ppt/slides",
-            read,
-        );
-        assert!(
-            out.contains(r#"<a:bodyPr lIns="91440" tIns="45720" rIns="91440" bIns="45720"/>"#),
-            "{out}"
-        );
+        let (out, _) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
+        assert!(out.contains(r#"<a:bodyPr lIns="91440" tIns="45720" rIns="91440" bIns="45720"/>"#), "{out}");
     }
 
     #[test]
     fn targets_resolve_against_the_slides_folder() {
-        assert_eq!(
-            part_path("ppt/slides", "../diagrams/drawing1.xml"),
-            "ppt/diagrams/drawing1.xml"
-        );
-        assert_eq!(
-            part_path("ppt/slides", "/ppt/diagrams/d.xml"),
-            "ppt/diagrams/d.xml"
-        );
-        assert_eq!(
-            relative_to("ppt/slides", "ppt/media/image3.png"),
-            "../media/image3.png"
-        );
+        assert_eq!(part_path("ppt/slides", "../diagrams/drawing1.xml"), "ppt/diagrams/drawing1.xml");
+        assert_eq!(part_path("ppt/slides", "/ppt/diagrams/d.xml"), "ppt/diagrams/d.xml");
+        assert_eq!(relative_to("ppt/slides", "ppt/media/image3.png"), "../media/image3.png");
         assert_eq!(relative_to("ppt/slides", "ppt/slides/x.png"), "x.png");
     }
 
@@ -475,27 +351,16 @@ mod tests {
             "ppt/diagrams/_rels/drawing1.xml.rels" => drawing_rels.to_string(),
             _ => String::new(),
         };
-        let (out, extra) = inline(
-            &format!("<p:spTree>{FRAME}</p:spTree>"),
-            RELS,
-            "ppt/slides",
-            read,
-        );
+        let (out, extra) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
         assert!(out.contains(r#"<a:blip r:embed="dgm0_rId1"/>"#), "{out}");
-        assert_eq!(
-            extra,
-            r#"<Relationship Id="dgm0_rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>"#
-        );
+        assert_eq!(extra, r#"<Relationship Id="dgm0_rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image3.png"/>"#);
     }
 
     /// A hyperlink on a diagram's text names its URL in the drawing's
     /// relationships: its r:id is renamed with it, the URL kept as written.
     #[test]
     fn a_hyperlinks_relationship_follows_it_into_the_slide() {
-        let drawing = DRAWING.replace(
-            "<a:r><a:t>Communication",
-            r#"<a:r><a:rPr><a:hlinkClick r:id="rId2"/></a:rPr><a:t>Communication"#,
-        );
+        let drawing = DRAWING.replace("<a:r><a:t>Communication", r#"<a:r><a:rPr><a:hlinkClick r:id="rId2"/></a:rPr><a:t>Communication"#);
         let drawing_rels = r#"<Relationships><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org/a?b=1&amp;c=2" TargetMode="External"/></Relationships>"#;
         let read = |name: &str| match name {
             "ppt/diagrams/data1.xml" => DATA.to_string(),
@@ -503,16 +368,8 @@ mod tests {
             "ppt/diagrams/_rels/drawing1.xml.rels" => drawing_rels.to_string(),
             _ => String::new(),
         };
-        let (out, extra) = inline(
-            &format!("<p:spTree>{FRAME}</p:spTree>"),
-            RELS,
-            "ppt/slides",
-            read,
-        );
+        let (out, extra) = inline(&format!("<p:spTree>{FRAME}</p:spTree>"), RELS, "ppt/slides", read);
         assert!(out.contains(r#"<a:hlinkClick r:id="dgm0_rId2"/>"#), "{out}");
-        assert_eq!(
-            extra,
-            r#"<Relationship Id="dgm0_rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org/a?b=1&amp;c=2" TargetMode="External"/>"#
-        );
+        assert_eq!(extra, r#"<Relationship Id="dgm0_rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.org/a?b=1&amp;c=2" TargetMode="External"/>"#);
     }
 }

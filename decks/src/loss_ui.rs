@@ -17,27 +17,16 @@ use libadwaita as adw;
 /// to a fresh, distinct destination. A new deck has no source.
 /// Once a save has gone ahead the file is Decks' own, so the next save
 /// doesn't ask.
-pub(crate) fn save_after_asking(
-    window: &adw::ApplicationWindow,
-    source: Option<&str>,
-    target: &str,
-    save: impl FnOnce() + 'static,
-) {
+pub(crate) fn save_after_asking(window: &adw::ApplicationWindow, source: Option<&str>, target: &str, save: impl FnOnce() + 'static) {
     let report = source.map(decks_core::loss::content_a_save_drops);
     if let Some(report) = report.as_ref().filter(|r| r.has_hard_errors()) {
-        let details = report
-            .features
-            .iter()
+        let details = report.features.iter()
             .filter(|f| f.disposition == suite_common::interop::FeatureDisposition::HardError)
             .map(|f| f.detail.as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        let recovery_copy = source
-            .is_some_and(|source| decks_core::loss::can_save_unverified_copy(source, target))
-            && report
-                .features
-                .iter()
-                .filter(|f| f.disposition == suite_common::interop::FeatureDisposition::HardError)
+        let recovery_copy = source.is_some_and(|source| decks_core::loss::can_save_unverified_copy(source, target))
+            && report.features.iter().filter(|f| f.disposition == suite_common::interop::FeatureDisposition::HardError)
                 .all(|f| f.id == "source-inspection-failed");
         if recovery_copy {
             let body = format!(
@@ -45,33 +34,22 @@ pub(crate) fn save_after_asking(
                 suite_common::i18n("Decks could not check the original file. This unverified copy may be missing content that was not imported. Save Copy writes your current edits to a new file without changing the original. The destination must not already exist."),
                 details,
             );
-            let dialog = adw::AlertDialog::new(
-                Some(&suite_common::i18n("Save an Unverified Copy?")),
-                Some(&body),
-            );
+            let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Save an Unverified Copy?")), Some(&body));
             dialog.add_response("cancel", &suite_common::i18n("_Cancel"));
             dialog.add_response("copy", &suite_common::i18n("_Save Copy"));
             dialog.set_response_appearance("copy", adw::ResponseAppearance::Destructive);
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
-            let (source, target, window) = (
-                source.unwrap_or_default().to_string(),
-                target.to_string(),
-                window.clone(),
-            );
-            dialog.choose(
-                Some(&window.clone()),
-                None::<&gio::Cancellable>,
-                move |response| {
-                    if response == "copy" {
-                        if decks_core::loss::can_save_unverified_copy(&source, &target) {
-                            save();
-                        } else {
-                            show_inspection_failure(&window, &details);
-                        }
+            let (source, target, window) = (source.unwrap_or_default().to_string(), target.to_string(), window.clone());
+            dialog.choose(Some(&window.clone()), None::<&gio::Cancellable>, move |response| {
+                if response == "copy" {
+                    if decks_core::loss::can_save_unverified_copy(&source, &target) {
+                        save();
+                    } else {
+                        show_inspection_failure(&window, &details);
                     }
-                },
-            );
+                }
+            });
         } else {
             show_inspection_failure(window, &details);
         }
@@ -87,12 +65,7 @@ pub(crate) fn save_after_asking(
         .map(|r| {
             let mut lines: Vec<String> = Vec::new();
             for f in r.destructive_features() {
-                let line = format!(
-                    "\u{2022} {}: {} \u{2014} {}",
-                    suite_common::i18n(&f.label),
-                    f.location,
-                    f.detail
-                );
+                let line = format!("\u{2022} {}: {} \u{2014} {}", suite_common::i18n(&f.label), f.location, f.detail);
                 if !lines.contains(&line) {
                     lines.push(line);
                 }
@@ -112,24 +85,15 @@ pub(crate) fn save_after_asking(
     let consented: Vec<(String, String, String)> = report
         .as_ref()
         .map(|r| {
-            r.destructive_features()
-                .iter()
-                .map(|f| (f.id.clone(), f.location.clone(), f.detail.clone()))
-                .collect()
+            r.destructive_features().iter().map(|f| (f.id.clone(), f.location.clone(), f.detail.clone())).collect()
         })
         .unwrap_or_default();
     let source = source.unwrap_or_default();
-    let name = |p: &str| {
-        std::path::Path::new(p)
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    };
+    let name = |p: &str| std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let outcome = if source == target {
         suite_common::i18n("Saving replaces the file without them. Save a copy instead to keep the original as it is.")
     } else {
-        suite_common::i18n("The new file will not have them; %s keeps them.")
-            .replace("%s", &name(source))
+        suite_common::i18n("The new file will not have them; %s keeps them.").replace("%s", &name(source))
     };
     let body = format!(
         "{}\n\n{}\n\n{}",
@@ -137,10 +101,7 @@ pub(crate) fn save_after_asking(
         dropped.join("\n"),
         outcome
     );
-    let dialog = adw::AlertDialog::new(
-        Some(&suite_common::i18n("Save Without This Content?")),
-        Some(&body),
-    );
+    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Save Without This Content?")), Some(&body));
     dialog.add_response("cancel", &suite_common::i18n("_Cancel"));
     dialog.add_response("save", &suite_common::i18n("_Save Anyway"));
     dialog.set_response_appearance("save", adw::ResponseAppearance::Destructive);
@@ -152,22 +113,15 @@ pub(crate) fn save_after_asking(
         if response == "save" {
             let fresh = decks_core::loss::content_a_save_drops(&source_path);
             if fresh.has_hard_errors() {
-                let details = fresh
-                    .features
-                    .iter()
-                    .filter(|f| {
-                        f.disposition == suite_common::interop::FeatureDisposition::HardError
-                    })
+                let details = fresh.features.iter()
+                    .filter(|f| f.disposition == suite_common::interop::FeatureDisposition::HardError)
                     .map(|f| f.detail.as_str())
                     .collect::<Vec<_>>()
                     .join("\n");
                 show_inspection_failure(&window_for_save, &details);
             } else {
-                let now: Vec<(String, String, String)> = fresh
-                    .destructive_features()
-                    .iter()
-                    .map(|f| (f.id.clone(), f.location.clone(), f.detail.clone()))
-                    .collect();
+                let now: Vec<(String, String, String)> = fresh.destructive_features().iter()
+                    .map(|f| (f.id.clone(), f.location.clone(), f.detail.clone())).collect();
                 if now == consented {
                     save();
                 } else {
@@ -189,11 +143,7 @@ fn show_inspection_failure(window: &adw::ApplicationWindow, details: &str) {
         suite_common::i18n("Decks could not check the original file for content this save might lose. Nothing was saved. Make the original file available and try again, or use Save As with a new filename to save an unverified copy of your current edits. An unverified copy cannot replace an existing file."),
         details,
     );
-    suite_common::dialogs::show_message(
-        Some(window),
-        &suite_common::i18n("Could Not Save File"),
-        &body,
-    );
+    suite_common::dialogs::show_message(Some(window), &suite_common::i18n("Could Not Save File"), &body);
 }
 
 /// Run `save` (a save to `target`), first asking when the imported
@@ -332,8 +282,7 @@ pub(crate) fn save_after_asking_with_context(
             "Saving replaces the file without them. Save a copy instead to keep the original as it is.",
         )
     } else {
-        suite_common::i18n("The new file will not have them; %s keeps them.")
-            .replace("%s", &source_name)
+        suite_common::i18n("The new file will not have them; %s keeps them.").replace("%s", &source_name)
     };
     let body = format!("{}\n\n{}", sections.join("\n\n"), outcome);
     let dialog = adw::AlertDialog::new(

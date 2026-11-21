@@ -31,8 +31,7 @@ fn replace(path: &std::path::Path, name: &str, content: &str) -> std::path::Path
         if entry_name == name {
             bytes = content.as_bytes().to_vec();
         }
-        w.start_file(entry_name, zip::write::SimpleFileOptions::default())
-            .unwrap();
+        w.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
         w.write_all(&bytes).unwrap();
     }
     w.finish().unwrap();
@@ -65,9 +64,7 @@ fn a_powerpoint_line_break_is_a_break_inside_the_paragraph() {
         format!("Pay Centre Impact Assessment – {LINE_BREAK}Unified Actions for Pay (UAP) and{LINE_BREAK}Departmental Surcharge\n{LINE_BREAK}November 2024"),
         "breaks inside the paragraph, one paragraph break, nothing welded"
     );
-    let SlideObject::TextBox { runs, .. } = &d.slides[0].objects[0] else {
-        unreachable!()
-    };
+    let SlideObject::TextBox { runs, .. } = &d.slides[0].objects[0] else { unreachable!() };
     let joined: String = runs.iter().map(|r| r.text.as_str()).collect();
     assert_eq!(joined, text_of(&d), "the runs are the text");
     // Written back as breaks, not characters, and read back the same.
@@ -76,18 +73,12 @@ fn a_powerpoint_line_break_is_a_break_inside_the_paragraph() {
     let xml = part(&out, "ppt/slides/slide1.xml");
     assert_eq!(xml.matches("<a:br/>").count(), 3, "{xml}");
     assert!(!xml.contains(LINE_BREAK), "no raw separator in a:t");
-    assert_eq!(
-        text_of(&read_pptx(out.to_str().unwrap()).unwrap()),
-        text_of(&d)
-    );
+    assert_eq!(text_of(&read_pptx(out.to_str().unwrap()).unwrap()), text_of(&d));
 }
 
 fn deck() -> Deck {
     let mut d = Deck::new();
-    let bold = RunStyle {
-        bold: true,
-        ..Default::default()
-    };
+    let bold = RunStyle { bold: true, ..Default::default() };
     let first = format!("Unified Actions for Pay (UAP) and{LINE_BREAK}Departmental Surcharge");
     d.slides[0].objects = vec![SlideObject::TextBox {
         text: format!("{first}\nNovember 2024"),
@@ -96,16 +87,7 @@ fn deck() -> Deck {
         w: 600.0,
         h: 200.0,
         rotation: 0.0,
-        runs: vec![
-            Run {
-                text: first,
-                style: bold,
-            },
-            Run {
-                text: "\nNovember 2024".into(),
-                style: RunStyle::default(),
-            },
-        ],
+        runs: vec![Run { text: first, style: bold }, Run { text: "\nNovember 2024".into(), style: RunStyle::default() }],
         body: Default::default(),
     }];
     d
@@ -117,20 +99,11 @@ fn a_line_break_survives_pptx_as_a_break_between_runs_of_one_look() {
     let path = dir.path().join("br.pptx");
     write_pptx(path.to_str().unwrap(), &deck()).unwrap();
     let xml = part(&path, "ppt/slides/slide1.xml");
-    assert!(
-        xml.contains("and</a:t></a:r><a:br/><a:r>"),
-        "an a:br between the runs: {xml}"
-    );
+    assert!(xml.contains("and</a:t></a:r><a:br/><a:r>"), "an a:br between the runs: {xml}");
     let back = read_pptx(path.to_str().unwrap()).unwrap();
     assert_eq!(text_of(&back), text_of(&deck()));
-    let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else {
-        unreachable!()
-    };
-    assert!(
-        runs.iter()
-            .any(|r| r.text.starts_with("Departmental") && r.style.bold),
-        "the run after the break keeps its look: {runs:?}"
-    );
+    let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else { unreachable!() };
+    assert!(runs.iter().any(|r| r.text.starts_with("Departmental") && r.style.bold), "the run after the break keeps its look: {runs:?}");
 }
 
 #[test]

@@ -28,19 +28,14 @@ impl PhKey {
         let mut ty = None;
         let mut idx = None;
         for attr in e.attributes().flatten() {
-            let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) else {
-                continue;
-            };
+            let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) else { continue };
             match attr.key.as_ref() {
                 "type" => ty = Some(v.to_string()),
                 "idx" => idx = v.parse().ok(),
                 _ => {}
             }
         }
-        PhKey {
-            ty: ty.unwrap_or_else(|| "obj".into()),
-            idx,
-        }
+        PhKey { ty: ty.unwrap_or_else(|| "obj".into()), idx }
     }
 
     /// Types that stand for the same slot one level up: a layout's
@@ -103,9 +98,7 @@ pub(crate) fn parse_placeholders(xml: &str) -> Vec<Placeholder> {
                     "p:sp" => {
                         if let Some((Some(key), g)) = cur.take() {
                             let rect = match g {
-                                [Some(x), Some(y), Some(w), Some(h)] => {
-                                    Some(EmuRect { x, y, w, h })
-                                }
+                                [Some(x), Some(y), Some(w), Some(h)] => Some(EmuRect { x, y, w, h }),
                                 _ => None,
                             };
                             out.push(Placeholder { key, rect });
@@ -133,11 +126,7 @@ pub(crate) fn parse_placeholders(xml: &str) -> Vec<Placeholder> {
             }
             "a:off" | "a:ext" if in_sppr => {
                 if let Some((_, g)) = cur.as_mut() {
-                    let (k1, k2, i) = if e.name().as_ref() == "a:off" {
-                        ("x", "y", 0)
-                    } else {
-                        ("cx", "cy", 2)
-                    };
+                    let (k1, k2, i) = if e.name().as_ref() == "a:off" { ("x", "y", 0) } else { ("cx", "cy", 2) };
                     for attr in e.attributes().flatten() {
                         let v = attr
                             .normalized_value(quick_xml::XmlVersion::Implicit1_0)
@@ -168,13 +157,7 @@ fn find_index(keys: &[&PhKey], key: &PhKey, use_idx: bool) -> Option<usize> {
         &|p| use_idx && p.ty == key.ty && idx(p) == idx(key),
         &|p| use_idx && idx(p) == idx(key) && p.family() == key.family(),
         &|p| p.ty == key.ty,
-        &|p| {
-            if use_idx {
-                p.layout_family() == key.layout_family()
-            } else {
-                p.family() == key.family()
-            }
-        },
+        &|p| if use_idx { p.layout_family() == key.layout_family() } else { p.family() == key.family() },
     ];
     tiers.iter().find_map(|t| keys.iter().position(|p| t(p)))
 }
@@ -188,11 +171,7 @@ fn find<'a>(list: &'a [Placeholder], key: &PhKey, use_idx: bool) -> Option<&'a P
 /// placeholder `key` inherits from, as indices into `layout` and `master`.
 /// The layout is matched by index, then type; the master by type only,
 /// through the layout's own key when the layout has one.
-pub(crate) fn inherited_indices(
-    key: &PhKey,
-    layout: &[&PhKey],
-    master: &[&PhKey],
-) -> (Option<usize>, Option<usize>) {
+pub(crate) fn inherited_indices(key: &PhKey, layout: &[&PhKey], master: &[&PhKey]) -> (Option<usize>, Option<usize>) {
     let l = find_index(layout, key, true);
     let up = l.map(|i| layout[i]).unwrap_or(key);
     (l, find_index(master, up, false))
@@ -214,11 +193,7 @@ impl PhKey {
 /// layout's matching placeholder, else the master's placeholder of the
 /// same kind. Masters are matched by type only; their indices are not
 /// related to the slide's.
-pub(crate) fn inherited_rect(
-    key: &PhKey,
-    layout: &[Placeholder],
-    master: &[Placeholder],
-) -> Option<EmuRect> {
+pub(crate) fn inherited_rect(key: &PhKey, layout: &[Placeholder], master: &[Placeholder]) -> Option<EmuRect> {
     let from_layout = find(layout, key, true);
     if let Some(rect) = from_layout.and_then(|p| p.rect) {
         return Some(rect);
@@ -264,21 +239,9 @@ mod tests {
         ]);
         let got = parse_placeholders(&xml);
         assert_eq!(got.len(), 2);
-        assert_eq!(
-            got[0].key,
-            PhKey {
-                ty: "ctrTitle".into(),
-                idx: None
-            }
-        );
+        assert_eq!(got[0].key, PhKey { ty: "ctrTitle".into(), idx: None });
         assert_eq!(got[0].rect, rect(10.0, 20.0, 300.0, 40.0));
-        assert_eq!(
-            got[1].key,
-            PhKey {
-                ty: "subTitle".into(),
-                idx: Some(1)
-            }
-        );
+        assert_eq!(got[1].key, PhKey { ty: "subTitle".into(), idx: Some(1) });
         assert_eq!(got[1].rect, None);
     }
 
@@ -286,27 +249,12 @@ mod tests {
     fn title_slide_inherits_from_the_layout() {
         let layout = parse_placeholders(&part(&[
             sp("<p:ph type=\"ctrTitle\"/>", Some((10, 20, 300, 40))),
-            sp(
-                "<p:ph type=\"subTitle\" idx=\"1\"/>",
-                Some((10, 80, 300, 30)),
-            ),
+            sp("<p:ph type=\"subTitle\" idx=\"1\"/>", Some((10, 80, 300, 30))),
         ]));
-        let title = PhKey {
-            ty: "ctrTitle".into(),
-            idx: None,
-        };
-        let sub = PhKey {
-            ty: "subTitle".into(),
-            idx: Some(1),
-        };
-        assert_eq!(
-            inherited_rect(&title, &layout, &[]),
-            rect(10.0, 20.0, 300.0, 40.0)
-        );
-        assert_eq!(
-            inherited_rect(&sub, &layout, &[]),
-            rect(10.0, 80.0, 300.0, 30.0)
-        );
+        let title = PhKey { ty: "ctrTitle".into(), idx: None };
+        let sub = PhKey { ty: "subTitle".into(), idx: Some(1) };
+        assert_eq!(inherited_rect(&title, &layout, &[]), rect(10.0, 20.0, 300.0, 40.0));
+        assert_eq!(inherited_rect(&sub, &layout, &[]), rect(10.0, 80.0, 300.0, 30.0));
     }
 
     #[test]
@@ -321,22 +269,10 @@ mod tests {
             sp("<p:ph type=\"title\"/>", Some((5, 6, 7, 8))),
             sp("<p:ph type=\"body\" idx=\"1\"/>", Some((9, 10, 11, 12))),
         ]));
-        let sub = PhKey {
-            ty: "subTitle".into(),
-            idx: Some(1),
-        };
-        let title = PhKey {
-            ty: "ctrTitle".into(),
-            idx: None,
-        };
-        assert_eq!(
-            inherited_rect(&title, &layout, &master),
-            rect(5.0, 6.0, 7.0, 8.0)
-        );
-        assert_eq!(
-            inherited_rect(&sub, &layout, &master),
-            rect(9.0, 10.0, 11.0, 12.0)
-        );
+        let sub = PhKey { ty: "subTitle".into(), idx: Some(1) };
+        let title = PhKey { ty: "ctrTitle".into(), idx: None };
+        assert_eq!(inherited_rect(&title, &layout, &master), rect(5.0, 6.0, 7.0, 8.0));
+        assert_eq!(inherited_rect(&sub, &layout, &master), rect(9.0, 10.0, 11.0, 12.0));
     }
 
     #[test]
@@ -346,14 +282,8 @@ mod tests {
             sp("<p:ph idx=\"1\"/>", Some((0, 0, 100, 100))),
             sp("<p:ph idx=\"2\"/>", Some((200, 0, 100, 100))),
         ]));
-        let second = PhKey {
-            ty: "obj".into(),
-            idx: Some(2),
-        };
-        assert_eq!(
-            inherited_rect(&second, &layout, &[]),
-            rect(200.0, 0.0, 100.0, 100.0)
-        );
+        let second = PhKey { ty: "obj".into(), idx: Some(2) };
+        assert_eq!(inherited_rect(&second, &layout, &[]), rect(200.0, 0.0, 100.0, 100.0));
     }
 
     #[test]
@@ -362,42 +292,21 @@ mod tests {
         // content placeholder whose idx the layout doesn't have (what
         // pasting a body from another slide gives).
         let layout = parse_placeholders(&part(&[
-            sp(
-                "<p:ph type=\"ctrTitle\"/>",
-                Some((685800, 2130425, 7772400, 1470025)),
-            ),
-            sp(
-                "<p:ph type=\"subTitle\" idx=\"1\"/>",
-                Some((1371600, 3886200, 6400800, 1752600)),
-            ),
+            sp("<p:ph type=\"ctrTitle\"/>", Some((685800, 2130425, 7772400, 1470025))),
+            sp("<p:ph type=\"subTitle\" idx=\"1\"/>", Some((1371600, 3886200, 6400800, 1752600))),
         ]));
         let master = parse_placeholders(&part(&[
-            sp(
-                "<p:ph type=\"title\"/>",
-                Some((457200, 274638, 8229600, 1143000)),
-            ),
-            sp(
-                "<p:ph type=\"body\" idx=\"1\"/>",
-                Some((457200, 1600200, 8229600, 4525963)),
-            ),
+            sp("<p:ph type=\"title\"/>", Some((457200, 274638, 8229600, 1143000))),
+            sp("<p:ph type=\"body\" idx=\"1\"/>", Some((457200, 1600200, 8229600, 4525963))),
         ]));
-        let content = PhKey {
-            ty: "obj".into(),
-            idx: Some(13),
-        };
-        assert_eq!(
-            inherited_rect(&content, &layout, &master),
-            rect(457200.0, 1600200.0, 8229600.0, 4525963.0)
-        );
+        let content = PhKey { ty: "obj".into(), idx: Some(13) };
+        assert_eq!(inherited_rect(&content, &layout, &master), rect(457200.0, 1600200.0, 8229600.0, 4525963.0));
         let lk: Vec<&PhKey> = layout.iter().map(|p| &p.key).collect();
         let mk: Vec<&PhKey> = master.iter().map(|p| &p.key).collect();
         assert_eq!(inherited_indices(&content, &lk, &mk), (None, Some(1)));
         // A subtitle still finds the layout's subtitle, and without one the
         // master's body.
-        let sub = PhKey {
-            ty: "subTitle".into(),
-            idx: Some(1),
-        };
+        let sub = PhKey { ty: "subTitle".into(), idx: Some(1) };
         assert_eq!(inherited_indices(&sub, &lk, &mk), (Some(1), Some(1)));
         assert_eq!(inherited_indices(&sub, &lk[..1], &mk), (None, Some(1)));
     }
@@ -409,30 +318,15 @@ mod tests {
             sp("<p:ph type=\"title\"/>", None),
             sp("<p:ph idx=\"1\"/>", Some((10, 20, 30, 40))),
         ]));
-        let content = PhKey {
-            ty: "obj".into(),
-            idx: Some(13),
-        };
-        assert_eq!(
-            inherited_rect(&content, &layout, &[]),
-            rect(10.0, 20.0, 30.0, 40.0)
-        );
-        let body = PhKey {
-            ty: "body".into(),
-            idx: Some(13),
-        };
-        assert_eq!(
-            inherited_rect(&body, &layout, &[]),
-            rect(10.0, 20.0, 30.0, 40.0)
-        );
+        let content = PhKey { ty: "obj".into(), idx: Some(13) };
+        assert_eq!(inherited_rect(&content, &layout, &[]), rect(10.0, 20.0, 30.0, 40.0));
+        let body = PhKey { ty: "body".into(), idx: Some(13) };
+        assert_eq!(inherited_rect(&body, &layout, &[]), rect(10.0, 20.0, 30.0, 40.0));
     }
 
     #[test]
     fn nothing_to_inherit_is_none() {
-        let key = PhKey {
-            ty: "pic".into(),
-            idx: Some(3),
-        };
+        let key = PhKey { ty: "pic".into(), idx: Some(3) };
         assert_eq!(inherited_rect(&key, &[], &[]), None);
     }
 }

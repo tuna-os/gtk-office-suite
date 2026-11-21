@@ -25,28 +25,21 @@ pub fn build_decks_toolbar() -> gtk::Box {
     toolbar.add_css_class("toolbar");
 
     let bold = gtk::ToggleButton::builder()
-        .icon_name("format-text-bold-symbolic")
-        .tooltip_text("Bold")
-        .build();
+        .icon_name("format-text-bold-symbolic").tooltip_text("Bold").build();
     let italic = gtk::ToggleButton::builder()
-        .icon_name("format-text-italic-symbolic")
-        .tooltip_text("Italic")
-        .build();
+        .icon_name("format-text-italic-symbolic").tooltip_text("Italic").build();
     let underline = gtk::ToggleButton::builder()
-        .icon_name("format-text-underline-symbolic")
-        .tooltip_text("Underline")
-        .build();
+        .icon_name("format-text-underline-symbolic").tooltip_text("Underline").build();
     for btn in [&bold, &italic, &underline] {
         btn.add_css_class("flat");
         toolbar.append(btn);
     }
 
+
     // The Insert buttons go between these and Present (insert_bar.rs).
 
     let present = gtk::Button::builder()
-        .icon_name("view-fullscreen-symbolic")
-        .tooltip_text("Present (F5)")
-        .build();
+        .icon_name("view-fullscreen-symbolic").tooltip_text("Present (F5)").build();
     present.set_margin_start(12);
     present.add_css_class("flat");
     present.add_css_class("suggested-action");

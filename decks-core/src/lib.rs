@@ -21,8 +21,8 @@ pub mod odp;
 mod odp_builds;
 mod odp_graphics;
 mod odp_layouts;
-mod odp_text;
 pub mod ops;
+mod odp_text;
 pub mod presenter;
 pub mod provenance;
 pub mod recovery;
@@ -31,9 +31,7 @@ pub mod snapshot;
 pub mod templates;
 pub mod undo;
 
-pub use controller::{
-    DecksController, SelectionMode, SelectionState, TextRange, TextSessionError, TxnOutcome,
-};
+pub use controller::{DecksController, SelectionMode, SelectionState, TextRange, TextSessionError, TxnOutcome};
 pub use engine::{Deck, MasterSlide, Slide, SlideObject};
 pub use provenance::{DeckSourceContext, MutationSet, ProvenanceFacts, SourceState};
 /// Read a presentation, dispatching on extension (.pptx or .odp).
@@ -46,35 +44,13 @@ pub fn read_deck(path: &str) -> Result<engine::Deck, String> {
 }
 
 /// Read a deck while retaining unsupported package members for a safe save.
-pub fn read_deck_with_report(
-    path: &str,
-) -> Result<
-    (
-        engine::Deck,
-        suite_common_core::interop::CompatibilityReport,
-        suite_common_core::interop::OpaquePackage,
-    ),
-    String,
-> {
+pub fn read_deck_with_report(path: &str) -> Result<(engine::Deck, suite_common_core::interop::CompatibilityReport, suite_common_core::interop::OpaquePackage), String> {
     let deck = read_deck(path)?;
-    let format = if path.to_lowercase().ends_with(".odp") {
-        "odp"
-    } else {
-        "pptx"
-    };
-    let opaque = suite_common_core::interop::OpaquePackage::capture(
-        path,
-        provenance::recognized_parts(format),
-    )?;
+    let format = if path.to_lowercase().ends_with(".odp") { "odp" } else { "pptx" };
+    let opaque = suite_common_core::interop::OpaquePackage::capture(path, provenance::recognized_parts(format))?;
     let mut report = suite_common_core::interop::CompatibilityReport::new(format);
     for name in opaque.part_names() {
-        report.record(suite_common_core::interop::UnsupportedFeature::new(
-            "uninterpreted-package-part",
-            "Uninterpreted package part",
-            name,
-            suite_common_core::interop::FeatureDisposition::OpaquePassThrough,
-            "will be copied through on an opaque save",
-        ));
+        report.record(suite_common_core::interop::UnsupportedFeature::new("uninterpreted-package-part", "Uninterpreted package part", name, suite_common_core::interop::FeatureDisposition::OpaquePassThrough, "will be copied through on an opaque save"));
     }
     // Slides the reader could not read (#1977): they are not in the deck,
     // so nothing else in this report can speak for them. Naming them here
@@ -82,16 +58,7 @@ pub fn read_deck_with_report(
     // the save-time loss check (`loss::content_a_save_drops`) makes the
     // same finding from the file under the same id.
     for skipped in &deck.skipped_slides {
-        report.record(suite_common_core::interop::UnsupportedFeature::new(
-            "unreadable-slides",
-            "Slides that could not be read",
-            &skipped.part,
-            suite_common_core::interop::FeatureDisposition::WarnOnLoss,
-            format!(
-                "the slide was not read ({}); saving will drop it permanently",
-                skipped.reason
-            ),
-        ));
+        report.record(suite_common_core::interop::UnsupportedFeature::new("unreadable-slides", "Slides that could not be read", &skipped.part, suite_common_core::interop::FeatureDisposition::WarnOnLoss, format!("the slide was not read ({}); saving will drop it permanently", skipped.reason)));
     }
     Ok((deck, report, opaque))
 }
@@ -134,8 +101,7 @@ pub const FORMATS: &[suite_common_core::file_formats::FileFormat] = {
 /// PowerPoint bytes whatever it was called, so a Save As to `talk.key` or
 /// `talk` wrote a file its name misdescribed (#1206).
 pub fn write_deck(path: &str, deck: &engine::Deck) -> Result<(), String> {
-    match suite_common_core::file_formats::for_path(FORMATS, path).map(|format| format.extension())
-    {
+    match suite_common_core::file_formats::for_path(FORMATS, path).map(|format| format.extension()) {
         Some("odp") => odp::write(deck, path),
         Some(_) => engine::write_pptx(path, deck),
         None => Err(format!(
@@ -172,8 +138,7 @@ pub fn write_deck_with_context(
     }
     carried.write_with(std::path::Path::new(path), |p| {
         write_deck(
-            p.to_str()
-                .ok_or_else(|| "save path is not UTF-8".to_string())?,
+            p.to_str().ok_or_else(|| "save path is not UTF-8".to_string())?,
             deck,
         )
     })?;

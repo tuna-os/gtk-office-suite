@@ -1,11 +1,11 @@
 // transition.rs — Slide transitions via Cairo double-buffering.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use decks_core::engine::{MasterSlide, Slide, Transition};
 use gtk4::cairo;
-use gtk4::{glib, prelude::*};
+use gtk4::{prelude::*, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
+use decks_core::engine::{MasterSlide, Slide, Transition};
 
 // Fade/CoverLeft/SplitHorizontal are drawn (see draw_transition below) but
 // not yet selectable from any UI — only None/PushLeft/WipeLeft are wired
@@ -40,11 +40,7 @@ impl TransitionType {
     /// Progress per 16 ms frame: Magic Move takes about a second, the
     /// others a third of one.
     fn step(self) -> f64 {
-        if self == TransitionType::MagicMove {
-            0.016
-        } else {
-            0.05
-        }
+        if self == TransitionType::MagicMove { 0.016 } else { 0.05 }
     }
 }
 
@@ -103,10 +99,7 @@ impl TransitionState {
             s.active = kind != TransitionType::None;
             if kind == TransitionType::MagicMove {
                 s.magic = Some(MagicMove {
-                    pairs: decks_core::magic_move::match_objects(
-                        &from_slide.objects,
-                        &to_slide.objects,
-                    ),
+                    pairs: decks_core::magic_move::match_objects(&from_slide.objects, &to_slide.objects),
                     from: from_slide.clone(),
                     to: to_slide.clone(),
                     masters: masters.to_vec(),
@@ -155,28 +148,13 @@ fn render_slide_to_surface(slide: &Slide, masters: &[MasterSlide]) -> cairo::Ima
 /// master) cross-fades, then every object of decks_core::magic_move::frame
 /// at its place and opacity. Nothing of the editor is drawn: no selection,
 /// no slide number, no "empty slide" caption.
-fn draw_magic_move(
-    cr: &cairo::Context,
-    m: &MagicMove,
-    t: f64,
-    canvas_w: f64,
-    canvas_h: f64,
-    chrome: crate::canvas::Chrome,
-) {
+fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, canvas_h: f64, chrome: crate::canvas::Chrome) {
     use crate::canvas::{draw_object, draw_slide_base, master_for};
     let e = decks_core::magic_move::ease(t);
     let to = std::slice::from_ref(&m.to);
     let (frame, bg) = draw_slide_base(cr, canvas_w, canvas_h, to, 0, &m.masters, chrome);
     cr.push_group();
-    draw_slide_base(
-        cr,
-        canvas_w,
-        canvas_h,
-        std::slice::from_ref(&m.from),
-        0,
-        &m.masters,
-        chrome,
-    );
+    draw_slide_base(cr, canvas_w, canvas_h, std::slice::from_ref(&m.from), 0, &m.masters, chrome);
     let _ = cr.pop_group_to_source();
     let _ = cr.paint_with_alpha(1.0 - e);
     let master = master_for(to, 0, &m.masters);
@@ -204,9 +182,7 @@ pub fn dump_midpoint(state: &TransitionState, area: &gtk4::DrawingArea) {
     if std::env::var_os("GTK_OFFICE_TEST_MODE").is_none() || !state.active {
         return;
     }
-    let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else {
-        return;
-    };
+    let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else { return };
     let (w, h) = (area.width().max(320), area.height().max(180));
     let path = std::path::Path::new(&dir).join("transition-midpoint.png");
     if let Err(e) = write_frame_png(state, 0.5, w, h, &path) {
@@ -217,15 +193,8 @@ pub fn dump_midpoint(state: &TransitionState, area: &gtk4::DrawingArea) {
 /// Render the frame of `state`'s transition at `t` on a `w`×`h` canvas,
 /// through the same drawing the animation uses, into a PNG at `path`.
 /// For looking at a transition without a timer (tests, GTK_OFFICE_TEST_MODE).
-pub fn write_frame_png(
-    state: &TransitionState,
-    t: f64,
-    w: i32,
-    h: i32,
-    path: &std::path::Path,
-) -> Result<(), String> {
-    let surface =
-        cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).map_err(|e| e.to_string())?;
+pub fn write_frame_png(state: &TransitionState, t: f64, w: i32, h: i32, path: &std::path::Path) -> Result<(), String> {
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).map_err(|e| e.to_string())?;
     {
         let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
         let frame = TransitionState {
@@ -243,15 +212,8 @@ pub fn write_frame_png(
     surface.write_to_png(&mut f).map_err(|e| e.to_string())
 }
 
-pub fn draw_transition(
-    cr: &cairo::Context,
-    state: &TransitionState,
-    canvas_w: f64,
-    canvas_h: f64,
-) -> bool {
-    if !state.active {
-        return false;
-    }
+pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f64, canvas_h: f64) -> bool {
+    if !state.active { return false; }
     let t = state.progress;
     if let (TransitionType::MagicMove, Some(m)) = (state.kind, state.magic.as_ref()) {
         draw_magic_move(cr, m, t, canvas_w, canvas_h, state.chrome);
@@ -263,9 +225,7 @@ pub fn draw_transition(
     let (ox, oy, slide_w, _slide_h) = crate::canvas::slide_frame(canvas_w, canvas_h, state.chrome);
     match state.chrome {
         crate::canvas::Chrome::Editor => cr.set_source_rgb(0.86, 0.86, 0.86),
-        crate::canvas::Chrome::Show
-        | crate::canvas::Chrome::Preview
-        | crate::canvas::Chrome::Export => cr.set_source_rgb(0.0, 0.0, 0.0),
+        crate::canvas::Chrome::Show | crate::canvas::Chrome::Preview | crate::canvas::Chrome::Export => cr.set_source_rgb(0.0, 0.0, 0.0),
     }
     let _ = cr.paint();
     let scale_x = slide_w / 960.0;
@@ -394,20 +354,10 @@ mod tests {
             w: 100.0,
             h: 100.0,
             rotation: 0.0,
-            style: ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(c),
-                gradient: None,
-                stroke: None,
-                fill_src: None,
-                stroke_src: None,
-            },
+            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(c), gradient: None, stroke: None, fill_src: None, stroke_src: None },
         };
         let (red, blue) = (Color(220, 0, 0), Color(0, 0, 220));
-        let slide = |objects| Slide {
-            hidden: false,
+        let slide = |objects| Slide { hidden: false,
             title: String::new(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -457,25 +407,12 @@ mod tests {
             (data[i + 2], data[i + 1], data[i]) // Cairo ARGB32 is BGRA in memory
         };
         // Half way between x=100 and x=700 the red square spans 400..500.
-        assert_eq!(
-            px(450.0, 250.0).0,
-            220,
-            "the red square's centre at the midpoint: {:?}",
-            px(450.0, 250.0)
-        );
-        assert_eq!(
-            px(150.0, 250.0),
-            (255, 255, 255),
-            "it has left its first place"
-        );
+        assert_eq!(px(450.0, 250.0).0, 220, "the red square's centre at the midpoint: {:?}", px(450.0, 250.0));
+        assert_eq!(px(150.0, 250.0), (255, 255, 255), "it has left its first place");
         assert_eq!(px(750.0, 250.0), (255, 255, 255), "and hasn't arrived yet");
         // The blue square fades in, half way: a mid blue on white.
         let (r, _, b) = px(480.0, 430.0);
-        assert!(
-            b > 200 && (100..160).contains(&r),
-            "half-faded blue: {:?}",
-            px(480.0, 430.0)
-        );
+        assert!(b > 200 && (100..160).contains(&r), "half-faded blue: {:?}", px(480.0, 430.0));
     }
 
     #[test]

@@ -9,11 +9,7 @@ use decks_core::engine::shape::{Color, Glow, ShapeKind, ShapeStyle, Stroke};
 use decks_core::engine::{Deck, SlideObject};
 
 fn glow() -> Glow {
-    Glow {
-        radius: 10.0,
-        color: Color(0x00, 0xC2, 0xF3),
-        alpha: 0.25,
-    }
+    Glow { radius: 10.0, color: Color(0x00, 0xC2, 0xF3), alpha: 0.25 }
 }
 
 fn deck() -> Deck {
@@ -32,10 +28,7 @@ fn deck() -> Deck {
             fill_alpha: None,
             fill: Some(navy),
             gradient: None,
-            stroke: Some(Stroke {
-                color: navy,
-                width: 1.0,
-            }),
+            stroke: Some(Stroke { color: navy, width: 1.0 }),
             fill_src: None,
             stroke_src: None,
         },
@@ -60,8 +53,7 @@ fn a_glow_survives_both_formats() {
     for ext in ["pptx", "odp"] {
         let path = dir.path().join(format!("g.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck()).unwrap();
-        let back = glow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap())
-            .unwrap_or_else(|| panic!("{ext}: no glow"));
+        let back = glow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap_or_else(|| panic!("{ext}: no glow"));
         assert!(close(back, glow()), "{ext}: {back:?}");
     }
 }
@@ -75,12 +67,8 @@ fn the_glow_is_written_as_powerpoint_writes_it() {
     decks_core::write_deck(path.to_str().unwrap(), &deck()).unwrap();
     let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
     let mut xml = String::new();
-    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml)
-        .unwrap();
-    assert!(
-        xml.contains("<a:glow rad=\"95250\"><a:srgbClr val=\"00C2F3\"><a:alpha val=\"25000\"/>"),
-        "{xml}"
-    );
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml).unwrap();
+    assert!(xml.contains("<a:glow rad=\"95250\"><a:srgbClr val=\"00C2F3\"><a:alpha val=\"25000\"/>"), "{xml}");
 }
 
 #[test]
@@ -93,11 +81,7 @@ fn a_shape_without_a_glow_writes_none() {
     for ext in ["pptx", "odp"] {
         let path = dir.path().join(format!("n.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
-        assert_eq!(
-            glow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()),
-            None,
-            "{ext}"
-        );
+        assert_eq!(glow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()), None, "{ext}");
     }
 }
 
@@ -107,14 +91,7 @@ fn shadowed() -> Deck {
     let mut d = deck();
     if let SlideObject::Shape { style, .. } = &mut d.slides[0].objects[0] {
         style.glow = None;
-        style.shadow = Some(decks_core::engine::shape::Shadow {
-            dx: 3.0,
-            dy: 4.0,
-            blur: 6.0,
-            color: Color(0, 0, 0),
-            alpha: 0.4,
-            rotate_with_shape: false,
-        });
+        style.shadow = Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4, rotate_with_shape: false });
     }
     d
 }
@@ -133,8 +110,7 @@ fn a_shadow_survives_both_formats() {
     for ext in ["pptx", "odp"] {
         let path = dir.path().join(format!("s.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &shadowed()).unwrap();
-        let got = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap())
-            .unwrap_or_else(|| panic!("{ext}: no shadow"));
+        let got = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap_or_else(|| panic!("{ext}: no shadow"));
         assert!(
             (got.dx - want.dx).abs() < 0.05
                 && (got.dy - want.dy).abs() < 0.05
@@ -157,16 +133,9 @@ fn a_glow_and_a_shadow_are_written_in_effect_list_order() {
     decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
     let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
     let mut xml = String::new();
-    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml)
-        .unwrap();
-    let (g, s) = (
-        xml.find("<a:glow").unwrap(),
-        xml.find("<a:outerShdw").unwrap(),
-    );
-    assert!(
-        g < s,
-        "CT_EffectList puts the glow before the outer shadow: {xml}"
-    );
+    std::io::Read::read_to_string(&mut zip.by_name("ppt/slides/slide1.xml").unwrap(), &mut xml).unwrap();
+    let (g, s) = (xml.find("<a:glow").unwrap(), xml.find("<a:outerShdw").unwrap());
+    assert!(g < s, "CT_EffectList puts the glow before the outer shadow: {xml}");
     let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
     assert!(glow_of(&back).is_some() && shadow_of(&back).is_some());
 }
@@ -178,10 +147,7 @@ fn whether_a_shadow_turns_with_its_shape_survives_pptx() {
     let dir = tempfile::tempdir().unwrap();
     for turns in [true, false] {
         let mut d = shadowed();
-        if let SlideObject::Shape {
-            style, rotation, ..
-        } = &mut d.slides[0].objects[0]
-        {
+        if let SlideObject::Shape { style, rotation, .. } = &mut d.slides[0].objects[0] {
             *rotation = 30.0;
             if let Some(sh) = &mut style.shadow {
                 sh.rotate_with_shape = turns;
@@ -200,10 +166,7 @@ fn a_rotated_shapes_turning_shadow_is_saved_to_odp_as_the_page_offset_it_draws()
     // frame falls 4 left and 3 down on the page, which is what LibreOffice
     // keeps.
     let mut d = shadowed();
-    if let SlideObject::Shape {
-        style, rotation, ..
-    } = &mut d.slides[0].objects[0]
-    {
+    if let SlideObject::Shape { style, rotation, .. } = &mut d.slides[0].objects[0] {
         *rotation = 90.0;
         if let Some(sh) = &mut style.shadow {
             sh.rotate_with_shape = true;
@@ -214,10 +177,7 @@ fn a_rotated_shapes_turning_shadow_is_saved_to_odp_as_the_page_offset_it_draws()
     decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
     let back = shadow_of(&decks_core::read_deck(path.to_str().unwrap()).unwrap()).unwrap();
     assert!(!back.rotate_with_shape);
-    assert!(
-        (back.dx + 4.0).abs() < 0.05 && (back.dy - 3.0).abs() < 0.05,
-        "{back:?}"
-    );
+    assert!((back.dx + 4.0).abs() < 0.05 && (back.dy - 3.0).abs() < 0.05, "{back:?}");
 }
 
 #[test]
@@ -228,14 +188,7 @@ fn a_rotated_text_frames_turning_shadow_is_saved_to_odp_as_the_page_offset_it_dr
     let navy = Color(0x0E, 0x28, 0x41);
     let style = ShapeStyle {
         glow: None,
-        shadow: Some(decks_core::engine::shape::Shadow {
-            dx: 3.0,
-            dy: 4.0,
-            blur: 6.0,
-            color: Color(0, 0, 0),
-            alpha: 0.4,
-            rotate_with_shape: true,
-        }),
+        shadow: Some(decks_core::engine::shape::Shadow { dx: 3.0, dy: 4.0, blur: 6.0, color: Color(0, 0, 0), alpha: 0.4, rotate_with_shape: true }),
         fill_alpha: None,
         fill: Some(navy),
         gradient: None,
@@ -252,13 +205,7 @@ fn a_rotated_text_frames_turning_shadow_is_saved_to_odp_as_the_page_offset_it_dr
         h: 60.0,
         rotation: 90.0,
         runs: vec![],
-        body: TextBody {
-            frame: Some(Frame {
-                kind: ShapeKind::Rect,
-                style,
-            }),
-            ..Default::default()
-        },
+        body: TextBody { frame: Some(Frame { kind: ShapeKind::Rect, style }), ..Default::default() },
     }];
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("card.odp");
@@ -274,8 +221,5 @@ fn a_rotated_text_frames_turning_shadow_is_saved_to_odp_as_the_page_offset_it_dr
         })
         .unwrap_or_else(|| panic!("no shadow: {:?}", back.slides[0].objects));
     assert!(!sh.rotate_with_shape);
-    assert!(
-        (sh.dx + 4.0).abs() < 0.05 && (sh.dy - 3.0).abs() < 0.05,
-        "{sh:?}"
-    );
+    assert!((sh.dx + 4.0).abs() < 0.05 && (sh.dy - 3.0).abs() < 0.05, "{sh:?}");
 }

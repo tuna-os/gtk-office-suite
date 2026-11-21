@@ -24,18 +24,12 @@ pub fn open_files_on_drop(
 ) -> gtk::DropTarget {
     let claim = std::rc::Rc::new(claim);
     let app_weak = app.as_ref().downgrade();
-    let target = gtk::DropTarget::new(
-        gtk4::gdk::FileList::static_type(),
-        gtk4::gdk::DragAction::COPY,
-    );
+    let target = gtk::DropTarget::new(gtk4::gdk::FileList::static_type(), gtk4::gdk::DragAction::COPY);
     {
         let claim = claim.clone();
         let app_weak = app_weak.clone();
         target.connect_drop(move |_, val, _, _| {
-            let (Ok(list), Some(app)) = (val.get::<gtk4::gdk::FileList>(), app_weak.upgrade())
-            else {
-                return false;
-            };
+            let (Ok(list), Some(app)) = (val.get::<gtk4::gdk::FileList>(), app_weak.upgrade()) else { return false };
             let files = list.files();
             if files.is_empty() {
                 return false;
@@ -48,16 +42,8 @@ pub fn open_files_on_drop(
     if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
         let act = gio::SimpleAction::new("test-drop-files", Some(glib::VariantTy::STRING));
         act.connect_activate(move |_, param| {
-            let (Some(paths), Some(app)) =
-                (param.and_then(|p| p.get::<String>()), app_weak.upgrade())
-            else {
-                return;
-            };
-            let files: Vec<gio::File> = paths
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(gio::File::for_path)
-                .collect();
+            let (Some(paths), Some(app)) = (param.and_then(|p| p.get::<String>()), app_weak.upgrade()) else { return };
+            let files: Vec<gio::File> = paths.lines().filter(|l| !l.is_empty()).map(gio::File::for_path).collect();
             open_dropped(&app, &files, &*claim);
         });
         if let Some(map) = app.dynamic_cast_ref::<gio::ActionMap>() {

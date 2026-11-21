@@ -35,12 +35,7 @@ pub const HANDOUT_PT: (f64, f64) = (595.276, 841.89);
 
 /// Draw slide `index` into `(x, y, w, h)` of `cr`, a box of the deck's
 /// page shape.
-fn draw_into(
-    cr: &cairo::Context,
-    deck: &Deck,
-    index: usize,
-    (x, y, w, h): (f64, f64, f64, f64),
-) -> Result<(), String> {
+fn draw_into(cr: &cairo::Context, deck: &Deck, index: usize, (x, y, w, h): (f64, f64, f64, f64)) -> Result<(), String> {
     cr.save().map_err(|e| e.to_string())?;
     cr.translate(x, y);
     // Drawn 960 units wide, as the editor lays text out, and scaled
@@ -53,15 +48,7 @@ fn draw_into(
     cr.scale(k, k);
     cr.rectangle(0.0, 0.0, 960.0, tall);
     cr.clip();
-    draw_slide_in(
-        cr,
-        960.0,
-        tall,
-        &deck.slides,
-        index,
-        &deck.masters,
-        Chrome::Export,
-    );
+    draw_slide_in(cr, 960.0, tall, &deck.slides, index, &deck.masters, Chrome::Export);
     cr.restore().map_err(|e| e.to_string())
 }
 
@@ -77,10 +64,7 @@ pub fn handout_boxes(per_page: usize, (sw, sh): (f64, f64)) -> Vec<(f64, f64, f6
     };
     let margin = 54.0;
     let (pw, ph) = HANDOUT_PT;
-    let (cw, ch) = (
-        (pw - 2.0 * margin) / cols as f64,
-        (ph - 2.0 * margin) / rows as f64,
-    );
+    let (cw, ch) = ((pw - 2.0 * margin) / cols as f64, (ph - 2.0 * margin) / rows as f64);
     let label = 18.0;
     let gap = 18.0;
     let k = ((cw - gap) / sw).min((ch - gap - label) / sh);
@@ -102,11 +86,7 @@ pub fn handout_boxes(per_page: usize, (sw, sh): (f64, f64)) -> Vec<(f64, f64, f6
 /// PowerPoint leave it out (`engine::shown_slides`).
 pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(), String> {
     let slide = page_pt(deck);
-    let (pw, ph) = if per_page.is_some() {
-        HANDOUT_PT
-    } else {
-        slide
-    };
+    let (pw, ph) = if per_page.is_some() { HANDOUT_PT } else { slide };
     let surface = cairo::PdfSurface::new(pw, ph, path).map_err(|e| e.to_string())?;
     let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
     match per_page {
@@ -118,10 +98,7 @@ pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(
         }
         Some(n) => {
             let boxes = handout_boxes(n, slide);
-            for (page, chunk) in decks_core::engine::shown_slides(&deck.slides)
-                .chunks(boxes.len())
-                .enumerate()
-            {
+            for (page, chunk) in decks_core::engine::shown_slides(&deck.slides).chunks(boxes.len()).enumerate() {
                 let _ = page;
                 for (i, (x, y, w, h)) in chunk.iter().zip(&boxes) {
                     draw_into(&cr, deck, *i, (*x, *y, *w, *h))?;
@@ -157,8 +134,7 @@ pub fn export_png(deck: &Deck, index: usize, width: i32, path: &Path) -> Result<
     }
     let (pw, ph) = page_pt(deck);
     let height = (width as f64 * ph / pw).round().max(1.0) as i32;
-    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
-        .map_err(|e| e.to_string())?;
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|e| e.to_string())?;
     {
         let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
         draw_into(&cr, deck, index, (0.0, 0.0, width as f64, height as f64))?;
@@ -198,10 +174,7 @@ mod tests {
                         w: 200.0,
                         h: 150.0,
                         rotation: 0.0,
-                        style: decks_core::engine::shape::ShapeStyle {
-                            glow: None,
-                            shadow: None,
-                            fill_alpha: None,
+                        style: decks_core::engine::shape::ShapeStyle { glow: None, shadow: None, fill_alpha: None,
                             fill: Some(decks_core::engine::shape::Color(0xE0, 0x1B, 0x24)),
                             gradient: None,
                             stroke: None,
@@ -221,9 +194,7 @@ mod tests {
         match std::process::Command::new(cmd).args(args).output() {
             Ok(o) if o.status.success() => Some(String::from_utf8_lossy(&o.stdout).to_string()),
             Ok(o) => panic!("{cmd} failed: {}", String::from_utf8_lossy(&o.stderr)),
-            Err(_) if std::env::var_os("CI").is_some() => {
-                panic!("{cmd} is required in CI (poppler-utils)")
-            }
+            Err(_) if std::env::var_os("CI").is_some() => panic!("{cmd} is required in CI (poppler-utils)"),
             Err(_) => {
                 eprintln!("skipping: {cmd} not installed");
                 None
@@ -233,23 +204,14 @@ mod tests {
 
     #[test]
     fn handout_boxes_take_the_slides_shape_and_do_not_overlap() {
-        for (n, shape) in [2, 4, 6]
-            .into_iter()
-            .flat_map(|n| [(n, SLIDE_PT), (n, (720.0, 540.0))])
-        {
+        for (n, shape) in [2, 4, 6].into_iter().flat_map(|n| [(n, SLIDE_PT), (n, (720.0, 540.0))]) {
             let b = handout_boxes(n, shape);
             assert_eq!(b.len(), n);
             for (i, (x, y, w, h)) in b.iter().enumerate() {
                 assert!((w / h - shape.0 / shape.1).abs() < 1e-9);
-                assert!(
-                    *x >= 0.0 && *y >= 0.0 && x + w <= HANDOUT_PT.0 && y + h + 18.0 <= HANDOUT_PT.1,
-                    "{n}: {i}"
-                );
+                assert!(*x >= 0.0 && *y >= 0.0 && x + w <= HANDOUT_PT.0 && y + h + 18.0 <= HANDOUT_PT.1, "{n}: {i}");
                 for (x2, y2, w2, h2) in &b[i + 1..] {
-                    assert!(
-                        x + w <= *x2 || x2 + w2 <= *x || y + h <= *y2 || y2 + h2 <= *y,
-                        "{n}: boxes overlap"
-                    );
+                    assert!(x + w <= *x2 || x2 + w2 <= *x || y + h <= *y2 || y2 + h2 <= *y, "{n}: boxes overlap");
                 }
             }
         }
@@ -263,9 +225,7 @@ mod tests {
         let path = dir.path().join("deck.pdf");
         export_pdf(&deck(3), &path, None).unwrap();
         let p = path.to_str().unwrap();
-        let Some(info) = tool("pdfinfo", &[p]) else {
-            return;
-        };
+        let Some(info) = tool("pdfinfo", &[p]) else { return };
         assert!(info.contains("Pages:           3"), "{info}");
         assert!(info.contains("Page size:       720 x 405 pts"), "{info}");
         for k in 1..=3 {
@@ -285,22 +245,15 @@ mod tests {
         d.slides[1].hidden = true;
         export_pdf(&d, &path, None).unwrap();
         let p = path.to_str().unwrap();
-        let Some(info) = tool("pdfinfo", &[p]) else {
-            return;
-        };
+        let Some(info) = tool("pdfinfo", &[p]) else { return };
         assert!(info.contains("Pages:           2"), "{info}");
         let text = tool("pdftotext", &[p, "-"]).unwrap();
-        assert!(
-            text.contains("Slide 1") && text.contains("Slide 3") && !text.contains("Slide 2"),
-            "{text:?}"
-        );
+        assert!(text.contains("Slide 1") && text.contains("Slide 3") && !text.contains("Slide 2"), "{text:?}");
         for s in &mut d.slides {
             s.hidden = true;
         }
         export_pdf(&d, &path, None).unwrap();
-        assert!(tool("pdfinfo", &[p])
-            .unwrap()
-            .contains("Pages:           3"));
+        assert!(tool("pdfinfo", &[p]).unwrap().contains("Pages:           3"));
     }
 
     #[test]
@@ -311,25 +264,15 @@ mod tests {
             export_pdf(&deck(7), &path, Some(n)).unwrap();
             // EXPORT_KEEP=<dir> keeps the files, to look at.
             if let Some(keep) = std::env::var_os("EXPORT_KEEP") {
-                let _ = std::fs::copy(
-                    &path,
-                    std::path::Path::new(&keep).join(format!("handouts-{n}.pdf")),
-                );
+                let _ = std::fs::copy(&path, std::path::Path::new(&keep).join(format!("handouts-{n}.pdf")));
             }
             let p = path.to_str().unwrap();
-            let Some(info) = tool("pdfinfo", &[p]) else {
-                return;
-            };
-            assert!(
-                info.contains(&format!("Pages:           {pages}")),
-                "{n} per page: {info}"
-            );
+            let Some(info) = tool("pdfinfo", &[p]) else { return };
+            assert!(info.contains(&format!("Pages:           {pages}")), "{n} per page: {info}");
             assert!(info.contains("(A4)"), "{n} per page: {info}");
             // The first page holds the first n slides, in order.
             let text = tool("pdftotext", &["-f", "1", "-l", "1", p, "-"]).unwrap();
-            let found: Vec<usize> = (1..=7)
-                .filter(|k| text.contains(&format!("Slide {k}")))
-                .collect();
+            let found: Vec<usize> = (1..=7).filter(|k| text.contains(&format!("Slide {k}"))).collect();
             assert_eq!(found, (1..=n).collect::<Vec<_>>(), "{n} per page: {text:?}");
         }
     }
@@ -348,22 +291,9 @@ mod tests {
         export_pdf(&d, &pdf, None).unwrap();
         export_png(&d, 0, 960, &png).unwrap();
         let prefix = dir.path().join("page");
-        let Some(_) = tool(
-            "pdftoppm",
-            &[
-                "-png",
-                "-r",
-                "96",
-                "-singlefile",
-                pdf.to_str().unwrap(),
-                prefix.to_str().unwrap(),
-            ],
-        ) else {
-            return;
-        };
+        let Some(_) = tool("pdftoppm", &["-png", "-r", "96", "-singlefile", pdf.to_str().unwrap(), prefix.to_str().unwrap()]) else { return };
         let red = |path: &Path| -> (u32, u32, usize) {
-            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(path).unwrap())
-                .unwrap();
+            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(path).unwrap()).unwrap();
             let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
             let data = s.take_data().unwrap();
             let mut n = 0;
@@ -402,10 +332,7 @@ mod tests {
                 w: 960.0,
                 h: 540.0,
                 rotation: 0.0,
-                style: decks_core::engine::shape::ShapeStyle {
-                    glow: None,
-                    shadow: None,
-                    fill_alpha: None,
+                style: decks_core::engine::shape::ShapeStyle { glow: None, shadow: None, fill_alpha: None,
                     fill: Some(decks_core::engine::shape::Color(0x1C, 0x71, 0xD8)),
                     gradient: None,
                     stroke: None,
@@ -420,66 +347,31 @@ mod tests {
         export_pdf(&d, &pdf, None).unwrap();
         export_png(&d, 0, 960, &png).unwrap();
         let blue = |path: &Path| -> (i32, i32, bool) {
-            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(path).unwrap())
-                .unwrap();
+            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(path).unwrap()).unwrap();
             let (w, h, stride) = (s.width(), s.height(), s.stride() as usize);
             let data = s.take_data().unwrap();
             let at = |x: i32, y: i32| {
                 let p = &data[y as usize * stride + x as usize * 4..][..4];
                 p[0] > 180 && p[1] > 90 && p[1] < 140 && p[2] < 60
             };
-            let corners = [
-                (1, 1),
-                (w - 2, 1),
-                (1, h - 2),
-                (w - 2, h - 2),
-                (w / 2, h / 2),
-            ];
+            let corners = [(1, 1), (w - 2, 1), (1, h - 2), (w - 2, h - 2), (w / 2, h / 2)];
             (w, h, corners.iter().all(|&(x, y)| at(x, y)))
         };
-        assert_eq!(
-            blue(&png),
-            (960, 720, true),
-            "PNG: 4:3, the box to every corner"
-        );
+        assert_eq!(blue(&png), (960, 720, true), "PNG: 4:3, the box to every corner");
 
         let p = pdf.to_str().unwrap();
-        let Some(info) = tool("pdfinfo", &[p]) else {
-            return;
-        };
+        let Some(info) = tool("pdfinfo", &[p]) else { return };
         assert!(info.contains("Page size:       720 x 540 pts"), "{info}");
         assert!(info.contains("Pages:           2"), "{info}");
         let prefix = dir.path().join("page");
-        tool(
-            "pdftoppm",
-            &[
-                "-png",
-                "-r",
-                "96",
-                "-f",
-                "1",
-                "-l",
-                "1",
-                "-singlefile",
-                p,
-                prefix.to_str().unwrap(),
-            ],
-        )
-        .unwrap();
-        assert_eq!(
-            blue(&prefix.with_extension("png")),
-            (960, 720, true),
-            "PDF page 1 at 96 dpi"
-        );
+        tool("pdftoppm", &["-png", "-r", "96", "-f", "1", "-l", "1", "-singlefile", p, prefix.to_str().unwrap()]).unwrap();
+        assert_eq!(blue(&prefix.with_extension("png")), (960, 720, true), "PDF page 1 at 96 dpi");
 
         // Handouts frame each slide as a 4:3 box.
         let handouts = dir.path().join("handouts.pdf");
         export_pdf(&d, &handouts, Some(2)).unwrap();
         let info = tool("pdfinfo", &[handouts.to_str().unwrap()]).unwrap();
-        assert!(
-            info.contains("(A4)") && info.contains("Pages:           1"),
-            "{info}"
-        );
+        assert!(info.contains("(A4)") && info.contains("Pages:           1"), "{info}");
     }
 
     /// The master's decorations are on every exported page, behind each
@@ -495,10 +387,7 @@ mod tests {
             w: 960.0,
             h: 60.0,
             rotation: 0.0,
-            style: decks_core::engine::shape::ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
+            style: decks_core::engine::shape::ShapeStyle { glow: None, shadow: None, fill_alpha: None,
                 fill: Some(decks_core::engine::shape::Color(0x26, 0xA2, 0x69)),
                 gradient: None,
                 stroke: None,
@@ -513,27 +402,8 @@ mod tests {
         for k in 1..=3 {
             let page = k.to_string();
             let prefix = dir.path().join(format!("page{k}"));
-            let Some(_) = tool(
-                "pdftoppm",
-                &[
-                    "-png",
-                    "-r",
-                    "96",
-                    "-f",
-                    &page,
-                    "-l",
-                    &page,
-                    "-singlefile",
-                    p,
-                    prefix.to_str().unwrap(),
-                ],
-            ) else {
-                return;
-            };
-            let s = cairo::ImageSurface::create_from_png(
-                &mut std::fs::File::open(prefix.with_extension("png")).unwrap(),
-            )
-            .unwrap();
+            let Some(_) = tool("pdftoppm", &["-png", "-r", "96", "-f", &page, "-l", &page, "-singlefile", p, prefix.to_str().unwrap()]) else { return };
+            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(prefix.with_extension("png")).unwrap()).unwrap();
             let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
             let data = s.take_data().unwrap();
             // BGRA: the band's green, and only in the band's rows.
@@ -541,19 +411,9 @@ mod tests {
                 let px = &data[y * stride + x * 4..][..4];
                 px[1] > 140 && px[2] < 70 && px[0] > 80 && px[0] < 130
             };
-            let band = (480..540)
-                .flat_map(|y| (0..w).map(move |x| (x, y)))
-                .filter(|&(x, y)| green(x, y))
-                .count();
-            assert!(
-                band >= 960 * 58,
-                "page {k}: the master's band has {band} of {} pixels",
-                960 * 60
-            );
-            let above = (0..470)
-                .flat_map(|y| (0..w).map(move |x| (x, y)))
-                .filter(|&(x, y)| green(x, y))
-                .count();
+            let band = (480..540).flat_map(|y| (0..w).map(move |x| (x, y))).filter(|&(x, y)| green(x, y)).count();
+            assert!(band >= 960 * 58, "page {k}: the master's band has {band} of {} pixels", 960 * 60);
+            let above = (0..470).flat_map(|y| (0..w).map(move |x| (x, y))).filter(|&(x, y)| green(x, y)).count();
             assert_eq!(above, 0, "page {k}: green above the band");
             assert_eq!((w, h), (960, 540));
         }
@@ -569,19 +429,13 @@ mod tests {
         let before = format!("{:?}", d.slides);
         for per_page in [None, Some(4)] {
             let pdf = dir.path().join("gone").join("deck.pdf");
-            assert!(
-                export_pdf(&d, &pdf, per_page).is_err(),
-                "{per_page:?}: a PDF into a folder that isn't there"
-            );
+            assert!(export_pdf(&d, &pdf, per_page).is_err(), "{per_page:?}: a PDF into a folder that isn't there");
             assert!(!pdf.exists());
         }
         let png = dir.path().join("gone").join("slide.png");
         assert!(export_png(&d, 0, 960, &png).is_err());
         assert!(!png.exists());
-        assert!(
-            export_png(&d, 9, 960, &dir.path().join("slide.png")).is_err(),
-            "no such slide"
-        );
+        assert!(export_png(&d, 9, 960, &dir.path().join("slide.png")).is_err(), "no such slide");
         assert_eq!(format!("{:?}", d.slides), before);
     }
 }

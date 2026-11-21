@@ -27,21 +27,14 @@ fn two_slide_pptx() -> (Vec<u8>, Vec<String>) {
         .filter(|n| n.starts_with("ppt/slides/") && n.ends_with(".xml"))
         .collect();
     parts.sort();
-    assert_eq!(
-        parts.len(),
-        2,
-        "the writer must emit two slide parts: {parts:?}"
-    );
+    assert_eq!(parts.len(), 2, "the writer must emit two slide parts: {parts:?}");
     (bytes, parts)
 }
 
 /// The same package with `drop_part` removed; everything else byte-identical.
 fn without_part(bytes: &[u8], drop_part: &str) -> Vec<u8> {
     let mut src = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
-    let names: Vec<String> = src
-        .file_names()
-        .map(|n| n.expect("member name").into_owned())
-        .collect();
+    let names: Vec<String> = src.file_names().map(|n| n.expect("member name").into_owned()).collect();
     let mut out = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut out));
@@ -51,9 +44,7 @@ fn without_part(bytes: &[u8], drop_part: &str) -> Vec<u8> {
             }
             let mut data = Vec::new();
             src.by_name(name).unwrap().read_to_end(&mut data).unwrap();
-            writer
-                .start_file(name, SimpleFileOptions::default())
-                .unwrap();
+            writer.start_file(name, SimpleFileOptions::default()).unwrap();
             writer.write_all(&data).unwrap();
         }
         writer.finish().unwrap();
@@ -78,23 +69,10 @@ fn a_missing_slide_part_is_recorded_not_silently_dropped() {
 
     // The deck still opens, with the readable slide — and the skip named.
     let deck = decks_core::read_deck(path).expect("a missing slide part must not fail the open");
-    assert_eq!(
-        deck.slides.len(),
-        1,
-        "only the readable slide is in the deck"
-    );
-    assert_eq!(
-        deck.skipped_slides.len(),
-        1,
-        "the skip must be recorded: {:?}",
-        deck.skipped_slides
-    );
+    assert_eq!(deck.slides.len(), 1, "only the readable slide is in the deck");
+    assert_eq!(deck.skipped_slides.len(), 1, "the skip must be recorded: {:?}", deck.skipped_slides);
     assert_eq!(deck.skipped_slides[0].part, dropped);
-    assert!(
-        deck.skipped_slides[0].reason.contains("missing"),
-        "reason: {}",
-        deck.skipped_slides[0].reason
-    );
+    assert!(deck.skipped_slides[0].reason.contains("missing"), "reason: {}", deck.skipped_slides[0].reason);
 
     // The open report names the slide under the shared id, as a loss the
     // user can refuse.
@@ -127,11 +105,7 @@ fn a_complete_package_records_no_skipped_slides() {
 
     let deck = decks_core::read_deck(path).expect("open the complete deck");
     assert_eq!(deck.slides.len(), 2);
-    assert!(
-        deck.skipped_slides.is_empty(),
-        "nothing was skipped: {:?}",
-        deck.skipped_slides
-    );
+    assert!(deck.skipped_slides.is_empty(), "nothing was skipped: {:?}", deck.skipped_slides);
 
     let loss = decks_core::loss::content_a_save_drops(path);
     assert!(

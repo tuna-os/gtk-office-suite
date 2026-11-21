@@ -16,9 +16,7 @@
 
 use crate::engine::shape::{Color, ShapeKind, ShapeStyle, Stroke};
 use crate::engine::theme::{ColorRef, FillSrc, StrokeSrc};
-use crate::engine::{
-    Anchor, Bullet, Insets, ParaAlign, ParaStyle, Run, RunStyle, SlideObject, Spacing,
-};
+use crate::engine::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Run, RunStyle, SlideObject, Spacing};
 use crate::undo::{obj_bounds, obj_rotation, set_obj_bounds, set_obj_rotation};
 
 /// A paragraph list type, as the inspector offers it.
@@ -201,11 +199,7 @@ impl ObjectFormat {
             picture: matches!(obj, SlideObject::Image { .. }),
         };
         let first_run = |runs: &[Run], f: &mut ObjectFormat| {
-            if let Some(r) = runs
-                .iter()
-                .find(|r| !r.text.trim().is_empty())
-                .or(runs.first())
-            {
+            if let Some(r) = runs.iter().find(|r| !r.text.trim().is_empty()).or(runs.first()) {
                 f.font_family = r.style.font_family.clone();
                 f.font_size = r.style.font_size_hp.map(|hp| hp as f64 / 2.0);
                 f.bold = r.style.bold;
@@ -219,9 +213,7 @@ impl ObjectFormat {
             SlideObject::Shape { kind, style, .. } => {
                 f.has_style = true;
                 f.kind = Some(kind.clone());
-                f.fill = style
-                    .fill
-                    .or_else(|| style.gradient.as_ref().and_then(|g| g.mean()));
+                f.fill = style.fill.or_else(|| style.gradient.as_ref().and_then(|g| g.mean()));
                 f.outline = style.stroke;
             }
             SlideObject::Rect { .. } => {
@@ -265,29 +257,14 @@ impl ObjectFormat {
 /// like, so the Style tab can edit it.
 fn promote(obj: &mut SlideObject) {
     let promoted = match obj {
-        SlideObject::Rect {
-            x,
-            y,
-            w,
-            h,
-            rotation,
-        } => SlideObject::Shape {
+        SlideObject::Rect { x, y, w, h, rotation } => SlideObject::Shape {
             kind: ShapeKind::Rect,
             x: *x,
             y: *y,
             w: *w,
             h: *h,
             rotation: *rotation,
-            style: ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(PLAIN_RECT),
-                gradient: None,
-                stroke: None,
-                fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_RECT.to_hex()))),
-                stroke_src: None,
-            },
+            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(PLAIN_RECT), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_RECT.to_hex()))), stroke_src: None },
         },
         SlideObject::Circle { x, y, r, rotation } => SlideObject::Shape {
             kind: ShapeKind::Ellipse,
@@ -296,16 +273,7 @@ fn promote(obj: &mut SlideObject) {
             w: *r * 2.0,
             h: *r * 2.0,
             rotation: *rotation,
-            style: ShapeStyle {
-                glow: None,
-                shadow: None,
-                fill_alpha: None,
-                fill: Some(PLAIN_CIRCLE),
-                gradient: None,
-                stroke: None,
-                fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_CIRCLE.to_hex()))),
-                stroke_src: None,
-            },
+            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(PLAIN_CIRCLE), gradient: None, stroke: None, fill_src: Some(FillSrc::Color(ColorRef::Rgb(PLAIN_CIRCLE.to_hex()))), stroke_src: None },
         },
         _ => return,
     };
@@ -318,9 +286,7 @@ pub fn edit_style(s: &mut RunStyle, edit: &FormatEdit) -> bool {
     let before = s.clone();
     match edit {
         FormatEdit::FontFamily(f) => s.font_family = f.clone(),
-        FormatEdit::FontSize(pt) => {
-            s.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16)
-        }
+        FormatEdit::FontSize(pt) => s.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16),
         FormatEdit::Bold(b) => s.bold = *b,
         FormatEdit::Italic(i) => s.italic = *i,
         FormatEdit::Underline(u) => s.underline = *u,
@@ -344,10 +310,7 @@ pub fn edit_para(p: &mut ParaStyle, edit: &FormatEdit) {
             p.bullet = match kind {
                 ListKind::None => Bullet::None,
                 ListKind::Bullet => Bullet::Char("•".into()),
-                ListKind::Number => Bullet::AutoNum {
-                    scheme: "arabicPeriod".into(),
-                    start: 1,
-                },
+                ListKind::Number => Bullet::AutoNum { scheme: "arabicPeriod".into(), start: 1 },
             };
             // A hanging indent for the marker, one level step a level;
             // taken away again when the list is.
@@ -366,11 +329,7 @@ pub fn edit_para(p: &mut ParaStyle, edit: &FormatEdit) {
         // plain text moves one indent step, never left of the box.
         FormatEdit::Indent(more) => {
             if p.bullet != Bullet::None {
-                let level = if *more {
-                    (p.level + 1).min(8)
-                } else {
-                    p.level.saturating_sub(1)
-                };
+                let level = if *more { (p.level + 1).min(8) } else { p.level.saturating_sub(1) };
                 p.level = level;
                 p.margin_left = LEVEL_STEP * (level as f64 + 1.0);
                 if p.indent >= 0.0 {
@@ -396,12 +355,7 @@ pub fn edit_body(body: &mut crate::engine::TextBody, edit: &FormatEdit) -> bool 
         FormatEdit::Anchor(a) => body.anchor = *a,
         FormatEdit::Insets(pt) => {
             let u = pt.max(0.0) * UNITS_PER_PT;
-            body.insets = Some(Insets {
-                left: u,
-                top: u,
-                right: u,
-                bottom: u,
-            });
+            body.insets = Some(Insets { left: u, top: u, right: u, bottom: u });
         }
         _ => {}
     }
@@ -448,15 +402,11 @@ pub fn apply_edit(obj: &mut SlideObject, edit: &FormatEdit) {
                     }
                     FormatEdit::OutlineWidth(w) => {
                         let color = style.stroke.map_or(Color(0, 0, 0), |s| s.color);
-                        style.stroke = Some(Stroke {
-                            color,
-                            width: w.max(0.0),
-                        });
+                        style.stroke = Some(Stroke { color, width: w.max(0.0) });
                         // A user-touched outline is a local override: keep
                         // a carried reference, otherwise pin the colour.
                         if style.stroke_src.is_none() {
-                            style.stroke_src =
-                                Some(StrokeSrc::Color(ColorRef::Rgb(color.to_hex())));
+                            style.stroke_src = Some(StrokeSrc::Color(ColorRef::Rgb(color.to_hex())));
                         }
                     }
                     FormatEdit::NoOutline => {
@@ -484,10 +434,7 @@ pub fn apply_edit(obj: &mut SlideObject, edit: &FormatEdit) {
                     if !edit_style(&mut probe, edit) {
                         return;
                     }
-                    runs.push(Run {
-                        text: text.clone(),
-                        style: RunStyle::default(),
-                    });
+                    runs.push(Run { text: text.clone(), style: RunStyle::default() });
                 }
                 for r in runs.iter_mut() {
                     edit_style(&mut r.style, edit);
@@ -507,9 +454,7 @@ pub fn apply_edit(obj: &mut SlideObject, edit: &FormatEdit) {
         | FormatEdit::Indent(_)
         | FormatEdit::SpaceBefore(_)
         | FormatEdit::SpaceAfter(_) => {
-            let SlideObject::TextBox { text, body, .. } = obj else {
-                return;
-            };
+            let SlideObject::TextBox { text, body, .. } = obj else { return };
             let n = text.split('\n').count();
             let before: Vec<ParaStyle> = (0..n).map(|i| body.para(i)).collect();
             let mut paras = before.clone();
@@ -536,10 +481,7 @@ mod tests {
     fn text_box(text: &str) -> SlideObject {
         SlideObject::TextBox {
             text: text.into(),
-            x: 10.0,
-            y: 20.0,
-            w: 300.0,
-            h: 100.0,
+            x: 10.0, y: 20.0, w: 300.0, h: 100.0,
             rotation: 0.0,
             runs: vec![],
             body: TextBody::default(),
@@ -547,45 +489,19 @@ mod tests {
     }
 
     fn shape() -> SlideObject {
-        SlideObject::Shape {
-            kind: ShapeKind::Rect,
-            x: 0.0,
-            y: 0.0,
-            w: 100.0,
-            h: 50.0,
-            rotation: 0.0,
-            style: ShapeStyle::default(),
-        }
+        SlideObject::Shape { kind: ShapeKind::Rect, x: 0.0, y: 0.0, w: 100.0, h: 50.0, rotation: 0.0, style: ShapeStyle::default() }
     }
+
 
     #[test]
     fn a_fill_edit_on_a_plain_rectangle_makes_it_a_styled_shape_that_looks_the_same_until_then() {
-        let mut o = SlideObject::Rect {
-            x: 1.0,
-            y: 2.0,
-            w: 3.0,
-            h: 4.0,
-            rotation: 0.0,
-        };
+        let mut o = SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 };
         assert_eq!(ObjectFormat::of(&o).fill, Some(PLAIN_RECT));
         apply_edit(&mut o, &FormatEdit::Fill(Some(Color(1, 2, 3))));
-        let SlideObject::Shape {
-            kind, x, w, style, ..
-        } = &o
-        else {
-            panic!("{o:?}")
-        };
-        assert_eq!(
-            (kind, *x, *w, style.fill),
-            (&ShapeKind::Rect, 1.0, 3.0, Some(Color(1, 2, 3)))
-        );
+        let SlideObject::Shape { kind, x, w, style, .. } = &o else { panic!("{o:?}") };
+        assert_eq!((kind, *x, *w, style.fill), (&ShapeKind::Rect, 1.0, 3.0, Some(Color(1, 2, 3))));
         // A circle keeps its box, not its centre.
-        let mut c = SlideObject::Circle {
-            x: 50.0,
-            y: 50.0,
-            r: 10.0,
-            rotation: 0.0,
-        };
+        let mut c = SlideObject::Circle { x: 50.0, y: 50.0, r: 10.0, rotation: 0.0 };
         apply_edit(&mut c, &FormatEdit::Kind(ShapeKind::Diamond));
         assert_eq!(obj_bounds(&c), (40.0, 40.0, 20.0, 20.0));
         assert_eq!(ObjectFormat::of(&c).kind, Some(ShapeKind::Diamond));
@@ -597,21 +513,9 @@ mod tests {
         apply_edit(&mut o, &FormatEdit::NoOutline);
         assert_eq!(ObjectFormat::of(&o).outline, None);
         apply_edit(&mut o, &FormatEdit::OutlineWidth(3.0));
-        assert_eq!(
-            ObjectFormat::of(&o).outline,
-            Some(Stroke {
-                color: Color(0, 0, 0),
-                width: 3.0
-            })
-        );
+        assert_eq!(ObjectFormat::of(&o).outline, Some(Stroke { color: Color(0, 0, 0), width: 3.0 }));
         apply_edit(&mut o, &FormatEdit::OutlineColor(Color(9, 9, 9)));
-        assert_eq!(
-            ObjectFormat::of(&o).outline,
-            Some(Stroke {
-                color: Color(9, 9, 9),
-                width: 3.0
-            })
-        );
+        assert_eq!(ObjectFormat::of(&o).outline, Some(Stroke { color: Color(9, 9, 9), width: 3.0 }));
         // A gradient fill is replaced by a solid one.
         apply_edit(&mut o, &FormatEdit::Fill(None));
         assert_eq!(ObjectFormat::of(&o).fill, None);
@@ -623,46 +527,25 @@ mod tests {
         apply_edit(&mut o, &FormatEdit::Bold(true));
         apply_edit(&mut o, &FormatEdit::FontSize(24.0));
         apply_edit(&mut o, &FormatEdit::FontFamily(Some("Cantarell".into())));
-        let SlideObject::TextBox { runs, text, .. } = &o else {
-            panic!()
-        };
-        assert_eq!(
-            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
-            *text,
-            "runs still spell the text"
-        );
+        let SlideObject::TextBox { runs, text, .. } = &o else { panic!() };
+        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<String>(), *text, "runs still spell the text");
         let f = ObjectFormat::of(&o);
         assert!(f.bold && f.has_text && !f.has_style);
-        assert_eq!(
-            (f.font_size, f.font_family.as_deref()),
-            (Some(24.0), Some("Cantarell"))
-        );
+        assert_eq!((f.font_size, f.font_family.as_deref()), (Some(24.0), Some("Cantarell")));
     }
 
     #[test]
     fn a_list_gives_every_paragraph_a_marker_on_a_hanging_indent_and_back() {
         let mut o = text_box("a\nb\nc");
         apply_edit(&mut o, &FormatEdit::List(ListKind::Bullet));
-        let SlideObject::TextBox { body, .. } = &o else {
-            panic!()
-        };
+        let SlideObject::TextBox { body, .. } = &o else { panic!() };
         assert_eq!(body.paras.len(), 3);
-        assert!(body
-            .paras
-            .iter()
-            .all(|p| p.bullet == Bullet::Char("•".into())
-                && p.indent < 0.0
-                && p.margin_left > 0.0));
+        assert!(body.paras.iter().all(|p| p.bullet == Bullet::Char("•".into()) && p.indent < 0.0 && p.margin_left > 0.0));
         apply_edit(&mut o, &FormatEdit::List(ListKind::Number));
         assert_eq!(ObjectFormat::of(&o).list, ListKind::Number);
         apply_edit(&mut o, &FormatEdit::List(ListKind::None));
-        let SlideObject::TextBox { body, .. } = &o else {
-            panic!()
-        };
-        assert!(body
-            .paras
-            .iter()
-            .all(|p| p.bullet == Bullet::None && p.margin_left == 0.0 && p.indent == 0.0));
+        let SlideObject::TextBox { body, .. } = &o else { panic!() };
+        assert!(body.paras.iter().all(|p| p.bullet == Bullet::None && p.margin_left == 0.0 && p.indent == 0.0));
         apply_edit(&mut o, &FormatEdit::Align(ParaAlign::Center));
         apply_edit(&mut o, &FormatEdit::Anchor(Anchor::Middle));
         let f = ObjectFormat::of(&o);
@@ -678,12 +561,7 @@ mod tests {
         let f = ObjectFormat::of(&o);
         assert_eq!((f.bounds, f.rotation), ((5.0, 0.0, 40.0, 50.0), 270.0));
         // A circle stays round: its box is square on the smaller side.
-        let mut c = SlideObject::Circle {
-            x: 50.0,
-            y: 50.0,
-            r: 10.0,
-            rotation: 0.0,
-        };
+        let mut c = SlideObject::Circle { x: 50.0, y: 50.0, r: 10.0, rotation: 0.0 };
         apply_edit(&mut c, &FormatEdit::X(0.0));
         assert_eq!(obj_bounds(&c), (0.0, 40.0, 20.0, 20.0));
         let mut t = text_box("t");
@@ -691,31 +569,18 @@ mod tests {
         assert!(obj_bounds(&t).3 > 0.0, "never collapses");
     }
 
+
     #[test]
     fn indent_spacing_insets_and_scope_reach_what_they_name() {
         let mut o = text_box("a\nb");
         apply_edit(&mut o, &FormatEdit::List(ListKind::Bullet));
         apply_edit(&mut o, &FormatEdit::Indent(true));
-        let SlideObject::TextBox { body, .. } = &o else {
-            panic!()
-        };
-        assert!(
-            body.paras
-                .iter()
-                .all(|p| p.level == 1 && p.margin_left == 72.0 && p.indent < 0.0),
-            "{body:?}"
-        );
+        let SlideObject::TextBox { body, .. } = &o else { panic!() };
+        assert!(body.paras.iter().all(|p| p.level == 1 && p.margin_left == 72.0 && p.indent < 0.0), "{body:?}");
         apply_edit(&mut o, &FormatEdit::Indent(false));
         apply_edit(&mut o, &FormatEdit::Indent(false));
-        let SlideObject::TextBox { body, .. } = &o else {
-            panic!()
-        };
-        assert!(
-            body.paras
-                .iter()
-                .all(|p| p.level == 0 && p.margin_left == 36.0),
-            "never below level 0"
-        );
+        let SlideObject::TextBox { body, .. } = &o else { panic!() };
+        assert!(body.paras.iter().all(|p| p.level == 0 && p.margin_left == 36.0), "never below level 0");
         // Outside a list an indent step moves the text, never left of the box.
         let mut plain = ParaStyle::default();
         edit_para(&mut plain, &FormatEdit::Indent(true));
@@ -726,10 +591,7 @@ mod tests {
         apply_edit(&mut o, &FormatEdit::SpaceBefore(12.0));
         apply_edit(&mut o, &FormatEdit::Insets(9.0));
         let f = ObjectFormat::of(&o);
-        assert!(
-            (f.space_before.unwrap() - 12.0).abs() < 1e-9 && (f.inset.unwrap() - 9.0).abs() < 1e-9,
-            "{f:?}"
-        );
+        assert!((f.space_before.unwrap() - 12.0).abs() < 1e-9 && (f.inset.unwrap() - 9.0).abs() < 1e-9, "{f:?}");
         assert_eq!(FormatEdit::Underline(true).scope(), EditScope::Characters);
         assert_eq!(FormatEdit::Indent(true).scope(), EditScope::Paragraphs);
         assert_eq!(FormatEdit::Insets(1.0).scope(), EditScope::TextBox);
@@ -740,14 +602,10 @@ mod tests {
     fn a_whole_box_format_on_an_empty_box_is_its_typing_style() {
         let mut o = text_box("");
         apply_edit(&mut o, &FormatEdit::Strikethrough(false));
-        let SlideObject::TextBox { runs, .. } = &o else {
-            panic!()
-        };
+        let SlideObject::TextBox { runs, .. } = &o else { panic!() };
         assert!(runs.is_empty(), "no visible change, no run");
         apply_edit(&mut o, &FormatEdit::Underline(true));
-        let SlideObject::TextBox { runs, .. } = &o else {
-            panic!()
-        };
+        let SlideObject::TextBox { runs, .. } = &o else { panic!() };
         assert_eq!(runs.len(), 1);
         assert!(runs[0].text.is_empty() && runs[0].style.underline);
         assert!(ObjectFormat::of(&o).underline);

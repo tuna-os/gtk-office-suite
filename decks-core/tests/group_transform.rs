@@ -12,15 +12,7 @@ use decks_core::engine::shape::ShapeKind;
 use decks_core::engine::{read_pptx, write_pptx, Deck, SlideObject};
 
 fn shape(x: f64, rotation: f64) -> SlideObject {
-    SlideObject::Shape {
-        kind: ShapeKind::Ellipse,
-        x,
-        y: 100.0,
-        w: 100.0,
-        h: 50.0,
-        rotation,
-        style: Default::default(),
-    }
+    SlideObject::Shape { kind: ShapeKind::Ellipse, x, y: 100.0, w: 100.0, h: 50.0, rotation, style: Default::default() }
 }
 
 /// A copy of the deck at `path` whose shapes sit in one group spanning
@@ -50,8 +42,7 @@ fn grouped(path: &std::path::Path, xfrm_attrs: &str) -> Deck {
             )
             .into_bytes();
         }
-        w.start_file(name, zip::write::SimpleFileOptions::default())
-            .unwrap();
+        w.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
         w.write_all(&bytes).unwrap();
     }
     w.finish().unwrap();
@@ -63,14 +54,7 @@ fn placed(d: &Deck) -> Vec<(f64, f64, f64, f64, f64)> {
         .objects
         .iter()
         .filter_map(|o| match o {
-            SlideObject::Shape {
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                ..
-            } => Some((*x, *y, *w, *h, *rotation)),
+            SlideObject::Shape { x, y, w, h, rotation, .. } => Some((*x, *y, *w, *h, *rotation)),
             _ => None,
         })
         .collect()
@@ -79,11 +63,7 @@ fn placed(d: &Deck) -> Vec<(f64, f64, f64, f64, f64)> {
 fn assert_near(got: (f64, f64, f64, f64, f64), want: (f64, f64, f64, f64, f64), what: &str) {
     let close = |a: f64, b: f64| (a - b).abs() < 0.5;
     assert!(
-        close(got.0, want.0)
-            && close(got.1, want.1)
-            && close(got.2, want.2)
-            && close(got.3, want.3)
-            && close(got.4, want.4),
+        close(got.0, want.0) && close(got.1, want.1) && close(got.2, want.2) && close(got.3, want.3) && close(got.4, want.4),
         "{what}: got {got:?}, want {want:?}"
     );
 }
@@ -113,16 +93,8 @@ fn a_mirrored_group_swaps_its_shapes_and_mirrors_their_turn() {
     let dir = tempfile::tempdir().unwrap();
     let path = deck_at(dir.path(), vec![shape(100.0, 30.0), shape(300.0, 0.0)]);
     let got = placed(&grouped(&path, " flipH=\"1\""));
-    assert_near(
-        got[0],
-        (300.0, 100.0, 100.0, 50.0, 330.0),
-        "left shape, now on the right",
-    );
-    assert_near(
-        got[1],
-        (100.0, 100.0, 100.0, 50.0, 0.0),
-        "right shape, now on the left",
-    );
+    assert_near(got[0], (300.0, 100.0, 100.0, 50.0, 330.0), "left shape, now on the right");
+    assert_near(got[1], (100.0, 100.0, 100.0, 50.0, 0.0), "right shape, now on the left");
 }
 
 #[test]

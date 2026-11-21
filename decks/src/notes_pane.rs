@@ -69,9 +69,5 @@ pub fn build() -> NotesPane {
     widget.add_css_class("view");
     widget.append(&heading);
     widget.append(&overlay);
-    NotesPane {
-        widget,
-        buffer,
-        view,
-    }
+    NotesPane { widget, buffer, view }
 }

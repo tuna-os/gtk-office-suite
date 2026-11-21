@@ -91,26 +91,13 @@ const HYPERLINKS: (&str, &str) = ("text-hyperlinks", "Text hyperlinks");
 /// decision; until then, say so before the save.
 const GROUPS: (&str, &str) = ("groups", "Grouped shapes");
 
-fn record(
-    report: &mut CompatibilityReport,
-    (id, label): (&str, &str),
-    location: &str,
-    detail: &str,
-) {
+fn record(report: &mut CompatibilityReport, (id, label): (&str, &str), location: &str, detail: &str) {
     // Deduplicate on the full triple, not just id and location: one slide
     // can name two missing pictures, and the shared `record` would keep only
     // the first. Every finding names its affected part in `location` or
     // `detail`, so dropping the second would hide a loss the dialog promised.
-    if !report.features.iter().any(|existing| {
-        existing.id == id && existing.location == location && existing.detail == detail
-    }) {
-        report.features.push(UnsupportedFeature::new(
-            id,
-            label,
-            location,
-            FeatureDisposition::WarnOnLoss,
-            detail,
-        ));
+    if !report.features.iter().any(|existing| existing.id == id && existing.location == location && existing.detail == detail) {
+        report.features.push(UnsupportedFeature::new(id, label, location, FeatureDisposition::WarnOnLoss, detail));
     }
 }
 
@@ -132,28 +119,19 @@ pub fn can_save_unverified_copy(source: &str, target: &str) -> bool {
     use std::path::Path;
     let source = Path::new(source);
     let target = Path::new(target);
-    if !matches!(std::fs::symlink_metadata(target), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
-    {
+    if !matches!(std::fs::symlink_metadata(target), Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
         return false;
     }
     let location = |path: &Path| {
-        let parent = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
-        let name = path
-            .file_name()
-            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+        let name = path.file_name().ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
         std::fs::canonicalize(parent).map(|parent| parent.join(name))
     };
-    let Ok(target) = location(target) else {
-        return false;
-    };
+    let Ok(target) = location(target) else { return false };
     // A dangling source symlink could name the proposed destination.
     match std::fs::symlink_metadata(source) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            std::fs::canonicalize(source).is_ok_and(|source| source != target)
-        }
+        Ok(metadata) if metadata.file_type().is_symlink() =>
+            std::fs::canonicalize(source).is_ok_and(|source| source != target),
         Ok(_) => location(source).is_ok_and(|source| source != target),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => match location(source) {
             Ok(source) => source != target,
@@ -180,12 +158,7 @@ fn content_a_save_drops_with_budget(path: &str, budget: &mut ZipBudget) -> Compa
     report
 }
 
-fn inspect_source(
-    path: &str,
-    odp: bool,
-    budget: &mut ZipBudget,
-    report: &mut CompatibilityReport,
-) -> Result<(), String> {
+fn inspect_source(path: &str, odp: bool, budget: &mut ZipBudget, report: &mut CompatibilityReport) -> Result<(), String> {
     let file = std::fs::File::open(path).map_err(|e| format!("open source: {e}"))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("read source package: {e}"))?;
     budget.check_entry_count(zip.len())?;
@@ -201,21 +174,11 @@ fn inspect_source(
     }
 }
 
-fn scan_part<R: Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    name: &str,
-    budget: &mut ZipBudget,
-) -> Result<String, String> {
-    zip.part_to_string(name, budget)
-        .map_err(|e| format!("inspect {name}: {e}"))
+fn scan_part<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, name: &str, budget: &mut ZipBudget) -> Result<String, String> {
+    zip.part_to_string(name, budget).map_err(|e| format!("inspect {name}: {e}"))
 }
 
-fn pptx_drops<R: Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    names: &BTreeSet<String>,
-    budget: &mut ZipBudget,
-    report: &mut CompatibilityReport,
-) -> Result<(), String> {
+fn pptx_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTreeSet<String>, budget: &mut ZipBudget, report: &mut CompatibilityReport) -> Result<(), String> {
     // Slides the presentation names but the package does not contain
     // (#1977): the reader skips a missing slide part, so the slide is not
     // in the deck and this save would drop it permanently. Resolved from
@@ -235,70 +198,33 @@ fn pptx_drops<R: Read + std::io::Seek>(
     }
     // Comment parts themselves: PowerPoint writes an authors list
     // (ppt/authors.xml, ppt/commentAuthors.xml) into decks with no comments.
-    if names
-        .iter()
-        .any(|n| n.starts_with("ppt/comments/") && n.ends_with(".xml"))
-    {
-        record(
-            report,
-            COMMENTS,
-            "ppt/comments",
-            "comments on slides are not kept",
-        );
+    if names.iter().any(|n| n.starts_with("ppt/comments/") && n.ends_with(".xml")) {
+        record(report, COMMENTS, "ppt/comments", "comments on slides are not kept");
     }
     if names.iter().any(|n| n.starts_with("ppt/diagrams/")) {
         record(report, SMARTART, "ppt/diagrams", "SmartArt is not kept");
     }
-    for slide in names
-        .iter()
-        .filter(|n| n.starts_with("ppt/slides/slide") && n.ends_with(".xml"))
-    {
+    for slide in names.iter().filter(|n| n.starts_with("ppt/slides/slide") && n.ends_with(".xml")) {
         let xml = scan_part(zip, slide, budget)?;
         let tags = start_tags(&xml);
-        if tags
-            .iter()
-            .any(|t| matches!(t.local, "videoFile" | "audioFile" | "media"))
-        {
+        if tags.iter().any(|t| matches!(t.local, "videoFile" | "audioFile" | "media")) {
             record(report, MEDIA, slide, "audio and video are not kept");
         }
-        if tags
-            .iter()
-            .any(|t| t.local == "oleObj" || t.local.eq_ignore_ascii_case("oleobject"))
-        {
+        if tags.iter().any(|t| t.local == "oleObj" || t.local.eq_ignore_ascii_case("oleobject")) {
             record(report, OLE, slide, "embedded objects are not kept");
         }
         let rels = slide.replacen("ppt/slides/", "ppt/slides/_rels/", 1) + ".rels";
-        if tags
-            .iter()
-            .any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver"))
-        {
-            let rels_xml = if names.contains(&rels) {
-                scan_part(zip, &rels, budget)?
-            } else {
-                String::new()
-            };
+        if tags.iter().any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver")) {
+            let rels_xml = if names.contains(&rels) { scan_part(zip, &rels, budget)? } else { String::new() };
             if dropped_pptx_link(&tags, &rels_xml) {
                 record(report, HYPERLINKS, slide, "links that jump to a slide, run an action, or sit on a whole shape are not kept");
             }
         }
         if tags.iter().any(|t| t.local == "grpSp") {
-            record(
-                report,
-                GROUPS,
-                slide,
-                "groups are not kept; their shapes are saved one by one",
-            );
+            record(report, GROUPS, slide, "groups are not kept; their shapes are saved one by one");
         }
-        if tags
-            .iter()
-            .any(|t| matches!(attr_value(t.attrs, "presetClass"), Some("emph" | "path")))
-        {
-            record(
-                report,
-                ANIMATION,
-                slide,
-                "only entrance and exit builds are kept",
-            );
+        if tags.iter().any(|t| matches!(attr_value(t.attrs, "presetClass"), Some("emph" | "path"))) {
+            record(report, ANIMATION, slide, "only entrance and exit builds are kept");
         }
         // A slide need not have relationships. If the part exists, failure
         // to inspect it is not evidence that all its pictures are present.
@@ -308,33 +234,17 @@ fn pptx_drops<R: Read + std::io::Seek>(
         let rels_xml = scan_part(zip, &rels, budget)?;
         for target in internal_targets(&rels_xml, "/image") {
             if !names.contains(&resolve("ppt/slides", &target)) {
-                record(
-                    report,
-                    MISSING,
-                    slide,
-                    &format!("{target} is not in the file"),
-                );
+                record(report, MISSING, slide, &format!("{target} is not in the file"));
             }
         }
     }
     // Hyperlinks live on layouts and masters too (a linked title
     // placeholder, a "home" button in the master): a deck whose slides
     // are clean can still lose links from its masters on save.
-    for part in names.iter().filter(|n| {
-        (n.starts_with("ppt/slideLayouts/") || n.starts_with("ppt/slideMasters/"))
-            && n.ends_with(".xml")
-    }) {
+    for part in names.iter().filter(|n| (n.starts_with("ppt/slideLayouts/") || n.starts_with("ppt/slideMasters/")) && n.ends_with(".xml")) {
         let xml = scan_part(zip, part, budget)?;
-        if start_tags(&xml)
-            .iter()
-            .any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver"))
-        {
-            record(
-                report,
-                HYPERLINKS,
-                part,
-                "links on layouts and masters are not kept",
-            );
+        if start_tags(&xml).iter().any(|t| matches!(t.local, "hlinkClick" | "hlinkMouseOver")) {
+            record(report, HYPERLINKS, part, "links on layouts and masters are not kept");
         }
     }
     for chart in chart_parts(zip, names, budget, report)? {
@@ -346,50 +256,21 @@ fn pptx_drops<R: Read + std::io::Seek>(
             .map(|t| t.local)
             .filter(|l| l.ends_with("Chart") && l.len() > "Chart".len())
             .collect();
-        let first_only = types.first().is_some_and(|t| {
-            matches!(
-                *t,
-                "scatterChart"
-                    | "pieChart"
-                    | "pie3DChart"
-                    | "doughnutChart"
-                    | "ofPieChart"
-                    | "bubbleChart"
-            )
-        });
-        // Stacking is kept for columns alone, and only as plain stacking.
-        let grouping = tags
-            .iter()
-            .find(|t| t.local == "grouping")
-            .and_then(|t| attr_value(t.attrs, "val"))
-            .unwrap_or("");
-        let bars = types
+        let first_only = types
             .first()
-            .is_some_and(|t| matches!(*t, "barChart" | "bar3DChart"));
+            .is_some_and(|t| matches!(*t, "scatterChart" | "pieChart" | "pie3DChart" | "doughnutChart" | "ofPieChart" | "bubbleChart"));
+        // Stacking is kept for columns alone, and only as plain stacking.
+        let grouping = tags.iter().find(|t| t.local == "grouping").and_then(|t| attr_value(t.attrs, "val")).unwrap_or("");
+        let bars = types.first().is_some_and(|t| matches!(*t, "barChart" | "bar3DChart"));
         let lost_grouping = grouping == "percentStacked" || (grouping == "stacked" && !bars);
         if types.len() > 1 {
             record(report, CHARTS, &chart, "only the first chart type is kept");
         } else if lost_grouping {
-            record(
-                report,
-                CHARTS,
-                &chart,
-                &format!("{grouping} grouping is drawn as series side by side or plainly stacked"),
-            );
+            record(report, CHARTS, &chart, &format!("{grouping} grouping is drawn as series side by side or plainly stacked"));
         } else if first_only && series > 1 {
-            record(
-                report,
-                CHARTS,
-                &chart,
-                "only the first chart series is kept",
-            );
+            record(report, CHARTS, &chart, "only the first chart series is kept");
         } else if series > MAX_SERIES {
-            record(
-                report,
-                CHARTS,
-                &chart,
-                &format!("only the first {MAX_SERIES} chart series are kept"),
-            );
+            record(report, CHARTS, &chart, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     Ok(())
@@ -418,12 +299,7 @@ fn chart_parts<R: Read + std::io::Seek>(
             } else {
                 // A chart the relationships name but the package does not
                 // contain: the save cannot keep what is not there to read.
-                record(
-                    report,
-                    MISSING,
-                    rels_name.as_str(),
-                    &format!("{target} is not in the file"),
-                );
+                record(report, MISSING, rels_name.as_str(), &format!("{target} is not in the file"));
             }
         }
     }
@@ -443,12 +319,7 @@ fn rels_base(rels_path: &str) -> String {
     parts.join("/")
 }
 
-fn odp_drops<R: Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    names: &BTreeSet<String>,
-    budget: &mut ZipBudget,
-    report: &mut CompatibilityReport,
-) -> Result<(), String> {
+fn odp_drops<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, names: &BTreeSet<String>, budget: &mut ZipBudget, report: &mut CompatibilityReport) -> Result<(), String> {
     // Master and layout artwork lives in styles.xml; content.xml alone would
     // miss a comment, a movie or a dangling picture the master names.
     // styles.xml is optional: its absence is not an inspection failure.
@@ -472,42 +343,19 @@ fn odp_drops<R: Read + std::io::Seek>(
         // inside the deck or to a file, and any link in styles.xml (the
         // masters, which keep none).
         if tags.iter().any(|t| {
-            t.local == "a"
-                && (part == "styles.xml"
-                    || !attr_value(t.attrs, "href").is_some_and(crate::odp::external_href))
+            t.local == "a" && (part == "styles.xml" || !attr_value(t.attrs, "href").is_some_and(crate::odp::external_href))
         }) {
-            record(
-                report,
-                HYPERLINKS,
-                part,
-                "links that jump inside the deck or to a file, and links on masters, are not kept",
-            );
+            record(report, HYPERLINKS, part, "links that jump inside the deck or to a file, and links on masters, are not kept");
         }
         if tags.iter().any(|t| t.local == "g") {
-            record(
-                report,
-                GROUPS,
-                part,
-                "groups are not kept; their shapes are saved one by one",
-            );
+            record(report, GROUPS, part, "groups are not kept; their shapes are saved one by one");
         }
-        if tags.iter().any(|t| {
-            matches!(
-                attr_value(t.attrs, "preset-class"),
-                Some("emphasis" | "motion-path")
-            )
-        }) {
-            record(
-                report,
-                ANIMATION,
-                part,
-                "only entrance and exit builds are kept",
-            );
+        if tags.iter().any(|t| matches!(attr_value(t.attrs, "preset-class"), Some("emphasis" | "motion-path"))) {
+            record(report, ANIMATION, part, "only entrance and exit builds are kept");
         }
         for tag in tags.iter().filter(|t| t.local == "image") {
             if let Some(href) = attr_value(tag.attrs, "href") {
-                let internal =
-                    !href.contains(':') && !href.starts_with('/') && !href.starts_with("../");
+                let internal = !href.contains(':') && !href.starts_with('/') && !href.starts_with("../");
                 if internal && !names.contains(href.trim_start_matches("./")) {
                     record(report, MISSING, part, &format!("{href} is not in the file"));
                 }
@@ -518,50 +366,23 @@ fn odp_drops<R: Read + std::io::Seek>(
         let xml = scan_part(zip, &object, budget)?;
         let tags = start_tags(&xml);
         // `chart:chart`, not the `office:chart` body around it: the one with a class.
-        let Some(chart) = tags
-            .iter()
-            .find(|t| t.local == "chart" && attr_value(t.attrs, "class").is_some())
-        else {
-            continue;
-        };
-        let class = attr_value(chart.attrs, "class")
-            .map(|c| local_of(c).to_string())
-            .unwrap_or_default();
+        let Some(chart) = tags.iter().find(|t| t.local == "chart" && attr_value(t.attrs, "class").is_some()) else { continue };
+        let class = attr_value(chart.attrs, "class").map(|c| local_of(c).to_string()).unwrap_or_default();
         let series: Vec<&StartTag> = tags.iter().filter(|t| t.local == "series").collect();
         let other_type = series
             .iter()
             .filter_map(|s| attr_value(s.attrs, "class"))
             .any(|c| local_of(c) != class);
-        let props = |name: &str| {
-            tags.iter()
-                .any(|t| t.local == "chart-properties" && attr_value(t.attrs, name) == Some("true"))
-        };
+        let props = |name: &str| tags.iter().any(|t| t.local == "chart-properties" && attr_value(t.attrs, name) == Some("true"));
         let lost_grouping = props("percentage") || (props("stacked") && class != "bar");
         if other_type {
             record(report, CHARTS, &object, "only the chart's own type is kept");
         } else if lost_grouping {
-            record(
-                report,
-                CHARTS,
-                &object,
-                "stacking other than stacked columns is drawn plainly",
-            );
-        } else if matches!(class.as_str(), "scatter" | "circle" | "ring" | "bubble")
-            && series.len() > 1
-        {
-            record(
-                report,
-                CHARTS,
-                &object,
-                "only the first chart series is kept",
-            );
+            record(report, CHARTS, &object, "stacking other than stacked columns is drawn plainly");
+        } else if matches!(class.as_str(), "scatter" | "circle" | "ring" | "bubble") && series.len() > 1 {
+            record(report, CHARTS, &object, "only the first chart series is kept");
         } else if series.len() > MAX_SERIES {
-            record(
-                report,
-                CHARTS,
-                &object,
-                &format!("only the first {MAX_SERIES} chart series are kept"),
-            );
+            record(report, CHARTS, &object, &format!("only the first {MAX_SERIES} chart series are kept"));
         }
     }
     mixed_page_sizes(zip, names, budget, report)?;
@@ -595,9 +416,7 @@ fn mixed_page_sizes<R: Read + std::io::Seek>(
             if t.local != "page-layout-properties" {
                 continue;
             }
-            let Some(prev) = j.checked_sub(1).and_then(|i| tags.get(i)) else {
-                continue;
-            };
+            let Some(prev) = j.checked_sub(1).and_then(|i| tags.get(i)) else { continue };
             if prev.local != "page-layout" {
                 continue;
             }
@@ -615,14 +434,8 @@ fn mixed_page_sizes<R: Read + std::io::Seek>(
     }
     // Master-page name to its page-layout name (empty elements in styles.xml).
     let mut master_layout: HashMap<String, String> = HashMap::new();
-    for t in start_tags(&styles)
-        .iter()
-        .filter(|t| t.local == "master-page")
-    {
-        if let (Some(m), Some(l)) = (
-            attr_value(t.attrs, "name"),
-            attr_value(t.attrs, "page-layout-name"),
-        ) {
+    for t in start_tags(&styles).iter().filter(|t| t.local == "master-page") {
+        if let (Some(m), Some(l)) = (attr_value(t.attrs, "name"), attr_value(t.attrs, "page-layout-name")) {
             master_layout.insert(m.to_string(), l.to_string());
         }
     }
@@ -638,19 +451,14 @@ fn mixed_page_sizes<R: Read + std::io::Seek>(
         }
     }
     if sizes.len() > 1 {
-        let mut list: Vec<String> = sizes
-            .iter()
-            .map(|(w, h)| format!("{}x{}pt", *w as f64 / 100.0, *h as f64 / 100.0))
-            .collect();
+        let mut list: Vec<String> =
+            sizes.iter().map(|(w, h)| format!("{}x{}pt", *w as f64 / 100.0, *h as f64 / 100.0)).collect();
         list.sort();
         record(
             report,
             MIXED_SIZES,
             "content.xml",
-            &format!(
-                "slides use differently-sized pages ({}); the save keeps the first page's size",
-                list.join(", ")
-            ),
+            &format!("slides use differently-sized pages ({}); the save keeps the first page's size", list.join(", ")),
         );
     }
     Ok(())
@@ -664,9 +472,7 @@ fn odp_chart_objects(names: &BTreeSet<String>) -> Vec<String> {
         .iter()
         .filter(|n| {
             n.ends_with("/content.xml")
-                && n.split('/')
-                    .next()
-                    .is_some_and(|first| first.starts_with("Object "))
+                && n.split('/').next().is_some_and(|first| first.starts_with("Object "))
         })
         .cloned()
         .collect()
@@ -762,18 +568,12 @@ fn start_tags(xml: &str) -> Vec<StartTag<'_>> {
         if inner.ends_with('/') {
             inner = inner[..inner.len() - 1].trim_end();
         }
-        let split = inner
-            .find(|c: char| c.is_whitespace())
-            .unwrap_or(inner.len());
+        let split = inner.find(|c: char| c.is_whitespace()).unwrap_or(inner.len());
         let qualified = &inner[..split];
         if qualified.is_empty() {
             continue;
         }
-        out.push(StartTag {
-            qualified,
-            local: local_of(qualified),
-            attrs: inner[split..].trim_start(),
-        });
+        out.push(StartTag { qualified, local: local_of(qualified), attrs: inner[split..].trim_start() });
     }
     out
 }
@@ -789,11 +589,7 @@ fn attr_value<'a>(attrs: &'a str, want: &str) -> Option<&'a str> {
             i += 1;
         }
         let start = i;
-        while i < bytes.len()
-            && !bytes[i].is_ascii_whitespace()
-            && bytes[i] != b'='
-            && bytes[i] != b'/'
-        {
+        while i < bytes.len() && !bytes[i].is_ascii_whitespace() && bytes[i] != b'=' && bytes[i] != b'/' {
             i += 1;
         }
         if start == i {
@@ -849,9 +645,7 @@ fn dropped_pptx_link(tags: &[StartTag<'_>], rels: &str) -> bool {
     let external: BTreeSet<&str> = start_tags(rels)
         .into_iter()
         .filter(|t| t.local == "Relationship")
-        .filter(|t| {
-            attr_value(t.attrs, "TargetMode").is_some_and(|m| m.eq_ignore_ascii_case("external"))
-        })
+        .filter(|t| attr_value(t.attrs, "TargetMode").is_some_and(|m| m.eq_ignore_ascii_case("external")))
         .filter(|t| attr_value(t.attrs, "Type").is_some_and(|ty| ty.ends_with("/hyperlink")))
         .filter_map(|t| attr_value(t.attrs, "Id"))
         .collect();
@@ -923,8 +717,7 @@ mod tests {
     fn package(path: &std::path::Path, parts: &[(&str, &str)]) {
         let mut z = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
         for (name, data) in parts {
-            z.start_file(*name, zip::write::SimpleFileOptions::default())
-                .unwrap();
+            z.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
             z.write_all(data.as_bytes()).unwrap();
         }
         z.finish().unwrap();
@@ -938,18 +731,12 @@ mod tests {
     }
 
     fn assert_inspection_blocked(report: &CompatibilityReport, detail: &str) {
-        let failure = report
-            .features
-            .iter()
-            .find(|f| f.id == "source-inspection-failed")
+        let failure = report.features.iter().find(|f| f.id == "source-inspection-failed")
             .expect("a failed source scan must not claim the save is clean");
         assert_eq!(failure.disposition, FeatureDisposition::HardError);
         assert!(failure.detail.contains(detail), "{}", failure.detail);
         assert!(report.validate_save(false).is_err());
-        assert!(
-            report.validate_save(true).is_err(),
-            "Save Anyway must not override a failed inspection"
-        );
+        assert!(report.validate_save(true).is_err(), "Save Anyway must not override a failed inspection");
     }
 
     #[test]
@@ -959,10 +746,7 @@ mod tests {
             let path = dir.path().join(format!("source.{ext}"));
             assert_inspection_blocked(&content_a_save_drops(path.to_str().unwrap()), "open source");
             std::fs::write(&path, b"not a ZIP package").unwrap();
-            assert_inspection_blocked(
-                &content_a_save_drops(path.to_str().unwrap()),
-                "read source package",
-            );
+            assert_inspection_blocked(&content_a_save_drops(path.to_str().unwrap()), "read source package");
         }
     }
 
@@ -971,18 +755,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("source.pptx");
         let copy = dir.path().join("copy.pptx");
-        let allowed = |target: &std::path::Path| {
-            can_save_unverified_copy(source.to_str().unwrap(), target.to_str().unwrap())
-        };
-        assert!(
-            !allowed(&source),
-            "a missing source is not a copy destination"
-        );
+        let allowed = |target: &std::path::Path| can_save_unverified_copy(source.to_str().unwrap(), target.to_str().unwrap());
+        assert!(!allowed(&source), "a missing source is not a copy destination");
         assert!(!allowed(&dir.path().join(".").join("source.pptx")));
-        assert!(
-            allowed(&copy),
-            "a missing source can be recovered to a fresh name"
-        );
+        assert!(allowed(&copy), "a missing source can be recovered to a fresh name");
         std::fs::write(&source, b"corrupt source").unwrap();
         assert!(allowed(&copy));
         std::fs::write(&copy, b"existing destination").unwrap();
@@ -993,23 +769,12 @@ mod tests {
     fn recovery_copy_handles_relative_sources_and_deleted_parent_directories() {
         let dir = tempfile::tempdir_in(".").unwrap();
         let source = dir.path().join("source.pptx");
-        let absolute_source = std::fs::canonicalize(dir.path())
-            .unwrap()
-            .join("source.pptx");
-        assert!(!can_save_unverified_copy(
-            source.to_str().unwrap(),
-            absolute_source.to_str().unwrap()
-        ));
+        let absolute_source = std::fs::canonicalize(dir.path()).unwrap().join("source.pptx");
+        assert!(!can_save_unverified_copy(source.to_str().unwrap(), absolute_source.to_str().unwrap()));
         let missing_parent_source = dir.path().join("deleted-directory").join("source.pptx");
         let copy = dir.path().join("copy.pptx");
-        assert!(can_save_unverified_copy(
-            missing_parent_source.to_str().unwrap(),
-            copy.to_str().unwrap()
-        ));
-        assert!(!can_save_unverified_copy(
-            source.to_str().unwrap(),
-            missing_parent_source.to_str().unwrap()
-        ));
+        assert!(can_save_unverified_copy(missing_parent_source.to_str().unwrap(), copy.to_str().unwrap()));
+        assert!(!can_save_unverified_copy(source.to_str().unwrap(), missing_parent_source.to_str().unwrap()));
     }
 
     #[cfg(unix)]
@@ -1020,44 +785,23 @@ mod tests {
         let source = dir.path().join("source.pptx");
         let alias_dir = dir.path().join("alias");
         symlink(dir.path(), &alias_dir).unwrap();
-        assert!(!can_save_unverified_copy(
-            source.to_str().unwrap(),
-            alias_dir.join("source.pptx").to_str().unwrap()
-        ));
+        assert!(!can_save_unverified_copy(source.to_str().unwrap(), alias_dir.join("source.pptx").to_str().unwrap()));
         let link = dir.path().join("link.pptx");
         symlink(&source, &link).unwrap();
-        assert!(!can_save_unverified_copy(
-            source.to_str().unwrap(),
-            link.to_str().unwrap()
-        ));
-        assert!(!can_save_unverified_copy(
-            link.to_str().unwrap(),
-            source.to_str().unwrap()
-        ));
+        assert!(!can_save_unverified_copy(source.to_str().unwrap(), link.to_str().unwrap()));
+        assert!(!can_save_unverified_copy(link.to_str().unwrap(), source.to_str().unwrap()));
         std::fs::write(&source, b"source").unwrap();
         let hardlink = dir.path().join("hardlink.pptx");
         std::fs::hard_link(&source, &hardlink).unwrap();
-        assert!(!can_save_unverified_copy(
-            source.to_str().unwrap(),
-            hardlink.to_str().unwrap()
-        ));
+        assert!(!can_save_unverified_copy(source.to_str().unwrap(), hardlink.to_str().unwrap()));
     }
 
     #[test]
     fn missing_required_odp_content_blocks_saving() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("missing-content.odp");
-        package(
-            &path,
-            &[(
-                "mimetype",
-                "application/vnd.oasis.opendocument.presentation",
-            )],
-        );
-        assert_inspection_blocked(
-            &content_a_save_drops(path.to_str().unwrap()),
-            "content.xml: missing",
-        );
+        package(&path, &[("mimetype", "application/vnd.oasis.opendocument.presentation")]);
+        assert_inspection_blocked(&content_a_save_drops(path.to_str().unwrap()), "content.xml: missing");
     }
 
     #[test]
@@ -1065,9 +809,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("no-relationships.pptx");
         package(&path, &[("ppt/slides/slide1.xml", "<p:sld/>")]);
-        assert!(content_a_save_drops(path.to_str().unwrap())
-            .validate_save(false)
-            .is_ok());
+        assert!(content_a_save_drops(path.to_str().unwrap()).validate_save(false).is_ok());
     }
 
     #[test]
@@ -1078,10 +820,7 @@ mod tests {
             "<p:sld><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/><p:grpSp><p:nvGrpSpPr/><p:grpSpPr/><p:sp/><p:sp/></p:grpSp></p:spTree></p:cSld></p:sld>")]);
         let report = content_a_save_drops(pptx.to_str().unwrap());
         assert!(ids(&report).contains(&"groups"), "{:?}", ids(&report));
-        assert!(
-            report.validate_save(false).is_err(),
-            "an unconfirmed save must not proceed"
-        );
+        assert!(report.validate_save(false).is_err(), "an unconfirmed save must not proceed");
         let odp = dir.path().join("grouped.odp");
         package(&odp, &[
             ("mimetype", "application/vnd.oasis.opendocument.presentation"),
@@ -1105,15 +844,8 @@ mod tests {
         package(&slide, &[("ppt/slides/slide1.xml",
             "<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:rPr><a:hlinkClick r:id=\"rId2\"/></a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>")]);
         let report = content_a_save_drops(slide.to_str().unwrap());
-        assert!(
-            ids(&report).contains(&"text-hyperlinks"),
-            "{:?}",
-            ids(&report)
-        );
-        assert!(
-            report.validate_save(false).is_err(),
-            "an unconfirmed save must not proceed"
-        );
+        assert!(ids(&report).contains(&"text-hyperlinks"), "{:?}", ids(&report));
+        assert!(report.validate_save(false).is_err(), "an unconfirmed save must not proceed");
         // ...and one that lives only in the slide master.
         let master = dir.path().join("linked-master.pptx");
         package(&master, &[
@@ -1147,41 +879,16 @@ mod tests {
                     <Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slide2.xml\"/></Relationships>";
         let pptx = |name: &str, body: &str| {
             let path = dir.path().join(name);
-            package(
-                &path,
-                &[
-                    (
-                        "ppt/slides/slide1.xml",
-                        &format!("<p:sld><p:cSld><p:spTree>{body}</p:spTree></p:cSld></p:sld>"),
-                    ),
-                    ("ppt/slides/_rels/slide1.xml.rels", rels),
-                ],
-            );
+            package(&path, &[
+                ("ppt/slides/slide1.xml", &format!("<p:sld><p:cSld><p:spTree>{body}</p:spTree></p:cSld></p:sld>")),
+                ("ppt/slides/_rels/slide1.xml.rels", rels),
+            ]);
             ids(&content_a_save_drops(path.to_str().unwrap())).contains(&"text-hyperlinks")
         };
-        let run = |click: &str| {
-            format!("<p:sp><p:txBody><a:p><a:r><a:rPr b=\"1\"><a:latin typeface=\"Inter\"/>{click}</a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp>")
-        };
-        assert!(
-            !pptx("kept.pptx", &run("<a:hlinkClick r:id=\"rId2\"/>")),
-            "a run linked to an address is kept"
-        );
-        assert!(
-            pptx(
-                "jump.pptx",
-                &run("<a:hlinkClick r:id=\"rId3\" action=\"ppaction://hlinksldjump\"/>")
-            ),
-            "a jump to a slide is not"
-        );
-        assert!(
-            pptx(
-                "action.pptx",
-                &run(
-                    "<a:hlinkClick r:id=\"\" action=\"ppaction://hlinkshowjump?jump=nextslide\"/>"
-                )
-            ),
-            "nor a click action"
-        );
+        let run = |click: &str| format!("<p:sp><p:txBody><a:p><a:r><a:rPr b=\"1\"><a:latin typeface=\"Inter\"/>{click}</a:rPr><a:t>site</a:t></a:r></a:p></p:txBody></p:sp>");
+        assert!(!pptx("kept.pptx", &run("<a:hlinkClick r:id=\"rId2\"/>")), "a run linked to an address is kept");
+        assert!(pptx("jump.pptx", &run("<a:hlinkClick r:id=\"rId3\" action=\"ppaction://hlinksldjump\"/>")), "a jump to a slide is not");
+        assert!(pptx("action.pptx", &run("<a:hlinkClick r:id=\"\" action=\"ppaction://hlinkshowjump?jump=nextslide\"/>")), "nor a click action");
         assert!(
             pptx("shape.pptx", "<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"B\"><a:hlinkClick r:id=\"rId2\"/></p:cNvPr></p:nvSpPr><p:txBody><a:p><a:r><a:rPr/><a:t>x</a:t></a:r></a:p></p:txBody></p:sp>"),
             "nor a link on the whole shape",
@@ -1206,23 +913,17 @@ mod tests {
             let path = dir.path().join(format!("corrupt.{ext}"));
             for invalid_utf8 in [false, true] {
                 let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
-                let options = zip::write::SimpleFileOptions::default()
-                    .compression_method(zip::CompressionMethod::Stored);
+                let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
                 if part.ends_with(".rels") {
                     writer.start_file("ppt/slides/slide1.xml", options).unwrap();
                     writer.write_all(b"<p:sld/>").unwrap();
                 }
                 writer.start_file(part, options).unwrap();
-                writer
-                    .write_all(if invalid_utf8 { b"\xff" } else { b"corrupt-me" })
-                    .unwrap();
+                writer.write_all(if invalid_utf8 { b"\xff" } else { b"corrupt-me" }).unwrap();
                 writer.finish().unwrap();
                 if !invalid_utf8 {
                     let mut bytes = std::fs::read(&path).unwrap();
-                    let offset = bytes
-                        .windows(b"corrupt-me".len())
-                        .position(|s| s == b"corrupt-me")
-                        .unwrap();
+                    let offset = bytes.windows(b"corrupt-me".len()).position(|s| s == b"corrupt-me").unwrap();
                     bytes[offset] ^= 1; // Leave the stored CRC unchanged.
                     std::fs::write(&path, bytes).unwrap();
                 }
@@ -1247,10 +948,7 @@ mod tests {
                 parts.push(("ppt/slides/slide1.xml", "<p:sld/>"));
             }
             package(&path, &parts);
-            let mut budget = ZipBudget::new(ZipLimits {
-                max_entry_bytes: 64,
-                ..ZipLimits::default()
-            });
+            let mut budget = ZipBudget::new(ZipLimits { max_entry_bytes: 64, ..ZipLimits::default() });
             let report = content_a_save_drops_with_budget(path.to_str().unwrap(), &mut budget);
             assert_inspection_blocked(&report, part);
             assert_inspection_blocked(&report, "byte limit");
@@ -1262,42 +960,24 @@ mod tests {
         use suite_common_core::zip_guard::ZipLimits;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("over-budget.pptx");
-        package(
-            &path,
-            &[
-                ("ppt/slides/slide1.xml", "<p:sld/>"),
-                ("ppt/slides/slide2.xml", "<p:sld/>"),
-            ],
-        );
-        let mut count = ZipBudget::new(ZipLimits {
-            max_entries: 1,
-            ..ZipLimits::default()
-        });
-        assert_inspection_blocked(
-            &content_a_save_drops_with_budget(path.to_str().unwrap(), &mut count),
-            "members",
-        );
-        let mut total = ZipBudget::new(ZipLimits {
-            max_total_bytes: 12,
-            ..ZipLimits::default()
-        });
-        assert_inspection_blocked(
-            &content_a_save_drops_with_budget(path.to_str().unwrap(), &mut total),
-            "byte total",
-        );
+        package(&path, &[
+            ("ppt/slides/slide1.xml", "<p:sld/>"),
+            ("ppt/slides/slide2.xml", "<p:sld/>"),
+        ]);
+        let mut count = ZipBudget::new(ZipLimits { max_entries: 1, ..ZipLimits::default() });
+        assert_inspection_blocked(&content_a_save_drops_with_budget(path.to_str().unwrap(), &mut count), "members");
+        let mut total = ZipBudget::new(ZipLimits { max_total_bytes: 12, ..ZipLimits::default() });
+        assert_inspection_blocked(&content_a_save_drops_with_budget(path.to_str().unwrap(), &mut total), "byte total");
     }
 
     #[test]
     fn scan_failure_does_not_discard_losses_already_found() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("comments-and-broken-slide.pptx");
-        package(
-            &path,
-            &[
-                ("ppt/comments/comment1.xml", "<p:cmLst/>"),
-                ("ppt/slides/slide1.xml", "<p:sld/>"),
-            ],
-        );
+        package(&path, &[
+            ("ppt/comments/comment1.xml", "<p:cmLst/>"),
+            ("ppt/slides/slide1.xml", "<p:sld/>"),
+        ]);
         let mut budget = ZipBudget::new(suite_common_core::zip_guard::ZipLimits {
             max_entry_bytes: 1,
             ..Default::default()
@@ -1352,28 +1032,9 @@ mod tests {
             ),
         ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        assert_eq!(
-            ids(&r),
-            [
-                "animations",
-                "comments",
-                "embedded-objects",
-                "media",
-                "missing-pictures",
-                "smartart"
-            ]
-        );
-        let missing: Vec<&str> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "missing-pictures")
-            .map(|f| f.detail.as_str())
-            .collect();
-        assert_eq!(
-            missing,
-            ["../media/gone.png is not in the file"],
-            "the picture that is there and the linked one are fine"
-        );
+        assert_eq!(ids(&r), ["animations", "comments", "embedded-objects", "media", "missing-pictures", "smartart"]);
+        let missing: Vec<&str> = r.features.iter().filter(|f| f.id == "missing-pictures").map(|f| f.detail.as_str()).collect();
+        assert_eq!(missing, ["../media/gone.png is not in the file"], "the picture that is there and the linked one are fine");
         assert!(r.requires_confirmation());
         assert!(r.validate_save(false).is_err() && r.validate_save(true).is_ok());
     }
@@ -1382,44 +1043,23 @@ mod tests {
     fn an_odp_lists_comments_media_ole_animations_and_missing_pictures() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("theirs.odp");
-        package(
-            &p,
-            &[
-                (
-                    "mimetype",
-                    "application/vnd.oasis.opendocument.presentation",
-                ),
-                ("Pictures/here.png", "png"),
-                (
-                    "content.xml",
-                    "<office:document-content><draw:page>\
+        package(&p, &[
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("Pictures/here.png", "png"),
+            (
+                "content.xml",
+                "<office:document-content><draw:page>\
                  <officeooo:annotation/><draw:plugin xlink:href=\"v.mp4\"/><draw:object-ole/>\
                  <anim:par presentation:preset-class=\"motion-path\"/>\
                  <draw:frame><draw:image xlink:href=\"Pictures/here.png\"/></draw:frame>\
                  <draw:frame><draw:image xlink:href=\"Pictures/gone.png\"/></draw:frame>\
                  <draw:frame><draw:image xlink:href=\"https://example.org/a.png\"/></draw:frame>\
                  </draw:page></office:document-content>",
-                ),
-            ],
-        );
+            ),
+        ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        assert_eq!(
-            ids(&r),
-            [
-                "animations",
-                "comments",
-                "embedded-objects",
-                "media",
-                "missing-pictures"
-            ]
-        );
-        assert_eq!(
-            r.features
-                .iter()
-                .filter(|f| f.id == "missing-pictures")
-                .count(),
-            1
-        );
+        assert_eq!(ids(&r), ["animations", "comments", "embedded-objects", "media", "missing-pictures"]);
+        assert_eq!(r.features.iter().filter(|f| f.id == "missing-pictures").count(), 1);
     }
 
     #[test]
@@ -1431,9 +1071,7 @@ mod tests {
             "<office:document-content><anim:par presentation:preset-class=\"entrance\"/>\
              <draw:frame><draw:object xlink:href=\"./Object 1\"/></draw:frame></office:document-content>",
         )]);
-        assert!(content_a_save_drops(p.to_str().unwrap())
-            .features
-            .is_empty());
+        assert!(content_a_save_drops(p.to_str().unwrap()).features.is_empty());
     }
 
     #[test]
@@ -1458,35 +1096,14 @@ mod tests {
         ]);
         let r = content_a_save_drops(p.to_str().unwrap());
         let at = |id: &str| {
-            r.features
-                .iter()
-                .filter(|f| f.id == id)
-                .map(|f| f.location.clone())
-                .collect::<Vec<_>>()
+            r.features.iter().filter(|f| f.id == id).map(|f| f.location.clone()).collect::<Vec<_>>()
         };
         assert_eq!(at("comments"), ["ppt/comments"]);
-        for id in [
-            "media",
-            "embedded-objects",
-            "animations",
-            "missing-pictures",
-        ] {
-            assert_eq!(
-                at(id),
-                ["ppt/slides/slide2.xml"],
-                "{id} must name its slide"
-            );
+        for id in ["media", "embedded-objects", "animations", "missing-pictures"] {
+            assert_eq!(at(id), ["ppt/slides/slide2.xml"], "{id} must name its slide");
         }
-        let missing = r
-            .features
-            .iter()
-            .find(|f| f.id == "missing-pictures")
-            .unwrap();
-        assert!(
-            missing.detail.contains("../media/gone.png"),
-            "{}",
-            missing.detail
-        );
+        let missing = r.features.iter().find(|f| f.id == "missing-pictures").unwrap();
+        assert!(missing.detail.contains("../media/gone.png"), "{}", missing.detail);
         assert!(r.requires_confirmation());
         assert!(r.validate_save(false).is_err() && r.validate_save(true).is_ok());
     }
@@ -1515,15 +1132,7 @@ mod tests {
             ),
         ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        assert_eq!(
-            ids(&r),
-            [
-                "animations",
-                "embedded-objects",
-                "media",
-                "missing-pictures"
-            ]
-        );
+        assert_eq!(ids(&r), ["animations", "embedded-objects", "media", "missing-pictures"]);
         let o = dir.path().join("aliased.odp");
         package(&o, &[(
             "content.xml",
@@ -1534,10 +1143,7 @@ mod tests {
              <anim:par z:preset-class='motion-path' xmlns:z=\"urn:oasis:names:tc:opendocument:xmlns:presentation\"/>\
              </draw:page></office:document-content>",
         )]);
-        assert_eq!(
-            ids(&content_a_save_drops(o.to_str().unwrap())),
-            ["animations", "comments", "embedded-objects", "media"]
-        );
+        assert_eq!(ids(&content_a_save_drops(o.to_str().unwrap())), ["animations", "comments", "embedded-objects", "media"]);
     }
 
     #[test]
@@ -1546,17 +1152,12 @@ mod tests {
         // unsupported element must not warn: the scanner reads tags, not text.
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("quoted.pptx");
-        package(
-            &p,
-            &[(
-                "ppt/slides/slide1.xml",
-                "<p:sld><!-- <p:oleObj/> --><![CDATA[<a:videoFile/>]]>\
+        package(&p, &[(
+            "ppt/slides/slide1.xml",
+            "<p:sld><!-- <p:oleObj/> --><![CDATA[<a:videoFile/>]]>\
              <p:sp><a:t>&lt;p:oleObj&gt; and presetClass=\"emph\" as text</a:t></p:sp></p:sld>",
-            )],
-        );
-        assert!(content_a_save_drops(p.to_str().unwrap())
-            .features
-            .is_empty());
+        )]);
+        assert!(content_a_save_drops(p.to_str().unwrap()).features.is_empty());
     }
 
     #[test]
@@ -1569,11 +1170,8 @@ mod tests {
         // Stored, so the slide bytes sit verbatim in the archive and flipping
         // one breaks the part's CRC while leaving the archive readable.
         let mut writer = zip::ZipWriter::new(std::fs::File::create(&p).unwrap());
-        let stored = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        writer
-            .start_file("ppt/comments/comment1.xml", stored)
-            .unwrap();
+        let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        writer.start_file("ppt/comments/comment1.xml", stored).unwrap();
         writer.write_all(b"<p:cmLst/>").unwrap();
         writer.start_file("ppt/slides/slide1.xml", stored).unwrap();
         writer.write_all(b"<p:sld><p:oleObj/>").unwrap();
@@ -1582,19 +1180,13 @@ mod tests {
         // report a hard error, not an empty finding list.
         let mut bytes = std::fs::read(&p).unwrap();
         let needle = b"<p:oleObj/>";
-        let offset = bytes
-            .windows(needle.len())
-            .position(|s| s == needle)
-            .unwrap();
+        let offset = bytes.windows(needle.len()).position(|s| s == needle).unwrap();
         bytes[offset] ^= 1;
         std::fs::write(&p, bytes).unwrap();
         let r = content_a_save_drops(p.to_str().unwrap());
         assert!(r.has_hard_errors());
         assert!(r.validate_save(false).is_err());
-        assert!(
-            r.validate_save(true).is_err(),
-            "confirmation must not override a failed inspection"
-        );
+        assert!(r.validate_save(true).is_err(), "confirmation must not override a failed inspection");
     }
 
     #[test]
@@ -1614,20 +1206,10 @@ mod tests {
             ),
         ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        let mut details: Vec<&str> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "missing-pictures")
-            .map(|f| f.detail.as_str())
-            .collect();
+        let mut details: Vec<&str> =
+            r.features.iter().filter(|f| f.id == "missing-pictures").map(|f| f.detail.as_str()).collect();
         details.sort();
-        assert_eq!(
-            details,
-            [
-                "../media/a.png is not in the file",
-                "../media/b.png is not in the file"
-            ]
-        );
+        assert_eq!(details, ["../media/a.png is not in the file", "../media/b.png is not in the file"]);
     }
 
     #[test]
@@ -1660,11 +1242,7 @@ mod tests {
             ),
         ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        let charts: Vec<&UnsupportedFeature> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "multi-series-charts")
-            .collect();
+        let charts: Vec<&UnsupportedFeature> = r.features.iter().filter(|f| f.id == "multi-series-charts").collect();
         assert_eq!(charts.len(), 1);
         assert_eq!(charts[0].location, "ppt/charts/chart1.xml");
         let o = dir.path().join("series.odp");
@@ -1688,11 +1266,7 @@ mod tests {
             ),
         ]);
         let r = content_a_save_drops(o.to_str().unwrap());
-        let charts: Vec<&UnsupportedFeature> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "multi-series-charts")
-            .collect();
+        let charts: Vec<&UnsupportedFeature> = r.features.iter().filter(|f| f.id == "multi-series-charts").collect();
         assert_eq!(charts.len(), 1);
         assert_eq!(charts[0].location, "Object 1/content.xml");
     }
@@ -1714,29 +1288,17 @@ mod tests {
                 .map(|i| format!("<Relationship Id=\"rId{i}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart\" Target=\"../charts/chart{i}.xml\"/>"))
                 .collect::<String>()
             + "</Relationships>";
-        let (a, b, c) = (
-            chart("barChart", "stacked"),
-            chart("areaChart", "stacked"),
-            chart("barChart", "percentStacked"),
-        );
+        let (a, b, c) = (chart("barChart", "stacked"), chart("areaChart", "stacked"), chart("barChart", "percentStacked"));
         let p = dir.path().join("stacked.pptx");
-        package(
-            &p,
-            &[
-                ("ppt/slides/slide1.xml", "<p:sld/>"),
-                ("ppt/slides/_rels/slide1.xml.rels", rels.as_str()),
-                ("ppt/charts/chart1.xml", a.as_str()),
-                ("ppt/charts/chart2.xml", b.as_str()),
-                ("ppt/charts/chart3.xml", c.as_str()),
-            ],
-        );
+        package(&p, &[
+            ("ppt/slides/slide1.xml", "<p:sld/>"),
+            ("ppt/slides/_rels/slide1.xml.rels", rels.as_str()),
+            ("ppt/charts/chart1.xml", a.as_str()),
+            ("ppt/charts/chart2.xml", b.as_str()),
+            ("ppt/charts/chart3.xml", c.as_str()),
+        ]);
         let r = content_a_save_drops(p.to_str().unwrap());
-        let mut at: Vec<&str> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "multi-series-charts")
-            .map(|f| f.location.as_str())
-            .collect();
+        let mut at: Vec<&str> = r.features.iter().filter(|f| f.id == "multi-series-charts").map(|f| f.location.as_str()).collect();
         at.sort();
         assert_eq!(at, ["ppt/charts/chart2.xml", "ppt/charts/chart3.xml"]);
         let object = |class: &str, prop: &str| {
@@ -1748,35 +1310,23 @@ mod tests {
                  <table:table/></office:document-content>"
             )
         };
-        let (a, b, c) = (
-            object("bar", "stacked"),
-            object("area", "stacked"),
-            object("bar", "percentage"),
-        );
+        let (a, b, c) = (object("bar", "stacked"), object("area", "stacked"), object("bar", "percentage"));
         let o = dir.path().join("stacked.odp");
-        package(
-            &o,
-            &[
-                (
-                    "content.xml",
-                    "<office:document-content><draw:page>\
+        package(&o, &[
+            (
+                "content.xml",
+                "<office:document-content><draw:page>\
                  <draw:frame><draw:object xlink:href=\"./Object 1\"/></draw:frame>\
                  <draw:frame><draw:object xlink:href=\"./Object 2\"/></draw:frame>\
                  <draw:frame><draw:object xlink:href=\"./Object 3\"/></draw:frame>\
                  </draw:page></office:document-content>",
-                ),
-                ("Object 1/content.xml", a.as_str()),
-                ("Object 2/content.xml", b.as_str()),
-                ("Object 3/content.xml", c.as_str()),
-            ],
-        );
+            ),
+            ("Object 1/content.xml", a.as_str()),
+            ("Object 2/content.xml", b.as_str()),
+            ("Object 3/content.xml", c.as_str()),
+        ]);
         let r = content_a_save_drops(o.to_str().unwrap());
-        let mut at: Vec<&str> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "multi-series-charts")
-            .map(|f| f.location.as_str())
-            .collect();
+        let mut at: Vec<&str> = r.features.iter().filter(|f| f.id == "multi-series-charts").map(|f| f.location.as_str()).collect();
         at.sort();
         assert_eq!(at, ["Object 2/content.xml", "Object 3/content.xml"]);
     }
@@ -1788,22 +1338,16 @@ mod tests {
         // names must warn like content.xml's do.
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("master.odp");
-        package(
-            &p,
-            &[
-                (
-                    "content.xml",
-                    "<office:document-content><draw:page/></office:document-content>",
-                ),
-                (
-                    "styles.xml",
-                    "<office:document-styles><draw:page>\
+        package(&p, &[
+            ("content.xml", "<office:document-content><draw:page/></office:document-content>"),
+            (
+                "styles.xml",
+                "<office:document-styles><draw:page>\
                  <draw:plugin xlink:href=\"reel.mp4\"/>\
                  <draw:frame><draw:image xlink:href=\"Pictures/gone.png\"/></draw:frame>\
                  </draw:page></office:document-styles>",
-                ),
-            ],
-        );
+            ),
+        ]);
         let r = content_a_save_drops(p.to_str().unwrap());
         assert_eq!(ids(&r), ["media", "missing-pictures"]);
         assert!(r.features.iter().all(|f| f.location == "styles.xml"));
@@ -1822,9 +1366,8 @@ mod tests {
     #[test]
     fn mixed_odp_page_sizes_warn_and_uniform_ones_do_not() {
         let dir = tempfile::tempdir().unwrap();
-        let styles = |second: &str| {
-            format!(
-                "<office:document-styles>\
+        let styles = |second: &str| format!(
+            "<office:document-styles>\
              <office:automatic-styles>\
              <style:page-layout style:name=\"PM1\">\
              <style:page-layout-properties fo:page-width=\"28cm\" fo:page-height=\"21cm\"/>\
@@ -1838,44 +1381,22 @@ mod tests {
              <s:master-page s:name=\"M2\" s:page-layout-name=\"PM2\"/>\
              </office:master-styles>\
              </office:document-styles>"
-            )
-        };
-        let content = |second: &str| {
-            format!(
-                "<office:document-content><office:body><office:presentation>\
+        );
+        let content = |second: &str| format!(
+            "<office:document-content><office:body><office:presentation>\
              <d:page d:master-page-name=\"M1\"/>\
              <d:page d:master-page-name=\"{second}\"/>\
              </office:presentation></office:body></office:document-content>"
-            )
-        };
+        );
         let mixed = dir.path().join("mixed.odp");
-        package(
-            &mixed,
-            &[
-                ("content.xml", &content("M2")),
-                ("styles.xml", &styles("25cm")),
-            ],
-        );
+        package(&mixed, &[("content.xml", &content("M2")), ("styles.xml", &styles("25cm"))]);
         let r = content_a_save_drops(mixed.to_str().unwrap());
-        let findings: Vec<&UnsupportedFeature> = r
-            .features
-            .iter()
-            .filter(|f| f.id == "mixed-page-sizes")
-            .collect();
+        let findings: Vec<&UnsupportedFeature> =
+            r.features.iter().filter(|f| f.id == "mixed-page-sizes").collect();
         assert_eq!(findings.len(), 1, "{:?}", ids(&r));
-        assert!(
-            findings[0].detail.contains("first page's size"),
-            "{}",
-            findings[0].detail
-        );
+        assert!(findings[0].detail.contains("first page's size"), "{}", findings[0].detail);
         let uniform = dir.path().join("uniform.odp");
-        package(
-            &uniform,
-            &[
-                ("content.xml", &content("M1")),
-                ("styles.xml", &styles("21cm")),
-            ],
-        );
+        package(&uniform, &[("content.xml", &content("M1")), ("styles.xml", &styles("21cm"))]);
         let r = content_a_save_drops(uniform.to_str().unwrap());
         assert!(!ids(&r).contains(&"mixed-page-sizes"), "{:?}", ids(&r));
     }

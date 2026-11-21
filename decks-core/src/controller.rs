@@ -13,6 +13,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+
 use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::ops::Op;
 use suite_common_core::ops::History;
@@ -67,13 +68,7 @@ pub struct SelectionState {
 
 impl SelectionState {
     pub fn none() -> Self {
-        SelectionState {
-            slide_id: None,
-            object_ids: Vec::new(),
-            primary_object_id: None,
-            mode: SelectionMode::Object,
-            text_range: None,
-        }
+        SelectionState { slide_id: None, object_ids: Vec::new(), primary_object_id: None, mode: SelectionMode::Object, text_range: None }
     }
 
     /// Slide `slide_id` current, object `object` (if any) selected on it.
@@ -208,8 +203,7 @@ struct MasterEdit {
 /// The master as the stand-in slide the master view edits: its
 /// decorations as the slide's objects, its background as the slide's.
 fn master_as_slide(m: &MasterSlide) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: m.name.clone(),
         background: m.background.clone(),
         background_picture: None,
@@ -229,58 +223,36 @@ fn master_as_slide(m: &MasterSlide) -> Slide {
 /// and layouts are not editable decorations: they survive untouched, so
 /// the Done transaction only ever replaces background and shapes.
 fn master_from_slide(m: &MasterSlide, s: &Slide) -> MasterSlide {
-    MasterSlide {
-        background: s.background.clone(),
-        shapes: s.objects.clone(),
-        ..m.clone()
-    }
+    MasterSlide { background: s.background.clone(), shapes: s.objects.clone(), ..m.clone() }
 }
 
 /// The slide ids and object ids a deck holds, for transaction reporting.
-fn id_sets(
-    slides: &[Slide],
-) -> (
-    std::collections::BTreeSet<u64>,
-    std::collections::BTreeSet<u64>,
-) {
+fn id_sets(slides: &[Slide]) -> (std::collections::BTreeSet<u64>, std::collections::BTreeSet<u64>) {
     (
         slides.iter().map(|s| s.ids.slide).collect(),
-        slides
-            .iter()
-            .flat_map(|s| s.ids.objects.iter().copied())
-            .collect(),
+        slides.iter().flat_map(|s| s.ids.objects.iter().copied()).collect(),
     )
 }
 
 /// The slide ids one op group names, where still present afterwards.
 fn ops_slide_ids(ops: &[Op]) -> Vec<u64> {
-    ops.iter()
-        .filter_map(|op| match op {
-            Op::InsertSlide { .. } => None,
-            Op::DeleteSlide { slide }
-            | Op::MoveSlide { slide, .. }
-            | Op::SetSlide { slide, .. }
-            | Op::InsertObject { slide, .. }
-            | Op::DeleteObject { slide, .. }
-            | Op::MoveObject { slide, .. }
-            | Op::SetObject { slide, .. } => Some(*slide),
-            Op::SetMaster { .. } => None,
-        })
-        .collect()
+    ops.iter().filter_map(|op| match op {
+        Op::InsertSlide { .. } => None,
+        Op::DeleteSlide { slide }
+        | Op::MoveSlide { slide, .. }
+        | Op::SetSlide { slide, .. }
+        | Op::InsertObject { slide, .. }
+        | Op::DeleteObject { slide, .. }
+        | Op::MoveObject { slide, .. }
+        | Op::SetObject { slide, .. } => Some(*slide),
+        Op::SetMaster { .. } => None,
+    }).collect()
 }
 
 /// New ids the transaction minted, plus the named ids it touched that are
 /// still present: what a view should refresh.
-fn changed_ids(
-    before: &std::collections::BTreeSet<u64>,
-    after: &std::collections::BTreeSet<u64>,
-    named: Vec<u64>,
-) -> Vec<u64> {
-    let mut out: Vec<u64> = after
-        .difference(before)
-        .copied()
-        .chain(named.into_iter().filter(|id| after.contains(id)))
-        .collect();
+fn changed_ids(before: &std::collections::BTreeSet<u64>, after: &std::collections::BTreeSet<u64>, named: Vec<u64>) -> Vec<u64> {
+    let mut out: Vec<u64> = after.difference(before).copied().chain(named.into_iter().filter(|id| after.contains(id))).collect();
     out.sort_unstable();
     out.dedup();
     out
@@ -291,10 +263,7 @@ impl DecksController {
         let mut slides = slides;
         let mut masters = masters;
         crate::ops::ensure_all_ids(&mut slides, &mut masters);
-        let selection = slides
-            .first()
-            .map(|s| SelectionState::single(s.ids.slide, None))
-            .unwrap_or_else(SelectionState::none);
+        let selection = slides.first().map(|s| SelectionState::single(s.ids.slide, None)).unwrap_or_else(SelectionState::none);
         Self {
             slides: Rc::new(RefCell::new(slides)),
             masters: Rc::new(RefCell::new(masters)),
@@ -372,10 +341,7 @@ impl DecksController {
         self.page_size.set(deck.page_size);
         *self.themes.borrow_mut() = deck.themes;
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
-        crate::ops::ensure_all_ids(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-        );
+        crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = Some(context);
         *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
@@ -383,12 +349,7 @@ impl DecksController {
         self.merge_chain.set(false);
         self.revision.set(0);
         self.saved_revision.set(None);
-        let first = self
-            .slides
-            .borrow()
-            .first()
-            .map(|s| SelectionState::single(s.ids.slide, None))
-            .unwrap_or_else(SelectionState::none);
+        let first = self.slides.borrow().first().map(|s| SelectionState::single(s.ids.slide, None)).unwrap_or_else(SelectionState::none);
         *self.selection.borrow_mut() = first;
         // A replaced deck has nothing for an open text edit to commit to.
         *self.text_session.borrow_mut() = None;
@@ -419,10 +380,7 @@ impl DecksController {
         self.page_size.set(deck.page_size);
         *self.themes.borrow_mut() = deck.themes;
         *self.skipped_slides.borrow_mut() = deck.skipped_slides;
-        crate::ops::ensure_all_ids(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-        );
+        crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
         *self.source_context.borrow_mut() = context;
         *self.history.borrow_mut() = History::with_limit(UNDO_LIMIT);
         self.undo_sels.borrow_mut().clear();
@@ -431,12 +389,7 @@ impl DecksController {
         self.revision.set(revision);
         self.saved_revision.set(None);
         self.dirty.set(true);
-        let first = self
-            .slides
-            .borrow()
-            .first()
-            .map(|s| SelectionState::single(s.ids.slide, None))
-            .unwrap_or_else(SelectionState::none);
+        let first = self.slides.borrow().first().map(|s| SelectionState::single(s.ids.slide, None)).unwrap_or_else(SelectionState::none);
         *self.selection.borrow_mut() = first;
         *self.text_session.borrow_mut() = None;
     }
@@ -515,10 +468,9 @@ impl DecksController {
 
     /// Whether `target` is the file the context was captured from.
     pub fn provenance_source_matches(&self, target: &str) -> bool {
-        self.source_context
-            .borrow()
-            .as_ref()
-            .is_some_and(|c| c.provenance_source_matches(std::path::Path::new(target)))
+        self.source_context.borrow().as_ref().is_some_and(|c| {
+            c.provenance_source_matches(std::path::Path::new(target))
+        })
     }
 
     /// Carried part names a save to `target` will not keep (the whole set
@@ -556,12 +508,7 @@ impl DecksController {
         let slides = self.slides.borrow();
         let slide = slides.iter().find(|s| s.ids.slide == slide_id)?;
         if let Some(id) = slide.master_id {
-            return self
-                .masters
-                .borrow()
-                .iter()
-                .any(|m| m.id == id)
-                .then_some(id);
+            return self.masters.borrow().iter().any(|m| m.id == id).then_some(id);
         }
         self.masters.borrow().first().map(|m| m.id)
     }
@@ -581,25 +528,13 @@ impl DecksController {
         crate::ops::ensure_all_ids(std::slice::from_mut(&mut stand_in), &mut []);
         let stand_in_id = stand_in.ids.slide;
         let slides = std::mem::replace(&mut *self.slides.borrow_mut(), vec![stand_in]);
-        let history = std::mem::replace(
-            &mut *self.history.borrow_mut(),
-            History::with_limit(UNDO_LIMIT),
-        );
+        let history = std::mem::replace(&mut *self.history.borrow_mut(), History::with_limit(UNDO_LIMIT));
         let selection = std::mem::take(&mut *self.selection.borrow_mut());
         let undo_sels = std::mem::take(&mut *self.undo_sels.borrow_mut());
         let redo_sels = std::mem::take(&mut *self.redo_sels.borrow_mut());
         let merge_chain = self.merge_chain.replace(false);
         *self.selection.borrow_mut() = SelectionState::single(stand_in_id, None);
-        *self.master_edit.borrow_mut() = Some(MasterEdit {
-            master_id,
-            slides,
-            history,
-            selection,
-            undo_sels,
-            redo_sels,
-            merge_chain,
-            from_slide_id: slide_id,
-        });
+        *self.master_edit.borrow_mut() = Some(MasterEdit { master_id, slides, history, selection, undo_sels, redo_sels, merge_chain, from_slide_id: slide_id });
         Some(master_id)
     }
 
@@ -621,19 +556,11 @@ impl DecksController {
         *self.selection.borrow_mut() = SelectionState::single(edit.from_slide_id, None);
         self.repair_selection();
         if let Some(s) = stand_in.first() {
-            let old = self
-                .masters
-                .borrow()
-                .iter()
-                .find(|m| m.id == edit.master_id)
-                .cloned();
+            let old = self.masters.borrow().iter().find(|m| m.id == edit.master_id).cloned();
             if let Some(old) = old {
                 let new = master_from_slide(&old, s);
                 if format!("{new:?}") != format!("{old:?}") {
-                    self.apply_ops(vec![Op::SetMaster {
-                        id: edit.master_id,
-                        master: Box::new(new),
-                    }]);
+                    self.apply_ops(vec![Op::SetMaster { id: edit.master_id, master: Box::new(new) }]);
                 }
             }
         }
@@ -663,10 +590,7 @@ impl DecksController {
         let mut masters = self.masters.borrow().clone();
         let slides = match edit.as_ref() {
             Some(e) => {
-                if let (Some(m), Some(s)) = (
-                    masters.iter().find(|m| m.id == e.master_id).cloned(),
-                    self.slides.borrow().first().cloned(),
-                ) {
+                if let (Some(m), Some(s)) = (masters.iter().find(|m| m.id == e.master_id).cloned(), self.slides.borrow().first().cloned()) {
                     if let Some(slot) = masters.iter_mut().find(|m| m.id == e.master_id) {
                         *slot = master_from_slide(&m, &s);
                     }
@@ -675,13 +599,7 @@ impl DecksController {
             }
             None => self.slides.borrow().clone(),
         };
-        crate::engine::Deck {
-            slides,
-            masters,
-            page_size: self.page_size.get(),
-            themes: self.themes.borrow().clone(),
-            skipped_slides: self.skipped_slides.borrow().clone(),
-        }
+        crate::engine::Deck { slides, masters, page_size: self.page_size.get(), themes: self.themes.borrow().clone(), skipped_slides: self.skipped_slides.borrow().clone() }
     }
 
     pub fn slide_count(&self) -> usize {
@@ -721,41 +639,16 @@ impl DecksController {
     /// the object inspectors act on, worked on as `mode`. Unknown ids are
     /// dropped; `primary` falls back to the first id kept. Returns
     /// whether the slide exists.
-    pub fn select_objects(
-        &self,
-        slide_id: u64,
-        object_ids: &[u64],
-        primary: Option<u64>,
-        mode: SelectionMode,
-    ) -> bool {
+    pub fn select_objects(&self, slide_id: u64, object_ids: &[u64], primary: Option<u64>, mode: SelectionMode) -> bool {
         if self.slides.borrow().iter().all(|s| s.ids.slide != slide_id) {
             return false;
         }
         let slides = self.slides.borrow();
-        let slide = slides
-            .iter()
-            .find(|s| s.ids.slide == slide_id)
-            .expect("checked above");
-        let kept: Vec<u64> = object_ids
-            .iter()
-            .copied()
-            .filter(|id| slide.ids.objects.contains(id))
-            .collect();
-        let primary = primary
-            .filter(|p| kept.contains(p))
-            .or_else(|| kept.first().copied());
-        let mode = if kept.is_empty() {
-            SelectionMode::Object
-        } else {
-            mode
-        };
-        *self.selection.borrow_mut() = SelectionState {
-            slide_id: Some(slide_id),
-            object_ids: kept,
-            primary_object_id: primary,
-            mode,
-            text_range: None,
-        };
+        let slide = slides.iter().find(|s| s.ids.slide == slide_id).expect("checked above");
+        let kept: Vec<u64> = object_ids.iter().copied().filter(|id| slide.ids.objects.contains(id)).collect();
+        let primary = primary.filter(|p| kept.contains(p)).or_else(|| kept.first().copied());
+        let mode = if kept.is_empty() { SelectionMode::Object } else { mode };
+        *self.selection.borrow_mut() = SelectionState { slide_id: Some(slide_id), object_ids: kept, primary_object_id: primary, mode, text_range: None };
         true
     }
 
@@ -767,26 +660,16 @@ impl DecksController {
     /// selection exactly as it was.
     pub fn set_text_range(&self, object_id: u64, start: usize, end: usize) -> bool {
         let sel = self.selection.borrow().clone();
-        let Some(slide_id) = sel.slide_id else {
-            return false;
-        };
+        let Some(slide_id) = sel.slide_id else { return false };
         let slides = self.slides.borrow();
-        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-            return false;
-        };
-        let Some(at) = slide.object_index(object_id) else {
-            return false;
-        };
+        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return false };
+        let Some(at) = slide.object_index(object_id) else { return false };
         let text = match &slide.objects[at] {
             SlideObject::TextBox { text, .. } => text.clone(),
             _ => return false,
         };
         drop(slides);
-        if start > end
-            || end > text.len()
-            || !text.is_char_boundary(start)
-            || !text.is_char_boundary(end)
-        {
+        if start > end || end > text.len() || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
             return false;
         }
         *self.selection.borrow_mut() = SelectionState {
@@ -794,11 +677,7 @@ impl DecksController {
             object_ids: vec![object_id],
             primary_object_id: Some(object_id),
             mode: SelectionMode::Text,
-            text_range: Some(TextRange {
-                object_id,
-                start,
-                end,
-            }),
+            text_range: Some(TextRange { object_id, start, end }),
         };
         true
     }
@@ -810,61 +689,23 @@ impl DecksController {
     /// store the result.
     fn repaired(&self, sel: SelectionState) -> SelectionState {
         let slides = self.slides.borrow();
-        let slide_id = sel
-            .slide_id
-            .filter(|id| slides.iter().any(|s| s.ids.slide == *id))
-            .or_else(|| slides.first().map(|s| s.ids.slide));
-        let Some(slide_id) = slide_id else {
-            return SelectionState::none();
-        };
-        let slide = slides
-            .iter()
-            .find(|s| s.ids.slide == slide_id)
-            .expect("checked above");
-        let object_ids: Vec<u64> = sel
-            .object_ids
-            .into_iter()
-            .filter(|id| slide.ids.objects.contains(id))
-            .collect();
-        let primary_object_id = sel
-            .primary_object_id
-            .filter(|p| object_ids.contains(p))
-            .or_else(|| object_ids.first().copied());
-        let mut mode = if object_ids.is_empty() {
-            SelectionMode::Object
-        } else {
-            sel.mode
-        };
+        let slide_id = sel.slide_id.filter(|id| slides.iter().any(|s| s.ids.slide == *id)).or_else(|| slides.first().map(|s| s.ids.slide));
+        let Some(slide_id) = slide_id else { return SelectionState::none() };
+        let slide = slides.iter().find(|s| s.ids.slide == slide_id).expect("checked above");
+        let object_ids: Vec<u64> = sel.object_ids.into_iter().filter(|id| slide.ids.objects.contains(id)).collect();
+        let primary_object_id = sel.primary_object_id.filter(|p| object_ids.contains(p)).or_else(|| object_ids.first().copied());
+        let mut mode = if object_ids.is_empty() { SelectionMode::Object } else { sel.mode };
         let text_range = match (mode, sel.text_range) {
             (SelectionMode::Text, Some(r)) if object_ids.contains(&r.object_id) => {
-                let valid = slide
-                    .object_index(r.object_id)
-                    .map(|at| match &slide.objects[at] {
-                        SlideObject::TextBox { text, .. } => {
-                            r.start <= r.end
-                                && r.end <= text.len()
-                                && text.is_char_boundary(r.start)
-                                && text.is_char_boundary(r.end)
-                        }
-                        _ => false,
-                    })
-                    .unwrap_or(false);
-                if valid {
-                    Some(r)
-                } else {
-                    mode = SelectionMode::Object;
-                    None
-                }
+                let valid = slide.object_index(r.object_id).map(|at| match &slide.objects[at] {
+                    SlideObject::TextBox { text, .. } => r.start <= r.end && r.end <= text.len() && text.is_char_boundary(r.start) && text.is_char_boundary(r.end),
+                    _ => false,
+                }).unwrap_or(false);
+                if valid { Some(r) } else { mode = SelectionMode::Object; None }
             }
             _ => None,
         };
-        SelectionState {
-            slide_id: Some(slide_id),
-            object_ids,
-            primary_object_id,
-            mode,
-            text_range,
-        }
+        SelectionState { slide_id: Some(slide_id), object_ids, primary_object_id, mode, text_range }
     }
 
     /// Repair the owned selection against the slides now present (after
@@ -885,19 +726,12 @@ impl DecksController {
 
     /// The position of slide `slide_id`, if it is still in the deck.
     pub fn slide_index(&self, slide_id: u64) -> Option<usize> {
-        self.slides
-            .borrow()
-            .iter()
-            .position(|s| s.ids.slide == slide_id)
+        self.slides.borrow().iter().position(|s| s.ids.slide == slide_id)
     }
 
     /// The z-position of object `object_id` on slide `slide_id`.
     pub fn object_index(&self, slide_id: u64, object_id: u64) -> Option<usize> {
-        self.slides
-            .borrow()
-            .iter()
-            .find(|s| s.ids.slide == slide_id)?
-            .object_index(object_id)
+        self.slides.borrow().iter().find(|s| s.ids.slide == slide_id)?.object_index(object_id)
     }
 
     /// The id of the slide at view position `index`.
@@ -908,13 +742,7 @@ impl DecksController {
     /// The id of the object at z-position `object` on the slide at view
     /// position `slide`.
     pub fn object_id_at(&self, slide: usize, object: usize) -> Option<u64> {
-        self.slides
-            .borrow()
-            .get(slide)?
-            .ids
-            .objects
-            .get(object)
-            .copied()
+        self.slides.borrow().get(slide)?.ids.objects.get(object).copied()
     }
 
     /// The view position of the selected slide, if it is still present.
@@ -928,17 +756,10 @@ impl DecksController {
     /// The z-positions of the selected objects, in selection order.
     pub fn selected_object_indices(&self) -> Vec<usize> {
         let sel = self.selection.borrow().clone();
-        let Some(slide_id) = sel.slide_id else {
-            return Vec::new();
-        };
+        let Some(slide_id) = sel.slide_id else { return Vec::new() };
         let slides = self.slides.borrow();
-        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-            return Vec::new();
-        };
-        sel.object_ids
-            .into_iter()
-            .filter_map(|id| slide.object_index(id))
-            .collect()
+        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return Vec::new() };
+        sel.object_ids.into_iter().filter_map(|id| slide.object_index(id)).collect()
     }
 
     /// The z-position of the primary object, if still selected.
@@ -963,10 +784,7 @@ impl DecksController {
         slide.ids = Default::default();
         // Fresh ids are minted from the session space at apply time; read
         // the new slide's id back by position afterwards.
-        if !self.apply_ops(vec![Op::InsertSlide {
-            at,
-            slide: Box::new(slide),
-        }]) {
+        if !self.apply_ops(vec![Op::InsertSlide { at, slide: Box::new(slide) }]) {
             return None;
         }
         self.slide_id_at(at)
@@ -1014,10 +832,7 @@ impl DecksController {
             Some(at) if at > 0 => at,
             _ => return false,
         };
-        self.apply_ops(vec![Op::MoveSlide {
-            slide: slide_id,
-            to: at - 1,
-        }])
+        self.apply_ops(vec![Op::MoveSlide { slide: slide_id, to: at - 1 }])
     }
 
     /// Move slide `slide_id` one place down (later). False when it is
@@ -1030,19 +845,13 @@ impl DecksController {
         if at + 1 >= self.slides.borrow().len() {
             return false;
         }
-        self.apply_ops(vec![Op::MoveSlide {
-            slide: slide_id,
-            to: at + 1,
-        }])
+        self.apply_ops(vec![Op::MoveSlide { slide: slide_id, to: at + 1 }])
     }
 
     /// Every slide, object, master, layout and placeholder given its id
     /// first. Reads that need ids call this before borrowing.
     fn ids_ready(&self) {
-        crate::ops::ensure_all_ids(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-        );
+        crate::ops::ensure_all_ids(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut());
     }
 
     /// Apply `ops` as one undo step, all or nothing, and report what the
@@ -1059,25 +868,15 @@ impl DecksController {
     /// for that step is already on the stack.
     fn apply_ops_inner(&self, ops: Vec<Op>, merged: bool) -> TxnOutcome {
         let pre_selection = self.selection.borrow().clone();
-        let failed = TxnOutcome {
-            applied: false,
-            changed_slides: Vec::new(),
-            changed_objects: Vec::new(),
-            revision: self.revision.get(),
-            selection: pre_selection.clone(),
-        };
+        let failed = TxnOutcome { applied: false, changed_slides: Vec::new(), changed_objects: Vec::new(), revision: self.revision.get(), selection: pre_selection.clone() };
         if ops.is_empty() {
             return failed;
         }
         let before = id_sets(&self.slides.borrow());
-        let inverses = crate::ops::with_doc(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-            |doc| suite_common_core::ops::apply_all(doc, &ops),
-        );
-        let Ok(inverses) = inverses else {
-            return failed;
-        };
+        let inverses = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| {
+            suite_common_core::ops::apply_all(doc, &ops)
+        });
+        let Ok(inverses) = inverses else { return failed };
         if inverses.is_empty() {
             // Every op addressed something deleted: nothing happened.
             return failed;
@@ -1121,9 +920,7 @@ impl DecksController {
         let ops = {
             self.ids_ready();
             let slides = self.slides.borrow();
-            let Some(si) = slides.iter().position(|s| s.ids.slide == slide_id) else {
-                return false;
-            };
+            let Some(si) = slides.iter().position(|s| s.ids.slide == slide_id) else { return false };
             let slide = &slides[si];
             let mut objects = slide.objects.clone();
             edit(&mut objects);
@@ -1145,10 +942,7 @@ impl DecksController {
             None => return false,
         };
         self.edit_objects(slide_id, |objects| {
-            if let Some(SlideObject::Image {
-                path, w, h, crop, ..
-            }) = objects.get_mut(at)
-            {
+            if let Some(SlideObject::Image { path, w, h, crop, .. }) = objects.get_mut(at) {
                 *crop = if fill {
                     match crate::image_px::natural_size_pt(path) {
                         Some((iw, ih)) => crate::engine::Crop::fill(iw, ih, *w, *h),
@@ -1180,11 +974,7 @@ impl DecksController {
             Op::InsertObject { id, .. } => *id,
             _ => unreachable!(),
         };
-        if self.apply_ops(vec![op]) {
-            Some(id)
-        } else {
-            None
-        }
+        if self.apply_ops(vec![op]) { Some(id) } else { None }
     }
 
     /// Delete object `object_id` of slide `slide_id` (a tombstone: see
@@ -1194,10 +984,7 @@ impl DecksController {
         if self.object_index(slide_id, object_id).is_none() {
             return false;
         }
-        self.apply_ops(vec![Op::DeleteObject {
-            slide: slide_id,
-            id: object_id,
-        }])
+        self.apply_ops(vec![Op::DeleteObject { slide: slide_id, id: object_id }])
     }
 
     pub fn move_object(&self, slide_id: u64, object_id: u64, dx: f64, dy: f64) {
@@ -1222,22 +1009,12 @@ impl DecksController {
             if *text == new_text {
                 return false;
             }
-            let start: usize = text
-                .chars()
-                .zip(new_text.chars())
-                .take_while(|(a, b)| a == b)
-                .map(|(c, _)| c.len_utf8())
-                .sum();
-            let suffix: usize = text[start..]
-                .chars()
-                .rev()
-                .zip(new_text[start..].chars().rev())
-                .take_while(|(a, b)| a == b)
-                .map(|(c, _)| c.len_utf8())
-                .sum();
+            let start: usize = text.chars().zip(new_text.chars())
+                .take_while(|(a, b)| a == b).map(|(c, _)| c.len_utf8()).sum();
+            let suffix: usize = text[start..].chars().rev().zip(new_text[start..].chars().rev())
+                .take_while(|(a, b)| a == b).map(|(c, _)| c.len_utf8()).sum();
             let end = text.len() - suffix;
-            rt.replace(start, end, &new_text[start..new_text.len() - suffix], None)
-                .unwrap_or(false)
+            rt.replace(start, end, &new_text[start..new_text.len() - suffix], None).unwrap_or(false)
         });
     }
 
@@ -1246,64 +1023,30 @@ impl DecksController {
     /// one undo step. Unaffected runs and paragraph styles stay as they
     /// are. `false`, recording nothing, for an invalid range, a non-text
     /// object or no change.
-    pub fn replace_text_range(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-        start: usize,
-        end: usize,
-        text: &str,
-    ) -> bool {
-        self.edit_text(slide_id, object_id, |rt| {
-            rt.replace(start, end, text, None).unwrap_or(false)
-        })
+    pub fn replace_text_range(&self, slide_id: u64, object_id: u64, start: usize, end: usize, text: &str) -> bool {
+        self.edit_text(slide_id, object_id, |rt| rt.replace(start, end, text, None).unwrap_or(false))
     }
 
     /// Apply `edit` to bytes `start..end` of text box `object_id` as far
     /// as its scope reaches (characters, the paragraphs touched, or the
     /// box: `FormatEdit::scope`), as one undo step. A range edit never
     /// widens to the whole box; `format_objects` is the whole-box command.
-    pub fn format_text_range(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-        start: usize,
-        end: usize,
-        edit: &crate::format::FormatEdit,
-    ) -> bool {
-        self.edit_text(slide_id, object_id, |rt| {
-            rt.format(start, end, edit).unwrap_or(false)
-        })
+    pub fn format_text_range(&self, slide_id: u64, object_id: u64, start: usize, end: usize, edit: &crate::format::FormatEdit) -> bool {
+        self.edit_text(slide_id, object_id, |rt| rt.format(start, end, edit).unwrap_or(false))
     }
 
     /// One text edit of one box as one undo step: `edit` changes a copy
     /// of its text and says whether it changed anything. Refused while a
     /// text session is open on that box, whose commit would otherwise
     /// overwrite the edit.
-    fn edit_text(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-        edit: impl FnOnce(&mut crate::rich_text::RichText) -> bool,
-    ) -> bool {
-        if self
-            .text_session
-            .borrow()
-            .as_ref()
-            .is_some_and(|s| s.object_id == object_id)
-        {
+    fn edit_text(&self, slide_id: u64, object_id: u64, edit: impl FnOnce(&mut crate::rich_text::RichText) -> bool) -> bool {
+        if self.text_session.borrow().as_ref().is_some_and(|s| s.object_id == object_id) {
             return false;
         }
-        let Some(at) = self.object_index(slide_id, object_id) else {
-            return false;
-        };
+        let Some(at) = self.object_index(slide_id, object_id) else { return false };
         let rt = {
             let slides = self.slides.borrow();
-            slides
-                .iter()
-                .find(|s| s.ids.slide == slide_id)
-                .and_then(|s| s.objects.get(at))
-                .and_then(crate::rich_text::RichText::of)
+            slides.iter().find(|s| s.ids.slide == slide_id).and_then(|s| s.objects.get(at)).and_then(crate::rich_text::RichText::of)
         };
         let Some(mut rt) = rt else { return false };
         if !edit(&mut rt) {
@@ -1325,27 +1068,15 @@ impl DecksController {
         if self.text_session.borrow().is_some() {
             return false;
         }
-        let Some(at) = self.object_index(slide_id, object_id) else {
-            return false;
-        };
+        let Some(at) = self.object_index(slide_id, object_id) else { return false };
         let rt = {
             let slides = self.slides.borrow();
-            slides
-                .iter()
-                .find(|s| s.ids.slide == slide_id)
-                .and_then(|s| s.objects.get(at))
-                .and_then(crate::rich_text::RichText::of)
+            slides.iter().find(|s| s.ids.slide == slide_id).and_then(|s| s.objects.get(at)).and_then(crate::rich_text::RichText::of)
         };
         let Some(rt) = rt else { return false };
-        let session =
-            crate::rich_text::TextSession::new(slide_id, object_id, self.editing_master(), rt);
+        let session = crate::rich_text::TextSession::new(slide_id, object_id, self.editing_master(), rt);
         let (start, end) = session.range();
-        self.select_objects(
-            slide_id,
-            &[object_id],
-            Some(object_id),
-            SelectionMode::Object,
-        );
+        self.select_objects(slide_id, &[object_id], Some(object_id), SelectionMode::Object);
         self.set_text_range(object_id, start, end);
         *self.text_session.borrow_mut() = Some(session);
         true
@@ -1358,20 +1089,14 @@ impl DecksController {
 
     /// Read the open text session. `f` must not call back into the
     /// controller.
-    pub fn text_session<R>(
-        &self,
-        f: impl FnOnce(&crate::rich_text::TextSession) -> R,
-    ) -> Option<R> {
+    pub fn text_session<R>(&self, f: impl FnOnce(&crate::rich_text::TextSession) -> R) -> Option<R> {
         self.text_session.borrow().as_ref().map(f)
     }
 
     /// Edit the open text session (type, format, move the caret, its own
     /// undo). The document, its history and its dirty state are never
     /// touched. `f` must not call back into the controller.
-    pub fn edit_text_session<R>(
-        &self,
-        f: impl FnOnce(&mut crate::rich_text::TextSession) -> R,
-    ) -> Option<R> {
+    pub fn edit_text_session<R>(&self, f: impl FnOnce(&mut crate::rich_text::TextSession) -> R) -> Option<R> {
         self.text_session.borrow_mut().as_mut().map(f)
     }
 
@@ -1381,9 +1106,7 @@ impl DecksController {
     /// was changed underneath it, the session stays open and the error
     /// says why, so the editor can keep focus and show it.
     pub fn commit_text_session(&self) -> Result<bool, TextSessionError> {
-        let Some(session) = self.text_session.borrow_mut().take() else {
-            return Err(TextSessionError::NoSession);
-        };
+        let Some(session) = self.text_session.borrow_mut().take() else { return Err(TextSessionError::NoSession) };
         let target = self.session_target(&session);
         let at = match target {
             Ok(at) => at,
@@ -1394,12 +1117,7 @@ impl DecksController {
         };
         // The step's undo restores this selection: the box, as it was
         // selected before the edit began.
-        self.select_objects(
-            session.slide_id,
-            &[session.object_id],
-            Some(session.object_id),
-            SelectionMode::Object,
-        );
+        self.select_objects(session.slide_id, &[session.object_id], Some(session.object_id), SelectionMode::Object);
         if !session.changed() {
             return Ok(false);
         }
@@ -1415,16 +1133,9 @@ impl DecksController {
     /// document, its history, dirty state and revision are exactly as
     /// before it began. Returns whether one was open.
     pub fn cancel_text_session(&self) -> bool {
-        let Some(session) = self.text_session.borrow_mut().take() else {
-            return false;
-        };
+        let Some(session) = self.text_session.borrow_mut().take() else { return false };
         if self.slide_index(session.slide_id).is_some() {
-            self.select_objects(
-                session.slide_id,
-                &[session.object_id],
-                Some(session.object_id),
-                SelectionMode::Object,
-            );
+            self.select_objects(session.slide_id, &[session.object_id], Some(session.object_id), SelectionMode::Object);
         } else {
             self.repair_selection();
         }
@@ -1433,22 +1144,13 @@ impl DecksController {
 
     /// Where the session's box is now, if it is still the box the
     /// session opened: same view (deck or master), same slide, same text.
-    fn session_target(
-        &self,
-        session: &crate::rich_text::TextSession,
-    ) -> Result<usize, TextSessionError> {
+    fn session_target(&self, session: &crate::rich_text::TextSession) -> Result<usize, TextSessionError> {
         if self.editing_master() != session.master {
             return Err(TextSessionError::Gone);
         }
-        let at = self
-            .object_index(session.slide_id, session.object_id)
-            .ok_or(TextSessionError::Gone)?;
+        let at = self.object_index(session.slide_id, session.object_id).ok_or(TextSessionError::Gone)?;
         let slides = self.slides.borrow();
-        let current = slides
-            .iter()
-            .find(|s| s.ids.slide == session.slide_id)
-            .and_then(|s| s.objects.get(at))
-            .and_then(crate::rich_text::RichText::of);
+        let current = slides.iter().find(|s| s.ids.slide == session.slide_id).and_then(|s| s.objects.get(at)).and_then(crate::rich_text::RichText::of);
         match current {
             Some(rt) if rt == *session.original() => Ok(at),
             Some(_) => Err(TextSessionError::Changed),
@@ -1487,64 +1189,36 @@ impl DecksController {
     pub fn align_objects(&self, slide_id: u64, object_ids: &[u64], mode: crate::undo::AlignMode) {
         use crate::undo::{obj_bounds, AlignMode};
         let slides = self.slides.borrow();
-        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-            return;
-        };
-        let mut resolved: Vec<(u64, (f64, f64, f64, f64))> = object_ids
-            .iter()
-            .filter_map(|id| {
-                slide
-                    .object_index(*id)
-                    .map(|at| (*id, obj_bounds(&slide.objects[at])))
-            })
-            .collect();
-        if resolved.len() < 2 {
-            return;
-        }
+        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return };
+        let mut resolved: Vec<(u64, (f64, f64, f64, f64))> = object_ids.iter().filter_map(|id| {
+            slide.object_index(*id).map(|at| (*id, obj_bounds(&slide.objects[at])))
+        }).collect();
+        if resolved.len() < 2 { return; }
         resolved.sort_by_key(|r| r.0);
         resolved.dedup_by(|a, b| a.0 == b.0);
-        if resolved.len() < 2 {
-            return;
-        }
+        if resolved.len() < 2 { return; }
         let bounds_list: Vec<(f64, f64, f64, f64)> = resolved.iter().map(|(_, b)| *b).collect();
 
         let target = match mode {
-            AlignMode::Left => bounds_list
-                .iter()
-                .map(|b| b.0)
-                .fold(f64::INFINITY, f64::min),
-            AlignMode::Top => bounds_list
-                .iter()
-                .map(|b| b.1)
-                .fold(f64::INFINITY, f64::min),
-            AlignMode::Right => bounds_list
-                .iter()
-                .map(|b| b.0 + b.2)
-                .fold(f64::NEG_INFINITY, f64::max),
-            AlignMode::Bottom => bounds_list
-                .iter()
-                .map(|b| b.1 + b.3)
-                .fold(f64::NEG_INFINITY, f64::max),
-            AlignMode::Center => {
-                bounds_list.iter().map(|b| b.0 + b.2 / 2.0).sum::<f64>() / bounds_list.len() as f64
-            }
-            AlignMode::Middle => {
-                bounds_list.iter().map(|b| b.1 + b.3 / 2.0).sum::<f64>() / bounds_list.len() as f64
-            }
+            AlignMode::Left => bounds_list.iter().map(|b| b.0).fold(f64::INFINITY, f64::min),
+            AlignMode::Top => bounds_list.iter().map(|b| b.1).fold(f64::INFINITY, f64::min),
+            AlignMode::Right => bounds_list.iter().map(|b| b.0 + b.2).fold(f64::NEG_INFINITY, f64::max),
+            AlignMode::Bottom => bounds_list.iter().map(|b| b.1 + b.3).fold(f64::NEG_INFINITY, f64::max),
+            AlignMode::Center => bounds_list.iter().map(|b| b.0 + b.2 / 2.0).sum::<f64>() / bounds_list.len() as f64,
+            AlignMode::Middle => bounds_list.iter().map(|b| b.1 + b.3 / 2.0).sum::<f64>() / bounds_list.len() as f64,
         };
 
         let ids: Vec<u64> = resolved.iter().map(|(id, _)| *id).collect();
-        let new_positions: Vec<(f64, f64)> = bounds_list
-            .iter()
-            .map(|&(x, y, w, h)| match mode {
+        let new_positions: Vec<(f64, f64)> = bounds_list.iter().map(|&(x, y, w, h)| {
+            match mode {
                 AlignMode::Left => (target, y),
                 AlignMode::Right => (target - w, y),
                 AlignMode::Center => (target - w / 2.0, y),
                 AlignMode::Top => (x, target),
                 AlignMode::Bottom => (x, target - h),
                 AlignMode::Middle => (x, target - h / 2.0),
-            })
-            .collect();
+            }
+        }).collect();
         drop(slides);
         self.place_objects(slide_id, &ids, &new_positions);
     }
@@ -1552,10 +1226,7 @@ impl DecksController {
     /// Move the objects `object_ids` names to `positions`
     /// (bounding-box origins) as one undo step.
     fn place_objects(&self, slide_id: u64, object_ids: &[u64], positions: &[(f64, f64)]) {
-        let ats: Vec<Option<usize>> = object_ids
-            .iter()
-            .map(|id| self.object_index(slide_id, *id))
-            .collect();
+        let ats: Vec<Option<usize>> = object_ids.iter().map(|id| self.object_index(slide_id, *id)).collect();
         self.edit_objects(slide_id, |o| {
             for (at, &(x, y)) in ats.iter().zip(positions) {
                 if let Some(at) = at {
@@ -1567,56 +1238,38 @@ impl DecksController {
         });
     }
 
-    pub fn distribute_objects(
-        &self,
-        slide_id: u64,
-        object_ids: &[u64],
-        mode: crate::undo::DistributeMode,
-    ) {
+    pub fn distribute_objects(&self, slide_id: u64, object_ids: &[u64], mode: crate::undo::DistributeMode) {
         use crate::undo::{obj_bounds, DistributeMode};
         let slides = self.slides.borrow();
-        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-            return;
-        };
-        let mut items: Vec<(u64, (f64, f64, f64, f64))> = object_ids
-            .iter()
-            .filter_map(|id| {
-                slide
-                    .object_index(*id)
-                    .map(|at| (*id, obj_bounds(&slide.objects[at])))
-            })
-            .collect();
+        let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return };
+        let mut items: Vec<(u64, (f64, f64, f64, f64))> = object_ids.iter().filter_map(|id| {
+            slide.object_index(*id).map(|at| (*id, obj_bounds(&slide.objects[at])))
+        }).collect();
         items.sort_by_key(|item| item.0);
         items.dedup_by(|a, b| a.0 == b.0);
-        if items.len() < 3 {
-            return;
-        }
+        if items.len() < 3 { return; }
 
         if mode == DistributeMode::Horizontal {
-            items.sort_by(|a, b| a.1 .0.partial_cmp(&b.1 .0).unwrap());
-            let min_x = items.first().unwrap().1 .0;
-            let max_x = items.last().unwrap().1 .0;
+            items.sort_by(|a, b| a.1.0.partial_cmp(&b.1.0).unwrap());
+            let min_x = items.first().unwrap().1.0;
+            let max_x = items.last().unwrap().1.0;
             let total_span = max_x - min_x;
             let step = total_span / (items.len() - 1) as f64;
-            let new_pos: Vec<(f64, f64)> = items
-                .iter()
-                .enumerate()
-                .map(|(idx, item)| (min_x + idx as f64 * step, item.1 .1))
-                .collect();
+            let new_pos: Vec<(f64, f64)> = items.iter().enumerate().map(|(idx, item)| {
+                (min_x + idx as f64 * step, item.1.1)
+            }).collect();
             let sorted_ids: Vec<u64> = items.iter().map(|i| i.0).collect();
             drop(slides);
             self.place_objects(slide_id, &sorted_ids, &new_pos);
         } else {
-            items.sort_by(|a, b| a.1 .1.partial_cmp(&b.1 .1).unwrap());
-            let min_y = items.first().unwrap().1 .1;
-            let max_y = items.last().unwrap().1 .1;
+            items.sort_by(|a, b| a.1.1.partial_cmp(&b.1.1).unwrap());
+            let min_y = items.first().unwrap().1.1;
+            let max_y = items.last().unwrap().1.1;
             let total_span = max_y - min_y;
             let step = total_span / (items.len() - 1) as f64;
-            let new_pos: Vec<(f64, f64)> = items
-                .iter()
-                .enumerate()
-                .map(|(idx, item)| (item.1 .0, min_y + idx as f64 * step))
-                .collect();
+            let new_pos: Vec<(f64, f64)> = items.iter().enumerate().map(|(idx, item)| {
+                (item.1.0, min_y + idx as f64 * step)
+            }).collect();
             let sorted_ids: Vec<u64> = items.iter().map(|i| i.0).collect();
             drop(slides);
             self.place_objects(slide_id, &sorted_ids, &new_pos);
@@ -1631,38 +1284,21 @@ impl DecksController {
             Some(at) => at,
             None => return false,
         };
-        let len = self
-            .slides
-            .borrow()
-            .iter()
-            .find(|s| s.ids.slide == slide_id)
-            .map(|s| s.objects.len())
-            .unwrap_or(0);
+        let len = self.slides.borrow().iter().find(|s| s.ids.slide == slide_id).map(|s| s.objects.len()).unwrap_or(0);
         let to = crate::undo::z_order_index(at, len, op);
         if to == at {
             return false;
         }
-        self.apply_ops(vec![Op::MoveObject {
-            slide: slide_id,
-            id: object_id,
-            to,
-        }])
+        self.apply_ops(vec![Op::MoveObject { slide: slide_id, id: object_id, to }])
     }
 
     /// Apply one Format inspector edit to the objects `object_ids` names
     /// on slide `slide_id`, as one undo step. Returns whether anything
     /// changed.
-    pub fn format_objects(
-        &self,
-        slide_id: u64,
-        object_ids: &[u64],
-        edit: &crate::format::FormatEdit,
-    ) -> bool {
+    pub fn format_objects(&self, slide_id: u64, object_ids: &[u64], edit: &crate::format::FormatEdit) -> bool {
         let ats: Vec<usize> = {
             let slides = self.slides.borrow();
-            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-                return false;
-            };
+            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return false };
             let mut seen = Vec::new();
             let mut ats = Vec::new();
             for id in object_ids {
@@ -1690,36 +1326,20 @@ impl DecksController {
     /// build goes last in the slide's build order. The build names the
     /// object by stable id, so reordering never retargets it. Returns
     /// whether anything changed.
-    pub fn set_build(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-        out: bool,
-        effect: Option<crate::builds::BuildEffect>,
-    ) -> bool {
+    pub fn set_build(&self, slide_id: u64, object_id: u64, out: bool, effect: Option<crate::builds::BuildEffect>) -> bool {
         use crate::builds::Build;
         let (old, new) = {
             let slides = self.slides.borrow();
-            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-                return false;
-            };
+            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return false };
             if !slide.ids.objects.contains(&object_id) {
                 return false;
             }
             let old = slide.builds.clone();
             let mut new = old.clone();
-            match (
-                new.iter_mut()
-                    .find(|b| b.object == object_id && b.out == out),
-                effect,
-            ) {
+            match (new.iter_mut().find(|b| b.object == object_id && b.out == out), effect) {
                 (Some(b), Some(e)) => b.effect = e,
                 (Some(_), None) => new.retain(|b| !(b.object == object_id && b.out == out)),
-                (None, Some(e)) => new.push(Build {
-                    object: object_id,
-                    effect: e,
-                    out,
-                }),
+                (None, Some(e)) => new.push(Build { object: object_id, effect: e, out }),
                 (None, None) => {}
             }
             (old, new)
@@ -1735,12 +1355,7 @@ impl DecksController {
     /// editor: a letter or digit added to a run of them joins that run's
     /// step, and anything else (a space, a deletion, a paste) starts one.
     pub fn set_notes(&self, slide_id: u64, notes: &str) -> bool {
-        let typing = match self
-            .slides
-            .borrow()
-            .iter()
-            .find(|s| s.ids.slide == slide_id)
-        {
+        let typing = match self.slides.borrow().iter().find(|s| s.ids.slide == slide_id) {
             Some(s) => one_word_char_added(&s.notes, notes),
             None => return false,
         };
@@ -1777,10 +1392,7 @@ impl DecksController {
                 None => return false,
             };
             let masters = self.masters.borrow();
-            let master = match s
-                .master_id
-                .and_then(|id| masters.iter().find(|m| m.id == id))
-            {
+            let master = match s.master_id.and_then(|id| masters.iter().find(|m| m.id == id)) {
                 Some(m) => m.clone(),
                 None => match masters.first() {
                     Some(m) => m.clone(),
@@ -1813,10 +1425,7 @@ impl DecksController {
                 None => return false,
             };
             let masters = self.masters.borrow();
-            let master = match s
-                .master_id
-                .and_then(|id| masters.iter().find(|m| m.id == id))
-            {
+            let master = match s.master_id.and_then(|id| masters.iter().find(|m| m.id == id)) {
                 Some(m) => m.clone(),
                 None => match masters.first() {
                     Some(m) => m.clone(),
@@ -1848,23 +1457,14 @@ impl DecksController {
             Some(l) => l.clone(),
             None => return false,
         };
-        let mut master = match self
-            .masters
-            .borrow()
-            .iter()
-            .find(|m| m.id == master_id)
-            .cloned()
-        {
+        let mut master = match self.masters.borrow().iter().find(|m| m.id == master_id).cloned() {
             Some(m) => m,
             None => return false,
         };
         master.layouts = layouts;
         // The SetMaster op goes first; the arranged-slide ops follow in
         // the same group, so undo takes the added layouts away too.
-        let mut ops = vec![Op::SetMaster {
-            id: master_id,
-            master: Box::new(master),
-        }];
+        let mut ops = vec![Op::SetMaster { id: master_id, master: Box::new(master) }];
         match self.arranged_ops(slide_id, master_id, &target) {
             Some(more) => ops.extend(more),
             None => return false,
@@ -1877,12 +1477,7 @@ impl DecksController {
     /// master/layout ids. `None` for an unknown slide. Pure: the caller
     /// applies the returned group (possibly with preceding ops) as one
     /// transaction.
-    fn arranged_ops(
-        &self,
-        slide_id: u64,
-        master_id: u64,
-        target: &crate::layouts::Layout,
-    ) -> Option<Vec<Op>> {
+    fn arranged_ops(&self, slide_id: u64, master_id: u64, target: &crate::layouts::Layout) -> Option<Vec<Op>> {
         let slides = self.slides.borrow();
         let si = slides.iter().position(|s| s.ids.slide == slide_id)?;
         let s = &slides[si];
@@ -1894,20 +1489,12 @@ impl DecksController {
         props.layout_id = Some(target.id);
         props.master_id = Some(master_id);
         if props != crate::ops::SlideProps::of(s) {
-            ops.push(Op::SetSlide {
-                slide: slide_id,
-                props: Box::new(props),
-            });
+            ops.push(Op::SetSlide { slide: slide_id, props: Box::new(props) });
         }
         ops.extend(crate::ops::set_objects(&slides, si, &arranged[..kept]));
         let first = crate::ops::next_id(&slides);
         for (k, (o, id)) in arranged[kept..].iter().zip(first..).enumerate() {
-            ops.push(Op::InsertObject {
-                slide: slide_id,
-                at: kept + k,
-                id,
-                object: Box::new(o.clone()),
-            });
+            ops.push(Op::InsertObject { slide: slide_id, at: kept + k, id, object: Box::new(o.clone()) });
         }
         Some(ops)
     }
@@ -1921,10 +1508,7 @@ impl DecksController {
                 None => return false,
             };
             let masters = self.masters.borrow();
-            let master = match s
-                .master_id
-                .and_then(|id| masters.iter().find(|m| m.id == id))
-            {
+            let master = match s.master_id.and_then(|id| masters.iter().find(|m| m.id == id)) {
                 Some(m) => m.clone(),
                 None => match masters.first() {
                     Some(m) => m.clone(),
@@ -1940,38 +1524,24 @@ impl DecksController {
     }
 
     /// Change slide `slide_id`'s properties as one undo step.
-    fn set_slide_props(
-        &self,
-        slide_id: u64,
-        change: impl FnOnce(&mut crate::ops::SlideProps),
-    ) -> bool {
+    fn set_slide_props(&self, slide_id: u64, change: impl FnOnce(&mut crate::ops::SlideProps)) -> bool {
         self.set_slide_props_inner(slide_id, false, change)
     }
 
     /// As `set_slide_props`, sharing the history step (and the selection
     /// entry) with the previous step when `merged`.
-    fn set_slide_props_inner(
-        &self,
-        slide_id: u64,
-        merged: bool,
-        change: impl FnOnce(&mut crate::ops::SlideProps),
-    ) -> bool {
+    fn set_slide_props_inner(&self, slide_id: u64, merged: bool, change: impl FnOnce(&mut crate::ops::SlideProps)) -> bool {
         let op = {
             self.ids_ready();
             let slides = self.slides.borrow();
-            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else {
-                return false;
-            };
+            let Some(slide) = slides.iter().find(|s| s.ids.slide == slide_id) else { return false };
             let old = crate::ops::SlideProps::of(slide);
             let mut new = old.clone();
             change(&mut new);
             if new == old {
                 return false;
             }
-            Op::SetSlide {
-                slide: slide_id,
-                props: Box::new(new),
-            }
+            Op::SetSlide { slide: slide_id, props: Box::new(new) }
         };
         self.apply_ops_inner(vec![op], merged).applied
     }
@@ -1985,12 +1555,7 @@ impl DecksController {
     /// What the inspector shows for object `object_id` on slide `slide_id`.
     /// Edit the chart at object `object_id` of slide `slide_id`: one undo
     /// step, or none when the edit changes nothing.
-    pub fn edit_chart(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-        edit: &crate::engine::chart::ChartEdit,
-    ) -> bool {
+    pub fn edit_chart(&self, slide_id: u64, object_id: u64, edit: &crate::engine::chart::ChartEdit) -> bool {
         let at = match self.object_index(slide_id, object_id) {
             Some(at) => at,
             None => return false,
@@ -2002,11 +1567,7 @@ impl DecksController {
         })
     }
 
-    pub fn object_format(
-        &self,
-        slide_id: u64,
-        object_id: u64,
-    ) -> Option<crate::format::ObjectFormat> {
+    pub fn object_format(&self, slide_id: u64, object_id: u64) -> Option<crate::format::ObjectFormat> {
         let slides = self.slides.borrow();
         let slide = slides.iter().find(|s| s.ids.slide == slide_id)?;
         let at = slide.object_index(object_id)?;
@@ -2024,11 +1585,9 @@ impl DecksController {
         }
         let pre = self.selection.borrow().clone();
         let mut history = self.history.borrow_mut();
-        let done = crate::ops::with_doc(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-            |doc| history.undo(doc),
-        )
+        let done = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| {
+            history.undo(doc)
+        })
         .is_some();
         if done {
             self.redo_sels.borrow_mut().push(pre);
@@ -2063,11 +1622,9 @@ impl DecksController {
         }
         let pre = self.selection.borrow().clone();
         let mut history = self.history.borrow_mut();
-        let done = crate::ops::with_doc(
-            &mut self.slides.borrow_mut(),
-            &mut self.masters.borrow_mut(),
-            |doc| history.redo(doc),
-        )
+        let done = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| {
+            history.redo(doc)
+        })
         .is_some();
         if done {
             // The redone step goes onto the undo stack with the selection
@@ -2130,29 +1687,11 @@ mod tests {
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide {
-            hidden: false,
-            title: title.into(),
-            background: "#fff".into(),
-            background_picture: None,
-            objects: vec![],
-            notes: String::new(),
-            master_id: None,
-            transition: Default::default(),
-            builds: Vec::new(),
-            ids: Default::default(),
-            layout_id: None,
-        }
+        Slide { hidden: false, title: title.into(), background: "#fff".into(), background_picture: None, objects: vec![], notes: String::new(), master_id: None, transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout_id: None }
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
-        SlideObject::Rect {
-            x,
-            y,
-            w: 10.0,
-            h: 10.0,
-            rotation: 0.0,
-        }
+        SlideObject::Rect { x, y, w: 10.0, h: 10.0, rotation: 0.0 }
     }
 
     /// The stable id of the slide at view position `i`.
@@ -2203,24 +1742,11 @@ mod tests {
         let inserted = chart(&c);
         assert!(c.edit_chart(s, o, &ChartEdit::Value(1, 9.0)));
         assert!(c.edit_chart(s, o, &ChartEdit::Kind(ChartKind::Pie)));
-        assert!(
-            !c.edit_chart(s, o, &ChartEdit::Kind(ChartKind::Pie)),
-            "no change, no step"
-        );
-        assert!(
-            !c.edit_chart(s, u64::MAX, &ChartEdit::AddPoint),
-            "no object there"
-        );
-        assert_eq!(
-            (chart(&c).kind, chart(&c).points[1].1),
-            (ChartKind::Pie, 9.0)
-        );
+        assert!(!c.edit_chart(s, o, &ChartEdit::Kind(ChartKind::Pie)), "no change, no step");
+        assert!(!c.edit_chart(s, u64::MAX, &ChartEdit::AddPoint), "no object there");
+        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Pie, 9.0));
         assert!(c.undo());
-        assert_eq!(
-            (chart(&c).kind, chart(&c).points[1].1),
-            (ChartKind::Bar, 9.0),
-            "one undo, the type"
-        );
+        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Bar, 9.0), "one undo, the type");
         assert!(c.undo());
         assert_eq!(chart(&c), inserted, "a second, the value");
         assert!(c.redo());
@@ -2272,16 +1798,7 @@ mod tests {
     #[test]
     fn change_text_updates_textbox_and_undo_reverts() {
         let mut s = slide("S1");
-        s.objects.push(SlideObject::TextBox {
-            text: "old".into(),
-            x: 0.0,
-            y: 0.0,
-            w: 10.0,
-            h: 10.0,
-            runs: vec![],
-            rotation: 0.0,
-            body: Default::default(),
-        });
+        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![], rotation: 0.0, body: Default::default() });
         let c = DecksController::new(vec![s], vec![]);
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         c.change_text(s, o, "new".into());
@@ -2300,35 +1817,18 @@ mod tests {
         }
     }
 
-    fn styled_text_controller(
-        runs: Vec<suite_common_core::document::Run>,
-        body: crate::engine::TextBody,
-    ) -> DecksController {
+    fn styled_text_controller(runs: Vec<suite_common_core::document::Run>, body: crate::engine::TextBody) -> DecksController {
         let mut s = slide("Styled");
         s.objects.push(SlideObject::TextBox {
             text: runs.iter().map(|r| r.text.as_str()).collect(),
-            x: 12.0,
-            y: 34.0,
-            w: 240.0,
-            h: 120.0,
-            rotation: 15.0,
-            runs,
-            body,
+            x: 12.0, y: 34.0, w: 240.0, h: 120.0, rotation: 15.0, runs, body,
         });
         DecksController::new(vec![s], vec![])
     }
 
-    fn text_state(
-        c: &DecksController,
-    ) -> (
-        String,
-        Vec<suite_common_core::document::Run>,
-        crate::engine::TextBody,
-    ) {
+    fn text_state(c: &DecksController) -> (String, Vec<suite_common_core::document::Run>, crate::engine::TextBody) {
         match &c.slides.borrow()[0].objects[0] {
-            SlideObject::TextBox {
-                text, runs, body, ..
-            } => (text.clone(), runs.clone(), body.clone()),
+            SlideObject::TextBox { text, runs, body, .. } => (text.clone(), runs.clone(), body.clone()),
             _ => panic!("expected TextBox"),
         }
     }
@@ -2336,56 +1836,26 @@ mod tests {
     #[test]
     fn change_text_preserves_styled_spans_and_exact_undo_redo() {
         use suite_common_core::document::{Run, RunStyle};
-        let bold = RunStyle {
-            bold: true,
-            ..Default::default()
-        };
-        let italic = RunStyle {
-            italic: true,
-            ..Default::default()
-        };
-        let c = styled_text_controller(
-            vec![
-                Run::plain("Keep "),
-                Run {
-                    text: "ca".into(),
-                    style: bold.clone(),
-                },
-                Run {
-                    text: "fé".into(),
-                    style: bold.clone(),
-                },
-                Run {
-                    text: " 東京😀".into(),
-                    style: italic.clone(),
-                },
-            ],
-            Default::default(),
-        );
+        let bold = RunStyle { bold: true, ..Default::default() };
+        let italic = RunStyle { italic: true, ..Default::default() };
+        let c = styled_text_controller(vec![
+            Run::plain("Keep "),
+            Run { text: "ca".into(), style: bold.clone() },
+            Run { text: "fé".into(), style: bold.clone() },
+            Run { text: " 東京😀".into(), style: italic.clone() },
+        ], Default::default());
         let before = format!("{:?}", c.slides.borrow()[0].objects[0]);
         // A stale caller snapshot must not become the source of style offsets or undo.
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         c.change_text(s, o, "Keep cañon 東京😀".into());
         let (text, runs, _) = text_state(&c);
         assert_eq!(text, "Keep cañon 東京😀");
-        assert_eq!(
-            runs,
-            vec![
-                Run::plain("Keep "),
-                Run {
-                    text: "cañon".into(),
-                    style: bold
-                },
-                Run {
-                    text: " 東京😀".into(),
-                    style: italic
-                },
-            ]
-        );
-        assert_eq!(
-            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
-            text
-        );
+        assert_eq!(runs, vec![
+            Run::plain("Keep "),
+            Run { text: "cañon".into(), style: bold },
+            Run { text: " 東京😀".into(), style: italic },
+        ]);
+        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<String>(), text);
         let after = format!("{:?}", c.slides.borrow()[0].objects[0]);
         assert!(c.undo());
         assert_eq!(format!("{:?}", c.slides.borrow()[0].objects[0]), before);
@@ -2397,110 +1867,38 @@ mod tests {
     #[test]
     fn change_text_unicode_insert_delete_and_replace_across_run_boundaries() {
         use suite_common_core::document::{Run, RunStyle};
-        let bold = RunStyle {
-            bold: true,
-            ..Default::default()
-        };
-        let italic = RunStyle {
-            italic: true,
-            ..Default::default()
-        };
+        let bold = RunStyle { bold: true, ..Default::default() };
+        let italic = RunStyle { italic: true, ..Default::default() };
         let original = vec![
-            Run {
-                text: "é😀".into(),
-                style: bold.clone(),
-            },
-            Run {
-                text: "東京".into(),
-                style: italic.clone(),
-            },
+            Run { text: "é😀".into(), style: bold.clone() },
+            Run { text: "東京".into(), style: italic.clone() },
             Run::plain("e\u{301}!"),
         ];
         let cases = [
-            (
-                "前é😀東京e\u{301}!",
-                vec![
-                    Run {
-                        text: "前é😀".into(),
-                        style: bold.clone(),
-                    },
-                    original[1].clone(),
-                    original[2].clone(),
-                ],
-            ),
-            (
-                "é😀東京e\u{301}!後",
-                vec![
-                    original[0].clone(),
-                    original[1].clone(),
-                    Run::plain("e\u{301}!後"),
-                ],
-            ),
-            (
-                "Replacement",
-                vec![Run {
-                    text: "Replacement".into(),
-                    style: bold.clone(),
-                }],
-            ),
-            (
-                "é😀界東京e\u{301}!",
-                vec![
-                    original[0].clone(),
-                    Run {
-                        text: "界東京".into(),
-                        style: italic.clone(),
-                    },
-                    original[2].clone(),
-                ],
-            ),
-            (
-                "é京e\u{301}!",
-                vec![
-                    Run {
-                        text: "é".into(),
-                        style: bold.clone(),
-                    },
-                    Run {
-                        text: "京".into(),
-                        style: italic.clone(),
-                    },
-                    original[2].clone(),
-                ],
-            ),
-            (
-                "é🦀京e\u{301}!",
-                vec![
-                    Run {
-                        text: "é🦀".into(),
-                        style: bold.clone(),
-                    },
-                    Run {
-                        text: "京".into(),
-                        style: italic.clone(),
-                    },
-                    original[2].clone(),
-                ],
-            ),
-            (
-                "ê😀東京e\u{301}!",
-                vec![
-                    Run {
-                        text: "ê😀".into(),
-                        style: bold.clone(),
-                    },
-                    original[1].clone(),
-                    original[2].clone(),
-                ],
-            ),
-            (
-                "é😀東京e\u{302}!",
-                vec![
-                    original[0].clone(),
-                    original[1].clone(),
-                    Run::plain("e\u{302}!"),
-                ],
-            ),
+            ("前é😀東京e\u{301}!", vec![
+                Run { text: "前é😀".into(), style: bold.clone() }, original[1].clone(), original[2].clone(),
+            ]),
+            ("é😀東京e\u{301}!後", vec![
+                original[0].clone(), original[1].clone(), Run::plain("e\u{301}!後"),
+            ]),
+            ("Replacement", vec![Run { text: "Replacement".into(), style: bold.clone() }]),
+            ("é😀界東京e\u{301}!", vec![
+                original[0].clone(), Run { text: "界東京".into(), style: italic.clone() }, original[2].clone(),
+            ]),
+            ("é京e\u{301}!", vec![
+                Run { text: "é".into(), style: bold.clone() },
+                Run { text: "京".into(), style: italic.clone() }, original[2].clone(),
+            ]),
+            ("é🦀京e\u{301}!", vec![
+                Run { text: "é🦀".into(), style: bold.clone() },
+                Run { text: "京".into(), style: italic.clone() }, original[2].clone(),
+            ]),
+            ("ê😀東京e\u{301}!", vec![
+                Run { text: "ê😀".into(), style: bold.clone() }, original[1].clone(), original[2].clone(),
+            ]),
+            ("é😀東京e\u{302}!", vec![
+                original[0].clone(), original[1].clone(), Run::plain("e\u{302}!"),
+            ]),
         ];
         for (new_text, expected) in cases {
             let c = styled_text_controller(original.clone(), Default::default());
@@ -2519,39 +1917,17 @@ mod tests {
     #[test]
     fn change_text_empty_box_keeps_typing_style_and_noop_keeps_history() {
         use suite_common_core::document::{Run, RunStyle};
-        let style = RunStyle {
-            bold: true,
-            font_size_hp: Some(48),
-            ..Default::default()
-        };
-        let c = styled_text_controller(
-            vec![Run {
-                text: "Hi".into(),
-                style: style.clone(),
-            }],
-            Default::default(),
-        );
+        let style = RunStyle { bold: true, font_size_hp: Some(48), ..Default::default() };
+        let c = styled_text_controller(vec![Run { text: "Hi".into(), style: style.clone() }], Default::default());
         let before = text_state(&c);
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         c.change_text(s, o, "Hi".into());
         assert!(!c.dirty.get());
         assert!(!c.can_undo());
         c.change_text(s, o, String::new());
-        assert_eq!(
-            text_state(&c).1,
-            vec![Run {
-                text: String::new(),
-                style: style.clone()
-            }]
-        );
+        assert_eq!(text_state(&c).1, vec![Run { text: String::new(), style: style.clone() }]);
         c.change_text(s, o, "😀".into());
-        assert_eq!(
-            text_state(&c).1,
-            vec![Run {
-                text: "😀".into(),
-                style
-            }]
-        );
+        assert_eq!(text_state(&c).1, vec![Run { text: "😀".into(), style }]);
         assert!(c.undo());
         assert!(text_state(&c).0.is_empty());
         assert!(c.undo());
@@ -2567,42 +1943,19 @@ mod tests {
     fn change_text_remaps_paragraph_styles_with_newlines_and_undo() {
         use crate::engine::text_body::{Anchor, ParaStyle, TextBody};
         use suite_common_core::document::Run;
-        let first = ParaStyle {
-            margin_left: 10.0,
-            ..Default::default()
-        };
-        let second = ParaStyle {
-            margin_left: 20.0,
-            ..Default::default()
-        };
-        let third = ParaStyle {
-            margin_left: 30.0,
-            ..Default::default()
-        };
-        let c = styled_text_controller(
-            vec![Run::plain("one\ntwo\n三")],
-            TextBody {
-                paras: vec![first.clone(), second.clone(), third.clone()],
-                anchor: Anchor::Middle,
-                ..Default::default()
-            },
-        );
+        let first = ParaStyle { margin_left: 10.0, ..Default::default() };
+        let second = ParaStyle { margin_left: 20.0, ..Default::default() };
+        let third = ParaStyle { margin_left: 30.0, ..Default::default() };
+        let c = styled_text_controller(vec![Run::plain("one\ntwo\n三")], TextBody {
+            paras: vec![first.clone(), second.clone(), third.clone()],
+            anchor: Anchor::Middle, ..Default::default()
+        });
         let before = text_state(&c);
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         c.change_text(s, o, "one\nnew\ntwo\n三".into());
         let inserted = text_state(&c);
-        assert_eq!(
-            inserted
-                .1
-                .iter()
-                .map(|r| r.text.as_str())
-                .collect::<String>(),
-            inserted.0
-        );
-        assert_eq!(
-            inserted.2.paras,
-            vec![first.clone(), second.clone(), second.clone(), third.clone()]
-        );
+        assert_eq!(inserted.1.iter().map(|r| r.text.as_str()).collect::<String>(), inserted.0);
+        assert_eq!(inserted.2.paras, vec![first.clone(), second.clone(), second.clone(), third.clone()]);
         assert_eq!(inserted.2.anchor, Anchor::Middle);
         c.change_text(s, o, "one\nnewtwo\n三".into());
         assert_eq!(text_state(&c).2.paras, vec![first, second, third]);
@@ -2660,12 +2013,7 @@ mod tests {
         std::fs::write(&png, head).unwrap();
         let mut s = slide("S1");
         s.objects.push(SlideObject::Image {
-            path: png.to_string_lossy().into(),
-            x: 0.0,
-            y: 0.0,
-            w: 100.0,
-            h: 100.0,
-            rotation: 0.0,
+            path: png.to_string_lossy().into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0, rotation: 0.0,
             crop: Default::default(),
         });
         let c = DecksController::new(vec![s], vec![]);
@@ -2676,10 +2024,7 @@ mod tests {
         };
         assert!(c.crop_picture(s, o, true));
         let fill = crop(&c);
-        assert!(
-            (fill.left - 0.25).abs() < 1e-9 && (fill.right - 0.25).abs() < 1e-9,
-            "a 2:1 picture in a square box loses a quarter each side: {fill:?}"
-        );
+        assert!((fill.left - 0.25).abs() < 1e-9 && (fill.right - 0.25).abs() < 1e-9, "a 2:1 picture in a square box loses a quarter each side: {fill:?}");
         assert_eq!((fill.top, fill.bottom), (0.0, 0.0));
         assert!(!c.crop_picture(s, o, true), "already filled: no step");
         assert!(c.crop_picture(s, o, false));
@@ -2701,33 +2046,16 @@ mod tests {
             let s = c.slides.borrow();
             assert_eq!(s.len(), 3);
             assert_eq!((&s[1].title, &s[1].notes), (&first.title, &first.notes));
-            assert_eq!(
-                format!("{:?}", s[1].objects),
-                format!("{:?}", first.objects),
-                "the same objects"
-            );
+            assert_eq!(format!("{:?}", s[1].objects), format!("{:?}", first.objects), "the same objects");
             assert_eq!(s[2].title, "Two", "the slide after it moves down");
-            assert_ne!(
-                s[1].ids.slide, s[0].ids.slide,
-                "the copy is a slide of its own"
-            );
-            assert!(
-                s[1].ids
-                    .objects
-                    .iter()
-                    .all(|id| !s[0].ids.objects.contains(id)),
-                "with objects of its own"
-            );
+            assert_ne!(s[1].ids.slide, s[0].ids.slide, "the copy is a slide of its own");
+            assert!(s[1].ids.objects.iter().all(|id| !s[0].ids.objects.contains(id)), "with objects of its own");
         }
         assert_eq!(c.duplicate_slide(u64::MAX), None);
         assert!(c.undo());
         {
             let s = c.slides.borrow();
-            assert_eq!(
-                s.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(),
-                ["One", "Two"],
-                "one undo removes the copy"
-            );
+            assert_eq!(s.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["One", "Two"], "one undo removes the copy");
         }
         assert!(c.redo());
         // Redo keeps the copy's identity: it is the same slide, not a new one.
@@ -2770,17 +2098,9 @@ mod tests {
         assert_eq!(c.slides.borrow()[0].notes, "hello world");
         assert!(c.dirty.get(), "a notes edit makes the deck dirty");
         assert!(c.undo());
-        assert_eq!(
-            c.slides.borrow()[0].notes,
-            "hello ",
-            "the last word goes in one step"
-        );
+        assert_eq!(c.slides.borrow()[0].notes, "hello ", "the last word goes in one step");
         assert!(c.undo());
-        assert_eq!(
-            c.slides.borrow()[0].notes,
-            "hello",
-            "the space is its own step"
-        );
+        assert_eq!(c.slides.borrow()[0].notes, "hello", "the space is its own step");
         assert!(c.undo());
         assert_eq!(c.slides.borrow()[0].notes, "", "and so is the first word");
         assert!(!c.can_undo());
@@ -2825,13 +2145,7 @@ mod tests {
             name: "Theme".into(),
             background: "#0b3d6b".into(),
             default_font: "Sans".into(),
-            shapes: vec![SlideObject::Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 28.0,
-                h: 540.0,
-                rotation: 0.0,
-            }],
+            shapes: vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 28.0, h: 540.0, rotation: 0.0 }],
             theme_id: None,
             color_map: Default::default(),
             layouts: Vec::new(),
@@ -2843,43 +2157,18 @@ mod tests {
         let c = DecksController::new(vec![slide("S1"), slide("S2")], vec![decorated_master()]);
         let (first, second) = (sid(&c, 0), sid(&c, 1));
         let master_id = c.masters.borrow()[0].id;
-        c.add_object(
-            first,
-            SlideObject::Rect {
-                x: 5.0,
-                y: 5.0,
-                w: 5.0,
-                h: 5.0,
-                rotation: 0.0,
-            },
-        );
+        c.add_object(first, SlideObject::Rect { x: 5.0, y: 5.0, w: 5.0, h: 5.0, rotation: 0.0 });
         assert_eq!(c.edit_master(first), Some(master_id));
         assert_eq!(c.editing_master(), Some(master_id));
         assert_eq!(c.slide_count(), 1, "the master stands in for the slides");
-        assert_eq!(
-            c.slides.borrow()[0].objects.len(),
-            1,
-            "its decorations are the objects"
-        );
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1, "its decorations are the objects");
         assert!(!c.can_undo(), "the view has its own history");
         // Edits, each undoable inside the view.
         let stand_in = sid(&c, 0);
-        c.add_object(
-            stand_in,
-            SlideObject::Rect {
-                x: 900.0,
-                y: 0.0,
-                w: 60.0,
-                h: 60.0,
-                rotation: 0.0,
-            },
-        );
+        c.add_object(stand_in, SlideObject::Rect { x: 900.0, y: 0.0, w: 60.0, h: 60.0, rotation: 0.0 });
         c.move_object(stand_in, oid(&c, 0, 0), 10.0, 0.0);
         assert!(c.undo());
-        assert_eq!(
-            crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]).0,
-            0.0
-        );
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]).0, 0.0);
         assert!(c.redo());
         // Saving now saves the deck, with the master as edited.
         let saved = c.deck();
@@ -2889,23 +2178,12 @@ mod tests {
         assert_eq!(c.editing_master(), None);
         assert_eq!(c.slide_count(), 2, "the slides are back");
         assert_eq!(c.masters.borrow()[0].shapes.len(), 2);
-        assert_eq!(
-            c.slides.borrow()[0].objects.len(),
-            1,
-            "the slide's own objects are untouched"
-        );
-        assert_eq!(
-            sid(&c, 1),
-            second,
-            "slide identities survive the round trip"
-        );
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1, "the slide's own objects are untouched");
+        assert_eq!(sid(&c, 1), second, "slide identities survive the round trip");
         // One step undoes the whole master edit; the slide edit before it
         // is still in the history.
         assert!(c.undo());
-        assert_eq!(
-            format!("{:?}", c.masters.borrow()[0]),
-            format!("{:?}", decorated_master_stamped(&c, master_id))
-        );
+        assert_eq!(format!("{:?}", c.masters.borrow()[0]), format!("{:?}", decorated_master_stamped(&c, master_id)));
         assert!(c.undo());
         assert!(c.slides.borrow()[0].objects.is_empty());
         assert!(c.redo() && c.redo());
@@ -2944,16 +2222,8 @@ mod tests {
         assert_eq!(c.cancel_master(), Some(s));
         assert_eq!(c.editing_master(), None);
         assert_eq!(c.slide_count(), 1);
-        assert_eq!(
-            c.slides.borrow()[0].objects.len(),
-            1,
-            "the view's objects are gone"
-        );
-        assert_eq!(
-            c.masters.borrow()[0].shapes.len(),
-            1,
-            "the master is untouched"
-        );
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1, "the view's objects are gone");
+        assert_eq!(c.masters.borrow()[0].shapes.len(), 1, "the master is untouched");
         // The original history is back exactly: one step undoes the slide edit.
         assert!(c.undo());
         assert!(c.slides.borrow()[0].objects.is_empty());
@@ -2973,10 +2243,7 @@ mod tests {
             h: 10.0,
             rotation: 0.0,
             runs: vec![],
-            body: crate::engine::TextBody {
-                placeholder: Some(Placeholder::Title),
-                ..Default::default()
-            },
+            body: crate::engine::TextBody { placeholder: Some(Placeholder::Title), ..Default::default() },
         });
         let c = DecksController::new(vec![s1], vec![decorated_master()]);
         let s = sid(&c, 0);
@@ -2987,11 +2254,7 @@ mod tests {
             let slides = c.slides.borrow();
             assert_eq!(slides[0].layout_id, Some(layout_id));
             assert_eq!(slides[0].objects.len(), 2, "the body is added");
-            assert_eq!(
-                crate::undo::obj_bounds(&slides[0].objects[0]),
-                (80.0, 40.0, 800.0, 90.0),
-                "the title moves"
-            );
+            assert_eq!(crate::undo::obj_bounds(&slides[0].objects[0]), (80.0, 40.0, 800.0, 90.0), "the title moves");
         }
         // Deleting the added body and re-applying by stable id brings it back.
         let body = oid(&c, 0, 1);
@@ -3003,10 +2266,7 @@ mod tests {
         assert!(c.undo());
         assert!(c.undo());
         assert!(c.undo());
-        assert!(
-            c.masters.borrow()[0].layouts.is_empty(),
-            "undo takes the added layouts too"
-        );
+        assert!(c.masters.borrow()[0].layouts.is_empty(), "undo takes the added layouts too");
         assert_eq!(c.slides.borrow()[0].objects.len(), 1);
         assert_eq!(c.slides.borrow()[0].layout_id, None);
         assert!(!c.can_undo());
@@ -3066,25 +2326,13 @@ mod tests {
     #[test]
     fn resize_and_rotate_object_with_undo() {
         let mut s = slide("S1");
-        s.objects.push(SlideObject::Rect {
-            x: 10.0,
-            y: 10.0,
-            w: 50.0,
-            h: 50.0,
-            rotation: 0.0,
-        });
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 50.0, h: 50.0, rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         c.resize_object(s, o, (20.0, 20.0, 100.0, 80.0));
-        assert_eq!(
-            crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]),
-            (20.0, 20.0, 100.0, 80.0)
-        );
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]), (20.0, 20.0, 100.0, 80.0));
         assert!(c.undo());
-        assert_eq!(
-            crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]),
-            (10.0, 10.0, 50.0, 50.0)
-        );
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]), (10.0, 10.0, 50.0, 50.0));
 
         c.rotate_object(s, o, 45.0);
         assert_eq!(c.slides.borrow()[0].objects[0].rotation(), 45.0);
@@ -3096,27 +2344,9 @@ mod tests {
     fn align_and_distribute_objects_with_undo() {
         use crate::undo::{AlignMode, DistributeMode};
         let mut s = slide("S1");
-        s.objects.push(SlideObject::Rect {
-            x: 10.0,
-            y: 10.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
-        s.objects.push(SlideObject::Rect {
-            x: 50.0,
-            y: 30.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
-        s.objects.push(SlideObject::Rect {
-            x: 100.0,
-            y: 50.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 50.0, y: 30.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 100.0, y: 50.0, w: 20.0, h: 20.0, rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         let s = sid(&c, 0);
         let ids = [oid(&c, 0, 0), oid(&c, 0, 1), oid(&c, 0, 2)];
@@ -3140,32 +2370,15 @@ mod tests {
     fn z_order_object_with_undo() {
         use crate::undo::ZOrderOp;
         let mut s = slide("S1");
-        s.objects.push(SlideObject::Rect {
-            x: 10.0,
-            y: 10.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
-        s.objects.push(SlideObject::Circle {
-            x: 50.0,
-            y: 50.0,
-            r: 10.0,
-            rotation: 0.0,
-        });
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Circle { x: 50.0, y: 50.0, r: 10.0, rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
 
         assert!(c.z_order_object(s, o, ZOrderOp::BringToFront));
-        assert!(matches!(
-            c.slides.borrow()[0].objects[1],
-            SlideObject::Rect { .. }
-        ));
+        assert!(matches!(c.slides.borrow()[0].objects[1], SlideObject::Rect { .. }));
         assert!(c.undo());
-        assert!(matches!(
-            c.slides.borrow()[0].objects[0],
-            SlideObject::Rect { .. }
-        ));
+        assert!(matches!(c.slides.borrow()[0].objects[0], SlideObject::Rect { .. }));
         // The z-order move keeps the object's identity.
         assert_eq!(c.object_id_at(0, 0), Some(o));
     }
@@ -3174,36 +2387,17 @@ mod tests {
     fn a_format_edit_is_one_undo_step_and_a_no_op_is_none() {
         use crate::format::FormatEdit;
         let mut s = slide("S1");
-        s.objects.push(SlideObject::Rect {
-            x: 10.0,
-            y: 10.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
-        s.objects.push(SlideObject::Rect {
-            x: 40.0,
-            y: 10.0,
-            w: 20.0,
-            h: 20.0,
-            rotation: 0.0,
-        });
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 40.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         let s = sid(&c, 0);
         let (o1, o2) = (oid(&c, 0, 0), oid(&c, 0, 1));
         assert!(c.format_objects(s, &[o1, o2], &FormatEdit::Width(50.0)));
         assert_eq!(c.object_format(s, o2).unwrap().bounds.2, 50.0);
-        assert!(
-            !c.format_objects(s, &[o1, o2], &FormatEdit::Width(50.0)),
-            "nothing to change"
-        );
+        assert!(!c.format_objects(s, &[o1, o2], &FormatEdit::Width(50.0)), "nothing to change");
         assert!(c.undo());
         assert_eq!(c.object_format(s, o1).unwrap().bounds.2, 20.0);
-        assert_eq!(
-            c.object_format(s, o2).unwrap().bounds.2,
-            20.0,
-            "both in the one step"
-        );
+        assert_eq!(c.object_format(s, o2).unwrap().bounds.2, 20.0, "both in the one step");
         assert!(!c.can_undo());
         assert!(c.dirty.get());
     }
@@ -3215,14 +2409,8 @@ mod tests {
         let second = sid(&c, 1);
         assert!(c.set_transition(second, Transition::MagicMove));
         assert_eq!(c.slides.borrow()[1].transition, Transition::MagicMove);
-        assert!(
-            !c.set_transition(second, Transition::MagicMove),
-            "no change, no step"
-        );
-        assert!(
-            !c.set_transition(u64::MAX, Transition::Fade),
-            "no such slide"
-        );
+        assert!(!c.set_transition(second, Transition::MagicMove), "no change, no step");
+        assert!(!c.set_transition(u64::MAX, Transition::Fade), "no such slide");
         assert!(c.undo());
         assert_eq!(c.slides.borrow()[1].transition, Transition::None);
         assert!(!c.can_undo());
@@ -3233,58 +2421,28 @@ mod tests {
         use crate::builds::{Build, BuildEffect};
         let mut s = slide("S1");
         for x in [0.0, 50.0, 100.0] {
-            s.objects.push(SlideObject::Rect {
-                x,
-                y: 0.0,
-                w: 20.0,
-                h: 20.0,
-                rotation: 0.0,
-            });
+            s.objects.push(SlideObject::Rect { x, y: 0.0, w: 20.0, h: 20.0, rotation: 0.0 });
         }
         let c = DecksController::new(vec![s], vec![]);
         let s = sid(&c, 0);
         let (o1, o2, o3) = (oid(&c, 0, 0), oid(&c, 0, 1), oid(&c, 0, 2));
         assert!(c.set_build(s, o3, false, Some(BuildEffect::Dissolve)));
         assert!(c.set_build(s, o1, false, Some(BuildEffect::Appear)));
-        assert!(
-            !c.set_build(s, o1, false, Some(BuildEffect::Appear)),
-            "no change"
-        );
+        assert!(!c.set_build(s, o1, false, Some(BuildEffect::Appear)), "no change");
         let builds = || c.slides.borrow()[0].builds.clone();
-        assert_eq!(
-            builds().iter().map(|b| b.object).collect::<Vec<_>>(),
-            [o3, o1],
-            "in the order they were added"
-        );
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [o3, o1], "in the order they were added");
         // Deleting the middle object drops only the builds that name it;
         // the build on the third object keeps its identity.
         assert!(c.delete_object(s, o2));
-        assert_eq!(
-            builds().iter().map(|b| b.object).collect::<Vec<_>>(),
-            [o3, o1]
-        );
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [o3, o1]);
         assert!(c.undo());
-        assert_eq!(
-            builds().iter().map(|b| b.object).collect::<Vec<_>>(),
-            [o3, o1]
-        );
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [o3, o1]);
         // Reordering never retargets a build: the same ids name the same boxes.
         assert!(c.z_order_object(s, o1, crate::undo::ZOrderOp::BringToFront));
-        assert_eq!(
-            builds(),
-            vec![
-                Build {
-                    object: o3,
-                    effect: BuildEffect::Dissolve,
-                    out: false
-                },
-                Build {
-                    object: o1,
-                    effect: BuildEffect::Appear,
-                    out: false
-                },
-            ]
-        );
+        assert_eq!(builds(), vec![
+            Build { object: o3, effect: BuildEffect::Dissolve, out: false },
+            Build { object: o1, effect: BuildEffect::Appear, out: false },
+        ]);
         assert!(c.undo());
         assert!(c.set_build(s, o3, false, None));
         assert_eq!(builds().len(), 1);
@@ -3299,16 +2457,7 @@ mod tests {
         assert!(c.select_objects(second, &[o], Some(o), SelectionMode::Object));
         // Reordering moves positions, not the selection.
         assert!(c.move_slide_up(second));
-        assert_eq!(
-            c.selection(),
-            SelectionState {
-                slide_id: Some(second),
-                object_ids: vec![o],
-                primary_object_id: Some(o),
-                mode: SelectionMode::Object,
-                text_range: None
-            }
-        );
+        assert_eq!(c.selection(), SelectionState { slide_id: Some(second), object_ids: vec![o], primary_object_id: Some(o), mode: SelectionMode::Object, text_range: None });
         assert_eq!(c.slide_index(second), Some(0));
         // Deleting the selected slide repairs the selection; undo restores both.
         assert!(c.delete_slide(second));
@@ -3320,10 +2469,7 @@ mod tests {
         assert!(c.redo());
         assert_eq!(c.slide_index(first), Some(0));
         assert_eq!(c.slide_index(third), Some(1));
-        assert!(c
-            .selection()
-            .slide_id
-            .is_some_and(|id| id == first || id == third));
+        assert!(c.selection().slide_id.is_some_and(|id| id == first || id == third));
     }
 
     /// ADR 0011: a step that no longer fits is dropped alone. (Decks' ops
@@ -3343,23 +2489,13 @@ mod tests {
         c.move_object(third, o, 1.0, 0.0);
         assert!(c.select_slide(third));
         assert_ne!(c.selection(), on_object);
-        assert!(
-            c.move_slide_up(third),
-            "its undo moves it back to position 2"
-        );
+        assert!(c.move_slide_up(third), "its undo moves it back to position 2");
         // A peer removes the other two slides: position 2 is out of range.
         c.slides.borrow_mut().retain(|s| s.ids.slide == third);
         assert!(!c.undo(), "that step no longer fits");
-        assert!(
-            c.can_undo() && !c.can_redo(),
-            "the steps before it stay, and the dropped one cannot be redone"
-        );
+        assert!(c.can_undo() && !c.can_redo(), "the steps before it stay, and the dropped one cannot be redone");
         assert!(c.undo(), "the move is next");
-        assert_eq!(
-            c.selection(),
-            on_object,
-            "with the selection that step saw, not the dropped step's"
-        );
+        assert_eq!(c.selection(), on_object, "with the selection that step saw, not the dropped step's");
     }
 
     #[test]
@@ -3387,52 +2523,26 @@ mod tests {
     #[test]
     fn text_ranges_are_validated_session_state() {
         let mut s = slide("S1");
-        s.objects.push(SlideObject::TextBox {
-            text: "héllo".into(),
-            x: 0.0,
-            y: 0.0,
-            w: 10.0,
-            h: 10.0,
-            runs: vec![],
-            rotation: 0.0,
-            body: Default::default(),
-        });
+        s.objects.push(SlideObject::TextBox { text: "héllo".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![], rotation: 0.0, body: Default::default() });
         s.objects.push(rect(50.0, 50.0));
         let c = DecksController::new(vec![s], vec![]);
         let (s, text_box, shape) = (sid(&c, 0), oid(&c, 0, 0), oid(&c, 0, 1));
         assert!(c.select_slide(s));
         // "héllo" is 6 bytes: h(1) é(2) l l o. Offset 2 is inside é.
-        assert!(
-            !c.set_text_range(text_box, 2, 3),
-            "mid-character split rejected"
-        );
-        assert!(
-            !c.set_text_range(text_box, 3, 2),
-            "start after end rejected"
-        );
+        assert!(!c.set_text_range(text_box, 2, 3), "mid-character split rejected");
+        assert!(!c.set_text_range(text_box, 3, 2), "start after end rejected");
         assert!(!c.set_text_range(text_box, 0, 99), "past the end rejected");
         assert!(!c.set_text_range(shape, 0, 0), "non-text object rejected");
         assert!(!c.set_text_range(u64::MAX, 0, 0), "unknown object rejected");
         assert!(c.set_text_range(text_box, 1, 3));
         assert_eq!(c.selection().mode, SelectionMode::Text);
-        assert_eq!(
-            c.selection().text_range,
-            Some(TextRange {
-                object_id: text_box,
-                start: 1,
-                end: 3
-            })
-        );
+        assert_eq!(c.selection().text_range, Some(TextRange { object_id: text_box, start: 1, end: 3 }));
         // Selection-only movement never dirties or bumps the revision.
         assert!(!c.dirty.get());
         let revision = c.revision();
         assert!(c.select_slide(s));
         assert_eq!(c.revision(), revision);
-        assert_eq!(
-            c.selection().text_range,
-            None,
-            "leaving text mode drops the range"
-        );
+        assert_eq!(c.selection().text_range, None, "leaving text mode drops the range");
     }
 
     #[test]
@@ -3456,15 +2566,9 @@ mod tests {
         let quiet = c.apply_ops_txn(vec![]);
         assert!(!quiet.applied);
         assert_eq!(quiet.revision, outcome.revision);
-        let unknown = c.apply_ops_txn(vec![Op::DeleteObject {
-            slide: s,
-            id: u64::MAX,
-        }]);
+        let unknown = c.apply_ops_txn(vec![Op::DeleteObject { slide: s, id: u64::MAX }]);
         assert!(!unknown.applied);
-        assert!(
-            !c.dirty.get() || c.revision() == outcome.revision,
-            "no new revision"
-        );
+        assert!(!c.dirty.get() || c.revision() == outcome.revision, "no new revision");
     }
 
     /// DCK-007: an in-place text edit is one transaction. Typing and
@@ -3476,23 +2580,8 @@ mod tests {
     fn a_text_session_commits_one_step_and_cancels_without_trace() {
         use crate::format::FormatEdit;
         use suite_common_core::document::{Run, RunStyle};
-        let bold = RunStyle {
-            bold: true,
-            ..Default::default()
-        };
-        let c = styled_text_controller(
-            vec![
-                Run {
-                    text: "Alpha ".into(),
-                    style: bold.clone(),
-                },
-                Run {
-                    text: "Beta".into(),
-                    style: RunStyle::default(),
-                },
-            ],
-            Default::default(),
-        );
+        let bold = RunStyle { bold: true, ..Default::default() };
+        let c = styled_text_controller(vec![Run { text: "Alpha ".into(), style: bold.clone() }, Run { text: "Beta".into(), style: RunStyle::default() }], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
         // An earlier, unrelated edit gives undo something to take back.
         c.move_object(s, o, 1.0, 0.0);
@@ -3510,20 +2599,12 @@ mod tests {
         assert_eq!(c.revision(), revision);
         assert!(!c.undo(), "document undo is refused during a session");
         assert!(!c.redo());
-        assert_eq!(
-            c.object_format(s, o).unwrap().bounds.0,
-            13.0,
-            "the earlier move was not undone"
-        );
+        assert_eq!(c.object_format(s, o).unwrap().bounds.0, 13.0, "the earlier move was not undone");
         assert_eq!(c.commit_text_session(), Ok(true));
         assert!(!c.has_text_session());
         let (text, runs, _) = text_state(&c);
         assert_eq!(text, "Alpha Beta\nGamma");
-        assert!(
-            runs.iter()
-                .any(|r| r.text.starts_with("Beta") && r.style.italic),
-            "{runs:?}"
-        );
+        assert!(runs.iter().any(|r| r.text.starts_with("Beta") && r.style.italic), "{runs:?}");
         assert_eq!(c.selection().mode, SelectionMode::Object);
         assert!(c.undo(), "one step");
         assert_eq!(text_state(&c), before);
@@ -3538,10 +2619,7 @@ mod tests {
         c.edit_text_session(|t| t.replace(0, 0, "Discard ").unwrap());
         assert!(c.cancel_text_session());
         assert_eq!(text_state(&c), before);
-        assert_eq!(
-            (c.dirty.get(), c.revision(), c.can_redo()),
-            (dirty, revision, redo)
-        );
+        assert_eq!((c.dirty.get(), c.revision(), c.can_redo()), (dirty, revision, redo));
         // A session that changed nothing commits nothing.
         assert!(c.begin_text_session(s, o));
         assert_eq!(c.commit_text_session(), Ok(false));
@@ -3564,14 +2642,8 @@ mod tests {
             }
         });
         assert_eq!(c.commit_text_session(), Err(TextSessionError::Changed));
-        assert!(
-            c.has_text_session(),
-            "kept open so the editor can show the error"
-        );
-        assert!(
-            !c.replace_text_range(s, o, 0, 0, "x"),
-            "no direct edit under an open session"
-        );
+        assert!(c.has_text_session(), "kept open so the editor can show the error");
+        assert!(!c.replace_text_range(s, o, 0, 0, "x"), "no direct edit under an open session");
         assert!(c.cancel_text_session());
         assert!(c.begin_text_session(s, o));
         assert!(c.delete_object(s, o));
@@ -3586,10 +2658,7 @@ mod tests {
         use suite_common_core::document::Run;
         let c = styled_text_controller(vec![Run::plain("héllo wörld")], Default::default());
         let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
-        assert!(
-            !c.format_text_range(s, o, 2, 3, &FormatEdit::Bold(true)),
-            "mid-character"
-        );
+        assert!(!c.format_text_range(s, o, 2, 3, &FormatEdit::Bold(true)), "mid-character");
         assert!(!c.replace_text_range(s, o, 5, 2, "x"), "reversed");
         assert!(!c.can_undo(), "rejected commands record nothing");
         let world = "héllo ".len();
@@ -3597,13 +2666,7 @@ mod tests {
         assert!(c.replace_text_range(s, o, 0, "héllo".len(), "hi"));
         let (text, runs, _) = text_state(&c);
         assert_eq!(text, "hi wörld");
-        assert_eq!(
-            runs.iter()
-                .filter(|r| r.style.bold)
-                .map(|r| r.text.as_str())
-                .collect::<String>(),
-            "wörld"
-        );
+        assert_eq!(runs.iter().filter(|r| r.style.bold).map(|r| r.text.as_str()).collect::<String>(), "wörld");
         assert!(c.undo());
         assert!(c.undo());
         assert_eq!(text_state(&c).0, "héllo wörld");

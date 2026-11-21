@@ -16,49 +16,17 @@ use proptest::prelude::*;
 
 #[derive(Clone, Debug)]
 enum Step {
-    AddObject {
-        slide: usize,
-        x: f64,
-    },
-    DeleteObject {
-        slide: usize,
-        index: usize,
-    },
-    MoveObject {
-        slide: usize,
-        index: usize,
-        dx: f64,
-    },
-    Resize {
-        slide: usize,
-        index: usize,
-        w: f64,
-    },
-    Rotate {
-        slide: usize,
-        index: usize,
-        angle: f64,
-    },
-    ZOrder {
-        slide: usize,
-        index: usize,
-        front: bool,
-    },
-    AddSlide {
-        at: usize,
-    },
-    DeleteSlide {
-        slide: usize,
-    },
-    DuplicateSlide {
-        slide: usize,
-    },
-    SlideUp {
-        slide: usize,
-    },
-    SlideDown {
-        slide: usize,
-    },
+    AddObject { slide: usize, x: f64 },
+    DeleteObject { slide: usize, index: usize },
+    MoveObject { slide: usize, index: usize, dx: f64 },
+    Resize { slide: usize, index: usize, w: f64 },
+    Rotate { slide: usize, index: usize, angle: f64 },
+    ZOrder { slide: usize, index: usize, front: bool },
+    AddSlide { at: usize },
+    DeleteSlide { slide: usize },
+    DuplicateSlide { slide: usize },
+    SlideUp { slide: usize },
+    SlideDown { slide: usize },
     Undo,
     Redo,
 }
@@ -68,26 +36,10 @@ fn step() -> impl Strategy<Value = Step> {
     prop_oneof![
         (n.clone(), 0.0..900.0).prop_map(|(slide, x)| Step::AddObject { slide, x }),
         (n.clone(), n.clone()).prop_map(|(slide, index)| Step::DeleteObject { slide, index }),
-        (n.clone(), n.clone(), 1.0..50.0).prop_map(|(slide, index, dx)| Step::MoveObject {
-            slide,
-            index,
-            dx
-        }),
-        (n.clone(), n.clone(), 30.0..300.0).prop_map(|(slide, index, w)| Step::Resize {
-            slide,
-            index,
-            w
-        }),
-        (n.clone(), n.clone(), 1.0..359.0).prop_map(|(slide, index, angle)| Step::Rotate {
-            slide,
-            index,
-            angle
-        }),
-        (n.clone(), n.clone(), any::<bool>()).prop_map(|(slide, index, front)| Step::ZOrder {
-            slide,
-            index,
-            front
-        }),
+        (n.clone(), n.clone(), 1.0..50.0).prop_map(|(slide, index, dx)| Step::MoveObject { slide, index, dx }),
+        (n.clone(), n.clone(), 30.0..300.0).prop_map(|(slide, index, w)| Step::Resize { slide, index, w }),
+        (n.clone(), n.clone(), 1.0..359.0).prop_map(|(slide, index, angle)| Step::Rotate { slide, index, angle }),
+        (n.clone(), n.clone(), any::<bool>()).prop_map(|(slide, index, front)| Step::ZOrder { slide, index, front }),
         n.clone().prop_map(|at| Step::AddSlide { at }),
         n.clone().prop_map(|slide| Step::DeleteSlide { slide }),
         n.clone().prop_map(|slide| Step::DuplicateSlide { slide }),
@@ -99,18 +51,11 @@ fn step() -> impl Strategy<Value = Step> {
 }
 
 fn rect(x: f64) -> SlideObject {
-    SlideObject::Rect {
-        x,
-        y: 10.0,
-        w: 20.0,
-        h: 20.0,
-        rotation: 0.0,
-    }
+    SlideObject::Rect { x, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 }
 }
 
 fn slide(title: &str, xs: &[f64]) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: title.into(),
         background: "#ffffff".into(),
         background_picture: None,
@@ -294,20 +239,14 @@ fn undoing_an_added_slide_and_object_repairs_a_selection_past_the_end() {
     assert_eq!(c.selected_slide_index(), Some(1));
     assert_eq!(c.selected_object_indices(), vec![0]);
     assert!(c.undo());
-    assert_eq!(
-        c.selection().object_ids,
-        Vec::<u64>::new(),
-        "the object went with the undo"
-    );
+    assert_eq!(c.selection().object_ids, Vec::<u64>::new(), "the object went with the undo");
     assert!(c.undo());
     assert_eq!(c.selected_slide_index(), Some(0), "so did the slide");
-    assert!(
-        c.selection().object_ids.is_empty(),
-        "object 0 of another slide is not what was selected"
-    );
+    assert!(c.selection().object_ids.is_empty(), "object 0 of another slide is not what was selected");
     assert!(c.redo() && c.redo());
     // Redo applies onto the current selection, which stays put (repaired):
     // only undo restores the selection a step saw.
     assert_eq!(c.selected_slide_index(), Some(0));
     assert!(c.selection().object_ids.is_empty());
 }
+

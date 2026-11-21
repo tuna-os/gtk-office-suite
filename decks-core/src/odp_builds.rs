@@ -54,21 +54,13 @@ pub(crate) fn animations_xml(builds: &[Build], id: impl Fn(u64) -> String) -> Op
         let (class, preset, sub) = match (b.effect, b.out) {
             (BuildEffect::Appear, false) => ("entrance", "ooo-entrance-appear", None),
             (BuildEffect::Dissolve, false) => ("entrance", "ooo-entrance-fade-in", None),
-            (BuildEffect::Move(e), false) => {
-                ("entrance", "ooo-entrance-fly-in", Some(edge_name(e, false)))
-            }
+            (BuildEffect::Move(e), false) => ("entrance", "ooo-entrance-fly-in", Some(edge_name(e, false))),
             (BuildEffect::Appear, true) => ("exit", "ooo-exit-disappear", None),
             (BuildEffect::Dissolve, true) => ("exit", "ooo-exit-fade-out", None),
             (BuildEffect::Move(e), true) => ("exit", "ooo-exit-fly-out", Some(edge_name(e, true))),
         };
-        let sub_attr = sub
-            .map(|s| format!(" presentation:preset-sub-type=\"{s}\""))
-            .unwrap_or_default();
-        let (vis, vis_begin) = if b.out {
-            ("hidden", "0.5s")
-        } else {
-            ("visible", "0s")
-        };
+        let sub_attr = sub.map(|s| format!(" presentation:preset-sub-type=\"{s}\"")).unwrap_or_default();
+        let (vis, vis_begin) = if b.out { ("hidden", "0.5s") } else { ("visible", "0s") };
         let set = format!(
             "<anim:set smil:begin=\"{vis_begin}\" smil:dur=\"0.001s\" smil:fill=\"hold\" smil:targetElement=\"{target}\" \
              smil:attributeName=\"visibility\" smil:to=\"{vis}\"/>"
@@ -93,11 +85,7 @@ pub(crate) fn animations_xml(builds: &[Build], id: impl Fn(u64) -> String) -> Op
                 )
             }
         };
-        let effect = if b.out {
-            format!("{motion}{set}")
-        } else {
-            format!("{set}{motion}")
-        };
+        let effect = if b.out { format!("{motion}{set}") } else { format!("{set}{motion}") };
         clicks.push_str(&format!(
             "<anim:par smil:begin=\"next\"><anim:par smil:begin=\"0s\">\
              <anim:par smil:begin=\"0s\" smil:fill=\"hold\" presentation:node-type=\"on-click\" \
@@ -142,12 +130,7 @@ impl BuildReader {
             if empty {
                 return;
             }
-            self.effect = Some((
-                out,
-                attr("presentation:preset-id").unwrap_or_default(),
-                attr("presentation:preset-sub-type"),
-                None,
-            ));
+            self.effect = Some((out, attr("presentation:preset-id").unwrap_or_default(), attr("presentation:preset-sub-type"), None));
             self.depth = 0;
         }
     }
@@ -161,8 +144,7 @@ impl BuildReader {
             return;
         }
         if let Some((out, preset, sub, Some(target))) = self.effect.take() {
-            self.found
-                .push((out, effect_of(&preset, sub.as_deref()), target));
+            self.found.push((out, effect_of(&preset, sub.as_deref()), target));
         }
         self.effect = None;
     }
@@ -174,11 +156,7 @@ impl BuildReader {
             .iter()
             .filter_map(|(out, effect, target)| {
                 let object = ids.iter().find(|(xml, _)| xml == target)?.1;
-                Some(Build {
-                    object,
-                    effect: *effect,
-                    out: *out,
-                })
+                Some(Build { object, effect: *effect, out: *out })
             })
             .collect()
     }
@@ -209,57 +187,25 @@ mod tests {
         // Builds name stable object ids; the writer maps those to xml:ids
         // and the reader maps them back.
         let builds = vec![
-            Build {
-                object: 21,
-                effect: BuildEffect::Dissolve,
-                out: false,
-            },
-            Build {
-                object: 20,
-                effect: BuildEffect::Move(Edge::Left),
-                out: false,
-            },
-            Build {
-                object: 22,
-                effect: BuildEffect::Appear,
-                out: false,
-            },
-            Build {
-                object: 21,
-                effect: BuildEffect::Move(Edge::Bottom),
-                out: true,
-            },
-            Build {
-                object: 20,
-                effect: BuildEffect::Dissolve,
-                out: true,
-            },
+            Build { object: 21, effect: BuildEffect::Dissolve, out: false },
+            Build { object: 20, effect: BuildEffect::Move(Edge::Left), out: false },
+            Build { object: 22, effect: BuildEffect::Appear, out: false },
+            Build { object: 21, effect: BuildEffect::Move(Edge::Bottom), out: true },
+            Build { object: 20, effect: BuildEffect::Dissolve, out: true },
         ];
         let xml = animations_xml(&builds, |id| format!("o{id}")).unwrap();
         let found = read(&xml);
         let ids: Vec<(String, u64)> = [20, 21, 22].map(|id| (format!("o{id}"), id)).to_vec();
-        let r = BuildReader {
-            found,
-            ..Default::default()
-        };
+        let r = BuildReader { found, ..Default::default() };
         assert_eq!(r.builds(&ids), builds);
         assert_eq!(animations_xml(&[], |_| String::new()), None);
     }
 
     #[test]
     fn libreoffices_presets_read_as_the_nearest_effect() {
-        assert_eq!(
-            effect_of("ooo-entrance-wipe", Some("from-left")),
-            BuildEffect::Dissolve
-        );
-        assert_eq!(
-            effect_of("ooo-entrance-fly-in", Some("from-top")),
-            BuildEffect::Move(Edge::Top)
-        );
-        assert_eq!(
-            effect_of("ooo-exit-fly-out", Some("from-right")),
-            BuildEffect::Move(Edge::Right)
-        );
+        assert_eq!(effect_of("ooo-entrance-wipe", Some("from-left")), BuildEffect::Dissolve);
+        assert_eq!(effect_of("ooo-entrance-fly-in", Some("from-top")), BuildEffect::Move(Edge::Top));
+        assert_eq!(effect_of("ooo-exit-fly-out", Some("from-right")), BuildEffect::Move(Edge::Right));
         assert_eq!(effect_of("ooo-exit-disappear", None), BuildEffect::Appear);
     }
 }

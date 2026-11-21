@@ -8,32 +8,18 @@
 
 use gtk4::gio;
 use gtk4::gio::prelude::*;
-use suite_common::locations::{
-    commit_save, open_location, remote_uri, save_location, CHANGED_ELSEWHERE,
-};
+use suite_common::locations::{commit_save, open_location, remote_uri, save_location, CHANGED_ELSEWHERE};
 
 fn remote_dir() -> Option<gio::File> {
-    std::env::var("TUNAOS_REMOTE_DIR")
-        .ok()
-        .map(|uri| gio::File::for_uri(&uri))
+    std::env::var("TUNAOS_REMOTE_DIR").ok().map(|uri| gio::File::for_uri(&uri))
 }
 
 fn put(file: &gio::File, bytes: &[u8]) {
-    file.replace_contents(
-        bytes,
-        None,
-        false,
-        gio::FileCreateFlags::NONE,
-        None::<&gio::Cancellable>,
-    )
-    .unwrap();
+    file.replace_contents(bytes, None, false, gio::FileCreateFlags::NONE, None::<&gio::Cancellable>).unwrap();
 }
 
 fn get(file: &gio::File) -> Vec<u8> {
-    file.load_contents(None::<&gio::Cancellable>)
-        .unwrap()
-        .0
-        .to_vec()
+    file.load_contents(None::<&gio::Cancellable>).unwrap().0.to_vec()
 }
 
 #[test]
@@ -66,24 +52,10 @@ fn a_document_at_a_remote_location_opens_saves_and_refuses_to_overwrite_a_newer_
 
     // Someone else changes it: the next save is refused, and their
     // version stays.
-    let etag_before = file
-        .query_info(
-            "etag::value",
-            gio::FileQueryInfoFlags::NONE,
-            None::<&gio::Cancellable>,
-        )
-        .unwrap()
-        .etag();
+    let etag_before = file.query_info("etag::value", gio::FileQueryInfoFlags::NONE, None::<&gio::Cancellable>).unwrap().etag();
     std::thread::sleep(std::time::Duration::from_millis(1100));
     put(&file, b"their version");
-    let etag_after = file
-        .query_info(
-            "etag::value",
-            gio::FileQueryInfoFlags::NONE,
-            None::<&gio::Cancellable>,
-        )
-        .unwrap()
-        .etag();
+    let etag_after = file.query_info("etag::value", gio::FileQueryInfoFlags::NONE, None::<&gio::Cancellable>).unwrap().etag();
     println!("etag before: {etag_before:?}, after someone else's save: {etag_after:?}");
     std::fs::write(&staged, b"my version").unwrap();
     match commit_save(&staged) {

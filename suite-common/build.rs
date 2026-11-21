@@ -19,8 +19,7 @@ fn main() {
         writeln!(xml, "    <file>{name}</file>").unwrap();
     }
     xml.push_str("  </gresource>\n</gresources>\n");
-    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap())
-        .join("suite-icons.gresource.xml");
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("suite-icons.gresource.xml");
     std::fs::write(&out, xml).unwrap();
     glib_build_tools::compile_resources(&["icons"], out.to_str().unwrap(), "suite-icons.gresource");
 }

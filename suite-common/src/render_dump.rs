@@ -81,9 +81,7 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
     let last = std::cell::Cell::new((0, 0));
     let stable = std::cell::Cell::new(0u32);
     glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
-        let window = app
-            .downcast_ref::<gtk4::Application>()
-            .and_then(|a| a.active_window());
+        let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
         let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
         if size == last.get() && size != (0, 0) {
             stable.set(stable.get() + 1);
@@ -91,11 +89,9 @@ pub fn schedule_export(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized =
-            !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
-        let ready =
-            elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
+        let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         if !ready && elapsed < std::time::Duration::from_secs(15) {
             return glib::ControlFlow::Continue;
         }
@@ -154,11 +150,7 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
     if let Some(display) = gtk4::gdk::Display::default() {
         let css = gtk4::CssProvider::new();
         css.load_from_string("* { caret-color: transparent; }");
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &css,
-            gtk4::STYLE_PROVIDER_PRIORITY_USER,
-        );
+        gtk4::style_context_add_provider_for_display(&display, &css, gtk4::STYLE_PROVIDER_PRIORITY_USER);
     }
     let app = app.as_ref().clone();
     // Wait for the window to settle before capturing: at least 1.5 s (Letters
@@ -173,9 +165,7 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
     let last = std::cell::Cell::new((0, 0));
     let stable = std::cell::Cell::new(0u32);
     glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
-        let window = app
-            .downcast_ref::<gtk4::Application>()
-            .and_then(|a| a.active_window());
+        let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
         let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
         if size == last.get() && size != (0, 0) {
             stable.set(stable.get() + 1);
@@ -183,11 +173,9 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
             stable.set(0);
             last.set(size);
         }
-        let maximized =
-            !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
+        let maximized = !wait_for_maximized(hold) || window.as_ref().is_some_and(|w| w.is_maximized());
         let elapsed = start.elapsed();
-        let ready =
-            elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
+        let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
         // Give up waiting after 15 s and capture what there is; the lab's
         // own checks (template match, A-vs-B agreement) will say so.
         if !ready && elapsed < std::time::Duration::from_secs(15) {
@@ -220,24 +208,14 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
 pub fn write_geometry(widget: &impl IsA<gtk4::Widget>, rects: &[(f64, f64, f64, f64)]) {
     let Some(dir) = dump_dir() else { return };
     let widget = widget.as_ref();
-    let (Some(root), Some(native)) = (widget.root(), widget.native()) else {
-        return;
-    };
-    let Some(origin) = widget.compute_point(&root, &gtk4::graphene::Point::new(0.0, 0.0)) else {
-        return;
-    };
+    let (Some(root), Some(native)) = (widget.root(), widget.native()) else { return };
+    let Some(origin) = widget.compute_point(&root, &gtk4::graphene::Point::new(0.0, 0.0)) else { return };
     // The surface includes client-side decoration shadows around the root.
     let (sx, sy) = native.surface_transform();
     let json: Vec<String> = rects
         .iter()
         .map(|(x, y, w, h)| {
-            format!(
-                "[{:.1},{:.1},{:.1},{:.1}]",
-                x + origin.x() as f64 + sx,
-                y + origin.y() as f64 + sy,
-                w,
-                h
-            )
+            format!("[{:.1},{:.1},{:.1},{:.1}]", x + origin.x() as f64 + sx, y + origin.y() as f64 + sy, w, h)
         })
         .collect();
     let _ = std::fs::write(dir.join("geom.json"), format!("[{}]", json.join(",")));
@@ -264,9 +242,7 @@ pub fn widget_to_png(
     let paintable = gtk4::WidgetPaintable::new(Some(widget));
     let snapshot = gtk4::Snapshot::new();
     paintable.snapshot(&snapshot, w, h);
-    let node = snapshot
-        .to_node()
-        .ok_or("widget produced no render node (drew nothing)")?;
+    let node = snapshot.to_node().ok_or("widget produced no render node (drew nothing)")?;
     let renderer = widget
         .native()
         .and_then(|n| n.renderer())

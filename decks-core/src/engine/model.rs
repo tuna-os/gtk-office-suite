@@ -77,11 +77,7 @@ pub fn slide_page_size_pt() -> (f64, f64) {
 /// shows them all rather than nothing.
 pub fn shown_slides(slides: &[Slide]) -> Vec<usize> {
     let shown: Vec<usize> = (0..slides.len()).filter(|&i| !slides[i].hidden).collect();
-    if shown.is_empty() {
-        (0..slides.len()).collect()
-    } else {
-        shown
-    }
+    if shown.is_empty() { (0..slides.len()).collect() } else { shown }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -139,7 +135,8 @@ impl Slide {
 }
 
 /// A picture a background is filled with, stretched (`a:stretch`).
-#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BackgroundPicture {
     /// The picture's file (an imported one lives in the media cache).
     pub path: String,
@@ -153,7 +150,8 @@ pub struct BackgroundPicture {
 /// pptx's `a:fillRect`. Negative reaches past the box, as the pay centre
 /// decks' title pictures do by 1% on each side (`l="-1000" r="-1000"`):
 /// what is past the edge is cut. All zero fills the box exactly.
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct FillRect {
     pub left: f64,
     pub top: f64,
@@ -183,7 +181,8 @@ impl FillRect {
 /// its width (left, right) and height (top, bottom): pptx's `a:srcRect`
 /// and ODF's `fo:clip`. The rest is stretched to the picture's box, which
 /// is how PowerPoint and Impress draw a picture, cropped or not.
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Crop {
     pub left: f64,
     pub top: f64,
@@ -215,24 +214,17 @@ impl Crop {
         let (src, dst) = (iw / ih, bw / bh);
         if src > dst {
             let cut = (1.0 - dst / src) / 2.0;
-            Crop {
-                left: cut,
-                right: cut,
-                ..Default::default()
-            }
+            Crop { left: cut, right: cut, ..Default::default() }
         } else {
             let cut = (1.0 - src / dst) / 2.0;
-            Crop {
-                top: cut,
-                bottom: cut,
-                ..Default::default()
-            }
+            Crop { top: cut, bottom: cut, ..Default::default() }
         }
     }
 }
 
 /// A slide transition.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum Transition {
     #[default]
     None,
@@ -246,13 +238,7 @@ pub enum Transition {
 }
 
 impl Transition {
-    pub const ALL: [Transition; 5] = [
-        Transition::None,
-        Transition::Fade,
-        Transition::Push,
-        Transition::Wipe,
-        Transition::MagicMove,
-    ];
+    pub const ALL: [Transition; 5] = [Transition::None, Transition::Fade, Transition::Push, Transition::Wipe, Transition::MagicMove];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -325,11 +311,7 @@ impl MasterSlide {
     /// not have drawn is a round-trip of something nothing honours.
     pub fn font_family(&self) -> &str {
         let named = self.default_font.trim();
-        if named.is_empty() {
-            Self::DEFAULT_FONT
-        } else {
-            named
-        }
+        if named.is_empty() { Self::DEFAULT_FONT } else { named }
     }
 
     /// The layout `id` of this master, if it still has one by that id.
@@ -344,14 +326,12 @@ impl MasterSlide {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum SlideObject {
     TextBox {
         text: String,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+        x: f64, y: f64, w: f64, h: f64,
         rotation: f64,
         /// Styled runs (shared WYSIWYG primitive with Letters). When
         /// non-empty, concatenated run text equals `text`.
@@ -360,58 +340,33 @@ pub enum SlideObject {
         /// vertical anchor and insets. `TextBody::default()` is a plain box.
         body: super::text_body::TextBody,
     },
-    Rect {
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
-        rotation: f64,
-    },
+    Rect { x: f64, y: f64, w: f64, h: f64, rotation: f64 },
     /// A preset shape with its own fill and outline (engine::shape). What
     /// the pptx and odp readers produce; `Rect` and `Circle` are the
     /// editor's older unstyled shapes.
     Shape {
         kind: super::shape::ShapeKind,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+        x: f64, y: f64, w: f64, h: f64,
         rotation: f64,
         style: super::shape::ShapeStyle,
     },
-    Circle {
-        x: f64,
-        y: f64,
-        r: f64,
-        rotation: f64,
-    },
+    Circle { x: f64, y: f64, r: f64, rotation: f64 },
     /// A picture, stretched to its box after `crop` trims its source.
     Image {
-        path: String,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
-        rotation: f64,
+        path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64,
         #[serde(default)]
         crop: Crop,
     },
     /// A table (engine::table): a grid of styled cells in a box.
     Table {
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+        x: f64, y: f64, w: f64, h: f64,
         rotation: f64,
         table: super::table::TableData,
     },
     /// A chart (engine::chart): one series drawn by the renderer Tables
     /// draws its charts with.
     Chart {
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
+        x: f64, y: f64, w: f64, h: f64,
         rotation: f64,
         chart: super::chart::ChartData,
     },
@@ -484,8 +439,7 @@ impl Deck {
             layouts: Vec::new(),
         };
         Self {
-            slides: vec![Slide {
-                hidden: false,
+            slides: vec![Slide { hidden: false,
                 title: "Slide 1".into(),
                 background: "#ffffff".into(),
                 background_picture: None,
@@ -520,9 +474,7 @@ impl Deck {
     /// theme relationship, or an ODP master): see
     /// [`super::theme::Theme::default_colors`].
     pub fn theme_of(&self, master: &MasterSlide) -> Option<&super::theme::Theme> {
-        master
-            .theme_id
-            .and_then(|id| self.themes.iter().find(|t| t.id == id))
+        master.theme_id.and_then(|id| self.themes.iter().find(|t| t.id == id))
     }
 
     /// The position of slide `id`, if it is still in the deck.
@@ -548,9 +500,7 @@ impl Deck {
     /// The layout a slide uses, resolved by stable id within its master.
     pub fn layout_of(&self, slide: &Slide) -> Option<&crate::layouts::Layout> {
         let master = self.master_of(slide)?;
-        slide
-            .layout_id
-            .and_then(|id| master.layouts.iter().find(|l| l.id == id))
+        slide.layout_id.and_then(|id| master.layouts.iter().find(|l| l.id == id))
     }
 
     /// The view index of a slide's layout within its master, for combo rows
@@ -558,9 +508,7 @@ impl Deck {
     /// point of use; `None` when the slide uses no listed layout.
     pub fn layout_index(&self, slide: &Slide) -> Option<usize> {
         let master = self.master_of(slide)?;
-        slide
-            .layout_id
-            .and_then(|id| master.layouts.iter().position(|l| l.id == id))
+        slide.layout_id.and_then(|id| master.layouts.iter().position(|l| l.id == id))
     }
 }
 
@@ -582,10 +530,7 @@ mod page_size_tests {
     #[test]
     fn the_pdf_page_keeps_the_slide_aspect() {
         let (w, h) = slide_page_size_pt();
-        assert!(
-            (w / h - 16.0 / 9.0).abs() < 1e-9,
-            "16:9 like the model slide: {w}x{h}"
-        );
+        assert!((w / h - 16.0 / 9.0).abs() < 1e-9, "16:9 like the model slide: {w}x{h}");
     }
 }
 
@@ -595,19 +540,11 @@ mod crop_tests {
 
     #[test]
     fn the_source_rect_is_what_the_crop_leaves() {
-        let c = Crop {
-            left: 0.25,
-            top: 0.1,
-            right: 0.0,
-            bottom: 0.2,
-        };
+        let c = Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
         let (x, y, w, h) = c.source_rect(400.0, 300.0);
         assert_eq!((x, w), (100.0, 300.0));
         assert!((y - 30.0).abs() < 1e-9 && (h - 210.0).abs() < 1e-9);
-        assert_eq!(
-            Crop::default().source_rect(400.0, 300.0),
-            (0.0, 0.0, 400.0, 300.0)
-        );
+        assert_eq!(Crop::default().source_rect(400.0, 300.0), (0.0, 0.0, 400.0, 300.0));
     }
 
     #[test]
@@ -616,13 +553,7 @@ mod crop_tests {
         assert_eq!((tall.left, tall.right), (0.0, 0.0));
         assert!((tall.top - 0.375).abs() < 1e-9 && (tall.bottom - 0.375).abs() < 1e-9);
         let (_, _, w, h) = tall.source_rect(100.0, 400.0);
-        assert!(
-            (w / h - 1.0).abs() < 1e-9,
-            "what is left has the box's shape"
-        );
-        assert!(
-            Crop::fill(200.0, 100.0, 400.0, 200.0).is_none(),
-            "same shape: nothing to cut"
-        );
+        assert!((w / h - 1.0).abs() < 1e-9, "what is left has the box's shape");
+        assert!(Crop::fill(200.0, 100.0, 400.0, 200.0).is_none(), "same shape: nothing to cut");
     }
 }

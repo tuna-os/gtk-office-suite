@@ -20,13 +20,7 @@ use decks_core::layouts::{Layout, LayoutKind, LayoutPlaceholder, Placeholder};
 fn theme(id: u64, accent1: &str, source: &str) -> Theme {
     let colors: BTreeMap<String, String> = Theme::default_colors()
         .into_iter()
-        .map(|(k, v)| {
-            if k == "accent1" {
-                (k, accent1.to_string())
-            } else {
-                (k, v)
-            }
-        })
+        .map(|(k, v)| if k == "accent1" { (k, accent1.to_string()) } else { (k, v) })
         .collect();
     Theme {
         id,
@@ -44,21 +38,13 @@ fn theme(id: u64, accent1: &str, source: &str) -> Theme {
 fn inheritor(kind: ShapeKind, resolved: Color) -> SlideObject {
     SlideObject::Shape {
         kind,
-        x: 10.0,
-        y: 10.0,
-        w: 100.0,
-        h: 100.0,
+        x: 10.0, y: 10.0, w: 100.0, h: 100.0,
         rotation: 0.0,
-        style: ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None,
             fill: Some(resolved),
             gradient: None,
             stroke: None,
-            fill_src: Some(FillSrc::Color(ColorRef::Theme(ThemeColor::unmodulated(
-                "accent1",
-            )))),
+            fill_src: Some(FillSrc::Color(ColorRef::Theme(ThemeColor::unmodulated("accent1")))),
             stroke_src: None,
         },
     }
@@ -67,15 +53,9 @@ fn inheritor(kind: ShapeKind, resolved: Color) -> SlideObject {
 fn local(kind: ShapeKind) -> SlideObject {
     SlideObject::Shape {
         kind,
-        x: 10.0,
-        y: 10.0,
-        w: 100.0,
-        h: 100.0,
+        x: 10.0, y: 10.0, w: 100.0, h: 100.0,
         rotation: 0.0,
-        style: ShapeStyle {
-            glow: None,
-            shadow: None,
-            fill_alpha: None,
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None,
             fill: Some(Color(0x00, 0x80, 0x00)),
             gradient: None,
             stroke: None,
@@ -86,8 +66,7 @@ fn local(kind: ShapeKind) -> SlideObject {
 }
 
 fn slide_on(master_id: u64, background: &str, objects: Vec<SlideObject>) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: "S".into(),
         background: background.into(),
         background_picture: None,
@@ -115,29 +94,13 @@ fn master(id: u64, name: &str, theme_id: u64) -> MasterSlide {
 }
 
 fn two_theme_deck() -> decks_core::engine::Deck {
-    let themes = vec![
-        theme(7, "FF0000", "ppt/theme/theme1.xml"),
-        theme(8, "0000FF", "ppt/theme/theme2.xml"),
-    ];
+    let themes = vec![theme(7, "FF0000", "ppt/theme/theme1.xml"), theme(8, "0000FF", "ppt/theme/theme2.xml")];
     let masters = vec![master(1, "Red", 7), master(2, "Blue", 8)];
     let slides = vec![
-        slide_on(
-            1,
-            "",
-            vec![
-                inheritor(ShapeKind::Rect, Color(0xFF, 0, 0)),
-                local(ShapeKind::Ellipse),
-            ],
-        ),
+        slide_on(1, "", vec![inheritor(ShapeKind::Rect, Color(0xFF, 0, 0)), local(ShapeKind::Ellipse)]),
         slide_on(2, "", vec![inheritor(ShapeKind::Rect, Color(0, 0, 0xFF))]),
     ];
-    decks_core::engine::Deck {
-        slides,
-        masters,
-        page_size: None,
-        themes,
-        skipped_slides: Vec::new(),
-    }
+    decks_core::engine::Deck { slides, masters, page_size: None, themes, skipped_slides: Vec::new() }
 }
 
 fn part(path: &std::path::Path, name: &str) -> String {
@@ -148,9 +111,7 @@ fn part(path: &std::path::Path, name: &str) -> String {
 }
 
 fn accent_of(deck: &decks_core::engine::Deck, slide: usize) -> Color {
-    let m = deck
-        .master_of(&deck.slides[slide])
-        .expect("the slide's master");
+    let m = deck.master_of(&deck.slides[slide]).expect("the slide's master");
     let t = deck.theme_of(m).expect("the master's theme");
     t.slot("accent1").expect("accent1")
 }
@@ -163,31 +124,14 @@ fn multiple_themes_keep_local_overrides() {
     let path = dir.path().join("two-themes.pptx");
     decks_core::engine::write_pptx(path.to_str().unwrap(), &two_theme_deck()).unwrap();
     // One theme part per master, each carrying its own accent.
-    assert!(
-        part(&path, "ppt/theme/theme1.xml").contains("val=\"FF0000\""),
-        "theme 1 keeps its red"
-    );
-    assert!(
-        part(&path, "ppt/theme/theme2.xml").contains("val=\"0000FF\""),
-        "theme 2 keeps its blue"
-    );
-    assert!(
-        part(&path, "ppt/slides/slide1.xml").contains("val=\"accent1\""),
-        "the reference writes back as a token"
-    );
+    assert!(part(&path, "ppt/theme/theme1.xml").contains("val=\"FF0000\""), "theme 1 keeps its red");
+    assert!(part(&path, "ppt/theme/theme2.xml").contains("val=\"0000FF\""), "theme 2 keeps its blue");
+    assert!(part(&path, "ppt/slides/slide1.xml").contains("val=\"accent1\""), "the reference writes back as a token");
 
     let back = decks_core::engine::read_pptx(path.to_str().unwrap()).unwrap();
     assert_eq!(back.themes.len(), 2, "both themes are retained");
-    assert_eq!(
-        accent_of(&back, 0),
-        Color(0xFF, 0, 0),
-        "master 1 inherits red"
-    );
-    assert_eq!(
-        accent_of(&back, 1),
-        Color(0, 0, 0xFF),
-        "master 2 inherits blue"
-    );
+    assert_eq!(accent_of(&back, 0), Color(0xFF, 0, 0), "master 1 inherits red");
+    assert_eq!(accent_of(&back, 1), Color(0, 0, 0xFF), "master 2 inherits blue");
     let fills: Vec<Option<Color>> = back.slides[0]
         .objects
         .iter()
@@ -196,25 +140,13 @@ fn multiple_themes_keep_local_overrides() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        fills,
-        vec![Some(Color(0xFF, 0, 0)), Some(Color(0, 0x80, 0))],
-        "inheritor moved, override stayed: {fills:?}"
-    );
+    assert_eq!(fills, vec![Some(Color(0xFF, 0, 0)), Some(Color(0, 0x80, 0))], "inheritor moved, override stayed: {fills:?}");
 
     // A second save through the retained model changes nothing.
     let again = dir.path().join("again.pptx");
     decks_core::engine::write_pptx(again.to_str().unwrap(), &back).unwrap();
-    for name in [
-        "ppt/theme/theme1.xml",
-        "ppt/theme/theme2.xml",
-        "ppt/slides/slide1.xml",
-    ] {
-        assert_eq!(
-            part(&again, name),
-            part(&path, name),
-            "{name} churned on a second save"
-        );
+    for name in ["ppt/theme/theme1.xml", "ppt/theme/theme2.xml", "ppt/slides/slide1.xml"] {
+        assert_eq!(part(&again, name), part(&path, name), "{name} churned on a second save");
     }
     let reopened = decks_core::engine::read_pptx(again.to_str().unwrap()).unwrap();
     assert_eq!(accent_of(&reopened, 0), Color(0xFF, 0, 0));
@@ -237,21 +169,13 @@ fn theme_colours_resolve_to_the_same_hex_in_odp() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        fills,
-        vec![Some(Color(0xFF, 0, 0)), Some(Color(0, 0x80, 0))],
-        "{fills:?}"
-    );
+    assert_eq!(fills, vec![Some(Color(0xFF, 0, 0)), Some(Color(0, 0x80, 0))], "{fills:?}");
     assert_eq!(back.slides[1].objects.len(), 1);
     let blue = match &back.slides[1].objects[0] {
         SlideObject::Shape { style, .. } => style.fill,
         other => panic!("{other:?}"),
     };
-    assert_eq!(
-        blue,
-        Some(Color(0, 0, 0xFF)),
-        "master 2 still inherits blue, as hex"
-    );
+    assert_eq!(blue, Some(Color(0, 0, 0xFF)), "master 2 still inherits blue, as hex");
 }
 
 #[test]
@@ -267,23 +191,10 @@ fn absent_backgrounds_stay_absent_through_both_formats() {
         let path = dir.path().join(format!("bg.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
-        assert_eq!(
-            back.slides[0].background, "",
-            "{ext}: the absent background stayed absent"
-        );
-        assert_eq!(
-            back.slides[1].background, "#ffffff",
-            "{ext}: the explicit white stayed explicit"
-        );
-        assert_eq!(
-            back.masters[0].background, "#0b3d6b",
-            "{ext}: the master colour survived"
-        );
-        let resolved = decks_core::layouts::resolve_background(
-            &back.slides[0].background,
-            None,
-            &back.masters[0].background,
-        );
+        assert_eq!(back.slides[0].background, "", "{ext}: the absent background stayed absent");
+        assert_eq!(back.slides[1].background, "#ffffff", "{ext}: the explicit white stayed explicit");
+        assert_eq!(back.masters[0].background, "#0b3d6b", "{ext}: the master colour survived");
+        let resolved = decks_core::layouts::resolve_background(&back.slides[0].background, None, &back.masters[0].background);
         assert_eq!(resolved, "#0b3d6b", "{ext}: absence inherits at draw time");
     }
 }
@@ -299,42 +210,18 @@ fn placeholder_indices_survive_a_pptx_round_trip() {
         background: None,
         shapes: Vec::new(),
         placeholders: vec![
-            LayoutPlaceholder {
-                id: 6,
-                role: Placeholder::Body,
-                x: 10.0,
-                y: 10.0,
-                w: 100.0,
-                h: 100.0,
-                source_ty: "obj".into(),
-                source_idx: Some(1),
-            },
-            LayoutPlaceholder {
-                id: 7,
-                role: Placeholder::Body,
-                x: 200.0,
-                y: 10.0,
-                w: 100.0,
-                h: 100.0,
-                source_ty: "obj".into(),
-                source_idx: Some(2),
-            },
+            LayoutPlaceholder { id: 6, role: Placeholder::Body, x: 10.0, y: 10.0, w: 100.0, h: 100.0, source_ty: "obj".into(), source_idx: Some(1) },
+            LayoutPlaceholder { id: 7, role: Placeholder::Body, x: 200.0, y: 10.0, w: 100.0, h: 100.0, source_ty: "obj".into(), source_idx: Some(2) },
         ],
     };
     let keyed = |idx: u32, text: &str| SlideObject::TextBox {
         text: text.into(),
-        x: 1.0,
-        y: 2.0,
-        w: 3.0,
-        h: 4.0,
+        x: 1.0, y: 2.0, w: 3.0, h: 4.0,
         rotation: 0.0,
         runs: Vec::new(),
         body: TextBody {
             placeholder: Some(Placeholder::Body),
-            placeholder_key: Some(decks_core::layouts::PlaceholderKey {
-                ty: "obj".into(),
-                idx: Some(idx),
-            }),
+            placeholder_key: Some(decks_core::layouts::PlaceholderKey { ty: "obj".into(), idx: Some(idx) }),
             ..Default::default()
         },
     };
@@ -357,18 +244,12 @@ fn placeholder_indices_survive_a_pptx_round_trip() {
         .iter()
         .map(|p| (p.source_ty.clone(), p.source_idx))
         .collect();
-    assert_eq!(
-        places,
-        vec![("obj".to_string(), Some(1)), ("obj".to_string(), Some(2))],
-        "{places:?}"
-    );
+    assert_eq!(places, vec![("obj".to_string(), Some(1)), ("obj".to_string(), Some(2))], "{places:?}");
     let keys: Vec<Option<u32>> = back.slides[0]
         .objects
         .iter()
         .filter_map(|o| match o {
-            SlideObject::TextBox { body, .. } => {
-                Some(body.placeholder_key.as_ref().and_then(|k| k.idx))
-            }
+            SlideObject::TextBox { body, .. } => Some(body.placeholder_key.as_ref().and_then(|k| k.idx)),
             _ => None,
         })
         .collect();

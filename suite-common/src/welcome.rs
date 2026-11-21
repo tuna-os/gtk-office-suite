@@ -19,8 +19,8 @@ use std::{cell::Cell, rc::Rc};
 use adw::prelude::*;
 use gtk4::{gio, glib};
 use libadwaita as adw;
-pub use suite_common_core::onboarding::SuiteApp;
 use suite_common_core::onboarding::{welcome, Welcome};
+pub use suite_common_core::onboarding::SuiteApp;
 
 use crate::i18n;
 
@@ -41,11 +41,7 @@ fn shared_settings() -> Option<gio::Settings> {
 /// The suite apps the system has a desktop file for: the ids of every
 /// application the desktop knows, matched against `<app id>.desktop`.
 fn installed() -> Vec<&'static str> {
-    let known: Vec<String> = gio::AppInfo::all()
-        .iter()
-        .filter_map(|a| a.id())
-        .map(|id| id.to_string())
-        .collect();
+    let known: Vec<String> = gio::AppInfo::all().iter().filter_map(|a| a.id()).map(|id| id.to_string()).collect();
     SuiteApp::ALL
         .iter()
         .map(|a| a.app_id())
@@ -57,18 +53,10 @@ fn installed() -> Vec<&'static str> {
 fn body(this: SuiteApp, w: &Welcome) -> String {
     let mut parts = Vec::new();
     if !w.missing_apps.is_empty() {
-        let names: Vec<String> = w
-            .missing_apps
-            .iter()
-            .map(|a| format!("\u{2022} {}", i18n(a.name())))
-            .collect();
-        parts.push(
-            i18n("%s works with the other apps in the suite.").replace("%s", &i18n(this.name())),
-        );
+        let names: Vec<String> = w.missing_apps.iter().map(|a| format!("\u{2022} {}", i18n(a.name()))).collect();
+        parts.push(i18n("%s works with the other apps in the suite.").replace("%s", &i18n(this.name())));
         parts.push(names.join("\n"));
-        parts.push(i18n(
-            "Install them from your software centre and they will work together.",
-        ));
+        parts.push(i18n("Install them from your software centre and they will work together."));
     }
     if w.offer_accounts {
         parts.push(i18n(
@@ -89,13 +77,9 @@ pub fn install(app: &adw::Application, this: SuiteApp) {
         if done.get() {
             return;
         }
-        let Some(window) = app.active_window() else {
-            return;
-        };
+        let Some(window) = app.active_window() else { return };
         done.set(true);
-        let Some(settings) = shared_settings() else {
-            return;
-        };
+        let Some(settings) = shared_settings() else { return };
         if settings.boolean(KEY) {
             return;
         }
@@ -103,20 +87,12 @@ pub fn install(app: &adw::Application, this: SuiteApp) {
         glib::spawn_future_local(async move {
             // Off the main thread: GOA may have to be started first. `None`
             // (could not look) offers no account, never a wrong one.
-            let book = gio::spawn_blocking(crate::online_accounts::read)
-                .await
-                .ok()
-                .flatten();
+            let book = gio::spawn_blocking(crate::online_accounts::read).await.ok().flatten();
             let needs_mail_account = book.is_some_and(|b| b.needs_first_run());
             let ids = installed();
-            let Some(w) = welcome(this, &ids, needs_mail_account, settings.boolean(KEY)) else {
-                return;
-            };
-            let Some(window) = window.upgrade() else {
-                return;
-            };
-            let dialog =
-                adw::AlertDialog::new(Some(&i18n("Welcome to the Suite")), Some(&body(this, &w)));
+            let Some(w) = welcome(this, &ids, needs_mail_account, settings.boolean(KEY)) else { return };
+            let Some(window) = window.upgrade() else { return };
+            let dialog = adw::AlertDialog::new(Some(&i18n("Welcome to the Suite")), Some(&body(this, &w)));
             dialog.add_response("ok", &i18n("_OK"));
             dialog.set_default_response(Some("ok"));
             dialog.set_close_response("ok");
@@ -133,35 +109,20 @@ mod tests {
 
     #[test]
     fn the_text_names_each_missing_app_and_how_to_get_it() {
-        let w = Welcome {
-            missing_apps: vec![SuiteApp::Tables, SuiteApp::Decks],
-            offer_accounts: false,
-        };
+        let w = Welcome { missing_apps: vec![SuiteApp::Tables, SuiteApp::Decks], offer_accounts: false };
         let text = body(SuiteApp::Letters, &w);
-        assert!(
-            text.contains("\u{2022} Tables") && text.contains("\u{2022} Decks"),
-            "{text}"
-        );
+        assert!(text.contains("\u{2022} Tables") && text.contains("\u{2022} Decks"), "{text}");
         assert!(!text.contains("\u{2022} Letters"), "{text}");
-        assert!(
-            text.starts_with("Letters works with the other apps in the suite."),
-            "{text}"
-        );
+        assert!(text.starts_with("Letters works with the other apps in the suite."), "{text}");
         assert!(text.contains("software centre"), "{text}");
         assert!(!text.contains("Online Accounts"), "{text}");
     }
 
     #[test]
     fn with_every_app_installed_it_only_says_where_to_add_mail() {
-        let w = Welcome {
-            missing_apps: vec![],
-            offer_accounts: true,
-        };
+        let w = Welcome { missing_apps: vec![], offer_accounts: true };
         let text = body(SuiteApp::Letters, &w);
         assert!(text.starts_with("To send documents by email"), "{text}");
-        assert!(
-            text.contains("Online Accounts") && !text.contains("software centre"),
-            "{text}"
-        );
+        assert!(text.contains("Online Accounts") && !text.contains("software centre"), "{text}");
     }
 }

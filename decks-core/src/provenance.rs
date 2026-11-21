@@ -628,8 +628,7 @@ mod tests {
     fn every_op_variant_records_a_dependency() {
         use crate::engine::SlideObject;
         let slide = || {
-            Box::new(crate::engine::Slide {
-                hidden: false,
+            Box::new(crate::engine::Slide { hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,

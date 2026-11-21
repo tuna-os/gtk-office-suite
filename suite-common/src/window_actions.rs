@@ -32,11 +32,7 @@ pub struct Registration {
 /// Call before building a window that registers document actions.
 pub fn begin(app: &impl IsA<gtk::Application>) -> Registration {
     let app = app.as_ref();
-    let before = app
-        .list_actions()
-        .iter()
-        .filter_map(|name| app.lookup_action(name))
-        .collect();
+    let before = app.list_actions().iter().filter_map(|name| app.lookup_action(name)).collect();
     Registration { before }
 }
 
@@ -129,22 +125,15 @@ mod tests {
             registration.finish(&app, &second);
 
             let is_current = |action: &gio::SimpleAction| {
-                app.lookup_action(&action.name()).as_ref()
-                    == Some(action.upcast_ref::<gio::Action>())
+                app.lookup_action(&action.name()).as_ref() == Some(action.upcast_ref::<gio::Action>())
             };
-            assert!(
-                is_current(&save_2),
-                "the newest window's, until another is active"
-            );
+            assert!(is_current(&save_2), "the newest window's, until another is active");
 
             install_for(&app, &first);
             assert!(is_current(&save_1) && is_current(&undo_1));
             install_for(&app, &second);
             assert!(is_current(&save_2) && is_current(&undo_2));
-            assert!(
-                is_current(&quit),
-                "an action no window registered stays as it was"
-            );
+            assert!(is_current(&quit), "an action no window registered stays as it was");
 
             first.destroy();
             second.destroy();

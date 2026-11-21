@@ -69,18 +69,16 @@ fn mutate(seed: u64, base: &[u8]) -> Vec<u8> {
 fn valid_odp() -> Vec<u8> {
     let mut deck = decks_core::engine::Deck::default();
     if let Some(slide) = deck.slides.first_mut() {
-        slide
-            .objects
-            .push(decks_core::engine::SlideObject::TextBox {
-                x: 40.0,
-                y: 40.0,
-                w: 300.0,
-                h: 80.0,
-                text: "A slide with an object on it".into(),
-                runs: Vec::new(),
-                rotation: 0.0,
-                body: Default::default(),
-            });
+        slide.objects.push(decks_core::engine::SlideObject::TextBox {
+            x: 40.0,
+            y: 40.0,
+            w: 300.0,
+            h: 80.0,
+            text: "A slide with an object on it".into(),
+            runs: Vec::new(),
+            rotation: 0.0,
+            body: Default::default(),
+        });
     }
     decks_core::odp::write_bytes(&deck).expect("write an odp")
 }
@@ -117,9 +115,7 @@ fn package(content: &str) -> Vec<u8> {
     let mut buffer = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
-        writer
-            .start_file("content.xml", SimpleFileOptions::default())
-            .unwrap();
+        writer.start_file("content.xml", SimpleFileOptions::default()).unwrap();
         writer.write_all(content.as_bytes()).unwrap();
         writer.finish().unwrap();
     }
@@ -195,21 +191,9 @@ fn hostile_documents() -> Vec<(String, String)> {
     // Geometry a renderer would later multiply, clamp or allocate from.
     // Non-finite and negative sizes are the values that turn a drawing
     // command into a hang or a panic further down.
-    for value in [
-        "999999999999999999999cm",
-        "-5cm",
-        "NaNcm",
-        "1e400cm",
-        "0cm",
-        "cm",
-        "5",
-        "",
-    ] {
+    for value in ["999999999999999999999cm", "-5cm", "NaNcm", "1e400cm", "0cm", "cm", "5", ""] {
         cases.push((
-            format!(
-                "frame-geometry-{}",
-                if value.is_empty() { "empty" } else { value }
-            ),
+            format!("frame-geometry-{}", if value.is_empty() { "empty" } else { value }),
             format!(
                 "<office:document-content xmlns:office=\"o\" xmlns:text=\"t\" \
                  xmlns:draw=\"d\" xmlns:svg=\"sv\"><office:body><office:presentation>\
@@ -302,10 +286,7 @@ fn mutated_packages_are_errors_not_crashes() {
             }
         }
     }
-    assert!(
-        panicked.is_empty(),
-        "the reader panicked on seeds: {panicked:?}"
-    );
+    assert!(panicked.is_empty(), "the reader panicked on seeds: {panicked:?}");
 }
 
 /// The loss scan over mutated packages: it must never panic, it must still
@@ -325,11 +306,7 @@ fn loss_scan_of_mutated_packages_never_panics_and_never_authorizes_on_failure() 
         let report = decks_core::loss::content_a_save_drops(path.to_str().unwrap());
         let mut v: Vec<String> = report.features.iter().map(|f| f.id.clone()).collect();
         v.sort();
-        (
-            v,
-            report.has_hard_errors(),
-            report.validate_save(true).is_ok(),
-        )
+        (v, report.has_hard_errors(), report.validate_save(true).is_ok())
     };
     let (v, hard, confirmed) = ids(&unmutated);
     assert_eq!(v, ["animations", "comments", "media"]);
@@ -343,10 +320,7 @@ fn loss_scan_of_mutated_packages_never_panics_and_never_authorizes_on_failure() 
             Err(_) => panic!("the loss scan panicked on seed {seed}"),
         };
         if hard {
-            assert!(
-                !confirmed,
-                "seed {seed}: a failed inspection authorized a confirmed save"
-            );
+            assert!(!confirmed, "seed {seed}: a failed inspection authorized a confirmed save");
         }
         let _ = v;
     }
@@ -366,10 +340,7 @@ fn mutated_document_xml_is_an_error_not_a_crash() {
             }
         }
     }
-    assert!(
-        panicked.is_empty(),
-        "the reader panicked on seeds: {panicked:?}"
-    );
+    assert!(panicked.is_empty(), "the reader panicked on seeds: {panicked:?}");
 }
 
 /// Every input under `tests/crashes/` is replayed.
@@ -392,9 +363,7 @@ fn every_retained_crash_input_still_reads_without_panicking() {
             if path.extension().is_some_and(|e| e == "md") || path.is_dir() {
                 continue;
             }
-            let Ok(bytes) = std::fs::read(&path) else {
-                continue;
-            };
+            let Ok(bytes) = std::fs::read(&path) else { continue };
             replayed += 1;
             if read_without_unwinding(&bytes).is_err() {
                 panicked.push(path.file_name().unwrap().to_string_lossy().to_string());
@@ -402,14 +371,8 @@ fn every_retained_crash_input_still_reads_without_panicking() {
         }
     }
 
-    assert!(
-        panicked.is_empty(),
-        "retained crash inputs still panic: {panicked:?}"
-    );
-    println!(
-        "replayed {replayed} retained crash input(s) from {}",
-        dir.display()
-    );
+    assert!(panicked.is_empty(), "retained crash inputs still panic: {panicked:?}");
+    println!("replayed {replayed} retained crash input(s) from {}", dir.display());
 }
 
 /// The campaign-scale version, for the nightly. Ignored in the PR lane for
@@ -460,10 +423,7 @@ fn seed_campaign() {
 const DEEP_NESTING_CHILD: &str = "DEEP_NESTING_CHILD";
 
 fn depth() -> usize {
-    std::env::var("DEEP_NESTING_DEPTH")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(100_000)
+    std::env::var("DEEP_NESTING_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000)
 }
 
 fn nested(open: &str, close: &str, inner: &str, depth: usize) -> String {
@@ -496,9 +456,7 @@ fn pptx_with_slide(slide: &str) -> Vec<u8> {
             if name == "ppt/slides/slide1.xml" {
                 bytes = slide.as_bytes().to_vec();
             }
-            writer
-                .start_file(name, SimpleFileOptions::default())
-                .unwrap();
+            writer.start_file(name, SimpleFileOptions::default()).unwrap();
             writer.write_all(&bytes).unwrap();
         }
         writer.finish().unwrap();
@@ -515,45 +473,13 @@ fn deep_nesting_child() {
     }
     let depth = depth();
     for (name, xml) in [
-        (
-            "spans",
-            nested(
-                "<draw:frame><draw:text-box><text:p>",
-                "</text:p></draw:text-box></draw:frame>",
-                "",
-                1,
-            )
-            .replace(
-                "<text:p></text:p>",
-                &format!(
-                    "<text:p>{}x{}</text:p>",
-                    "<text:span>".repeat(depth),
-                    "</text:span>".repeat(depth)
-                ),
-            ),
-        ),
+        ("spans", nested("<draw:frame><draw:text-box><text:p>", "</text:p></draw:text-box></draw:frame>", "", 1)
+            .replace("<text:p></text:p>", &format!("<text:p>{}x{}</text:p>", "<text:span>".repeat(depth), "</text:span>".repeat(depth)))),
         ("frames", nested("<draw:frame>", "</draw:frame>", "", depth)),
-        (
-            "groups",
-            nested("<draw:g>", "</draw:g>", "<draw:rect/>", depth),
-        ),
-        (
-            "lists",
-            nested(
-                "<draw:frame><draw:text-box>",
-                "</draw:text-box></draw:frame>",
-                "",
-                1,
-            )
-            .replace(
-                "<draw:text-box></draw:text-box>",
-                &format!(
-                    "<draw:text-box>{}<text:p>x</text:p>{}</draw:text-box>",
-                    "<text:list><text:list-item>".repeat(depth),
-                    "</text:list-item></text:list>".repeat(depth)
-                ),
-            ),
-        ),
+        ("groups", nested("<draw:g>", "</draw:g>", "<draw:rect/>", depth)),
+        ("lists", nested("<draw:frame><draw:text-box>", "</draw:text-box></draw:frame>", "", 1)
+            .replace("<draw:text-box></draw:text-box>", &format!("<draw:text-box>{}<text:p>x</text:p>{}</draw:text-box>",
+                "<text:list><text:list-item>".repeat(depth), "</text:list-item></text:list>".repeat(depth)))),
     ] {
         eprintln!("reading odp {name}");
         let _ = read_without_unwinding(&package(&xml));
@@ -585,13 +511,7 @@ fn deep_nesting_neither_overflows_nor_crawls() {
 fn run_deep_nesting_child(budget: std::time::Duration) {
     use std::io::Read;
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "deep_nesting_child",
-            "--exact",
-            "--ignored",
-            "--nocapture",
-            "--test-threads=1",
-        ])
+        .args(["deep_nesting_child", "--exact", "--ignored", "--nocapture", "--test-threads=1"])
         .env(DEEP_NESTING_CHILD, "1")
         .env_remove("RUST_MIN_STACK")
         .stdout(std::process::Stdio::null())
@@ -617,21 +537,12 @@ fn run_deep_nesting_child(budget: std::time::Duration) {
         std::thread::sleep(std::time::Duration::from_millis(100));
     };
     let text = reader.join().unwrap();
-    let reached = text
-        .lines()
-        .rfind(|l| l.starts_with("reading "))
-        .unwrap_or("(nothing)");
+    let reached = text.lines().rfind(|l| l.starts_with("reading ")).unwrap_or("(nothing)");
     match status {
         None => panic!("deep nesting took over {budget:?}; it was {reached}"),
         Some(status) => {
-            assert!(
-                status.success(),
-                "a reader died on deep nesting ({status}) {reached}"
-            );
-            assert!(
-                text.contains("deep nesting: all read"),
-                "the child stopped early:\n{text}"
-            );
+            assert!(status.success(), "a reader died on deep nesting ({status}) {reached}");
+            assert!(text.contains("deep nesting: all read"), "the child stopped early:\n{text}");
         }
     }
 }

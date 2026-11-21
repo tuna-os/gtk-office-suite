@@ -23,29 +23,15 @@ fn a_masters_connector_and_flat_line_are_kept() {
     let lines: Vec<_> = shapes
         .iter()
         .filter_map(|o| match o {
-            SlideObject::Shape {
-                kind, w, h, style, ..
-            } if is_line(kind) => Some((kind.clone(), *w, *h, style.stroke.map(|s| s.color))),
+            SlideObject::Shape { kind, w, h, style, .. } if is_line(kind) => Some((kind.clone(), *w, *h, style.stroke.map(|s| s.color))),
             _ => None,
         })
         .collect();
     assert_eq!(lines.len(), 3, "{shapes:?}");
     assert_eq!(lines[0].0, ShapeKind::Other("straightConnector1".into()));
     assert!(lines[0].1 > 0.0 && lines[0].2 == 0.0, "{lines:?}");
-    assert_eq!(
-        lines[0].3,
-        Some(Color(0x00, 0xB0, 0xF0)),
-        "the connector's own colour"
-    );
+    assert_eq!(lines[0].3, Some(Color(0x00, 0xB0, 0xF0)), "the connector's own colour");
     // An elbow connector whose ends are level is a straight segment.
-    assert_eq!(
-        (lines[1].0.clone(), lines[1].3),
-        (ShapeKind::from_prst("line"), Some(Color(0x00, 0xFF, 0x00))),
-        "{lines:?}"
-    );
-    assert_eq!(
-        lines[2].3,
-        Some(Color(0xFF, 0x00, 0x00)),
-        "a flat line shape too"
-    );
+    assert_eq!((lines[1].0.clone(), lines[1].3), (ShapeKind::from_prst("line"), Some(Color(0x00, 0xFF, 0x00))), "{lines:?}");
+    assert_eq!(lines[2].3, Some(Color(0xFF, 0x00, 0x00)), "a flat line shape too");
 }

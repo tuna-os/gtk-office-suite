@@ -23,8 +23,7 @@ fn package_with_oversized_part(parts: &[(&str, usize)], literal: &[(&str, &str)]
     let mut buffer = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
-        let options =
-            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, text) in literal {
             writer.start_file(*name, options).unwrap();
             writer.write_all(text.as_bytes()).unwrap();
@@ -136,8 +135,7 @@ fn loss_scan_names_aliased_content_and_still_blocks_unreadable_parts() {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
         // Stored, so the slide bytes sit verbatim in the archive and the
         // corruption below breaks the part's CRC, not the archive itself.
-        let stored =
-            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         writer.start_file("ppt/slides/slide1.xml", stored).unwrap();
         writer
             .write_all(
@@ -156,10 +154,7 @@ fn loss_scan_names_aliased_content_and_still_blocks_unreadable_parts() {
         v
     };
     assert_eq!(ids, ["animations", "media"]);
-    assert!(report
-        .features
-        .iter()
-        .all(|f| f.location == "ppt/slides/slide1.xml"));
+    assert!(report.features.iter().all(|f| f.location == "ppt/slides/slide1.xml"));
     assert!(report.validate_save(false).is_err() && report.validate_save(true).is_ok());
 
     // Corrupt the slide part in place so its CRC fails: the scan must block
@@ -167,16 +162,10 @@ fn loss_scan_names_aliased_content_and_still_blocks_unreadable_parts() {
     // as clean.
     let mut bytes = buffer;
     let needle = b"videoFile";
-    let offset = bytes
-        .windows(needle.len())
-        .position(|s| s == needle)
-        .unwrap();
+    let offset = bytes.windows(needle.len()).position(|s| s == needle).unwrap();
     bytes[offset] ^= 1;
     std::fs::write(&path, bytes).unwrap();
     let report = decks_core::loss::content_a_save_drops(path.to_str().unwrap());
     assert!(report.has_hard_errors());
-    assert!(
-        report.validate_save(true).is_err(),
-        "confirmation must not override a failed inspection"
-    );
+    assert!(report.validate_save(true).is_err(), "confirmation must not override a failed inspection");
 }

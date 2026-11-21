@@ -30,18 +30,11 @@ impl Rng {
 }
 
 fn rect(x: f64) -> SlideObject {
-    SlideObject::Rect {
-        x,
-        y: 10.0,
-        w: 20.0,
-        h: 20.0,
-        rotation: 0.0,
-    }
+    SlideObject::Rect { x, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 }
 }
 
 fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
-    Slide {
-        hidden: false,
+    Slide { hidden: false,
         title: title.into(),
         background: "#ffffff".into(),
         background_picture: None,
@@ -58,10 +51,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
 fn base() -> Vec<Slide> {
     vec![
         slide("one", vec![rect(0.0), text_box(), rect(200.0)]),
-        slide(
-            "two",
-            vec![shape(shape_library()[2].kind.clone()), table(2, 3)],
-        ),
+        slide("two", vec![shape(shape_library()[2].kind.clone()), table(2, 3)]),
         slide("three", vec![]),
     ]
 }
@@ -70,22 +60,14 @@ fn base() -> Vec<Slide> {
 /// local ids (each peer numbers its own). Builds name stable object ids,
 /// so they are normalized to z-positions for the comparison.
 fn content(deck: &[Slide]) -> String {
-    let plain: Vec<Slide> = deck
-        .iter()
-        .map(|s| {
-            let mut s = s.clone();
-            for b in s.builds.iter_mut() {
-                b.object = s
-                    .ids
-                    .objects
-                    .iter()
-                    .position(|id| *id == b.object)
-                    .unwrap_or(usize::MAX) as u64;
-            }
-            s.ids = Default::default();
-            s
-        })
-        .collect();
+    let plain: Vec<Slide> = deck.iter().map(|s| {
+        let mut s = s.clone();
+        for b in s.builds.iter_mut() {
+            b.object = s.ids.objects.iter().position(|id| *id == b.object).unwrap_or(usize::MAX) as u64;
+        }
+        s.ids = Default::default();
+        s
+    }).collect();
     format!("{plain:#?}")
 }
 
@@ -108,10 +90,7 @@ fn nudged(object: &SlideObject, dx: f64) -> SlideObject {
             *x += dx;
             text.push('!');
         }
-        SlideObject::Rect { x, .. }
-        | SlideObject::Shape { x, .. }
-        | SlideObject::Image { x, .. }
-        | SlideObject::Table { x, .. } => *x += dx,
+        SlideObject::Rect { x, .. } | SlideObject::Shape { x, .. } | SlideObject::Image { x, .. } | SlideObject::Table { x, .. } => *x += dx,
         SlideObject::Chart { x, chart, .. } => {
             *x += dx;
             if let Some(p) = chart.points.first_mut() {
@@ -131,63 +110,28 @@ fn random_op(rng: &mut Rng, deck: &[Slide]) -> Option<Op> {
     let n = s.objects.len();
     let pick = (n > 0).then(|| rng.below(n));
     Some(match rng.below(11) {
-        0 | 1 => Op::InsertObject {
-            slide: s.ids.slide,
-            at: rng.below(n + 1),
-            id: next_id(deck),
-            object: Box::new(any_object(rng)),
-        },
-        2 => Op::DeleteObject {
-            slide: s.ids.slide,
-            id: s.ids.objects[pick?],
-        },
-        3 => Op::MoveObject {
-            slide: s.ids.slide,
-            id: s.ids.objects[pick?],
-            to: rng.below(n),
-        },
+        0 | 1 => Op::InsertObject { slide: s.ids.slide, at: rng.below(n + 1), id: next_id(deck), object: Box::new(any_object(rng)) },
+        2 => Op::DeleteObject { slide: s.ids.slide, id: s.ids.objects[pick?] },
+        3 => Op::MoveObject { slide: s.ids.slide, id: s.ids.objects[pick?], to: rng.below(n) },
         4 | 5 => {
             let i = pick?;
-            Op::SetObject {
-                slide: s.ids.slide,
-                id: s.ids.objects[i],
-                object: Box::new(nudged(&s.objects[i], rng.below(40) as f64 - 20.0)),
-            }
+            Op::SetObject { slide: s.ids.slide, id: s.ids.objects[i], object: Box::new(nudged(&s.objects[i], rng.below(40) as f64 - 20.0)) }
         }
-        6 => Op::InsertSlide {
-            at: rng.below(deck.len() + 1),
-            slide: Box::new(slide(
-                &format!("s{}", rng.below(99)),
-                vec![rect(1.0), text_box()],
-            )),
-        },
+        6 => Op::InsertSlide { at: rng.below(deck.len() + 1), slide: Box::new(slide(&format!("s{}", rng.below(99)), vec![rect(1.0), text_box()])) },
         7 if deck.len() > 1 => Op::DeleteSlide { slide: s.ids.slide },
         7 => return None,
-        8 => Op::MoveSlide {
-            slide: s.ids.slide,
-            to: rng.below(deck.len()),
-        },
+        8 => Op::MoveSlide { slide: s.ids.slide, to: rng.below(deck.len()) },
         9 => {
             let mut p = SlideProps::of(s);
             p.notes = format!("notes {}", rng.below(999));
             p.title = format!("title {}", rng.below(999));
             p.transition = Transition::ALL[rng.below(Transition::ALL.len())];
-            Op::SetSlide {
-                slide: s.ids.slide,
-                props: Box::new(p),
-            }
+            Op::SetSlide { slide: s.ids.slide, props: Box::new(p) }
         }
         _ => {
             let mut p = SlideProps::of(s);
-            p.builds.push(Build {
-                object: s.ids.objects[pick?],
-                effect: BuildEffect::ALL[rng.below(BuildEffect::ALL.len())],
-                out: rng.below(2) == 1,
-            });
-            Op::SetSlide {
-                slide: s.ids.slide,
-                props: Box::new(p),
-            }
+            p.builds.push(Build { object: s.ids.objects[pick?], effect: BuildEffect::ALL[rng.below(BuildEffect::ALL.len())], out: rng.below(2) == 1 });
+            Op::SetSlide { slide: s.ids.slide, props: Box::new(p) }
         }
     })
 }
@@ -209,30 +153,19 @@ fn the_document_holds_exactly_the_deck_after_every_edit() {
 
 /// A random local step: mostly a new op, sometimes an undo or redo, which
 /// are op groups too (the inverses), recorded like any other.
-fn undo_or_edit(
-    rng: &mut Rng,
-    deck: &mut Vec<Slide>,
-    replica: &mut Replica,
-    history: &mut History<Op>,
-) {
+fn undo_or_edit(rng: &mut Rng, deck: &mut Vec<Slide>, replica: &mut Replica, history: &mut History<Op>) {
     match rng.below(8) {
         0 => undo_step(deck, replica, history, true),
         1 => undo_step(deck, replica, history, false),
         _ => {
-            let Some(op) = random_op(rng, deck) else {
-                return;
-            };
+            let Some(op) = random_op(rng, deck) else { return };
             let group = vec![op];
-            let Ok(inverse) = apply_all(deck, &group) else {
-                return;
-            };
+            let Ok(inverse) = apply_all(deck, &group) else { return };
             if inverse.is_empty() {
                 return;
             }
             history.record(inverse);
-            replica
-                .record(&group)
-                .expect("a group that applied locally applies to the replica");
+            replica.record(&group).expect("a group that applied locally applies to the replica");
         }
     }
 }
@@ -241,17 +174,9 @@ fn undo_or_edit(
 /// applied (the stored inverses), and the replica records those, like any
 /// other group.
 fn undo_step(deck: &mut Vec<Slide>, replica: &mut Replica, history: &mut History<Op>, undo: bool) {
-    let applied = crate::ops::with_slides(deck, |doc| {
-        if undo {
-            history.undo(doc)
-        } else {
-            history.redo(doc)
-        }
-    });
+    let applied = crate::ops::with_slides(deck, |doc| if undo { history.undo(doc) } else { history.redo(doc) });
     if let Some(ops) = applied {
-        replica
-            .record(&ops)
-            .expect("an undo step applies to the replica");
+        replica.record(&ops).expect("an undo step applies to the replica");
     }
 }
 
@@ -276,18 +201,10 @@ fn two_peers_editing_at_once_converge_and_equal_a_replay() {
             b.merge_from(&a).unwrap();
             deck_a = a.rebuild().unwrap();
             deck_b = b.rebuild().unwrap();
-            assert_eq!(
-                content(&deck_a),
-                content(&deck_b),
-                "seed {seed}, round {round}: the peers differ"
-            );
+            assert_eq!(content(&deck_a), content(&deck_b), "seed {seed}, round {round}: the peers differ");
             // The merged history, replayed into a peer that saw none of it.
             let (_, replayed) = Replica::from_updates(3, &a.export_all()).unwrap();
-            assert_eq!(
-                content(&replayed),
-                content(&deck_a),
-                "seed {seed}, round {round}: a replay differs"
-            );
+            assert_eq!(content(&replayed), content(&deck_a), "seed {seed}, round {round}: a replay differs");
         }
     }
 }
@@ -316,41 +233,14 @@ fn merged(mut a: Replica, mut b: Replica) -> (Vec<Slide>, Vec<Slide>) {
 fn a_delete_wins_over_a_concurrent_move_and_edit_of_the_same_object() {
     let (mut a, mut deck_a, mut b, mut deck_b) = pair();
     let (sa, oa) = (deck_a[0].ids.slide, deck_a[0].ids.objects[0]);
-    edit(
-        &mut deck_a,
-        &mut a,
-        vec![Op::DeleteObject { slide: sa, id: oa }],
-    );
+    edit(&mut deck_a, &mut a, vec![Op::DeleteObject { slide: sa, id: oa }]);
     let (sb, ob) = (deck_b[0].ids.slide, deck_b[0].ids.objects[0]);
     let moved = nudged(&deck_b[0].objects[0], 300.0);
-    edit(
-        &mut deck_b,
-        &mut b,
-        vec![
-            Op::MoveObject {
-                slide: sb,
-                id: ob,
-                to: 2,
-            },
-            Op::SetObject {
-                slide: sb,
-                id: ob,
-                object: Box::new(moved),
-            },
-        ],
-    );
+    edit(&mut deck_b, &mut b, vec![Op::MoveObject { slide: sb, id: ob, to: 2 }, Op::SetObject { slide: sb, id: ob, object: Box::new(moved) }]);
     let (deck_a, deck_b) = merged(a, b);
     for deck in [&deck_a, &deck_b] {
-        assert_eq!(
-            deck[0].objects.len(),
-            2,
-            "the deleted object stays deleted: {:#?}",
-            deck[0].objects
-        );
-        assert!(deck[0]
-            .objects
-            .iter()
-            .all(|o| !matches!(o, SlideObject::Rect { x, .. } if *x == 0.0 || *x == 300.0)));
+        assert_eq!(deck[0].objects.len(), 2, "the deleted object stays deleted: {:#?}", deck[0].objects);
+        assert!(deck[0].objects.iter().all(|o| !matches!(o, SlideObject::Rect { x, .. } if *x == 0.0 || *x == 300.0)));
     }
     assert_eq!(content(&deck_a), content(&deck_b));
 }
@@ -363,17 +253,7 @@ fn a_slide_delete_wins_over_a_concurrent_move_and_edit_of_that_slide() {
     let mut props = SlideProps::of(&deck_b[1]);
     props.title = "renamed".into();
     let id = deck_b[1].ids.slide;
-    edit(
-        &mut deck_b,
-        &mut b,
-        vec![
-            Op::MoveSlide { slide: id, to: 0 },
-            Op::SetSlide {
-                slide: id,
-                props: Box::new(props),
-            },
-        ],
-    );
+    edit(&mut deck_b, &mut b, vec![Op::MoveSlide { slide: id, to: 0 }, Op::SetSlide { slide: id, props: Box::new(props) }]);
     let (deck_a, deck_b) = merged(a, b);
     for deck in [&deck_a, &deck_b] {
         let titles: Vec<&str> = deck.iter().map(|s| s.title.as_str()).collect();
@@ -398,12 +278,7 @@ fn undoing_a_delete_brings_the_same_object_back_for_everyone() {
 #[test]
 fn concurrent_inserts_at_one_place_keep_both_in_one_order() {
     let (mut a, mut deck_a, mut b, mut deck_b) = pair();
-    let ins = |deck: &[Slide], x: f64| Op::InsertObject {
-        slide: deck[0].ids.slide,
-        at: 1,
-        id: next_id(deck),
-        object: Box::new(rect(x)),
-    };
+    let ins = |deck: &[Slide], x: f64| Op::InsertObject { slide: deck[0].ids.slide, at: 1, id: next_id(deck), object: Box::new(rect(x)) };
     let op = ins(&deck_a, 111.0);
     edit(&mut deck_a, &mut a, vec![op]);
     let op = ins(&deck_b, 222.0);
@@ -419,40 +294,16 @@ fn builds_follow_their_object_through_concurrent_reorders() {
     // A builds the third object in; B moves the first object to the top.
     let third = deck_a[0].ids.objects[2];
     let mut p = SlideProps::of(&deck_a[0]);
-    p.builds.push(Build {
-        object: third,
-        effect: BuildEffect::Dissolve,
-        out: false,
-    });
+    p.builds.push(Build { object: third, effect: BuildEffect::Dissolve, out: false });
     let sa = deck_a[0].ids.slide;
-    edit(
-        &mut deck_a,
-        &mut a,
-        vec![Op::SetSlide {
-            slide: sa,
-            props: Box::new(p),
-        }],
-    );
+    edit(&mut deck_a, &mut a, vec![Op::SetSlide { slide: sa, props: Box::new(p) }]);
     let (sb, ob) = (deck_b[0].ids.slide, deck_b[0].ids.objects[0]);
-    edit(
-        &mut deck_b,
-        &mut b,
-        vec![Op::MoveObject {
-            slide: sb,
-            id: ob,
-            to: 2,
-        }],
-    );
+    edit(&mut deck_b, &mut b, vec![Op::MoveObject { slide: sb, id: ob, to: 2 }]);
     let (deck_a, deck_b) = merged(a, b);
     for deck in [&deck_a, &deck_b] {
-        let at = deck[0]
-            .object_index(deck[0].builds[0].object)
-            .expect("the build still names a live object");
+        let at = deck[0].object_index(deck[0].builds[0].object).expect("the build still names a live object");
         let built = &deck[0].objects[at];
-        assert!(
-            matches!(built, SlideObject::Rect { x, .. } if *x == 200.0),
-            "the build still names the same object: {built:?}"
-        );
+        assert!(matches!(built, SlideObject::Rect { x, .. } if *x == 200.0), "the build still names the same object: {built:?}");
     }
 }
 
@@ -460,11 +311,7 @@ fn builds_follow_their_object_through_concurrent_reorders() {
 fn every_kind_of_object_survives_the_document() {
     let mut deck = base();
     let lib = shape_library();
-    deck[2].objects = lib
-        .iter()
-        .map(|s| shape(s.kind.clone()))
-        .chain([text_box(), table(3, 3), rect(3.25)])
-        .collect();
+    deck[2].objects = lib.iter().map(|s| shape(s.kind.clone())).chain([text_box(), table(3, 3), rect(3.25)]).collect();
     let replica = Replica::new(1, &mut deck).unwrap();
     let (_, rebuilt) = Replica::from_updates(2, &replica.export_all()).unwrap();
     assert_eq!(content(&rebuilt), content(&deck));

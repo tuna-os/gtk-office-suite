@@ -24,8 +24,7 @@ fn rewrite(bytes: &[u8], edit: impl Fn(&str, String) -> String) -> Vec<u8> {
         if name.ends_with(".xml") {
             data = edit(&name, String::from_utf8(data).unwrap()).into_bytes();
         }
-        out.start_file(name, zip::write::SimpleFileOptions::default())
-            .unwrap();
+        out.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
         out.write_all(&data).unwrap();
     }
     out.finish().unwrap().into_inner()
@@ -60,12 +59,7 @@ fn saved_with_picture() -> (tempfile::TempDir, Vec<u8>) {
 fn an_svg_picture_is_saved_as_svg_and_an_svg_only_blip_is_read() {
     let (_dir, bytes) = saved_with_picture();
     let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).unwrap();
-    assert!(
-        zip.file_names()
-            .filter_map(Result::ok)
-            .any(|n| n == "ppt/media/image1.svg"),
-        "SVG bytes are named .svg, not .png"
-    );
+    assert!(zip.file_names().filter_map(Result::ok).any(|n| n == "ppt/media/image1.svg"), "SVG bytes are named .svg, not .png");
     // As Office 2016+ saves an SVG-only graphic: no r:embed on the blip,
     // the part named on asvg:svgBlip in its extensions.
     let svg_only = rewrite(&bytes, |name, xml| {
@@ -85,16 +79,8 @@ fn an_svg_picture_is_saved_as_svg_and_an_svg_only_blip_is_read() {
             SlideObject::Image { path, .. } => Some(path.clone()),
             _ => None,
         })
-        .unwrap_or_else(|| {
-            panic!(
-                "the SVG-only picture was dropped: {:?}",
-                deck.slides[0].objects
-            )
-        });
-    assert!(
-        std::fs::read(path).unwrap().starts_with(b"<?xml"),
-        "the picture is the SVG part"
-    );
+        .unwrap_or_else(|| panic!("the SVG-only picture was dropped: {:?}", deck.slides[0].objects));
+    assert!(std::fs::read(path).unwrap().starts_with(b"<?xml"), "the picture is the SVG part");
 }
 
 #[test]
@@ -118,18 +104,13 @@ fn a_layouts_colour_map_recolours_its_background_and_its_slides() {
     });
     let deck = read(&section);
     let dk1 = deck.masters[0].layouts[0].background.clone();
-    assert!(
-        dk1.as_deref()
-            .is_some_and(|c| !c.eq_ignore_ascii_case("ffffff")),
-        "bg1 is dk1 on this layout: {dk1:?}"
-    );
+    assert!(dk1.as_deref().is_some_and(|c| !c.eq_ignore_ascii_case("ffffff")), "bg1 is dk1 on this layout: {dk1:?}");
     let fill = deck.slides[0].objects.iter().find_map(|o| match o {
         SlideObject::Shape { style, .. } => Some(style.fill),
         _ => None,
     });
     assert_eq!(
-        fill.flatten()
-            .map(|c| format!("{:02x}{:02x}{:02x}", c.0, c.1, c.2)),
+        fill.flatten().map(|c| format!("{:02x}{:02x}{:02x}", c.0, c.1, c.2)),
         dk1.map(|c| c.trim_start_matches('#').to_lowercase()),
         "a slide shape's bg1 follows its layout's map"
     );

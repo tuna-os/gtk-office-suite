@@ -8,11 +8,7 @@ fn crc32(bytes: &[u8]) -> u32 {
     for &b in bytes {
         crc ^= u32::from(b);
         for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
+            crc = if crc & 1 != 0 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
         }
     }
     !crc
@@ -87,15 +83,7 @@ pub fn deck(slides: usize, dir: &std::path::Path) -> Deck {
                     runs: vec![],
                     body: Default::default(),
                 },
-                SlideObject::Image {
-                    path: path.to_string_lossy().into(),
-                    x: 60.0,
-                    y: 120.0,
-                    w: 400.0,
-                    h: 300.0,
-                    rotation: 0.0,
-                    crop: Default::default(),
-                },
+                SlideObject::Image { path: path.to_string_lossy().into(), x: 60.0, y: 120.0, w: 400.0, h: 300.0, rotation: 0.0 , crop: Default::default()},
             ];
             s
         })
@@ -104,9 +92,5 @@ pub fn deck(slides: usize, dir: &std::path::Path) -> Deck {
 }
 
 pub fn pictures(d: &Deck) -> usize {
-    d.slides
-        .iter()
-        .flat_map(|s| &s.objects)
-        .filter(|o| matches!(o, SlideObject::Image { .. }))
-        .count()
+    d.slides.iter().flat_map(|s| &s.objects).filter(|o| matches!(o, SlideObject::Image { .. })).count()
 }

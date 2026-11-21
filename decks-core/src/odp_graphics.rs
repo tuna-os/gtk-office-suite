@@ -47,19 +47,9 @@ fn color(v: &str) -> Option<Color> {
 /// `draw:gradient`s styles.xml declares, named `decksGradient<n>`.
 pub(crate) fn deck_gradients(deck: &Deck) -> Vec<LinearGradient> {
     let mut out: Vec<LinearGradient> = Vec::new();
-    let objects = deck
-        .slides
-        .iter()
-        .flat_map(|s| &s.objects)
-        .chain(deck.masters.iter().flat_map(|m| &m.shapes));
+    let objects = deck.slides.iter().flat_map(|s| &s.objects).chain(deck.masters.iter().flat_map(|m| &m.shapes));
     for o in objects {
-        if let SlideObject::Shape {
-            style: ShapeStyle {
-                gradient: Some(g), ..
-            },
-            ..
-        } = o
-        {
+        if let SlideObject::Shape { style: ShapeStyle { gradient: Some(g), .. }, .. } = o {
             if !out.contains(g) {
                 out.push(g.clone());
             }
@@ -101,23 +91,12 @@ pub(crate) fn gradient_defs(gradients: &[LinearGradient]) -> String {
 /// gradient when it has one (`gradients` is `deck_gradients`), else its
 /// solid fill, else none.
 pub(crate) fn fill_attrs(style: &ShapeStyle, gradients: &[LinearGradient]) -> String {
-    if let Some(i) = style
-        .gradient
-        .as_ref()
-        .and_then(|g| gradients.iter().position(|x| x == g))
-    {
-        return format!(
-            "draw:fill=\"gradient\" draw:fill-gradient-name=\"{}\"",
-            gradient_name(i)
-        );
+    if let Some(i) = style.gradient.as_ref().and_then(|g| gradients.iter().position(|x| x == g)) {
+        return format!("draw:fill=\"gradient\" draw:fill-gradient-name=\"{}\"", gradient_name(i));
     }
     match style.fill {
         Some(c) => match style.fill_alpha {
-            Some(a) => format!(
-                "draw:fill=\"solid\" draw:fill-color=\"{}\" draw:opacity=\"{}%\"",
-                hex(c),
-                (a * 100.0).round()
-            ),
+            Some(a) => format!("draw:fill=\"solid\" draw:fill-color=\"{}\" draw:opacity=\"{}%\"", hex(c), (a * 100.0).round()),
             None => format!("draw:fill=\"solid\" draw:fill-color=\"{}\"", hex(c)),
         },
         None => "draw:fill=\"none\"".to_string(),
@@ -191,16 +170,13 @@ impl GraphicDefs {
             match reader.read_event() {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
                     "style:style" => {
-                        cur = (attr(&e, "style:family").as_deref() == Some("graphic"))
-                            .then(|| attr(&e, "style:name"));
+                        cur = (attr(&e, "style:family").as_deref() == Some("graphic")).then(|| attr(&e, "style:name"));
                         if let Some(Some(name)) = &cur {
-                            self.styles.entry(name.clone()).or_default().parent =
-                                attr(&e, "style:parent-style-name");
+                            self.styles.entry(name.clone()).or_default().parent = attr(&e, "style:parent-style-name");
                         }
                     }
                     "style:default-style" => {
-                        cur = (attr(&e, "style:family").as_deref() == Some("graphic"))
-                            .then_some(None);
+                        cur = (attr(&e, "style:family").as_deref() == Some("graphic")).then_some(None);
                     }
                     "style:graphic-properties" => {
                         let Some(which) = &cur else { continue };
@@ -223,17 +199,13 @@ impl GraphicDefs {
                         if let Some(c) = attr(&e, "svg:stroke-color").as_deref().and_then(color) {
                             p.stroke_color = Some(c);
                         }
-                        if let Some(w) = attr(&e, "svg:stroke-width")
-                            .and_then(|v| crate::odp::parse_length_pt(&v))
-                        {
+                        if let Some(w) = attr(&e, "svg:stroke-width").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.stroke_width_pt = Some(w);
                         }
                         if let Some(v) = attr(&e, "fo:clip") {
                             p.clip = Some(v);
                         }
-                        if let Some(r) = attr(&e, "loext:glow-radius")
-                            .and_then(|v| crate::odp::parse_length_pt(&v))
-                        {
+                        if let Some(r) = attr(&e, "loext:glow-radius").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.glow_radius_pt = Some(r);
                         }
                         if let Some(c) = attr(&e, "loext:glow-color").as_deref().and_then(color) {
@@ -242,37 +214,25 @@ impl GraphicDefs {
                         if let Some(v) = attr(&e, "draw:shadow") {
                             p.shadow = Some(v);
                         }
-                        if let Some(v) = attr(&e, "draw:shadow-offset-x")
-                            .and_then(|v| crate::odp::parse_length_pt(&v))
-                        {
+                        if let Some(v) = attr(&e, "draw:shadow-offset-x").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.shadow_dx_pt = Some(v);
                         }
-                        if let Some(v) = attr(&e, "draw:shadow-offset-y")
-                            .and_then(|v| crate::odp::parse_length_pt(&v))
-                        {
+                        if let Some(v) = attr(&e, "draw:shadow-offset-y").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.shadow_dy_pt = Some(v);
                         }
                         if let Some(c) = attr(&e, "draw:shadow-color").as_deref().and_then(color) {
                             p.shadow_color = Some(c);
                         }
-                        if let Some(o) = attr(&e, "draw:opacity")
-                            .and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok())
-                        {
+                        if let Some(o) = attr(&e, "draw:opacity").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
                             p.opacity = Some((o / 100.0).clamp(0.0, 1.0));
                         }
-                        if let Some(o) = attr(&e, "draw:shadow-opacity")
-                            .and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok())
-                        {
+                        if let Some(o) = attr(&e, "draw:shadow-opacity").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
                             p.shadow_opacity = Some((o / 100.0).clamp(0.0, 1.0));
                         }
-                        if let Some(v) = attr(&e, "loext:shadow-blur")
-                            .and_then(|v| crate::odp::parse_length_pt(&v))
-                        {
+                        if let Some(v) = attr(&e, "loext:shadow-blur").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.shadow_blur_pt = Some(v);
                         }
-                        if let Some(t) = attr(&e, "loext:glow-transparency")
-                            .and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok())
-                        {
+                        if let Some(t) = attr(&e, "loext:glow-transparency").and_then(|v| v.trim().trim_end_matches('%').parse::<f64>().ok()) {
                             p.glow_transparency = Some((t / 100.0).clamp(0.0, 1.0));
                         }
                     }
@@ -284,31 +244,16 @@ impl GraphicDefs {
                         ) else {
                             continue;
                         };
-                        let angle = attr(&e, "draw:angle")
-                            .map(|v| parse_angle(&v))
-                            .unwrap_or(0.0);
+                        let angle = attr(&e, "draw:angle").map(|v| parse_angle(&v)).unwrap_or(0.0);
                         let g = LinearGradient {
-                            stops: vec![
-                                GradientStop {
-                                    pos: 0.0,
-                                    color: start,
-                                },
-                                GradientStop {
-                                    pos: 1.0,
-                                    color: end,
-                                },
-                            ],
+                            stops: vec![GradientStop { pos: 0.0, color: start }, GradientStop { pos: 1.0, color: end }],
                             angle: (90.0 - angle).rem_euclid(360.0),
                         };
                         self.gradients.insert(name, g);
                     }
                     _ => {}
                 },
-                Ok(Event::End(e))
-                    if matches!(e.name().as_ref(), "style:style" | "style:default-style") =>
-                {
-                    cur = None
-                }
+                Ok(Event::End(e)) if matches!(e.name().as_ref(), "style:style" | "style:default-style") => cur = None,
                 Ok(Event::Eof) | Err(_) => break,
                 _ => {}
             }
@@ -324,22 +269,11 @@ impl GraphicDefs {
         let v: Vec<f64> = inner
             .split([',', ' '])
             .filter(|s| !s.is_empty())
-            .map(|s| {
-                if s == "auto" {
-                    Some(0.0)
-                } else {
-                    crate::odp::parse_length_pt(s)
-                }
-            })
+            .map(|s| if s == "auto" { Some(0.0) } else { crate::odp::parse_length_pt(s) })
             .collect::<Option<_>>()?;
         let [t, r, b, l] = v[..] else { return None };
         let (w, h) = natural;
-        (w > 0.0 && h > 0.0).then(|| crate::engine::Crop {
-            left: l / w,
-            top: t / h,
-            right: r / w,
-            bottom: b / h,
-        })
+        (w > 0.0 && h > 0.0).then(|| crate::engine::Crop { left: l / w, top: t / h, right: r / w, bottom: b / h })
     }
 
     /// The paint of graphic style `name`, its outline scaled by `k` (model
@@ -349,9 +283,7 @@ impl GraphicDefs {
         let mut parent = p.parent.clone();
         let mut seen = 0;
         while let Some(n) = parent.take() {
-            let Some(base) = self.styles.get(&n) else {
-                break;
-            };
+            let Some(base) = self.styles.get(&n) else { break };
             p.over(base);
             parent = base.parent.clone();
             seen += 1;
@@ -361,11 +293,7 @@ impl GraphicDefs {
         }
         p.over(&self.default);
         let gradient = match p.fill.as_deref() {
-            Some("gradient") => p
-                .gradient
-                .as_ref()
-                .and_then(|g| self.gradients.get(g))
-                .cloned(),
+            Some("gradient") => p.gradient.as_ref().and_then(|g| self.gradients.get(g)).cloned(),
             _ => None,
         };
         let fill = match p.fill.as_deref() {
@@ -376,61 +304,39 @@ impl GraphicDefs {
         // The statement as stated (DCK-006): a direct solid colour as a
         // literal reference, an explicit none distinct from no statement.
         let fill_src = match p.fill.as_deref() {
-            Some("solid") => p
-                .fill_color
-                .map(|c| FillSrc::Color(ColorRef::Rgb(c.to_hex()))),
+            Some("solid") => p.fill_color.map(|c| FillSrc::Color(ColorRef::Rgb(c.to_hex()))),
             Some("none") => Some(FillSrc::NoFill),
             _ => None,
         };
         let stroke = match p.stroke.as_deref() {
-            Some("solid") | Some("dash") => p.stroke_color.map(|color| Stroke {
-                color,
-                width: p.stroke_width_pt.unwrap_or(0.0) * k,
-            }),
+            Some("solid") | Some("dash") => p.stroke_color.map(|color| Stroke { color, width: p.stroke_width_pt.unwrap_or(0.0) * k }),
             _ => None,
         };
         let stroke_src = match p.stroke.as_deref() {
-            Some("solid") | Some("dash") => p
-                .stroke_color
-                .map(|c| StrokeSrc::Color(ColorRef::Rgb(c.to_hex()))),
+            Some("solid") | Some("dash") => p.stroke_color.map(|c| StrokeSrc::Color(ColorRef::Rgb(c.to_hex()))),
             Some("none") => Some(StrokeSrc::NoLine),
             _ => None,
         };
         let glow = match (p.glow_radius_pt, p.glow_color) {
-            (Some(r), Some(color)) if r > 0.0 => Some(crate::engine::shape::Glow {
-                radius: r * k,
-                color,
-                alpha: 1.0 - p.glow_transparency.unwrap_or(0.0),
-            }),
+            (Some(r), Some(color)) if r > 0.0 => {
+                Some(crate::engine::shape::Glow { radius: r * k, color, alpha: 1.0 - p.glow_transparency.unwrap_or(0.0) })
+            }
             _ => None,
         };
         // ODF's defaults where a visible shadow states none: 0.2 cm each
         // way, grey 808080, opaque, unblurred.
-        let shadow =
-            (p.shadow.as_deref() == Some("visible")).then(|| crate::engine::shape::Shadow {
-                dx: p.shadow_dx_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
-                dy: p.shadow_dy_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
-                blur: p.shadow_blur_pt.unwrap_or(0.0) * k,
-                color: p.shadow_color.unwrap_or(Color(0x80, 0x80, 0x80)),
-                alpha: p.shadow_opacity.unwrap_or(1.0),
-                // LibreOffice keeps a shadow's offset fixed to the page.
-                rotate_with_shape: false,
-            });
+        let shadow = (p.shadow.as_deref() == Some("visible")).then(|| crate::engine::shape::Shadow {
+            dx: p.shadow_dx_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
+            dy: p.shadow_dy_pt.unwrap_or(0.2 / 2.54 * 72.0) * k,
+            blur: p.shadow_blur_pt.unwrap_or(0.0) * k,
+            color: p.shadow_color.unwrap_or(Color(0x80, 0x80, 0x80)),
+            alpha: p.shadow_opacity.unwrap_or(1.0),
+            // LibreOffice keeps a shadow's offset fixed to the page.
+            rotate_with_shape: false,
+        });
         // A solid fill's opacity; opaque is no statement.
-        let fill_alpha = (p.fill.as_deref() == Some("solid"))
-            .then_some(p.opacity)
-            .flatten()
-            .filter(|a| *a < 1.0);
-        Some(ShapeStyle {
-            glow,
-            shadow,
-            fill,
-            gradient,
-            stroke,
-            fill_src,
-            stroke_src,
-            fill_alpha,
-        })
+        let fill_alpha = (p.fill.as_deref() == Some("solid")).then_some(p.opacity).flatten().filter(|a| *a < 1.0);
+        Some(ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src, fill_alpha })
     }
 }
 
@@ -456,9 +362,7 @@ fn parse_angle(v: &str) -> f64 {
 pub(crate) fn kind_of(element: &str, custom_type: Option<&str>, radius: Option<f64>) -> ShapeKind {
     match element {
         "draw:rect" => match radius {
-            Some(r) if r > 0.0 => ShapeKind::RoundRect {
-                radius: r.clamp(0.0, 0.5),
-            },
+            Some(r) if r > 0.0 => ShapeKind::RoundRect { radius: r.clamp(0.0, 0.5) },
             _ => ShapeKind::Rect,
         },
         "draw:ellipse" | "draw:circle" => ShapeKind::Ellipse,
@@ -504,24 +408,13 @@ mod tests {
         let mut d = GraphicDefs::default();
         d.read(xml);
         let a = d.style("a", 1.0).unwrap();
-        assert_eq!(
-            a.fill,
-            Some(Color(255, 0, 0)),
-            "own colour, default's solid fill"
-        );
+        assert_eq!(a.fill, Some(Color(255, 0, 0)), "own colour, default's solid fill");
         assert_eq!(a.stroke, None, "the parent's no outline");
         let b = d.style("b", 2.0).unwrap();
         let g = b.gradient.unwrap();
         assert_eq!(g.angle, 90.0);
         assert_eq!(g.stops.len(), 2);
-        assert_eq!(
-            b.stroke,
-            Some(Stroke {
-                color: Color(0x34, 0x65, 0xa4),
-                width: 2.0
-            }),
-            "the default's outline, scaled"
-        );
+        assert_eq!(b.stroke, Some(Stroke { color: Color(0x34, 0x65, 0xa4), width: 2.0 }), "the default's outline, scaled");
         assert!(d.style("nope", 1.0).is_none());
     }
 }

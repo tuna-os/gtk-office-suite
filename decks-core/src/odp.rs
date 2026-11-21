@@ -8,10 +8,10 @@
 // circles, speaker notes, slide backgrounds, multi-slide order.
 // Fidelity is measured against the Impress oracle, never ported.
 
+use suite_common_core::document::{Run, RunStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Write;
-use suite_common_core::document::{Run, RunStyle};
 
 use crate::engine::{Deck, MasterSlide, Slide, SlideObject, Transition};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
@@ -122,7 +122,9 @@ fn geometry(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> String {
     let (x, w) = (page_x(x), page_x(w));
     let (y, h) = (page_y(y), page_y(h));
     if rotation == 0.0 {
-        return format!("svg:x=\"{x}pt\" svg:y=\"{y}pt\" svg:width=\"{w}pt\" svg:height=\"{h}pt\"");
+        return format!(
+            "svg:x=\"{x}pt\" svg:y=\"{y}pt\" svg:width=\"{w}pt\" svg:height=\"{h}pt\""
+        );
     }
     let a = -rotation.to_radians();
     let (rx, ry) = rotate_point(a, w / 2.0, h / 2.0);
@@ -223,10 +225,7 @@ fn esc_breaks(text: &str) -> String {
 
 fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
     let text = esc_breaks(&run.text);
-    let look = RunStyle {
-        link: None,
-        ..run.style.clone()
-    };
+    let look = RunStyle { link: None, ..run.style.clone() };
     let span = if look == RunStyle::default() {
         text
     } else {
@@ -234,10 +233,7 @@ fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
     };
     // A linked run is a `text:a` around its span, as Impress writes it (#1998).
     match run.style.link.as_deref().filter(|l| !l.is_empty()) {
-        Some(href) => format!(
-            "<text:a xlink:type=\"simple\" xlink:href=\"{}\">{span}</text:a>",
-            esc(href)
-        ),
+        Some(href) => format!("<text:a xlink:type=\"simple\" xlink:href=\"{}\">{span}</text:a>", esc(href)),
         None => span,
     }
 }
@@ -268,7 +264,11 @@ pub(crate) fn external_href(href: &str) -> bool {
 /// silently gone, which our own reader could not see because it put the
 /// newline back when parsing its own single paragraph. The runs-empty path
 /// above always split correctly; only the styled one did not.
-fn styled_paragraphs(runs: &[Run], style_of: &dyn Fn(&RunStyle) -> usize, prefix: &str) -> String {
+fn styled_paragraphs(
+    runs: &[Run],
+    style_of: &dyn Fn(&RunStyle) -> usize,
+    prefix: &str,
+) -> String {
     let mut out = String::new();
     let mut para = String::new();
     for run in runs {
@@ -276,10 +276,7 @@ fn styled_paragraphs(runs: &[Run], style_of: &dyn Fn(&RunStyle) -> usize, prefix
         if let Some(first) = pieces.next() {
             if !first.is_empty() {
                 para.push_str(&run_span(
-                    &Run {
-                        text: first.to_string(),
-                        style: run.style.clone(),
-                    },
+                    &Run { text: first.to_string(), style: run.style.clone() },
                     style_of(&run.style),
                     prefix,
                 ));
@@ -290,10 +287,7 @@ fn styled_paragraphs(runs: &[Run], style_of: &dyn Fn(&RunStyle) -> usize, prefix
             para.clear();
             if !piece.is_empty() {
                 para.push_str(&run_span(
-                    &Run {
-                        text: piece.to_string(),
-                        style: run.style.clone(),
-                    },
+                    &Run { text: piece.to_string(), style: run.style.clone() },
                     style_of(&run.style),
                     prefix,
                 ));
@@ -364,12 +358,7 @@ fn text_style(st: &RunStyle) -> String {
     if let Some(c) = &st.color {
         props.push_str(&format!(" fo:color=\"#{c}\""));
     }
-    if let Some(f) = st
-        .font_family
-        .as_deref()
-        .map(str::trim)
-        .filter(|f| !f.is_empty())
-    {
+    if let Some(f) = st.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty()) {
         props.push_str(&format!(" fo:font-family=\"{}\"", esc(f)));
     }
     props
@@ -472,10 +461,7 @@ pub(crate) struct GraphicStyles {
 /// shadow that turns with its shape (pptx `rotWithShape`, the default) has
 /// its offset in the shape's frame; turned by the shape's `rotation`
 /// (degrees, clockwise) it is the page offset that draws the same (#2335).
-fn page_fixed_shadow(
-    style: &crate::engine::shape::ShapeStyle,
-    rotation: f64,
-) -> std::borrow::Cow<'_, crate::engine::shape::ShapeStyle> {
+fn page_fixed_shadow(style: &crate::engine::shape::ShapeStyle, rotation: f64) -> std::borrow::Cow<'_, crate::engine::shape::ShapeStyle> {
     match style.shadow {
         Some(sh) if sh.rotate_with_shape => {
             let (sin, cos) = rotation.to_radians().sin_cos();
@@ -599,11 +585,7 @@ impl GraphicStyles {
 /// `frame_style` is the box's frame style (anchor, padding), if it has one:
 /// a placeholder names its presentation twin instead of it.
 fn frame_attrs(body: &crate::engine::TextBody, text: &str, frame_style: Option<String>) -> String {
-    let empty = if text.is_empty() {
-        " presentation:placeholder=\"true\""
-    } else {
-        ""
-    };
+    let empty = if text.is_empty() { " presentation:placeholder=\"true\"" } else { "" };
     match (body.placeholder, frame_style) {
         (Some(role), style) => format!(
             " presentation:style-name=\"{}\" presentation:class=\"{}\"{empty}",
@@ -627,293 +609,189 @@ fn shapes_xml(
     graphics: &mut GraphicStyles,
 ) -> Result<String, String> {
     let mut pages = String::new();
-    for obj in shapes {
-        match obj {
-            // A box with a shape of its own is that shape holding the
-            // text, as Impress writes one: a custom shape painted by a
-            // graphic style.
-            SlideObject::TextBox {
-                text,
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                runs,
-                body,
-            } if body.frame.is_some() => {
-                let frame = body.frame.as_ref().expect("matched on it");
-                let inner: Vec<String> = if runs.is_empty() {
-                    text.split('\n').map(esc_breaks).collect()
-                } else {
-                    crate::engine::text_body::paragraphs(runs)
-                        .iter()
-                        .map(|p| {
-                            p.iter()
-                                .map(|r| run_span(r, style_of(&r.style), prefix))
-                                .collect()
-                        })
-                        .collect()
-                };
-                let paras = if body.is_plain() {
-                    inner
-                        .iter()
-                        .map(|l| format!("<text:p>{l}</text:p>"))
-                        .collect()
-                } else {
-                    graphics.text.paragraphs(body, &inner)
-                };
-                let gs = graphics.name_of(&page_fixed_shadow(&frame.style, *rotation));
-                let geom = enhanced_geometry(&frame.kind);
-                pages.push_str(&format!(
+        for obj in shapes {
+            match obj {
+                // A box with a shape of its own is that shape holding the
+                // text, as Impress writes one: a custom shape painted by a
+                // graphic style.
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } if body.frame.is_some() => {
+                    let frame = body.frame.as_ref().expect("matched on it");
+                    let inner: Vec<String> = if runs.is_empty() {
+                        text.split('\n').map(esc_breaks).collect()
+                    } else {
+                        crate::engine::text_body::paragraphs(runs)
+                            .iter()
+                            .map(|p| p.iter().map(|r| run_span(r, style_of(&r.style), prefix)).collect())
+                            .collect()
+                    };
+                    let paras = if body.is_plain() {
+                        inner.iter().map(|l| format!("<text:p>{l}</text:p>")).collect()
+                    } else {
+                        graphics.text.paragraphs(body, &inner)
+                    };
+                    let gs = graphics.name_of(&page_fixed_shadow(&frame.style, *rotation));
+                    let geom = enhanced_geometry(&frame.kind);
+                    pages.push_str(&format!(
                         "<draw:custom-shape draw:style-name=\"{gs}\" {}>{paras}{geom}</draw:custom-shape>",
                         geometry(*x, *y, *w, *h, *rotation)
                     ));
-            }
-            SlideObject::TextBox {
-                text,
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                runs,
-                body,
-            } if !body.is_plain() => {
-                // Paragraph styles, lists and the frame's anchor and
-                // padding (odp_text.rs).
-                let inner: Vec<String> = if runs.is_empty() {
-                    text.split('\n').map(esc).collect()
-                } else {
-                    crate::engine::text_body::paragraphs(runs)
-                        .iter()
-                        .map(|p| {
-                            p.iter()
-                                .map(|r| run_span(r, style_of(&r.style), prefix))
-                                .collect()
-                        })
-                        .collect()
-                };
-                let paras = graphics.text.paragraphs(body, &inner);
-                let style = graphics.text.frame_name(body);
-                pages.push_str(&format!(
-                    "<draw:frame {}{}><draw:text-box>{paras}</draw:text-box></draw:frame>",
-                    geometry(*x, *y, *w, *h, *rotation),
-                    frame_attrs(body, text, style)
-                ));
-            }
-            SlideObject::TextBox {
-                text,
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                runs,
-                body,
-            } => {
-                let inner: String = if runs.is_empty() {
-                    text.split('\n')
-                        .map(|l| format!("<text:p>{}</text:p>", esc_breaks(l)))
-                        .collect()
-                } else {
-                    styled_paragraphs(runs, style_of, prefix)
-                };
-                pages.push_str(&format!(
-                    "<draw:frame {}{}>\
-                         <draw:text-box>{inner}</draw:text-box></draw:frame>",
-                    geometry(*x, *y, *w, *h, *rotation),
-                    frame_attrs(body, text, None)
-                ));
-            }
-            SlideObject::Rect {
-                x,
-                y,
-                w,
-                h,
-                rotation,
-            } => {
-                pages.push_str(&format!(
-                    "<draw:rect {}/>",
-                    geometry(*x, *y, *w, *h, *rotation)
-                ));
-            }
-            SlideObject::Circle { x, y, r, rotation } => {
-                let (cx, cy, d) = (x - r, y - r, r * 2.0);
-                pages.push_str(&format!(
-                    "<draw:ellipse {}/>",
-                    geometry(cx, cy, d, d, *rotation)
-                ));
-            }
-            SlideObject::Table {
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                table,
-            } => {
-                // A table in a frame, as Impress writes one. Its default
-                // look (header row, banding) isn't carried: ODF expresses
-                // it through a table template, not yet written.
-                let cols = table.rows.first().map_or(0, |r| r.len());
-                let mut t = format!(
-                    "<draw:frame {}><table:table>",
-                    geometry(*x, *y, *w, *h, *rotation)
-                );
-                t.push_str(&"<table:table-column/>".repeat(cols));
-                let owners = table.owners();
-                for (r, row) in table.rows.iter().enumerate() {
-                    t.push_str("<table:table-row>");
-                    for (c, cell) in row.iter().enumerate() {
-                        // A cell a merged one covers is ODF's covered
-                        // cell; the merged one says how far it spans.
-                        if owners
-                            .get(r)
-                            .and_then(|o| o.get(c))
-                            .is_some_and(|o| *o != (r, c))
-                        {
-                            t.push_str("<table:covered-table-cell/>");
-                            continue;
-                        }
-                        let inner: String = if cell.runs.is_empty() {
-                            "<text:p/>".to_string()
-                        } else {
-                            styled_paragraphs(&cell.runs, style_of, prefix)
-                        };
-                        let (cs, rs) = cell.span();
-                        let mut span = String::new();
-                        if cs > 1 {
-                            span.push_str(&format!(" table:number-columns-spanned=\"{cs}\""));
-                        }
-                        if rs > 1 {
-                            span.push_str(&format!(" table:number-rows-spanned=\"{rs}\""));
-                        }
-                        t.push_str(&format!(
-                            "<table:table-cell{span}>{inner}</table:table-cell>"
-                        ));
-                    }
-                    t.push_str("</table:table-row>");
                 }
-                t.push_str("</table:table></draw:frame>");
-                pages.push_str(&t);
-            }
-            SlideObject::Shape {
-                kind,
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                style,
-            } => {
-                use crate::engine::shape::ShapeKind;
-                let at = geometry(*x, *y, *w, *h, *rotation);
-                let gs = graphics.name_of(&page_fixed_shadow(style, *rotation));
-                pages.push_str(&match kind {
-                    ShapeKind::Rect => format!("<draw:rect draw:style-name=\"{gs}\" {at}/>"),
-                    ShapeKind::RoundRect { radius } => format!(
-                        "<draw:rect draw:style-name=\"{gs}\" draw:corner-radius=\"{}pt\" {at}/>",
-                        snap(page_x(radius.clamp(0.0, 0.5) * w.min(*h)))
-                    ),
-                    ShapeKind::Ellipse => format!("<draw:ellipse draw:style-name=\"{gs}\" {at}/>"),
-                    // Impress's names for the other DrawingML presets.
-                    other => format!(
-                        "<draw:custom-shape draw:style-name=\"{gs}\" {at}>{}</draw:custom-shape>",
-                        enhanced_geometry(other)
-                    ),
-                });
-            }
-            SlideObject::Chart {
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                chart,
-            } => {
-                // An embedded chart object, as Impress writes one: a
-                // sub-document of its own whose data is its local
-                // table. Numbered through the package like pictures.
-                use crate::engine::chart;
-                let n = media
-                    .iter()
-                    .filter(|m| m.media_type == chart::ODF_CHART_MEDIA_TYPE)
-                    .count()
-                    + 1;
-                let dir = format!("Object {n}");
-                pages.push_str(&format!(
-                    "<draw:frame {}>\
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } if !body.is_plain() => {
+                    // Paragraph styles, lists and the frame's anchor and
+                    // padding (odp_text.rs).
+                    let inner: Vec<String> = if runs.is_empty() {
+                        text.split('\n').map(esc).collect()
+                    } else {
+                        crate::engine::text_body::paragraphs(runs)
+                            .iter()
+                            .map(|p| p.iter().map(|r| run_span(r, style_of(&r.style), prefix)).collect())
+                            .collect()
+                    };
+                    let paras = graphics.text.paragraphs(body, &inner);
+                    let style = graphics.text.frame_name(body);
+                    pages.push_str(&format!(
+                        "<draw:frame {}{}><draw:text-box>{paras}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation),
+                        frame_attrs(body, text, style)
+                    ));
+                }
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } => {
+                    let inner: String = if runs.is_empty() {
+                        text.split('\n')
+                            .map(|l| format!("<text:p>{}</text:p>", esc_breaks(l)))
+                            .collect()
+                    } else {
+                        styled_paragraphs(runs, style_of, prefix)
+                    };
+                    pages.push_str(&format!(
+                        "<draw:frame {}{}>\
+                         <draw:text-box>{inner}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation),
+                        frame_attrs(body, text, None)
+                    ));
+                }
+                SlideObject::Rect { x, y, w, h, rotation } => {
+                    pages.push_str(&format!(
+                        "<draw:rect {}/>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                }
+                SlideObject::Circle { x, y, r, rotation } => {
+                    let (cx, cy, d) = (x - r, y - r, r * 2.0);
+                    pages.push_str(&format!(
+                        "<draw:ellipse {}/>",
+                        geometry(cx, cy, d, d, *rotation)
+                    ));
+                }
+                SlideObject::Table { x, y, w, h, rotation, table } => {
+                    // A table in a frame, as Impress writes one. Its default
+                    // look (header row, banding) isn't carried: ODF expresses
+                    // it through a table template, not yet written.
+                    let cols = table.rows.first().map_or(0, |r| r.len());
+                    let mut t = format!("<draw:frame {}><table:table>", geometry(*x, *y, *w, *h, *rotation));
+                    t.push_str(&"<table:table-column/>".repeat(cols));
+                    let owners = table.owners();
+                    for (r, row) in table.rows.iter().enumerate() {
+                        t.push_str("<table:table-row>");
+                        for (c, cell) in row.iter().enumerate() {
+                            // A cell a merged one covers is ODF's covered
+                            // cell; the merged one says how far it spans.
+                            if owners.get(r).and_then(|o| o.get(c)).is_some_and(|o| *o != (r, c)) {
+                                t.push_str("<table:covered-table-cell/>");
+                                continue;
+                            }
+                            let inner: String = if cell.runs.is_empty() {
+                                "<text:p/>".to_string()
+                            } else {
+                                styled_paragraphs(&cell.runs, style_of, prefix)
+                            };
+                            let (cs, rs) = cell.span();
+                            let mut span = String::new();
+                            if cs > 1 {
+                                span.push_str(&format!(" table:number-columns-spanned=\"{cs}\""));
+                            }
+                            if rs > 1 {
+                                span.push_str(&format!(" table:number-rows-spanned=\"{rs}\""));
+                            }
+                            t.push_str(&format!("<table:table-cell{span}>{inner}</table:table-cell>"));
+                        }
+                        t.push_str("</table:table-row>");
+                    }
+                    t.push_str("</table:table></draw:frame>");
+                    pages.push_str(&t);
+                }
+                SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
+                    use crate::engine::shape::ShapeKind;
+                    let at = geometry(*x, *y, *w, *h, *rotation);
+                    let gs = graphics.name_of(&page_fixed_shadow(style, *rotation));
+                    pages.push_str(&match kind {
+                        ShapeKind::Rect => format!("<draw:rect draw:style-name=\"{gs}\" {at}/>"),
+                        ShapeKind::RoundRect { radius } => format!(
+                            "<draw:rect draw:style-name=\"{gs}\" draw:corner-radius=\"{}pt\" {at}/>",
+                            snap(page_x(radius.clamp(0.0, 0.5) * w.min(*h)))
+                        ),
+                        ShapeKind::Ellipse => format!("<draw:ellipse draw:style-name=\"{gs}\" {at}/>"),
+                        // Impress's names for the other DrawingML presets.
+                        other => format!("<draw:custom-shape draw:style-name=\"{gs}\" {at}>{}</draw:custom-shape>", enhanced_geometry(other)),
+                    });
+                }
+                SlideObject::Chart { x, y, w, h, rotation, chart } => {
+                    // An embedded chart object, as Impress writes one: a
+                    // sub-document of its own whose data is its local
+                    // table. Numbered through the package like pictures.
+                    use crate::engine::chart;
+                    let n = media.iter().filter(|m| m.media_type == chart::ODF_CHART_MEDIA_TYPE).count() + 1;
+                    let dir = format!("Object {n}");
+                    pages.push_str(&format!(
+                        "<draw:frame {}>\
                          <draw:object xlink:href=\"./{dir}\" xlink:type=\"simple\" \
                          xlink:show=\"embed\" xlink:actuate=\"onLoad\"/></draw:frame>",
-                    geometry(*x, *y, *w, *h, *rotation)
-                ));
-                media.push(Media {
-                    zip_path: format!("{dir}/"),
-                    media_type: chart::ODF_CHART_MEDIA_TYPE.into(),
-                    bytes: Vec::new(),
-                });
-                media.push(Media {
-                    zip_path: format!("{dir}/content.xml"),
-                    media_type: "text/xml".into(),
-                    bytes: chart::odf_chart_content_xml(chart, snap(page_x(*w)), snap(page_y(*h)))
-                        .into_bytes(),
-                });
-                media.push(Media {
-                    zip_path: format!("{dir}/styles.xml"),
-                    media_type: "text/xml".into(),
-                    bytes: chart::odf_chart_styles_xml().into_bytes(),
-                });
-            }
-            SlideObject::Image {
-                path,
-                x,
-                y,
-                w,
-                h,
-                rotation,
-                crop,
-            } => {
-                // Named by position in the package rather than after
-                // the source file: two decks can hold pictures called
-                // the same thing, and a name taken from the model is a
-                // name from a document we did not write.
-                let (ext, media_type) = media_type_for(path);
-                let zip_path = format!("Pictures/image{}.{ext}", media.len() + 1);
-                let bytes =
-                    std::fs::read(path).map_err(|e| format!("Cannot open image {path}: {e}"))?;
-                // A crop is lengths against the picture's natural size
-                // (96 dpi): `rect(top, right, bottom, left)`.
-                let clip = (!crop.is_none())
-                    .then(|| crate::image_px::pixel_size(&bytes))
-                    .flatten()
-                    .map(|(pw, ph)| {
-                        let (nw, nh) = (f64::from(pw) * 0.75, f64::from(ph) * 0.75);
-                        graphics.clip_name(format!(
-                            "rect({}pt, {}pt, {}pt, {}pt)",
-                            snap(crop.top * nh),
-                            snap(crop.right * nw),
-                            snap(crop.bottom * nh),
-                            snap(crop.left * nw)
-                        ))
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                    media.push(Media { zip_path: format!("{dir}/"), media_type: chart::ODF_CHART_MEDIA_TYPE.into(), bytes: Vec::new() });
+                    media.push(Media {
+                        zip_path: format!("{dir}/content.xml"),
+                        media_type: "text/xml".into(),
+                        bytes: chart::odf_chart_content_xml(chart, snap(page_x(*w)), snap(page_y(*h))).into_bytes(),
                     });
-                let style = clip
-                    .map(|c| format!(" draw:style-name=\"{c}\""))
-                    .unwrap_or_default();
-                pages.push_str(&format!(
-                    "<draw:frame{style} {}>\
+                    media.push(Media {
+                        zip_path: format!("{dir}/styles.xml"),
+                        media_type: "text/xml".into(),
+                        bytes: chart::odf_chart_styles_xml().into_bytes(),
+                    });
+                }
+                SlideObject::Image { path, x, y, w, h, rotation, crop } => {
+                    // Named by position in the package rather than after
+                    // the source file: two decks can hold pictures called
+                    // the same thing, and a name taken from the model is a
+                    // name from a document we did not write.
+                    let (ext, media_type) = media_type_for(path);
+                    let zip_path = format!("Pictures/image{}.{ext}", media.len() + 1);
+                    let bytes = std::fs::read(path)
+                        .map_err(|e| format!("Cannot open image {path}: {e}"))?;
+                    // A crop is lengths against the picture's natural size
+                    // (96 dpi): `rect(top, right, bottom, left)`.
+                    let clip = (!crop.is_none())
+                        .then(|| crate::image_px::pixel_size(&bytes))
+                        .flatten()
+                        .map(|(pw, ph)| {
+                            let (nw, nh) = (f64::from(pw) * 0.75, f64::from(ph) * 0.75);
+                            graphics.clip_name(format!(
+                                "rect({}pt, {}pt, {}pt, {}pt)",
+                                snap(crop.top * nh), snap(crop.right * nw), snap(crop.bottom * nh), snap(crop.left * nw)
+                            ))
+                        });
+                    let style = clip.map(|c| format!(" draw:style-name=\"{c}\"")).unwrap_or_default();
+                    pages.push_str(&format!(
+                        "<draw:frame{style} {}>\
                          <draw:image xlink:href=\"{zip_path}\" xlink:type=\"simple\" \
                          xlink:show=\"embed\" xlink:actuate=\"onLoad\"/></draw:frame>",
-                    geometry(*x, *y, *w, *h, *rotation)
-                ));
-                media.push(Media {
-                    zip_path,
-                    media_type: media_type.to_string(),
-                    bytes,
-                });
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                    media.push(Media { zip_path, media_type: media_type.to_string(), bytes });
+                }
             }
         }
-    }
     Ok(pages)
 }
 
@@ -941,13 +819,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         }
     }
 
-    let style_of = |st: &RunStyle| {
-        styles
-            .iter()
-            .position(|s| s == st)
-            .map(|i| i + 1)
-            .unwrap_or(0)
-    };
+    let style_of = |st: &RunStyle| styles.iter().position(|s| s == st).map(|i| i + 1).unwrap_or(0);
 
     let mut pages = String::new();
     let mut graphics = GraphicStyles::new("gr", deck);
@@ -976,35 +848,19 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         let master_attrs = master
             .map(|m| {
                 let style = encode_style_name(&m.name);
-                let layout = slide
-                    .layout_id
-                    .and_then(|id| m.layouts.iter().position(|l| l.id == id))
-                    .or((!m.layouts.is_empty()).then_some(0));
+                let layout = slide.layout_id.and_then(|id| m.layouts.iter().position(|l| l.id == id)).or((!m.layouts.is_empty()).then_some(0));
                 let page = match layout {
-                    Some(j) if crate::odp_layouts::has_look(&m.layouts[j]) => {
-                        crate::odp_layouts::look_page_name(&style, j)
-                    }
+                    Some(j) if crate::odp_layouts::has_look(&m.layouts[j]) => crate::odp_layouts::look_page_name(&style, j),
                     _ => style.clone(),
                 };
                 let layout_attr = layout
-                    .map(|j| {
-                        format!(
-                            " presentation:presentation-page-layout-name=\"{}\"",
-                            esc(&crate::odp_layouts::page_layout_name(&style, j))
-                        )
-                    })
+                    .map(|j| format!(" presentation:presentation-page-layout-name=\"{}\"", esc(&crate::odp_layouts::page_layout_name(&style, j))))
                     .unwrap_or_default();
                 format!(" draw:master-page-name=\"{}\"{layout_attr}", esc(&page))
             })
             .unwrap_or_default();
         pages.push_str(&format!("<draw:page{name_attr}{dp_attr}{master_attrs}>"));
-        let shapes = shapes_xml(
-            &slide.objects,
-            &style_of,
-            SLIDE_STYLE_PREFIX,
-            media,
-            &mut graphics,
-        )?;
+        let shapes = shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media, &mut graphics)?;
         if slide.builds.is_empty() {
             pages.push_str(&shapes);
         } else {
@@ -1089,11 +945,7 @@ fn encode_style_name(name: &str) -> String {
             out.push_str(&format!("_{:x}_", c as u32));
         }
     }
-    if out.is_empty() {
-        "Default".into()
-    } else {
-        out
-    }
+    if out.is_empty() { "Default".into() } else { out }
 }
 
 /// The inverse, and tolerant: a token with no escapes, or a stray `_`, is
@@ -1152,11 +1004,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          style:print-orientation=\"{}\"/></style:page-layout>",
         snap(page_w),
         snap(page_h),
-        if page_w >= page_h {
-            "landscape"
-        } else {
-            "portrait"
-        }
+        if page_w >= page_h { "landscape" } else { "portrait" }
     );
     let mut pages = String::new();
     let mut master_graphics = GraphicStyles::new("mgr", deck);
@@ -1178,51 +1026,25 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         let mstyles = distinct_run_styles(&master.shapes);
         auto.push_str(&declare_run_styles(&mstyles, &master_style_prefix(i)));
         let style_of = |st: &RunStyle| {
-            mstyles
-                .iter()
-                .position(|s| s == st)
-                .map(|p| p + 1)
-                .unwrap_or(0)
+            mstyles.iter().position(|s| s == st).map(|p| p + 1).unwrap_or(0)
         };
         pages.push_str(&format!(
             "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{dp}>{}\
              </style:master-page>",
             esc(&encode_style_name(&master.name)),
-            shapes_xml(
-                &master.shapes,
-                &style_of,
-                &master_style_prefix(i),
-                media,
-                &mut master_graphics
-            )?,
+            shapes_xml(&master.shapes, &style_of, &master_style_prefix(i), media, &mut master_graphics)?,
         ));
         // A layout with a look of its own: one more master page, the
         // master's decorations and then the layout's (odp_layouts).
         let style = encode_style_name(&master.name);
-        for (j, l) in master
-            .layouts
-            .iter()
-            .enumerate()
-            .filter(|(_, l)| crate::odp_layouts::has_look(l))
-        {
+        for (j, l) in master.layouts.iter().enumerate().filter(|(_, l)| crate::odp_layouts::has_look(l)) {
             let mut shapes = master.shapes.clone();
             shapes.extend(l.shapes.iter().cloned());
             let lstyles = distinct_run_styles(&shapes);
             let prefix = format!("{}L{}", master_style_prefix(i), j + 1);
             auto.push_str(&declare_run_styles(&lstyles, &prefix));
-            let style_of = |st: &RunStyle| {
-                lstyles
-                    .iter()
-                    .position(|s| s == st)
-                    .map(|p| p + 1)
-                    .unwrap_or(0)
-            };
-            let bg = l
-                .background
-                .as_deref()
-                .unwrap_or(&master.background)
-                .trim_start_matches('#')
-                .to_string();
+            let style_of = |st: &RunStyle| lstyles.iter().position(|s| s == st).map(|p| p + 1).unwrap_or(0);
+            let bg = l.background.as_deref().unwrap_or(&master.background).trim_start_matches('#').to_string();
             let ldp = if bg.len() == 6 {
                 auto.push_str(&format!(
                     "<style:style style:name=\"mdp{}l{}\" style:family=\"drawing-page\">\
@@ -1244,9 +1066,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
                 shapes_xml(&shapes, &style_of, &prefix, media, &mut master_graphics)?,
             ));
         }
-        page_layouts.push_str(&crate::odp_layouts::page_layouts_xml(
-            master, &style, &page_x, &page_y,
-        ));
+        page_layouts.push_str(&crate::odp_layouts::page_layouts_xml(master, &style, &page_x, &page_y));
     }
     auto.push_str(&master_graphics.declare());
     // ODF wants a font it uses declared as well as referenced; Impress
@@ -1340,8 +1160,7 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
     )
     .map_err(|e| e.to_string())?;
-    z.write_all(MIMETYPE.as_bytes())
-        .map_err(|e| e.to_string())?;
+    z.write_all(MIMETYPE.as_bytes()).map_err(|e| e.to_string())?;
     let opt = zip::write::SimpleFileOptions::default();
     // The XML is built first because building it is what discovers the
     // pictures: the manifest has to list them, and it is written before
@@ -1349,20 +1168,16 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     let mut media: Vec<Media> = Vec::new();
     let content = content_xml(deck, &mut media)?;
     let styles = styles_xml(deck, &mut media)?;
-    z.start_file("META-INF/manifest.xml", opt)
-        .map_err(|e| e.to_string())?;
-    z.write_all(manifest_xml(&media).as_bytes())
-        .map_err(|e| e.to_string())?;
-    z.start_file("content.xml", opt)
-        .map_err(|e| e.to_string())?;
+    z.start_file("META-INF/manifest.xml", opt).map_err(|e| e.to_string())?;
+    z.write_all(manifest_xml(&media).as_bytes()).map_err(|e| e.to_string())?;
+    z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(styles.as_bytes()).map_err(|e| e.to_string())?;
     for m in &media {
         // An embedded object's directory (its manifest entry names it).
         if m.zip_path.ends_with('/') {
-            z.add_directory(m.zip_path.as_str(), opt)
-                .map_err(|e| e.to_string())?;
+            z.add_directory(m.zip_path.as_str(), opt).map_err(|e| e.to_string())?;
             continue;
         }
         // Stored, not deflated: a PNG or JPEG is already compressed, and
@@ -1375,9 +1190,7 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())?;
         z.write_all(&m.bytes).map_err(|e| e.to_string())?;
     }
-    z.finish()
-        .map_err(|e| e.to_string())
-        .map(|c| c.into_inner())
+    z.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
 }
 
 // ── Reading ──────────────────────────────────────────────────────────
@@ -1472,11 +1285,7 @@ fn transition_attrs(t: Transition) -> Option<String> {
         Transition::Push => ("pushWipe", "fromRight"),
         Transition::Wipe => ("barWipe", "leftToRight"),
     };
-    let magic = if t == Transition::MagicMove {
-        " decks:transition=\"magic-move\""
-    } else {
-        ""
-    };
+    let magic = if t == Transition::MagicMove { " decks:transition=\"magic-move\"" } else { "" };
     Some(format!(" presentation:transition-speed=\"medium\" smil:type=\"{ty}\" smil:subtype=\"{sub}\"{magic}"))
 }
 
@@ -1495,28 +1304,18 @@ fn transition_of(smil_type: Option<&str>, decks: Option<&str>) -> Transition {
 
 /// A `draw:enhanced-geometry`'s own paths, when it is not a preset: its
 /// enhanced path over its view box (`freeform::from_enhanced_path`).
-fn freeform_paths(
-    e: &quick_xml::events::BytesStart,
-) -> Option<Vec<crate::engine::freeform::FreePath>> {
+fn freeform_paths(e: &quick_xml::events::BytesStart) -> Option<Vec<crate::engine::freeform::FreePath>> {
     let ty = attr(e, "draw:type").unwrap_or_default();
     if !matches!(ty.as_str(), "non-primitive" | "ooxml-non-primitive") {
         return None;
     }
-    let view: Vec<f64> = attr(e, "svg:viewBox")?
-        .split_whitespace()
-        .filter_map(|v| v.parse().ok())
-        .collect();
-    let [_, _, vw, vh] = view.as_slice() else {
-        return None;
-    };
+    let view: Vec<f64> = attr(e, "svg:viewBox")?.split_whitespace().filter_map(|v| v.parse().ok()).collect();
+    let [_, _, vw, vh] = view.as_slice() else { return None };
     crate::engine::freeform::from_enhanced_path(&attr(e, "draw:enhanced-path")?, *vw, *vh)
 }
 
 /// A custom shape's kind: its own paths if it has them, else its preset.
-fn custom_kind(
-    shape_type: Option<&str>,
-    paths: Option<Vec<crate::engine::freeform::FreePath>>,
-) -> crate::engine::shape::ShapeKind {
+fn custom_kind(shape_type: Option<&str>, paths: Option<Vec<crate::engine::freeform::FreePath>>) -> crate::engine::shape::ShapeKind {
     match paths {
         Some(paths) => crate::engine::shape::ShapeKind::Freeform(paths),
         None => crate::odp_graphics::kind_of("draw:custom-shape", shape_type, None),
@@ -1557,26 +1356,15 @@ const FREEFORM_VIEW: f64 = 21600.0;
 fn drawing_page_props(slide: &Slide, si: usize) -> Option<String> {
     let bg = slide.background.trim_start_matches('#');
     let fill = if slide.background_picture.is_some() {
-        format!(
-            " draw:fill=\"bitmap\" draw:fill-image-name=\"{}\" style:repeat=\"stretch\"",
-            background_fill_name(si)
-        )
+        format!(" draw:fill=\"bitmap\" draw:fill-image-name=\"{}\" style:repeat=\"stretch\"", background_fill_name(si))
     } else if bg.len() == 6 {
-        format!(
-            " draw:fill=\"solid\" draw:fill-color=\"#{}\"",
-            bg.to_lowercase()
-        )
+        format!(" draw:fill=\"solid\" draw:fill-color=\"#{}\"", bg.to_lowercase())
     } else {
         String::new()
     };
     let trans = transition_attrs(slide.transition).unwrap_or_default();
-    let visibility = if slide.hidden {
-        " presentation:visibility=\"hidden\""
-    } else {
-        ""
-    };
-    (!fill.is_empty() || !trans.is_empty() || slide.hidden)
-        .then(|| format!("{fill}{trans}{visibility}"))
+    let visibility = if slide.hidden { " presentation:visibility=\"hidden\"" } else { "" };
+    (!fill.is_empty() || !trans.is_empty() || slide.hidden).then(|| format!("{fill}{trans}{visibility}"))
 }
 
 /// The fill image slide `si`'s background picture is declared as.
@@ -1589,9 +1377,7 @@ fn background_fill_name(si: usize) -> String {
 fn background_fill_images(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let mut defs = String::new();
     for (si, slide) in deck.slides.iter().enumerate() {
-        let Some(picture) = &slide.background_picture else {
-            continue;
-        };
+        let Some(picture) = &slide.background_picture else { continue };
         let path = &picture.path;
         let (ext, media_type) = media_type_for(path);
         let zip_path = format!("Pictures/background{}.{ext}", si + 1);
@@ -1601,11 +1387,7 @@ fn background_fill_images(deck: &Deck, media: &mut Vec<Media>) -> Result<String,
              xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>",
             background_fill_name(si)
         ));
-        media.push(Media {
-            zip_path,
-            media_type: media_type.to_string(),
-            bytes,
-        });
+        media.push(Media { zip_path, media_type: media_type.to_string(), bytes });
     }
     Ok(defs)
 }
@@ -1625,19 +1407,13 @@ fn fill_images(
         match reader.read_event() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
                 "style:style" => style = attr(&e, "style:name"),
-                "style:drawing-page-properties"
-                    if attr(&e, "draw:fill").as_deref() == Some("bitmap") =>
-                {
-                    if let (Some(style), Some(image)) =
-                        (style.clone(), attr(&e, "draw:fill-image-name"))
-                    {
+                "style:drawing-page-properties" if attr(&e, "draw:fill").as_deref() == Some("bitmap") => {
+                    if let (Some(style), Some(image)) = (style.clone(), attr(&e, "draw:fill-image-name")) {
                         page_image.insert(style, image);
                     }
                 }
                 "draw:fill-image" => {
-                    if let (Some(name), Some(href)) =
-                        (attr(&e, "draw:name"), attr(&e, "xlink:href"))
-                    {
+                    if let (Some(name), Some(href)) = (attr(&e, "draw:name"), attr(&e, "xlink:href")) {
                         images.insert(name, href);
                     }
                 }
@@ -1658,9 +1434,7 @@ fn hidden_pages(xml: &str, hidden: &mut std::collections::HashSet<String>) {
         match reader.read_event() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
                 "style:style" => cur = attr(&e, "style:name"),
-                "style:drawing-page-properties"
-                    if attr(&e, "presentation:visibility").as_deref() == Some("hidden") =>
-                {
+                "style:drawing-page-properties" if attr(&e, "presentation:visibility").as_deref() == Some("hidden") => {
                     hidden.extend(cur.clone());
                 }
                 _ => {}
@@ -1688,7 +1462,8 @@ fn parse_styles(
             match reader.read_event() {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
                     "style:style" => {
-                        cur = attr(&e, "style:name").zip(attr(&e, "style:family"));
+                        cur = attr(&e, "style:name")
+                            .zip(attr(&e, "style:family"));
                     }
                     "style:text-properties" => {
                         if let Some((name, family)) = &cur {
@@ -1718,7 +1493,8 @@ fn parse_styles(
                                     }
                                 }
                                 if let Some(c) = attr(&e, "fo:color") {
-                                    st.color = Some(c.trim_start_matches('#').to_lowercase());
+                                    st.color =
+                                        Some(c.trim_start_matches('#').to_lowercase());
                                 }
                                 // LibreOffice names a face declared in
                                 // office:font-face-decls, whose name is
@@ -1780,11 +1556,7 @@ struct Page {
 /// concatenated run text still equals the box's `text` — the invariant
 /// `SlideObject::TextBox` documents, and the one the pptx walker keeps the
 /// same way.
-fn open_paragraph(
-    textbox: &mut Option<(Vec<String>, Vec<Run>)>,
-    paras: &mut Vec<crate::engine::ParaStyle>,
-    para: crate::engine::ParaStyle,
-) {
+fn open_paragraph(textbox: &mut Option<(Vec<String>, Vec<Run>)>, paras: &mut Vec<crate::engine::ParaStyle>, para: crate::engine::ParaStyle) {
     if let Some((lines, runs)) = textbox.as_mut() {
         if let Some(last) = runs.last_mut() {
             last.text.push('\n');
@@ -1899,10 +1671,7 @@ fn parse_pages(
     let mut span_style: Option<RunStyle> = None;
     // The open `text:a`'s address, which the runs inside it link to (#1998).
     let mut link: Option<String> = None;
-    let run_style = |span: &Option<RunStyle>, link: &Option<String>| RunStyle {
-        link: link.clone(),
-        ..span.clone().unwrap_or_default()
-    };
+    let run_style = |span: &Option<RunStyle>, link: &Option<String>| RunStyle { link: link.clone(), ..span.clone().unwrap_or_default() };
     let mut in_text = false;
     let mut shape_type: Option<String> = None;
     // A custom shape's own paths, when its geometry is not a preset
@@ -1915,15 +1684,7 @@ fn parse_pages(
     let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
     let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
         let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
-        crate::engine::TextBody {
-            paras: std::mem::take(paras),
-            anchor,
-            insets,
-            autofit: None,
-            placeholder: None,
-            placeholder_key: None,
-            frame: None,
-        }
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None, placeholder_key: None, frame: None }
     };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
@@ -1940,13 +1701,7 @@ fn parse_pages(
                 Some((x, y, rotation)) => (x, y, rotation),
                 None => (g("svg:x"), g("svg:y"), 0.0),
             };
-        (
-            x_pt * scale.0,
-            y_pt * scale.1,
-            w_pt * scale.0,
-            h_pt * scale.1,
-            rotation,
-        )
+        (x_pt * scale.0, y_pt * scale.1, w_pt * scale.0, h_pt * scale.1, rotation)
     };
 
     // A rect or ellipse with a graphic style is a painted Shape, as on a
@@ -1958,15 +1713,7 @@ fn parse_pages(
             .and_then(|v| parse_length_pt(&v))
             .map(|r| r * scale.0 / w.min(h).max(f64::EPSILON));
         let kind = crate::odp_graphics::kind_of(element, None, radius);
-        Some(SlideObject::Shape {
-            kind,
-            x,
-            y,
-            w,
-            h,
-            rotation,
-            style,
-        })
+        Some(SlideObject::Shape { kind, x, y, w, h, rotation, style })
     };
 
     // Builds: each object's xml:id (the shape element it came from), and
@@ -1974,13 +1721,7 @@ fn parse_pages(
     let mut last_id: Option<String> = None;
     let mut ids: Vec<Option<String>> = Vec::new();
     let mut builds = crate::odp_builds::BuildReader::default();
-    const SHAPES: [&str; 5] = [
-        "draw:frame",
-        "draw:rect",
-        "draw:ellipse",
-        "draw:circle",
-        "draw:custom-shape",
-    ];
+    const SHAPES: [&str; 5] = ["draw:frame", "draw:rect", "draw:ellipse", "draw:circle", "draw:custom-shape"];
 
     // A page with nothing on it may be one self-closing element
     // (`<draw:page draw:name="A"/>`): it is read as its start, then its end.
@@ -2028,10 +1769,8 @@ fn parse_pages(
                     uses_master = attr(e, "draw:master-page-name");
                     page_style = attr(e, "draw:style-name");
                     page_layout = attr(e, "presentation:presentation-page-layout-name");
-                    layout_of = attr(e, "decks:layout-of")
-                        .zip(attr(e, "decks:layout").and_then(|j| j.parse().ok()));
-                    slide = Some(Slide {
-                        hidden: false,
+                    layout_of = attr(e, "decks:layout-of").zip(attr(e, "decks:layout").and_then(|j| j.parse().ok()));
+                    slide = Some(Slide { hidden: false,
                         title: attr(e, "draw:name")
                             .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
                             .unwrap_or_default(),
@@ -2051,8 +1790,7 @@ fn parse_pages(
                     frame = Some(geo(e));
                     frame_has_chart = false;
                     // A placeholder frame's style is its presentation style.
-                    frame_style =
-                        attr(e, "draw:style-name").or_else(|| attr(e, "presentation:style-name"));
+                    frame_style = attr(e, "draw:style-name").or_else(|| attr(e, "presentation:style-name"));
                     frame_class = attr(e, "presentation:class");
                 }
                 "text:list" => lists.push(attr(e, "text:style-name")),
@@ -2081,33 +1819,14 @@ fn parse_pages(
                                 .zip(crate::image_px::natural_size_pt(&path))
                                 .and_then(|(name, natural)| graphics.crop(name, natural))
                                 .unwrap_or_default();
-                            s2.objects.push(SlideObject::Image {
-                                path,
-                                x,
-                                y,
-                                w,
-                                h,
-                                rotation,
-                                crop,
-                            });
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation, crop });
                         }
                     }
                 }
                 "draw:object" => {
-                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
-                        (slide.as_mut(), in_notes, frame)
-                    {
-                        if let Some(chart) =
-                            attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned())
-                        {
-                            s2.objects.push(SlideObject::Chart {
-                                x,
-                                y,
-                                w,
-                                h,
-                                rotation,
-                                chart,
-                            });
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) = (slide.as_mut(), in_notes, frame) {
+                        if let Some(chart) = attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned()) {
+                            s2.objects.push(SlideObject::Chart { x, y, w, h, rotation, chart });
                             frame_has_chart = true;
                         }
                     }
@@ -2134,32 +1853,20 @@ fn parse_pages(
                 }
                 "text:p" => {
                     let list = lists.iter().flatten().next().map(String::as_str);
-                    let para = text_defs.para(
-                        attr(e, "text:style-name").as_deref(),
-                        list,
-                        lists.len(),
-                        scale.0,
-                    );
+                    let para = text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0);
                     open_paragraph(&mut textbox, &mut paras, para);
                     in_text = true;
                 }
                 "text:span" => {
-                    span_style =
-                        attr(e, "text:style-name").and_then(|n| text_styles.get(&n).cloned());
+                    span_style = attr(e, "text:style-name")
+                        .and_then(|n| text_styles.get(&n).cloned());
                 }
                 "text:a" => link = attr(e, "xlink:href").filter(|h| external_href(h)),
                 "draw:rect" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
                             let (x, y, w, h, rotation) = geo(e);
-                            s.objects
-                                .push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect {
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                }));
+                            s.objects.push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect { x, y, w, h, rotation }));
                         }
                     }
                 }
@@ -2168,14 +1875,10 @@ fn parse_pages(
                         if !in_notes {
                             let (x, y, w, h, rotation) = geo(e);
                             let r = (w.max(h)) / 2.0;
-                            s.objects.push(styled(e, "draw:ellipse").unwrap_or(
-                                SlideObject::Circle {
-                                    x: x + w / 2.0,
-                                    y: y + h / 2.0,
-                                    r,
-                                    rotation,
-                                },
-                            ));
+                            s.objects.push(
+                                styled(e, "draw:ellipse")
+                                    .unwrap_or(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation }),
+                            );
                         }
                     }
                 }
@@ -2189,22 +1892,14 @@ fn parse_pages(
                         if let Some(last) = lines.last_mut() {
                             last.push(crate::engine::LINE_BREAK);
                         }
-                        runs.push(Run {
-                            text: crate::engine::LINE_BREAK.to_string(),
-                            style: run_style(&span_style, &link),
-                        });
+                        runs.push(Run { text: crate::engine::LINE_BREAK.to_string(), style: run_style(&span_style, &link) });
                     }
                 }
                 // An empty paragraph, `<text:p/>`: how Impress writes a
                 // blank line. It is a paragraph all the same.
                 "text:p" => {
                     let list = lists.iter().flatten().next().map(String::as_str);
-                    let para = text_defs.para(
-                        attr(e, "text:style-name").as_deref(),
-                        list,
-                        lists.len(),
-                        scale.0,
-                    );
+                    let para = text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0);
                     open_paragraph(&mut textbox, &mut paras, para);
                 }
                 "draw:enhanced-geometry" => {
@@ -2216,27 +1911,17 @@ fn parse_pages(
                 "draw:rect" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h, rotation) = geo(e);
-                        s.objects
-                            .push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect {
-                                x,
-                                y,
-                                w,
-                                h,
-                                rotation,
-                            }));
+                        s.objects.push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect { x, y, w, h, rotation }));
                     }
                 }
                 "draw:ellipse" | "draw:circle" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h, rotation) = geo(e);
                         let r = (w.max(h)) / 2.0;
-                        s.objects
-                            .push(styled(e, "draw:ellipse").unwrap_or(SlideObject::Circle {
-                                x: x + w / 2.0,
-                                y: y + h / 2.0,
-                                r,
-                                rotation,
-                            }));
+                        s.objects.push(
+                            styled(e, "draw:ellipse")
+                                .unwrap_or(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation }),
+                        );
                     }
                 }
                 // The empty form, which is what this writer emits — see the
@@ -2253,34 +1938,15 @@ fn parse_pages(
                                 .zip(crate::image_px::natural_size_pt(&path))
                                 .and_then(|(name, natural)| graphics.crop(name, natural))
                                 .unwrap_or_default();
-                            s2.objects.push(SlideObject::Image {
-                                path,
-                                x,
-                                y,
-                                w,
-                                h,
-                                rotation,
-                                crop,
-                            });
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation, crop });
                         }
                     }
                 }
                 // The empty form, which is what this writer emits.
                 "draw:object" => {
-                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
-                        (slide.as_mut(), in_notes, frame)
-                    {
-                        if let Some(chart) =
-                            attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned())
-                        {
-                            s2.objects.push(SlideObject::Chart {
-                                x,
-                                y,
-                                w,
-                                h,
-                                rotation,
-                                chart,
-                            });
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) = (slide.as_mut(), in_notes, frame) {
+                        if let Some(chart) = attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned()) {
+                            s2.objects.push(SlideObject::Chart { x, y, w, h, rotation, chart });
                             frame_has_chart = true;
                         }
                     }
@@ -2342,19 +2008,8 @@ fn parse_pages(
                                 // box's styling, one by discarding it and
                                 // the other by never reading it.
                                 let mut body = body_of(&frame_style, &mut paras);
-                                body.placeholder = frame_class
-                                    .as_deref()
-                                    .and_then(crate::layouts::Placeholder::from_odf);
-                                s.objects.push(SlideObject::TextBox {
-                                    text,
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                    runs,
-                                    body,
-                                });
+                                body.placeholder = frame_class.as_deref().and_then(crate::layouts::Placeholder::from_odf);
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body });
                             }
                         }
                     }
@@ -2381,58 +2036,20 @@ fn parse_pages(
                                 body.frame = frame_style
                                     .as_deref()
                                     .and_then(|n| graphics.style(n, scale.0))
-                                    .filter(|st| {
-                                        st.fill.is_some()
-                                            || st.gradient.is_some()
-                                            || st.stroke.is_some()
-                                    })
+                                    .filter(|st| st.fill.is_some() || st.gradient.is_some() || st.stroke.is_some())
                                     .map(|style| crate::engine::text_body::Frame {
-                                        kind: custom_kind(
-                                            shape_type.as_deref(),
-                                            shape_paths.take(),
-                                        ),
+                                        kind: custom_kind(shape_type.as_deref(), shape_paths.take()),
                                         style,
                                     });
-                                s.objects.push(SlideObject::TextBox {
-                                    text,
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                    runs,
-                                    body,
-                                });
-                            } else if let Some(style) = frame_style
-                                .as_deref()
-                                .and_then(|n| graphics.style(n, scale.0))
-                            {
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body });
+                            } else if let Some(style) = frame_style.as_deref().and_then(|n| graphics.style(n, scale.0)) {
                                 let kind = custom_kind(shape_type.as_deref(), shape_paths.take());
-                                s.objects.push(SlideObject::Shape {
-                                    kind,
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                    style,
-                                });
+                                s.objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
-                                s.objects.push(SlideObject::Circle {
-                                    x: x + w / 2.0,
-                                    y: y + h / 2.0,
-                                    r,
-                                    rotation,
-                                });
+                                s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
                             } else {
-                                s.objects.push(SlideObject::Rect {
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                });
+                                s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
                             }
                         }
                     }
@@ -2453,11 +2070,7 @@ fn parse_pages(
                             s.ids.objects.push(*fresh);
                             *fresh += 1;
                         }
-                        let xml_ids: Vec<(String, u64)> = ids
-                            .iter()
-                            .zip(s.ids.objects.iter().copied())
-                            .filter_map(|(x, id)| x.clone().map(|x| (x, id)))
-                            .collect();
+                        let xml_ids: Vec<(String, u64)> = ids.iter().zip(s.ids.objects.iter().copied()).filter_map(|(x, id)| x.clone().map(|x| (x, id))).collect();
                         s.builds = builds.builds(&xml_ids);
                         pages.push(Page {
                             slide: s,
@@ -2499,9 +2112,7 @@ fn read_chart_objects(
         .collect();
     let mut out = std::collections::HashMap::new();
     for name in names {
-        let Ok(xml) = zip.part_to_string(&name, budget) else {
-            continue;
-        };
+        let Ok(xml) = zip.part_to_string(&name, budget) else { continue };
         if let Some(chart) = crate::engine::chart::parse_odf_chart(&xml) {
             out.insert(name.trim_end_matches("/content.xml").to_string(), chart);
         }
@@ -2548,15 +2159,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // download, and content.xml is the part a bomb would hide in (#442).
     let mut budget = ZipBudget::default();
     budget.check_entry_count(zip.len())?;
-    let content = zip
-        .part_to_string("content.xml", &mut budget)
-        .map_err(|e| {
-            if e.is_missing() {
-                "no content.xml — not an ODP?".to_string()
-            } else {
-                e.to_string()
-            }
-        })?;
+    let content = zip.part_to_string("content.xml", &mut budget).map_err(|e| {
+        if e.is_missing() { "no content.xml — not an ODP?".to_string() } else { e.to_string() }
+    })?;
 
     // First pass: text styles and drawing-page backgrounds, from both
     // parts — styles.xml is optional, and a deck we wrote before masters
@@ -2565,18 +2170,8 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut text_styles: std::collections::HashMap<String, RunStyle> = Default::default();
     let mut page_bg: std::collections::HashMap<String, String> = Default::default();
     let mut page_transition: std::collections::HashMap<String, Transition> = Default::default();
-    parse_styles(
-        &content,
-        &mut text_styles,
-        &mut page_bg,
-        &mut page_transition,
-    );
-    parse_styles(
-        &styles,
-        &mut text_styles,
-        &mut page_bg,
-        &mut page_transition,
-    );
+    parse_styles(&content, &mut text_styles, &mut page_bg, &mut page_transition);
+    parse_styles(&styles, &mut text_styles, &mut page_bg, &mut page_transition);
     let mut text_defs = crate::odp_text::TextDefs::default();
     text_defs.read(&content);
     text_defs.read(&styles);
@@ -2594,8 +2189,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // The page size, kept once on the deck for a pptx save (12700 EMU to
     // the point, DCK-006). This writer's own page is 960x540pt, left as
     // the default.
-    let page_size =
-        (page_pt != DEFAULT_PAGE_PT).then_some((page_pt.0 * 12700.0, page_pt.1 * 12700.0));
+    let page_size = (page_pt != DEFAULT_PAGE_PT).then_some((page_pt.0 * 12700.0, page_pt.1 * 12700.0));
 
     // Absence stays empty (draw-time Sans): never Sans at import (DCK-006).
     let doc_font = parse_default_graphic_font(&styles).unwrap_or_default();
@@ -2610,18 +2204,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
     let master_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(
-            &styles,
-            "style:master-page",
-            &page_bg,
-            &text_styles,
-            &text_defs,
-            &graphic_defs,
-            scale,
-            &mut resolve,
-            &charts,
-            &mut fresh,
-        )?
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts, &mut fresh)?
     };
     // Layouts (odp_layouts): the page layouts, each master's own (or, in a
     // file we didn't write, every one), and the master pages that are a
@@ -2639,13 +2222,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         let style = page.slide.title.clone();
         let mine: Vec<&crate::odp_layouts::PageLayout> = page_layouts
             .iter()
-            .filter(|p| {
-                if tagged {
-                    p.master.as_deref().map(decode_style_name).as_deref() == Some(style.as_str())
-                } else {
-                    true
-                }
-            })
+            .filter(|p| if tagged { p.master.as_deref().map(decode_style_name).as_deref() == Some(style.as_str()) } else { true })
             .collect();
         layout_names.push(mine.iter().map(|p| p.name.clone()).collect());
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
@@ -2681,18 +2258,13 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // A layout's look page: the master's decorations, then the layout's.
     let mut look_slot: std::collections::HashMap<String, (usize, usize)> = Default::default();
     for page in looks {
-        let Some((of, j)) = page.layout_of.clone() else {
-            continue;
-        };
-        let Some(&mi) = master_idx_by_name.get(&decode_style_name(&of)) else {
-            continue;
-        };
+        let Some((of, j)) = page.layout_of.clone() else { continue };
+        let Some(&mi) = master_idx_by_name.get(&decode_style_name(&of)) else { continue };
         let m = &mut masters[mi];
         let own = m.shapes.len().min(page.slide.objects.len());
         if let Some(l) = m.layouts.get_mut(j) {
             l.shapes = page.slide.objects[own..].to_vec();
-            l.background =
-                (page.slide.background != m.background).then(|| page.slide.background.clone());
+            l.background = (page.slide.background != m.background).then(|| page.slide.background.clone());
             look_slot.insert(page.slide.title.clone(), (mi, j));
         }
     }
@@ -2710,27 +2282,10 @@ pub fn read(path: &str) -> Result<Deck, String> {
         });
     }
 
-    let mut deck = Deck {
-        slides: Vec::new(),
-        masters,
-        page_size,
-        themes: Vec::new(),
-        skipped_slides: Vec::new(),
-    };
+    let mut deck = Deck { slides: Vec::new(), masters, page_size, themes: Vec::new(), skipped_slides: Vec::new() };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(
-            &content,
-            "draw:page",
-            &page_bg,
-            &text_styles,
-            &text_defs,
-            &graphic_defs,
-            scale,
-            &mut resolve,
-            &charts,
-            &mut fresh,
-        )?
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts, &mut fresh)?
     };
     // Background pictures: a page style filled with a bitmap names a fill
     // image, which names the picture.
@@ -2749,10 +2304,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             .and_then(|n| page_image.get(n))
             .and_then(|image| images.get(image))
             .and_then(|href| extract_picture(href.trim_start_matches("./"), &mut zip, &mut budget))
-            .map(|path| crate::engine::BackgroundPicture {
-                path,
-                fill: Default::default(),
-            });
+            .map(|path| crate::engine::BackgroundPicture { path, fill: Default::default() });
         if let Some(t) = page.style.as_ref().and_then(|n| page_transition.get(n)) {
             slide.transition = *t;
         }
@@ -2773,27 +2325,19 @@ pub fn read(path: &str) -> Result<Deck, String> {
             slide.master_id = Some(deck.masters[mi].id);
             slide.layout_id = deck.masters[mi].layouts.get(j).map(|l| l.id);
         } else {
-            let mi = named
-                .and_then(|n| master_idx_by_name.get(&n).copied())
-                .or(Some(0));
+            let mi = named.and_then(|n| master_idx_by_name.get(&n).copied()).or(Some(0));
             slide.master_id = mi.map(|mi| deck.masters[mi].id);
-            slide.layout_id = mi
-                .and_then(|mi| {
-                    page.page_layout
-                        .as_ref()
-                        .and_then(|name| layout_names.get(mi)?.iter().position(|n| n == name))
-                })
-                .and_then(|j| {
-                    mi.and_then(|mi| deck.masters[mi].layouts.get(j))
-                        .map(|l| l.id)
-                });
+            slide.layout_id = mi.and_then(|mi| {
+                page.page_layout
+                    .as_ref()
+                    .and_then(|name| layout_names.get(mi)?.iter().position(|n| n == name))
+            }).and_then(|j| mi.and_then(|mi| deck.masters[mi].layouts.get(j)).map(|l| l.id));
         }
         deck.slides.push(slide);
     }
 
     if deck.slides.is_empty() {
-        deck.slides.push(Slide {
-            hidden: false,
+        deck.slides.push(Slide { hidden: false,
             title: "Slide 1".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -2821,12 +2365,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("empty.odp");
         let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
-        z.start_file("mimetype", zip::write::SimpleFileOptions::default())
-            .unwrap();
-        std::io::Write::write_all(&mut z, b"application/vnd.oasis.opendocument.presentation")
-            .unwrap();
-        z.start_file("content.xml", zip::write::SimpleFileOptions::default())
-            .unwrap();
+        z.start_file("mimetype", zip::write::SimpleFileOptions::default()).unwrap();
+        std::io::Write::write_all(&mut z, b"application/vnd.oasis.opendocument.presentation").unwrap();
+        z.start_file("content.xml", zip::write::SimpleFileOptions::default()).unwrap();
         std::io::Write::write_all(
             &mut z,
             br#"<office:document-content xmlns:office="o" xmlns:draw="d"><office:body><office:presentation><draw:page draw:name="A"/><draw:page draw:name="B"></draw:page><draw:page draw:name="C"/></office:presentation></office:body></office:document-content>"#,
@@ -2834,13 +2375,7 @@ mod tests {
         .unwrap();
         z.finish().unwrap();
         let deck = read(path.to_str().unwrap()).unwrap();
-        assert_eq!(
-            deck.slides
-                .iter()
-                .map(|s| s.title.as_str())
-                .collect::<Vec<_>>(),
-            ["A", "B", "C"]
-        );
+        assert_eq!(deck.slides.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["A", "B", "C"]);
     }
 
     fn round_trip(deck: &Deck) -> Deck {
@@ -2851,8 +2386,7 @@ mod tests {
     }
 
     fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
-        Slide {
-            hidden: false,
+        Slide { hidden: false,
             title: title.into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -2878,10 +2412,7 @@ mod tests {
     #[test]
     fn text_and_order_round_trip() {
         let mut deck = Deck::new();
-        deck.slides = vec![
-            text_slide("One", "first", ""),
-            text_slide("Two", "second", ""),
-        ];
+        deck.slides = vec![text_slide("One", "first", ""), text_slide("Two", "second", "")];
         let rt = round_trip(&deck);
         assert_eq!(rt.slides.len(), 2);
         assert!(matches!(&rt.slides[0].objects[0],
@@ -2892,7 +2423,8 @@ mod tests {
 
     /// What Impress wrote, verbatim, for the probe described on the test
     /// below: a 225x75pt rect at (75, 150)pt turned 30 degrees clockwise.
-    const IMPRESS_ROTATED_RECT: &str = "rotate (-0.523598775598299) translate (3.839cm 3.485cm)";
+    const IMPRESS_ROTATED_RECT: &str =
+        "rotate (-0.523598775598299) translate (3.839cm 3.485cm)";
 
     /// The probe that settled the ODF convention, kept as a test.
     ///
@@ -2910,10 +2442,7 @@ mod tests {
     fn the_transform_we_write_is_the_one_impress_wrote() {
         let got = geometry(75.0, 150.0, 225.0, 75.0, 30.0);
         let terms = transform_terms(
-            got.split("draw:transform=\"")
-                .nth(1)
-                .expect("no transform emitted")
-                .trim_end_matches('"'),
+            got.split("draw:transform=\"").nth(1).expect("no transform emitted").trim_end_matches('"'),
         )
         .expect("our own transform must parse");
         let want = transform_terms(IMPRESS_ROTATED_RECT).expect("the recorded probe must parse");
@@ -2948,10 +2477,7 @@ mod tests {
     fn a_transform_impress_wrote_reads_back_as_its_box_and_angle() {
         let (x, y, rotation) = parse_transform(IMPRESS_ROTATED_RECT, 225.0, 75.0)
             .expect("Impress's own transform must parse");
-        assert!(
-            (x - 75.0).abs() < 0.05 && (y - 150.0).abs() < 0.05,
-            "read as ({x}, {y})"
-        );
+        assert!((x - 75.0).abs() < 0.05 && (y - 150.0).abs() < 0.05, "read as ({x}, {y})");
         assert!((rotation - 30.0).abs() < 0.01, "read as {rotation} degrees");
     }
 
@@ -2960,10 +2486,7 @@ mod tests {
     #[test]
     fn an_unrotated_shape_keeps_plain_svg_coordinates() {
         let got = geometry(10.0, 20.0, 30.0, 40.0, 0.0);
-        assert_eq!(
-            got,
-            "svg:x=\"10pt\" svg:y=\"20pt\" svg:width=\"30pt\" svg:height=\"40pt\""
-        );
+        assert_eq!(got, "svg:x=\"10pt\" svg:y=\"20pt\" svg:width=\"30pt\" svg:height=\"40pt\"");
     }
 
     /// Impress writes `scale` and `skewX` for shapes we do not produce.
@@ -2985,21 +2508,11 @@ mod tests {
     fn a_rotation_past_a_half_turn_round_trips() {
         for rotation in [30.0, 120.0, 315.0] {
             let got = geometry(40.0, 50.0, 60.0, 70.0, rotation);
-            let transform = got
-                .split("draw:transform=\"")
-                .nth(1)
-                .unwrap()
-                .trim_end_matches('"')
-                .to_string();
+            let transform =
+                got.split("draw:transform=\"").nth(1).unwrap().trim_end_matches('"').to_string();
             let (x, y, back) = parse_transform(&transform, 60.0, 70.0).unwrap();
-            assert!(
-                (back - rotation).abs() < 1e-6,
-                "{rotation} came back as {back}"
-            );
-            assert!(
-                (x - 40.0).abs() < 1e-6 && (y - 50.0).abs() < 1e-6,
-                "moved to ({x}, {y})"
-            );
+            assert!((back - rotation).abs() < 1e-6, "{rotation} came back as {back}");
+            assert!((x - 40.0).abs() < 1e-6 && (y - 50.0).abs() < 1e-6, "moved to ({x}, {y})");
         }
     }
 
@@ -3012,20 +2525,14 @@ mod tests {
         for name in ["House Style", "Default", "a_b", "x-y", "déjà vu", "2026 Q1"] {
             let token = encode_style_name(name);
             assert!(
-                token
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+                token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
                 "{name:?} encoded to {token:?}, which is not a style token",
             );
             assert_eq!(decode_style_name(&token), name, "via {token:?}");
         }
         assert_eq!(encode_style_name("House Style"), "House_20_Style");
         assert_eq!(encode_style_name("a_b"), "a_5f_b");
-        assert_eq!(
-            encode_style_name(""),
-            "Default",
-            "an unnamed master still needs a token"
-        );
+        assert_eq!(encode_style_name(""), "Default", "an unnamed master still needs a token");
     }
 
     /// A token from elsewhere that is not escaped at all, or is escaped in
@@ -3072,10 +2579,7 @@ mod tests {
     /// No master, no size: the caller falls back rather than guessing one.
     #[test]
     fn a_document_naming_no_layout_reads_as_none() {
-        assert_eq!(
-            parse_page_size_pt("<office:document-styles xmlns:office=\"o\"/>"),
-            None
-        );
+        assert_eq!(parse_page_size_pt("<office:document-styles xmlns:office=\"o\"/>"), None);
         assert_eq!(parse_page_size_pt(""), None);
     }
 
@@ -3101,8 +2605,7 @@ mod tests {
                 color_map: Default::default(),
                 layouts: Vec::new(),
             }],
-            slides: vec![Slide {
-                hidden: false,
+            slides: vec![Slide { hidden: false,
                 title: "one".into(),
                 background: String::new(),
                 background_picture: None,
@@ -3133,11 +2636,13 @@ mod tests {
     /// A tiny valid PNG, inline so the tests need no fixture file.
     fn a_png() -> &'static [u8] {
         &[
-            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0,
-            0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0, 0xfd, 0xd4, 0x9a, 0x73, 0, 0, 0, 21, b'I', b'D',
-            b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x88, 0xff, 0x33,
-            0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff, 0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9, 0, 0, 0,
-            0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+            0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+            0xfd, 0xd4, 0x9a, 0x73,
+            0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+            0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+            0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+            0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
         ]
     }
 
@@ -3153,8 +2658,7 @@ mod tests {
                 color_map: Default::default(),
                 layouts: Vec::new(),
             }],
-            slides: vec![Slide {
-                hidden: false,
+            slides: vec![Slide { hidden: false,
                 title: "p".into(),
                 background: String::new(),
                 background_picture: None,
@@ -3164,8 +2668,7 @@ mod tests {
                     y: 20.0,
                     w: 30.0,
                     h: 40.0,
-                    rotation: 0.0,
-                    crop: Default::default(),
+                    rotation: 0.0, crop: Default::default()
                 }],
                 notes: String::new(),
                 master_id: None,
@@ -3254,21 +2757,13 @@ mod tests {
             y: 60.0,
             w: 30.0,
             h: 40.0,
-            rotation: 0.0,
-            crop: Default::default(),
+            rotation: 0.0, crop: Default::default()
         });
         let bytes = write_bytes(&deck).unwrap();
         let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let pictures: Vec<String> = zip
-            .file_names()
-            .map(|n| n.unwrap().into_owned())
-            .filter(|n| n.starts_with("Pictures/"))
-            .collect();
-        assert_eq!(
-            pictures.len(),
-            2,
-            "expected two picture parts, got {pictures:?}"
-        );
+        let pictures: Vec<String> =
+            zip.file_names().map(|n| n.unwrap().into_owned()).filter(|n| n.starts_with("Pictures/")).collect();
+        assert_eq!(pictures.len(), 2, "expected two picture parts, got {pictures:?}");
     }
 
     /// A missing source file fails the save rather than writing a deck with
@@ -3300,21 +2795,14 @@ mod tests {
         let src = dir.path().join("distinctive-name.png");
         std::fs::write(&src, a_png()).unwrap();
         let path = dir.path().join("deck.odp");
-        write(
-            &deck_with_picture(src.to_str().unwrap()),
-            path.to_str().unwrap(),
-        )
-        .unwrap();
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
 
         let back = read(path.to_str().unwrap()).unwrap();
-        let [SlideObject::Image { path: unpacked, .. }] = back.slides[0].objects.as_slice() else {
+        let [SlideObject::Image { path: unpacked, .. }] = back.slides[0].objects.as_slice()
+        else {
             panic!("expected one picture, got {:?}", back.slides[0].objects)
         };
-        assert_ne!(
-            unpacked,
-            &src.to_string_lossy().to_string(),
-            "the source was reused"
-        );
+        assert_ne!(unpacked, &src.to_string_lossy().to_string(), "the source was reused");
         assert!(
             !unpacked.contains("distinctive-name") && !unpacked.contains("image1"),
             "the unpacked path is derived from the document: {unpacked}",
@@ -3323,11 +2811,7 @@ mod tests {
             std::path::Path::new(unpacked).starts_with(std::env::temp_dir()),
             "the picture was unpacked outside the temp dir: {unpacked}",
         );
-        assert_eq!(
-            std::fs::read(unpacked).unwrap(),
-            a_png(),
-            "wrong bytes unpacked"
-        );
+        assert_eq!(std::fs::read(unpacked).unwrap(), a_png(), "wrong bytes unpacked");
     }
 
     /// Reopening a deck reuses the picture it already unpacked instead of
@@ -3339,11 +2823,7 @@ mod tests {
         let src = dir.path().join("pic.png");
         std::fs::write(&src, a_png()).unwrap();
         let path = dir.path().join("deck.odp");
-        write(
-            &deck_with_picture(src.to_str().unwrap()),
-            path.to_str().unwrap(),
-        )
-        .unwrap();
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
 
         let unpacked = |deck: &Deck| match deck.slides[0].objects.as_slice() {
             [SlideObject::Image { path, .. }] => path.clone(),
@@ -3354,10 +2834,7 @@ mod tests {
             assert_eq!(unpacked(&read(path.to_str().unwrap()).unwrap()), first);
         }
         let cache = suite_common_core::media_cache::process_dir().unwrap();
-        assert!(
-            std::path::Path::new(&first).starts_with(&cache),
-            "{first} not in {cache:?}"
-        );
+        assert!(std::path::Path::new(&first).starts_with(&cache), "{first} not in {cache:?}");
     }
 
     /// An href naming a part the package does not contain yields nothing,
@@ -3368,11 +2845,7 @@ mod tests {
         let src = dir.path().join("dot.png");
         std::fs::write(&src, a_png()).unwrap();
         let path = dir.path().join("deck.odp");
-        write(
-            &deck_with_picture(src.to_str().unwrap()),
-            path.to_str().unwrap(),
-        )
-        .unwrap();
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
         let mut budget = ZipBudget::default();
         assert!(extract_picture("Pictures/absent.png", &mut zip, &mut budget).is_none());
@@ -3382,25 +2855,13 @@ mod tests {
     #[test]
     fn geometry_round_trips() {
         let mut deck = Deck::new();
-        deck.slides = vec![Slide {
-            hidden: false,
+        deck.slides = vec![Slide { hidden: false,
             title: "g".into(),
             background: "#ffffff".into(),
             background_picture: None,
             objects: vec![
-                SlideObject::Rect {
-                    x: 240.0,
-                    y: 180.0,
-                    w: 320.0,
-                    h: 120.0,
-                    rotation: 0.0,
-                },
-                SlideObject::Circle {
-                    x: 500.0,
-                    y: 300.0,
-                    r: 80.0,
-                    rotation: 0.0,
-                },
+                SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 },
+                SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
             ],
             notes: String::new(),
             master_id: None,
@@ -3432,8 +2893,7 @@ mod tests {
     #[test]
     fn styled_runs_round_trip() {
         let mut deck = Deck::new();
-        deck.slides = vec![Slide {
-            hidden: false,
+        deck.slides = vec![Slide { hidden: false,
             title: "s".into(),
             background: "#ffffff".into(),
             background_picture: None,
@@ -3444,10 +2904,7 @@ mod tests {
                 w: 300.0,
                 h: 50.0,
                 runs: vec![
-                    Run {
-                        text: "plain ".into(),
-                        style: RunStyle::default(),
-                    },
+                    Run { text: "plain ".into(), style: RunStyle::default() },
                     Run {
                         text: "bold".into(),
                         style: RunStyle {
@@ -3469,9 +2926,7 @@ mod tests {
             layout_id: None,
         }];
         let rt = round_trip(&deck);
-        let SlideObject::TextBox { runs, .. } = &rt.slides[0].objects[0] else {
-            panic!()
-        };
+        let SlideObject::TextBox { runs, .. } = &rt.slides[0].objects[0] else { panic!() };
         let bold = runs.iter().find(|r| r.style.bold).expect("bold run lost");
         assert_eq!(bold.text, "bold");
         assert_eq!(bold.style.font_size_hp, Some(48));
@@ -3614,8 +3069,7 @@ mod tests {
     /// One slide holding a single text box at (`at`, `at`).
     fn deck_with_box(text: &str, at: f64) -> Deck {
         Deck {
-            slides: vec![Slide {
-                hidden: false,
+            slides: vec![Slide { hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,
@@ -3623,10 +3077,7 @@ mod tests {
                 master_id: None,
                 objects: vec![SlideObject::TextBox {
                     text: text.into(),
-                    x: at,
-                    y: at,
-                    w: 200.0,
-                    h: 50.0,
+                    x: at, y: at, w: 200.0, h: 50.0,
                     rotation: 0.0,
                     runs: vec![],
                     body: Default::default(),
@@ -3658,10 +3109,7 @@ mod default_font_tests {
             <style:default-style style:family=\"graphic\">\
             <style:text-properties style:font-name=\"Graphic Face\"/>\
             </style:default-style></office:styles>";
-        assert_eq!(
-            parse_default_graphic_font(xml).as_deref(),
-            Some("Graphic Face")
-        );
+        assert_eq!(parse_default_graphic_font(xml).as_deref(), Some("Graphic Face"));
     }
 
     #[test]
@@ -3738,15 +3186,9 @@ mod default_font_tests {
             skipped_slides: Vec::new(),
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
+        assert!(!xml.contains("style:font-name=\"\""), "no empty font name: {xml}");
         assert!(
-            !xml.contains("style:font-name=\"\""),
-            "no empty font name: {xml}"
-        );
-        assert!(
-            xml.contains(&format!(
-                "style:font-name=\"{}\"",
-                MasterSlide::DEFAULT_FONT
-            )),
+            xml.contains(&format!("style:font-name=\"{}\"", MasterSlide::DEFAULT_FONT)),
             "the fallback should be written: {xml}"
         );
     }

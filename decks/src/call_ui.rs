@@ -37,20 +37,13 @@ fn menu_section() -> gio::Menu {
 fn activate_args(action: &str) -> glib::Variant {
     glib::Variant::tuple_from_iter([
         action.to_variant(),
-        glib::Variant::array_from_iter_with_type(
-            glib::VariantTy::VARIANT,
-            std::iter::empty::<glib::Variant>(),
-        ),
+        glib::Variant::array_from_iter_with_type(glib::VariantTy::VARIANT, std::iter::empty::<glib::Variant>()),
         glib::VariantDict::new(None).end(),
     ])
 }
 
 /// Register `app.present-in-call` and its menu item.
-pub(crate) fn register(
-    app: &adw::Application,
-    window: &adw::ApplicationWindow,
-    header: &adw::HeaderBar,
-) {
+pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, header: &adw::HeaderBar) {
     if let Some(menu) = suite_common::menus::primary_menu(header.upcast_ref()) {
         menu.insert_section(1, None, &menu_section());
     }
@@ -124,15 +117,11 @@ mod tests {
     fn the_item_hides_while_mandelbrot_is_not_running() {
         let m = menu_section();
         assert_eq!(
-            m.item_attribute_value(0, "action", None)
-                .and_then(|v| v.str().map(str::to_owned))
-                .as_deref(),
+            m.item_attribute_value(0, "action", None).and_then(|v| v.str().map(str::to_owned)).as_deref(),
             Some("app.present-in-call")
         );
         assert_eq!(
-            m.item_attribute_value(0, "hidden-when", None)
-                .and_then(|v| v.str().map(str::to_owned))
-                .as_deref(),
+            m.item_attribute_value(0, "hidden-when", None).and_then(|v| v.str().map(str::to_owned)).as_deref(),
             Some("action-disabled")
         );
     }

@@ -30,25 +30,16 @@ fn names(ctl: &DecksController) -> Vec<String> {
     let slide_id = ctl.selection().slide_id;
     let slide = slide_id.and_then(|id| slides.iter().find(|s| s.ids.slide == id));
     let masters = ctl.masters.borrow();
-    let master = slide
-        .and_then(|s| s.master_id)
-        .and_then(|id| masters.iter().find(|m| m.id == id))
-        .or_else(|| masters.first());
+    let master = slide.and_then(|s| s.master_id).and_then(|id| masters.iter().find(|m| m.id == id)).or_else(|| masters.first());
     match master.filter(|m| !m.layouts.is_empty()) {
         Some(m) => m.layouts.iter().map(|l| l.name.clone()).collect(),
-        None => decks_core::layouts::standard()
-            .into_iter()
-            .map(|l| l.name)
-            .collect(),
+        None => decks_core::layouts::standard().into_iter().map(|l| l.name).collect(),
     }
 }
 
 pub(crate) fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> LayoutPicker {
     let model = gtk::StringList::new(&[]);
-    let row = adw::ComboRow::builder()
-        .title("Layout")
-        .model(&model)
-        .build();
+    let row = adw::ComboRow::builder().title("Layout").model(&model).build();
     row.set_subtitle("Where the title and text go");
     let syncing = Rc::new(Cell::new(false));
     let sync: Rc<dyn Fn()> = {
@@ -56,23 +47,16 @@ pub(crate) fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> LayoutP
         Rc::new(move || {
             syncing.set(true);
             let wanted = names(&ctl);
-            let now: Vec<String> = (0..model.n_items())
-                .filter_map(|i| model.string(i).map(|s| s.to_string()))
-                .collect();
+            let now: Vec<String> = (0..model.n_items()).filter_map(|i| model.string(i).map(|s| s.to_string())).collect();
             if now != wanted {
                 let refs: Vec<&str> = wanted.iter().map(String::as_str).collect();
                 model.splice(0, model.n_items(), &refs);
             }
             let slides = ctl.slides.borrow();
-            let slide = ctl
-                .selection()
-                .slide_id
-                .and_then(|id| slides.iter().find(|s| s.ids.slide == id));
+            let slide = ctl.selection().slide_id.and_then(|id| slides.iter().find(|s| s.ids.slide == id));
             let masters = ctl.masters.borrow();
             let selected = slide.and_then(|s| {
-                let master = s
-                    .master_id
-                    .and_then(|id| masters.iter().find(|m| m.id == id))?;
+                let master = s.master_id.and_then(|id| masters.iter().find(|m| m.id == id))?;
                 s.layout_id.and_then(|id| master.layout_index(id))
             });
             row.set_selected(selected.map_or(gtk::INVALID_LIST_POSITION, |l| l as u32));
@@ -86,16 +70,12 @@ pub(crate) fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> LayoutP
                 return;
             }
             let row_idx = r.selected() as usize;
-            let Some(slide_id) = ctl.selection().slide_id else {
-                return;
-            };
+            let Some(slide_id) = ctl.selection().slide_id else { return };
             let apply = {
                 let slides = ctl.slides.borrow();
                 let slide = slides.iter().find(|s| s.ids.slide == slide_id);
                 let masters = ctl.masters.borrow();
-                let master = slide
-                    .and_then(|s| s.master_id)
-                    .and_then(|id| masters.iter().find(|m| m.id == id));
+                let master = slide.and_then(|s| s.master_id).and_then(|id| masters.iter().find(|m| m.id == id));
                 match master.filter(|m| !m.layouts.is_empty()) {
                     Some(m) => m.layouts.get(row_idx).map(|l| (false, l.id)),
                     None => Some((true, row_idx as u64)),

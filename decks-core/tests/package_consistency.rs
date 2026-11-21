@@ -6,11 +6,10 @@ use decks_core::engine::{Deck, SlideObject};
 
 /// A valid 3x2 PNG.
 const PNG: [u8; 78] = [
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1,
-    0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7,
-    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0,
-    0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00,
+    0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1, 0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63,
+    0x3c, 0x21, 0x27, 0xc7, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0, 0x65, 0x61,
+    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
 #[test]
@@ -20,30 +19,12 @@ fn pptx_and_odp_packages_are_consistent() {
     std::fs::write(&png, PNG).unwrap();
     let mut deck = Deck::new();
     deck.slides[0].notes = "notes".into();
-    deck.slides[0].objects.push(SlideObject::Image {
-        path: png.to_string_lossy().into_owned(),
-        x: 10.0,
-        y: 10.0,
-        w: 100.0,
-        h: 60.0,
-        rotation: 0.0,
-        crop: Default::default(),
-    });
-    deck.slides[0].objects.push(SlideObject::Rect {
-        x: 50.0,
-        y: 250.0,
-        w: 200.0,
-        h: 90.0,
-        rotation: 0.0,
-    });
+    deck.slides[0].objects.push(SlideObject::Image { path: png.to_string_lossy().into_owned(), x: 10.0, y: 10.0, w: 100.0, h: 60.0, rotation: 0.0, crop: Default::default() });
+    deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 0.0 });
     for ext in ["pptx", "odp"] {
         let path = dir.path().join(format!("deck.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).unwrap();
-        assert_eq!(
-            suite_common_core::carry::problems(&path),
-            Vec::<String>::new(),
-            "{ext}"
-        );
+        assert_eq!(suite_common_core::carry::problems(&path), Vec::<String>::new(), "{ext}");
     }
 }
 
@@ -57,13 +38,7 @@ fn rewriting_written_decks_gives_consistent_packages() {
     empty.slides[0].objects.clear();
     let mut several = Deck::new();
     several.slides[0].notes = "first".into();
-    several.slides[0].objects.push(SlideObject::Rect {
-        x: 50.0,
-        y: 250.0,
-        w: 200.0,
-        h: 90.0,
-        rotation: 15.0,
-    });
+    several.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 15.0 });
     let mut second = several.slides[0].clone();
     second.notes = "second".into();
     several.slides.push(second.clone());
@@ -72,19 +47,11 @@ fn rewriting_written_decks_gives_consistent_packages() {
         for ext in ["pptx", "odp"] {
             let first = dir.path().join(format!("{name}-0.{ext}"));
             decks_core::write_deck(first.to_str().unwrap(), &deck).unwrap();
-            assert_eq!(
-                suite_common_core::carry::problems(&first),
-                Vec::<String>::new(),
-                "{name}.{ext}"
-            );
+            assert_eq!(suite_common_core::carry::problems(&first), Vec::<String>::new(), "{name}.{ext}");
             let reread = decks_core::read_deck(first.to_str().unwrap()).unwrap();
             let again = dir.path().join(format!("{name}-1.{ext}"));
             decks_core::write_deck(again.to_str().unwrap(), &reread).unwrap();
-            assert_eq!(
-                suite_common_core::carry::problems(&again),
-                Vec::<String>::new(),
-                "{name}.{ext} rewritten"
-            );
+            assert_eq!(suite_common_core::carry::problems(&again), Vec::<String>::new(), "{name}.{ext} rewritten");
         }
     }
 }
@@ -101,18 +68,12 @@ fn a_written_single_series_chart_loses_nothing() {
         w: 300.0,
         h: 200.0,
         rotation: 0.0,
-        chart: decks_core::engine::chart::ChartData::sample(
-            suite_common_core::charts::ChartKind::Bar,
-        ),
+        chart: decks_core::engine::chart::ChartData::sample(suite_common_core::charts::ChartKind::Bar),
     });
     for ext in ["pptx", "odp"] {
         let path = dir.path().join(format!("chart.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &deck).unwrap();
-        assert_eq!(
-            suite_common_core::carry::problems(&path),
-            Vec::<String>::new(),
-            "{ext}"
-        );
+        assert_eq!(suite_common_core::carry::problems(&path), Vec::<String>::new(), "{ext}");
         let report = decks_core::loss::content_a_save_drops(path.to_str().unwrap());
         assert!(report.features.is_empty(), "{ext}: {:?}", report.features);
         assert!(!report.requires_confirmation());
@@ -134,10 +95,7 @@ fn pptx_with_unmodeled_safe_parts(
     let path = dir.path().join(name);
     decks_core::write_deck(path.to_str().unwrap(), &deck).unwrap();
     let parts = vec![
-        (
-            "customXml/item1.xml".to_string(),
-            b"<data>kept</data>".to_vec(),
-        ),
+        ("customXml/item1.xml".to_string(), b"<data>kept</data>".to_vec()),
         ("docProps/thumbnail.jpeg".to_string(), b"preview".to_vec()),
     ];
     {
@@ -167,8 +125,7 @@ fn opaque_dependency_survives_unrelated_edit() {
     // An unrelated edit: a new slide, touching nothing the parts refer to.
     controller.add_slide(
         1,
-        decks_core::engine::Slide {
-            hidden: false,
+        decks_core::engine::Slide { hidden: false,
             title: "added".into(),
             background: "#ffffff".into(),
             background_picture: None,

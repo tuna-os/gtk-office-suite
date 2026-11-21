@@ -31,10 +31,7 @@ pub fn show(overlay: &adw::ToastOverlay, text: &str) {
 /// is in none (a widget not yet in a window), so the caller can say it some
 /// other way.
 pub fn show_near(widget: &impl IsA<gtk::Widget>, text: &str) -> bool {
-    match widget
-        .ancestor(adw::ToastOverlay::static_type())
-        .and_then(|w| w.downcast::<adw::ToastOverlay>().ok())
-    {
+    match widget.ancestor(adw::ToastOverlay::static_type()).and_then(|w| w.downcast::<adw::ToastOverlay>().ok()) {
         Some(overlay) => {
             show(&overlay, text);
             true
@@ -86,10 +83,7 @@ mod tests {
     fn a_short_note_stays_three_seconds_and_a_sentence_five() {
         assert_eq!(timeout_for("Rows frozen"), 3);
         assert_eq!(timeout_for("Join code copied"), 3);
-        assert_eq!(
-            timeout_for("Place the pivot table outside the selection, which it would overwrite"),
-            5
-        );
+        assert_eq!(timeout_for("Place the pivot table outside the selection, which it would overwrite"), 5);
     }
 
     #[test]
