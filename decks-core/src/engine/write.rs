@@ -826,10 +826,15 @@ fn write_table<W: std::io::Write>(
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
-            write_paragraphs(writer, &cell.text(), &cell.runs, &TextBody::default(), links)?;
+            // The cell's paragraph styles (alignment, bullets, indents).
+            let body = TextBody { paras: cell.paras.clone(), ..TextBody::default() };
+            write_paragraphs(writer, &cell.text(), &cell.runs, &body, links)?;
             writer.write_event(Event::End(BytesEnd::new("a:txBody")))?;
             // The cell's own margins, as it stated them.
             let mut tc_pr = BytesStart::new("a:tcPr");
+            if cell.anchor != super::text_body::Anchor::Top {
+                tc_pr.push_attribute(("anchor", cell.anchor.to_drawingml()));
+            }
             if let Some((l, t, r, b)) = cell.margins {
                 for (k, v) in [("marL", emu(l)), ("marR", emu(r)), ("marT", emu_y(t)), ("marB", emu_y(b))] {
                     tc_pr.push_attribute((k, v.as_str()));

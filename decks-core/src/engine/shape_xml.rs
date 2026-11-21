@@ -723,7 +723,7 @@ fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>, th
 
 /// Every table in a part's graphic frames.
 /// `links` are the part's external hyperlink relationships, by id.
-pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::HashMap<String, String>) -> Vec<FrameTable> {
+pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::HashMap<String, String>, scale: super::SlideScale) -> Vec<FrameTable> {
     use super::table::{TableCell, TableData};
     let root = parse_tree(xml);
     let mut frames = Vec::new();
@@ -765,6 +765,16 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                                 // Its own margins (EMU here; the slide's
                                 // scale applies in parse.rs), DrawingML's
                                 // defaults for any it leaves out.
+                                paras: tc
+                                    .child("a:txBody")
+                                    .map(|b| b.children_named("a:p").map(|p| super::text_xml::own_para_style(p.child("a:pPr"), theme, scale)).collect())
+                                    .filter(|ps: &Vec<super::text_body::ParaStyle>| ps.iter().any(|p| *p != super::text_body::ParaStyle::default()))
+                                    .unwrap_or_default(),
+                                anchor: tc
+                                    .child("a:tcPr")
+                                    .and_then(|p| p.attr("anchor"))
+                                    .and_then(super::text_body::Anchor::from_drawingml)
+                                    .unwrap_or_default(),
                                 margins: tc.child("a:tcPr").filter(|p| ["marL", "marT", "marR", "marB"].iter().any(|k| p.attr(k).is_some())).map(|p| {
                                     let m = |k: &str, d: f64| p.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
                                     (m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0))
@@ -947,7 +957,7 @@ mod tests {
             <a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{616DA210-FB5B-4158-B5E0-FEB733F419BA}</a:tableStyleId></a:tblPr>
             <a:tblGrid><a:gridCol w="100"/></a:tblGrid><a:tr h="50"><a:tc><a:txBody><a:p><a:r><a:t>Year</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
             </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let tables = frame_tables(xml, &Theme::default(), &Default::default());
+        let tables = frame_tables(xml, &Theme::default(), &Default::default(), super::super::SlideScale::default());
         let t = &tables[0].table;
         assert_eq!(t.style_id.as_deref(), Some("{616DA210-FB5B-4158-B5E0-FEB733F419BA}"));
         assert_eq!(t.family(), super::super::table::StyleFamily::LightStyle3);
@@ -999,7 +1009,7 @@ mod tests {
           <a:tr h="914400"><a:tc><a:txBody><a:p><a:r><a:rPr b="1"/><a:t>Head </a:t></a:r><a:r><a:t>one</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>
             <a:tc><a:txBody><a:p><a:r><a:t>R1C2</a:t></a:r></a:p></a:txBody><a:tcPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:tcPr></a:tc></a:tr>
           </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
-        let t = frame_tables(xml, &theme(THEME_2007), &Default::default());
+        let t = frame_tables(xml, &theme(THEME_2007), &Default::default(), super::super::SlideScale::default());
         assert_eq!(t.len(), 1);
         let f = &t[0];
         assert_eq!((f.index, f.x, f.w), (0, 914400.0, 7315200.0));

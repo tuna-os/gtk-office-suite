@@ -34,6 +34,17 @@ pub struct TableCell {
     /// top, right and bottom in model units; None takes the table's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub margins: Option<(f64, f64, f64, f64)>,
+    /// Each paragraph's style, in order (`a:p/a:pPr`): its alignment,
+    /// bullet and indents. Empty is every paragraph plain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paras: Vec<super::text_body::ParaStyle>,
+    /// Where the text sits down the cell (`a:tcPr anchor`).
+    #[serde(default, skip_serializing_if = "is_top")]
+    pub anchor: super::text_body::Anchor,
+}
+
+fn is_top(a: &super::text_body::Anchor) -> bool {
+    *a == super::text_body::Anchor::Top
 }
 
 impl TableCell {

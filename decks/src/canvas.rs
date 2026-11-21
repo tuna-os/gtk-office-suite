@@ -1442,49 +1442,31 @@ pub fn draw_table(
 ) {
     let (cols, mut rows) = table.fitted(w, h);
     let (mx, my) = table.margins();
-    let (pad_x, pad_y) = (mx * scale, my * scale);
     // A merged cell is drawn once, over every column and row it spans; a
     // cell it covers draws nothing of its own.
     let owners = table.owners();
     let owner = |r: usize, c: usize| owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
     // A cell's text, laid out to its width (`cw`) in its paint.
-    // A cell's margins (left, top, right, bottom) in canvas pixels: its
-    // own, else the table's.
-    let pad = |r: usize, c: usize| {
-        table.rows.get(r).and_then(|row| row.get(c)).and_then(|cell| cell.margins).map_or(
-            (pad_x, pad_y, pad_x, pad_y),
-            |(l, t, rr, b)| (l * scale, t * scale, rr * scale, b * scale),
-        )
-    };
-    let layout_of = |r: usize, c: usize, cw: f64| -> Option<pango::Layout> {
+    // A cell's text as a text body: its paragraph styles and anchor, at
+    // its own margins, else the table's (model units).
+    let body_of = |r: usize, c: usize| -> Option<(String, Vec<Run>, decks_core::engine::TextBody)> {
         let cell = table.rows.get(r)?.get(c)?;
-        let (l, _, rr, _) = pad(r, c);
-        let layout = pangocairo::functions::create_layout(cr);
-        layout.set_font_description(Some(font));
-        layout.set_width(((cw - l - rr).max(1.0) * pango::SCALE as f64) as i32);
-        layout.set_wrap(pango::WrapMode::WordChar);
-        set_styled_text(&layout, &cell.text(), &cell.runs, scale);
+        let (l, t, rr, b) = cell.margins.unwrap_or((mx, my, mx, my));
+        let body = decks_core::engine::TextBody {
+            paras: cell.paras.clone(),
+            anchor: cell.anchor,
+            insets: Some(decks_core::engine::Insets { left: l, top: t, right: rr, bottom: b }),
+            ..Default::default()
+        };
         // The style's bold header, on each run that doesn't state itself
         // regular (b="0").
+        let mut runs = cell.runs.clone();
         if table.cell_paint(r, c).bold {
-            let attrs = layout.attributes().unwrap_or_default();
-            let mut at = 0u32;
-            for run in &cell.runs {
-                let end = at + run.text.len() as u32;
-                if !run.style.regular {
-                    let mut bold = pango::AttrInt::new_weight(pango::Weight::Bold);
-                    bold.set_start_index(at);
-                    bold.set_end_index(end);
-                    attrs.insert(bold);
-                }
-                at = end;
+            for run in runs.iter_mut().filter(|run| !run.style.regular) {
+                run.style.bold = true;
             }
-            if cell.runs.is_empty() {
-                attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
-            }
-            layout.set_attributes(Some(&attrs));
         }
-        Some(layout)
+        Some((cell.text(), runs, body))
     };
     // A row is as tall as the file says, or as its text needs: a height in
     // a table is a least height, which PowerPoint and Impress grow to fit
@@ -1496,9 +1478,8 @@ pub fn draw_table(
                 continue;
             }
             let cw: f64 = cols.iter().skip(c).take(table.rows[r][c].span().0).sum();
-            if let Some(layout) = layout_of(r, c, cw) {
-                let (_, t, _, b) = pad(r, c);
-                *row_h = row_h.max(f64::from(layout.pixel_size().1) + t + b);
+            if let Some((text, runs, body)) = body_of(r, c) {
+                *row_h = row_h.max(crate::text_render::text_body_height(cr, &text, &runs, &body, cw, scale, font));
             }
         }
     }
@@ -1525,15 +1506,13 @@ pub fn draw_table(
                 cr.rectangle(cx, cy, *cw, *rh);
                 cr.fill().unwrap();
             }
-            if let Some(layout) = layout_of(r, c, *cw) {
+            if let Some((text, runs, body)) = body_of(r, c) {
                 let (tr, tg, tb) = paint.text.to_f64();
                 cr.set_source_rgb(tr, tg, tb);
                 cr.save().unwrap();
                 cr.rectangle(cx, cy, *cw, *rh);
                 cr.clip();
-                let (l, t, _, _) = pad(r, c);
-                cr.move_to(cx + l, cy + t);
-                pangocairo::functions::show_layout(cr, &layout);
+                crate::text_render::draw_text_body(cr, &text, &runs, &body, (cx, cy, *cw, *rh), scale, font);
                 cr.restore().unwrap();
             }
             cx += col_w;

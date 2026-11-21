@@ -57,3 +57,31 @@ fn a_cell_without_margins_takes_the_tables() {
     write_pptx(path.to_str().unwrap(), &d).unwrap();
     assert_eq!(cell(&read_pptx(path.to_str().unwrap()).unwrap()).margins, None);
 }
+
+/// A cell's paragraphs keep their alignment and bullets, and the cell its
+/// anchor: the HR measures deck's toolkit table centres its headers and
+/// bullets its fact sheets (1,506 aligned and 1,571 anchored cells
+/// across the real decks' tables).
+#[test]
+fn a_cells_paragraph_styles_and_anchor_survive_a_pptx_save() {
+    use decks_core::engine::{Anchor, Bullet, ParaAlign, ParaStyle};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.pptx");
+    let mut d = deck();
+    if let SlideObject::Table { table, .. } = &mut d.slides[0].objects[0] {
+        let cell = &mut table.rows[0][0];
+        cell.runs = vec![Run::plain("Heading\nA point")];
+        cell.paras = vec![
+            ParaStyle { align: ParaAlign::Center, ..Default::default() },
+            ParaStyle { bullet: Bullet::Char("•".into()), margin_left: 20.0, indent: -20.0, ..Default::default() },
+        ];
+        cell.anchor = Anchor::Middle;
+    }
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
+    let back = cell(&read_pptx(path.to_str().unwrap()).unwrap());
+    assert_eq!(back.anchor, Anchor::Middle);
+    assert_eq!(back.paras.len(), 2, "{:?}", back.paras);
+    assert_eq!(back.paras[0].align, ParaAlign::Center);
+    assert_eq!(back.paras[1].bullet, Bullet::Char("•".into()));
+    assert!((back.paras[1].margin_left - 20.0).abs() < 0.1 && (back.paras[1].indent + 20.0).abs() < 0.1, "{:?}", back.paras[1]);
+}
