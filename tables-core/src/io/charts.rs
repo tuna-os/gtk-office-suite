@@ -235,6 +235,12 @@ fn anchor_cell(cell_xml: &str) -> Option<(usize, usize, f64, f64)> {
     if col < 0.0 || row < 0.0 || col.fract() != 0.0 || row.fract() != 0.0 {
         return None;
     }
+    // Nor is a cell past the grid's last: the size of a two-cell anchor is
+    // summed over every row and column between its cells, and a file can
+    // write a row no sheet has (1e19) in five bytes.
+    if col >= crate::sheet::SHEET_MAX_COLS as f64 || row >= crate::sheet::SHEET_MAX_ROWS as f64 {
+        return None;
+    }
     let (col, row) = (col as usize, row as usize);
     let col_off = grab_num(cell_xml, "colOff").unwrap_or(0.0);
     let row_off = grab_num(cell_xml, "rowOff").unwrap_or(0.0);

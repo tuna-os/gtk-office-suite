@@ -171,6 +171,41 @@ const CELL_PAD_V: f64 = 2.0;
 
 /// The Pango layout for a cell's text in its style: font, weight, slant,
 /// underline and strikethrough, alignment, and wrapping within `width`.
+/// Pango attributes for each run of a rich-text cell that has a font of
+/// its own: the EWCO claim form's title is a bold line over a small italic
+/// version, one cell drawn as one font until runs were read.
+fn run_attributes(attrs: &pango::AttrList, runs: &[tables_core::sheet::TextRun], cell_font: &pango::FontDescription) {
+    let mut start = 0u32;
+    for run in runs {
+        let end = start + run.text.len() as u32;
+        if let Some(f) = &run.font {
+            let mut font = cell_font.clone();
+            if let Some(family) = &f.family {
+                font.set_family(family);
+            }
+            if let Some(size) = f.size {
+                font.set_size((size * pango::SCALE as f64) as i32);
+            }
+            font.set_weight(if f.bold { pango::Weight::Bold } else { pango::Weight::Normal });
+            font.set_style(if f.italic { pango::Style::Italic } else { pango::Style::Normal });
+            let ranged = |mut a: pango::Attribute| {
+                a.set_start_index(start);
+                a.set_end_index(end);
+                attrs.insert(a);
+            };
+            ranged(pango::AttrFontDesc::new(&font).into());
+            ranged(pango::AttrInt::new_underline(if f.underline { pango::Underline::Single } else { pango::Underline::None }).into());
+            ranged(pango::AttrInt::new_strikethrough(f.strikethrough).into());
+            if let Some(color) = f.color {
+                let (r, g, b) = color.to_f64();
+                let c16 = |v: f64| (v * 65535.0).round() as u16;
+                ranged(pango::AttrColor::new_foreground(c16(r), c16(g), c16(b)).into());
+            }
+        }
+        start = end;
+    }
+}
+
 fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str, width: f64) -> pango::Layout {
     use tables_core::style::HAlign;
     let style = &sheet.styles[r][c];
@@ -186,16 +221,17 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
         font.set_style(pango::Style::Italic);
     }
     layout.set_font_description(Some(&font));
-    if style.underline || style.strikethrough {
-        let attrs = pango::AttrList::new();
-        if style.underline {
-            attrs.insert(pango::AttrInt::new_underline(pango::Underline::Single));
-        }
-        if style.strikethrough {
-            attrs.insert(pango::AttrInt::new_strikethrough(true));
-        }
-        layout.set_attributes(Some(&attrs));
+    let attrs = pango::AttrList::new();
+    if style.underline {
+        attrs.insert(pango::AttrInt::new_underline(pango::Underline::Single));
     }
+    if style.strikethrough {
+        attrs.insert(pango::AttrInt::new_strikethrough(true));
+    }
+    if let Some(runs) = sheet.rich_runs(r, c, text) {
+        run_attributes(&attrs, runs, &font);
+    }
+    layout.set_attributes(Some(&attrs));
     layout.set_text(text);
     layout.set_width(
         ((width - CELL_PAD_LEFT - CELL_PAD_RIGHT - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32,

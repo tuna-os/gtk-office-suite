@@ -36,6 +36,9 @@
   "decks/layout-rules": {
     "A": "green"
   },
+  "decks/master-slide-number": {
+    "A": "green"
+  },
   "decks/pay-centre-reduced-connector-rules": {
     "A": "green",
     "B": "green",
@@ -55,6 +58,9 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "decks/picture-flip": {
+    "A": "green"
   },
   "decks/preset-shapes": {
     "A": "green",
@@ -249,7 +255,7 @@
     "C": "green"
   },
   "letters/odt-page-break-spacing": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -299,7 +305,7 @@
     "C": "green"
   },
   "letters/table": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },

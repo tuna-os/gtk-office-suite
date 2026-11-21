@@ -943,7 +943,10 @@ impl DecksController {
         };
         self.edit_objects(slide_id, |objects| {
             if let Some(SlideObject::Image { path, w, h, crop, .. }) = objects.get_mut(at) {
-                *crop = if fill {
+                // The crop is the trim only: a mirrored picture stays
+                // mirrored whichever way it is cropped.
+                let (flip_h, flip_v) = (crop.flip_h, crop.flip_v);
+                let trim = if fill {
                     match crate::image_px::natural_size_pt(path) {
                         Some((iw, ih)) => crate::engine::Crop::fill(iw, ih, *w, *h),
                         None => *crop,
@@ -951,6 +954,7 @@ impl DecksController {
                 } else {
                     crate::engine::Crop::default()
                 };
+                *crop = crate::engine::Crop { flip_h, flip_v, ..trim };
             }
         })
     }
@@ -2031,6 +2035,37 @@ mod tests {
         assert!(crop(&c).is_none());
         assert!(c.undo());
         assert_eq!(crop(&c), fill, "one undo puts the crop back");
+    }
+
+    /// Crop to Fill and show-all change the trim only: a mirrored picture
+    /// stays mirrored. Rebuilding the crop reset the flip, so cropping a
+    /// mirrored logo un-mirrored it and the save wrote it so.
+    #[test]
+    fn cropping_a_mirrored_picture_keeps_it_mirrored() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("wide.png");
+        let mut head = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        head.extend_from_slice(&400u32.to_be_bytes());
+        head.extend_from_slice(&200u32.to_be_bytes());
+        std::fs::write(&png, head).unwrap();
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Image {
+            path: png.to_string_lossy().into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0, rotation: 0.0,
+            crop: crate::engine::Crop { flip_h: true, flip_v: true, ..Default::default() },
+        });
+        let c = DecksController::new(vec![s], vec![]);
+        let (s, o) = (sid(&c, 0), oid(&c, 0, 0));
+        let crop = |c: &DecksController| match &c.slides.borrow()[0].objects[0] {
+            SlideObject::Image { crop, .. } => *crop,
+            _ => unreachable!(),
+        };
+        assert!(c.crop_picture(s, o, true));
+        let fill = crop(&c);
+        assert!((fill.left - 0.25).abs() < 1e-9, "trimmed: {fill:?}");
+        assert_eq!((fill.flip_h, fill.flip_v), (true, true), "and still mirrored");
+        assert!(c.crop_picture(s, o, false));
+        let all = crop(&c);
+        assert_eq!((all.left, all.right, all.flip_h, all.flip_v), (0.0, 0.0, true, true), "shown whole, still mirrored");
     }
 
     #[test]

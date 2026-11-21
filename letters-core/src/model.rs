@@ -1302,6 +1302,11 @@ impl Document {
 
     pub fn set_list_item(&mut self, para_idx: usize, kind: ListKind, level: u8, start: Option<u32>) {
         if let Some(style) = self.paragraphs.get_mut(para_idx).map(|p| &mut p.style) {
+            // A label belongs to its kind: a bullet's glyph is no number,
+            // and a number's "a)" is no bullet.
+            if style.list != kind {
+                style.list_label = None;
+            }
             style.list = kind;
             style.list_level = level;
             style.list_start = start.filter(|n| *n > 0);
