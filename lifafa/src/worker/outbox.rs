@@ -234,6 +234,11 @@ fn queue_outbox_message(
     if let Some(id) = id.filter(|_| !msg.forwards.is_empty()) {
         cache.set_outbox_forwards(id, &msg.forwards);
     }
+    // How a Tuta message is to go, which its flush reads back. A row that
+    // lacks it is not sent outside Tuta as ordinary mail.
+    if let Some(id) = id {
+        cache.set_outbox_delivery(id, msg.tuta.stored());
+    }
     id.is_some()
 }
 

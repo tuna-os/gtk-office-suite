@@ -569,6 +569,44 @@ fn a_continued_cell_does_not_open_with_paragraph_spacing() {
     assert!(on_a_gap > 0, "no break fell on the space between paragraphs");
 }
 
+/// A cell continued on the next page opens with the space above the
+/// paragraph it resumes in, after its padding, whether the page broke
+/// inside that paragraph or before it: measured in LibreOffice 24.2, a
+/// 12pt space-before in an unpadded cell puts the continued line 12pt
+/// below the cell's top on odt and docx alike. Dropped, every line after
+/// such a break in an excise form's guidance sat 6pt high (render-real
+/// `notes-on-the-completion-of-form-w1`).
+#[test]
+fn a_continued_cell_opens_with_the_space_above_its_paragraph() {
+    for (case, lines) in [("between paragraphs", 80usize), ("inside a paragraph", 1)] {
+        let mut d = doc_of(30, "filler");
+        let table = d.insert_table_at(30, 1, 1);
+        d.table_padding.insert(table, CellPadding { top_pt: 2.0, ..Default::default() });
+        let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+        let text = |n: usize| if lines == 1 { (0..900).map(|w| format!("word{w}")).collect::<Vec<_>>().join(" ") } else { format!("line {n}") };
+        let paras: Vec<Paragraph> = (0..lines)
+            .map(|n| Paragraph {
+                style: ParaStyle { table_cell: Some(TableCell { table, row: 0, col: 0 }), space_before_pt: 12.0, ..Default::default() },
+                runs: vec![Run::plain(text(n))],
+            })
+            .collect();
+        d.paragraphs.splice(at..=at, paras);
+        let t = lay(&d);
+        assert!(t.pages.len() > 1, "{case}: the row splits");
+        let inset = |page: usize| -> f64 {
+            let items = &t.pages[page].items;
+            let cell = items.iter().find_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).unwrap();
+            let top = items
+                .iter()
+                .find_map(|i| match i { Item::Line { text, top_pt, .. } if text.starts_with("line ") || text.starts_with("word") => Some(*top_pt), _ => None })
+                .unwrap();
+            top - cell
+        };
+        assert!((inset(0) - 14.0).abs() < 1e-6, "{case}: the first line below padding and space: {}", inset(0));
+        assert!((inset(1) - 14.0).abs() < 1e-6, "{case}: continued, the same: {}", inset(1));
+    }
+}
+
 /// A row kept on one page that does not fit what is left of a page
 /// starts the next, as Writer moves the social housing dictionary's long
 /// rows whole; one not kept so splits there; and one taller than a page
