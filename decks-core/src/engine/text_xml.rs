@@ -287,6 +287,7 @@ pub(crate) struct Inherited {
 }
 
 impl Inherited {
+    #[cfg(test)]
     pub(crate) fn read(layout_xml: &str, master_xml: &str, theme: &Theme) -> Inherited {
         Self::read_scaled(layout_xml, master_xml, theme, 1.0)
     }
