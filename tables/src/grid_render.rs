@@ -342,6 +342,17 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     cr.restore().unwrap();
 }
 
+/// What a row Calc refits (an ods optimal-height row) adds to its text's
+/// line height, in pixels. Calc fits an 11 pt row to 13.78 pt (18.4 px) and
+/// a 20 pt one to 24.44 pt (32.6 px), whatever the face (LibreOffice 24.2,
+/// Liberation Sans, Serif and Carlito alike): Pango's lines for those sizes
+/// are 16.9 and 30.6 px.
+const FIT_ROW_PAD: f64 = 2.0;
+/// What any other grown row adds (an xlsx row with no height of its own
+/// holding wrapped or resized text). Taking Calc's 2 here too turned
+/// july-2026-fiscal-risks' Tier A red in CI.
+const GROW_ROW_PAD: f64 = 6.0;
+
 /// Grow each row to fit cells that need more than the default height (a
 /// wrapped cell, or a font size of its own), unless the row already has a
 /// height of its own (anything other than the default), as spreadsheets
@@ -352,14 +363,21 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     // Measure with the options the grid draws with, or rows fit a
     // different text than the one shown.
     suite_common::use_ui_font_rendering(&cr);
+    // A row the file asks to fit (an ods optimal-height row) is as tall as
+    // its tallest cell's text, larger or smaller than the height it
+    // stored; an empty one keeps that height. Hampshire's postcode list
+    // stores 15.76 pt on every row and Calc draws 13.9 pt; mining
+    // remediation's 10 pt Arial rows, under an 11 pt default style, are 17
+    // px in Calc, and its empty rows keep their stored 12.75 pt.
     for r in 0..sheet.rows {
-        if (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
+        let fit = sheet.fit_rows.contains(&r);
+        if !fit && (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
             continue;
         }
-        let mut need = sheet.row_heights[r];
+        let mut need = if fit { 0.0 } else { sheet.row_heights[r] };
         for c in 0..sheet.cols {
             let style = &sheet.styles[r][c];
-            if !(style.wrap || style.font_size.is_some()) || sheet.cell(r, c).is_empty() {
+            if !(fit || style.wrap || style.font_size.is_some()) || sheet.cell(r, c).is_empty() {
                 continue;
             }
             let width = match sheet.merge_covering(r, c) {
@@ -371,10 +389,17 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
             };
             let text = sheet.formats[r][c].format(sheet.cell(r, c));
             let layout = cell_layout(&cr, sheet, r, c, &text, width);
-            need = need.max(layout.pixel_size().1 as f64 + 6.0);
+            need = need.max(layout.pixel_size().1 as f64 + if fit { FIT_ROW_PAD } else { GROW_ROW_PAD });
         }
-        sheet.row_heights[r] = need;
+        if need > 0.0 {
+            sheet.row_heights[r] = need;
+        }
     }
+    // The file's request is met once, on open: from here the fitted heights
+    // are the sheet's own, so a height set by hand survives the next fit (a
+    // format change refits), and an inserted row doesn't refit the wrong
+    // one (review on #2389).
+    sheet.fit_rows.clear();
 }
 
 /// Size each column that holds text to its widest cell, as Calc's CSV
@@ -890,6 +915,22 @@ pub fn render_sheet_pdf(
 
 #[cfg(test)]
 mod tests {
+    /// An optimal-height row is fitted once, on open: a height set by hand
+    /// afterwards survives the next fit.
+    #[test]
+    fn an_optimal_row_is_fitted_once() {
+        let mut sheet = SheetModel::new("S", 2, 1, 0);
+        sheet.data[0][0] = "text".into();
+        sheet.row_heights[0] = 48.0;
+        sheet.fit_rows.insert(0);
+        fit_rows_to_content(&mut sheet);
+        assert!(sheet.row_heights[0] < 30.0, "fitted to its text: {}", sheet.row_heights[0]);
+        assert!(sheet.fit_rows.is_empty(), "the request is met");
+        sheet.row_heights[0] = 40.0;
+        fit_rows_to_content(&mut sheet);
+        assert_eq!(sheet.row_heights[0], 40.0, "a height set by hand stays");
+    }
+
     /// A picture's size is read from its header, and a huge one is refused
     /// before it is decoded: a few bytes of PNG can declare 60000 x 60000.
     #[test]
