@@ -621,29 +621,54 @@ fn write_geometry_and_paint<W: std::io::Write>(
         writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
     }
 
-    let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> Result<(), quick_xml::Error> {
+    // The fill's opacity, as its colour's a:alpha (none when opaque).
+    let fill_alpha = style.fill_alpha.filter(|a| *a < 1.0);
+    let alpha_el = |writer: &mut Writer<W>| -> Result<(), quick_xml::Error> {
+        if let Some(a) = fill_alpha {
+            let mut el = BytesStart::new("a:alpha");
+            el.push_attribute(("val", ((a * 100_000.0).round() as i64).to_string().as_str()));
+            writer.write_event(Event::Empty(el))?;
+        }
+        Ok(())
+    };
+    // `fill` adds the fill's opacity; an outline's colour has none.
+    let solid = |writer: &mut Writer<W>, color: super::shape::Color, fill: bool| -> Result<(), quick_xml::Error> {
         writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
         let mut srgb = BytesStart::new("a:srgbClr");
         srgb.push_attribute(("val", color.to_hex().as_str()));
-        writer.write_event(Event::Empty(srgb))?;
+        if fill && fill_alpha.is_some() {
+            writer.write_event(Event::Start(srgb))?;
+            alpha_el(writer)?;
+            writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
+        } else {
+            writer.write_event(Event::Empty(srgb))?;
+        }
         writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
         Ok(())
     };
     // A carried colour reference (DCK-006): the statement the file made,
     // literal or theme token, written back instead of the resolved cache
     // so a save keeps the live link rather than freezing the colour.
-    let solid_ref = |writer: &mut Writer<W>, r: &super::theme::ColorRef| -> Result<(), quick_xml::Error> {
+    // `fill` adds the fill's opacity; an outline's colour has none.
+    let solid_ref = |writer: &mut Writer<W>, r: &super::theme::ColorRef, fill: bool| -> Result<(), quick_xml::Error> {
+        let alpha = if fill { fill_alpha } else { None };
         writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
         match r {
             super::theme::ColorRef::Rgb(hex) => {
                 let mut srgb = BytesStart::new("a:srgbClr");
                 srgb.push_attribute(("val", hex.to_uppercase().as_str()));
-                writer.write_event(Event::Empty(srgb))?;
+                if alpha.is_some() {
+                    writer.write_event(Event::Start(srgb))?;
+                    alpha_el(writer)?;
+                    writer.write_event(Event::End(BytesEnd::new("a:srgbClr")))?;
+                } else {
+                    writer.write_event(Event::Empty(srgb))?;
+                }
             }
             super::theme::ColorRef::Theme(t) => {
                 let mut clr = BytesStart::new("a:schemeClr");
                 clr.push_attribute(("val", t.slot.as_str()));
-                if t.mods.is_empty() {
+                if t.mods.is_empty() && alpha.is_none() {
                     writer.write_event(Event::Empty(clr))?;
                 } else {
                     writer.write_event(Event::Start(clr))?;
@@ -651,6 +676,9 @@ fn write_geometry_and_paint<W: std::io::Write>(
                         let mut mod_el = BytesStart::new(m.xml_name());
                         mod_el.push_attribute(("val", m.value().to_string().as_str()));
                         writer.write_event(Event::Empty(mod_el))?;
+                    }
+                    if alpha.is_some() {
+                        alpha_el(writer)?;
                     }
                     writer.write_event(Event::End(BytesEnd::new("a:schemeClr")))?;
                 }
@@ -679,9 +707,9 @@ fn write_geometry_and_paint<W: std::io::Write>(
             writer.write_event(Event::Empty(lin))?;
             writer.write_event(Event::End(BytesEnd::new("a:gradFill")))?;
         }
-        (Some(super::theme::FillSrc::Color(r)), None, _) => solid_ref(writer, r)?,
+        (Some(super::theme::FillSrc::Color(r)), None, _) => solid_ref(writer, r, true)?,
         (Some(super::theme::FillSrc::NoFill), None, _) => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
-        (None, None, Some(c)) => solid(writer, c)?,
+        (None, None, Some(c)) => solid(writer, c, true)?,
         (None, None, None) => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
     }
     let mut ln = BytesStart::new("a:ln");
@@ -692,7 +720,7 @@ fn write_geometry_and_paint<W: std::io::Write>(
             let w = stroke.map(|s| s.width).unwrap_or(9525.0 / TO_EMU.with(|t| t.get().0));
             ln.push_attribute(("w", emu(w).as_str()));
             writer.write_event(Event::Start(ln))?;
-            solid_ref(writer, r)?;
+            solid_ref(writer, r, false)?;
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
         (Some(super::theme::StrokeSrc::NoLine), _) | (None, None) => {
@@ -704,7 +732,7 @@ fn write_geometry_and_paint<W: std::io::Write>(
             // Model units, as write_xfrm writes coordinates.
             ln.push_attribute(("w", emu(stroke.width).as_str()));
             writer.write_event(Event::Start(ln))?;
-            solid(writer, stroke.color)?;
+            solid(writer, stroke.color, false)?;
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }

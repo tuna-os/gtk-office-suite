@@ -33,7 +33,7 @@ fn deck() -> Deck {
         w: 200.0,
         h: 200.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, shadow: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
     }];
     d
 }
