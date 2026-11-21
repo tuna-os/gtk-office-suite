@@ -51,7 +51,8 @@ the cells at their own size.
 | Text columns (`numCol`) | One column | Open PR #2366 |
 | Mirrored pictures lose the mirror when cropped, and in export | Picture unmirrored | Open PR #2367 |
 | All caps / small caps (`cap`) | Text drawn as typed | Open PR #2378 |
-| Shrink-to-fit (`normAutofit`) sizing | Text drawn larger than Impress in some boxes (a title Impress draws at 88.5% we draw at 100%); our fit is measured, Impress's algorithm differs | Not yet root-caused |
+| Shrink-to-fit (`normAutofit`) and trailing line breaks | A break that ends a paragraph took no line, so centred titles ending in `<a:br/>` sat half a line low; the fit scaled the font alone where Impress closes the line spacing to 90%/80% first | Open PR #2388 (Impress's own search; whole-point rounding of shrunk sizes not repeated) |
+| Table style headers and first columns | Header rows drawn bold in every style, and a marked first column painted as the header, where Impress bolds only Light Style 1's and paints the first column as the header only in the medium styles | Open PR #2387 |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps
