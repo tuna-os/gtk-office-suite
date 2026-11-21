@@ -670,7 +670,7 @@ fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], 
     let slot = (bottom - top_y) / count as f64;
     let n = if opts.stacked { 1.0 } else { series.len() as f64 };
     let bar_h = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
-    for (i, cat) in categories.iter().enumerate() {
+    for i in 0..categories.len() {
         let row = if opts.reversed { i } else { count - 1 - i };
         let start = top_y + row as f64 * slot + (slot - n * bar_h) / 2.0;
         let mut base = 0.0;
@@ -702,7 +702,6 @@ fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], 
         for (j, line) in lines.iter().enumerate().filter(|_| !opts.hide_category_axis) {
             show(cr, left - 8.0 - text_w(cr, line), first + j as f64 * line_h, line);
         }
-        let _ = cat;
     }
 
     draw_legend(cr, w - legend_w + 2.0, (top_y + bottom) / 2.0, &legend, Key::Square);
@@ -730,9 +729,13 @@ fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64,
     }
     let y_of = |v: f64| bottom - (v.max(0.0) / axis.top) * (bottom - top_y);
     let n = categories.len();
-    let x_of = |i: usize| match style {
-        Style::Line => left + (i as f64 + 0.5) * (right - left) / n as f64,
-        Style::Area => left + i as f64 * (right - left) / (n - 1).max(1) as f64,
+    // The categories run right to left when the file reverses its axis.
+    let x_of = |i: usize| {
+        let i = if opts.reversed { n - 1 - i } else { i };
+        match style {
+            Style::Line => left + (i as f64 + 0.5) * (right - left) / n as f64,
+            Style::Area => left + i as f64 * (right - left) / (n - 1).max(1) as f64,
+        }
     };
     if !opts.hide_value_axis {
         draw_value_axis(cr, &axis, left, right, top_y, bottom);
@@ -967,6 +970,28 @@ mod tests {
         let (bar_p, bar_t) = (top_row_with(&mut p, (0x4f, 0x81, 0xbd)).unwrap(), top_row_with(&mut t, (0x4f, 0x81, 0xbd)).unwrap());
         assert!(red < bar_t, "the title is above the bars");
         assert!(bar_t > bar_p + 10, "the plot gives the title room: {bar_p} → {bar_t}");
+    }
+
+    /// A reversed line chart is the plain one mirrored: its first category
+    /// at the right, where the file's reversed axis puts it.
+    #[test]
+    fn a_reversed_line_chart_runs_right_to_left() {
+        let categories: Vec<String> = ["A", "B", "C"].iter().map(|s| s.to_string()).collect();
+        let a = [1.0, 2.0, 9.0];
+        let one = [Series { name: None, values: &a }];
+        let plain = Options { no_legend: true, hide_category_axis: true, hide_value_axis: true, ..Options::default() };
+        let mut p = draw_with(&categories, &one, ChartKind::Line, &plain);
+        let mut r = draw_with(&categories, &one, ChartKind::Line, &Options { reversed: true, ..plain });
+        let accent = (0x4f, 0x81, 0xbd);
+        // The highest point (C, 9) is the topmost accent: right of centre
+        // plain, left of it reversed.
+        let top_x = |s: &mut ImageSurface| {
+            let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+            let px = s.data().unwrap();
+            (0..h).find_map(|y| (0..w).find(|x| px[y * stride + x * 4..][..3] == [accent.2, accent.1, accent.0])).unwrap()
+        };
+        let (pw, rw) = (top_x(&mut p), top_x(&mut r));
+        assert!(pw > 200 && rw < 200, "plain {pw}, reversed {rw}");
     }
 
     /// Default options are the plain chart, pixel for pixel.

@@ -495,7 +495,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
         ChartKind::Area => format!(
             "<c:areaChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
              {head}{cat}{val}</c:ser>{more}{dlbls}{ids}</c:areaChart>{}{}",
-            cat_ax(),
+            category_axis(),
             value_axis(AX_2, "l", AX_1, true, "midCat")
         ),
         ChartKind::Pie => {
@@ -1309,6 +1309,20 @@ mod tests {
         let auto = HORIZONTAL.replacen("<c:chart>", "<c:chart><c:title><c:overlay val=\"0\"/></c:title>", 1);
         assert_eq!(parse_chart_space(&auto).unwrap().title, None);
         assert!(!chart_space_xml(&parse_chart_space(HORIZONTAL).unwrap()).contains("<c:title>"));
+    }
+
+    /// An area or line chart keeps a reversed, deleted category axis on
+    /// save, as a bar chart does: the reader sets both for every kind with
+    /// axes.
+    #[test]
+    fn an_area_charts_reversed_hidden_axis_round_trips() {
+        for kind in [ChartKind::Area, ChartKind::Line] {
+            let mut c = ChartData::sample(kind);
+            c.reversed = true;
+            c.hide_category_axis = true;
+            let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
+            assert!(back.reversed && back.hide_category_axis, "{kind:?}: {back:?}");
+        }
     }
 
     #[test]
