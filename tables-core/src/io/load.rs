@@ -681,6 +681,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             sheet.charts.push(spec);
         }
     }
+    for (owner, picture) in super::read_pictures(path, &sheets) {
+        if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
+            sheet.pictures.push(picture);
+        }
+    }
     for (owner, rule) in super::read_cond_rules_detailed(path).0 {
         if let Some(sheet) = sheets.iter_mut().find(|s| s.name == owner) {
             sheet.cond_rules.push(rule);
@@ -886,6 +891,7 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
                 sheet.col_widths[c] = px;
             }
         }
+        sheet.fit_rows = p.fit_rows.iter().copied().filter(|&r| r < sheet.rows).collect();
         for (&r, &px) in &p.row_heights {
             if r < sheet.row_heights.len() {
                 sheet.row_heights[r] = px;

@@ -144,6 +144,7 @@ fn between(from: &SlideObject, to: &SlideObject, t: f64) -> SlideObject {
                 let sb = y.style.font_size_hp.unwrap_or(36) as f64;
                 if sa != sb {
                     y.style.font_size_hp = Some(lerp(sa, sb, t).round().max(1.0) as u16);
+                    y.style.font_size_cpt = None;
                 }
             }
         }

@@ -71,9 +71,28 @@ pub struct RunStyle {
     pub font_family: Option<String>,
     /// Font size in half-points (24 is 12pt); None is the default.
     pub font_size_hp: Option<u16>,
+    /// The same size in hundredths of a point, where a reader knows it more
+    /// finely than a half point (a 19 pt run on a 13.33-inch deck is
+    /// 14.25 pt on Decks' 10-inch slide). Meaningful only while it still
+    /// rounds to `font_size_hp`: an edit that sets the size leaves it stale,
+    /// and `size_pt` then ignores it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_size_cpt: Option<u32>,
     /// Text color as RRGGBB hex, no '#'; None is the default.
     pub color: Option<String>,
     pub vert_align: Option<VertAlign>,
+}
+
+impl RunStyle {
+    /// The run's size in points: `font_size_cpt` while it agrees with
+    /// `font_size_hp`, else the half points; `None` is the default size.
+    pub fn size_pt(&self) -> Option<f64> {
+        let hp = self.font_size_hp?;
+        match self.font_size_cpt {
+            Some(cpt) if (f64::from(cpt) / 50.0).round() as i64 == i64::from(hp) => Some(f64::from(cpt) / 100.0),
+            _ => Some(f64::from(hp) / 2.0),
+        }
+    }
 }
 
 /// Paragraph formatting every app can show.

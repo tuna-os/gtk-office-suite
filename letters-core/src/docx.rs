@@ -841,6 +841,11 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
     if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\") || xml.contains("<w:txbxContent") || xml.contains("<wps:cNvCnPr") || xml.contains("prst=\"line\"")) {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new(), Vec::new())));
     }
+    // Controls around a whole table cell or row, which rdocx drops with
+    // their cell, come off first: the cell stays, its placeholder text and
+    // all.
+    let lifted = lift_cell_controls(&xml);
+    let xml = lifted.clone().unwrap_or(xml);
     // A table of contents first: it lifts the paragraphs out of their
     // content control before chips look at controls.
     let toc = crate::docx_toc::unwrap(&xml);
@@ -850,11 +855,62 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
     let patched = commented.clone().unwrap_or(patched);
     // Text boxes rdocx does not read (docx_text_boxes).
     let (patched, text_boxes) = crate::docx_text_boxes::unwrap(&patched);
-    if chips.is_empty() && revisions.is_empty() && commented.is_none() && toc.is_none() && text_boxes.is_empty() {
+    if lifted.is_none() && chips.is_empty() && revisions.is_empty() && commented.is_none() && toc.is_none() && text_boxes.is_empty() {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new(), Vec::new())));
     }
     let bytes = with_part(&bytes, "word/document.xml", |_| patched.clone())?;
     Ok((rdocx::Document::from_bytes(&bytes).map_err(|e| e.to_string())?, (chips, revisions, text_boxes)))
+}
+
+/// `document_xml` with each content control that wraps a whole table cell
+/// or row (`<w:sdt>…<w:sdtContent><w:tc>…`) replaced by what it holds; None
+/// when there is none. rdocx reads a row's cells and skips a control among
+/// them, so the cell went with it: the tier 2/3 notification form's date and
+/// "Choose an item." cells were missing, and the cells after them moved
+/// left into their columns.
+fn lift_cell_controls(document_xml: &str) -> Option<String> {
+    let mut xml = document_xml.to_string();
+    let mut changed = false;
+    let mut from = 0;
+    let opens = |s: &str, at: usize| [s[at..].find("<w:sdt>"), s[at..].find("<w:sdt ")].into_iter().flatten().min().map(|a| at + a);
+    while let Some(start) = opens(&xml, from) {
+        // Its matching end, counting nested controls.
+        let mut depth = 0usize;
+        let mut at = start;
+        let end = loop {
+            let open = opens(&xml, at + 1);
+            let Some(close) = xml[at + 1..].find("</w:sdt>").map(|a| at + 1 + a) else { break None };
+            match open {
+                Some(o) if o < close => {
+                    depth += 1;
+                    at = o;
+                }
+                _ if depth == 0 => break Some(close + "</w:sdt>".len()),
+                _ => {
+                    depth -= 1;
+                    at = close;
+                }
+            }
+        };
+        let Some(end) = end else { break };
+        let control = &xml[start..end];
+        let content = control.find("<w:sdtContent>").map(|c| c + "<w:sdtContent>".len()).zip(control.rfind("</w:sdtContent>"));
+        match content {
+            Some((c0, c1)) if c0 <= c1 && {
+                let inner = control[c0..c1].trim_start();
+                inner.starts_with("<w:tc>") || inner.starts_with("<w:tc ") || inner.starts_with("<w:tr>") || inner.starts_with("<w:tr ")
+            } =>
+            {
+                let inner = control[c0..c1].to_string();
+                xml.replace_range(start..end, &inner);
+                changed = true;
+                // Look again inside what it held: a cell's own controls.
+                from = start;
+            }
+            _ => from = start + 1,
+        }
+    }
+    changed.then_some(xml)
 }
 
 /// Tabs in run text as Word's `w:tab` elements. rdocx writes a tab as a
@@ -1305,6 +1361,13 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                             // An empty paragraph is a line of the cell:
                             // a form's answer box is a cell of them.
                             let mut para = map_paragraph(&doc, &cp, table.style_id(), raw_cell);
+                            // A list in a cell resolves its indent as one in
+                            // the body does: its own `w:ind w:left` over its
+                            // level's, with the level's hanging indent. It
+                            // kept the raw left, and the layout added the
+                            // list's indent on top: the outside-appointments
+                            // decision's numbers stood 24 px right of Word's.
+                            list_indent_from_declared(&doc, &cp, &mut para.style);
                             drop_cell_page_breaks(&mut para, &cp);
                             keep(para);
                         }
@@ -4101,6 +4164,25 @@ mod tests {
 
     fn para(text: &str) -> String {
         format!("<w:p><w:r><w:t>{text}</w:t></w:r></w:p>")
+    }
+
+    /// A content control around a whole cell keeps its cell: the tier 2/3
+    /// notification form's date and drop-down cells were dropped, and the
+    /// cells after them moved into their columns.
+    #[test]
+    fn a_control_around_a_cell_keeps_the_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        let cell = |t: &str| format!("<w:tc>{}</w:tc>", para(t));
+        let body = format!(
+            "<w:tbl><w:tblGrid><w:gridCol w:w=\"3000\"/><w:gridCol w:w=\"3000\"/><w:gridCol w:w=\"3000\"/></w:tblGrid>\
+             <w:tr>{}<w:sdt><w:sdtPr><w:showingPlcHdr/><w:date/></w:sdtPr><w:sdtContent>{}</w:sdtContent></w:sdt>{}</w:tr>\
+             <w:sdt><w:sdtPr/><w:sdtContent><w:tr>{}{}{}</w:tr></w:sdtContent></w:sdt></w:tbl>{}",
+            cell("Date"), cell("Click or tap to enter a date."), cell("After"),
+            cell("a"), cell("b"), cell("c"), para("End")
+        );
+        let path = docx_with_body(dir.path(), &body, "c.docx");
+        let doc = super::read(path.to_str().unwrap()).unwrap();
+        assert_eq!(doc.to_plain_text(), "Date\nClick or tap to enter a date.\nAfter\na\nb\nc\nEnd");
     }
 
     /// A legacy form checkbox (`FORMCHECKBOX`, its state in `w:ffData`)
