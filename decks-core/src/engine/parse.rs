@@ -911,11 +911,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 // A placeholder that paints nothing itself is
                                 // drawn with its layout's (or master's)
                                 // placeholder fill and outline.
-                                let bare = paint.style.fill.is_none() && paint.style.gradient.is_none() && paint.style.stroke.is_none();
-                                let paint = match shape.ph.as_ref().filter(|_| bare).and_then(|k| inherited.paint(k)) {
-                                    Some(p) => p.clone(),
-                                    None => paint,
-                                };
+                                let paint = super::shape_xml::placeholder_or_own(paint, shape.ph.as_ref().and_then(|k| inherited.paint(k)));
                                 let text = text_of(&shape.runs);
                                 let has_text = !text.trim().is_empty();
                                 // A title, subtitle or body placeholder is a
