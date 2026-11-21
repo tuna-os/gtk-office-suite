@@ -343,6 +343,7 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     if style.italic { r_pr.push_attribute(("i", "1")); }
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
+    if style.caps { r_pr.push_attribute(("cap", "all")); } else if style.small_caps { r_pr.push_attribute(("cap", "small")); }
     let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
     let link = style.link.as_ref().and_then(|target| links.get(target));
     if style.color.is_some() || family.is_some() || link.is_some() {
