@@ -52,12 +52,14 @@ pub(crate) struct RunProps {
     color: Option<String>,
     /// The Latin typeface, theme references resolved.
     latin: Option<String>,
+    /// `cap`: "all", "small" or "none".
+    cap: Option<String>,
 }
 
 impl RunProps {
     fn over(&mut self, top: &RunProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(sz, b, i, u, strike, color, latin);
+        take!(sz, b, i, u, strike, color, latin, cap);
     }
 
     fn of(rpr: &Node, theme: &Theme) -> RunProps {
@@ -73,6 +75,7 @@ impl RunProps {
                 .and_then(|f| first_color(f, theme, None))
                 .map(|c| c.to_hex().to_lowercase()),
             latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
+            cap: rpr.attr("cap").map(str::to_string),
         }
     }
 
@@ -89,6 +92,8 @@ impl RunProps {
             font_size_hp: self.sz.map(|s| (s as f64 / 50.0).round() as u16),
             color: self.color.clone(),
             font_family: self.latin.clone(),
+            caps: self.cap.as_deref() == Some("all"),
+            small_caps: self.cap.as_deref() == Some("small"),
             ..RunStyle::default()
         }
     }

@@ -188,12 +188,19 @@ pub struct Crop {
     pub top: f64,
     pub right: f64,
     pub bottom: f64,
+    /// The picture mirrored left to right (`a:xfrm flipH`), as it is drawn
+    /// in its box.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flip_h: bool,
+    /// The picture mirrored top to bottom (`a:xfrm flipV`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flip_v: bool,
 }
 
 impl Crop {
-    /// Nothing is cut.
+    /// Nothing is cut (a flip is not a cut).
     pub fn is_none(&self) -> bool {
-        *self == Crop::default()
+        Crop { flip_h: false, flip_v: false, ..*self } == Crop::default()
     }
 
     /// The part of a `iw`×`ih` source that is shown: (x, y, w, h).
@@ -540,7 +547,7 @@ mod crop_tests {
 
     #[test]
     fn the_source_rect_is_what_the_crop_leaves() {
-        let c = Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
+        let c = Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2, ..Default::default() };
         let (x, y, w, h) = c.source_rect(400.0, 300.0);
         assert_eq!((x, w), (100.0, 300.0));
         assert!((y - 30.0).abs() < 1e-9 && (h - 210.0).abs() < 1e-9);

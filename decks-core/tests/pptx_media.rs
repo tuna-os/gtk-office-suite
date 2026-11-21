@@ -102,3 +102,35 @@ fn a_picture_used_on_many_slides_is_stored_once() {
         assert_eq!(std::fs::read(&bg.path).unwrap(), JPEG);
     }
 }
+
+/// The adults' nature survey mirrors its figure illustration (`a:xfrm
+/// flipH="1"` on the picture); Decks drew it facing the other way.
+#[test]
+fn a_mirrored_picture_stays_mirrored_through_a_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("photo.jpeg");
+    std::fs::write(&src, JPEG).unwrap();
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Image {
+        path: src.to_str().unwrap().to_string(),
+        x: 10.0,
+        y: 10.0,
+        w: 100.0,
+        h: 80.0,
+        rotation: 0.0,
+        crop: decks_core::engine::Crop { flip_h: true, ..Default::default() },
+    });
+    let bytes = write_pptx_bytes(&deck).unwrap();
+    let mut zip = parts(&bytes);
+    let slide = String::from_utf8(read_part(&mut zip, "ppt/slides/slide1.xml")).unwrap();
+    assert!(slide.contains(r#"flipH="1""#), "{slide}");
+    assert!(!slide.contains("a:srcRect"), "a flip is not a crop: {slide}");
+    let path = dir.path().join("f.pptx");
+    std::fs::write(&path, &bytes).unwrap();
+    let back = read_pptx(path.to_str().unwrap()).unwrap();
+    let crop = back.slides[0].objects.iter().find_map(|o| match o {
+        SlideObject::Image { crop, .. } => Some(*crop),
+        _ => None,
+    });
+    assert_eq!(crop.map(|c| (c.flip_h, c.flip_v)), Some((true, false)));
+}
