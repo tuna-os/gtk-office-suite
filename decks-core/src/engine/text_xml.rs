@@ -352,6 +352,11 @@ impl SpText {
 /// The resolved text of every `p:sp` in a slide part, in document order.
 /// `ph_of(n)` is the placeholder key of the nth shape (None for a plain
 /// shape), which the caller already knows.
+/// Whether `sp` is a text box (`p:cNvSpPr txBox="1"`), not a shape.
+fn is_text_box(sp: &Node) -> bool {
+    sp.child("p:nvSpPr").and_then(|n| n.child("p:cNvSpPr")).and_then(|c| c.attr("txBox")).is_some_and(|v| v == "1" || v == "true")
+}
+
 pub(crate) fn sp_texts(slide_xml: &str, theme: &Theme, inh: &Inherited, scale: SlideScale) -> Vec<SpText> {
     let root = parse_tree(slide_xml);
     let mut sps = Vec::new();
@@ -373,10 +378,12 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         // A master's plain `a:normAutofit` says "shrink if needed" with
         // nothing shrunk yet: only a stated scale changes the drawing.
         autofit: body.autofit.flatten().filter(|a| !a.is_identity()),
-        // DrawingML's default insets (0.1" across, 0.05" down) where a
-        // body states none, as PowerPoint and LibreOffice lay every shape's
-        // text out: the canvas's own 4 px inset is for boxes made here.
-        insets: if true {
+        // A placeholder, a box that states its insets, and text on a shape
+        // (an oval, a rectangle: not a text box) get DrawingML's insets,
+        // 0.1" across and 0.05" down where unstated, as PowerPoint and
+        // LibreOffice wrap a shape's text. A plain text box keeps the
+        // canvas's default so it draws as before.
+        insets: if key.is_some() || body.ins.iter().any(Option::is_some) || !is_text_box(sp) {
             let d = [91440.0, 45720.0, 91440.0, 45720.0];
             let i = |n: usize| body.ins[n].unwrap_or(d[n]);
             Some(Insets { left: emu(i(0)), top: i(1) * scale.y, right: emu(i(2)), bottom: i(3) * scale.y })
@@ -498,7 +505,7 @@ mod tests {
 
     fn sp(ph: &str, body: &str) -> String {
         format!(
-            r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr>{ph}</p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{body}</p:txBody></p:sp>"#
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr txBox="1"/><p:nvPr>{ph}</p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{body}</p:txBody></p:sp>"#
         )
     }
 
@@ -568,6 +575,9 @@ mod tests {
         assert_eq!(got[0].paras[0], ParaStyle::default());
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(36));
         assert_eq!(got[0].insets, None);
+        // Text on a shape (no txBox) wraps inside DrawingML's insets.
+        let shape = sp("", "<a:p><a:r><a:t>t</a:t></a:r></a:p>").replace(r#"<p:cNvSpPr txBox="1"/>"#, "<p:cNvSpPr/>");
+        assert_eq!(resolve(&shape)[0].insets, Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }));
     }
 
     #[test]
