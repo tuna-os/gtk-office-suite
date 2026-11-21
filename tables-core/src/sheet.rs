@@ -953,6 +953,22 @@ pub struct ChartSeries {
     pub color: Option<String>,
 }
 
+/// A picture floating over a sheet (`xdr:pic` in a drawing part), as it
+/// was read: drawn over the cells and written back on save at the same
+/// anchor, offset and size. Pictures the reader skips (hidden, grouped,
+/// not PNG/JPEG/GIF/BMP) and shapes are not kept; the package scan says so.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SheetPicture {
+    /// The cell its top-left corner sits in, (row, col).
+    pub anchor: (usize, usize),
+    /// Its corner's offset into that cell, in pixels.
+    pub offset_px: (f64, f64),
+    pub width_px: f64,
+    pub height_px: f64,
+    /// The image file's bytes (PNG, JPEG, GIF…), shared between copies.
+    pub data: std::sync::Arc<[u8]>,
+}
+
 /// One embedded chart: kind, title, series, axes, legend, and placement.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
@@ -1398,6 +1414,8 @@ pub struct SheetModel {
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
+    /// Pictures floating over this sheet, as read from xlsx.
+    pub pictures: Vec<SheetPicture>,
     /// Pivot tables defined on this sheet.
     pub pivot_tables: Vec<PivotTableSpec>,
     /// Sheet protection status.
@@ -1409,6 +1427,11 @@ pub struct SheetModel {
     /// Cell notes (Excel's notes, Calc's comments): plain text shown on
     /// hover, marked by a red corner.
     pub notes: Vec<Vec<Option<String>>>,
+    /// Rows the file asked to be fitted to their content when it is opened
+    /// (an ods optimal-height row): fitted to every cell's text, the
+    /// sheet's default font included, not only wrapped or resized cells.
+    /// Read once, on open; the fitted heights are what the sheet keeps.
+    pub fit_rows: std::collections::HashSet<usize>,
     /// Cells whose text is styled piece by piece (xlsx rich text: a bold
     /// title over a small italic version line), keyed by (row, col). Drawn
     /// only while the cell still shows exactly these runs' text, so an edit
@@ -1494,6 +1517,8 @@ impl SheetModel {
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
+            fit_rows: std::collections::HashSet::new(),
+            pictures: Vec::new(),
             rich_text: std::collections::HashMap::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),

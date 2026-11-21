@@ -419,7 +419,13 @@ pub fn document_font_description(
     master: Option<&MasterSlide>,
     base_pt: f64,
 ) -> pango::FontDescription {
-    let mut desc = pango::FontDescription::from_string(master_font_family(master));
+    // The family is a name, not a description string: `from_string` reads
+    // trailing style words, so "Segoe UI Semilight" became Segoe UI at
+    // semilight weight, a lighter and narrower face than the regular one
+    // PowerPoint and Impress fall back to when the font is missing, and a
+    // banner that wraps in both fitted on one line.
+    let mut desc = pango::FontDescription::new();
+    desc.set_family(master_font_family(master));
     desc.set_absolute_size(base_pt * 96.0 / 72.0 * pango::SCALE as f64);
     desc
 }
@@ -441,12 +447,15 @@ pub fn set_styled_text(
     runs: &[Run],
     scale: f64,
 ) {
+    // A word too long for its line breaks without a hyphen in PowerPoint
+    // and Impress ("TECHNOLOG" over "Y"); Pango adds one by default.
+    let attrs = pango::AttrList::new();
+    attrs.insert(pango::AttrInt::new_insert_hyphens(false));
     if runs.is_empty() {
         layout.set_text(text);
-        layout.set_attributes(None);
+        layout.set_attributes(Some(&attrs));
         return;
     }
-    let attrs = pango::AttrList::new();
     let mut buf = String::new();
     for run in runs {
         let start = buf.len() as u32;
@@ -485,8 +494,10 @@ pub fn set_styled_text(
         } else if run.style.small_caps {
             add(pango::AttrInt::new_variant(pango::Variant::SmallCaps).into());
         }
-        if let Some(hp) = run.style.font_size_hp {
-            let pt = hp as f64 / 2.0 * scale;
+        // The exact size where the reader kept one (a 19 pt run on a
+        // 13.33-inch deck is 14.25 pt here, not the 14.5 its half points say).
+        if let Some(pt) = run.style.size_pt() {
+            let pt = pt * scale;
             add(pango::AttrSize::new_size_absolute(
                 (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
             )
@@ -934,6 +945,11 @@ pub fn draw_object(
                     .iter()
                     .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
                     .collect();
+                let series_colors: Vec<Option<(f64, f64, f64)>> = chart
+                    .series_colors
+                    .iter()
+                    .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
+                    .collect();
                 let opts = suite_common::charts::Options {
                     stacked: chart.stacked,
                     labels: chart.labels,
@@ -942,6 +958,20 @@ pub fn draw_object(
                     point_colors: &colors,
                     no_legend: chart.no_legend,
                     transparent: chart.transparent,
+                    horizontal: chart.horizontal,
+                    reversed: chart.reversed,
+                    percent: chart.percent,
+                    text_color: chart.text_color.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                    // Hundredths of a point; the chart is drawn in the
+                    // slide's own units, which are points.
+                    text_px: chart.text_size.map(|v| v as f64 / 100.0),
+                    series_colors: &series_colors,
+                    gap: chart.gap.map(f64::from),
+                    hide_category_axis: chart.hide_category_axis,
+                    title: chart.title.as_ref().map(|t| t.text.as_str()),
+                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0),
+                    title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
+                    title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {
@@ -1563,23 +1593,60 @@ pub fn draw_table(
         }
         cy += row_h;
     }
-    // The style's rules ("Medium Style 2": white 1 pt rules inside),
-    // between two grid positions only where they are different cells.
-    let Some(rules) = table.rules() else { return };
-    let (lr, lg, lb) = rules.color.to_f64();
-    cr.set_source_rgb(lr, lg, lb);
     let width = |pt: f64| (pt * 960.0 / 720.0 * scale).max(1.0);
-    cr.set_line_width(width(rules.width_pt));
     let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
     let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
-    let (right, bottom) = (col_x[cols.len()], row_y[rows.len()]);
-    for r in 0..rows.len() {
-        for c in 0..cols.len() {
-            if rules.inside_v && c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
+    if let Some(rules) = table.rules() {
+        draw_table_rules(cr, &rules, &col_x, &row_y, &owner, width);
+    }
+    // Each cell's own edges (`a:tcPr/a:lnL` and the like), over the
+    // style's rules: a table whose every cell states a black 1 pt box was
+    // drawn with the style's rules alone, no verticals at all.
+    for (r, row) in table.rows.iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            if owner(r, c) != (r, c) || cell.edges.iter().all(Option::is_none) {
+                continue;
+            }
+            let (cs, rs) = cell.span();
+            let (x0, x1) = (col_x[c], col_x[(c + cs).min(cols.len())]);
+            let (y0, y1) = (row_y[r], row_y[(r + rs).min(rows.len())]);
+            let lines = [((x0, y0), (x0, y1)), ((x1, y0), (x1, y1)), ((x0, y0), (x1, y0)), ((x0, y1), (x1, y1))];
+            for (edge, (from, to)) in cell.edges.iter().zip(lines) {
+                let Some(decks_core::engine::table::CellEdge { color: Some(color), width_pt }) = edge else { continue };
+                let (er, eg, eb) = color.to_f64();
+                cr.set_source_rgb(er, eg, eb);
+                cr.set_line_width(width(*width_pt));
+                cr.move_to(from.0, from.1);
+                cr.line_to(to.0, to.1);
+                cr.stroke().unwrap();
+            }
+        }
+    }
+}
+
+/// A table style's rules ("Medium Style 2": white 1 pt rules inside),
+/// between two grid positions only where they are different cells.
+fn draw_table_rules(
+    cr: &cairo::Context,
+    rules: &decks_core::engine::table::Rules,
+    col_x: &[f64],
+    row_y: &[f64],
+    owner: &dyn Fn(usize, usize) -> (usize, usize),
+    width: impl Fn(f64) -> f64,
+) {
+    let (cols, rows) = (col_x.len() - 1, row_y.len() - 1);
+    let (x, y) = (col_x[0], row_y[0]);
+    let (lr, lg, lb) = rules.color.to_f64();
+    cr.set_source_rgb(lr, lg, lb);
+    cr.set_line_width(width(rules.width_pt));
+    let (right, bottom) = (col_x[cols], row_y[rows]);
+    for r in 0..rows {
+        for c in 0..cols {
+            if rules.inside_v && c + 1 < cols && owner(r, c) != owner(r, c + 1) {
                 cr.move_to(col_x[c + 1], row_y[r]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
-            if rules.inside_h && r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
+            if rules.inside_h && r + 1 < rows && owner(r, c) != owner(r + 1, c) {
                 cr.move_to(col_x[c], row_y[r + 1]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
@@ -2113,6 +2180,41 @@ mod font_tests {
     }
 
     #[test]
+    fn a_word_broken_across_lines_gets_no_hyphen() {
+        let l = layout();
+        let mut d = pango::FontDescription::from_string("Sans");
+        d.set_absolute_size(20.0 * pango::SCALE as f64);
+        l.set_font_description(Some(&d));
+        l.set_width(60 * pango::SCALE);
+        l.set_wrap(pango::WrapMode::WordChar);
+        set_styled_text(&l, "TECHNOLOGY", &[], 1.0);
+        assert!(l.line_count() > 1, "the word must break to test anything");
+        let shown: String = (0..l.line_count())
+            .map(|i| {
+                let line = l.line_readonly(i).unwrap();
+                let (start, len) = (line.start_index() as usize, line.length() as usize);
+                l.text()[start..start + len].to_string()
+            })
+            .collect();
+        assert_eq!(shown, "TECHNOLOGY");
+        // Pango draws an inserted hyphen as an extra glyph on the line's end;
+        // with hyphens off each line holds exactly its own characters.
+        let hyphenated = (0..l.line_count()).any(|i| {
+            let line = l.line_readonly(i).unwrap();
+            line.runs().iter().any(|r| r.glyph_string().num_glyphs() > r.item().num_chars())
+        });
+        assert!(!hyphenated, "no hyphen glyph was added");
+    }
+
+    #[test]
+    fn a_family_named_after_a_weight_keeps_its_whole_name() {
+        let m = master(7, "Segoe UI Semilight");
+        let desc = document_font_description(Some(&m), 18.0);
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Segoe UI Semilight"));
+        assert_eq!(desc.weight(), pango::Weight::Normal);
+    }
+
+    #[test]
     fn the_description_carries_the_size_it_was_asked_for() {
         let desc = document_font_description(None, 18.0);
         assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
@@ -2138,7 +2240,8 @@ mod font_tests {
         l.set_attributes(Some(&pango::AttrList::new()));
         set_styled_text(&l, "just text", &[], 1.0);
         assert_eq!(l.text(), "just text");
-        assert!(l.attributes().is_none(), "a stale attribute list survived");
+        let kinds: Vec<_> = l.attributes().map(|a| a.attributes().iter().map(|x| x.type_()).collect()).unwrap_or_default();
+        assert_eq!(kinds, vec![pango::AttrType::InsertHyphens], "a stale attribute list survived");
     }
 
     /// The drawn string is the runs concatenated — the same string the model

@@ -87,6 +87,29 @@ fn pango_text_width(cr: &Context, text: &str) -> f64 {
     header_layout(cr, text).pixel_size().0 as f64
 }
 
+/// A cell's border with the edges inside its merged block taken off: a
+/// merge draws as one cell, so only the block's outline shows, as in Excel
+/// and Calc. The EWCO claim form's notes box (B4:E13) is bordered cell by
+/// cell, and drew its inner lines through the merged text.
+fn block_edges(border: &CellBorder, merge: Option<(usize, usize, usize, usize)>, r: usize, c: usize) -> CellBorder {
+    let mut b = border.clone();
+    if let Some((mr, mc, rs, cs)) = merge {
+        if r != mr {
+            b.top = BorderStyle::None;
+        }
+        if c != mc {
+            b.left = BorderStyle::None;
+        }
+        if r + 1 != mr + rs.max(1) {
+            b.bottom = BorderStyle::None;
+        }
+        if c + 1 != mc + cs.max(1) {
+            b.right = BorderStyle::None;
+        }
+    }
+    b
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_border_line(cr: &Context, style: &BorderStyle, color: (f64, f64, f64), x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
     if *style == BorderStyle::None { return; }
@@ -319,6 +342,17 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     cr.restore().unwrap();
 }
 
+/// What a row Calc refits (an ods optimal-height row) adds to its text's
+/// line height, in pixels. Calc fits an 11 pt row to 13.78 pt (18.4 px) and
+/// a 20 pt one to 24.44 pt (32.6 px), whatever the face (LibreOffice 24.2,
+/// Liberation Sans, Serif and Carlito alike): Pango's lines for those sizes
+/// are 16.9 and 30.6 px.
+const FIT_ROW_PAD: f64 = 2.0;
+/// What any other grown row adds (an xlsx row with no height of its own
+/// holding wrapped or resized text). Taking Calc's 2 here too turned
+/// july-2026-fiscal-risks' Tier A red in CI.
+const GROW_ROW_PAD: f64 = 6.0;
+
 /// Grow each row to fit cells that need more than the default height (a
 /// wrapped cell, or a font size of its own), unless the row already has a
 /// height of its own (anything other than the default), as spreadsheets
@@ -329,14 +363,21 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     // Measure with the options the grid draws with, or rows fit a
     // different text than the one shown.
     suite_common::use_ui_font_rendering(&cr);
+    // A row the file asks to fit (an ods optimal-height row) is as tall as
+    // its tallest cell's text, larger or smaller than the height it
+    // stored; an empty one keeps that height. Hampshire's postcode list
+    // stores 15.76 pt on every row and Calc draws 13.9 pt; mining
+    // remediation's 10 pt Arial rows, under an 11 pt default style, are 17
+    // px in Calc, and its empty rows keep their stored 12.75 pt.
     for r in 0..sheet.rows {
-        if (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
+        let fit = sheet.fit_rows.contains(&r);
+        if !fit && (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
             continue;
         }
-        let mut need = sheet.row_heights[r];
+        let mut need = if fit { 0.0 } else { sheet.row_heights[r] };
         for c in 0..sheet.cols {
             let style = &sheet.styles[r][c];
-            if !(style.wrap || style.font_size.is_some()) || sheet.cell(r, c).is_empty() {
+            if !(fit || style.wrap || style.font_size.is_some()) || sheet.cell(r, c).is_empty() {
                 continue;
             }
             let width = match sheet.merge_covering(r, c) {
@@ -348,10 +389,17 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
             };
             let text = sheet.formats[r][c].format(sheet.cell(r, c));
             let layout = cell_layout(&cr, sheet, r, c, &text, width);
-            need = need.max(layout.pixel_size().1 as f64 + 6.0);
+            need = need.max(layout.pixel_size().1 as f64 + if fit { FIT_ROW_PAD } else { GROW_ROW_PAD });
         }
-        sheet.row_heights[r] = need;
+        if need > 0.0 {
+            sheet.row_heights[r] = need;
+        }
     }
+    // The file's request is met once, on open: from here the fitted heights
+    // are the sheet's own, so a height set by hand survives the next fit (a
+    // format change refits), and an inserted row doesn't refit the wrong
+    // one (review on #2389).
+    sheet.fit_rows.clear();
 }
 
 /// Size each column that holds text to its widest cell, as Calc's CSV
@@ -534,7 +582,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(px, py, pw, ph);
     cr.clip();
-    let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
+    let mut bordered: Vec<(f64, f64, f64, f64, CellBorder)> = Vec::new();
     // Text spilling into empty neighbours is drawn after every cell of the
     // pane, or their backgrounds would paint over it.
     let mut spilled: Vec<(usize, usize, CellRect)> = Vec::new();
@@ -573,7 +621,12 @@ pub fn draw_grid(
             } else {
                 cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
-            cr.rectangle(cx, cy, cw, rh);
+            // On whole pixels: a row 66.95 pt tall leaves every row after
+            // it on a half pixel, and two antialiased half-covered edges
+            // let the dark canvas through as a grey seam between each pair
+            // of filled cells (render-real `ewco-claim-form`).
+            let (x0, y0) = (cx.round(), cy.round());
+            cr.rectangle(x0, y0, (cx + cw).round() - x0, (cy + rh).round() - y0);
             cr.fill().unwrap();
 
             // A merged block draws as one cell: no gridlines inside it, and
@@ -607,7 +660,7 @@ pub fn draw_grid(
             // 3 px edge reaches into the neighbouring cell, whose fill
             // would otherwise paint over it.
             if !border.is_none() {
-                bordered.push((cx, cy, cw, rh, border));
+                bordered.push((cx, cy, cw, rh, block_edges(border, merge, r, c)));
             }
 
             // Active cell border (a merged block's is the selection outline)
@@ -650,8 +703,8 @@ pub fn draw_grid(
     for &(r, c, rect) in &spilled {
         draw_cell_text(cr, sheet, r, c, rect, cell_text);
     }
-    for &(x, y, w, h, border) in &bordered {
-        draw_border_edges(cr, x, y, w, h, border, is_dark);
+    for (x, y, w, h, border) in &bordered {
+        draw_border_edges(cr, *x, *y, *w, *h, border, is_dark);
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.
@@ -664,6 +717,30 @@ pub fn draw_grid(
             continue;
         }
         draw_cell_text(cr, sheet, mr, mc, (x, y, w, h), cell_text);
+    }
+    // Pictures float above the cells at their anchor (offset into it),
+    // under the charts, scaled to the size the file gives them.
+    for picture in sheet.pictures.iter().filter(|p| in_pane(p.anchor.0, p.anchor.1)) {
+        let x = tables_core::sheet::col_x(picture.anchor.1, scroll_x, sheet) + picture.offset_px.0;
+        let y = tables_core::sheet::row_y(picture.anchor.0, scroll_y, sheet) + picture.offset_px.1;
+        let (w, h) = (picture.width_px, picture.height_px);
+        if x > width || y > height || x + w < ROW_HEADER_WIDTH || y + h < COL_HEADER_HEIGHT {
+            continue;
+        }
+        let Some(surface) = picture_surface(&picture.data) else {
+            continue;
+        };
+        let (iw, ih) = (surface.width() as f64, surface.height() as f64);
+        if iw < 1.0 || ih < 1.0 {
+            continue;
+        }
+        cr.save().unwrap();
+        cr.translate(x, y);
+        cr.scale(w / iw, h / ih);
+        cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+        cr.source().set_filter(gtk4::cairo::Filter::Good);
+        cr.paint().unwrap();
+        cr.restore().unwrap();
     }
     // Charts float above the cells at their anchor. They were read from
     // xlsx and saved back, but only ever drawn in the chart dialog's preview
@@ -838,8 +915,61 @@ pub fn render_sheet_pdf(
 
 #[cfg(test)]
 mod tests {
+    /// An optimal-height row is fitted once, on open: a height set by hand
+    /// afterwards survives the next fit.
+    #[test]
+    fn an_optimal_row_is_fitted_once() {
+        let mut sheet = SheetModel::new("S", 2, 1, 0);
+        sheet.data[0][0] = "text".into();
+        sheet.row_heights[0] = 48.0;
+        sheet.fit_rows.insert(0);
+        fit_rows_to_content(&mut sheet);
+        assert!(sheet.row_heights[0] < 30.0, "fitted to its text: {}", sheet.row_heights[0]);
+        assert!(sheet.fit_rows.is_empty(), "the request is met");
+        sheet.row_heights[0] = 40.0;
+        fit_rows_to_content(&mut sheet);
+        assert_eq!(sheet.row_heights[0], 40.0, "a height set by hand stays");
+    }
+
+    /// A picture's size is read from its header, and a huge one is refused
+    /// before it is decoded: a few bytes of PNG can declare 60000 x 60000.
+    #[test]
+    fn an_oversized_picture_is_refused_from_its_header() {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&[8, 2, 0, 0, 0]);
+        assert_eq!(super::picture_size(&png), Some((60_000, 60_000)));
+        assert!(super::decode_picture(&png).is_none(), "refused unread");
+        let gif = [b"GIF89a".as_slice(), &[10, 0, 20, 0]].concat();
+        assert_eq!(super::picture_size(&gif), Some((10, 20)));
+        let mut bmp = vec![0u8; 26];
+        bmp[..2].copy_from_slice(b"BM");
+        bmp[18..22].copy_from_slice(&30i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&(-40i32).to_le_bytes());
+        assert_eq!(super::picture_size(&bmp), Some((30, 40)), "a top-down BMP's negative height");
+        // SOI, an APP0 of length 4, then SOF0: precision, height 7, width 9.
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 11, 8, 0, 7, 0, 9];
+        assert_eq!(super::picture_size(&jpeg), Some((9, 7)));
+        assert_eq!(super::picture_size(b"not a picture"), None);
+    }
+
     use super::*;
     use tables_core::style::VAlign;
+
+    #[test]
+    fn a_merged_block_keeps_only_its_outline() {
+        let boxed = CellBorder::all(BorderStyle::Solid, (0.0, 0.0, 0.0));
+        let block = Some((3, 1, 10, 4)); // B4:E13
+        let inner = block_edges(&boxed, block, 6, 2);
+        assert!(inner.is_none(), "a cell inside the block draws no edge");
+        let corner = block_edges(&boxed, block, 3, 1);
+        assert_eq!((corner.top, corner.left), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!((corner.bottom, corner.right), (BorderStyle::None, BorderStyle::None));
+        let far = block_edges(&boxed, block, 12, 4);
+        assert_eq!((far.bottom, far.right), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!(block_edges(&boxed, None, 6, 2), boxed, "an unmerged cell keeps all four");
+    }
 
     /// Calibri 11's line box (17.9 px) in a 20 px row: bottom-aligned text
     /// starts just above the row, leaving its descent line 2 px clear of the
@@ -873,6 +1003,23 @@ mod tests {
         // the baseline there, where an ellipsis would leave only dots.
         let inked_rows = (0..h as usize).filter(|&y| (w as usize - 6..w as usize - 2).any(|x| dark(x, y))).count();
         assert!(inked_rows >= 6, "the text stops short of the edge: {inked_rows} rows inked at the right");
+    }
+
+    /// A sheet picture's file decodes to its own pixel size, once: a second
+    /// redraw gets the same surface back, and bytes that aren't an image
+    /// give none rather than failing the draw.
+    #[test]
+    fn a_sheet_picture_decodes_once() {
+        let img = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 7, 3).unwrap();
+        let mut png = Vec::new();
+        img.write_to_png(&mut png).unwrap();
+        let data: std::sync::Arc<[u8]> = png.into();
+        let first = picture_surface(&data).expect("a PNG decodes");
+        assert_eq!((first.width(), first.height()), (7, 3));
+        let again = picture_surface(&data).unwrap();
+        assert_eq!(first.to_raw_none(), again.to_raw_none(), "decoded once");
+        let junk: std::sync::Arc<[u8]> = b"not an image".to_vec().into();
+        assert!(picture_surface(&junk).is_none());
     }
 
     #[test]
@@ -1013,4 +1160,100 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("no cells"), "{err}");
     }
+}
+
+/// A decoded picture beside a handle on the bytes it was decoded from.
+type DecodedPicture = (std::sync::Weak<[u8]>, Option<gtk4::cairo::ImageSurface>);
+
+thread_local! {
+    /// Decoded sheet pictures, by the address of their shared bytes: a
+    /// redraw paints them again without decoding the file each frame.
+    static PICTURES: std::cell::RefCell<std::collections::HashMap<usize, DecodedPicture>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// A sheet picture's image as a cairo surface, decoded once.
+fn picture_surface(data: &std::sync::Arc<[u8]>) -> Option<gtk4::cairo::ImageSurface> {
+    let key = std::sync::Arc::as_ptr(data) as *const u8 as usize;
+    PICTURES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((weak, surface)) = cache.get(&key) {
+            if weak.upgrade().is_some_and(|d| std::sync::Arc::ptr_eq(&d, data)) {
+                return surface.clone();
+            }
+        }
+        // Forget the pictures whose sheets are gone.
+        cache.retain(|_, (weak, _)| weak.strong_count() > 0);
+        let surface = decode_picture(data);
+        cache.insert(key, (std::sync::Arc::downgrade(data), surface.clone()));
+        surface
+    })
+}
+
+/// The most pixels a worksheet picture may decode to: a few bytes of PNG
+/// can declare tens of thousands of pixels a side, and the decode (and the
+/// surface after it) would then ask for gigabytes on the UI thread. The
+/// same budget Lifafa's logo decoder keeps (`MAX_PIXELS`, 2048 x 2048).
+const MAX_PICTURE_PIXELS: i64 = 4_194_304;
+
+/// A PNG, JPEG, GIF or BMP picture's pixel size, read from its header: the
+/// formats a worksheet picture is kept in. `None` for anything else.
+fn picture_size(data: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])));
+    let le16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])));
+    let be32 = |i: usize| data.get(i..i + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    let le32 = |i: usize| data.get(i..i + 4).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]).unsigned_abs());
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Some((be32(16)?, be32(20)?));
+    }
+    if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if data.starts_with(b"BM") {
+        return Some((le32(18)?, le32(22)?));
+    }
+    if data.starts_with(&[0xFF, 0xD8]) {
+        // Walk the markers to a start-of-frame (SOF0..SOF15, less DHT,
+        // JPG and DAC), which holds the height then the width.
+        let mut i = 2;
+        while i + 4 <= data.len() {
+            if data[i] != 0xFF {
+                return None;
+            }
+            let marker = data[i + 1];
+            if marker == 0xFF {
+                i += 1;
+                continue;
+            }
+            let len = be16(i + 2)? as usize;
+            if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+                return Some((be16(i + 7)?, be16(i + 5)?));
+            }
+            i += 2 + len;
+        }
+    }
+    None
+}
+
+fn decode_picture(data: &[u8]) -> Option<gtk4::cairo::ImageSurface> {
+    use gtk4::gdk::prelude::GdkCairoContextExt;
+    use gtk4::gdk_pixbuf::prelude::PixbufLoaderExt;
+    // Refuse an oversized picture from its header, before any decoder
+    // allocates for it (gdk-pixbuf allocates the full size even when asked
+    // to scale), and one whose size can't be read.
+    let (w, h) = picture_size(data)?;
+    if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PICTURE_PIXELS as u64 {
+        return None;
+    }
+    let loader = gtk4::gdk_pixbuf::PixbufLoader::new();
+    loader.write(data).ok()?;
+    loader.close().ok()?;
+    let pixbuf = loader.pixbuf()?;
+    let surface = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
+    {
+        let cr = gtk4::cairo::Context::new(&surface).ok()?;
+        cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+        cr.paint().ok()?;
+    }
+    Some(surface)
 }

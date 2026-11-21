@@ -210,6 +210,19 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, plac
         p.push_attribute(("algn", st.align.to_drawingml()));
     }
     writer.write_event(Event::Start(p))?;
+    // CT_TextParagraphProperties order: lnSpc, spcBef, spcAft. A stated
+    // line spacing is written whatever it is, 100% included.
+    if let Some(line) = st.line_spacing {
+        let (el, val) = match line {
+            Spacing::Units(u) => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
+            Spacing::Lines(f) => ("a:spcPct", (f * 100_000.0).round() as i64),
+        };
+        writer.write_event(Event::Start(BytesStart::new("a:lnSpc")))?;
+        let mut e = BytesStart::new(el);
+        e.push_attribute(("val", val.to_string().as_str()));
+        writer.write_event(Event::Empty(e))?;
+        writer.write_event(Event::End(BytesEnd::new("a:lnSpc")))?;
+    }
     for (name, sp) in [("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
         let (el, val) = match sp {
             Spacing::Units(u) if u != 0.0 => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
@@ -339,10 +352,10 @@ fn write_paragraphs<W: std::io::Write>(
 
 /// An empty paragraph's `a:endParaRPr`, with the size it was read with.
 fn write_end_para<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, wrote: bool) -> Result<(), quick_xml::Error> {
-    let Some(hp) = st.end_run.as_ref().and_then(|r| r.font_size_hp).filter(|_| !wrote) else { return Ok(()) };
+    let Some(hp) = st.end_run.as_ref().and_then(|r| r.size_pt()).map(|pt| pt * 2.0).filter(|_| !wrote) else { return Ok(()) };
     let mut end = BytesStart::new("a:endParaRPr");
     end.push_attribute(("lang", "en-US"));
-    end.push_attribute(("sz", ((file_size(hp as f64) * 50.0).round() as u32).to_string().as_str()));
+    end.push_attribute(("sz", ((file_size(hp) * 50.0).round() as u32).to_string().as_str()));
     writer.write_event(Event::Empty(end))?;
     Ok(())
 }
@@ -352,7 +365,10 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     writer.write_event(Event::Start(BytesStart::new("a:r")))?;
     let mut r_pr = BytesStart::new("a:rPr");
     r_pr.push_attribute(("lang", "en-US"));
-    let sz = (file_size(style.font_size_hp.unwrap_or(36) as f64) * 50.0).round() as u32;
+    // The exact size where the reader kept one: a 19 pt run on a
+    // 13.33-inch deck was saved back as 19.33 pt (sz 1933) from the half
+    // points it had been rounded to.
+    let sz = (file_size(style.size_pt().map_or(36.0, |pt| pt * 2.0)) * 50.0).round() as u32;
     r_pr.push_attribute(("sz", sz.to_string().as_str()));
     if style.bold { r_pr.push_attribute(("b", "1")); } else if style.regular { r_pr.push_attribute(("b", "0")); }
     if style.italic { r_pr.push_attribute(("i", "1")); }
@@ -905,17 +921,36 @@ fn write_table<W: std::io::Write>(
                     tc_pr.push_attribute((k, v.as_str()));
                 }
             }
-            match cell.fill {
-                Some(fill) => {
-                    writer.write_event(Event::Start(tc_pr))?;
+            // Its own edges, then its fill, in the schema's order.
+            let edges: Vec<_> = ["a:lnL", "a:lnR", "a:lnT", "a:lnB"].into_iter().zip(cell.edges).filter_map(|(k, e)| Some((k, e?))).collect();
+            if edges.is_empty() && cell.fill.is_none() && !cell.no_fill {
+                writer.write_event(Event::Empty(tc_pr))?;
+            } else {
+                writer.write_event(Event::Start(tc_pr))?;
+                let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> quick_xml::Result<()> {
                     writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
                     let mut srgb = BytesStart::new("a:srgbClr");
-                    srgb.push_attribute(("val", fill.to_hex().as_str()));
+                    srgb.push_attribute(("val", color.to_hex().as_str()));
                     writer.write_event(Event::Empty(srgb))?;
                     writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
-                    writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
+                    Ok(())
+                };
+                for (k, e) in edges {
+                    let mut ln = BytesStart::new(k);
+                    ln.push_attribute(("w", ((e.width_pt * 12700.0).round() as i64).to_string().as_str()));
+                    writer.write_event(Event::Start(ln))?;
+                    match e.color {
+                        Some(color) => solid(writer, color)?,
+                        None => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    }
+                    writer.write_event(Event::End(BytesEnd::new(k)))?;
                 }
-                None => writer.write_event(Event::Empty(tc_pr))?,
+                match cell.fill {
+                    Some(fill) => solid(writer, fill)?,
+                    None if cell.no_fill => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    None => {}
+                }
+                writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
             }
             writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
         }

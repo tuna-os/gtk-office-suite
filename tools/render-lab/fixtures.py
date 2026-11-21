@@ -2195,6 +2195,22 @@ def decks(img):
         r.font.color.rgb = RGBColor(*rgb)
     save(p, "text-styles", "Three lines: 14pt black, 32pt red, 54pt blue")
 
+    # Line spacing (#2353): Office's themes set text at 90%; a paragraph may
+    # set its own. Three wrapped paragraphs at 90%, 100% and 150%, side by
+    # side, so each column's lines sit at their own pitch.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    words = "Line spacing sets how far apart the lines of one paragraph sit, from tight to open."
+    for i, spacing in enumerate((0.9, 1.0, 1.5)):
+        tf = s.shapes.add_textbox(Inches(0.6 + i * 4.2), Inches(1.5), Inches(3.8), Inches(4.5)).text_frame
+        fixed_box(tf)
+        para = tf.paragraphs[0]
+        para.line_spacing = spacing
+        r = para.add_run()
+        r.text = words
+        r.font.size = Pt(24)
+    save(p, "line-spacing", "Three 24pt paragraphs wrapped over several lines at 90%, 100% and 150% line spacing")
+
     p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     for kind, x, color in ((MSO_SHAPE.RECTANGLE, 1, (220, 40, 40)), (MSO_SHAPE.OVAL, 5, (40, 160, 60)), (MSO_SHAPE.ROUNDED_RECTANGLE, 9, (40, 80, 220))):
@@ -2453,6 +2469,49 @@ def decks(img):
             run.font.color.rgb = RGBColor(255, 255, 255)
     save(p, "pay-centre-reduced-leading-blank-paragraphs",
          "Three navy tiles, each with a bold white 14pt figure two blank lines below the tile's top edge")
+
+    # DCK-004, reduced from the children's nature survey's side charts: a
+    # horizontal bar chart (first category at the top) on a dark panel, its
+    # bars and text in a theme colour (bg1, white), labelled as
+    # percentages. Decks drew vertical columns in the default accent with
+    # raw fractions (0.72) for labels and black text.
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
+    from pptx.enum.dml import MSO_THEME_COLOR
+    from lxml import etree
+
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    panel = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), 0, Inches(5), p.slide_height)
+    panel.fill.solid()
+    panel.fill.fore_color.rgb = RGBColor(0x2E, 0x5E, 0x2E)
+    panel.line.fill.background()
+    data = CategoryChartData()
+    data.categories = ["Garden", "Park", "Woods", "Beach", "Other"]
+    data.add_series("Share", (0.72, 0.64, 0.27, 0.26, 0.01), number_format="0%")
+    chart = s.shapes.add_chart(XL_CHART_TYPE.BAR_CLUSTERED, Inches(5.3), Inches(0.8), Inches(4.4), Inches(5.6), data).chart
+    chart.has_legend = False
+    chart.category_axis.reverse_order = True
+    chart.value_axis.visible = False
+    chart.value_axis.has_major_gridlines = False
+    plot = chart.plots[0]
+    plot.has_data_labels = True
+    plot.data_labels.number_format = "0%"
+    plot.data_labels.number_format_is_linked = False
+    plot.data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
+    fill = plot.series[0].format.fill
+    fill.solid()
+    fill.fore_color.theme_color = MSO_THEME_COLOR.BACKGROUND_1
+    chart.font.size = Pt(12)
+    chart.font.color.theme_color = MSO_THEME_COLOR.BACKGROUND_1
+    chart.has_title = False
+    # No chart background, as the survey's: the panel shows through.
+    space = chart._chartSpace
+    space.chart.addnext(etree.fromstring(
+        '<c:spPr xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>'))
+    save(p, "chart-horizontal-percent",
+         "On a green panel, five white horizontal bars, Garden at the top to Other at the bottom, each labelled in white with its percentage (72% to 1%)")
 
     # DCK-004, reduced from the adults' nature survey: its illustration of
     # people walking in a park is mirrored (a:xfrm flipH="1" on the

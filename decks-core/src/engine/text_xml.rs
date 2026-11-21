@@ -90,6 +90,10 @@ impl RunProps {
             // whole numbers dropped up to half a point, so a 19.84 pt run
             // (our 18 pt on an 11-inch page) read back as 19.5 pt.
             font_size_hp: self.sz.map(|s| (s as f64 / 50.0).round() as u16),
+            // The file's own hundredths where they're off the half-point
+            // grid: our 18 pt saved on a 28 cm ODP page is sz="1984", and
+            // rounding that to 20 pt first read it back as 18.14 pt.
+            font_size_cpt: self.sz.filter(|s| !s.is_multiple_of(50)),
             color: self.color.clone(),
             font_family: self.latin.clone(),
             caps: self.cap.as_deref() == Some("all"),
@@ -109,6 +113,7 @@ struct LevelProps {
     indent: Option<f64>,
     bullet: Option<Bullet>,
     spc_bef: Option<RawSpacing>,
+    ln_spc: Option<RawSpacing>,
     spc_aft: Option<RawSpacing>,
     /// `Some(None)` is a `*Tx` element: follow the text.
     bu_font: Option<Option<String>>,
@@ -128,7 +133,7 @@ enum RawBuSize {
 impl LevelProps {
     fn over(&mut self, top: &LevelProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft, bu_font, bu_size, bu_clr);
+        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft, ln_spc, bu_font, bu_size, bu_clr);
         self.run.over(&top.run);
     }
 
@@ -170,6 +175,7 @@ impl LevelProps {
             indent: num("indent"),
             bullet,
             spc_bef: spacing("a:spcBef"),
+            ln_spc: spacing("a:lnSpc"),
             spc_aft: spacing("a:spcAft"),
             bu_font,
             bu_size,
@@ -432,9 +438,12 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     let emu = |v: f64| v * scale.x;
     let mut out = SpText {
         anchor: body.anchor.unwrap_or_default(),
-        // A master's plain `a:normAutofit` says "shrink if needed" with
-        // nothing shrunk yet: only a stated scale changes the drawing.
-        autofit: body.autofit.flatten().filter(|a| !a.is_identity()),
+        // A plain `a:normAutofit` (the slide's, or inherited) says "shrink
+        // if needed": the canvas measures the fit, so a box whose text
+        // overflows shrinks as PowerPoint and Impress shrink it, whether or
+        // not the last editor recorded a scale (the CNSC deck's closing
+        // slide ran past its box at full size).
+        autofit: body.autofit.flatten(),
         // A placeholder, a box that states its insets, and text on a shape
         // (an oval, a rectangle: not a text box) get DrawingML's insets,
         // 0.1" across and 0.05" down where unstated, as PowerPoint and
@@ -491,6 +500,9 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
             margin_left: emu(props.mar_l.unwrap_or(0.0)),
             indent: emu(props.indent.unwrap_or(0.0)),
             space_before: spacing(props.spc_bef),
+            // Kept as stated, 100% included: a paragraph's 100% overrides
+            // a master's 90% and must say so when it is saved.
+            line_spacing: props.ln_spc.map(|s| spacing(Some(s))),
             space_after: spacing(props.spc_aft),
             marker: MarkerStyle {
                 font: props.bu_font.clone().flatten(),
@@ -635,6 +647,26 @@ mod tests {
         assert_eq!((y.font_size_hp, y.bold), (Some(64), false), "the next run is back to the level's defaults");
     }
 
+    /// Office's themes set body text at 90% (`a:lnSpc`), which every
+    /// placeholder inherits; a paragraph's own wins.
+    #[test]
+    fn line_spacing_is_inherited_and_overridden() {
+        let theme = Theme::default();
+        let master = MASTER.replace(
+            r#"<a:lvl1pPr marL="342900" indent="-342900" algn="l">"#,
+            r#"<a:lvl1pPr marL="342900" indent="-342900" algn="l"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc>"#,
+        );
+        let inh = Inherited::read(LAYOUT, &master, &theme);
+        let got = sp_texts(
+            &slide(&sp(r#"<p:ph idx="2"/>"#, r#"<a:p><a:r><a:t>a</a:t></a:r></a:p><a:p><a:pPr><a:lnSpc><a:spcPts val="3000"/></a:lnSpc></a:pPr><a:r><a:t>b</a:t></a:r></a:p>"#)),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
+        assert_eq!(got[0].paras[0].line_spacing, Some(Spacing::Lines(0.9)));
+        assert!(matches!(got[0].paras[1].line_spacing, Some(Spacing::Units(u)) if u > 0.0), "{:?}", got[0].paras[1]);
+    }
+
     #[test]
     fn a_plain_text_box_takes_the_other_style_and_no_insets() {
         let got = resolve(&sp("", "<a:p><a:r><a:t>t</a:t></a:r></a:p>"));
@@ -700,14 +732,14 @@ mod tests {
     }
 
     #[test]
-    fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_is_nothing() {
+    fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_still_shrinks() {
         let body = |pr: &str| {
             format!(r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr><p:ph idx="2"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody>{pr}<a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r></a:p></p:txBody></p:sp>"#)
         };
         let got = resolve(&(body(r#"<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>"#)
             + &body(r#"<a:bodyPr><a:normAutofit/></a:bodyPr>"#)));
         assert_eq!(got[0].autofit, Some(Autofit { font_scale: 0.625, line_reduction: 0.2 }));
-        assert_eq!(got[1].autofit, None);
+        assert_eq!(got[1].autofit, Some(Autofit { font_scale: 1.0, line_reduction: 0.0 }), "measured on the canvas, shrunk only on overflow");
         // The sizes themselves are the author's.
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(64));
     }

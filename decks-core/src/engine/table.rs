@@ -41,6 +41,28 @@ pub struct TableCell {
     /// Where the text sits down the cell (`a:tcPr anchor`).
     #[serde(default, skip_serializing_if = "is_top")]
     pub anchor: super::text_body::Anchor,
+    /// The cell says it has no fill (`a:tcPr/a:noFill`): the table style's
+    /// fill or band doesn't paint it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_fill: bool,
+    /// Its own edges, left, right, top and bottom (`a:tcPr/a:lnL`, `lnR`,
+    /// `lnT`, `lnB`), drawn over the style's rules; `None` where the cell
+    /// states none.
+    #[serde(default, skip_serializing_if = "no_edges")]
+    pub edges: [Option<CellEdge>; 4],
+}
+
+/// One edge a cell states: a line in `color`, `width_pt` wide, or with no
+/// colour an explicit no-line (`a:ln*` holding `a:noFill`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct CellEdge {
+    pub color: Option<Color>,
+    pub width_pt: f64,
+}
+
+fn no_edges(e: &[Option<CellEdge>; 4]) -> bool {
+    e.iter().all(Option::is_none)
 }
 
 fn is_top(a: &super::text_body::Anchor) -> bool {
@@ -88,6 +110,12 @@ pub struct TableData {
     /// - Accent 1". `accent` is that style's colour.
     #[serde(default)]
     pub style_id: Option<String>,
+    /// What the package's own definition of that style (`ppt/tableStyles.xml`)
+    /// says of the header row's and the first column's weight
+    /// (`a:firstRow/a:tcTxStyle b="on"`, `a:firstCol`). `None` where the
+    /// package doesn't define the style: its built-in look then applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_bold: Option<(bool, bool)>,
 }
 
 /// The default table style's GUID: "Medium Style 2 - Accent 1".
@@ -241,7 +269,13 @@ impl TableData {
         // fonts), so in those only a run's own `b="1"` makes header text
         // bold. PowerPoint bolds them all; the render lab's reference is
         // Impress.
-        let bold = self.family() == StyleFamily::LightStyle1 && ((self.first_row && r == 0) || (self.first_col && c == 0));
+        // A package that defines the style itself is drawn as it says:
+        // Impress reads `ppt/tableStyles.xml`, and PowerPoint's own Medium
+        // Style 2 there bolds the header (the PMC Vanguard deck).
+        let bold = match self.file_bold {
+            Some((row, col)) => (row && self.first_row && r == 0) || (col && self.first_col && c == 0),
+            None => self.family() == StyleFamily::LightStyle1 && ((self.first_row && r == 0) || (self.first_col && c == 0)),
+        };
         let (fill, text, _office_bold) = match self.family() {
             StyleFamily::MediumStyle2 => (
                 Some(if header { accent } else if banded { accent.tint(40_000) } else { accent.tint(20_000) }),
@@ -257,7 +291,8 @@ impl TableData {
             StyleFamily::LightStyle2 => (header.then_some(accent), if header { white } else { black }, header),
             StyleFamily::NoStyle | StyleFamily::TableGrid => (None, black, false),
         };
-        CellPaint { fill: own.or(fill), text, bold }
+        let stated_none = self.rows.get(r).and_then(|row| row.get(c)).is_some_and(|cell| cell.no_fill);
+        CellPaint { fill: if stated_none { None } else { own.or(fill) }, text, bold }
     }
 
     /// The rules the table's style draws between and around its cells.
@@ -305,6 +340,7 @@ mod tests {
             accent: Some(Color(0x4F, 0x81, 0xBD)),
             cell_margins: None,
             style_id: None,
+            file_bold: None,
         }
     }
 
@@ -398,6 +434,26 @@ mod tests {
         // Without banding every body row is the same.
         let t = table(true, false);
         assert_eq!(t.cell_paint(1, 0).fill, t.cell_paint(2, 0).fill);
+    }
+
+    /// A package that defines its style says how heavy the header is: the
+    /// PMC Vanguard deck's own Medium Style 2 bolds it, where the built-in
+    /// look (as Impress draws it without the definition) keeps it regular.
+    #[test]
+    fn the_packages_own_style_decides_the_headers_weight() {
+        let mut t = table(true, true);
+        assert!(!t.cell_paint(0, 0).bold, "built in, Medium Style 2 keeps the weight");
+        t.file_bold = Some((true, false));
+        assert!(t.cell_paint(0, 0).bold, "the file's firstRow b=on");
+        assert!(!t.cell_paint(1, 0).bold, "a body cell stays regular");
+    }
+
+    #[test]
+    fn a_cell_that_states_no_fill_is_not_banded() {
+        let mut t = table(true, true);
+        t.rows[1][0].no_fill = true;
+        assert_eq!(t.cell_paint(1, 0).fill, None);
+        assert!(t.cell_paint(1, 1).fill.is_some(), "its neighbour keeps the band");
     }
 
     #[test]
