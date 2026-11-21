@@ -98,6 +98,9 @@
   "decks/table-text-panel": {
     "A": "green"
   },
+  "decks/text-columns": {
+    "A": "green"
+  },
   "decks/text-styles": {
     "A": "green",
     "B": "green",

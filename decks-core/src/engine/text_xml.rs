@@ -208,6 +208,9 @@ struct BodyProps {
     /// `a:normAutofit` (Some) or `a:noAutofit`/`a:spAutoFit` (None), when
     /// stated.
     autofit: Option<Option<Autofit>>,
+    /// `numCol` and `spcCol` (EMU), when stated.
+    num_col: Option<u8>,
+    spc_col: Option<f64>,
 }
 
 impl BodyProps {
@@ -228,9 +231,17 @@ impl BodyProps {
             } else {
                 None
             },
+            num_col: b.attr("numCol").and_then(|v| v.parse::<u8>().ok()).map(|n| n.clamp(1, 16)),
+            spc_col: num("spcCol"),
         }
     }
     fn over(&mut self, top: &BodyProps) {
+        if top.num_col.is_some() {
+            self.num_col = top.num_col;
+        }
+        if top.spc_col.is_some() {
+            self.spc_col = top.spc_col;
+        }
         if top.anchor.is_some() {
             self.anchor = top.anchor;
         }
@@ -353,6 +364,7 @@ pub(crate) struct SpText {
     pub runs: Vec<RunProps>,
     pub anchor: Anchor,
     pub insets: Option<Insets>,
+    pub columns: Option<super::text_body::Columns>,
     pub autofit: Option<Autofit>,
 }
 
@@ -364,6 +376,7 @@ impl SpText {
             paras: line_paras.iter().map(|&p| self.paras.get(p).cloned().unwrap_or_default()).collect(),
             anchor: self.anchor,
             insets: self.insets,
+            columns: self.columns,
             autofit: self.autofit,
             placeholder: None,
             // The caller (parse.rs) stamps the slide's own key after this.
@@ -450,6 +463,7 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         } else {
             None
         },
+        columns: body.num_col.filter(|n| *n > 1).map(|count| super::text_body::Columns { count, gap: emu(body.spc_col.unwrap_or(0.0)) }),
         ..SpText::default()
     };
     let Some(tx) = tx else { return out };
