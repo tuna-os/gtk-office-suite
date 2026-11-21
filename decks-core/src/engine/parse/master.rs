@@ -290,7 +290,13 @@ pub(super) fn master_shapes(
                 "p:cxnSp" => {
                     if let Some(p) = cur.take().filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
                         let paint = cxn_paints.get(p.sp_index).cloned().unwrap_or_default();
-                        let kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("line"));
+                        // A connector with a flat box (a bent or curved one
+                        // whose ends are level) is a straight segment: drawn
+                        // as a line, not as a zero-height shape of its preset.
+                        let mut kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("line"));
+                        if (p.w == 0.0 || p.h == 0.0) && !crate::engine::shape::is_line(&kind) {
+                            kind = ShapeKind::from_prst("line");
+                        }
                         shapes.push(SlideObject::Shape { kind, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, style: paint.style });
                     }
                 }

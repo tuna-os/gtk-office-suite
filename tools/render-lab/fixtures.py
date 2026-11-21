@@ -2377,6 +2377,33 @@ def decks(img):
     slash.line.width = Pt(3)
     save(p, "pay-centre-reduced-connector-rules",
          "Three navy tiles, each split by a white 1.5pt rule across its middle; one red 3pt diagonal below them")
+    # DCK-004, reduced from the HR and reporting decks: the rule under every
+    # slide's title is on the layout, as a connector (p:cxnSp) or as a
+    # `line` preset p:sp with zero height. The master/layout reader took
+    # neither, so the rule was missing from every slide.
+    from lxml import etree
+
+    p = deck()
+    layout = p.slide_layouts[6]
+    ns = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    rules = [
+        f"""<p:cxnSp {ns}><p:nvCxnSpPr><p:cNvPr id="90" name="Title rule"/><p:cNvCxnSpPr/><p:nvPr userDrawn="1"/></p:nvCxnSpPr>
+        <p:spPr><a:xfrm><a:off x="731520" y="1371600"/><a:ext cx="10728960" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+        <a:ln w="38100"><a:solidFill><a:srgbClr val="1F4E79"/></a:solidFill></a:ln></p:spPr></p:cxnSp>""",
+        f"""<p:sp {ns}><p:nvSpPr><p:cNvPr id="91" name="Footer rule"/><p:cNvSpPr/><p:nvPr userDrawn="1"/></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="731520" y="6126480"/><a:ext cx="10728960" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+        <a:ln w="19050"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln></p:spPr></p:sp>""",
+    ]
+    tree = layout.shapes._spTree
+    for xml in rules:
+        tree.append(etree.fromstring(xml))
+    s = p.slides.add_slide(layout)
+    tb = s.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(10), Inches(0.9)).text_frame
+    fixed_box(tb)
+    tb.text = "Layout rules"
+    tb.paragraphs[0].runs[0].font.size = Pt(32)
+    save(p, "layout-rules",
+         "A 32pt title over a navy 3pt rule across the slide, and a red 1.5pt rule near the bottom; both rules come from the layout")
     # DCK-004, reduced from the same deck's figure tiles (#1397): each tile
     # is a top-anchored box that opens with two empty 14pt paragraphs and
     # then the figure. Dropping the leading paragraphs drew the figure at
