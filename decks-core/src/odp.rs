@@ -1684,7 +1684,7 @@ fn parse_pages(
     let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
     let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
         let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
-        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None, placeholder_key: None, frame: None }
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None, placeholder_key: None, frame: None, columns: None }
     };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries

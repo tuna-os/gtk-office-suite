@@ -1530,6 +1530,7 @@ fn paragraph_styles_survive_a_snapshot() {
         placeholder: None,
         placeholder_key: None,
         frame: None,
+        columns: None,
     };
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {

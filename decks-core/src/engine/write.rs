@@ -150,6 +150,12 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
     if body.anchor != Anchor::Top || body.placeholder.is_some() {
         b.push_attribute(("anchor", body.anchor.to_drawingml()));
     }
+    if let Some(cols) = body.columns {
+        b.push_attribute(("numCol", cols.count.to_string().as_str()));
+        if cols.gap > 0.0 {
+            b.push_attribute(("spcCol", emu(cols.gap).as_str()));
+        }
+    }
     let Some(fit) = body.autofit else {
         writer.write_event(Event::Empty(b))?;
         return Ok(());

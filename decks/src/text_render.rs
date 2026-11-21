@@ -92,8 +92,15 @@ fn place_inner(
 ) -> (Vec<Placed>, f64) {
     let (bx, by, bw, bh) = rect;
     let (l, t, r, b) = insets(body, (bw, bh), scale);
-    let inner_w = (bw - l - r).max(8.0);
+    let box_w = (bw - l - r).max(8.0);
     let inner_h = bh - t - b;
+    // Text set in columns (`numCol`) wraps to one column's width and runs
+    // on into the next when it reaches the bottom, as PowerPoint and
+    // Impress fill them. A paragraph moves whole to the next column.
+    let (count, gap) = body.columns.map_or((1usize, 0.0), |c| (c.count.max(1) as usize, c.gap * scale));
+    let inner_w = ((box_w - gap * (count - 1) as f64) / count as f64).max(8.0);
+    let mut column = 0usize;
+    let mut tallest = 0.0f64;
     let paras: Vec<Vec<Run>> = if runs.is_empty() {
         text.split('\n').map(|p| vec![Run { text: p.to_string(), style: Default::default() }]).collect()
     } else {
@@ -187,14 +194,24 @@ fn place_inner(
             Marker { layout: ml, x: mx, dy }
         });
         let h = layout.pixel_size().1 as f64;
-        placed.push(Placed { layout, marker, x: g.text_x, y });
+        if column + 1 < count && y > 0.0 && y + h > inner_h {
+            tallest = tallest.max(y);
+            column += 1;
+            y = 0.0;
+        }
+        let col_x = column as f64 * (inner_w + gap);
+        let marker = marker.map(|mut m| {
+            m.x += col_x;
+            m
+        });
+        placed.push(Placed { layout, marker, x: g.text_x + col_x, y });
         // Pango tightens the lines after a paragraph's first; the first
         // line's share of the reduction comes off the advance.
         let first_cut = fit.map_or(0.0, |a| a.line_reduction) * line_h;
         y += h - first_cut + st.space_after.resolve(line_h / scale) * scale;
     }
-    let content_h = y;
-    let dy = body.anchor.offset(inner_h, y);
+    let content_h = y.max(tallest);
+    let dy = body.anchor.offset(inner_h, content_h);
     for p in &mut placed {
         p.x += bx + l;
         p.y += by + t + dy;

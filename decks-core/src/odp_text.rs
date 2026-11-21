@@ -532,6 +532,7 @@ mod tests {
             placeholder: None,
             placeholder_key: None,
             frame: None,
+            columns: None,
         };
         let mut w = TextStyles::new("T");
         let inner: Vec<String> = ["t", "a", "b", "c"].iter().map(|s| s.to_string()).collect();

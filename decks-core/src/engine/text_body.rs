@@ -281,6 +281,20 @@ pub struct TextBody {
     /// white figures). `None` is a bare text box.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<Frame>,
+    /// The text set in columns (`a:bodyPr numCol`, `spcCol`): their count
+    /// and the space between them in model units. `None` is one column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub columns: Option<Columns>,
+}
+
+/// A text body's columns.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Columns {
+    /// Two or more.
+    pub count: u8,
+    /// The gap between two columns, in model units.
+    pub gap: f64,
 }
 
 /// A text box's own shape: its preset and how it is painted.
@@ -298,6 +312,7 @@ impl TextBody {
         self.anchor == Anchor::Top
             && self.insets.is_none()
             && self.autofit.is_none()
+            && self.columns.is_none()
             && self.paras.iter().all(|p| *p == ParaStyle::default())
     }
 

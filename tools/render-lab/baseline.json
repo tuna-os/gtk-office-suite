@@ -86,6 +86,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/text-columns": {
+    "A": "green"
+  },
   "decks/text-styles": {
     "A": "green",
     "B": "green",

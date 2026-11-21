@@ -2454,6 +2454,26 @@ def decks(img):
     save(p, "pay-centre-reduced-leading-blank-paragraphs",
          "Three navy tiles, each with a bold white 14pt figure two blank lines below the tile's top edge")
 
+    # DCK-004, reduced from the HR and pay monthly status report: its
+    # highlights are one text box set in two columns (a:bodyPr numCol="2").
+    # Decks ran the text down one column the box's width and off its foot.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    box = s.shapes.add_textbox(Inches(0.5), Inches(0.6), Inches(9), Inches(2.4))
+    tb = box.text_frame
+    fixed_box(tb)
+    tb.word_wrap = True
+    body_pr = tb._txBody.bodyPr
+    body_pr.set("numCol", "2")
+    body_pr.set("spcCol", "228600")
+    for k in range(8):
+        para = tb.paragraphs[0] if k == 0 else tb.add_paragraph()
+        run = para.add_run()
+        run.text = f"Item {k + 1}: the workstream reported its progress this period."
+        run.font.size = Pt(16)
+    save(p, "text-columns",
+         "Eight 16pt paragraphs in one box set in two columns: items 1 to 4 down the left, 5 to 8 down the right")
+
     # DCK-004, reduced from the 2024-2025 delegated authorities report: its
     # theme was saved on a machine in a dark mode, so lt1 is the system
     # "window" colour with lastClr="202020". The master's background is
