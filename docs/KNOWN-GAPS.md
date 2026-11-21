@@ -30,7 +30,7 @@ waiting to merge; the gap stays listed until it has.
 | Gap | How it shows | Tracked |
 |---|---|---|
 | Sheet pictures (logos) | Not drawn; rows under a form's logo look empty | Open PR #2380 |
-| Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Not started |
+| Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Open PR #2380 (saved at their cell, offset and size; shapes still dropped) |
 | Formulas referring to another workbook | Shown as `#REF!` instead of the cached value | Open PR #2381 (loads the cached value; the link itself is not kept, as the package scan warns) |
 | Hidden rows/columns in ODS (`collapse`/`filter`) | Shown | Open PR #2368 |
 | Sheet view zoom (`zoomScale`) | Opens at 100% where Excel opens at the file's zoom | Not started |
