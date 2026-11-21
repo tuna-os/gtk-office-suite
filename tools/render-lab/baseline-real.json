@@ -110,7 +110,7 @@
     "C": "amber"
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -314,7 +314,7 @@
     "B": "red"
   },
   "tables/real-available-data-and-their-modes-of-access": {
-    "A": "amber",
+    "A": "green",
     "B": "red",
     "C": "red"
   },
@@ -412,7 +412,7 @@
     "C": "amber"
   },
   "tables/real-record-of-non-lethal-actions-template": {
-    "A": "green",
+    "A": "amber",
     "B": "amber",
     "C": "amber"
   },
