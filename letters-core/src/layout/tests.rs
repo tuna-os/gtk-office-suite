@@ -323,6 +323,28 @@ fn a_marker_wider_than_its_hanging_tabs_its_text_to_the_next_stop() {
     assert!((lines[0] - margin - DEFAULT_TAB_PT).abs() < 1e-6, "the first line at the first stop: {lines:?}");
 }
 
+/// The label measured is the item's own: "10." overruns a hanging that
+/// "1." fits, so item 10's text tabs to the next stop where item 1's
+/// starts at its indent (the explanatory note's items 10 to 12, drawn
+/// with no gap after the number).
+#[test]
+fn a_tenth_items_wider_label_tabs_its_text_on() {
+    let mut d = doc_of(10, "item");
+    for p in &mut d.paragraphs {
+        p.style.list = crate::model::ListKind::Numbered;
+        p.style.list_hanging_pt = Some(12.0);
+    }
+    let t = lay(&d);
+    let firsts: Vec<f64> = t.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Line { x_pt, line: 0, .. } => Some(*x_pt), _ => None })
+        .collect();
+    assert_eq!(firsts.len(), 10, "{firsts:?}");
+    assert!(firsts[..9].iter().all(|&x| (x - firsts[0]).abs() < 1e-6), "\"1.\" to \"9.\" fit their hanging: {firsts:?}");
+    assert!(firsts[9] > firsts[0] + 1.0, "\"10.\" doesn't, and its text moves on: {firsts:?}");
+}
+
 /// A header's or footer's paragraph padding (its border gaps) is inside
 /// the part, the last paragraph's below too, unlike its space after.
 #[test]

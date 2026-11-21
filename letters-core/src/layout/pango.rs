@@ -521,6 +521,9 @@ impl Shaper for PangoShaper {
 /// it for zoom before calling).
 pub struct Typeset {
     doc: Document,
+    /// Each paragraph's list number (`lists::ordinals`), as the engine
+    /// shaped it.
+    ordinals: Vec<u32>,
     opts: LayoutOptions,
     tree: RenderTree,
     shaper: PangoShaper,
@@ -744,8 +747,10 @@ impl Typeset {
         let opts = opts.for_document(&doc);
         let tree = super::relayout(&doc, &opts, &mut shaper, &mut shapes);
         shapes.prune();
+        let ordinals = crate::lists::ordinals(doc.paragraphs.iter().map(|p| &p.style));
         Self {
             doc,
+            ordinals,
             opts,
             tree,
             shaper,
@@ -775,6 +780,7 @@ impl Typeset {
     pub fn update(&mut self, doc: Document, opts: LayoutOptions) -> usize {
         self.opts = opts.for_document(&doc);
         self.tree = super::relayout(&doc, &self.opts, &mut self.shaper, &mut self.shapes);
+        self.ordinals = crate::lists::ordinals(doc.paragraphs.iter().map(|p| &p.style));
         self.doc = doc;
         self.revision = 0;
         let shaped = self.shapes.misses;
@@ -981,7 +987,10 @@ impl Typeset {
 
     fn paragraph_layout(&self, para: usize, box_w: f64) -> Option<pango::Layout> {
         let p = self.doc.paragraphs.get(para)?;
-        let req = paragraph_request(p, box_w, &self.opts);
+        // The item's own number, as the engine shaped it: a wide label
+        // moves the first line.
+        let ordinal = self.ordinals.get(para).copied().unwrap_or(1);
+        let req = super::paragraph_request_at(p, box_w, &self.opts, ordinal);
         let key = request_key(&req);
         if let Some(l) = self.shaper.layouts.get(&key) {
             return Some(l.clone());
