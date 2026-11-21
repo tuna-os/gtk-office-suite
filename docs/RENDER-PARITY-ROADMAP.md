@@ -626,12 +626,16 @@ in the shipped Flatpak in the GNOME VM, in the window Tiers A and B use
 workbooks red in Tier C alone, #2319). Its first verdicts had 19 of the 85
 documents that can still be fetched green, 62 amber and 4 red.
 
-The run of 2026-11-21 on main (render-parity run 44892542989) has none red:
-22 green and 63 amber. The four red workbooks are amber now that hidden rows
-and columns, merged-cell borders and the wide-sheet window are drawn; two
-more workbooks and two decks turned green. One Letters form moved from green
-to amber on two lines the VM capture's OCR misread (its Tier A is green with
-none lost, and the page reads the same). Five Tables documents still have no
+The runs of 2026-11-21 on main have none red. The first (render-parity run
+44892542989) had 22 green and 63 amber: the four red workbooks moved off red
+once hidden rows and columns, merged-cell borders and the wide-sheet window
+were drawn, three of them to amber and deep-sea-stock, a run later, to
+green. One Letters form moved from green to amber on two lines the VM
+capture's OCR misread (its Tier A is green with none lost, and the page
+reads the same). The later run (44919831054), which the baseline follows,
+has 25 green and 60 amber: three Letters documents and deep-sea-stock turned
+green, and the ukhsa transactions workbook, green in the first, is amber at
+ssim 0.73, just under the line. Five Tables documents still have no
 Tier C verdict: three sources answer HTTP 410, and two were not captured.
 The exit still waits on the ambers: Tier C on the real corpus is ratcheted,
 not yet green.*

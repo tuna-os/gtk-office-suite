@@ -442,6 +442,6 @@
   "tables/real-ukhsa-government-procurement-card-gpc-transactio": {
     "A": "amber",
     "B": "amber",
-    "C": "green"
+    "C": "amber"
   }
 }
