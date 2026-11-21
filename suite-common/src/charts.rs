@@ -104,6 +104,27 @@ pub struct Options<'a> {
     pub no_legend: bool,
     /// No white background: the slide shows through.
     pub transparent: bool,
+    /// A bar chart's bars lie horizontally, categories down the left.
+    pub horizontal: bool,
+    /// The categories run the other way: a horizontal chart's first at the
+    /// top, a column chart's first at the right.
+    pub reversed: bool,
+    /// Data labels as percentages: 0.72 reads "72%".
+    pub percent: bool,
+    /// The chart's text colour (`c:txPr`), where the file sets one; black
+    /// otherwise.
+    pub text_color: Option<(f64, f64, f64)>,
+    /// The chart's text size in the drawing's units, where the file sets
+    /// one; `CHART_TEXT_PX` otherwise.
+    pub text_px: Option<f64>,
+    /// A colour per series, the first included, as the file colours them;
+    /// `None` keeps the accent.
+    pub series_colors: &'a [Option<(f64, f64, f64)>],
+    /// A bar chart's gap between categories in percent of one bar; `None`
+    /// is Excel's default 150.
+    pub gap: Option<f64>,
+    /// No category labels: the file deletes the category axis.
+    pub hide_category_axis: bool,
 }
 
 /// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
@@ -118,7 +139,8 @@ pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], k
     // Chart text is Calibri 10 pt (Carlito where Calibri isn't
     // installed), as Excel and Calc draw a chart that names no font.
     cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
-    cr.set_font_size(CHART_TEXT_PX);
+    cr.set_font_size(opts.text_px.unwrap_or(CHART_TEXT_PX));
+    TEXT.with(|t| t.set(opts.text_color.unwrap_or(CHART_TEXT)));
     let (w, h) = (width, height);
     if !series.is_empty() {
         match kind {
@@ -129,6 +151,7 @@ pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], k
             ChartKind::Scatter => draw_scatter(cr, categories, series, w, h),
         }
     }
+    TEXT.with(|t| t.set(CHART_TEXT));
     let _ = cr.restore();
 }
 
@@ -289,6 +312,12 @@ const CHART_TEXT: (f64, f64, f64) = (0.0, 0.0, 0.0);
 /// Gridlines.
 const GRID: (f64, f64, f64) = (0.7, 0.7, 0.7);
 
+thread_local! {
+    /// The text colour of the chart being drawn: the file's, or
+    /// `CHART_TEXT`. Set by `draw_chart_with`, read by `show`.
+    static TEXT: std::cell::Cell<(f64, f64, f64)> = const { std::cell::Cell::new(CHART_TEXT) };
+}
+
 /// Office's default theme accents 1 to 6, which Excel and LibreOffice give
 /// series (and a pie's slices) that name no colour.
 const ACCENTS: [(u8, u8, u8); 6] = [
@@ -314,7 +343,7 @@ fn text_w(cr: &Context, t: &str) -> f64 {
 }
 
 fn show(cr: &Context, x: f64, y: f64, t: &str) {
-    show_in(cr, CHART_TEXT, x, y, t);
+    show_in(cr, TEXT.with(|c| c.get()), x, y, t);
 }
 
 /// `t` at (x, y) in `color`.
@@ -334,7 +363,12 @@ enum Key {
 
 /// The named series' legend entries: name and colour.
 fn legend_entries<'a>(series: &[Series<'a>]) -> Vec<(&'a str, (f64, f64, f64))> {
-    series.iter().enumerate().filter_map(|(i, s)| Some((s.name?, accent(i)))).collect()
+    legend_in(series, &Options::default())
+}
+
+/// The legend rows in each series' colour under `opts`.
+fn legend_in<'a>(series: &[Series<'a>], opts: &Options) -> Vec<(&'a str, (f64, f64, f64))> {
+    series.iter().enumerate().filter_map(|(i, s)| Some((s.name?, series_color(opts, i)))).collect()
 }
 
 /// The legend's width for the widest of `names`, at the right of the
@@ -439,6 +473,27 @@ fn value_label(v: f64) -> String {
     if v.fract() == 0.0 && v.abs() < 1e15 { format!("{}", v as i64) } else { format!("{v}") }
 }
 
+/// A data label as the chart's number format reads it: a percentage
+/// rounded to a whole percent, else the value.
+fn label_for(v: f64, opts: &Options) -> String {
+    if opts.percent { format!("{}%", (v * 100.0).round() as i64) } else { value_label(v) }
+}
+
+/// The colour of series `k`'s bar in category `i`: a one-series chart's
+/// bars take their points' own colours, as the file sets them.
+fn bar_color(series: &[Series], opts: &Options, k: usize, i: usize) -> (f64, f64, f64) {
+    if series.len() == 1 {
+        opts.point_colors.get(i).copied().flatten().unwrap_or_else(|| series_color(opts, 0))
+    } else {
+        series_color(opts, k)
+    }
+}
+
+/// Series `k`'s colour: the file's, else the accent.
+fn series_color(opts: &Options, k: usize) -> (f64, f64, f64) {
+    opts.series_colors.get(k).copied().flatten().unwrap_or_else(|| accent(k))
+}
+
 /// The largest value of any series.
 fn max_of(series: &[Series]) -> f64 {
     series.iter().map(Series::max).fold(0.0, f64::max)
@@ -448,6 +503,9 @@ fn max_of(series: &[Series]) -> f64 {
 /// horizontal gridlines, categories under the bars, and the legend at the
 /// right when a series has a name.
 fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, opts: &Options) {
+    if opts.horizontal {
+        return draw_horizontal_bars(cr, categories, series, w, h, opts);
+    }
     // Stacked, the axis reaches the tallest category's sum of positives.
     let max = if opts.stacked {
         (0..categories.len())
@@ -457,7 +515,7 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
         max_of(series)
     };
     let axis = ValueAxis::new(max);
-    let legend = if opts.no_legend { Vec::new() } else { legend_entries(series) };
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
     let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
     let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
     let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
@@ -474,9 +532,10 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
     // slot holds one column the width of one series' bar.
     let slot = (right - left) / categories.len() as f64;
     let n = if opts.stacked { 1.0 } else { series.len() as f64 };
-    let bar_w = slot / (n + 1.5);
+    let bar_w = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
     for (i, cat) in categories.iter().enumerate() {
-        let start = left + i as f64 * slot + (slot - n * bar_w) / 2.0;
+        let at = if opts.reversed { categories.len() - 1 - i } else { i };
+        let start = left + at as f64 * slot + (slot - n * bar_w) / 2.0;
         let mut base = 0.0;
         for (k, s) in series.iter().enumerate() {
             let Some(val) = s.at(i) else { continue };
@@ -487,11 +546,11 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
             } else {
                 (start + k as f64 * bar_w, 0.0, val)
             };
-            set(cr, accent(k));
+            set(cr, bar_color(series, opts, k, i));
             cr.rectangle(x, y_of(to), bar_w, y_of(from) - y_of(to));
             cr.fill().unwrap();
             if opts.labels {
-                let t = value_label(val);
+                let t = label_for(val, opts);
                 let tw = text_w(cr, &t);
                 if opts.stacked {
                     // In the segment, white on the accent, as PowerPoint's
@@ -502,10 +561,119 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
                 }
             }
         }
-        show(cr, left + i as f64 * slot + (slot - text_w(cr, cat)) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
+        if !opts.hide_category_axis {
+            show(cr, left + at as f64 * slot + (slot - text_w(cr, cat)) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
+        }
     }
 
     draw_legend(cr, right + 12.0, (top_y + bottom) / 2.0, &legend, Key::Square);
+}
+
+/// `text` broken at spaces into lines no wider than `max_w` where it can
+/// be: a single word wider than that stays whole on its line.
+fn wrap_to(cr: &Context, text: &str, max_w: f64) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if text_w(cr, &format!("{line} {word}")) <= max_w => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_string()),
+        }
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+/// A horizontal bar chart (`c:barDir val="bar"`): categories down the left,
+/// right-aligned against the plot, values along the bottom with vertical
+/// gridlines, and each bar's label just past its end. The first category is
+/// at the bottom, as Excel draws it, unless the chart is reversed.
+fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, opts: &Options) {
+    let max = if opts.stacked {
+        (0..categories.len())
+            .map(|i| series.iter().filter_map(|s| s.at(i)).filter(|v| *v > 0.0).sum::<f64>())
+            .fold(0.0, f64::max)
+    } else {
+        max_of(series)
+    };
+    let axis = ValueAxis::new(max);
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
+    let legend_w = legend.iter().map(|(n, _)| text_w(cr, n) + 30.0).fold(0.0, f64::max);
+    // Category labels wrap at spaces to fit 45% of the width, as Calc and
+    // PowerPoint break a long one over lines.
+    let max_w = w * 0.45;
+    let wrapped: Vec<Vec<String>> = categories.iter().map(|c| wrap_to(cr, c, max_w)).collect();
+    let cat_w = if opts.hide_category_axis { 0.0 } else { wrapped.iter().flatten().map(|l| text_w(cr, l)).fold(0.0, f64::max) };
+    let line_h = cr.font_matrix().xx() * 1.15;
+    // Room past the longest bar for its label.
+    let label_w = if opts.labels { text_w(cr, &label_for(axis.top, opts)) + 6.0 } else { 0.0 };
+    let axis_h = if opts.hide_value_axis { 0.0 } else { CHART_TEXT_PX + 8.0 };
+    let (left, right, top_y, bottom) = (cat_w + 16.0, w - 10.0 - legend_w - label_w, 10.0, h - 10.0 - axis_h);
+    if right <= left || bottom <= top_y || categories.is_empty() {
+        return;
+    }
+    let x_of = |v: f64| left + (v / axis.top) * (right - left);
+    if !opts.hide_value_axis {
+        cr.set_line_width(1.0);
+        for i in 0..=axis.ticks() {
+            let x = (left + i as f64 / axis.ticks() as f64 * (right - left)).round() + 0.5;
+            set(cr, GRID);
+            cr.move_to(x, top_y);
+            cr.line_to(x, bottom);
+            cr.stroke().unwrap();
+            let t = axis.label(i);
+            show(cr, x - text_w(cr, &t) / 2.0, bottom + 4.0 + CHART_TEXT_PX, &t);
+        }
+    }
+    // The category axis line, where the bars start.
+    set(cr, GRID);
+    cr.set_line_width(1.0);
+    cr.move_to(left.round() + 0.5, top_y);
+    cr.line_to(left.round() + 0.5, bottom);
+    cr.stroke().unwrap();
+
+    let count = categories.len();
+    let slot = (bottom - top_y) / count as f64;
+    let n = if opts.stacked { 1.0 } else { series.len() as f64 };
+    let bar_h = slot / (n + opts.gap.unwrap_or(150.0) / 100.0);
+    for (i, lines) in wrapped.iter().enumerate() {
+        let row = if opts.reversed { i } else { count - 1 - i };
+        let start = top_y + row as f64 * slot + (slot - n * bar_h) / 2.0;
+        let mut base = 0.0;
+        for (k, s) in series.iter().enumerate() {
+            let Some(val) = s.at(i) else { continue };
+            let (y, from, to) = if opts.stacked {
+                let from = base;
+                base += val.max(0.0);
+                (start, from, base)
+            } else {
+                (start + k as f64 * bar_h, 0.0, val)
+            };
+            set(cr, bar_color(series, opts, k, i));
+            cr.rectangle(x_of(from), y, x_of(to) - x_of(from), bar_h);
+            cr.fill().unwrap();
+            if opts.labels {
+                let t = label_for(val, opts);
+                let ty = y + bar_h / 2.0 + CHART_TEXT_PX * 0.35;
+                if opts.stacked {
+                    let tw = text_w(cr, &t);
+                    show_in(cr, (1.0, 1.0, 1.0), (x_of(from) + x_of(to) - tw) / 2.0, ty, &t);
+                } else {
+                    show(cr, x_of(to) + 4.0, ty, &t);
+                }
+            }
+        }
+        let first = top_y + row as f64 * slot + slot / 2.0 - (lines.len() as f64 - 1.0) * line_h / 2.0 + line_h * 0.3;
+        for (j, line) in lines.iter().enumerate().filter(|_| !opts.hide_category_axis) {
+            show(cr, left - 8.0 - text_w(cr, line), first + j as f64 * line_h, line);
+        }
+    }
+
+    draw_legend(cr, w - legend_w + 2.0, (top_y + bottom) / 2.0, &legend, Key::Square);
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -521,7 +689,7 @@ enum Style {
 fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64, h: f64, style: Style, opts: &Options) {
     let axis = ValueAxis::new(max_of(series));
     let key = if style == Style::Line { Key::Line } else { Key::Square };
-    let legend = if opts.no_legend { Vec::new() } else { legend_entries(series) };
+    let legend = if opts.no_legend { Vec::new() } else { legend_in(series, opts) };
     let legend_w = legend_width(cr, &legend, key);
     let axis_w = if opts.hide_value_axis { 0.0 } else { axis.widest(cr) + 4.0 };
     let (left, right, top_y, bottom) = (axis_w + 10.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
@@ -530,16 +698,20 @@ fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64,
     }
     let y_of = |v: f64| bottom - (v.max(0.0) / axis.top) * (bottom - top_y);
     let n = categories.len();
-    let x_of = |i: usize| match style {
-        Style::Line => left + (i as f64 + 0.5) * (right - left) / n as f64,
-        Style::Area => left + i as f64 * (right - left) / (n - 1).max(1) as f64,
+    // The categories run right to left when the file reverses its axis.
+    let x_of = |i: usize| {
+        let i = if opts.reversed { n - 1 - i } else { i };
+        match style {
+            Style::Line => left + (i as f64 + 0.5) * (right - left) / n as f64,
+            Style::Area => left + i as f64 * (right - left) / (n - 1).max(1) as f64,
+        }
     };
     if !opts.hide_value_axis {
         draw_value_axis(cr, &axis, left, right, top_y, bottom);
     }
 
     for (k, s) in series.iter().enumerate() {
-        set(cr, accent(k));
+        set(cr, series_color(opts, k));
         match style {
             Style::Area => {
                 // A missing value is 0, as Calc fills a gap in an area.
@@ -571,7 +743,9 @@ fn draw_category(cr: &Context, categories: &[String], series: &[Series], w: f64,
         }
     }
     for (i, cat) in categories.iter().enumerate() {
-        show(cr, x_of(i) - text_w(cr, cat) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
+        if !opts.hide_category_axis {
+            show(cr, x_of(i) - text_w(cr, cat) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
+        }
     }
     draw_legend(cr, right + 12.0, h / 2.0 + 3.0, &legend, key);
 }
@@ -610,7 +784,7 @@ fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64
             // On the segment, halfway across the ring (or the slice).
             let mid = angle + sweep / 2.0;
             let rad = (r + inner) / 2.0 + if inner > 0.0 { 0.0 } else { r * 0.15 };
-            let t = value_label(*val);
+            let t = label_for(*val, opts);
             show(cr, cx + rad * mid.cos() - text_w(cr, &t) / 2.0, cy + rad * mid.sin() + CHART_TEXT_PX * 0.35, &t);
         }
         angle += sweep;
@@ -740,6 +914,28 @@ mod tests {
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
         (0..w).filter(|x| (0..h).any(|y| px[y * stride + x * 4..][..3] == [b, g, r])).collect()
+    }
+
+    /// A reversed line chart is the plain one mirrored: its first category
+    /// at the right, where the file's reversed axis puts it.
+    #[test]
+    fn a_reversed_line_chart_runs_right_to_left() {
+        let categories: Vec<String> = ["A", "B", "C"].iter().map(|s| s.to_string()).collect();
+        let a = [1.0, 2.0, 9.0];
+        let one = [Series { name: None, values: &a }];
+        let plain = Options { no_legend: true, hide_category_axis: true, hide_value_axis: true, ..Options::default() };
+        let mut p = draw_with(&categories, &one, ChartKind::Line, &plain);
+        let mut r = draw_with(&categories, &one, ChartKind::Line, &Options { reversed: true, ..plain });
+        let accent = (0x4f, 0x81, 0xbd);
+        // The highest point (C, 9) is the topmost accent: right of centre
+        // plain, left of it reversed.
+        let top_x = |s: &mut ImageSurface| {
+            let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+            let px = s.data().unwrap();
+            (0..h).find_map(|y| (0..w).find(|x| px[y * stride + x * 4..][..3] == [accent.2, accent.1, accent.0])).unwrap()
+        };
+        let (pw, rw) = (top_x(&mut p), top_x(&mut r));
+        assert!(pw > 200 && rw < 200, "plain {pw}, reversed {rw}");
     }
 
     /// Default options are the plain chart, pixel for pixel.
