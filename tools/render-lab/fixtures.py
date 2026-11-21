@@ -2227,6 +2227,34 @@ def decks(img):
         sh._element.spPr.append(parse_xml(f"<a:effectLst {a_ns}>{effect}</a:effectLst>"))
     save(p, "shape-effects", "Blue shapes with a shadow, a blurred shadow, a turned shape's slide-fixed shadow, and a glow")
 
+    # Text on shapes (the pay-centre innovation deck): an oval's text wraps
+    # in its inscribed rectangle, in the white its style's fontRef gives it
+    # (python-pptx's autoshapes carry `a:fontRef idx="minor"` with lt1),
+    # and Wingdings bullets with no margin to hang in (marL 0, indent
+    # -285750) draw as the squares and diamonds they show, beside the text.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    for x, words in ((6.8, "Since January 2024, the team processed 22,478 cases using bulk processing and the tool."),
+                     (10.0, "Total of approximately 2,938 hours of manual work avoided")):
+        sh = s.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(2.2), Inches(3.0), Inches(2.4))
+        sh.fill.solid()
+        sh.fill.fore_color.rgb = RGBColor(0x1F, 0x38, 0x64)
+        sh.text_frame.word_wrap = True
+        r = sh.text_frame.paragraphs[0].add_run()
+        r.text = words
+        r.font.size = Pt(16)
+    box = s.shapes.add_textbox(Inches(0.8), Inches(2.2), Inches(5.6), Inches(2.4))
+    box.text_frame.word_wrap = True
+    for i, (char, words) in enumerate((("§", "14,634 Cases - Inside Service Standard"), ("§", "15,573 Cases - Aged Intake"),
+                                       ("§", "42,898 Cases - Backlog over a year"), ("v", "Reduction of 21,675 cases"))):
+        para = box.text_frame.paragraphs[0] if i == 0 else box.text_frame.add_paragraph()
+        para._p.insert(0, parse_xml(
+            f'<a:pPr {a_ns} indent="-285750"><a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="{char}"/></a:pPr>'))
+        r = para.add_run()
+        r.text = words
+        r.font.size = Pt(18)
+    save(p, "shape-text", "White text wrapped inside two navy ovals; four Wingdings-bulleted lines (three squares, a diamond) beside their text")
+
     # The presets drawn with BetterOffice's DrawingML outlines
     # (decks-core shape.rs, borrowed_outline): stars, polygons, arrows,
     # a donut's hole, a cube's faces, callouts. Without them each was its box.
