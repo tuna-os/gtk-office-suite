@@ -44,7 +44,7 @@ a release has confirmed it yet; the row goes once one has.
 | ODS conditional number formats (`style:map` by sign) | Negatives as `-2` and zero as `0` where Calc shows `(2)` and `-` (hmt-annual-report core tables) | Fixed on main (#2390) |
 | Merged blocks bordered cell by cell; fills on half pixels | Inner borders drawn through merged text; grey seams between filled rows after a fractional-height row (ewco-claim-form) | Fixed on main (#2391) |
 | Rich text in a cell (xlsx runs) | Every run in the cell's one font: a bold title's small italic version line, bold labels in a notes box | Fixed on main for xlsx (#2392: read, drawn, saved); ODS `text:span` styles not read |
-| Hyperlinked cells | Drawn in the cell style's blue where Calc draws a cell's link navy (otsi-annual-review, record-of-non-lethal-actions) | Fixed on main (#2393) |
+| Hyperlinked cells | Drawn in the cell style's blue where Calc draws a cell's link navy (otsi-annual-review, record-of-non-lethal-actions) | Open PR to port #2393 to main: it merged into its stacked base after that branch had merged, so main never got it |
 
 Render-lab note: the Tables `scale` metric compared our grid with a
 printout shrunk by the file's print scale; open PR #2384 compares against
