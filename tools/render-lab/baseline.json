@@ -39,6 +39,9 @@
   "decks/layout-rules": {
     "A": "green"
   },
+  "decks/line-spacing": {
+    "A": "green"
+  },
   "decks/master-slide-number": {
     "A": "green"
   },
