@@ -305,6 +305,11 @@ fn sniff(path: &str) -> Option<Content> {
         // name, a flat XML document): not a table of text, so the file is
         // opened as its name says and fails there with a load error.
         return None;
+    } else if head.iter().any(|&b| b == 0 || (b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r' | 0x0c))) {
+        // Binary: a corrupt, truncated or zero-filled download. Opened as
+        // its name says, it fails with a load error rather than showing a
+        // sheet of junk that a save would write over the file.
+        return None;
     } else {
         Content::Text
     })
