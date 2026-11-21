@@ -125,6 +125,11 @@ pub struct ParaStyle {
     pub space_after: Spacing,
     /// How the marker is drawn, where it differs from the text.
     pub marker: MarkerStyle,
+    /// Line spacing (`a:lnSpc`): `Lines` a fraction of single spacing
+    /// (90% is 0.9), `Units` an exact line pitch in model units. None is
+    /// single spacing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_spacing: Option<Spacing>,
 }
 
 /// A bullet's own font, size and colour (`a:buFont`, `a:buSzPct` or

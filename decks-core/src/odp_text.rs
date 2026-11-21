@@ -223,6 +223,11 @@ impl TextStyles {
             if st.indent != 0.0 {
                 props.push_str(&format!(" fo:text-indent=\"{}\"", pt(crate::odp::page_x(st.indent))));
             }
+            // A proportional line spacing; ODF's exact one (a length) is
+            // not written, and reads back as single.
+            if let Some(Spacing::Lines(f)) = st.line_spacing {
+                props.push_str(&format!(" fo:line-height=\"{}%\"", (f * 100.0).round()));
+            }
             for (attr, sp) in [("fo:margin-top", st.space_before), ("fo:margin-bottom", st.space_after)] {
                 if let Spacing::Units(u) = sp {
                     if u != 0.0 {
@@ -320,6 +325,8 @@ struct ParaDef {
     indent: Option<f64>,
     top: Option<f64>,
     bottom: Option<f64>,
+    /// `fo:line-height` as a percentage: the fraction of single spacing.
+    line: Option<f64>,
 }
 
 /// Text-layout styles a document defines, by name.
@@ -367,6 +374,9 @@ impl TextDefs {
                                     indent: len(&e, "fo:text-indent"),
                                     top: len(&e, "fo:margin-top"),
                                     bottom: len(&e, "fo:margin-bottom"),
+                                    line: attr(&e, "fo:line-height")
+                                        .and_then(|v| v.trim().strip_suffix('%').and_then(|p| p.parse::<f64>().ok()))
+                                        .map(|p| p / 100.0),
                                 },
                             );
                         }
@@ -459,6 +469,7 @@ impl TextDefs {
             indent: d.indent.unwrap_or(0.0) * k,
             space_before: Spacing::Units(d.top.unwrap_or(0.0) * k),
             space_after: Spacing::Units(d.bottom.unwrap_or(0.0) * k),
+            line_spacing: d.line.filter(|l| *l != 1.0).map(Spacing::Lines),
             ..ParaStyle::default()
         };
         if depth > 0 {

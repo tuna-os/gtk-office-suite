@@ -127,7 +127,17 @@ fn place_inner(
         layout.set_width((g.text_width * pango::SCALE as f64) as i32);
         layout.set_wrap(pango::WrapMode::WordChar);
         layout.set_indent((g.first_indent * pango::SCALE as f64) as i32);
-        layout.set_line_spacing(line_factor);
+        // The paragraph's own line spacing (a:lnSpc 90% is 0.9 of single),
+        // less what a shrunk box takes off (lnSpcReduction). An exact
+        // pitch is set below, once the line's own height is known.
+        let fraction = match st.line_spacing {
+            Some(decks_core::engine::Spacing::Lines(f)) => Some(f),
+            _ => None,
+        };
+        layout.set_line_spacing(match (fraction, fit) {
+            (Some(f), _) => (f * (1.0 - fit.map_or(0.0, |a| a.line_reduction))) as f32,
+            (None, _) => line_factor,
+        });
         match st.align {
             ParaAlign::Left => layout.set_alignment(pango::Alignment::Left),
             ParaAlign::Center => layout.set_alignment(pango::Alignment::Center),
@@ -146,6 +156,9 @@ fn place_inner(
             .line_readonly(0)
             .map(|line| line.pixel_extents().1.height() as f64)
             .unwrap_or(0.0);
+        if let (Some(decks_core::engine::Spacing::Units(u)), true) = (st.line_spacing, line_h > 0.0) {
+            layout.set_line_spacing((u * text_scale / line_h) as f32);
+        }
         // Space above the first paragraph is not drawn: the inset is the
         // box's top margin, as PowerPoint lays it out.
         if i > 0 {

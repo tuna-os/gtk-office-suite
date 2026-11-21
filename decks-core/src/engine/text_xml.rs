@@ -104,6 +104,7 @@ struct LevelProps {
     indent: Option<f64>,
     bullet: Option<Bullet>,
     spc_bef: Option<RawSpacing>,
+    ln_spc: Option<RawSpacing>,
     spc_aft: Option<RawSpacing>,
     /// `Some(None)` is a `*Tx` element: follow the text.
     bu_font: Option<Option<String>>,
@@ -123,7 +124,7 @@ enum RawBuSize {
 impl LevelProps {
     fn over(&mut self, top: &LevelProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft, bu_font, bu_size, bu_clr);
+        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft, ln_spc, bu_font, bu_size, bu_clr);
         self.run.over(&top.run);
     }
 
@@ -165,6 +166,7 @@ impl LevelProps {
             indent: num("indent"),
             bullet,
             spc_bef: spacing("a:spcBef"),
+            ln_spc: spacing("a:lnSpc"),
             spc_aft: spacing("a:spcAft"),
             bu_font,
             bu_size,
@@ -426,6 +428,8 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
             margin_left: emu(props.mar_l.unwrap_or(0.0)),
             indent: emu(props.indent.unwrap_or(0.0)),
             space_before: spacing(props.spc_bef),
+            // 100% is single spacing, which is no statement.
+            line_spacing: props.ln_spc.map(|s| spacing(Some(s))).filter(|s| *s != Spacing::Lines(1.0)),
             space_after: spacing(props.spc_aft),
             marker: MarkerStyle {
                 font: props.bu_font.clone().flatten(),
@@ -559,6 +563,26 @@ mod tests {
         let (x, y) = (got[0].runs[0].style(), got[0].runs[1].style());
         assert_eq!((x.font_size_hp, x.bold, x.color.as_deref()), (Some(20), true, Some("c80000")));
         assert_eq!((y.font_size_hp, y.bold), (Some(64), false), "the next run is back to the level's defaults");
+    }
+
+    /// Office's themes set body text at 90% (`a:lnSpc`), which every
+    /// placeholder inherits; a paragraph's own wins.
+    #[test]
+    fn line_spacing_is_inherited_and_overridden() {
+        let theme = Theme::default();
+        let master = MASTER.replace(
+            r#"<a:lvl1pPr marL="342900" indent="-342900" algn="l">"#,
+            r#"<a:lvl1pPr marL="342900" indent="-342900" algn="l"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc>"#,
+        );
+        let inh = Inherited::read(LAYOUT, &master, &theme);
+        let got = sp_texts(
+            &slide(&sp(r#"<p:ph idx="2"/>"#, r#"<a:p><a:r><a:t>a</a:t></a:r></a:p><a:p><a:pPr><a:lnSpc><a:spcPts val="3000"/></a:lnSpc></a:pPr><a:r><a:t>b</a:t></a:r></a:p>"#)),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
+        assert_eq!(got[0].paras[0].line_spacing, Some(Spacing::Lines(0.9)));
+        assert!(matches!(got[0].paras[1].line_spacing, Some(Spacing::Units(u)) if u > 0.0), "{:?}", got[0].paras[1]);
     }
 
     #[test]

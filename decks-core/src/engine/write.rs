@@ -194,7 +194,13 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, plac
         p.push_attribute(("algn", st.align.to_drawingml()));
     }
     writer.write_event(Event::Start(p))?;
-    for (name, sp) in [("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
+    // CT_TextParagraphProperties order: lnSpc, spcBef, spcAft.
+    let line = st.line_spacing.unwrap_or(Spacing::Lines(1.0));
+    let single = line == Spacing::Lines(1.0);
+    for (name, sp) in [("a:lnSpc", line), ("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
+        if name == "a:lnSpc" && single {
+            continue;
+        }
         let (el, val) = match sp {
             Spacing::Units(u) if u != 0.0 => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
             Spacing::Lines(f) if f != 0.0 => ("a:spcPct", (f * 100_000.0).round() as i64),
