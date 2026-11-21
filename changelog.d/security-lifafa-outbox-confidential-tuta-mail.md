@@ -1,0 +1,1 @@
+- Lifafa: a confidential message from a Tuta account that waits in the Outbox (Send Later, a failed send, quitting during Undo Send) is sent confidentially. The Outbox did not record the choice, and the message went to addresses outside Tuta as ordinary mail. A message an older build queued stays in the Outbox until you open it and choose how it goes (#2340).

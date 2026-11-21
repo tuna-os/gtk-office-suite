@@ -39,6 +39,9 @@
   "decks/layout-rules": {
     "A": "green"
   },
+  "decks/master-slide-number": {
+    "A": "green"
+  },
   "decks/pay-centre-reduced-connector-rules": {
     "A": "green",
     "B": "green",

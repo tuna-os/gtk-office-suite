@@ -505,35 +505,6 @@ fn hex_rgb16(hex: &str) -> Option<(u16, u16, u16)> {
     Some((c(0)?, c(2)?, c(4)?))
 }
 
-/// The layout one master decoration is drawn from.
-///
-/// Extracted so the master path's *use* of the runs is reachable from a
-/// test: #732 left the equivalent call inside `draw_slide_multi` uncovered,
-/// and a call site that silently stops passing its runs is exactly how a
-/// carried style stops being drawn without anything failing.
-///
-/// Drawn through pango, and through the same run styling the slides use, so
-/// a master's own emphasis shows. The cairo toy API this replaces could do
-/// neither: it took one weight for the whole box — hardcoded bold, which
-/// drew every unemphasised decoration as though the design asked for bold —
-/// and it has no concept of a line break, so a multi-line decoration was
-/// silently drawn as one line.
-pub fn master_decoration_layout(
-    cr: &cairo::Context,
-    master: &MasterSlide,
-    text: &str,
-    runs: &[Run],
-    scale: f64,
-) -> pango::Layout {
-    let layout = pangocairo::functions::create_layout(cr);
-    layout.set_font_description(Some(&document_font_description(
-        Some(master),
-        11.0 * scale,
-    )));
-    set_styled_text(&layout, text, runs, scale);
-    layout
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide(
     cr: &cairo::Context, width: f64, height: f64,
@@ -627,6 +598,25 @@ pub fn draw_slide_objects(
     let _ = cr.restore();
 }
 
+/// The slide-number field PowerPoint caches in a master's or layout's
+/// text (`a:fld type="slidenum"`).
+const SLIDE_NUMBER_FIELD: &str = "\u{2039}#\u{203a}";
+
+/// `obj` with every slide-number field in its text replaced by `number`.
+fn with_slide_number(obj: &SlideObject, number: usize) -> SlideObject {
+    let mut out = obj.clone();
+    if let SlideObject::TextBox { text, runs, .. } = &mut out {
+        if text.contains(SLIDE_NUMBER_FIELD) {
+            let n = number.to_string();
+            *text = text.replace(SLIDE_NUMBER_FIELD, &n);
+            for r in runs.iter_mut() {
+                r.text = r.text.replace(SLIDE_NUMBER_FIELD, &n);
+            }
+        }
+    }
+    out
+}
+
 /// A slide's frame on the canvas `(x, y, w, h)` and the background colour
 /// (Cairo channels) text contrasts with.
 pub type SlideFrame = ((f64, f64, f64, f64), (f64, f64, f64));
@@ -709,14 +699,14 @@ pub fn draw_slide_base(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.fill().unwrap();
                 }
-                SlideObject::TextBox { text, x, y, runs, .. } => {
-                    let sx = ox + (x / 960.0) * slide_w;
-                    let sy = oy + (y / 540.0) * slide_h;
-                    cr.set_source_rgba(0.3, 0.3, 0.3, 0.4);
-                    let layout =
-                        master_decoration_layout(cr, master, text, runs, slide_w / 960.0);
-                    cr.move_to(sx + 4.0, sy + 4.0);
-                    pangocairo::functions::show_layout(cr, &layout);
+                // Text on the master (a footer, a slide number) is drawn as
+                // a slide's text box is, in its own look and the master's
+                // font, its slide-number field (`‹#›`, as PowerPoint caches
+                // it) reading this slide's number. It used to be drawn grey
+                // at 40% and nudged 4 px, whatever the file said.
+                SlideObject::TextBox { .. } => {
+                    let numbered = with_slide_number(obj, slide + 1);
+                    draw_object(cr, &numbered, (ox, oy, slide_w, slide_h), slide_bg_rgb, Some(master));
                 }
                 // A styled shape (an odp master's, a theme's decoration)
                 // carries its own paint, and a picture (a logo, a band of
@@ -2174,61 +2164,23 @@ mod font_tests {
         );
     }
 
-    fn ctx() -> cairo::Context {
-        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64)
-            .expect("an image surface needs no display");
-        cairo::Context::new(&surface).expect("context")
-    }
-
-    /// The master path actually passes its decoration's runs through.
-    ///
-    /// The gap #732 recorded and could not close: a call site that stops
-    /// passing its runs draws unstyled text and nothing fails, because
-    /// nothing asserts over what was drawn. Going through the layout the
-    /// master path builds — rather than the pixels it produces — makes that
-    /// reachable without depending on which fonts are installed.
     #[test]
-    fn a_master_decorations_emphasis_reaches_the_layout_it_is_drawn_from() {
-        let m = master(7, "Cantarell");
-        let l = master_decoration_layout(
-            &ctx(),
-            &m,
-            "ACME Confidential",
-            &[
-                run("ACME ", RunStyle::default()),
-                run(
-                    "Confidential",
-                    RunStyle { bold: true, ..RunStyle::default() },
-                ),
-            ],
-            1.0,
-        );
-        assert_eq!(l.text(), "ACME Confidential");
-        let attrs = l
-            .attributes()
-            .expect("the decoration's runs never reached the layout");
-        assert!(
-            attrs
-                .attributes()
-                .into_iter()
-                .any(|a| a.type_() == pango::AttrType::Weight),
-            "the decoration was drawn without its emphasis"
-        );
-    }
-
-    /// And the master's font still reaches it, which the same call site is
-    /// also responsible for.
-    #[test]
-    fn a_master_decoration_is_drawn_in_the_masters_font() {
-        let m = master(7, "Liberation Serif");
-        let l = master_decoration_layout(&ctx(), &m, "plain", &[], 1.0);
-        assert_eq!(
-            l.font_description()
-                .and_then(|d| d.family())
-                .map(|f| f.to_string())
-                .as_deref(),
-            Some("Liberation Serif")
-        );
+    fn a_master_slide_number_field_reads_the_slide_it_is_drawn_on() {
+        let field = SLIDE_NUMBER_FIELD;
+        let obj = SlideObject::TextBox {
+            text: format!("Page {field}"),
+            x: 0.0,
+            y: 0.0,
+            w: 100.0,
+            h: 20.0,
+            rotation: 0.0,
+            runs: vec![run("Page ", RunStyle::default()), run(field, RunStyle { bold: true, ..RunStyle::default() })],
+            body: Default::default(),
+        };
+        let SlideObject::TextBox { text, runs, .. } = with_slide_number(&obj, 6) else { unreachable!() };
+        assert_eq!(text, "Page 6");
+        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<String>(), "Page 6", "the runs say it too");
+        assert!(runs[1].style.bold, "in the field's own look");
     }
 }
 
