@@ -51,10 +51,23 @@ def csv_filter(src):
         else:
             text = head.decode("latin-1")
             charset = 12  # ISO-8859-1
-    first = text.splitlines()[0] if text else ""
-    delim = max([",", "\t", ";"], key=lambda d: (first.count(d), d == ","))
-    if delim not in first:
+    if not text.strip() or text.lstrip().startswith("<"):
+        return None  # empty or markup: not a table of text
+    if src.lower().endswith(".csv"):
         delim = ","
+    else:
+        # The first record's delimiters outside quoted fields.
+        counts, quoted = {",": 0, "\t": 0, ";": 0}, False
+        for ch in text:
+            if ch == '"':
+                quoted = not quoted
+            elif ch in "\r\n" and not quoted:
+                break
+            elif ch in counts and not quoted:
+                counts[ch] += 1
+        delim = max(counts, key=lambda d: (counts[d], d == ","))
+        if not counts[delim]:
+            delim = ","
     return f"Text - txt - csv (StarCalc):{ord(delim)},34,{charset},1"
 
 
