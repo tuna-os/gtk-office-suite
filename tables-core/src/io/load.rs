@@ -223,7 +223,9 @@ pub fn load_file_into_engine(
                 .map_err(|e| format!("Cannot read formulas: {}", e))?;
             load_xlsx_ranges_into_engine(&range, &super::odf_formula::a1_formulas(&formulas), engine)
         }
-        "csv" | "tsv" => load_delimited_into_engine(path, (ext == "tsv").then_some('\t'), engine),
+        // The name says which delimiter; only a file misnamed as a workbook
+        // has its delimiter guessed (load_text_workbook).
+        "csv" | "tsv" => load_delimited_into_engine(path, Some(if ext == "tsv" { '\t' } else { ',' }), engine),
         _ => Err(format!("Unsupported format: .{}", ext)),
     }
 }
@@ -257,15 +259,25 @@ fn load_delimited_into_engine(
     Ok((records.len().max(1), max_cols.max(1)))
 }
 
-/// The delimiter a text table's first line uses most: comma, tab or
-/// semicolon, comma when none.
+/// The delimiter a text table's first record uses most, outside quoted
+/// fields: comma, tab or semicolon, comma when none. A header such as
+/// `"Tags (a; b; c)",Count` is comma-separated.
 fn guess_delimiter(content: &str) -> char {
-    let first = content.lines().next().unwrap_or("");
-    [',', '\t', ';']
-        .into_iter()
-        .max_by_key(|d| (first.matches(*d).count(), *d == ','))
-        .filter(|d| first.contains(*d))
-        .unwrap_or(',')
+    let mut counts = [0usize; 3];
+    let mut quoted = false;
+    for ch in content.chars() {
+        match ch {
+            '"' => quoted = !quoted,
+            '\n' | '\r' if !quoted => break,
+            ',' if !quoted => counts[0] += 1,
+            '\t' if !quoted => counts[1] += 1,
+            ';' if !quoted => counts[2] += 1,
+            _ => {}
+        }
+    }
+    let delims = [',', '\t', ';'];
+    let best = (0..3).max_by_key(|&i| (counts[i], i == 0)).unwrap_or(0);
+    if counts[best] == 0 { ',' } else { delims[best] }
 }
 
 /// What a file holds, by its first bytes, whatever its name says.
@@ -281,12 +293,18 @@ enum Content {
 
 fn sniff(path: &str) -> Option<Content> {
     use std::io::Read;
-    let mut head = [0u8; 8];
+    let mut head = [0u8; 512];
     let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
-    Some(if n >= 4 && head[..4] == *b"PK\x03\x04" {
+    let head = &head[..n];
+    Some(if head.starts_with(b"PK\x03\x04") {
         Content::Zip
-    } else if n >= 8 && head == [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1] {
+    } else if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {
         Content::Ole
+    } else if head.iter().find(|b| !b.is_ascii_whitespace()).is_none_or(|&b| b == b'<') {
+        // Empty, or markup (an HTML error page saved under the download's
+        // name, a flat XML document): not a table of text, so the file is
+        // opened as its name says and fails there with a load error.
+        return None;
     } else {
         Content::Text
     })

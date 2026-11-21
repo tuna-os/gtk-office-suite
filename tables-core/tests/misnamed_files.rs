@@ -46,4 +46,21 @@ fn delimited_text_is_told_apart_from_workbooks() {
     assert!(tables_core::io::is_delimited_text(&text_named_xlsx));
     assert!(!tables_core::io::is_delimited_text(&zip_named_xlsx));
     assert!(!tables_core::io::is_delimited_text(&other), "only what load_workbook reads as text");
+fn a_csv_keeps_its_commas_when_a_quoted_header_holds_semicolons() {
+    let dir = tempfile::tempdir().unwrap();
+    let body = b"\"Tags (a; b; c; d)\",Count\nx,1\n";
+    for name in ["t.csv", "t.xlsx"] {
+        let path = write(dir.path(), name, body);
+        let (_, sheets) = tables_core::io::load_workbook(&path).expect("read");
+        assert_eq!((sheets[0].cell(0, 0), sheets[0].cell(0, 1)), ("Tags (a; b; c; d)", "Count"), "{name}");
+    }
+}
+
+#[test]
+fn an_empty_or_html_file_named_xlsx_is_still_a_load_error() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, body) in [("empty.xlsx", &b""[..]), ("page.xlsx", &b"\n<!DOCTYPE html><html>Not found</html>"[..])] {
+        let path = write(dir.path(), name, body);
+        assert!(tables_core::io::load_workbook(&path).is_err(), "{name}");
+    }
 }
