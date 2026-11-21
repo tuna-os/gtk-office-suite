@@ -552,8 +552,8 @@ fn picture(name: &str, w: f64, h: f64, crop: &decks_core::engine::Crop) -> Strin
     let kept_w = (1.0 - l - crop.right.clamp(0.0, 1.0)).max(1e-6);
     let kept_h = (1.0 - t - crop.bottom.clamp(0.0, 1.0)).max(1e-6);
     let (full_w, full_h) = (w / kept_w, h / kept_h);
-    format!(
-        "#box(width: {}, height: {}, clip: true)[#place(top + left, dx: {}, dy: {}, image({}, width: {}, height: {}, fit: \"stretch\"))]\n",
+    let boxed = format!(
+        "#box(width: {}, height: {}, clip: true)[#place(top + left, dx: {}, dy: {}, image({}, width: {}, height: {}, fit: \"stretch\"))]",
         pt(w),
         pt(h),
         pt(-l * full_w),
@@ -561,7 +561,15 @@ fn picture(name: &str, w: f64, h: f64, crop: &decks_core::engine::Crop) -> Strin
         string(name),
         pt(full_w),
         pt(full_h),
-    )
+    );
+    // A mirrored picture (`a:xfrm flipH`/`flipV`) is the kept part flipped
+    // inside its box, as the canvas and PowerPoint draw it.
+    if crop.flip_h || crop.flip_v {
+        let sign = |flip: bool| if flip { "-100%" } else { "100%" };
+        format!("#scale(x: {}, y: {})[{boxed}]\n", sign(crop.flip_h), sign(crop.flip_v))
+    } else {
+        format!("{boxed}\n")
+    }
 }
 
 fn background<'a>(deck: &'a Deck, slide: &'a Slide, master: Option<&'a MasterSlide>) -> String {
@@ -816,6 +824,25 @@ mod tests {
         let r = render(&picture_deck(&path.to_string_lossy(), Default::default())).unwrap();
         assert!(r.files.is_empty());
         assert!(r.losses.iter().any(|l| l.id == "picture-omitted"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_mirrored_picture_is_exported_mirrored_inside_its_box() {
+        let flipped = picture("p.png", 200.0, 100.0, &decks_core::engine::Crop { flip_h: true, ..Default::default() });
+        assert!(flipped.starts_with("#scale(x: -100%, y: 100%)[#box("), "{flipped}");
+        let plain = picture("p.png", 200.0, 100.0, &decks_core::engine::Crop::default());
+        assert!(plain.starts_with("#box("), "{plain}");
+        // And Typst takes it: a mirrored picture compiles into the PDF.
+        let dir = std::env::temp_dir().join(format!("slides-flip-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.png");
+        std::fs::write(&path, PNG).unwrap();
+        let deck = picture_deck(&path.to_string_lossy(), decks_core::engine::Crop { flip_v: true, ..Default::default() });
+        let r = render(&deck).unwrap();
+        assert!(r.source.contains("#scale(x: 100%, y: -100%)"), "{}", r.source);
+        let pdf = suite_export::compile_pdf_with_files(&r.source, &r.files).expect("compiles mirrored");
+        assert!(pdf.starts_with(b"%PDF-"));
         std::fs::remove_dir_all(&dir).ok();
     }
 
