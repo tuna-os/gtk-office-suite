@@ -725,11 +725,34 @@ fn draw_underlines(cr: &cairo::Context, line: &pango::LayoutLine, x: f64, baseli
                 cr.set_source_rgb(f64::from(c.red()) / 65535.0, f64::from(c.green()) / 65535.0, f64::from(c.blue()) / 65535.0);
             }
             cr.new_path();
-            cr.rectangle(run_x, baseline - rise + centre - thickness / 2.0, width, thickness);
+            let (top, height) = snap_rule(cr, baseline - rise + centre - thickness / 2.0, thickness);
+            cr.rectangle(run_x, top, width, height);
             let _ = cr.fill();
             let _ = cr.restore();
         }
         run_x += width;
+    }
+}
+
+/// A horizontal rule `thickness` tall at `top`, put on whole device pixels
+/// when drawn to pixels: (top, height) in user space. Writer snaps its
+/// underlines so, and a thin rule left between two pixel rows is drawn as
+/// two half-strength ones, much paler than its colour (the links in
+/// sma-positive-result-call-checklist read as light blue). The page view
+/// draws into the recording surface of a GTK Cairo node, in logical
+/// pixels, replayed onto pixels later; that counts as pixels too. PDF,
+/// print and other vector targets keep the exact position.
+fn snap_rule(cr: &cairo::Context, top: f64, thickness: f64) -> (f64, f64) {
+    let raster = matches!(cr.target().type_(), cairo::SurfaceType::Image | cairo::SurfaceType::Recording);
+    let ((_, y0), (_, y1)) = (cr.user_to_device(0.0, top), cr.user_to_device(0.0, top + thickness));
+    if !raster || !(y0.is_finite() && y1.is_finite()) || y1 <= y0 {
+        return (top, thickness);
+    }
+    let d0 = y0.round();
+    let d1 = y1.round().max(d0 + 1.0);
+    match (cr.device_to_user(0.0, d0), cr.device_to_user(0.0, d1)) {
+        (Ok((_, u0)), Ok((_, u1))) => (u0, u1 - u0),
+        _ => (top, thickness),
     }
 }
 
@@ -2436,6 +2459,67 @@ mod tests {
         assert!(clear > 0, "no gap between letters and underline: {dark:?}");
         let gap = rule as f64 / scale - baseline;
         assert!(gap >= centre - thickness / 2.0 - 1.0 / scale, "rule {gap}pt under the baseline, Writer leaves {}pt", centre - thickness / 2.0);
+    }
+
+    /// On screen, an underline is whole pixel rows of its full colour, as
+    /// Writer draws it, wherever the line's baseline falls: at 96 DPI and
+    /// a fractional offset, a rule left between two rows came out as two
+    /// half-strength grey rows (links in sma-positive-result-call-checklist
+    /// read light blue).
+    #[test]
+    fn an_underline_on_screen_is_solid_pixel_rows() {
+        let mut d = doc(1, "mmmm");
+        d.paragraphs[0].runs[0].style.underline = true;
+        let t = Typeset::new(d, LayoutOptions::default());
+        let page = &t.tree().pages[0];
+        let baseline = page
+            .items
+            .iter()
+            .find_map(|i| match i {
+                Item::Line { source: Source::Paragraph(0), baseline_pt, .. } => Some(*baseline_pt),
+                _ => None,
+            })
+            .unwrap();
+        let start = t.caret(TextPos { para: 0, offset: 0 }).unwrap();
+        let end = t.caret(TextPos { para: 0, offset: 4 }).unwrap();
+        let scale = 96.0 / 72.0;
+        // Straight onto pixels, and as the page view draws: into a GTK
+        // Cairo node's recording surface, replayed onto pixels.
+        for (offset, recorded) in [0.0, 0.25, 0.5, 0.75].into_iter().flat_map(|o| [(o, false), (o, true)]) {
+            let (w, h) = ((page.width_pt * scale) as i32, ((baseline + 8.0) * scale) as i32 + 2);
+            let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, w, h).unwrap();
+            {
+                let cr = cairo::Context::new(&surface).unwrap();
+                cr.set_source_rgb(1.0, 1.0, 1.0);
+                cr.paint().unwrap();
+                if recorded {
+                    let rec = cairo::RecordingSurface::create(cairo::Content::ColorAlpha, None).unwrap();
+                    {
+                        let rc = cairo::Context::new(&rec).unwrap();
+                        rc.translate(0.0, offset);
+                        rc.scale(scale, scale);
+                        t.draw_page(&rc, 0);
+                    }
+                    cr.set_source_surface(&rec, 0.0, 0.0).unwrap();
+                    cr.paint().unwrap();
+                } else {
+                    cr.translate(0.0, offset);
+                    cr.scale(scale, scale);
+                    t.draw_page(&cr, 0);
+                }
+            }
+            let stride = surface.stride() as usize;
+            let data = surface.take_data().unwrap();
+            let cols = (start.x_pt * scale) as usize + 2..(end.x_pt * scale) as usize - 2;
+            let below = ((baseline + 0.5) * scale + offset).ceil() as usize..h as usize;
+            // Rows where the rule is: every column of the word inked.
+            let rule: Vec<usize> = below.filter(|&y| cols.clone().all(|x| data[y * stride + x * 4] < 200)).collect();
+            assert!(!rule.is_empty(), "offset {offset} (recorded: {recorded}): no underline row");
+            for &y in &rule {
+                let darkest = cols.clone().map(|x| data[y * stride + x * 4]).max().unwrap();
+                assert!(darkest < 40, "offset {offset} (recorded: {recorded}): underline row {y} is grey ({darkest}), not solid");
+            }
+        }
     }
 
     /// Writer's underline numbers, in its tenths of a point: Liberation
