@@ -125,6 +125,11 @@ pub struct ParaStyle {
     pub space_after: Spacing,
     /// How the marker is drawn, where it differs from the text.
     pub marker: MarkerStyle,
+    /// Line spacing (`a:lnSpc`): `Lines` a fraction of single spacing
+    /// (90% is 0.9), `Units` an exact line pitch in model units. None is
+    /// no statement (single spacing, or what the paragraph inherits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_spacing: Option<Spacing>,
     /// An empty paragraph's look (`a:endParaRPr` over the inherited run
     /// properties): with no run of its own, it is this tall. A blank line
     /// set at 8 pt between 20 pt paragraphs is a small gap, not a line of
