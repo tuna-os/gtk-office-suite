@@ -31,7 +31,8 @@ fn replace(path: &std::path::Path, name: &str, content: &str) -> std::path::Path
         if entry_name == name {
             bytes = content.as_bytes().to_vec();
         }
-        w.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
+        w.start_file(entry_name, zip::write::SimpleFileOptions::default())
+            .unwrap();
         w.write_all(&bytes).unwrap();
     }
     w.finish().unwrap();
@@ -63,11 +64,18 @@ fn tile() -> Deck {
 fn leading_blank_paragraphs_are_kept_as_lines() {
     let d = tile();
     assert_eq!(text_of(&d), "\n\n6,046", "two blank lines, then the figure");
-    let SlideObject::TextBox { runs, .. } = &d.slides[0].objects[0] else { unreachable!() };
+    let SlideObject::TextBox { runs, .. } = &d.slides[0].objects[0] else {
+        unreachable!()
+    };
     let joined: String = runs.iter().map(|r| r.text.as_str()).collect();
     assert_eq!(joined, text_of(&d), "the runs are the text");
-    assert!(runs.iter().all(|r| r.style.font_size_hp == Some(28)), "the blank lines are sized like the figure: {runs:?}");
-    let SlideObject::TextBox { body, .. } = &d.slides[0].objects[0] else { unreachable!() };
+    assert!(
+        runs.iter().all(|r| r.style.font_size_hp == Some(28)),
+        "the blank lines are sized like the figure: {runs:?}"
+    );
+    let SlideObject::TextBox { body, .. } = &d.slides[0].objects[0] else {
+        unreachable!()
+    };
     let paras = &body.paras;
     assert_eq!(paras.len(), 3, "one style per paragraph: {paras:?}");
 }
@@ -79,8 +87,15 @@ fn leading_blank_paragraphs_survive_our_pptx() {
     let out = dir.path().join("back.pptx");
     write_pptx(out.to_str().unwrap(), &d).unwrap();
     let xml = part(&out, "ppt/slides/slide1.xml");
-    assert_eq!(xml.matches("<a:p>").count() + xml.matches("<a:p ").count(), 3, "{xml}");
-    assert_eq!(text_of(&read_pptx(out.to_str().unwrap()).unwrap()), "\n\n6,046");
+    assert_eq!(
+        xml.matches("<a:p>").count() + xml.matches("<a:p ").count(),
+        3,
+        "{xml}"
+    );
+    assert_eq!(
+        text_of(&read_pptx(out.to_str().unwrap()).unwrap()),
+        "\n\n6,046"
+    );
 }
 
 #[test]

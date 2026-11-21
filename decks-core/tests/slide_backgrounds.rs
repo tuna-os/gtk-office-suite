@@ -13,10 +13,11 @@ use decks_core::engine::{read_pptx, write_pptx, BackgroundPicture, Deck, FillRec
 
 /// A 1x1 PNG.
 const PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00,
-    0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
-    0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x9E,
-    0xDD, 0x22, 0x71, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+    0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+    0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+    0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
 
 /// A copy of the package at `path` with `name` replaced by `f` of it.
@@ -32,7 +33,8 @@ fn rewrite(path: &std::path::Path, name: &str, f: impl Fn(&str) -> String) -> st
         if entry_name == name {
             bytes = f(&String::from_utf8(bytes).unwrap()).into_bytes();
         }
-        w.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
+        w.start_file(entry_name, zip::write::SimpleFileOptions::default())
+            .unwrap();
         w.write_all(&bytes).unwrap();
     }
     w.finish().unwrap();
@@ -55,11 +57,22 @@ fn powerpoint_picture_slide(dir: &std::path::Path, bg: &str) -> std::path::PathB
     let src = dir.join("navy.png");
     std::fs::write(&src, PNG).unwrap();
     let mut d = Deck::new();
-    d.slides[0].objects.push(SlideObject::Image { path: src.to_string_lossy().into_owned(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, rotation: 0.0, crop: Default::default() });
+    d.slides[0].objects.push(SlideObject::Image {
+        path: src.to_string_lossy().into_owned(),
+        x: 0.0,
+        y: 0.0,
+        w: 10.0,
+        h: 10.0,
+        rotation: 0.0,
+        crop: Default::default(),
+    });
     let path = dir.join("ours.pptx");
     write_pptx(path.to_str().unwrap(), &d).unwrap();
     let rels = part(&path, "ppt/slides/_rels/slide1.xml.rels");
-    assert!(rels.contains("Id=\"rId1\"") && rels.contains("media/image1"), "{rels}");
+    assert!(
+        rels.contains("Id=\"rId1\"") && rels.contains("media/image1"),
+        "{rels}"
+    );
     let bg = bg.to_string();
     rewrite(&path, "ppt/slides/slide1.xml", move |_| {
         format!(
@@ -83,17 +96,42 @@ fn a_powerpoint_picture_background_is_the_slides_background() {
     let path = powerpoint_picture_slide(dir.path(), PAY_CENTRE_BG);
     let d = read_pptx(path.to_str().unwrap()).unwrap();
     let s = &d.slides[0];
-    let pic = s.background_picture.as_ref().expect("the slide's background picture");
+    let pic = s
+        .background_picture
+        .as_ref()
+        .expect("the slide's background picture");
     assert_eq!(std::fs::read(&pic.path).unwrap(), PNG);
-    assert!(close(pic.fill.left, -0.01) && close(pic.fill.right, -0.01) && close(pic.fill.top, 0.0) && close(pic.fill.bottom, 0.0), "{:?}", pic.fill);
+    assert!(
+        close(pic.fill.left, -0.01)
+            && close(pic.fill.right, -0.01)
+            && close(pic.fill.top, 0.0)
+            && close(pic.fill.bottom, 0.0),
+        "{:?}",
+        pic.fill
+    );
     // A background, not a picture on the slide, and no colour invented.
-    assert!(s.objects.iter().all(|o| !matches!(o, SlideObject::Image { .. })), "{:?}", s.objects);
+    assert!(
+        s.objects
+            .iter()
+            .all(|o| !matches!(o, SlideObject::Image { .. })),
+        "{:?}",
+        s.objects
+    );
     assert_eq!(s.background, "", "a picture background states no colour");
     let title = s.objects.iter().find_map(|o| match o {
-        SlideObject::TextBox { text, runs, .. } => Some((text.trim().to_string(), runs.iter().any(|r| r.style.color.as_deref() == Some("ffffff")))),
+        SlideObject::TextBox { text, runs, .. } => Some((
+            text.trim().to_string(),
+            runs.iter()
+                .any(|r| r.style.color.as_deref() == Some("ffffff")),
+        )),
         _ => None,
     });
-    assert_eq!(title, Some(("Pay Centre Impact Assessment".to_string(), true)), "{:?}", s.objects);
+    assert_eq!(
+        title,
+        Some(("Pay Centre Impact Assessment".to_string(), true)),
+        "{:?}",
+        s.objects
+    );
 }
 
 /// A colour inside the picture (a duotone recolour) belongs to the
@@ -104,7 +142,10 @@ fn a_colour_inside_the_background_picture_is_not_the_background_colour() {
     let bg = r#"<p:bg><p:bgPr><a:blipFill><a:blip r:embed="rId1"><a:duotone><a:prstClr val="black"/><a:srgbClr val="FF0000"/></a:duotone></a:blip><a:stretch><a:fillRect/></a:stretch></a:blipFill></p:bgPr></p:bg>"#;
     let d = read_pptx(powerpoint_picture_slide(dir.path(), bg).to_str().unwrap()).unwrap();
     assert_eq!(d.slides[0].background, "");
-    let pic = d.slides[0].background_picture.as_ref().expect("the picture");
+    let pic = d.slides[0]
+        .background_picture
+        .as_ref()
+        .expect("the picture");
     assert!(pic.fill.is_none(), "{:?}", pic.fill);
 }
 
@@ -122,24 +163,41 @@ fn deck_with_background(dir: &std::path::Path, fill: FillRect) -> Deck {
     let src = dir.join("bg.png");
     std::fs::write(&src, PNG).unwrap();
     let mut d = Deck::new();
-    d.slides[0].background_picture = Some(BackgroundPicture { path: src.to_string_lossy().into_owned(), fill });
+    d.slides[0].background_picture = Some(BackgroundPicture {
+        path: src.to_string_lossy().into_owned(),
+        fill,
+    });
     d
 }
 
 #[test]
 fn a_background_picture_and_its_fill_rect_survive_a_pptx_save() {
     let dir = tempfile::tempdir().unwrap();
-    let fill = FillRect { left: -0.01, right: -0.01, ..Default::default() };
+    let fill = FillRect {
+        left: -0.01,
+        right: -0.01,
+        ..Default::default()
+    };
     let d = deck_with_background(dir.path(), fill);
     let path = dir.path().join("bg.pptx");
     write_pptx(path.to_str().unwrap(), &d).unwrap();
     let slide = part(&path, "ppt/slides/slide1.xml");
-    assert!(slide.contains(r#"<a:fillRect l="-1000" r="-1000"/>"#), "{slide}");
+    assert!(
+        slide.contains(r#"<a:fillRect l="-1000" r="-1000"/>"#),
+        "{slide}"
+    );
     let back = read_pptx(path.to_str().unwrap()).unwrap();
-    let got = back.slides[0].background_picture.as_ref().expect("the background picture");
+    let got = back.slides[0]
+        .background_picture
+        .as_ref()
+        .expect("the background picture");
     assert_eq!(std::fs::read(&got.path).unwrap(), PNG);
     assert_eq!(got.fill, fill);
-    assert!(back.slides[0].objects.is_empty(), "a background, not a picture on the slide: {:?}", back.slides[0].objects);
+    assert!(
+        back.slides[0].objects.is_empty(),
+        "a background, not a picture on the slide: {:?}",
+        back.slides[0].objects
+    );
 }
 
 /// ODF has no `a:fillRect`: the picture fills the page, and comes back as
@@ -153,9 +211,16 @@ fn a_background_picture_survives_an_odp_save() {
     let content = part(&path, "content.xml");
     assert!(content.contains(r#"draw:fill="bitmap""#), "{content}");
     let back = decks_core::odp::read(path.to_str().unwrap()).unwrap();
-    let got = back.slides[0].background_picture.as_ref().expect("the background picture");
+    let got = back.slides[0]
+        .background_picture
+        .as_ref()
+        .expect("the background picture");
     assert_eq!(std::fs::read(&got.path).unwrap(), PNG);
-    assert!(back.slides[0].objects.is_empty(), "{:?}", back.slides[0].objects);
+    assert!(
+        back.slides[0].objects.is_empty(),
+        "{:?}",
+        back.slides[0].objects
+    );
 }
 
 /// An unrelated edit, undone and redone, leaves the background picture as

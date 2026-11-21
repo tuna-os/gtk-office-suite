@@ -1,17 +1,26 @@
 //! The About dialog: each app's own name, summary, developer, icon and
 //! latest release, from its AppStream metainfo.
 
+use adw::prelude::*;
 use gtk4 as gtk;
 use libadwaita as adw;
-use adw::prelude::*;
 
 /// Each app's AppStream metainfo, the one source of its name, summary,
 /// developer and release history: the About dialog shows what the software
 /// centre shows.
 const METAINFO: [(&str, &str); 3] = [
-    ("org.tunaos.letters", include_str!("../../flatpak/org.tunaos.letters.metainfo.xml")),
-    ("org.tunaos.tables", include_str!("../../flatpak/org.tunaos.tables.metainfo.xml")),
-    ("org.tunaos.decks", include_str!("../../flatpak/org.tunaos.decks.metainfo.xml")),
+    (
+        "org.tunaos.letters",
+        include_str!("../../flatpak/org.tunaos.letters.metainfo.xml"),
+    ),
+    (
+        "org.tunaos.tables",
+        include_str!("../../flatpak/org.tunaos.tables.metainfo.xml"),
+    ),
+    (
+        "org.tunaos.decks",
+        include_str!("../../flatpak/org.tunaos.decks.metainfo.xml"),
+    ),
 ];
 
 /// What the About dialog of `app_id` shows.
@@ -55,7 +64,12 @@ pub(crate) fn report_context(id: &str) -> suite_common_core::report::ReportConte
             (fallback, env!("CARGO_PKG_VERSION").to_string())
         });
     let os = suite_common_core::report::os_pretty_name();
-    let gtk_v = format!("GTK {}.{}.{}", gtk::major_version(), gtk::minor_version(), gtk::micro_version());
+    let gtk_v = format!(
+        "GTK {}.{}.{}",
+        gtk::major_version(),
+        gtk::minor_version(),
+        gtk::micro_version()
+    );
     let adw_v = unsafe {
         format!(
             "libadwaita {}.{}.{}",
@@ -76,7 +90,10 @@ pub(crate) fn report_context(id: &str) -> suite_common_core::report::ReportConte
 /// Open the tracker's new-issue page in the user's browser, with the app,
 /// version and environment filled in.
 pub fn report_problem(app: &adw::Application) {
-    let id = app.application_id().map(|s| s.to_string()).unwrap_or_default();
+    let id = app
+        .application_id()
+        .map(|s| s.to_string())
+        .unwrap_or_default();
     let ctx = report_context(&id);
     let url = suite_common_core::report::report_problem_url(&ctx);
     let active = app.active_window();
@@ -97,7 +114,10 @@ pub(crate) fn add_report_problem_action(app: &adw::Application) {
 
 /// Show the About dialog of the app, over its active window.
 pub fn show(app: &adw::Application) {
-    let id = app.application_id().map(|s| s.to_string()).unwrap_or_default();
+    let id = app
+        .application_id()
+        .map(|s| s.to_string())
+        .unwrap_or_default();
     let about = adw::AboutDialog::new();
     if let Some(info) = about_info(&id) {
         about.set_application_name(&info.name);
@@ -117,13 +137,24 @@ pub fn show(app: &adw::Application) {
 mod tests {
     /// The release versions of `app_id`'s metainfo, in file order.
     fn release_versions(app_id: &str) -> Vec<(u32, u32, u32)> {
-        let xml = super::METAINFO.iter().find(|(id, _)| *id == app_id).expect(app_id).1;
+        let xml = super::METAINFO
+            .iter()
+            .find(|(id, _)| *id == app_id)
+            .expect(app_id)
+            .1;
         xml.split("<release version=\"")
             .skip(1)
             .map(|rest| {
                 let v = rest.split('"').next().unwrap();
-                let mut n = v.split('.').map(|p| p.parse::<u32>().unwrap_or_else(|_| panic!("{app_id}: {v} is not a number")));
-                (n.next().unwrap_or(0), n.next().unwrap_or(0), n.next().unwrap_or(0))
+                let mut n = v.split('.').map(|p| {
+                    p.parse::<u32>()
+                        .unwrap_or_else(|_| panic!("{app_id}: {v} is not a number"))
+                });
+                (
+                    n.next().unwrap_or(0),
+                    n.next().unwrap_or(0),
+                    n.next().unwrap_or(0),
+                )
             })
             .collect()
     }
@@ -134,7 +165,11 @@ mod tests {
     /// which every release, each adding a newer entry, then broke.)
     #[test]
     fn each_app_is_about_itself_at_its_latest_release() {
-        for (id, name) in [("org.tunaos.letters", "Letters"), ("org.tunaos.tables", "Tables"), ("org.tunaos.decks", "Decks")] {
+        for (id, name) in [
+            ("org.tunaos.letters", "Letters"),
+            ("org.tunaos.tables", "Tables"),
+            ("org.tunaos.decks", "Decks"),
+        ] {
             let info = super::about_info(id).expect(id);
             assert_eq!(info.name, name);
             let versions = release_versions(id);
@@ -144,8 +179,16 @@ mod tests {
                 versions.iter().max(),
                 "{id}: the first <release> is the latest"
             );
-            let shown: Vec<u32> = info.version.split('.').map(|p| p.parse().expect("a numeric version")).collect();
-            assert_eq!(shown, [versions[0].0, versions[0].1, versions[0].2], "{id}: About shows the first <release>");
+            let shown: Vec<u32> = info
+                .version
+                .split('.')
+                .map(|p| p.parse().expect("a numeric version"))
+                .collect();
+            assert_eq!(
+                shown,
+                [versions[0].0, versions[0].1, versions[0].2],
+                "{id}: About shows the first <release>"
+            );
             assert!(!info.summary.is_empty() && !info.developer.is_empty());
         }
         assert_eq!(super::about_info("org.example.other"), None);
@@ -153,10 +196,18 @@ mod tests {
 
     #[test]
     fn report_context_builds_for_each_app() {
-        for (id, name) in [("org.tunaos.letters", "Letters"), ("org.tunaos.tables", "Tables"), ("org.tunaos.decks", "Decks")] {
+        for (id, name) in [
+            ("org.tunaos.letters", "Letters"),
+            ("org.tunaos.tables", "Tables"),
+            ("org.tunaos.decks", "Decks"),
+        ] {
             let ctx = super::report_context(id);
             assert_eq!(ctx.app_name, name);
-            assert_eq!(ctx.version, super::about_info(id).expect(id).version, "{id}: reports against the latest release");
+            assert_eq!(
+                ctx.version,
+                super::about_info(id).expect(id).version,
+                "{id}: reports against the latest release"
+            );
             assert!(ctx.toolkit.contains("GTK 4"));
         }
     }

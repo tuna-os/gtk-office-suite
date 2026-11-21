@@ -116,7 +116,9 @@ impl ObjectAccessible {
 
     fn update(&self, object: &SlideObject, selected: bool) {
         let (name, rect) = match object {
-            SlideObject::TextBox { text, x, y, w, h, .. } => {
+            SlideObject::TextBox {
+                text, x, y, w, h, ..
+            } => {
                 let label = if text.trim().is_empty() {
                     "Text box, empty".to_string()
                 } else {
@@ -125,8 +127,12 @@ impl ObjectAccessible {
                 (label, (*x, *y, *w, *h))
             }
             SlideObject::Rect { x, y, w, h, .. } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
-            SlideObject::Chart { x, y, w, h, chart, .. } => (chart.describe(), (*x, *y, *w, *h)),
-            SlideObject::Table { x, y, w, h, table, .. } => (
+            SlideObject::Chart {
+                x, y, w, h, chart, ..
+            } => (chart.describe(), (*x, *y, *w, *h)),
+            SlideObject::Table {
+                x, y, w, h, table, ..
+            } => (
                 format!(
                     "Table, {} rows by {} columns",
                     table.rows.len(),
@@ -134,7 +140,9 @@ impl ObjectAccessible {
                 ),
                 (*x, *y, *w, *h),
             ),
-            SlideObject::Shape { kind, x, y, w, h, .. } => {
+            SlideObject::Shape {
+                kind, x, y, w, h, ..
+            } => {
                 use decks_core::engine::shape::ShapeKind;
                 let name = match kind {
                     ShapeKind::Rect => "Rectangle".to_string(),
@@ -150,7 +158,9 @@ impl ObjectAccessible {
             SlideObject::Circle { x, y, r, .. } => {
                 ("Circle".to_string(), (x - r, y - r, r * 2.0, r * 2.0))
             }
-            SlideObject::Image { path, x, y, w, h, .. } => {
+            SlideObject::Image {
+                path, x, y, w, h, ..
+            } => {
                 let file = std::path::Path::new(path)
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())

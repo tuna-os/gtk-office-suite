@@ -14,8 +14,7 @@
 use suite_common_core::document::{Run, RunStyle};
 
 /// Horizontal alignment of a paragraph.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ParaAlign {
     #[default]
     Left,
@@ -69,8 +68,7 @@ impl ParaAlign {
 }
 
 /// The marker in front of a paragraph.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Bullet {
     #[default]
     None,
@@ -82,8 +80,7 @@ pub enum Bullet {
 }
 
 /// Space above or below a paragraph.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Spacing {
     /// Model units (already scaled onto the model's slide).
     Units(f64),
@@ -109,8 +106,7 @@ impl Spacing {
 }
 
 /// One paragraph's layout.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ParaStyle {
     pub align: ParaAlign,
     /// List level, 0-based (`a:pPr lvl`).
@@ -138,8 +134,7 @@ pub struct ParaStyle {
 /// which is also what the `*Tx` elements say. A bullet character is drawn
 /// in its own font: the default template's "•" is Arial's, a good deal
 /// smaller than the body font's.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MarkerStyle {
     pub font: Option<String>,
     pub size: Option<MarkerSize>,
@@ -148,8 +143,7 @@ pub struct MarkerStyle {
 }
 
 /// A marker's size.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MarkerSize {
     /// A fraction of the text's size (`buSzPct` / 100000).
     Relative(f64),
@@ -168,8 +162,7 @@ impl MarkerSize {
 }
 
 /// Where the block of text sits vertically in its box.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Anchor {
     #[default]
     Top,
@@ -196,8 +189,7 @@ impl Anchor {
 }
 
 /// Inner margins of a text box, in model units.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Insets {
     pub left: f64,
     pub top: f64,
@@ -207,15 +199,19 @@ pub struct Insets {
 
 impl Insets {
     /// DrawingML's defaults: 0.1in left and right, 0.05in top and bottom.
-    pub const DRAWINGML: Insets = Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 };
+    pub const DRAWINGML: Insets = Insets {
+        left: 9.6,
+        top: 4.8,
+        right: 9.6,
+        bottom: 4.8,
+    };
 }
 
 /// Shrink-on-overflow as the file states it (`a:normAutofit`): the
 /// application that last laid the box out found the text too big and
 /// recorded by how much it drew it smaller. Kept as stated rather than
 /// applied to the run sizes, so the sizes the author chose survive a save.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Autofit {
     /// Multiplier on every run's size (`fontScale` / 100000).
     pub font_scale: f64,
@@ -265,8 +261,7 @@ pub fn shrink_font_to_fit(inner_h: f64, measure: &mut dyn FnMut(f64) -> f64) -> 
 /// like the last one that has one, or plainly if there is none. An empty
 /// `TextBody` is a plain box: every paragraph left-aligned, no bullets,
 /// the canvas's own small inset, text from the top.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TextBody {
     pub paras: Vec<ParaStyle>,
     pub anchor: Anchor,
@@ -290,8 +285,7 @@ pub struct TextBody {
 }
 
 /// A text box's own shape: its preset and how it is painted.
-#[derive(Clone, Debug, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Frame {
     pub kind: super::shape::ShapeKind,
     pub style: super::shape::ShapeStyle,
@@ -309,7 +303,11 @@ impl TextBody {
 
     /// The style of paragraph `i`.
     pub fn para(&self, i: usize) -> ParaStyle {
-        self.paras.get(i).or(self.paras.last()).cloned().unwrap_or_default()
+        self.paras
+            .get(i)
+            .or(self.paras.last())
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -382,7 +380,10 @@ pub fn paragraphs(runs: &[Run]) -> Vec<Vec<Run>> {
         while let Some(piece) = pieces.next() {
             if !piece.is_empty() {
                 if let Some(cur) = out.last_mut() {
-                    cur.push(Run { text: piece.to_string(), style: run.style.clone() });
+                    cur.push(Run {
+                        text: piece.to_string(),
+                        style: run.style.clone(),
+                    });
                 }
             }
             if pieces.peek().is_some() {
@@ -487,8 +488,19 @@ fn alpha(n: u32) -> String {
 
 fn roman(mut n: u32) -> String {
     const TABLE: [(u32, &str); 13] = [
-        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
-        (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
     ];
     let mut s = String::new();
     for (v, r) in TABLE {
@@ -505,14 +517,28 @@ mod tests {
     use super::*;
 
     fn run(t: &str, bold: bool) -> Run {
-        Run { text: t.into(), style: RunStyle { bold, ..Default::default() } }
+        Run {
+            text: t.into(),
+            style: RunStyle {
+                bold,
+                ..Default::default()
+            },
+        }
     }
 
     #[test]
     fn runs_split_into_paragraphs_at_newlines() {
-        let runs = vec![run("One ", false), run("two\nThree", true), run("\n", false), run("\nFive", false)];
+        let runs = vec![
+            run("One ", false),
+            run("two\nThree", true),
+            run("\n", false),
+            run("\nFive", false),
+        ];
         let paras = paragraphs(&runs);
-        let texts: Vec<String> = paras.iter().map(|p| p.iter().map(|r| r.text.as_str()).collect()).collect();
+        let texts: Vec<String> = paras
+            .iter()
+            .map(|p| p.iter().map(|r| r.text.as_str()).collect())
+            .collect();
         assert_eq!(texts, ["One two", "Three", "", "Five"]);
         // The styles stay with their pieces.
         assert!(paras[0][1].style.bold && paras[1][0].style.bold && !paras[0][0].style.bold);
@@ -526,8 +552,15 @@ mod tests {
         let lead = paragraph_lead_styles(&runs);
         assert_eq!(lead.len(), paragraphs(&runs).len());
         assert!(!lead[0].as_ref().unwrap().bold, "Tile");
-        assert!(!lead[1].as_ref().unwrap().bold, "the first blank one opens in the plain run's break");
-        assert_eq!(lead[2].as_ref().unwrap().font_size_hp, Some(28), "the second in the figure's run");
+        assert!(
+            !lead[1].as_ref().unwrap().bold,
+            "the first blank one opens in the plain run's break"
+        );
+        assert_eq!(
+            lead[2].as_ref().unwrap().font_size_hp,
+            Some(28),
+            "the second in the figure's run"
+        );
         assert_eq!(lead[3].as_ref().unwrap().font_size_hp, Some(28));
     }
 
@@ -559,7 +592,10 @@ mod tests {
     #[test]
     fn a_missing_paragraph_style_repeats_the_last() {
         let body = TextBody {
-            paras: vec![ParaStyle { align: ParaAlign::Center, ..Default::default() }],
+            paras: vec![ParaStyle {
+                align: ParaAlign::Center,
+                ..Default::default()
+            }],
             ..Default::default()
         };
         assert_eq!(body.para(3).align, ParaAlign::Center);
@@ -572,24 +608,53 @@ mod tests {
     fn bullets_and_numbers_are_counted_per_level() {
         let num = |lvl| ParaStyle {
             level: lvl,
-            bullet: Bullet::AutoNum { scheme: "arabicPeriod".into(), start: 1 },
+            bullet: Bullet::AutoNum {
+                scheme: "arabicPeriod".into(),
+                start: 1,
+            },
             ..Default::default()
         };
-        let dash = ParaStyle { level: 1, bullet: Bullet::Char("–".into()), ..Default::default() };
-        let styles = [num(0), num(1), num(1), dash, num(0), num(1), ParaStyle::default()];
+        let dash = ParaStyle {
+            level: 1,
+            bullet: Bullet::Char("–".into()),
+            ..Default::default()
+        };
+        let styles = [
+            num(0),
+            num(1),
+            num(1),
+            dash,
+            num(0),
+            num(1),
+            ParaStyle::default(),
+        ];
         let empty = [false; 7];
         let got = markers(&styles, &empty);
         assert_eq!(
             got,
-            [Some("1."), Some("1."), Some("2."), Some("–"), Some("2."), Some("1."), None]
-                .map(|s| s.map(String::from))
+            [
+                Some("1."),
+                Some("1."),
+                Some("2."),
+                Some("–"),
+                Some("2."),
+                Some("1."),
+                None
+            ]
+            .map(|s| s.map(String::from))
         );
     }
 
     #[test]
     fn an_empty_paragraph_has_no_marker() {
-        let b = ParaStyle { bullet: Bullet::Char("•".into()), ..Default::default() };
-        assert_eq!(markers(&[b.clone(), b], &[true, false]), [None, Some("•".to_string())]);
+        let b = ParaStyle {
+            bullet: Bullet::Char("•".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            markers(&[b.clone(), b], &[true, false]),
+            [None, Some("•".to_string())]
+        );
     }
 
     #[test]
@@ -605,20 +670,43 @@ mod tests {
 
     #[test]
     fn a_bullet_hangs_in_the_indent_and_the_text_starts_at_the_margin() {
-        let st = ParaStyle { margin_left: 36.0, indent: -36.0, ..Default::default() };
+        let st = ParaStyle {
+            margin_left: 36.0,
+            indent: -36.0,
+            ..Default::default()
+        };
         let g = st.geometry(500.0, 2.0, true);
-        assert_eq!(g, ParaGeometry { text_x: 72.0, text_width: 428.0, first_indent: 0.0, marker_x: Some(0.0) });
+        assert_eq!(
+            g,
+            ParaGeometry {
+                text_x: 72.0,
+                text_width: 428.0,
+                first_indent: 0.0,
+                marker_x: Some(0.0)
+            }
+        );
     }
 
     #[test]
     fn without_a_marker_a_negative_indent_hangs_the_other_lines() {
-        let st = ParaStyle { margin_left: 36.0, indent: -36.0, ..Default::default() };
+        let st = ParaStyle {
+            margin_left: 36.0,
+            indent: -36.0,
+            ..Default::default()
+        };
         let g = st.geometry(500.0, 1.0, false);
         // First line at 0, the rest at 36.
         assert_eq!((g.text_x, g.first_indent, g.marker_x), (0.0, -36.0, None));
-        let st = ParaStyle { margin_left: 10.0, indent: 20.0, ..Default::default() };
+        let st = ParaStyle {
+            margin_left: 10.0,
+            indent: 20.0,
+            ..Default::default()
+        };
         let g = st.geometry(500.0, 1.0, false);
-        assert_eq!((g.text_x, g.text_width, g.first_indent), (10.0, 490.0, 20.0));
+        assert_eq!(
+            (g.text_x, g.text_width, g.first_indent),
+            (10.0, 490.0, 20.0)
+        );
     }
 
     #[test]
@@ -637,7 +725,12 @@ mod tests {
 
     #[test]
     fn alignment_and_anchor_names_round_trip() {
-        for a in [ParaAlign::Left, ParaAlign::Center, ParaAlign::Right, ParaAlign::Justify] {
+        for a in [
+            ParaAlign::Left,
+            ParaAlign::Center,
+            ParaAlign::Right,
+            ParaAlign::Justify,
+        ] {
             assert_eq!(ParaAlign::from_drawingml(a.to_drawingml()), Some(a));
             assert_eq!(ParaAlign::from_odf(a.to_odf()), Some(a));
         }

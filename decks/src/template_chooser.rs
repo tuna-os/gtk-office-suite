@@ -24,7 +24,14 @@ const PREVIEW_H: i32 = 126;
 fn tile(index: usize, name: &str, description: &str) -> gtk::ToggleButton {
     let body = gtk::Box::new(gtk::Orientation::Vertical, 6);
     if let Some((slides, masters)) = deck(index) {
-        if let Some(preview) = crate::sidebar::render_thumbnail(&slides, &masters, 0, PREVIEW_W, PREVIEW_H, Some(crate::canvas::Chrome::Preview)) {
+        if let Some(preview) = crate::sidebar::render_thumbnail(
+            &slides,
+            &masters,
+            0,
+            PREVIEW_W,
+            PREVIEW_H,
+            Some(crate::canvas::Chrome::Preview),
+        ) {
             preview.add_css_class("card");
             preview.set_can_shrink(false);
             preview.set_alternative_text(Some(name));
@@ -33,9 +40,15 @@ fn tile(index: usize, name: &str, description: &str) -> gtk::ToggleButton {
     }
     let label = gtk::Label::new(Some(name));
     body.append(&label);
-    let button = gtk::ToggleButton::builder().child(&body).tooltip_text(description).build();
+    let button = gtk::ToggleButton::builder()
+        .child(&body)
+        .tooltip_text(description)
+        .build();
     button.add_css_class("flat");
-    button.update_property(&[gtk::accessible::Property::Label(name), gtk::accessible::Property::Description(description)]);
+    button.update_property(&[
+        gtk::accessible::Property::Label(name),
+        gtk::accessible::Property::Description(description),
+    ]);
     button
 }
 
@@ -73,8 +86,15 @@ pub fn present(parent: &impl IsA<gtk::Widget>, choose: impl Fn(usize) + 'static)
         .child(&grid)
         .build();
 
-    let suite_common::dialogs::ActionDialog { dialog, action: create } =
-        suite_common::dialogs::action_dialog(&suite_common::i18n("Choose a Theme"), &suite_common::i18n("_Create"), 800, &scrolled);
+    let suite_common::dialogs::ActionDialog {
+        dialog,
+        action: create,
+    } = suite_common::dialogs::action_dialog(
+        &suite_common::i18n("Choose a Theme"),
+        &suite_common::i18n("_Create"),
+        800,
+        &scrolled,
+    );
     let tiles = Rc::new(tiles);
     {
         let dialog = dialog.clone();

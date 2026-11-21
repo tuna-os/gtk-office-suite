@@ -23,7 +23,10 @@ use crate::engine::MasterSlide;
 use crate::layouts::{Layout, LayoutKind, LayoutPlaceholder, Placeholder};
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn kind_name(k: LayoutKind) -> &'static str {
@@ -48,7 +51,12 @@ pub(crate) fn has_look(l: &Layout) -> bool {
 /// The `style:presentation-page-layout`s of master `m` (style name
 /// `master_style`), for office:styles. Places go through `x`/`y`, the
 /// writer's model-to-points scaling.
-pub(crate) fn page_layouts_xml(m: &MasterSlide, master_style: &str, x: &dyn Fn(f64) -> f64, y: &dyn Fn(f64) -> f64) -> String {
+pub(crate) fn page_layouts_xml(
+    m: &MasterSlide,
+    master_style: &str,
+    x: &dyn Fn(f64) -> f64,
+    y: &dyn Fn(f64) -> f64,
+) -> String {
     let pt = |v: f64| format!("{}pt", (v * 1e6).round() / 1e6);
     m.layouts
         .iter()
@@ -83,7 +91,9 @@ pub(crate) fn page_layouts_xml(m: &MasterSlide, master_style: &str, x: &dyn Fn(f
 /// its name ends in ("AL2T3": 3, title and two contents). Impress has no
 /// section header; a pptx one comes back from it as title and content.
 fn impress_kind(name: &str) -> LayoutKind {
-    let n = name.rsplit_once('T').and_then(|(_, n)| n.parse::<u32>().ok());
+    let n = name
+        .rsplit_once('T')
+        .and_then(|(_, n)| n.parse::<u32>().ok());
     match n {
         Some(0) => LayoutKind::Title,
         Some(1) => LayoutKind::TitleAndContent,
@@ -130,30 +140,53 @@ pub(crate) fn read_page_layouts(xml: &str, scale: (f64, f64)) -> Vec<PageLayout>
     let mut cur: Option<PageLayout> = None;
     loop {
         match reader.read_event() {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "style:presentation-page-layout" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if e.name().as_ref() == "style:presentation-page-layout" =>
+            {
                 if let Some(done) = cur.take() {
                     out.push(done);
                 }
-                let Some(name) = attr(&e, "style:name") else { continue };
+                let Some(name) = attr(&e, "style:name") else {
+                    continue;
+                };
                 let kind = match attr(&e, "decks:kind") {
                     Some(k) => LayoutKind::from_pptx(Some(&k)),
                     None => impress_kind(&name),
                 };
                 // Impress names its page layouts after their AutoLayout
                 // ("AL2T3"), not for people: they take the standard name.
-                let display = attr(&e, "style:display-name").unwrap_or_else(|| standard_name(kind).unwrap_or(&name).to_string());
+                let display = attr(&e, "style:display-name")
+                    .unwrap_or_else(|| standard_name(kind).unwrap_or(&name).to_string());
                 cur = Some(PageLayout {
                     name,
                     master: attr(&e, "decks:master"),
                     // Ids are stamped by the caller from the session space
                     // (DCK-005): 0 here means not assigned yet.
-                    layout: Layout { id: 0, name: display, kind, background: None, shapes: Vec::new(), placeholders: Vec::new() },
+                    layout: Layout {
+                        id: 0,
+                        name: display,
+                        kind,
+                        background: None,
+                        shapes: Vec::new(),
+                        placeholders: Vec::new(),
+                    },
                 });
             }
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "presentation:placeholder" => {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if e.name().as_ref() == "presentation:placeholder" =>
+            {
                 let Some(pl) = cur.as_mut() else { continue };
-                let Some(role) = attr(&e, "presentation:object").as_deref().and_then(Placeholder::from_odf) else { continue };
-                let g = |n: &str| attr(&e, n).and_then(|v| crate::odp::parse_length_pt(&v)).unwrap_or(0.0);
+                let Some(role) = attr(&e, "presentation:object")
+                    .as_deref()
+                    .and_then(Placeholder::from_odf)
+                else {
+                    continue;
+                };
+                let g = |n: &str| {
+                    attr(&e, n)
+                        .and_then(|v| crate::odp::parse_length_pt(&v))
+                        .unwrap_or(0.0)
+                };
                 pl.layout.placeholders.push(LayoutPlaceholder {
                     id: 0,
                     role,
@@ -205,7 +238,10 @@ mod tests {
         assert_eq!(read.len(), 6);
         for (pl, l) in read.iter().zip(&m.layouts) {
             assert_eq!(pl.master.as_deref(), Some("M"));
-            assert_eq!((pl.layout.name.as_str(), pl.layout.kind), (l.name.as_str(), l.kind));
+            assert_eq!(
+                (pl.layout.name.as_str(), pl.layout.kind),
+                (l.name.as_str(), l.kind)
+            );
             assert_eq!(pl.layout.placeholders, l.placeholders);
         }
         assert_eq!(read[3].name, page_layout_name("M", 3));
@@ -221,7 +257,10 @@ mod tests {
             <presentation:placeholder presentation:object=\"title\" svg:x=\"1pt\" svg:y=\"2pt\" svg:width=\"3pt\" svg:height=\"4pt\"/>\
             </style:presentation-page-layout></office:styles>";
         let read = read_page_layouts(xml, (1.0, 1.0));
-        assert_eq!((read[0].layout.name.as_str(), read[0].layout.kind), ("Title Slide", LayoutKind::Title));
+        assert_eq!(
+            (read[0].layout.name.as_str(), read[0].layout.kind),
+            ("Title Slide", LayoutKind::Title)
+        );
         assert_eq!(read[0].master, None);
     }
 }

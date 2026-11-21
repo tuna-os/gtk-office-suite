@@ -68,7 +68,9 @@ fn recent(settings: &gio::Settings) -> Vec<suite_common_core::recent::RecentItem
     items_from_paths(&crate::get_recent_files(settings))
 }
 
-fn meta_variant(meta: &suite_common_core::search_provider::ResultMeta) -> HashMap<String, glib::Variant> {
+fn meta_variant(
+    meta: &suite_common_core::search_provider::ResultMeta,
+) -> HashMap<String, glib::Variant> {
     let mut map = HashMap::new();
     map.insert("id".to_string(), meta.id.to_variant());
     map.insert("name".to_string(), meta.name.to_variant());
@@ -82,7 +84,12 @@ fn meta_variant(meta: &suite_common_core::search_provider::ResultMeta) -> HashMa
 /// `ObjectPath=` in the app's `*.search-provider.ini`; `icon` is its themed
 /// icon name. Failure to register is logged and the app carries on: search is
 /// an extra, never a reason not to start.
-pub fn export<A: IsA<gio::Application>>(app: &A, settings: gio::Settings, object_path: &'static str, icon: &'static str) {
+pub fn export<A: IsA<gio::Application>>(
+    app: &A,
+    settings: gio::Settings,
+    object_path: &'static str,
+    icon: &'static str,
+) {
     let app_for_open = app.as_ref().clone();
     app.connect_startup(move |app| {
         // Stay up briefly after a Shell call when there is no window. Only in
@@ -112,42 +119,66 @@ pub fn export<A: IsA<gio::Application>>(app: &A, settings: gio::Settings, object
         let app = app_for_open.clone();
         let registered = connection
             .register_object(object_path, &interface)
-            .method_call(move |_connection, _sender, _path, _interface, method, parameters, invocation| {
-                // Keep the application alive until this call is answered.
-                let _hold = app.hold();
-                let reply = match method {
-                    "GetInitialResultSet" => parameters.get::<(Vec<String>,)>().map(|(terms,)| {
-                        (initial_result_set(&recent(&settings), &terms, LIMIT),).to_variant()
-                    }),
-                    "GetSubsearchResultSet" => parameters.get::<(Vec<String>, Vec<String>)>().map(|(previous, terms)| {
-                        (subsearch_result_set(&recent(&settings), &previous, &terms, LIMIT),).to_variant()
-                    }),
-                    "GetResultMetas" => parameters.get::<(Vec<String>,)>().map(|(ids,)| {
-                        let metas: Vec<HashMap<String, glib::Variant>> =
-                            result_metas(&recent(&settings), &ids, icon).iter().map(meta_variant).collect();
-                        (metas,).to_variant()
-                    }),
-                    "ActivateResult" => parameters.get::<(String, Vec<String>, u32)>().map(|(id, _terms, _time)| {
-                        // The id is the document's path (search_provider::result_id).
-                        app.open(&[gio::File::for_path(&id)], "");
-                        ().to_variant()
-                    }),
-                    // The Shell's "show all results" asks the app to search itself;
-                    // Letters has no document search window, so just present it.
-                    "LaunchSearch" => parameters.get::<(Vec<String>, u32)>().map(|_| {
-                        app.activate();
-                        ().to_variant()
-                    }),
-                    other => {
-                        invocation.return_gerror(glib::Error::new(gio::DBusError::UnknownMethod, &format!("no method {other}")));
-                        return;
+            .method_call(
+                move |_connection, _sender, _path, _interface, method, parameters, invocation| {
+                    // Keep the application alive until this call is answered.
+                    let _hold = app.hold();
+                    let reply = match method {
+                        "GetInitialResultSet" => {
+                            parameters.get::<(Vec<String>,)>().map(|(terms,)| {
+                                (initial_result_set(&recent(&settings), &terms, LIMIT),)
+                                    .to_variant()
+                            })
+                        }
+                        "GetSubsearchResultSet" => parameters
+                            .get::<(Vec<String>, Vec<String>)>()
+                            .map(|(previous, terms)| {
+                                (subsearch_result_set(
+                                    &recent(&settings),
+                                    &previous,
+                                    &terms,
+                                    LIMIT,
+                                ),)
+                                    .to_variant()
+                            }),
+                        "GetResultMetas" => parameters.get::<(Vec<String>,)>().map(|(ids,)| {
+                            let metas: Vec<HashMap<String, glib::Variant>> =
+                                result_metas(&recent(&settings), &ids, icon)
+                                    .iter()
+                                    .map(meta_variant)
+                                    .collect();
+                            (metas,).to_variant()
+                        }),
+                        "ActivateResult" => parameters.get::<(String, Vec<String>, u32)>().map(
+                            |(id, _terms, _time)| {
+                                // The id is the document's path (search_provider::result_id).
+                                app.open(&[gio::File::for_path(&id)], "");
+                                ().to_variant()
+                            },
+                        ),
+                        // The Shell's "show all results" asks the app to search itself;
+                        // Letters has no document search window, so just present it.
+                        "LaunchSearch" => parameters.get::<(Vec<String>, u32)>().map(|_| {
+                            app.activate();
+                            ().to_variant()
+                        }),
+                        other => {
+                            invocation.return_gerror(glib::Error::new(
+                                gio::DBusError::UnknownMethod,
+                                &format!("no method {other}"),
+                            ));
+                            return;
+                        }
+                    };
+                    match reply {
+                        Some(value) => invocation.return_value(Some(&value)),
+                        None => invocation.return_gerror(glib::Error::new(
+                            gio::DBusError::InvalidArgs,
+                            "unexpected arguments",
+                        )),
                     }
-                };
-                match reply {
-                    Some(value) => invocation.return_value(Some(&value)),
-                    None => invocation.return_gerror(glib::Error::new(gio::DBusError::InvalidArgs, "unexpected arguments")),
-                }
-            })
+                },
+            )
             .build();
         if let Err(e) = registered {
             eprintln!("shell search: could not register {object_path}: {e}");

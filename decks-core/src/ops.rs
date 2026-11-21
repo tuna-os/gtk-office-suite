@@ -91,22 +91,52 @@ impl SlideProps {
 #[derive(Clone, Debug)]
 pub enum Op {
     /// Put `slide` (with its ids) at position `at`.
-    InsertSlide { at: usize, slide: Box<Slide> },
-    DeleteSlide { slide: u64 },
+    InsertSlide {
+        at: usize,
+        slide: Box<Slide>,
+    },
+    DeleteSlide {
+        slide: u64,
+    },
     /// Move a slide to position `to` (counted after it is taken out).
-    MoveSlide { slide: u64, to: usize },
-    SetSlide { slide: u64, props: Box<SlideProps> },
+    MoveSlide {
+        slide: u64,
+        to: usize,
+    },
+    SetSlide {
+        slide: u64,
+        props: Box<SlideProps>,
+    },
     /// Put `object` with id `id` at z-position `at` on a slide.
-    InsertObject { slide: u64, at: usize, id: u64, object: Box<SlideObject> },
-    DeleteObject { slide: u64, id: u64 },
+    InsertObject {
+        slide: u64,
+        at: usize,
+        id: u64,
+        object: Box<SlideObject>,
+    },
+    DeleteObject {
+        slide: u64,
+        id: u64,
+    },
     /// Move an object to z-position `to` (counted after it is taken out).
-    MoveObject { slide: u64, id: u64, to: usize },
-    SetObject { slide: u64, id: u64, object: Box<SlideObject> },
+    MoveObject {
+        slide: u64,
+        id: u64,
+        to: usize,
+    },
+    SetObject {
+        slide: u64,
+        id: u64,
+        object: Box<SlideObject>,
+    },
     /// Replace the master with stable id `id` (its background, font,
     /// decorations and layouts), as the master view's Done commits an
     /// edit: one step, whatever was changed on the master. Addressed by
     /// id, so a master insert or reorder elsewhere cannot retarget it.
-    SetMaster { id: u64, master: Box<MasterSlide> },
+    SetMaster {
+        id: u64,
+        master: Box<MasterSlide>,
+    },
 }
 
 /// What an op edits: the slides, and the masters they use. The controller
@@ -119,8 +149,15 @@ pub struct DeckDoc {
 }
 
 /// Run `f` on `slides` and `masters` as one `DeckDoc`, and put them back.
-pub fn with_doc<R>(slides: &mut Vec<Slide>, masters: &mut Vec<MasterSlide>, f: impl FnOnce(&mut DeckDoc) -> R) -> R {
-    let mut doc = DeckDoc { slides: std::mem::take(slides), masters: std::mem::take(masters) };
+pub fn with_doc<R>(
+    slides: &mut Vec<Slide>,
+    masters: &mut Vec<MasterSlide>,
+    f: impl FnOnce(&mut DeckDoc) -> R,
+) -> R {
+    let mut doc = DeckDoc {
+        slides: std::mem::take(slides),
+        masters: std::mem::take(masters),
+    };
     let r = f(&mut doc);
     *slides = doc.slides;
     *masters = doc.masters;
@@ -137,11 +174,18 @@ pub fn with_slides<R>(slides: &mut Vec<Slide>, f: impl FnOnce(&mut DeckDoc) -> R
 pub fn apply_doc(doc: &mut DeckDoc, op: &Op) -> Result<Vec<Op>, OpError> {
     match op {
         Op::SetMaster { id, master } => {
-            let slot = doc.masters.iter_mut().find(|m| m.id == *id).ok_or(OpError::OutOfRange)?;
+            let slot = doc
+                .masters
+                .iter_mut()
+                .find(|m| m.id == *id)
+                .ok_or(OpError::OutOfRange)?;
             let mut new = (**master).clone();
             new.id = *id;
             let old = std::mem::replace(slot, new);
-            Ok(vec![Op::SetMaster { id: *id, master: Box::new(old) }])
+            Ok(vec![Op::SetMaster {
+                id: *id,
+                master: Box::new(old),
+            }])
         }
         _ => apply(&mut doc.slides, op),
     }
@@ -162,7 +206,11 @@ pub enum OpError {
 fn max_id(slides: &[Slide]) -> u64 {
     slides
         .iter()
-        .flat_map(|s| std::iter::once(s.ids.slide).chain(s.ids.objects.iter().copied()).chain(s.ids.deleted.iter().copied()))
+        .flat_map(|s| {
+            std::iter::once(s.ids.slide)
+                .chain(s.ids.objects.iter().copied())
+                .chain(s.ids.deleted.iter().copied())
+        })
         .max()
         .unwrap_or(0)
 }
@@ -172,9 +220,11 @@ fn max_master_id(masters: &[MasterSlide]) -> u64 {
     masters
         .iter()
         .flat_map(|m| {
-            std::iter::once(m.id).chain(m.layouts.iter().flat_map(|l| {
-                std::iter::once(l.id).chain(l.placeholders.iter().map(|p| p.id))
-            }))
+            std::iter::once(m.id).chain(
+                m.layouts
+                    .iter()
+                    .flat_map(|l| std::iter::once(l.id).chain(l.placeholders.iter().map(|p| p.id))),
+            )
         })
         .max()
         .unwrap_or(0)
@@ -239,7 +289,11 @@ pub fn ensure_all_ids(slides: &mut [Slide], masters: &mut [MasterSlide]) {
 /// master, layout and placeholder id in the session, so the one session
 /// id space stays collision-free. Readers call this once after import
 /// alongside [`ensure_all_ids`]; assigned ids never change. Idempotent.
-pub fn ensure_theme_ids(slides: &[Slide], masters: &[MasterSlide], themes: &mut [crate::engine::theme::Theme]) {
+pub fn ensure_theme_ids(
+    slides: &[Slide],
+    masters: &[MasterSlide],
+    themes: &mut [crate::engine::theme::Theme],
+) {
     let mut next = max_id(slides)
         .max(max_master_id(masters))
         .max(themes.iter().map(|t| t.id).max().unwrap_or(0))
@@ -297,7 +351,9 @@ pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
             Ok(vec![Op::DeleteSlide { slide: id }])
         }
         Op::DeleteSlide { slide } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             if slides.len() == 1 {
                 return Err(OpError::LastSlide);
             }
@@ -310,25 +366,45 @@ pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
             let keep = &mut slides[neighbour].ids.deleted;
             keep.push(removed.ids.slide);
             keep.extend(removed.ids.objects.iter().chain(&removed.ids.deleted));
-            Ok(vec![Op::InsertSlide { at: i, slide: Box::new(removed) }])
+            Ok(vec![Op::InsertSlide {
+                at: i,
+                slide: Box::new(removed),
+            }])
         }
         Op::MoveSlide { slide, to } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             if *to >= slides.len() {
                 return Err(OutOfRange);
             }
             let s = slides.remove(i);
             slides.insert(*to, s);
-            Ok(vec![Op::MoveSlide { slide: *slide, to: i }])
+            Ok(vec![Op::MoveSlide {
+                slide: *slide,
+                to: i,
+            }])
         }
         Op::SetSlide { slide, props } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             let old = SlideProps::of(&slides[i]);
             (**props).clone().put(&mut slides[i]);
-            Ok(vec![Op::SetSlide { slide: *slide, props: Box::new(old) }])
+            Ok(vec![Op::SetSlide {
+                slide: *slide,
+                props: Box::new(old),
+            }])
         }
-        Op::InsertObject { slide, at, id, object } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+        Op::InsertObject {
+            slide,
+            at,
+            id,
+            object,
+        } => {
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             let s = &mut slides[i];
             if *at > s.objects.len() {
                 return Err(OutOfRange);
@@ -341,29 +417,48 @@ pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
             s.ids.deleted.retain(|d| d != id);
             // Builds name objects by stable id: inserting one moves
             // z-positions but retargets nothing.
-            Ok(vec![Op::DeleteObject { slide: *slide, id: *id }])
+            Ok(vec![Op::DeleteObject {
+                slide: *slide,
+                id: *id,
+            }])
         }
         Op::DeleteObject { slide, id } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             let s = &mut slides[i];
-            let Some(at) = object_pos(s, *id) else { return Ok(vec![]) };
+            let Some(at) = object_pos(s, *id) else {
+                return Ok(vec![]);
+            };
             let old_props = SlideProps::of(s);
             let object = s.objects.remove(at);
             s.ids.objects.remove(at);
             s.ids.deleted.push(*id);
             let had_builds = s.builds.iter().any(|b| b.object == *id);
             s.builds = crate::builds::without_object(&s.builds, *id);
-            let mut undo = vec![Op::InsertObject { slide: *slide, at, id: *id, object: Box::new(object) }];
+            let mut undo = vec![Op::InsertObject {
+                slide: *slide,
+                at,
+                id: *id,
+                object: Box::new(object),
+            }];
             if had_builds {
                 // Its own builds went with it: put the slide's builds back.
-                undo.push(Op::SetSlide { slide: *slide, props: Box::new(old_props) });
+                undo.push(Op::SetSlide {
+                    slide: *slide,
+                    props: Box::new(old_props),
+                });
             }
             Ok(undo)
         }
         Op::MoveObject { slide, id, to } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             let s = &mut slides[i];
-            let Some(from) = object_pos(s, *id) else { return Ok(vec![]) };
+            let Some(from) = object_pos(s, *id) else {
+                return Ok(vec![]);
+            };
             if *to >= s.objects.len() {
                 return Err(OutOfRange);
             }
@@ -372,14 +467,26 @@ pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
             let oid = s.ids.objects.remove(from);
             s.ids.objects.insert(*to, oid);
             // Builds name objects by stable id: reordering retargets nothing.
-            Ok(vec![Op::MoveObject { slide: *slide, id: *id, to: from }])
+            Ok(vec![Op::MoveObject {
+                slide: *slide,
+                id: *id,
+                to: from,
+            }])
         }
         Op::SetObject { slide, id, object } => {
-            let Some(i) = slide_pos(slides, *slide) else { return Ok(vec![]) };
+            let Some(i) = slide_pos(slides, *slide) else {
+                return Ok(vec![]);
+            };
             let s = &mut slides[i];
-            let Some(at) = object_pos(s, *id) else { return Ok(vec![]) };
+            let Some(at) = object_pos(s, *id) else {
+                return Ok(vec![]);
+            };
             let old = std::mem::replace(&mut s.objects[at], (**object).clone());
-            Ok(vec![Op::SetObject { slide: *slide, id: *id, object: Box::new(old) }])
+            Ok(vec![Op::SetObject {
+                slide: *slide,
+                id: *id,
+                object: Box::new(old),
+            }])
         }
     }
 }
@@ -398,13 +505,19 @@ pub fn apply_all(slides: &mut Vec<Slide>, ops: &[Op]) -> Result<Vec<Op>, OpError
 /// differs. How a whole-slide edit (align, distribute, a format over the
 /// selection) becomes ops.
 pub fn set_objects(slides: &[Slide], si: usize, objects: &[SlideObject]) -> Vec<Op> {
-    let Some(s) = slides.get(si) else { return vec![] };
+    let Some(s) = slides.get(si) else {
+        return vec![];
+    };
     s.objects
         .iter()
         .zip(objects)
         .zip(&s.ids.objects)
         .filter(|((a, b), _)| format!("{a:?}") != format!("{b:?}"))
-        .map(|((_, b), id)| Op::SetObject { slide: s.ids.slide, id: *id, object: Box::new(b.clone()) })
+        .map(|((_, b), id)| Op::SetObject {
+            slide: s.ids.slide,
+            id: *id,
+            object: Box::new(b.clone()),
+        })
         .collect()
 }
 
@@ -430,11 +543,20 @@ mod tests {
     use super::*;
 
     fn slide(title: &str, n: usize) -> Slide {
-        Slide { hidden: false,
+        Slide {
+            hidden: false,
             title: title.into(),
             background: "#ffffff".into(),
             background_picture: None,
-            objects: (0..n).map(|i| SlideObject::Rect { x: i as f64 * 10.0, y: 0.0, w: 5.0, h: 5.0, rotation: 0.0 }).collect(),
+            objects: (0..n)
+                .map(|i| SlideObject::Rect {
+                    x: i as f64 * 10.0,
+                    y: 0.0,
+                    w: 5.0,
+                    h: 5.0,
+                    rotation: 0.0,
+                })
+                .collect(),
             notes: String::new(),
             master_id: None,
             transition: Default::default(),
@@ -457,21 +579,45 @@ mod tests {
         assert_eq!(dbg(&d), before, "idempotent");
         let (s, o) = (d[0].ids.slide, d[0].ids.objects[1]);
         apply(&mut d, &Op::DeleteObject { slide: s, id: o }).unwrap();
-        d[0].objects.push(SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 });
+        d[0].objects.push(SlideObject::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+            rotation: 0.0,
+        });
         ensure_ids(&mut d);
-        assert_ne!(*d[0].ids.objects.last().unwrap(), o, "a tombstoned id is not reused");
+        assert_ne!(
+            *d[0].ids.objects.last().unwrap(),
+            o,
+            "a tombstoned id is not reused"
+        );
     }
 
     #[test]
     fn a_deleted_slides_ids_are_never_given_out_again() {
         let mut d = vec![slide("a", 1), slide("b", 2)];
         ensure_ids(&mut d);
-        let gone: Vec<u64> = std::iter::once(d[1].ids.slide).chain(d[1].ids.objects.clone()).collect();
+        let gone: Vec<u64> = std::iter::once(d[1].ids.slide)
+            .chain(d[1].ids.objects.clone())
+            .collect();
         let doomed = d[1].ids.slide;
         apply(&mut d, &Op::DeleteSlide { slide: doomed }).unwrap();
-        apply(&mut d, &Op::InsertSlide { at: 1, slide: Box::new(slide("c", 2)) }).unwrap();
-        let fresh: Vec<u64> = std::iter::once(d[1].ids.slide).chain(d[1].ids.objects.clone()).collect();
-        assert!(fresh.iter().all(|id| !gone.contains(id)), "{fresh:?} reuses one of {gone:?}");
+        apply(
+            &mut d,
+            &Op::InsertSlide {
+                at: 1,
+                slide: Box::new(slide("c", 2)),
+            },
+        )
+        .unwrap();
+        let fresh: Vec<u64> = std::iter::once(d[1].ids.slide)
+            .chain(d[1].ids.objects.clone())
+            .collect();
+        assert!(
+            fresh.iter().all(|id| !gone.contains(id)),
+            "{fresh:?} reuses one of {gone:?}"
+        );
     }
 
     #[test]
@@ -483,9 +629,39 @@ mod tests {
         assert_eq!(d[0].ids.deleted, vec![o]);
         let before = dbg(&d);
         // A concurrent move and edit arriving after the delete: no-ops.
-        assert_eq!(apply(&mut d, &Op::MoveObject { slide: s, id: o, to: 1 }).unwrap().len(), 0);
-        let obj = Box::new(SlideObject::Rect { x: 9.0, y: 9.0, w: 9.0, h: 9.0, rotation: 0.0 });
-        assert_eq!(apply(&mut d, &Op::SetObject { slide: s, id: o, object: obj }).unwrap().len(), 0);
+        assert_eq!(
+            apply(
+                &mut d,
+                &Op::MoveObject {
+                    slide: s,
+                    id: o,
+                    to: 1
+                }
+            )
+            .unwrap()
+            .len(),
+            0
+        );
+        let obj = Box::new(SlideObject::Rect {
+            x: 9.0,
+            y: 9.0,
+            w: 9.0,
+            h: 9.0,
+            rotation: 0.0,
+        });
+        assert_eq!(
+            apply(
+                &mut d,
+                &Op::SetObject {
+                    slide: s,
+                    id: o,
+                    object: obj
+                }
+            )
+            .unwrap()
+            .len(),
+            0
+        );
         assert_eq!(dbg(&d), before);
     }
 
@@ -496,13 +672,35 @@ mod tests {
         ensure_ids(&mut d);
         let (second, third) = (d[0].ids.objects[1], d[0].ids.objects[2]);
         d[0].builds = vec![
-            Build { object: second, effect: BuildEffect::Appear, out: false },
-            Build { object: third, effect: BuildEffect::Dissolve, out: false },
+            Build {
+                object: second,
+                effect: BuildEffect::Appear,
+                out: false,
+            },
+            Build {
+                object: third,
+                effect: BuildEffect::Dissolve,
+                out: false,
+            },
         ];
         let before = dbg(&d);
         let s = d[0].ids.slide;
-        let undo = apply(&mut d, &Op::DeleteObject { slide: s, id: second }).unwrap();
-        assert_eq!(d[0].builds, vec![Build { object: third, effect: BuildEffect::Dissolve, out: false }]);
+        let undo = apply(
+            &mut d,
+            &Op::DeleteObject {
+                slide: s,
+                id: second,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            d[0].builds,
+            vec![Build {
+                object: third,
+                effect: BuildEffect::Dissolve,
+                out: false
+            }]
+        );
         apply_all(&mut d, &undo).unwrap();
         // The tombstone goes when the object comes back.
         assert_eq!(dbg(&d), before);
@@ -533,22 +731,47 @@ mod tests {
             name: "M".into(),
             background: bg.into(),
             default_font: "Sans".into(),
-            shapes: vec![SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 }],
+            shapes: vec![SlideObject::Rect {
+                x: 1.0,
+                y: 2.0,
+                w: 3.0,
+                h: 4.0,
+                rotation: 0.0,
+            }],
             theme_id: None,
             color_map: Default::default(),
             layouts: Vec::new(),
         };
-        let mut doc = DeckDoc { slides: vec![slide("a", 1)], masters: vec![master("#ffffff")] };
+        let mut doc = DeckDoc {
+            slides: vec![slide("a", 1)],
+            masters: vec![master("#ffffff")],
+        };
         let mut h: History<Op> = History::default();
-        let inverse = suite_common_core::ops::apply_all(&mut doc, &[Op::SetMaster { id: 41, master: Box::new(master("#102030")) }]).unwrap();
+        let inverse = suite_common_core::ops::apply_all(
+            &mut doc,
+            &[Op::SetMaster {
+                id: 41,
+                master: Box::new(master("#102030")),
+            }],
+        )
+        .unwrap();
         h.record(inverse);
         assert_eq!(doc.masters[0].background, "#102030");
         assert!(h.undo(&mut doc).is_some());
-        assert_eq!(format!("{:?}", doc.masters), format!("{:?}", vec![master("#ffffff")]));
+        assert_eq!(
+            format!("{:?}", doc.masters),
+            format!("{:?}", vec![master("#ffffff")])
+        );
         assert!(h.redo(&mut doc).is_some());
         assert_eq!(doc.masters[0].background, "#102030");
-        let unknown = Op::SetMaster { id: 999, master: Box::new(master("#000000")) };
-        assert_eq!(apply_doc(&mut doc, &unknown).err(), Some(OpError::OutOfRange));
+        let unknown = Op::SetMaster {
+            id: 999,
+            master: Box::new(master("#000000")),
+        };
+        assert_eq!(
+            apply_doc(&mut doc, &unknown).err(),
+            Some(OpError::OutOfRange)
+        );
     }
 
     #[test]
@@ -558,9 +781,22 @@ mod tests {
         let before = dbg(&d);
         let s = d[0].ids.slide;
         let o = d[0].ids.objects[0];
-        let err = apply_all(&mut d, &[Op::MoveObject { slide: s, id: o, to: 1 }, Op::MoveSlide { slide: s, to: 5 }]);
+        let err = apply_all(
+            &mut d,
+            &[
+                Op::MoveObject {
+                    slide: s,
+                    id: o,
+                    to: 1,
+                },
+                Op::MoveSlide { slide: s, to: 5 },
+            ],
+        );
         assert_eq!(err.unwrap_err(), OpError::OutOfRange);
         assert_eq!(dbg(&d), before);
-        assert_eq!(apply(&mut d, &Op::DeleteSlide { slide: s }).unwrap_err(), OpError::LastSlide);
+        assert_eq!(
+            apply(&mut d, &Op::DeleteSlide { slide: s }).unwrap_err(),
+            OpError::LastSlide
+        );
     }
 }

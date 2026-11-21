@@ -17,7 +17,11 @@ pub enum Delivery {
 }
 
 /// Open `draft` in the mail client and call `done` with how it went.
-pub fn compose(window: &impl IsA<gtk::Window>, draft: MailDraft, done: impl FnOnce(Result<Delivery, String>) + 'static) {
+pub fn compose(
+    window: &impl IsA<gtk::Window>,
+    draft: MailDraft,
+    done: impl FnOnce(Result<Delivery, String>) + 'static,
+) {
     // Test hook: with SUITE_MAIL_SPOOL=<dir> the draft is written there
     // (draft.txt, and the attachments beside it) instead of being sent, so a
     // GUI test can read what the mail client would have been handed.
@@ -43,7 +47,9 @@ pub fn compose(window: &impl IsA<gtk::Window>, draft: MailDraft, done: impl FnOn
 }
 
 async fn portal_compose(draft: &MailDraft) -> Result<(), String> {
-    let bus = gio::bus_get_future(gio::BusType::Session).await.map_err(|e| e.to_string())?;
+    let bus = gio::bus_get_future(gio::BusType::Session)
+        .await
+        .map_err(|e| e.to_string())?;
     let files: Vec<std::fs::File> = draft
         .attachments
         .iter()
@@ -88,7 +94,13 @@ fn spool_draft(dir: &std::path::Path, draft: &MailDraft) -> Result<(), String> {
         std::fs::copy(file, dir.join(name)).map_err(|e| e.to_string())?;
         names.push(name.to_string_lossy().to_string());
     }
-    let text = format!("to: {}\nsubject: {}\nattachments: {}\n\n{}", draft.to.join(", "), draft.subject, names.join(", "), draft.body);
+    let text = format!(
+        "to: {}\nsubject: {}\nattachments: {}\n\n{}",
+        draft.to.join(", "),
+        draft.subject,
+        names.join(", "),
+        draft.body
+    );
     std::fs::write(dir.join("draft.txt"), text).map_err(|e| e.to_string())
 }
 

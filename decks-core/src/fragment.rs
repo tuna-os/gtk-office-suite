@@ -1,8 +1,8 @@
 // fragment.rs — Decks side of the cross-app clipboard.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub use suite_common_core::document::{GridCell, MIME};
 use serde::{Deserialize, Serialize};
+pub use suite_common_core::document::{GridCell, MIME};
 use suite_common_core::document::{ParaStyle, Paragraph, Run, RunStyle, ToNeutral};
 
 use crate::engine::SlideObject;
@@ -69,13 +69,22 @@ pub struct ClipRevision {
 
 impl From<Run> for ClipRun {
     fn from(r: Run) -> Self {
-        ClipRun { text: r.text, style: ClipStyle { style: r.style, foreign: Foreign::default() } }
+        ClipRun {
+            text: r.text,
+            style: ClipStyle {
+                style: r.style,
+                foreign: Foreign::default(),
+            },
+        }
     }
 }
 
 impl From<Paragraph> for ClipParagraph {
     fn from(p: Paragraph) -> Self {
-        ClipParagraph { style: p.style, runs: p.runs.into_iter().map(Into::into).collect() }
+        ClipParagraph {
+            style: p.style,
+            runs: p.runs.into_iter().map(Into::into).collect(),
+        }
     }
 }
 
@@ -86,19 +95,30 @@ impl ClipParagraph {
 
     /// The paragraph's runs with only their neutral style.
     pub fn neutral_runs(&self) -> Vec<Run> {
-        self.runs.iter().map(|r| Run { text: r.text.clone(), style: r.style.style.clone() }).collect()
+        self.runs
+            .iter()
+            .map(|r| Run {
+                text: r.text.clone(),
+                style: r.style.style.clone(),
+            })
+            .collect()
     }
 }
 
 impl ToNeutral for ClipParagraph {
     fn to_neutral(&self) -> Paragraph {
-        Paragraph { style: self.style.clone(), runs: self.neutral_runs() }
+        Paragraph {
+            style: self.style.clone(),
+            runs: self.neutral_runs(),
+        }
     }
 }
 
 /// One paragraph per line of `text`, like a plain-text paste.
 fn plain_paragraphs(text: &str) -> Vec<ClipParagraph> {
-    text.split('\n').map(|line| Paragraph::plain(line).into()).collect()
+    text.split('\n')
+        .map(|line| Paragraph::plain(line).into())
+        .collect()
 }
 
 /// Copy a text box as a styled-text fragment (runs carried verbatim).
@@ -108,7 +128,11 @@ pub fn copy_object(obj: &SlideObject) -> Option<Fragment> {
             let paras = if runs.is_empty() {
                 plain_paragraphs(text)
             } else {
-                vec![Paragraph { style: Default::default(), runs: runs.clone() }.into()]
+                vec![Paragraph {
+                    style: Default::default(),
+                    runs: runs.clone(),
+                }
+                .into()]
             };
             Some(Fragment::Text(paras))
         }
@@ -120,13 +144,30 @@ pub fn copy_object(obj: &SlideObject) -> Option<Fragment> {
 pub fn paste_as_text_box(frag: &Fragment, x: f64, y: f64) -> SlideObject {
     let (text, runs) = match frag {
         Fragment::Text(paras) => {
-            let text = paras.iter().map(|p| p.text()).collect::<Vec<_>>().join("\n");
-            let runs = if paras.len() == 1 { paras[0].neutral_runs() } else { vec![] };
+            let text = paras
+                .iter()
+                .map(|p| p.text())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let runs = if paras.len() == 1 {
+                paras[0].neutral_runs()
+            } else {
+                vec![]
+            };
             (text, runs)
         }
         Fragment::Grid(_) => (frag.to_plain(), vec![]),
     };
-    SlideObject::TextBox { text, x, y, w: 400.0, h: 100.0, rotation: 0.0, runs, body: Default::default() }
+    SlideObject::TextBox {
+        text,
+        x,
+        y,
+        w: 400.0,
+        h: 100.0,
+        rotation: 0.0,
+        runs,
+        body: Default::default(),
+    }
 }
 
 /// Copy bytes `start..end` of a text box's text (DCK-007) as a styled
@@ -148,7 +189,10 @@ pub fn copy_range(text: &crate::rich_text::RichText, start: usize, end: usize) -
                 continue;
             }
             let piece = &r.text[start.max(s) - s..end.min(e) - s];
-            runs.push(Run { text: piece.to_string(), style: r.style.clone() });
+            runs.push(Run {
+                text: piece.to_string(),
+                style: r.style.clone(),
+            });
         }
     }
     let first = text.para_of(start);
@@ -216,8 +260,15 @@ pub fn paste_runs(frag: &Fragment) -> Pasted {
     };
     for (i, p) in paras.iter().enumerate() {
         if i > 0 {
-            let style = out.runs.last().map(|r: &Run| r.style.clone()).unwrap_or_default();
-            out.runs.push(Run { text: "\n".into(), style });
+            let style = out
+                .runs
+                .last()
+                .map(|r: &Run| r.style.clone())
+                .unwrap_or_default();
+            out.runs.push(Run {
+                text: "\n".into(),
+                style,
+            });
         }
         for r in &p.runs {
             let (s, f) = (&r.style.style, &r.style.foreign);
@@ -259,7 +310,10 @@ pub fn paste_runs(frag: &Fragment) -> Pasted {
             };
             match out.runs.last_mut() {
                 Some(last) if last.style == style => last.text.push_str(&r.text),
-                _ => out.runs.push(Run { text: r.text.clone(), style }),
+                _ => out.runs.push(Run {
+                    text: r.text.clone(),
+                    style,
+                }),
             }
         }
         if p.style.heading.is_some() {
@@ -278,7 +332,10 @@ pub fn paste_runs(frag: &Fragment) -> Pasted {
             ListKind::Numbered => edits.push(FormatEdit::List(DeckList::Number)),
         }
         if p.style.list != ListKind::None {
-            edits.extend(std::iter::repeat_n(FormatEdit::Indent(true), p.style.list_level.min(8) as usize));
+            edits.extend(std::iter::repeat_n(
+                FormatEdit::Indent(true),
+                p.style.list_level.min(8) as usize,
+            ));
         }
         out.paras.push(edits);
     }
@@ -293,11 +350,23 @@ mod tests {
     fn styled_text_survives_decks_round_trip() {
         let obj = SlideObject::TextBox {
             text: "plain bold".into(),
-            x: 0.0, y: 0.0, w: 100.0, h: 50.0,
+            x: 0.0,
+            y: 0.0,
+            w: 100.0,
+            h: 50.0,
             rotation: 0.0,
             runs: vec![
-                Run { text: "plain ".into(), style: RunStyle::default() },
-                Run { text: "bold".into(), style: RunStyle { bold: true, ..Default::default() } },
+                Run {
+                    text: "plain ".into(),
+                    style: RunStyle::default(),
+                },
+                Run {
+                    text: "bold".into(),
+                    style: RunStyle {
+                        bold: true,
+                        ..Default::default()
+                    },
+                },
             ],
             body: Default::default(),
         };
@@ -306,8 +375,10 @@ mod tests {
         match back {
             SlideObject::TextBox { runs, text, .. } => {
                 assert_eq!(text, "plain bold");
-                assert!(runs.iter().any(|r| r.style.bold && r.text == "bold"),
-                        "bold run lost through clipboard");
+                assert!(
+                    runs.iter().any(|r| r.style.bold && r.text == "bold"),
+                    "bold run lost through clipboard"
+                );
             }
             _ => panic!("wrong object"),
         }
@@ -316,8 +387,14 @@ mod tests {
     #[test]
     fn grid_pastes_as_tsv_text_box() {
         let frag = Fragment::Grid(vec![vec![
-            GridCell { value: "a".into(), ..Default::default() },
-            GridCell { value: "b".into(), ..Default::default() },
+            GridCell {
+                value: "a".into(),
+                ..Default::default()
+            },
+            GridCell {
+                value: "b".into(),
+                ..Default::default()
+            },
         ]]);
         match paste_as_text_box(&frag, 0.0, 0.0) {
             SlideObject::TextBox { text, .. } => assert_eq!(text, "a\tb"),
@@ -328,14 +405,45 @@ mod tests {
     // ── copy_object edge cases ───────────────────────────────────────────────
 
     fn textbox(text: &str, runs: Vec<Run>) -> SlideObject {
-        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs, rotation: 0.0, body: Default::default() }
+        SlideObject::TextBox {
+            text: text.into(),
+            x: 0.0,
+            y: 0.0,
+            w: 100.0,
+            h: 50.0,
+            runs,
+            rotation: 0.0,
+            body: Default::default(),
+        }
     }
 
     #[test]
     fn copy_non_textbox_returns_none() {
-        assert!(copy_object(&SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }).is_none());
-        assert!(copy_object(&SlideObject::Circle { x: 0.0, y: 0.0, r: 1.0, rotation: 0.0 }).is_none());
-        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0, crop: Default::default() }).is_none());
+        assert!(copy_object(&SlideObject::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+            rotation: 0.0
+        })
+        .is_none());
+        assert!(copy_object(&SlideObject::Circle {
+            x: 0.0,
+            y: 0.0,
+            r: 1.0,
+            rotation: 0.0
+        })
+        .is_none());
+        assert!(copy_object(&SlideObject::Image {
+            path: "p.png".into(),
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+            rotation: 0.0,
+            crop: Default::default()
+        })
+        .is_none());
     }
 
     #[test]
@@ -353,7 +461,13 @@ mod tests {
 
     #[test]
     fn copy_styled_textbox_keeps_runs_verbatim() {
-        let runs = vec![Run { text: "b".into(), style: RunStyle { bold: true, ..Default::default() } }];
+        let runs = vec![Run {
+            text: "b".into(),
+            style: RunStyle {
+                bold: true,
+                ..Default::default()
+            },
+        }];
         let frag = copy_object(&textbox("b", runs.clone())).expect("fragment");
         match frag {
             Fragment::Text(paras) => {
@@ -371,7 +485,9 @@ mod tests {
         let frag = Fragment::Text(plain_paragraphs("l1\nl2"));
         let back = paste_as_text_box(&frag, 1.0, 2.0);
         match back {
-            SlideObject::TextBox { text, runs, x, y, .. } => {
+            SlideObject::TextBox {
+                text, runs, x, y, ..
+            } => {
                 assert_eq!(text, "l1\nl2");
                 assert!(runs.is_empty(), "multi-paragraph paste must drop runs");
                 assert_eq!((x, y), (1.0, 2.0));
@@ -382,7 +498,16 @@ mod tests {
 
     #[test]
     fn paste_single_paragraph_keeps_runs() {
-        let para = Paragraph { style: Default::default(), runs: vec![Run { text: "styled".into(), style: RunStyle { italic: true, ..Default::default() } }] };
+        let para = Paragraph {
+            style: Default::default(),
+            runs: vec![Run {
+                text: "styled".into(),
+                style: RunStyle {
+                    italic: true,
+                    ..Default::default()
+                },
+            }],
+        };
         let frag = Fragment::Text(vec![para.into()]);
         let back = paste_as_text_box(&frag, 0.0, 0.0);
         match back {
@@ -397,11 +522,19 @@ mod tests {
     #[test]
     fn grid_pastes_as_tsv_with_default_geometry() {
         let frag = Fragment::Grid(vec![
-            vec![GridCell { value: "a".into(), ..Default::default() }],
-            vec![GridCell { value: "b".into(), ..Default::default() }],
+            vec![GridCell {
+                value: "a".into(),
+                ..Default::default()
+            }],
+            vec![GridCell {
+                value: "b".into(),
+                ..Default::default()
+            }],
         ]);
         match paste_as_text_box(&frag, 5.0, 6.0) {
-            SlideObject::TextBox { text, x, y, w, h, .. } => {
+            SlideObject::TextBox {
+                text, x, y, w, h, ..
+            } => {
                 assert_eq!(text, "a\nb");
                 assert_eq!((x, y, w, h), (5.0, 6.0, 400.0, 100.0));
             }
@@ -415,26 +548,74 @@ mod tests {
     fn a_copied_range_keeps_its_paragraphs_styles_and_pastes_back_into_a_session() {
         use crate::engine::{Bullet, ParaAlign, ParaStyle, TextBody};
         use crate::rich_text::{RichText, TextSession};
-        let bold = RunStyle { bold: true, ..Default::default() };
-        let body = TextBody {
-            paras: vec![ParaStyle { align: ParaAlign::Center, ..Default::default() }, ParaStyle { bullet: Bullet::Char("•".into()), level: 1, ..Default::default() }],
+        let bold = RunStyle {
+            bold: true,
             ..Default::default()
         };
-        let rt = RichText { text: "Head bold\nitem".into(), runs: vec![Run::plain("Head "), Run { text: "bold\nitem".into(), style: bold.clone() }], body };
-        let Fragment::Text(paras) = copy_range(&rt, 5, rt.text.len()) else { panic!("text") };
-        assert_eq!(paras.len(), 2, "one clipboard paragraph per paragraph, no line break inside");
-        assert_eq!(paras[0].neutral_runs(), vec![Run { text: "bold".into(), style: bold.clone() }]);
-        assert_eq!(paras[0].style.alignment, suite_common_core::document::Alignment::Center);
-        assert_eq!(paras[1].style.list, suite_common_core::document::ListKind::Bullet);
+        let body = TextBody {
+            paras: vec![
+                ParaStyle {
+                    align: ParaAlign::Center,
+                    ..Default::default()
+                },
+                ParaStyle {
+                    bullet: Bullet::Char("•".into()),
+                    level: 1,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let rt = RichText {
+            text: "Head bold\nitem".into(),
+            runs: vec![
+                Run::plain("Head "),
+                Run {
+                    text: "bold\nitem".into(),
+                    style: bold.clone(),
+                },
+            ],
+            body,
+        };
+        let Fragment::Text(paras) = copy_range(&rt, 5, rt.text.len()) else {
+            panic!("text")
+        };
+        assert_eq!(
+            paras.len(),
+            2,
+            "one clipboard paragraph per paragraph, no line break inside"
+        );
+        assert_eq!(
+            paras[0].neutral_runs(),
+            vec![Run {
+                text: "bold".into(),
+                style: bold.clone()
+            }]
+        );
+        assert_eq!(
+            paras[0].style.alignment,
+            suite_common_core::document::Alignment::Center
+        );
+        assert_eq!(
+            paras[1].style.list,
+            suite_common_core::document::ListKind::Bullet
+        );
         assert_eq!(paras[1].style.list_level, 1);
         let pasted = paste_runs(&Fragment::Text(paras));
         assert!(pasted.flattened.is_empty(), "{:?}", pasted.flattened);
-        let plain = RichText { text: "x".into(), runs: vec![], body: TextBody::default() };
+        let plain = RichText {
+            text: "x".into(),
+            runs: vec![],
+            body: TextBody::default(),
+        };
         let mut s = TextSession::new(1, 2, None, plain);
         assert_eq!(s.insert_runs(pasted.runs, &pasted.paras), Ok(true));
         let w = s.working();
         assert_eq!(w.text, "xbold\nitem");
-        assert!(w.runs.iter().any(|r| r.text.starts_with("bold") && r.style.bold));
+        assert!(w
+            .runs
+            .iter()
+            .any(|r| r.text.starts_with("bold") && r.style.bold));
         assert_eq!(w.body.paras[1].bullet, Bullet::Char("•".into()));
         assert_eq!(w.body.paras[1].level, 1);
         w.check().unwrap();
@@ -442,15 +623,41 @@ mod tests {
 
     #[test]
     fn decks_copies_plain_neutral_json() {
-        let bold = RunStyle { bold: true, ..Default::default() };
-        let frag = copy_object(&textbox("b", vec![Run { text: "b".into(), style: bold.clone() }])).expect("fragment");
+        let bold = RunStyle {
+            bold: true,
+            ..Default::default()
+        };
+        let frag = copy_object(&textbox(
+            "b",
+            vec![Run {
+                text: "b".into(),
+                style: bold.clone(),
+            }],
+        ))
+        .expect("fragment");
         let json = frag.to_json();
-        for marker in ["\"image\"", "\"html\"", "\"chip\"", "\"comments\"", "\"footnote\"", "\"revision\""] {
+        for marker in [
+            "\"image\"",
+            "\"html\"",
+            "\"chip\"",
+            "\"comments\"",
+            "\"footnote\"",
+            "\"revision\"",
+        ] {
             assert!(!json.contains(marker), "{marker} written: {json}");
         }
-        let neutral = suite_common_core::document::Fragment::<Paragraph>::from_json(&json).expect("neutral read");
-        let suite_common_core::document::Fragment::Text(paras) = neutral else { panic!("text") };
-        assert_eq!(paras[0].runs, vec![Run { text: "b".into(), style: bold }]);
+        let neutral = suite_common_core::document::Fragment::<Paragraph>::from_json(&json)
+            .expect("neutral read");
+        let suite_common_core::document::Fragment::Text(paras) = neutral else {
+            panic!("text")
+        };
+        assert_eq!(
+            paras[0].runs,
+            vec![Run {
+                text: "b".into(),
+                style: bold
+            }]
+        );
     }
 
     #[test]
@@ -466,11 +673,21 @@ mod tests {
         let frag = Fragment::from_json(json).expect("a Letters fragment reads in Decks");
         let p = paste_runs(&frag);
         let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
-        assert_eq!(text, "<script>alert(1)</script>site", "HTML stays literal text; pictures and deletions are not pasted");
+        assert_eq!(
+            text, "<script>alert(1)</script>site",
+            "HTML stays literal text; pictures and deletions are not pasted"
+        );
         assert!(p.runs.iter().all(|r| r.style.link.is_none()));
-        assert!(p.runs.iter().any(|r| r.text == "site" && r.style.bold), "the supported style survives");
+        assert!(
+            p.runs.iter().any(|r| r.text == "site" && r.style.bold),
+            "the supported style survives"
+        );
         for what in ["raw HTML", "links", "pictures", "tracked changes"] {
-            assert!(p.flattened.contains(&what), "{what} not disclosed: {:?}", p.flattened);
+            assert!(
+                p.flattened.contains(&what),
+                "{what} not disclosed: {:?}",
+                p.flattened
+            );
         }
     }
 }

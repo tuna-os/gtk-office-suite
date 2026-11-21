@@ -36,7 +36,13 @@ pub(super) fn parse_src_rect(e: &BytesStart) -> crate::engine::Crop {
 pub(super) fn parse_fill_rect(e: &BytesStart) -> crate::engine::FillRect {
     let mut fill = crate::engine::FillRect::default();
     for a in e.attributes().filter_map(|a| a.ok()) {
-        let v = a.value.trim().parse::<f64>().ok().filter(|v| v.is_finite()).map_or(0.0, |v| (v / 100_000.0).clamp(-10.0, 10.0));
+        let v = a
+            .value
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map_or(0.0, |v| (v / 100_000.0).clamp(-10.0, 10.0));
         match a.key.as_ref() {
             "l" => fill.left = v,
             "t" => fill.top = v,
@@ -56,7 +62,11 @@ pub(super) fn rel_target(rels_xml: &str, id: &str) -> Option<String> {
                     e.attributes()
                         .flatten()
                         .find(|a| a.key.as_ref() == k)
-                        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned()))
+                        .and_then(|a| {
+                            a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                .ok()
+                                .map(|v| v.into_owned())
+                        })
                 };
                 if attr("Id").as_deref() == Some(id) {
                     return attr("Target");
@@ -70,11 +80,22 @@ pub(super) fn rel_target(rels_xml: &str, id: &str) -> Option<String> {
 
 /// A picture of the part `part` (relationships `rels_xml`) by its
 /// relationship id, read into the media cache: its file's path.
-pub(super) fn part_picture(archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str, rels_xml: &str, id: &str) -> Option<String> {
-    let dir = Path::new(part).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+pub(super) fn part_picture(
+    archive: &mut zip::ZipArchive<File>,
+    budget: &mut ZipBudget,
+    part: &str,
+    rels_xml: &str,
+    id: &str,
+) -> Option<String> {
+    let dir = Path::new(part)
+        .parent()
+        .map(|d| d.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let target = part_path(&dir, &rel_target(rels_xml, id)?);
     let bytes = archive.part_to_bytes(&target, budget).ok()?;
-    suite_common_core::media_cache::persist(&bytes).ok().map(|p| p.to_string_lossy().into_owned())
+    suite_common_core::media_cache::persist(&bytes)
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Position and crop of a picture on the slide.
@@ -114,7 +135,14 @@ pub(super) fn resolve_and_extract_picture(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
 ) -> Option<SlideObject> {
-    let PictureRect { x, y, w, h, rotation, crop } = rect;
+    let PictureRect {
+        x,
+        y,
+        w,
+        h,
+        rotation,
+        crop,
+    } = rect;
     let target = rels.get(embed_id)?;
     let relative_path = target.trim_start_matches("../");
     let full_zip_path = format!("ppt/{}", relative_path);

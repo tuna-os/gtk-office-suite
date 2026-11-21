@@ -31,7 +31,8 @@ fn replace(path: &std::path::Path, name: &str, content: &str) -> std::path::Path
         if entry_name == name {
             bytes = content.as_bytes().to_vec();
         }
-        w.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
+        w.start_file(entry_name, zip::write::SimpleFileOptions::default())
+            .unwrap();
         w.write_all(&bytes).unwrap();
     }
     w.finish().unwrap();
@@ -62,12 +63,29 @@ fn deck() -> Deck {
     read_pptx(path.to_str().unwrap()).unwrap()
 }
 
-fn shapes(d: &Deck) -> Vec<(ShapeKind, f64, f64, f64, f64, decks_core::engine::shape::ShapeStyle)> {
+fn shapes(
+    d: &Deck,
+) -> Vec<(
+    ShapeKind,
+    f64,
+    f64,
+    f64,
+    f64,
+    decks_core::engine::shape::ShapeStyle,
+)> {
     d.slides[0]
         .objects
         .iter()
         .filter_map(|o| match o {
-            SlideObject::Shape { kind, x, y, w, h, style, .. } => Some((kind.clone(), *x, *y, *w, *h, style.clone())),
+            SlideObject::Shape {
+                kind,
+                x,
+                y,
+                w,
+                h,
+                style,
+                ..
+            } => Some((kind.clone(), *x, *y, *w, *h, style.clone())),
             _ => None,
         })
         .collect()
@@ -77,17 +95,31 @@ fn shapes(d: &Deck) -> Vec<(ShapeKind, f64, f64, f64, f64, decks_core::engine::s
 fn a_connector_is_read_as_a_white_line_between_the_tiles() {
     let d = deck();
     let s = shapes(&d);
-    assert_eq!(s.len(), 3, "two tiles and the separator, in file order: {s:?}");
+    assert_eq!(
+        s.len(),
+        3,
+        "two tiles and the separator, in file order: {s:?}"
+    );
     let (kind, x, y, w, h, style) = &s[1];
     assert_eq!(*kind, ShapeKind::Other("line".into()));
     assert!(decks_core::engine::shape::is_line(kind));
     // Placed and sized as the file says, on the model's 960-wide slide:
     // the scale is the one the first tile was read at.
     let k = s[0].1 / 609_600.0;
-    assert!((x - 762_000.0 * k).abs() < 0.01 && (w - 1_342_761.0 * k).abs() < 0.01, "{x} {w}");
-    assert!((y - 2_286_000.0 * k).abs() < 0.01 && (h - 11_496.0 * k).abs() < 0.01, "{y} {h}");
+    assert!(
+        (x - 762_000.0 * k).abs() < 0.01 && (w - 1_342_761.0 * k).abs() < 0.01,
+        "{x} {w}"
+    );
+    assert!(
+        (y - 2_286_000.0 * k).abs() < 0.01 && (h - 11_496.0 * k).abs() < 0.01,
+        "{y} {h}"
+    );
     let stroke = style.stroke.as_ref().expect("the separator's outline");
-    assert_eq!(stroke.color.to_f64(), (1.0, 1.0, 1.0), "white, the a:ln over the lnRef colour");
+    assert_eq!(
+        stroke.color.to_f64(),
+        (1.0, 1.0, 1.0),
+        "white, the a:ln over the lnRef colour"
+    );
     assert!(stroke.width > 0.0);
 }
 
@@ -96,10 +128,22 @@ fn the_tile_after_a_connector_keeps_its_own_paint() {
     let d = deck();
     let s = shapes(&d);
     let fill = |i: usize| s[i].5.fill.map(|c| c.to_f64());
-    let navy = (0x17 as f64 / 255.0, 0x2A as f64 / 255.0, 0x45 as f64 / 255.0);
-    let teal = (0x0E as f64 / 255.0, 0x7C as f64 / 255.0, 0x7B as f64 / 255.0);
+    let navy = (
+        0x17 as f64 / 255.0,
+        0x2A as f64 / 255.0,
+        0x45 as f64 / 255.0,
+    );
+    let teal = (
+        0x0E as f64 / 255.0,
+        0x7C as f64 / 255.0,
+        0x7B as f64 / 255.0,
+    );
     assert_eq!(fill(0), Some(navy));
-    assert_eq!(fill(2), Some(teal), "the second tile's own fill, not the connector's or the first's");
+    assert_eq!(
+        fill(2),
+        Some(teal),
+        "the second tile's own fill, not the connector's or the first's"
+    );
 }
 
 #[test]
@@ -113,5 +157,8 @@ fn a_connector_survives_our_pptx_as_a_line() {
     let back = shapes(&read_pptx(out.to_str().unwrap()).unwrap());
     assert_eq!(back.len(), 3, "{back:?}");
     assert_eq!(back[1].0, ShapeKind::Other("line".into()));
-    assert_eq!(back[1].5.stroke.as_ref().map(|s| s.color.to_f64()), Some((1.0, 1.0, 1.0)));
+    assert_eq!(
+        back[1].5.stroke.as_ref().map(|s| s.color.to_f64()),
+        Some((1.0, 1.0, 1.0))
+    );
 }

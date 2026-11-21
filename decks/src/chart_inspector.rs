@@ -52,7 +52,11 @@ const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
 /// Call `commit(entry, final)` when `entry` is activated or loses focus
 /// (`final`), and when its text has settled after a change that wasn't
 /// the data sheet's own (`!final`: an unfinished value is left alone).
-fn on_commit(entry: &gtk::Entry, syncing: &Rc<Cell<bool>>, commit: impl Fn(&gtk::Entry, bool) + 'static) {
+fn on_commit(
+    entry: &gtk::Entry,
+    syncing: &Rc<Cell<bool>>,
+    commit: impl Fn(&gtk::Entry, bool) + 'static,
+) {
     let commit = Rc::new(commit);
     let pending: Rc<RefCell<Option<gtk::glib::SourceId>>> = Rc::default();
     let cancel = {
@@ -71,7 +75,12 @@ fn on_commit(entry: &gtk::Entry, syncing: &Rc<Cell<bool>>, commit: impl Fn(&gtk:
         });
     }
     {
-        let (commit, pending, cancel, syncing) = (commit.clone(), pending.clone(), cancel.clone(), syncing.clone());
+        let (commit, pending, cancel, syncing) = (
+            commit.clone(),
+            pending.clone(),
+            cancel.clone(),
+            syncing.clone(),
+        );
         entry.connect_changed(move |e| {
             if syncing.get() {
                 return;
@@ -110,7 +119,14 @@ fn kind_button(kind: ChartKind, group: Option<&gtk::ToggleButton>) -> gtk::Toggl
     area.set_draw_func(move |_, cr, w, h| {
         // Drawn at twice the size and scaled down, so the axis labels fit.
         cr.scale(0.5, 0.5);
-        suite_common::charts::draw_chart(cr, &sample.points, sample.kind, w as f64 * 2.0, h as f64 * 2.0, None);
+        suite_common::charts::draw_chart(
+            cr,
+            &sample.points,
+            sample.kind,
+            w as f64 * 2.0,
+            h as f64 * 2.0,
+            None,
+        );
     });
     tile.append(&area);
     let label = gtk::Label::new(Some(name));
@@ -135,7 +151,9 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector
                 return;
             }
             let sel = ctl.selection();
-            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else { return };
+            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else {
+                return;
+            };
             if ctl.edit_chart(slide_id, object_id, &edit) {
                 changed();
             }
@@ -171,14 +189,20 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector
         .title("Data")
         .description("Each value's category, and the series' name in the legend")
         .build();
-    let series = adw::EntryRow::builder().title("Series Name").show_apply_button(true).build();
+    let series = adw::EntryRow::builder()
+        .title("Series Name")
+        .show_apply_button(true)
+        .build();
     {
         let apply = apply.clone();
         series.connect_apply(move |r| apply(ChartEdit::Series(r.text().to_string())));
     }
     data_group.add(&series);
     let points_group = adw::PreferencesGroup::new();
-    let add = gtk::Button::builder().label("Add Value").halign(gtk::Align::Start).build();
+    let add = gtk::Button::builder()
+        .label("Add Value")
+        .halign(gtk::Align::Start)
+        .build();
     add.add_css_class("pill");
     add.update_property(&[gtk::accessible::Property::Label("Add Value")]);
     {
@@ -219,11 +243,17 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector
         let (apply, syncing) = (apply.clone(), syncing.clone());
         move |i: usize| -> PointRow {
             let n = i + 1;
-            let category = gtk::Entry::builder().width_chars(8).max_width_chars(12).valign(gtk::Align::Center).build();
+            let category = gtk::Entry::builder()
+                .width_chars(8)
+                .max_width_chars(12)
+                .valign(gtk::Align::Center)
+                .build();
             category.update_property(&[gtk::accessible::Property::Label(&format!("Category {n}"))]);
             {
                 let apply = apply.clone();
-                on_commit(&category, &syncing, move |e, _| apply(ChartEdit::Category(i, e.text().to_string())));
+                on_commit(&category, &syncing, move |e, _| {
+                    apply(ChartEdit::Category(i, e.text().to_string()))
+                });
             }
             let value = gtk::Entry::builder()
                 .width_chars(8)
@@ -250,7 +280,9 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector
             remove.add_css_class("flat");
             remove.set_valign(gtk::Align::Center);
             remove.set_tooltip_text(Some("Remove Value"));
-            remove.update_property(&[gtk::accessible::Property::Label(&format!("Remove Value {n}"))]);
+            remove.update_property(&[gtk::accessible::Property::Label(&format!(
+                "Remove Value {n}"
+            ))]);
             {
                 let apply = apply.clone();
                 remove.connect_clicked(move |_| apply(ChartEdit::RemovePoint(i)));
@@ -259,12 +291,22 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector
             row.add_prefix(&category);
             row.add_suffix(&value);
             row.add_suffix(&remove);
-            PointRow { row, category, value }
+            PointRow {
+                row,
+                category,
+                value,
+            }
         }
     };
 
     let sync: Rc<dyn Fn(&ChartData)> = {
-        let (syncing, rows, points_group, series, last) = (syncing.clone(), rows.clone(), points_group.clone(), series.clone(), last.clone());
+        let (syncing, rows, points_group, series, last) = (
+            syncing.clone(),
+            rows.clone(),
+            points_group.clone(),
+            series.clone(),
+            last.clone(),
+        );
         let leave_alone = move |e: &gtk::Entry| editing(e) && !forcing.get();
         Rc::new(move |chart: &ChartData| {
             *last.borrow_mut() = Some(chart.clone());

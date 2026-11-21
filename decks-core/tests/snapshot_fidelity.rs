@@ -38,7 +38,13 @@ fn through_a_snapshot(deck: &Deck, kind: &str, tag: &str) -> Deck {
 
 /// A deck of exactly these slides, with no masters.
 fn deck_of(slides: Vec<Slide>) -> Deck {
-    let mut deck = Deck { slides, masters: vec![], page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
+    let mut deck = Deck {
+        slides,
+        masters: vec![],
+        page_size: None,
+        themes: Vec::new(),
+        skipped_slides: Vec::new(),
+    };
     // Writers map builds to file ids through stable object ids, so the
     // deck needs them before the snapshot (DCK-005).
     decks_core::ops::ensure_all_ids(&mut deck.slides, &mut deck.masters);
@@ -47,7 +53,8 @@ fn deck_of(slides: Vec<Slide>) -> Deck {
 
 /// A slide carrying only what the caller cares about.
 fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
-    Slide { hidden: false,
+    Slide {
+        hidden: false,
         title: String::new(),
         background: background.to_string(),
         background_picture: None,
@@ -64,14 +71,21 @@ fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
 fn styled_run(text: &str) -> Run {
     Run {
         text: text.to_string(),
-        style: RunStyle { bold: true, italic: true, ..RunStyle::default() },
+        style: RunStyle {
+            bold: true,
+            italic: true,
+            ..RunStyle::default()
+        },
     }
 }
 
 fn text_box(text: &str, x: f64, y: f64) -> SlideObject {
     SlideObject::TextBox {
         text: text.to_string(),
-        x, y, w: 300.0, h: 80.0,
+        x,
+        y,
+        w: 300.0,
+        h: 80.0,
         rotation: 0.0,
         runs: vec![],
         body: Default::default(),
@@ -119,20 +133,39 @@ fn object_geometry_survives_a_snapshot() {
             vec![
                 SlideObject::TextBox {
                     text: "placed".into(),
-                    x: 137.0, y: 211.0, w: 320.0, h: 96.0,
+                    x: 137.0,
+                    y: 211.0,
+                    w: 320.0,
+                    h: 96.0,
                     rotation: 0.0,
                     runs: vec![],
                     body: Default::default(),
                 },
-                SlideObject::Rect { x: 40.0, y: 50.0, w: 60.0, h: 70.0, rotation: 0.0 },
-                SlideObject::Circle { x: 200.0, y: 240.0, r: 55.0, rotation: 0.0 },
+                SlideObject::Rect {
+                    x: 40.0,
+                    y: 50.0,
+                    w: 60.0,
+                    h: 70.0,
+                    rotation: 0.0,
+                },
+                SlideObject::Circle {
+                    x: 200.0,
+                    y: 240.0,
+                    r: 55.0,
+                    rotation: 0.0,
+                },
             ],
             "",
             "",
         )]);
         let back = through_a_snapshot(&deck, kind, "geometry");
         let objects = &back.slides[0].objects;
-        assert_eq!(objects.len(), 3, "{kind}: came back with {} objects", objects.len());
+        assert_eq!(
+            objects.len(),
+            3,
+            "{kind}: came back with {} objects",
+            objects.len()
+        );
 
         // Position is asserted per object rather than as a count: a reader
         // that produced three objects at the origin would satisfy any
@@ -143,19 +176,22 @@ fn object_geometry_survives_a_snapshot() {
         assert!(
             near(objects[0].x(), 137.0) && near(objects[0].y(), 211.0),
             "{kind}: text box came back at ({}, {}), not (137, 211)",
-            objects[0].x(), objects[0].y(),
+            objects[0].x(),
+            objects[0].y(),
         );
         assert!(
             near(objects[1].x(), 40.0) && near(objects[1].y(), 50.0),
             "{kind}: rect came back at ({}, {})",
-            objects[1].x(), objects[1].y(),
+            objects[1].x(),
+            objects[1].y(),
         );
         // Circle x()/y() report the bounding box, so a 55pt radius at
         // (200, 240) has its corner at (145, 185).
         assert!(
             near(objects[2].x(), 145.0) && near(objects[2].y(), 185.0),
             "{kind}: circle came back at ({}, {})",
-            objects[2].x(), objects[2].y(),
+            objects[2].x(),
+            objects[2].y(),
         );
     }
 }
@@ -182,10 +218,19 @@ fn object_geometry_survives_a_snapshot() {
 fn shape_rotation_survives_a_snapshot() {
     let deck = deck_of(vec![slide_of(
         vec![
-            SlideObject::Rect { x: 40.0, y: 50.0, w: 60.0, h: 70.0, rotation: 30.0 },
+            SlideObject::Rect {
+                x: 40.0,
+                y: 50.0,
+                w: 60.0,
+                h: 70.0,
+                rotation: 30.0,
+            },
             SlideObject::TextBox {
                 text: "tilted".into(),
-                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                x: 10.0,
+                y: 10.0,
+                w: 200.0,
+                h: 50.0,
                 // A rotation past a half turn, because normalising with the
                 // wrong modulo (or dropping the sign) turns 315 into -45 or
                 // 45 and a test using only 30 degrees would never notice.
@@ -193,7 +238,12 @@ fn shape_rotation_survives_a_snapshot() {
                 runs: vec![],
                 body: Default::default(),
             },
-            SlideObject::Circle { x: 300.0, y: 200.0, r: 45.0, rotation: 120.0 },
+            SlideObject::Circle {
+                x: 300.0,
+                y: 200.0,
+                r: 45.0,
+                rotation: 120.0,
+            },
         ],
         "",
         "",
@@ -253,7 +303,10 @@ fn run_styles_survive_a_snapshot() {
         let deck = deck_of(vec![slide_of(
             vec![SlideObject::TextBox {
                 text: "loud".into(),
-                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                x: 10.0,
+                y: 10.0,
+                w: 200.0,
+                h: 50.0,
                 rotation: 0.0,
                 runs: vec![styled_run("loud")],
                 body: Default::default(),
@@ -290,7 +343,12 @@ fn slide_order_survives_a_snapshot() {
                 .collect(),
         );
         let back = through_a_snapshot(&deck, kind, "order");
-        assert_eq!(back.slides.len(), 4, "{kind}: {} slides came back", back.slides.len());
+        assert_eq!(
+            back.slides.len(),
+            4,
+            "{kind}: {} slides came back",
+            back.slides.len()
+        );
         // Notes rather than the generated titles: pptx regenerates
         // `Slide N` from the index on read, so titles would agree even if
         // the slides came back shuffled.
@@ -351,7 +409,8 @@ fn masters_survive_a_snapshot() {
                 },
             ],
             slides: vec![
-                Slide { hidden: false,
+                Slide {
+                    hidden: false,
                     title: String::new(),
                     background: String::new(),
                     background_picture: None,
@@ -368,7 +427,8 @@ fn masters_survive_a_snapshot() {
                 // testable: a reader that loses it falls back to master 0,
                 // and a deck where every slide is already on master 0
                 // cannot tell that apart from working.
-                Slide { hidden: false,
+                Slide {
+                    hidden: false,
                     title: String::new(),
                     background: String::new(),
                     background_picture: None,
@@ -425,8 +485,11 @@ fn masters_survive_a_snapshot() {
         // Each slide must still name the master it was on, not merely
         // find some master in the package. Master ids are session-local,
         // so the assertion is on names, which persist.
-        let mapping: Vec<Option<String>> =
-            back.slides.iter().map(|s| back.master_of(s).map(|m| m.name.clone())).collect();
+        let mapping: Vec<Option<String>> = back
+            .slides
+            .iter()
+            .map(|s| back.master_of(s).map(|m| m.name.clone()))
+            .collect();
         if mapping != vec![Some("House Style".into()), Some("Second".into())] {
             complaints.push(format!(
                 "{kind}: the slides were on masters [House Style, Second] and came back on {mapping:?}"
@@ -442,7 +505,9 @@ fn masters_survive_a_snapshot() {
             })
             .collect();
         if on_slide != vec!["on the house master"] {
-            complaints.push(format!("{kind}: the slide's own content came back as {on_slide:?}"));
+            complaints.push(format!(
+                "{kind}: the slide's own content came back as {on_slide:?}"
+            ));
         }
     }
     assert!(complaints.is_empty(), "{}", complaints.join("\n"));
@@ -466,13 +531,11 @@ fn masters_survive_a_snapshot() {
 fn images_survive_a_snapshot() {
     // A 2x2 red PNG, inline so no fixture file is needed.
     let png: &[u8] = &[
-        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
-        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
-        0xfd, 0xd4, 0x9a, 0x73,
-        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
-        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
-        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
-        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0,
+        0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0, 0xfd, 0xd4, 0x9a, 0x73, 0, 0, 0, 21, b'I', b'D', b'A',
+        b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0, 0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30,
+        0x00, 0x00, 0x00, 0xff, 0xff, 0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9, 0, 0, 0, 0, b'I', b'E',
+        b'N', b'D', 0xae, 0x42, 0x60, 0x82,
     ];
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("dot.png");
@@ -485,7 +548,8 @@ fn images_survive_a_snapshot() {
             y: 70.0,
             w: 200.0,
             h: 150.0,
-            rotation: 0.0, crop: Default::default()
+            rotation: 0.0,
+            crop: Default::default(),
         }],
         "",
         "",
@@ -537,7 +601,12 @@ fn an_empty_deck_gains_nothing_it_never_had() {
     for kind in FORMATS {
         let deck = deck_of(vec![slide_of(vec![], "", "")]);
         let back = through_a_snapshot(&deck, kind, "empty");
-        assert_eq!(back.slides.len(), 1, "{kind}: one empty slide became {}", back.slides.len());
+        assert_eq!(
+            back.slides.len(),
+            1,
+            "{kind}: one empty slide became {}",
+            back.slides.len()
+        );
         assert_eq!(
             back.slides[0].notes, "",
             "{kind}: an empty slide gained notes: {:?}",
@@ -575,7 +644,8 @@ fn the_masters_font_survives_a_snapshot() {
                 color_map: Default::default(),
                 layouts: Vec::new(),
             }],
-            slides: vec![Slide { hidden: false,
+            slides: vec![Slide {
+                hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,
@@ -642,7 +712,8 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
             },
         ],
         slides: vec![
-            Slide { hidden: false,
+            Slide {
+                hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,
@@ -654,7 +725,8 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 ids: Default::default(),
                 layout_id: None,
             },
-            Slide { hidden: false,
+            Slide {
+                hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,
@@ -676,14 +748,22 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
     deck.slides[1].master_id = Some(deck.masters[1].id);
 
     let pptx = through_a_snapshot(&deck, "pptx", "two-fonts");
-    let pptx_fonts: Vec<&str> = pptx.masters.iter().map(|m| m.default_font.as_str()).collect();
+    let pptx_fonts: Vec<&str> = pptx
+        .masters
+        .iter()
+        .map(|m| m.default_font.as_str())
+        .collect();
     assert!(
         pptx_fonts.contains(&"Liberation Serif") && pptx_fonts.contains(&"Liberation Mono"),
         "pptx should keep a font per master, got {pptx_fonts:?}"
     );
 
     let odp = through_a_snapshot(&deck, "odp", "two-fonts");
-    let odp_fonts: Vec<&str> = odp.masters.iter().map(|m| m.default_font.as_str()).collect();
+    let odp_fonts: Vec<&str> = odp
+        .masters
+        .iter()
+        .map(|m| m.default_font.as_str())
+        .collect();
     assert!(
         !odp_fonts.is_empty() && odp_fonts.iter().all(|f| *f == "Liberation Serif"),
         "odp has one document font, so every master should read back as the \
@@ -718,7 +798,8 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             color_map: Default::default(),
             layouts: Vec::new(),
         }],
-        slides: vec![Slide { hidden: false,
+        slides: vec![Slide {
+            hidden: false,
             title: String::new(),
             background: String::new(),
             background_picture: None,
@@ -739,7 +820,9 @@ fn the_pptx_declares_the_theme_part_it_ships() {
         zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("the package should be a zip");
 
     let mut read = |name: &str| -> String {
-        let mut f = zip.by_name(name).unwrap_or_else(|_| panic!("{name} should be in the package"));
+        let mut f = zip
+            .by_name(name)
+            .unwrap_or_else(|_| panic!("{name} should be in the package"));
         let mut s = String::new();
         std::io::Read::read_to_string(&mut f, &mut s).expect("read part");
         s
@@ -796,16 +879,25 @@ fn the_pptx_declares_the_theme_part_it_ships() {
 fn styled_runs_do_not_gain_line_breaks_between_them() {
     for kind in FORMATS {
         let runs = vec![
-            Run { text: "Plain ".into(), style: RunStyle::default() },
+            Run {
+                text: "Plain ".into(),
+                style: RunStyle::default(),
+            },
             Run {
                 text: "Bold".into(),
-                style: RunStyle { bold: true, ..RunStyle::default() },
+                style: RunStyle {
+                    bold: true,
+                    ..RunStyle::default()
+                },
             },
         ];
         let deck = deck_of(vec![slide_of(
             vec![SlideObject::TextBox {
                 text: "Plain Bold".into(),
-                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                x: 10.0,
+                y: 10.0,
+                w: 200.0,
+                h: 50.0,
                 rotation: 0.0,
                 runs,
                 body: Default::default(),
@@ -856,10 +948,16 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
                 default_font: "Cantarell".into(),
                 shapes: vec![SlideObject::TextBox {
                     text: "ACME Confidential".into(),
-                    x: 20.0, y: 30.0, w: 300.0, h: 40.0,
+                    x: 20.0,
+                    y: 30.0,
+                    w: 300.0,
+                    h: 40.0,
                     rotation: 0.0,
                     runs: vec![
-                        Run { text: "ACME ".into(), style: RunStyle::default() },
+                        Run {
+                            text: "ACME ".into(),
+                            style: RunStyle::default(),
+                        },
                         Run {
                             text: "Confidential".into(),
                             style: RunStyle {
@@ -898,7 +996,10 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
             .find(|r| r.text.contains("Confidential"))
             .unwrap_or_else(|| panic!("{kind}: the emphasised run is missing"));
         assert!(emphasised.style.bold, "{kind}: the decoration lost bold");
-        assert!(emphasised.style.italic, "{kind}: the decoration lost italic");
+        assert!(
+            emphasised.style.italic,
+            "{kind}: the decoration lost italic"
+        );
         let plain = runs
             .iter()
             .find(|r| r.text.starts_with("ACME"))
@@ -931,11 +1032,17 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
         slides: vec![slide_of(
             vec![SlideObject::TextBox {
                 text: "slide word".into(),
-                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                x: 10.0,
+                y: 10.0,
+                w: 200.0,
+                h: 50.0,
                 rotation: 0.0,
                 runs: vec![Run {
                     text: "slide word".into(),
-                    style: RunStyle { bold: true, ..RunStyle::default() },
+                    style: RunStyle {
+                        bold: true,
+                        ..RunStyle::default()
+                    },
                 }],
                 body: Default::default(),
             }],
@@ -949,11 +1056,17 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
             default_font: "Cantarell".into(),
             shapes: vec![SlideObject::TextBox {
                 text: "master word".into(),
-                x: 20.0, y: 20.0, w: 200.0, h: 50.0,
+                x: 20.0,
+                y: 20.0,
+                w: 200.0,
+                h: 50.0,
                 rotation: 0.0,
                 runs: vec![Run {
                     text: "master word".into(),
-                    style: RunStyle { italic: true, ..RunStyle::default() },
+                    style: RunStyle {
+                        italic: true,
+                        ..RunStyle::default()
+                    },
                 }],
                 body: Default::default(),
             }],
@@ -1000,14 +1113,23 @@ fn a_styled_box_spanning_two_lines_keeps_both() {
         let deck = deck_of(vec![slide_of(
             vec![SlideObject::TextBox {
                 text: "Bold one\nplain two".into(),
-                x: 10.0, y: 10.0, w: 300.0, h: 80.0,
+                x: 10.0,
+                y: 10.0,
+                w: 300.0,
+                h: 80.0,
                 rotation: 0.0,
                 runs: vec![
                     Run {
                         text: "Bold one".into(),
-                        style: RunStyle { bold: true, ..RunStyle::default() },
+                        style: RunStyle {
+                            bold: true,
+                            ..RunStyle::default()
+                        },
                     },
-                    Run { text: "\nplain two".into(), style: RunStyle::default() },
+                    Run {
+                        text: "\nplain two".into(),
+                        style: RunStyle::default(),
+                    },
                 ],
                 body: Default::default(),
             }],
@@ -1029,7 +1151,8 @@ fn a_styled_box_spanning_two_lines_keeps_both() {
             "{kind}: a multi-line box lost its styling"
         );
         assert!(
-            runs.iter().any(|r| !r.style.bold && r.text.contains("plain two")),
+            runs.iter()
+                .any(|r| !r.style.bold && r.text.contains("plain two")),
             "{kind}: styling leaked onto the second line"
         );
     }
@@ -1068,7 +1191,8 @@ fn a_custom_shapes_styled_lines_survive_being_read() {
     let mut buffer = Vec::new();
     {
         let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
-        w.start_file("content.xml", zip::write::SimpleFileOptions::default()).unwrap();
+        w.start_file("content.xml", zip::write::SimpleFileOptions::default())
+            .unwrap();
         w.write_all(content.as_bytes()).unwrap();
         w.finish().unwrap();
     }
@@ -1146,12 +1270,16 @@ fn a_deck_on_the_modern_powerpoint_slide_size_imports_at_model_scale() {
     {
         let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
         for (name, body) in &parts {
-            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
             w.write_all(body.as_bytes()).unwrap();
         }
         // The slide's rels, named for the slide part.
-        w.start_file("ppt/_rels/presentation.xml.rels", zip::write::SimpleFileOptions::default())
-            .unwrap();
+        w.start_file(
+            "ppt/_rels/presentation.xml.rels",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
         w.write_all(
             b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
               <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slides/slide1.xml\"/>\
@@ -1298,16 +1426,26 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
     let xfrm = |x: i64, y: i64, w: i64, h: i64| {
         format!("<a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/></a:xfrm>")
     };
-    let tree = |root: &str, shapes: String| format!("<p:{root} {P}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:{root}>");
+    let tree = |root: &str, shapes: String| {
+        format!("<p:{root} {P}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:{root}>")
+    };
 
     let parts: Vec<(&str, String)> = vec![
-        ("_rels/.rels", rels(&[("officeDocument", "ppt/presentation.xml")])),
+        (
+            "_rels/.rels",
+            rels(&[("officeDocument", "ppt/presentation.xml")]),
+        ),
         (
             "ppt/presentation.xml",
-            format!("<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
-                     <p:sldSz cx=\"12192000\" cy=\"6858000\"/></p:presentation>"),
+            format!(
+                "<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
+                     <p:sldSz cx=\"12192000\" cy=\"6858000\"/></p:presentation>"
+            ),
         ),
-        ("ppt/_rels/presentation.xml.rels", rels(&[("slide", "slides/slide1.xml")])),
+        (
+            "ppt/_rels/presentation.xml.rels",
+            rels(&[("slide", "slides/slide1.xml")]),
+        ),
         (
             "ppt/slides/slide1.xml",
             tree(
@@ -1317,23 +1455,36 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
                     + &sp("<p:ph type=\"dt\" idx=\"10\"/>", "", ""),
             ),
         ),
-        ("ppt/slides/_rels/slide1.xml.rels", rels(&[("slideLayout", "../slideLayouts/slideLayout1.xml")])),
+        (
+            "ppt/slides/_rels/slide1.xml.rels",
+            rels(&[("slideLayout", "../slideLayouts/slideLayout1.xml")]),
+        ),
         (
             "ppt/slideLayouts/slideLayout1.xml",
             // The layout places the title; the subtitle it leaves to the master.
             tree(
                 "sldLayout",
-                sp("<p:ph type=\"ctrTitle\"/>", &xfrm(914400, 2130425, 10363200, 1470025), "")
-                    + &sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", ""),
+                sp(
+                    "<p:ph type=\"ctrTitle\"/>",
+                    &xfrm(914400, 2130425, 10363200, 1470025),
+                    "",
+                ) + &sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", ""),
             ),
         ),
-        ("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels(&[("slideMaster", "../slideMasters/slideMaster1.xml")])),
+        (
+            "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+            rels(&[("slideMaster", "../slideMasters/slideMaster1.xml")]),
+        ),
         (
             "ppt/slideMasters/slideMaster1.xml",
             tree(
                 "sldMaster",
                 sp("<p:ph type=\"title\"/>", &xfrm(0, 0, 100, 100), "")
-                    + &sp("<p:ph type=\"body\" idx=\"1\"/>", &xfrm(1828800, 3886200, 8534400, 1752600), ""),
+                    + &sp(
+                        "<p:ph type=\"body\" idx=\"1\"/>",
+                        &xfrm(1828800, 3886200, 8534400, 1752600),
+                        "",
+                    ),
             ),
         ),
     ];
@@ -1341,7 +1492,8 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
     {
         let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
         for (name, body) in &parts {
-            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
             w.write_all(body.as_bytes()).unwrap();
         }
         w.finish().unwrap();
@@ -1355,25 +1507,37 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
         .objects
         .iter()
         .map(|o| match o {
-            SlideObject::TextBox { text, x, y, w, h, .. } => (text.as_str(), *x, *y, *w, *h),
+            SlideObject::TextBox {
+                text, x, y, w, h, ..
+            } => (text.as_str(), *x, *y, *w, *h),
             other => panic!("unexpected object {other:?}"),
         })
         .collect();
-    assert_eq!(boxes.len(), 2, "the empty date placeholder must not be drawn: {boxes:?}");
+    assert_eq!(
+        boxes.len(),
+        2,
+        "the empty date placeholder must not be drawn: {boxes:?}"
+    );
     // 12192000 EMU across maps to 960 model units.
     let k = 960.0 / 12192000.0;
     let close = |a: f64, b: f64| (a - b).abs() < 0.01;
     let (t, x, y, w, h) = boxes[0];
     assert_eq!(t, "Title Slide");
     assert!(
-        close(x, 914400.0 * k) && close(y, 2130425.0 * k) && close(w, 10363200.0 * k) && close(h, 1470025.0 * k),
+        close(x, 914400.0 * k)
+            && close(y, 2130425.0 * k)
+            && close(w, 10363200.0 * k)
+            && close(h, 1470025.0 * k),
         "title should sit where the layout puts it, got {:?}",
         (x, y, w, h)
     );
     let (t, x, y, w, h) = boxes[1];
     assert_eq!(t, "Subtitle text");
     assert!(
-        close(x, 1828800.0 * k) && close(y, 3886200.0 * k) && close(w, 8534400.0 * k) && close(h, 1752600.0 * k),
+        close(x, 1828800.0 * k)
+            && close(y, 3886200.0 * k)
+            && close(w, 8534400.0 * k)
+            && close(h, 1752600.0 * k),
         "subtitle should fall through to the master's body, got {:?}",
         (x, y, w, h)
     );
@@ -1382,7 +1546,13 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
 /// A one-slide pptx built from raw parts: the slide's, layout's and
 /// master's `p:spTree` contents, and anything the master carries after its
 /// `p:cSld` (its `p:txStyles`).
-fn crafted_pptx(dir: &std::path::Path, slide: &str, layout: &str, master: &str, master_tail: &str) -> std::path::PathBuf {
+fn crafted_pptx(
+    dir: &std::path::Path,
+    slide: &str,
+    layout: &str,
+    master: &str,
+    master_tail: &str,
+) -> std::path::PathBuf {
     use std::io::{Cursor, Write};
     const P: &str = "xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" \
                      xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
@@ -1397,24 +1567,45 @@ fn crafted_pptx(dir: &std::path::Path, slide: &str, layout: &str, master: &str, 
         format!("<p:{root} {P}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld>{tail}</p:{root}>")
     };
     let parts: Vec<(&str, String)> = vec![
-        ("_rels/.rels", rels("officeDocument", "ppt/presentation.xml")),
+        (
+            "_rels/.rels",
+            rels("officeDocument", "ppt/presentation.xml"),
+        ),
         (
             "ppt/presentation.xml",
-            format!("<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
-                     <p:sldSz cx=\"9144000\" cy=\"5143500\"/></p:presentation>"),
+            format!(
+                "<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
+                     <p:sldSz cx=\"9144000\" cy=\"5143500\"/></p:presentation>"
+            ),
         ),
-        ("ppt/_rels/presentation.xml.rels", rels("slide", "slides/slide1.xml")),
+        (
+            "ppt/_rels/presentation.xml.rels",
+            rels("slide", "slides/slide1.xml"),
+        ),
         ("ppt/slides/slide1.xml", tree("sld", slide, "")),
-        ("ppt/slides/_rels/slide1.xml.rels", rels("slideLayout", "../slideLayouts/slideLayout1.xml")),
-        ("ppt/slideLayouts/slideLayout1.xml", tree("sldLayout", layout, "")),
-        ("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels("slideMaster", "../slideMasters/slideMaster1.xml")),
-        ("ppt/slideMasters/slideMaster1.xml", tree("sldMaster", master, master_tail)),
+        (
+            "ppt/slides/_rels/slide1.xml.rels",
+            rels("slideLayout", "../slideLayouts/slideLayout1.xml"),
+        ),
+        (
+            "ppt/slideLayouts/slideLayout1.xml",
+            tree("sldLayout", layout, ""),
+        ),
+        (
+            "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+            rels("slideMaster", "../slideMasters/slideMaster1.xml"),
+        ),
+        (
+            "ppt/slideMasters/slideMaster1.xml",
+            tree("sldMaster", master, master_tail),
+        ),
     ];
     let mut buffer = Vec::new();
     {
         let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
         for (name, body) in &parts {
-            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
             w.write_all(body.as_bytes()).unwrap();
         }
         w.finish().unwrap();
@@ -1438,18 +1629,23 @@ fn placeholder_paragraphs_inherit_their_layout_and_master_styles() {
              <p:spPr>{xfrm}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle>{lst}</a:lstStyle>{paras}</p:txBody></p:sp>"
         )
     };
-    let xfrm = "<a:xfrm><a:off x=\"457200\" y=\"457200\"/><a:ext cx=\"8229600\" cy=\"2286000\"/></a:xfrm>";
-    let slide = sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", "", "<a:p><a:r><a:t>Sub</a:t></a:r></a:p>")
-        + &sp(
-            "<p:ph idx=\"2\"/>",
-            xfrm,
-            "",
-            // A leading empty paragraph (a blank line of its own, as
-            // PowerPoint and Impress keep it), two levels, and a run that
-            // overrides its size.
-            "<a:p/><a:p><a:r><a:t>One</a:t></a:r></a:p>\
+    let xfrm =
+        "<a:xfrm><a:off x=\"457200\" y=\"457200\"/><a:ext cx=\"8229600\" cy=\"2286000\"/></a:xfrm>";
+    let slide = sp(
+        "<p:ph type=\"subTitle\" idx=\"1\"/>",
+        "",
+        "",
+        "<a:p><a:r><a:t>Sub</a:t></a:r></a:p>",
+    ) + &sp(
+        "<p:ph idx=\"2\"/>",
+        xfrm,
+        "",
+        // A leading empty paragraph (a blank line of its own, as
+        // PowerPoint and Impress keep it), two levels, and a run that
+        // overrides its size.
+        "<a:p/><a:p><a:r><a:t>One</a:t></a:r></a:p>\
              <a:p><a:pPr lvl=\"1\"/><a:r><a:rPr sz=\"1000\"/><a:t>Two</a:t></a:r></a:p>",
-        );
+    );
     let layout = sp(
         "<p:ph type=\"subTitle\" idx=\"1\"/>",
         xfrm,
@@ -1472,7 +1668,9 @@ fn placeholder_paragraphs_inherit_their_layout_and_master_styles() {
         .objects
         .iter()
         .filter_map(|o| match o {
-            SlideObject::TextBox { text, runs, body, .. } => Some((text.clone(), runs.clone(), body.clone())),
+            SlideObject::TextBox {
+                text, runs, body, ..
+            } => Some((text.clone(), runs.clone(), body.clone())),
             _ => None,
         })
         .collect();
@@ -1482,21 +1680,54 @@ fn placeholder_paragraphs_inherit_their_layout_and_master_styles() {
     assert_eq!(text, "Sub");
     assert_eq!(body.paras[0].align, ParaAlign::Center);
     assert_eq!(body.paras[0].bullet, Bullet::None);
-    assert_eq!(runs[0].style.font_size_hp, Some(64), "32 pt from the master's body style");
+    assert_eq!(
+        runs[0].style.font_size_hp,
+        Some(64),
+        "32 pt from the master's body style"
+    );
     assert!(
-        runs[0].style.color.as_deref().is_some_and(|c| c != "000000"),
+        runs[0]
+            .style
+            .color
+            .as_deref()
+            .is_some_and(|c| c != "000000"),
         "tx1 at a 75% tint is grey: {:?}",
         runs[0].style.color
     );
-    assert_eq!(body.anchor, Anchor::Bottom, "the master placeholder's anchor");
+    assert_eq!(
+        body.anchor,
+        Anchor::Bottom,
+        "the master placeholder's anchor"
+    );
 
     let (text, runs, body) = &boxes[1];
-    assert_eq!(text, "\nOne\nTwo", "the leading blank paragraph keeps its line");
-    assert_eq!(body.paras.len(), 3, "one style per line, the blank one included");
-    assert_eq!((body.paras[1].level, &body.paras[1].bullet), (0, &Bullet::Char("•".into())));
-    assert_eq!((body.paras[2].level, &body.paras[2].bullet), (1, &Bullet::Char("–".into())));
-    assert!((body.paras[1].margin_left - 36.0).abs() < 1e-9 && (body.paras[1].indent + 36.0).abs() < 1e-9);
-    assert_eq!(runs.iter().map(|r| r.style.font_size_hp).collect::<Vec<_>>(), [Some(64), Some(20)]);
+    assert_eq!(
+        text, "\nOne\nTwo",
+        "the leading blank paragraph keeps its line"
+    );
+    assert_eq!(
+        body.paras.len(),
+        3,
+        "one style per line, the blank one included"
+    );
+    assert_eq!(
+        (body.paras[1].level, &body.paras[1].bullet),
+        (0, &Bullet::Char("•".into()))
+    );
+    assert_eq!(
+        (body.paras[2].level, &body.paras[2].bullet),
+        (1, &Bullet::Char("–".into()))
+    );
+    assert!(
+        (body.paras[1].margin_left - 36.0).abs() < 1e-9
+            && (body.paras[1].indent + 36.0).abs() < 1e-9
+    );
+    assert_eq!(
+        runs.iter()
+            .map(|r| r.style.font_size_hp)
+            .collect::<Vec<_>>(),
+        [Some(64), Some(20)]
+    );
 }
 
 /// Paragraph styles, anchor and insets survive our own round trip, in both
@@ -1507,7 +1738,10 @@ fn paragraph_styles_survive_a_snapshot() {
     use decks_core::engine::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
     let body = TextBody {
         paras: vec![
-            ParaStyle { align: ParaAlign::Center, ..Default::default() },
+            ParaStyle {
+                align: ParaAlign::Center,
+                ..Default::default()
+            },
             ParaStyle {
                 level: 1,
                 bullet: Bullet::Char("•".into()),
@@ -1522,11 +1756,25 @@ fn paragraph_styles_survive_a_snapshot() {
                 },
                 ..Default::default()
             },
-            ParaStyle { bullet: Bullet::AutoNum { scheme: "alphaLcParenR".into(), start: 3 }, ..Default::default() },
+            ParaStyle {
+                bullet: Bullet::AutoNum {
+                    scheme: "alphaLcParenR".into(),
+                    start: 3,
+                },
+                ..Default::default()
+            },
         ],
         anchor: Anchor::Middle,
-        insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
-        autofit: Some(decks_core::engine::Autofit { font_scale: 0.625, line_reduction: 0.2 }),
+        insets: Some(Insets {
+            left: 9.6,
+            top: 4.8,
+            right: 9.6,
+            bottom: 4.8,
+        }),
+        autofit: Some(decks_core::engine::Autofit {
+            font_scale: 0.625,
+            line_reduction: 0.2,
+        }),
         placeholder: None,
         placeholder_key: None,
         frame: None,
@@ -1534,7 +1782,10 @@ fn paragraph_styles_survive_a_snapshot() {
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {
             text: "a\nb\nc".into(),
-            x: 10.0, y: 10.0, w: 300.0, h: 200.0,
+            x: 10.0,
+            y: 10.0,
+            w: 300.0,
+            h: 200.0,
             rotation: 0.0,
             runs: vec![],
             body: body.clone(),
@@ -1544,7 +1795,10 @@ fn paragraph_styles_survive_a_snapshot() {
     )]);
     for kind in FORMATS {
         let back = through_a_snapshot(&deck, kind, "para-styles");
-        let SlideObject::TextBox { body: got, text, .. } = &back.slides[0].objects[0] else {
+        let SlideObject::TextBox {
+            body: got, text, ..
+        } = &back.slides[0].objects[0]
+        else {
             panic!("{kind}: not a text box")
         };
         assert_eq!(text, "a\nb\nc", "{kind}");
@@ -1555,20 +1809,37 @@ fn paragraph_styles_survive_a_snapshot() {
             assert_eq!(got.autofit, body.autofit);
         }
         for (a, b) in got.paras.iter().zip(&body.paras) {
-            assert_eq!((a.align, a.level, &a.bullet, &a.marker), (b.align, b.level, &b.bullet, &b.marker), "{kind}");
-            assert!((a.margin_left - b.margin_left).abs() < 1e-3 && (a.indent - b.indent).abs() < 1e-3, "{kind}: {a:?}");
+            assert_eq!(
+                (a.align, a.level, &a.bullet, &a.marker),
+                (b.align, b.level, &b.bullet, &b.marker),
+                "{kind}"
+            );
+            assert!(
+                (a.margin_left - b.margin_left).abs() < 1e-3 && (a.indent - b.indent).abs() < 1e-3,
+                "{kind}: {a:?}"
+            );
             let units = |s: Spacing| match s {
                 Spacing::Units(u) => Some(u),
                 Spacing::Lines(_) => None,
             };
             match (kind, b.space_before) {
-                ("odp", Spacing::Lines(_)) => assert_eq!(a.space_before, Spacing::Units(0.0), "odp: lines are dropped"),
+                ("odp", Spacing::Lines(_)) => assert_eq!(
+                    a.space_before,
+                    Spacing::Units(0.0),
+                    "odp: lines are dropped"
+                ),
                 _ => assert_eq!(a.space_before, b.space_before, "{kind}"),
             }
-            assert!((units(a.space_after).unwrap() - units(b.space_after).unwrap()).abs() < 0.02, "{kind}");
+            assert!(
+                (units(a.space_after).unwrap() - units(b.space_after).unwrap()).abs() < 0.02,
+                "{kind}"
+            );
         }
         let (gi, bi) = (got.insets.unwrap(), body.insets.unwrap());
-        assert!((gi.left - bi.left).abs() < 1e-3 && (gi.top - bi.top).abs() < 1e-3, "{kind}");
+        assert!(
+            (gi.left - bi.left).abs() < 1e-3 && (gi.top - bi.top).abs() < 1e-3,
+            "{kind}"
+        );
     }
 }
 
@@ -1578,13 +1849,25 @@ fn paragraph_styles_survive_a_snapshot() {
 #[test]
 fn a_runs_font_family_survives_a_snapshot() {
     let runs = vec![
-        Run { text: "serif ".into(), style: RunStyle { font_family: Some("Liberation Serif".into()), ..RunStyle::default() } },
-        Run { text: "plain".into(), style: RunStyle::default() },
+        Run {
+            text: "serif ".into(),
+            style: RunStyle {
+                font_family: Some("Liberation Serif".into()),
+                ..RunStyle::default()
+            },
+        },
+        Run {
+            text: "plain".into(),
+            style: RunStyle::default(),
+        },
     ];
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {
             text: "serif plain".into(),
-            x: 10.0, y: 10.0, w: 300.0, h: 80.0,
+            x: 10.0,
+            y: 10.0,
+            w: 300.0,
+            h: 80.0,
             rotation: 0.0,
             runs,
             body: Default::default(),
@@ -1594,10 +1877,22 @@ fn a_runs_font_family_survives_a_snapshot() {
     )]);
     for kind in FORMATS {
         let back = through_a_snapshot(&deck, kind, "font-family");
-        let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else { panic!("{kind}: not a text box") };
-        let families: Vec<Option<&str>> = runs.iter().map(|r| r.style.font_family.as_deref()).collect();
-        assert_eq!(families.first().copied().flatten(), Some("Liberation Serif"), "{kind}: {runs:?}");
-        assert!(families.last().copied().flatten() != Some("Liberation Serif"), "{kind}: {runs:?}");
+        let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else {
+            panic!("{kind}: not a text box")
+        };
+        let families: Vec<Option<&str>> = runs
+            .iter()
+            .map(|r| r.style.font_family.as_deref())
+            .collect();
+        assert_eq!(
+            families.first().copied().flatten(),
+            Some("Liberation Serif"),
+            "{kind}: {runs:?}"
+        );
+        assert!(
+            families.last().copied().flatten() != Some("Liberation Serif"),
+            "{kind}: {runs:?}"
+        );
     }
 }
 
@@ -1609,7 +1904,10 @@ fn slide_transitions_survive_a_snapshot() {
     use decks_core::engine::Transition;
     let slides: Vec<Slide> = Transition::ALL
         .iter()
-        .map(|t| Slide { transition: *t, ..slide_of(vec![text_box("x", 10.0, 10.0)], "", "#ffffff") })
+        .map(|t| Slide {
+            transition: *t,
+            ..slide_of(vec![text_box("x", 10.0, 10.0)], "", "#ffffff")
+        })
         .collect();
     let mut slides = slides;
     slides[1].background = "#1e1e3c".into();
@@ -1628,24 +1926,56 @@ fn object_builds_survive_a_snapshot() {
     use decks_core::builds::{Build, BuildEffect, Edge};
     // Builds name stable object ids; across a save and reopen the ids
     // are minted fresh, so the assertion is on (position, effect, out).
-    let mut slide = slide_of(vec![text_box("a", 10.0, 10.0), text_box("b", 10.0, 100.0), text_box("c", 10.0, 200.0)], "", "#ffffff");
+    let mut slide = slide_of(
+        vec![
+            text_box("a", 10.0, 10.0),
+            text_box("b", 10.0, 100.0),
+            text_box("c", 10.0, 200.0),
+        ],
+        "",
+        "#ffffff",
+    );
     decks_core::ops::ensure_all_ids(std::slice::from_mut(&mut slide), &mut []);
     let ids = slide.ids.objects.clone();
     slide.builds = vec![
-        Build { object: ids[2], effect: BuildEffect::Dissolve, out: false },
-        Build { object: ids[0], effect: BuildEffect::Move(Edge::Left), out: false },
-        Build { object: ids[1], effect: BuildEffect::Appear, out: true },
+        Build {
+            object: ids[2],
+            effect: BuildEffect::Dissolve,
+            out: false,
+        },
+        Build {
+            object: ids[0],
+            effect: BuildEffect::Move(Edge::Left),
+            out: false,
+        },
+        Build {
+            object: ids[1],
+            effect: BuildEffect::Appear,
+            out: true,
+        },
     ];
     for kind in FORMATS {
         let back = through_a_snapshot(&deck_of(vec![slide.clone()]), kind, "builds");
-        let got: Vec<(usize, BuildEffect, bool)> = back.slides[0].builds.iter().map(|b| {
-            (back.slides[0].object_index(b.object).unwrap(), b.effect, b.out)
-        }).collect();
-        assert_eq!(got, vec![
-            (2, BuildEffect::Dissolve, false),
-            (0, BuildEffect::Move(Edge::Left), false),
-            (1, BuildEffect::Appear, true),
-        ], "{kind}");
+        let got: Vec<(usize, BuildEffect, bool)> = back.slides[0]
+            .builds
+            .iter()
+            .map(|b| {
+                (
+                    back.slides[0].object_index(b.object).unwrap(),
+                    b.effect,
+                    b.out,
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (2, BuildEffect::Dissolve, false),
+                (0, BuildEffect::Move(Edge::Left), false),
+                (1, BuildEffect::Appear, true),
+            ],
+            "{kind}"
+        );
     }
 }
 
@@ -1668,10 +1998,7 @@ fn provenance_snapshot_follows_the_session() {
     let (deck, context) = decks_core::read_deck_with_context(path.to_str().unwrap()).unwrap();
     let controller = decks_core::DecksController::new(vec![], vec![]);
     // No context before the open lands: no claims.
-    assert_eq!(
-        decks_core::snapshot::provenance_snapshot(&controller),
-        None
-    );
+    assert_eq!(decks_core::snapshot::provenance_snapshot(&controller), None);
     controller.install_opened_deck(deck, context);
     let opened =
         decks_core::snapshot::provenance_snapshot(&controller).expect("context installed at open");
@@ -1701,10 +2028,7 @@ fn provenance_snapshot_follows_the_session() {
     );
     // Recovery adopts bytes, not provenance.
     controller.clear_source_context();
-    assert_eq!(
-        decks_core::snapshot::provenance_snapshot(&controller),
-        None
-    );
+    assert_eq!(decks_core::snapshot::provenance_snapshot(&controller), None);
 }
 
 /// A snapshot that cannot even be built must not clear the good one an
@@ -1721,25 +2045,39 @@ fn serialization_failure_retains_last_generation() {
     // First generation: a plain deck snapshots fine.
     let good = deck_of(vec![slide_of(vec![text_box("kept", 10.0, 10.0)], "", "")]);
     let bytes = decks_core::write_deck_bytes("pptx", &good).expect("a plain deck snapshots");
-    let meta = SnapshotMeta { original_path: None, kind: "pptx".into() };
-    slot.write(&bytes, &meta).expect("the first generation lands");
+    let meta = SnapshotMeta {
+        original_path: None,
+        kind: "pptx".into(),
+    };
+    slot.write(&bytes, &meta)
+        .expect("the first generation lands");
     // Second generation: the picture's file is gone, so there are no
     // bytes to write — only the failure, reported once without spam.
     let gone = dir.path().join("gone.png");
     let bad = deck_of(vec![slide_of(
         vec![SlideObject::Image {
             path: gone.to_string_lossy().to_string(),
-            x: 10.0, y: 10.0, w: 30.0, h: 30.0,
+            x: 10.0,
+            y: 10.0,
+            w: 30.0,
+            h: 30.0,
             rotation: 0.0,
             crop: Default::default(),
         }],
         "",
         "",
     )]);
-    let err = decks_core::write_deck_bytes("pptx", &bad).expect_err("a missing picture must fail the snapshot");
-    assert!(err.contains("gone.png"), "the failure names the file: {err}");
+    let err = decks_core::write_deck_bytes("pptx", &bad)
+        .expect_err("a missing picture must fail the snapshot");
+    assert!(
+        err.contains("gone.png"),
+        "the failure names the file: {err}"
+    );
     assert!(policy.failed(&err).is_some(), "the first failure is told");
-    assert!(policy.failed(&err).is_none(), "the second identical failure is not repeated");
+    assert!(
+        policy.failed(&err).is_none(),
+        "the second identical failure is not repeated"
+    );
     // Nothing was written, so the previous generation reads back whole.
     let (back, back_meta) = slot.read().expect("the prior generation survives");
     assert_eq!(back, bytes, "the slot still holds the first generation");
@@ -1747,11 +2085,20 @@ fn serialization_failure_retains_last_generation() {
     let path = dir.path().join("legacy.pptx");
     std::fs::write(&path, &back).expect("stage the generation");
     let recovered = decks_core::read_deck(path.to_str().unwrap()).expect("it still opens");
-    let texts: Vec<&str> = recovered.slides.iter().flat_map(|s| s.objects.iter().filter_map(|o| match o {
-        SlideObject::TextBox { text, .. } => Some(text.as_str()),
-        _ => None,
-    })).collect();
-    assert!(texts.contains(&"kept"), "the work is still there: {texts:?}");
+    let texts: Vec<&str> = recovered
+        .slides
+        .iter()
+        .flat_map(|s| {
+            s.objects.iter().filter_map(|o| match o {
+                SlideObject::TextBox { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+        })
+        .collect();
+    assert!(
+        texts.contains(&"kept"),
+        "the work is still there: {texts:?}"
+    );
     // A later success closes the streak visibly.
     slot.write(&bytes, &meta).expect("a later generation lands");
     assert!(policy.succeeded().is_some(), "the recovery is told");
@@ -1759,11 +2106,10 @@ fn serialization_failure_retains_last_generation() {
 
 /// The 1×1 PNG the reader tests use: a real picture with real bytes.
 const RECOVERY_PNG: &[u8] = &[
-    0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D',
-    b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0,
-    12, b'I', b'D', b'A', b'T', 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 0, 3, 0,
-    1, 0x9e, 0xdd, 0x22, 0x71, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42,
-    0x60, 0x82,
+    0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0,
+    1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0, 12, b'I', b'D', b'A', b'T',
+    0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 0, 3, 0, 1, 0x9e, 0xdd, 0x22, 0x71, 0, 0, 0, 0, b'I',
+    b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
 ];
 
 /// Recovery keeps the opaque graph and the pictures (DCK-003): a session
@@ -1782,7 +2128,10 @@ fn recovery_keeps_opaque_graph_and_assets() {
             text_box("opaque", 10.0, 10.0),
             SlideObject::Image {
                 path: pic.to_string_lossy().to_string(),
-                x: 10.0, y: 100.0, w: 30.0, h: 30.0,
+                x: 10.0,
+                y: 100.0,
+                w: 30.0,
+                h: 30.0,
                 rotation: 0.0,
                 crop: Default::default(),
             },
@@ -1796,13 +2145,19 @@ fn recovery_keeps_opaque_graph_and_assets() {
     const CARRIED_NAME: &str = "customXml/item1.xml";
     const CARRIED_BYTES: &[u8] = b"<props><tag>kept</tag></props>";
     {
-        let file = std::fs::OpenOptions::new().read(true).write(true).open(&src).expect("reopen");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&src)
+            .expect("reopen");
         let mut zip = zip::ZipWriter::new_append(file).expect("append");
-        zip.start_file(CARRIED_NAME, zip::write::SimpleFileOptions::default()).expect("part");
+        zip.start_file(CARRIED_NAME, zip::write::SimpleFileOptions::default())
+            .expect("part");
         zip.write_all(CARRIED_BYTES).expect("bytes");
         zip.finish().expect("finish");
     }
-    let (opened, context) = decks_core::read_deck_with_context(src.to_str().unwrap()).expect("open");
+    let (opened, context) =
+        decks_core::read_deck_with_context(src.to_str().unwrap()).expect("open");
     let controller = decks_core::DecksController::new(vec![], vec![]);
     controller.install_opened_deck(opened, context);
     let before = decks_core::snapshot::provenance_snapshot(&controller).expect("context at open");
@@ -1818,23 +2173,45 @@ fn recovery_keeps_opaque_graph_and_assets() {
     let bytes = decks_core::recovery::encode_snapshot(&controller, "pptx").expect("encode");
     // The picture's file vanishes before the relaunch.
     std::fs::remove_file(&pic).expect("delete the picture");
-    let decks_core::recovery::SnapshotKind::Versioned(back) = decks_core::recovery::decode_snapshot(&bytes) else {
+    let decks_core::recovery::SnapshotKind::Versioned(back) =
+        decks_core::recovery::decode_snapshot(&bytes)
+    else {
         panic!("the snapshot must decode as versioned");
     };
     let back = *back;
-    assert!(back.unresolved_assets.is_empty(), "captured pictures restage: {:?}", back.unresolved_assets);
+    assert!(
+        back.unresolved_assets.is_empty(),
+        "captured pictures restage: {:?}",
+        back.unresolved_assets
+    );
     assert_eq!(back.revision, rev, "the revision travels with the snapshot");
     // Same identities the crashed session had.
-    let before_ids: Vec<u64> = controller.deck().slides.iter().map(|s| s.ids.slide).collect();
+    let before_ids: Vec<u64> = controller
+        .deck()
+        .slides
+        .iter()
+        .map(|s| s.ids.slide)
+        .collect();
     let after_ids: Vec<u64> = back.deck.slides.iter().map(|s| s.ids.slide).collect();
     assert_eq!(before_ids, after_ids, "slide identities survive recovery");
     // The picture points at bytes, not at the deleted file.
-    let image_path = back.deck.slides[0].objects.iter().find_map(|o| match o {
-        SlideObject::Image { path, .. } => Some(path.clone()),
-        _ => None,
-    }).expect("the picture survives");
-    assert_ne!(image_path, pic.to_string_lossy().to_string(), "the deleted file is not referenced");
-    assert_eq!(std::fs::read(&image_path).expect("restaged bytes read"), RECOVERY_PNG);
+    let image_path = back.deck.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::Image { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .expect("the picture survives");
+    assert_ne!(
+        image_path,
+        pic.to_string_lossy().to_string(),
+        "the deleted file is not referenced"
+    );
+    assert_eq!(
+        std::fs::read(&image_path).expect("restaged bytes read"),
+        RECOVERY_PNG
+    );
     // Reinstalled as one session, the next save is as safe as the
     // crashed one's: same carried names and inventory, source intact,
     // and the save carries the same bytes.
@@ -1852,13 +2229,20 @@ fn recovery_keeps_opaque_graph_and_assets() {
         out.to_str().unwrap(),
         &recovered.deck(),
         &recovered.carried_for_save(),
-    ).expect("the next save carries");
+    )
+    .expect("the next save carries");
     let file = std::fs::File::open(&out).expect("saved");
     let mut zip = zip::ZipArchive::new(file).expect("reopen saved");
     let mut buf = Vec::new();
     use std::io::Read as _;
-    zip.by_name(CARRIED_NAME).expect("carried part saved").read_to_end(&mut buf).expect("read");
-    assert_eq!(buf, CARRIED_BYTES, "the carried part is byte-identical through recovery");
+    zip.by_name(CARRIED_NAME)
+        .expect("carried part saved")
+        .read_to_end(&mut buf)
+        .expect("read");
+    assert_eq!(
+        buf, CARRIED_BYTES,
+        "the carried part is byte-identical through recovery"
+    );
 }
 
 /// A picture lost before the snapshot does not lose the snapshot
@@ -1873,7 +2257,10 @@ fn recovery_without_snapshot_bytes_reports_gaps() {
             text_box("kept", 10.0, 10.0),
             SlideObject::Image {
                 path: gone.to_string_lossy().to_string(),
-                x: 10.0, y: 10.0, w: 30.0, h: 30.0,
+                x: 10.0,
+                y: 10.0,
+                w: 30.0,
+                h: 30.0,
                 rotation: 0.0,
                 crop: Default::default(),
             },
@@ -1886,24 +2273,40 @@ fn recovery_without_snapshot_bytes_reports_gaps() {
     // an interchange fallback, which cannot be built without it.
     let bytes = decks_core::recovery::encode_snapshot(&controller, "pptx")
         .expect("the edits are protected despite the missing picture");
-    let decks_core::recovery::SnapshotKind::Versioned(back) = decks_core::recovery::decode_snapshot(&bytes) else {
+    let decks_core::recovery::SnapshotKind::Versioned(back) =
+        decks_core::recovery::decode_snapshot(&bytes)
+    else {
         panic!("the snapshot must decode as versioned");
     };
     assert!(
-        back.unresolved_assets.iter().any(|u| u.contains("gone.png")),
+        back.unresolved_assets
+            .iter()
+            .any(|u| u.contains("gone.png")),
         "the gap is listed: {:?}",
         back.unresolved_assets,
     );
-    let kept = back.deck.slides[0].objects.iter().find_map(|o| match o {
-        SlideObject::TextBox { text, .. } => Some(text.clone()),
-        _ => None,
-    }).expect("the text box survives");
+    let kept = back.deck.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::TextBox { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .expect("the text box survives");
     assert_eq!(kept, "kept");
-    let kept_path = back.deck.slides[0].objects.iter().find_map(|o| match o {
-        SlideObject::Image { path, .. } => Some(path.clone()),
-        _ => None,
-    }).expect("the picture node survives");
-    assert_eq!(kept_path, gone.to_string_lossy().to_string(), "the path is preserved for repair");
+    let kept_path = back.deck.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::Image { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .expect("the picture node survives");
+    assert_eq!(
+        kept_path,
+        gone.to_string_lossy().to_string(),
+        "the path is preserved for repair"
+    );
 }
 
 /// The full editable document round-trips the canonical snapshot:
@@ -1915,7 +2318,10 @@ fn recovery_rich_state_round_trip() {
     use decks_core::builds::{Build, BuildEffect};
     use decks_core::layouts::{Layout, LayoutKind, LayoutPlaceholder, Placeholder};
     let cell = |t: &str| decks_core::engine::table::TableCell {
-        runs: vec![Run { text: t.into(), style: Default::default() }],
+        runs: vec![Run {
+            text: t.into(),
+            style: Default::default(),
+        }],
         fill: None,
         col_span: 1,
         row_span: 1,
@@ -1928,13 +2334,19 @@ fn recovery_rich_state_round_trip() {
         vec![
             SlideObject::TextBox {
                 text: "loud".into(),
-                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                x: 10.0,
+                y: 10.0,
+                w: 200.0,
+                h: 50.0,
                 rotation: 0.0,
                 runs: vec![styled_run("loud")],
                 body: Default::default(),
             },
             SlideObject::Table {
-                x: 10.0, y: 200.0, w: 300.0, h: 100.0,
+                x: 10.0,
+                y: 200.0,
+                w: 300.0,
+                h: 100.0,
                 rotation: 0.0,
                 table: decks_core::engine::table::TableData {
                     col_widths: vec![150.0, 150.0],
@@ -1971,7 +2383,10 @@ fn recovery_rich_state_round_trip() {
                 placeholders: vec![LayoutPlaceholder {
                     id: 0,
                     role: Placeholder::Title,
-                    x: 10.0, y: 10.0, w: 300.0, h: 80.0,
+                    x: 10.0,
+                    y: 10.0,
+                    w: 300.0,
+                    h: 80.0,
                     source_ty: String::new(),
                     source_idx: None,
                 }],
@@ -1993,7 +2408,9 @@ fn recovery_rich_state_round_trip() {
     controller.add_slide(1, slide_of(vec![text_box("second", 10.0, 10.0)], "", ""));
     let rev = controller.revision();
     let bytes = decks_core::recovery::encode_snapshot(&controller, "pptx").expect("encode");
-    let decks_core::recovery::SnapshotKind::Versioned(back) = decks_core::recovery::decode_snapshot(&bytes) else {
+    let decks_core::recovery::SnapshotKind::Versioned(back) =
+        decks_core::recovery::decode_snapshot(&bytes)
+    else {
         panic!("the snapshot must decode as versioned");
     };
     assert_eq!(back.revision, rev);
@@ -2007,7 +2424,8 @@ fn recovery_rich_state_round_trip() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join(format!("recovered.{kind}"));
         decks_core::write_deck(path.to_str().unwrap(), &back.deck).expect("save after recovery");
-        let reopened = decks_core::read_deck(path.to_str().unwrap()).expect("reopen after recovery");
+        let reopened =
+            decks_core::read_deck(path.to_str().unwrap()).expect("reopen after recovery");
         assert_eq!(reopened.slides.len(), 2, "{kind}: slide count");
         assert_eq!(reopened.slides[0].notes, "say it out loud", "{kind}: notes");
     }
@@ -2018,10 +2436,16 @@ fn recovery_rich_state_round_trip() {
 /// restored document makes no source-loss claims it no longer possesses.
 #[test]
 fn legacy_package_snapshot_recovers_without_claims() {
-    let deck = deck_of(vec![slide_of(vec![text_box("legacy", 10.0, 10.0)], "old note", "")]);
+    let deck = deck_of(vec![slide_of(
+        vec![text_box("legacy", 10.0, 10.0)],
+        "old note",
+        "",
+    )]);
     // Exactly what the old autosave wrote: bare package bytes.
     let package = decks_core::write_deck_bytes("pptx", &deck).expect("legacy-shaped bytes");
-    let decks_core::recovery::SnapshotKind::Package(staged) = decks_core::recovery::decode_snapshot(&package) else {
+    let decks_core::recovery::SnapshotKind::Package(staged) =
+        decks_core::recovery::decode_snapshot(&package)
+    else {
         panic!("package-shaped bytes must decode as a package");
     };
     assert_eq!(staged, package);
@@ -2039,7 +2463,11 @@ fn legacy_package_snapshot_recovers_without_claims() {
     );
     assert!(controller.dirty.get(), "recovered work counts as dirty");
     assert_eq!(controller.revision(), 0);
-    assert_ne!(controller.deck().slides[0].ids.slide, 0, "reader-zeroed ids are assigned once, on install");
+    assert_ne!(
+        controller.deck().slides[0].ids.slide,
+        0,
+        "reader-zeroed ids are assigned once, on install"
+    );
 }
 
 /// A source replaced between snapshot and relaunch keeps its stored loss
@@ -2052,17 +2480,26 @@ fn recovery_after_source_replacement_keeps_no_carry() {
     decks_core::write_deck(
         src.to_str().unwrap(),
         &deck_of(vec![slide_of(vec![text_box("first", 10.0, 10.0)], "", "")]),
-    ).expect("source");
-    let (opened, context) = decks_core::read_deck_with_context(src.to_str().unwrap()).expect("open");
+    )
+    .expect("source");
+    let (opened, context) =
+        decks_core::read_deck_with_context(src.to_str().unwrap()).expect("open");
     let controller = decks_core::DecksController::new(vec![], vec![]);
     controller.install_opened_deck(opened, context);
     let bytes = decks_core::recovery::encode_snapshot(&controller, "pptx").expect("encode");
     // The original is replaced while the app is dead.
     decks_core::write_deck(
         src.to_str().unwrap(),
-        &deck_of(vec![slide_of(vec![text_box("stranger", 10.0, 10.0)], "", "")]),
-    ).expect("replace");
-    let decks_core::recovery::SnapshotKind::Versioned(back) = decks_core::recovery::decode_snapshot(&bytes) else {
+        &deck_of(vec![slide_of(
+            vec![text_box("stranger", 10.0, 10.0)],
+            "",
+            "",
+        )]),
+    )
+    .expect("replace");
+    let decks_core::recovery::SnapshotKind::Versioned(back) =
+        decks_core::recovery::decode_snapshot(&bytes)
+    else {
         panic!("the snapshot must decode as versioned");
     };
     let back = *back;
@@ -2073,6 +2510,10 @@ fn recovery_after_source_replacement_keeps_no_carry() {
         recovered.carried_for_save().is_empty(),
         "a replaced source carries nothing from the old revision",
     );
-    let facts = decks_core::snapshot::provenance_snapshot(&recovered).expect("degraded context installed");
-    assert!(!facts.opaque_complete, "another revision's inventory is never advertised complete");
+    let facts =
+        decks_core::snapshot::provenance_snapshot(&recovered).expect("degraded context installed");
+    assert!(
+        !facts.opaque_complete,
+        "another revision's inventory is never advertised complete"
+    );
 }

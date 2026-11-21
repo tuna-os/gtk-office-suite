@@ -12,7 +12,10 @@
 
 use adw::prelude::*;
 use decks_core::engine::Deck;
-use decks_core::presenter::{format_elapsed, layout_after_monitor_change, show_layout_on, show_position, PresenterState, ShowLayout, DISPLAY_LOST};
+use decks_core::presenter::{
+    format_elapsed, layout_after_monitor_change, show_layout_on, show_position, PresenterState,
+    ShowLayout, DISPLAY_LOST,
+};
 use gtk4::{self as gtk, gdk, gio, glib};
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
@@ -92,18 +95,42 @@ impl Show {
             p.current.queue_draw();
             p.next.queue_draw();
             let steps = self.deck.slides.get(i).map_or(0, decks_core::builds::steps);
-            p.counter.set_text(&show_position(i, self.deck.slides.len(), self.state.borrow().build_step(), steps));
-            let notes = self.deck.slides.get(i).map(|s| s.notes.trim().to_string()).unwrap_or_default();
-            p.notes.set_text(if notes.is_empty() { "No notes for this slide" } else { &notes });
-            p.notes.set_css_classes(if notes.is_empty() { &["dim-label"] } else { &[] });
+            p.counter.set_text(&show_position(
+                i,
+                self.deck.slides.len(),
+                self.state.borrow().build_step(),
+                steps,
+            ));
+            let notes = self
+                .deck
+                .slides
+                .get(i)
+                .map(|s| s.notes.trim().to_string())
+                .unwrap_or_default();
+            p.notes.set_text(if notes.is_empty() {
+                "No notes for this slide"
+            } else {
+                &notes
+            });
+            p.notes.set_css_classes(if notes.is_empty() {
+                &["dim-label"]
+            } else {
+                &[]
+            });
         }
     }
 
     /// Slide `i` as it stands after `step` builds: what is on it.
     fn slide_at(&self, i: usize, step: usize) -> Slide {
         let s = &self.deck.slides[i];
-        let objects = decks_core::builds::frame(s, step, 0.0).into_iter().map(|f| f.object).collect();
-        Slide { objects, ..s.clone() }
+        let objects = decks_core::builds::frame(s, step, 0.0)
+            .into_iter()
+            .map(|f| f.object)
+            .collect();
+        Slide {
+            objects,
+            ..s.clone()
+        }
     }
 
     /// Play the transition from slide `from` (as it was left, after
@@ -114,7 +141,11 @@ impl Show {
         if let Some((_, area)) = self.audience.borrow().as_ref() {
             let a = self.slide_at(from, from_step);
             let b = self.slide_at(to, self.state.borrow().build_step());
-            let kind = TransitionType::of(if to > from { b.transition } else { a.transition });
+            let kind = TransitionType::of(if to > from {
+                b.transition
+            } else {
+                a.transition
+            });
             self.transition.borrow_mut().chrome = Chrome::Show;
             TransitionState::start(&self.transition, kind, &a, &b, &self.deck.masters, area);
         }
@@ -144,7 +175,11 @@ impl Show {
                         let started = Instant::now();
                         glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
                             area.queue_draw();
-                            if started.elapsed() >= BUILD_TIME { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
+                            if started.elapsed() >= BUILD_TIME {
+                                glib::ControlFlow::Break
+                            } else {
+                                glib::ControlFlow::Continue
+                            }
                         });
                     }
                 }
@@ -172,13 +207,29 @@ impl Show {
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_none() {
             return;
         }
-        let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else { return };
-        let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 1280, 720) else { return };
+        let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else {
+            return;
+        };
+        let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 1280, 720)
+        else {
+            return;
+        };
         if let Ok(cr) = gtk::cairo::Context::new(&surface) {
             let objects = decks_core::builds::frame(&self.deck.slides[self.index()], n, 0.5);
-            draw_slide_objects(&cr, 1280.0, 720.0, &self.deck.slides, self.index(), &self.deck.masters, Chrome::Show, &objects);
+            draw_slide_objects(
+                &cr,
+                1280.0,
+                720.0,
+                &self.deck.slides,
+                self.index(),
+                &self.deck.masters,
+                Chrome::Show,
+                &objects,
+            );
         }
-        if let Ok(mut f) = std::fs::File::create(std::path::Path::new(&dir).join(format!("build-{n}-midpoint.png"))) {
+        if let Ok(mut f) = std::fs::File::create(
+            std::path::Path::new(&dir).join(format!("build-{n}-midpoint.png")),
+        ) {
             let _ = surface.write_to_png(&mut f);
         }
     }
@@ -202,7 +253,9 @@ impl Show {
     /// away comes back to the primary one, and both windows say so (ADR
     /// 0004: "return to primary and show a visible status").
     fn monitors_changed(&self, monitors: usize) {
-        let Some(after) = layout_after_monitor_change(self.layout.get(), monitors) else { return };
+        let Some(after) = layout_after_monitor_change(self.layout.get(), monitors) else {
+            return;
+        };
         let moved_audience = after.audience != self.layout.get().audience;
         self.layout.set(after);
         if moved_audience {
@@ -249,7 +302,9 @@ impl Show {
 
     /// The presenter display's clock, once a second while it is open.
     fn tick(&self) -> bool {
-        let Some(p) = self.presenter.borrow().as_ref().map(|p| p.clock.clone()) else { return false };
+        let Some(p) = self.presenter.borrow().as_ref().map(|p| p.clock.clone()) else {
+            return false;
+        };
         if let Some(snap) = self.state.borrow().snapshot_at(&self.deck, Instant::now()) {
             p.set_text(&format_elapsed(snap.elapsed));
         }
@@ -262,10 +317,14 @@ fn add_keys(widget: &impl IsA<gtk::Widget>, show: &Rc<Show>) {
     let key = gtk::EventControllerKey::new();
     let weak = Rc::downgrade(show);
     key.connect_key_pressed(move |_, keyval, _, _| {
-        let Some(show) = weak.upgrade() else { return glib::Propagation::Proceed };
+        let Some(show) = weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
         use gdk::Key;
         match keyval {
-            Key::Right | Key::Down | Key::space | Key::Page_Down | Key::Return | Key::n => show.step(true),
+            Key::Right | Key::Down | Key::space | Key::Page_Down | Key::Return | Key::n => {
+                show.step(true)
+            }
             Key::Left | Key::Up | Key::Page_Up | Key::BackSpace | Key::p => show.step(false),
             Key::Home => show.go(0),
             Key::End => show.go(show.deck.slides.len().saturating_sub(1)),
@@ -294,11 +353,23 @@ fn slide_area(show: &Rc<Show>, offset: usize, label: &str) -> gtk::DrawingArea {
         } else if step < decks_core::builds::steps(slide) {
             (i, step + 1)
         } else {
-            (decks_core::presenter::next_shown(&show.deck, i).unwrap_or(show.deck.slides.len()), 0)
+            (
+                decks_core::presenter::next_shown(&show.deck, i).unwrap_or(show.deck.slides.len()),
+                0,
+            )
         };
         if i < show.deck.slides.len() {
             let objects = decks_core::builds::frame(&show.deck.slides[i], step, 0.0);
-            draw_slide_objects(cr, w as f64, h as f64, &show.deck.slides, i, &show.deck.masters, Chrome::Preview, &objects);
+            draw_slide_objects(
+                cr,
+                w as f64,
+                h as f64,
+                &show.deck.slides,
+                i,
+                &show.deck.masters,
+                Chrome::Preview,
+                &objects,
+            );
         }
         // After the last slide there is no next one: the area stays empty.
     });
@@ -308,14 +379,22 @@ fn slide_area(show: &Rc<Show>, offset: usize, label: &str) -> gtk::DrawingArea {
 /// Which display the slides are on, for assistive technology: "On display 2".
 fn describe_display(area: &gtk::DrawingArea, monitor: Option<usize>) {
     if let Some(m) = monitor {
-        area.update_property(&[gtk::accessible::Property::Description(&format!("On display {}", m + 1))]);
+        area.update_property(&[gtk::accessible::Property::Description(&format!(
+            "On display {}",
+            m + 1
+        ))]);
     }
 }
 
-fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk::DrawingArea, gtk::Revealer) {
+fn build_audience(
+    app: &adw::Application,
+    show: &Rc<Show>,
+) -> (gtk::Window, gtk::DrawingArea, gtk::Revealer) {
     // An image to assistive technology: a plain drawing area isn't exposed
     // at all, so its name and display ("On display 2") would be lost.
-    let area = gtk::DrawingArea::builder().accessible_role(gtk::AccessibleRole::Img).build();
+    let area = gtk::DrawingArea::builder()
+        .accessible_role(gtk::AccessibleRole::Img)
+        .build();
     area.set_hexpand(true);
     area.set_vexpand(true);
     area.update_property(&[gtk::accessible::Property::Label("Slide show")]);
@@ -326,7 +405,16 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
             return;
         }
         let objects = show.audience_objects();
-        draw_slide_objects(cr, w as f64, h as f64, &show.deck.slides, show.index(), &show.deck.masters, Chrome::Show, &objects);
+        draw_slide_objects(
+            cr,
+            w as f64,
+            h as f64,
+            &show.deck.slides,
+            show.index(),
+            &show.deck.masters,
+            Chrome::Show,
+            &objects,
+        );
     });
     // A status line over the slides, for when the show has to move.
     let status = gtk::Label::new(Some(DISPLAY_LOST));
@@ -352,7 +440,12 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
         .map(|w| suite_common::dialogs::document_name(&w))
         .unwrap_or_else(|| suite_common::i18n("Untitled"));
     let title = format!("{deck_name} \u{2014} {}", suite_common::i18n("Slide Show"));
-    let window = gtk::Window::builder().application(app).title(title).decorated(false).child(&overlay).build();
+    let window = gtk::Window::builder()
+        .application(app)
+        .title(title)
+        .decorated(false)
+        .child(&overlay)
+        .build();
     // Clicking the slide advances, as in every presentation app.
     let click = gtk::GestureClick::new();
     let weak = Rc::downgrade(show);
@@ -391,7 +484,11 @@ fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
     notes.set_xalign(0.0);
     notes.set_yalign(0.0);
     notes.add_css_class("body");
-    let notes_scroll = gtk::ScrolledWindow::builder().child(&notes).vexpand(true).min_content_height(120).build();
+    let notes_scroll = gtk::ScrolledWindow::builder()
+        .child(&notes)
+        .vexpand(true)
+        .min_content_height(120)
+        .build();
 
     let side = gtk::Box::new(gtk::Orientation::Vertical, 12);
     side.set_width_request(280);
@@ -447,8 +544,14 @@ fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
         .content(&view)
         .build();
     // A narrow window stacks the current slide above the rest.
-    let narrow = adw::Breakpoint::new(adw::BreakpointCondition::parse("max-width: 700sp").expect("valid condition"));
-    narrow.add_setter(&body, "orientation", Some(&gtk::Orientation::Vertical.to_value()));
+    let narrow = adw::Breakpoint::new(
+        adw::BreakpointCondition::parse("max-width: 700sp").expect("valid condition"),
+    );
+    narrow.add_setter(
+        &body,
+        "orientation",
+        Some(&gtk::Orientation::Vertical.to_value()),
+    );
     window.add_breakpoint(narrow);
 
     for (button, forward) in [(&prev, false), (&fwd, true)] {
@@ -465,7 +568,15 @@ fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
             show.end();
         }
     });
-    Presenter { window, current, next, counter, clock, notes, banner }
+    Presenter {
+        window,
+        current,
+        next,
+        counter,
+        clock,
+        notes,
+        banner,
+    }
 }
 
 /// Start a show of `deck` from slide `start`. `rehearse` opens the
@@ -479,16 +590,25 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
         start_ready(app, deck, start, rehearse);
         return;
     }
-    let details = missing.iter().map(|media| {
-        suite_common::i18n("Slide %n: %s")
-            .replace("%n", &(media.slide_index + 1).to_string())
-            .replace("%s", &media.path)
-    }).collect::<Vec<_>>().join("\n");
-    let body = format!("{}\n\n{}\n\n{}",
+    let details = missing
+        .iter()
+        .map(|media| {
+            suite_common::i18n("Slide %n: %s")
+                .replace("%n", &(media.slide_index + 1).to_string())
+                .replace("%s", &media.path)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = format!(
+        "{}\n\n{}\n\n{}",
         suite_common::i18n("Some image files used by this presentation are missing:"),
         details,
-        suite_common::i18n("Cancel to restore the files, or continue with missing artwork."));
-    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Present With Missing Images?")), Some(&body));
+        suite_common::i18n("Cancel to restore the files, or continue with missing artwork.")
+    );
+    let dialog = adw::AlertDialog::new(
+        Some(&suite_common::i18n("Present With Missing Images?")),
+        Some(&body),
+    );
     dialog.add_response("cancel", &suite_common::i18n("_Cancel"));
     dialog.add_response("continue", &suite_common::i18n("_Continue Anyway"));
     dialog.set_response_appearance("continue", adw::ResponseAppearance::Destructive);
@@ -496,17 +616,22 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
     dialog.set_close_response("cancel");
     let parent = app.active_window();
     let app = app.clone();
-    dialog.choose(parent.as_ref(), None::<&gio::Cancellable>, move |response| {
-        if response == "continue" {
-            start_ready(&app, deck, start, rehearse);
-        }
-    });
+    dialog.choose(
+        parent.as_ref(),
+        None::<&gio::Cancellable>,
+        move |response| {
+            if response == "continue" {
+                start_ready(&app, deck, start, rehearse);
+            }
+        },
+    );
 }
 
 /// Open windows only after the readiness decision, using the checked snapshot.
 fn start_ready(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
     // Preferences ▸ Presentation Display: -1 is automatic.
-    let chosen = usize::try_from(gio::Settings::new("org.tunaos.decks").int("presentation-display")).ok();
+    let chosen =
+        usize::try_from(gio::Settings::new("org.tunaos.decks").int("presentation-display")).ok();
     let layout = show_layout_on(monitors_for_layout(), rehearse, chosen);
     let mut state = PresenterState::new();
     state.go_to(start.min(deck.slides.len() - 1), &deck);
@@ -558,7 +683,11 @@ fn start_ready(app: &adw::Application, deck: Deck, start: usize, rehearse: bool)
         let weak = Rc::downgrade(&show);
         glib::timeout_add_seconds_local(1, move || {
             let alive = weak.upgrade().is_some_and(|s| s.tick());
-            if alive { glib::ControlFlow::Continue } else { glib::ControlFlow::Break }
+            if alive {
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
+            }
         });
     }
     // A projector unplugged mid-show.

@@ -13,9 +13,9 @@
 // selection. This module only builds widgets and wires signals.
 
 use adw::prelude::*;
+use decks_core::builds::BuildEffect;
 use decks_core::engine::shape::{Color, ShapeKind};
 use decks_core::engine::{Anchor, ParaAlign, Transition};
-use decks_core::builds::BuildEffect;
 use decks_core::format::{FormatEdit, ListKind, ObjectFormat};
 use decks_core::undo::ZOrderOp;
 use decks_core::DecksController;
@@ -90,7 +90,12 @@ fn clear_button(label: &str) -> gtk::Button {
 }
 
 fn color_button(title: &str) -> gtk::ColorDialogButton {
-    let b = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::builder().title(title).with_alpha(false).build()));
+    let b = gtk::ColorDialogButton::new(Some(
+        gtk::ColorDialog::builder()
+            .title(title)
+            .with_alpha(false)
+            .build(),
+    ));
     b.set_valign(gtk::Align::Center);
     b.update_property(&[gtk::accessible::Property::Label(title)]);
     b
@@ -103,12 +108,17 @@ fn spin(title: &str, lo: f64, hi: f64, step: f64) -> adw::SpinRow {
 }
 
 fn combo(title: &str, items: &[&str]) -> adw::ComboRow {
-    adw::ComboRow::builder().title(title).model(&gtk::StringList::new(items)).build()
+    adw::ComboRow::builder()
+        .title(title)
+        .model(&gtk::StringList::new(items))
+        .build()
 }
 
 const KINDS: [(&str, MakeKind); 5] = [
     ("Rectangle", || ShapeKind::Rect),
-    ("Rounded Rectangle", || ShapeKind::RoundRect { radius: 1.0 / 6.0 }),
+    ("Rounded Rectangle", || ShapeKind::RoundRect {
+        radius: 1.0 / 6.0,
+    }),
     ("Ellipse", || ShapeKind::Ellipse),
     ("Triangle", || ShapeKind::Triangle),
     ("Diamond", || ShapeKind::Diamond),
@@ -146,7 +156,9 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
                 return;
             }
             let sel = ctl.selection();
-            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else { return };
+            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else {
+                return;
+            };
             if ctl.format_objects(slide_id, &[object_id], &edit) {
                 changed();
             }
@@ -201,7 +213,15 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     let italic = toggle("format-text-italic-symbolic", "Italic", None);
     let underline = toggle("format-text-underline-symbolic", "Underline", None);
     let strike = toggle("format-text-strikethrough-symbolic", "Strikethrough", None);
-    font_group.add(&row("Style", &linked(&[bold.upcast_ref(), italic.upcast_ref(), underline.upcast_ref(), strike.upcast_ref()])));
+    font_group.add(&row(
+        "Style",
+        &linked(&[
+            bold.upcast_ref(),
+            italic.upcast_ref(),
+            underline.upcast_ref(),
+            strike.upcast_ref(),
+        ]),
+    ));
     let text_color = color_button("Text Colour");
     let text_color_auto = clear_button("Automatic Colour");
     let text_color_row = row("Colour", &text_color);
@@ -210,18 +230,34 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
 
     let para_group = adw::PreferencesGroup::builder().title("Paragraph").build();
     let a_left = toggle("format-justify-left-symbolic", "Align Left", None);
-    let a_center = toggle("format-justify-center-symbolic", "Align Centre", Some(&a_left));
-    let a_right = toggle("format-justify-right-symbolic", "Align Right", Some(&a_left));
+    let a_center = toggle(
+        "format-justify-center-symbolic",
+        "Align Centre",
+        Some(&a_left),
+    );
+    let a_right = toggle(
+        "format-justify-right-symbolic",
+        "Align Right",
+        Some(&a_left),
+    );
     let a_just = toggle("format-justify-fill-symbolic", "Justify", Some(&a_left));
     para_group.add(&row(
         "Alignment",
-        &linked(&[a_left.upcast_ref(), a_center.upcast_ref(), a_right.upcast_ref(), a_just.upcast_ref()]),
+        &linked(&[
+            a_left.upcast_ref(),
+            a_center.upcast_ref(),
+            a_right.upcast_ref(),
+            a_just.upcast_ref(),
+        ]),
     ));
     let list = combo("List", &["None", "Bullets", "Numbers"]);
     para_group.add(&list);
     let outdent = icon_button("format-indent-less-symbolic", "Decrease Indent");
     let indent = icon_button("format-indent-more-symbolic", "Increase Indent");
-    para_group.add(&row("Indent", &linked(&[outdent.upcast_ref(), indent.upcast_ref()])));
+    para_group.add(&row(
+        "Indent",
+        &linked(&[outdent.upcast_ref(), indent.upcast_ref()]),
+    ));
     let space_before = spin("Space Before", 0.0, 400.0, 1.0);
     let space_after = spin("Space After", 0.0, 400.0, 1.0);
     para_group.add(&space_before);
@@ -254,7 +290,12 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     let to_front = icon_button("go-top-symbolic", "Bring to Front");
     order_group.add(&row(
         "Layer",
-        &linked(&[to_back.upcast_ref(), backward.upcast_ref(), forward.upcast_ref(), to_front.upcast_ref()]),
+        &linked(&[
+            to_back.upcast_ref(),
+            backward.upcast_ref(),
+            forward.upcast_ref(),
+            to_front.upcast_ref(),
+        ]),
     ));
     // A picture's crop (pptx srcRect, ODF fo:clip): fill the box without
     // distorting it, or show all of it again. One undo step each.
@@ -263,8 +304,17 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     crop_fill.set_valign(gtk::Align::Center);
     let crop_reset = gtk::Button::with_label("Show All");
     crop_reset.set_valign(gtk::Align::Center);
-    picture_group.add(&row("Crop", &linked(&[crop_fill.upcast_ref(), crop_reset.upcast_ref()])));
-    let arrange_page = page(&[&pos_group, &size_group, &turn_group, &order_group, &picture_group]);
+    picture_group.add(&row(
+        "Crop",
+        &linked(&[crop_fill.upcast_ref(), crop_reset.upcast_ref()]),
+    ));
+    let arrange_page = page(&[
+        &pos_group,
+        &size_group,
+        &turn_group,
+        &order_group,
+        &picture_group,
+    ]);
 
     // ── Animate (Keynote's builds) ─────────────────────────────────────────
     let build_group = adw::PreferencesGroup::builder()
@@ -274,7 +324,10 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     let mut effect_names = vec!["None"];
     effect_names.extend(BuildEffect::ALL.iter().map(|e| e.label()));
     let build_in = combo("Build In", &effect_names);
-    let out_names: Vec<String> = effect_names.iter().map(|n| n.replace(" from ", " to ")).collect();
+    let out_names: Vec<String> = effect_names
+        .iter()
+        .map(|n| n.replace(" from ", " to "))
+        .collect();
     let out_refs: Vec<&str> = out_names.iter().map(String::as_str).collect();
     let build_out = combo("Build Out", &out_refs);
     let build_order = adw::ActionRow::builder().title("Order").build();
@@ -289,12 +342,36 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
 
     // ── Tabs ─────────────────────────────────────────────────────────────
     let stack = adw::ViewStack::new();
-    let style_tab = stack.add_titled_with_icon(&style_page, Some("style"), "Style", "applications-graphics-symbolic");
-    let text_tab = stack.add_titled_with_icon(&text_page, Some("text"), "Text", "format-text-rich-symbolic");
-    let chart_tab = stack.add_titled_with_icon(&chart.page, Some("chart"), "Chart", "office-chart-symbolic");
-    stack.add_titled_with_icon(&arrange_page, Some("arrange"), "Arrange", "object-select-symbolic");
-    stack.add_titled_with_icon(&animate_page, Some("animate"), "Animate", "media-playback-start-symbolic");
-    let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).build();
+    let style_tab = stack.add_titled_with_icon(
+        &style_page,
+        Some("style"),
+        "Style",
+        "applications-graphics-symbolic",
+    );
+    let text_tab = stack.add_titled_with_icon(
+        &text_page,
+        Some("text"),
+        "Text",
+        "format-text-rich-symbolic",
+    );
+    let chart_tab =
+        stack.add_titled_with_icon(&chart.page, Some("chart"), "Chart", "office-chart-symbolic");
+    stack.add_titled_with_icon(
+        &arrange_page,
+        Some("arrange"),
+        "Arrange",
+        "object-select-symbolic",
+    );
+    stack.add_titled_with_icon(
+        &animate_page,
+        Some("animate"),
+        "Animate",
+        "media-playback-start-symbolic",
+    );
+    let switcher = adw::ViewSwitcher::builder()
+        .stack(&stack)
+        .policy(adw::ViewSwitcherPolicy::Wide)
+        .build();
     switcher.set_margin_top(6);
     switcher.set_margin_bottom(6);
     switcher.set_margin_start(6);
@@ -333,28 +410,61 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     let sync: Rc<dyn Fn()> = {
         let (ctl, syncing) = (ctl.clone(), syncing.clone());
         let (outer, stack) = (outer.clone(), stack.clone());
-        let (style_tab, text_tab, chart_tab, chart_sync) = (style_tab.clone(), text_tab.clone(), chart_tab.clone(), chart.sync.clone());
+        let (style_tab, text_tab, chart_tab, chart_sync) = (
+            style_tab.clone(),
+            text_tab.clone(),
+            chart_tab.clone(),
+            chart.sync.clone(),
+        );
         // The object last shown, so a newly selected chart opens on its
         // Chart tab.
         let shown: Rc<Cell<Option<(u64, u64)>>> = Rc::default();
-        let (fill, outline, outline_width, kind) = (fill.clone(), outline.clone(), outline_width.clone(), kind.clone());
-        let (font, size, bold, italic, text_color) =
-            (font.clone(), size.clone(), bold.clone(), italic.clone(), text_color.clone());
-        let (underline, strike, space_before, space_after, inset) =
-            (underline.clone(), strike.clone(), space_before.clone(), space_after.clone(), inset.clone());
-        let aligns = [a_left.clone(), a_center.clone(), a_right.clone(), a_just.clone()];
+        let (fill, outline, outline_width, kind) = (
+            fill.clone(),
+            outline.clone(),
+            outline_width.clone(),
+            kind.clone(),
+        );
+        let (font, size, bold, italic, text_color) = (
+            font.clone(),
+            size.clone(),
+            bold.clone(),
+            italic.clone(),
+            text_color.clone(),
+        );
+        let (underline, strike, space_before, space_after, inset) = (
+            underline.clone(),
+            strike.clone(),
+            space_before.clone(),
+            space_after.clone(),
+            inset.clone(),
+        );
+        let aligns = [
+            a_left.clone(),
+            a_center.clone(),
+            a_right.clone(),
+            a_just.clone(),
+        ];
         let (list, anchor, transition) = (list.clone(), anchor.clone(), transition.clone());
         let layout_sync = layout.sync.clone();
         let (x, y, w, h, rotation) = (x.clone(), y.clone(), w.clone(), h.clone(), rotation.clone());
-        let (build_in, build_out, build_order) = (build_in.clone(), build_out.clone(), build_order.clone());
+        let (build_in, build_out, build_order) =
+            (build_in.clone(), build_out.clone(), build_order.clone());
         let picture_group = picture_group.clone();
         Rc::new(move || {
             let sel = ctl.selection();
-            let f: Option<ObjectFormat> = sel.slide_id.zip(sel.primary_object_id).and_then(|(sid, oid)| ctl.object_format(sid, oid));
+            let f: Option<ObjectFormat> = sel
+                .slide_id
+                .zip(sel.primary_object_id)
+                .and_then(|(sid, oid)| ctl.object_format(sid, oid));
             let Some(f) = f else {
                 outer.set_visible_child_name("empty");
                 layout_sync();
-                let current = sel.slide_id.and_then(|sid| ctl.slide_index(sid)).and_then(|idx| ctl.slides.borrow().get(idx).map(|s| s.transition)).unwrap_or_default();
+                let current = sel
+                    .slide_id
+                    .and_then(|sid| ctl.slide_index(sid))
+                    .and_then(|idx| ctl.slides.borrow().get(idx).map(|s| s.transition))
+                    .unwrap_or_default();
                 syncing.set(true);
                 if let Some(i) = Transition::ALL.iter().position(|t| *t == current) {
                     transition.set_selected(i as u32);
@@ -380,7 +490,13 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
             if f.chart.is_some() && newly {
                 stack.set_visible_child_name("chart");
             } else if !shown_ok {
-                stack.set_visible_child_name(if f.has_style { "style" } else if f.has_text { "text" } else { "arrange" });
+                stack.set_visible_child_name(if f.has_style {
+                    "style"
+                } else if f.has_text {
+                    "text"
+                } else {
+                    "arrange"
+                });
             }
             if let Some(c) = &f.chart {
                 chart_sync(c);
@@ -401,7 +517,11 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
             space_after.set_value(f.space_after.unwrap_or(0.0));
             // An unstated margin shows DrawingML's 0.1in (7.2pt).
             inset.set_value(f.inset.unwrap_or(7.2));
-            let tc = f.text_color.as_deref().and_then(Color::from_hex).unwrap_or(Color(0, 0, 0));
+            let tc = f
+                .text_color
+                .as_deref()
+                .and_then(Color::from_hex)
+                .unwrap_or(Color(0, 0, 0));
             text_color.set_rgba(&rgba(tc));
             aligns[match f.align {
                 ParaAlign::Left => 0,
@@ -426,7 +546,12 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
             w.set_value(bw);
             h.set_value(bh);
             rotation.set_value(f.rotation.rem_euclid(360.0).round());
-            if let (Some(object_id), Some(slide)) = (sel.primary_object_id, sel.slide_id.and_then(|sid| ctl.slide_index(sid)).and_then(|idx| ctl.slides.borrow().get(idx).cloned())) {
+            if let (Some(object_id), Some(slide)) = (
+                sel.primary_object_id,
+                sel.slide_id
+                    .and_then(|sid| ctl.slide_index(sid))
+                    .and_then(|idx| ctl.slides.borrow().get(idx).cloned()),
+            ) {
                 let pick = |out: bool| {
                     slide
                         .builds
@@ -449,7 +574,11 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
                     [] => "Always on the slide".to_string(),
                     steps => format!(
                         "Click {} of {n}",
-                        steps.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" and ")
+                        steps
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(" and ")
                     ),
                 });
             }
@@ -499,18 +628,21 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
             let apply = apply.clone();
             let b2 = b.clone();
             let parent = b.root().and_downcast::<gtk::Window>();
-            gtk::FontDialog::builder().title("Font").build().choose_family(
-                parent.as_ref(),
-                None::<&gtk::pango::FontFamily>,
-                None::<&gtk::gio::Cancellable>,
-                move |chosen| {
-                    // Cancelling is an error here, and changes nothing.
-                    let Ok(family) = chosen else { return };
-                    let name = family.name().to_string();
-                    b2.set_label(&name);
-                    apply(FormatEdit::FontFamily(Some(name)));
-                },
-            );
+            gtk::FontDialog::builder()
+                .title("Font")
+                .build()
+                .choose_family(
+                    parent.as_ref(),
+                    None::<&gtk::pango::FontFamily>,
+                    None::<&gtk::gio::Cancellable>,
+                    move |chosen| {
+                        // Cancelling is an error here, and changes nothing.
+                        let Ok(family) = chosen else { return };
+                        let name = family.name().to_string();
+                        b2.set_label(&name);
+                        apply(FormatEdit::FontFamily(Some(name)));
+                    },
+                );
         });
     }
     {
@@ -561,7 +693,11 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     }
     {
         let apply = on(&apply);
-        text_color.connect_rgba_notify(move |b| apply(FormatEdit::TextColor(Some(color(&b.rgba()).to_hex().to_lowercase()))));
+        text_color.connect_rgba_notify(move |b| {
+            apply(FormatEdit::TextColor(Some(
+                color(&b.rgba()).to_hex().to_lowercase(),
+            )))
+        });
     }
     {
         let (apply, sync) = (on(&apply), sync.clone());
@@ -604,8 +740,13 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
         });
     }
     type Make = fn(f64) -> FormatEdit;
-    let arrange: [(&adw::SpinRow, Make); 5] =
-        [(&x, FormatEdit::X), (&y, FormatEdit::Y), (&w, FormatEdit::Width), (&h, FormatEdit::Height), (&rotation, FormatEdit::Rotation)];
+    let arrange: [(&adw::SpinRow, Make); 5] = [
+        (&x, FormatEdit::X),
+        (&y, FormatEdit::Y),
+        (&w, FormatEdit::Width),
+        (&h, FormatEdit::Height),
+        (&rotation, FormatEdit::Rotation),
+    ];
     for (spin, make) in arrange {
         let apply = on(&apply);
         spin.connect_value_notify(move |r| apply(make(r.value())));
@@ -619,7 +760,9 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
         let (ctl, changed) = (ctl.clone(), changed.clone());
         button.connect_clicked(move |_| {
             let sel = ctl.selection();
-            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else { return };
+            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else {
+                return;
+            };
             // Identity is unchanged by a reorder: the selection still names
             // the same object, so nothing follows it to a new index.
             if ctl.z_order_object(slide_id, object_id, op) {
@@ -632,7 +775,9 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
         let (ctl, changed) = (ctl.clone(), changed.clone());
         button.connect_clicked(move |_| {
             let sel = ctl.selection();
-            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else { return };
+            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else {
+                return;
+            };
             if ctl.crop_picture(slide_id, object_id, fill) {
                 changed();
             }
@@ -656,14 +801,19 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
     }
 
     for (row, out) in [(&build_in, false), (&build_out, true)] {
-        let (ctl, syncing, changed, sync) = (ctl.clone(), syncing.clone(), changed.clone(), sync.clone());
+        let (ctl, syncing, changed, sync) =
+            (ctl.clone(), syncing.clone(), changed.clone(), sync.clone());
         row.connect_selected_notify(move |r| {
             if syncing.get() {
                 return;
             }
             let sel = ctl.selection();
-            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else { return };
-            let effect = (r.selected() as usize).checked_sub(1).and_then(|i| BuildEffect::ALL.get(i).copied());
+            let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) else {
+                return;
+            };
+            let effect = (r.selected() as usize)
+                .checked_sub(1)
+                .and_then(|i| BuildEffect::ALL.get(i).copied());
             if ctl.set_build(slide_id, object_id, out, effect) {
                 changed();
                 sync();
@@ -671,5 +821,8 @@ pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspecto
         });
     }
 
-    FormatInspector { sidebar: outer.upcast(), sync }
+    FormatInspector {
+        sidebar: outer.upcast(),
+        sync,
+    }
 }

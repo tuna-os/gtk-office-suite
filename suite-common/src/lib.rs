@@ -10,38 +10,41 @@
 //   FileDialogHelper  — shared open/save/export file dialogs with office format filters
 //   ToastManager      — toast notification system for save/error feedback
 
+pub mod autosave_notice;
 pub mod charts;
 pub mod crash_report;
-pub mod file_dialogs;
-pub mod locations;
-pub mod autosave_notice;
-pub mod gtk_test;
-pub mod toast_manager;
-pub mod render_dump;
 pub mod dialogs;
+pub mod file_dialogs;
 pub mod file_drop;
+pub mod gtk_test;
+pub mod locations;
+pub mod render_dump;
+pub mod toast_manager;
 pub use file_drop::open_files_on_drop;
-pub mod popover;
-pub mod window_actions;
-pub mod icons;
 pub mod about;
-pub mod mail;
-pub mod shell_search;
-pub mod welcome;
 pub mod contacts;
+pub mod icons;
+pub mod mail;
+pub mod menus;
 pub mod online_accounts;
 pub mod page_setup;
-pub mod menus;
-pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session, report};
+pub mod popover;
+pub mod shell_search;
+pub mod welcome;
+pub mod window_actions;
+pub use suite_common_core::{
+    actions, atomic_save, autosave, carry, events, format, interop, palette, print, props, recent,
+    report, search, session, string_pool, style, templates, undo, units,
+};
 
+pub use dialogs::{confirm_discarding, show_error_dialog};
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
-pub use dialogs::{confirm_discarding, show_error_dialog};
 
 // The crate is named `libadwaita` in Cargo.toml; imported as `adw` for conciseness.
-use libadwaita as adw;
 use adw::prelude::*;
 use gtk4::{self as gtk, gio, glib};
+use libadwaita as adw;
 use std::cell::Cell;
 
 // ---------------------------------------------------------------------------
@@ -70,9 +73,13 @@ pub fn ni18n(singular: &str, plural: &str, n: u64) -> String {
 /// Initialize gettext for the suite. Called once from SuiteApp::new.
 /// Locale files install to <prefix>/share/locale (Flatpak: /app).
 fn init_i18n() {
-    use gettextrs::{bind_textdomain_codeset, bindtextdomain, setlocale, textdomain, LocaleCategory};
+    use gettextrs::{
+        bind_textdomain_codeset, bindtextdomain, setlocale, textdomain, LocaleCategory,
+    };
     // SAFETY: setlocale is safe in single-threaded startup; gettext-rs 0.8 marks it unsafe.
-    unsafe { setlocale(LocaleCategory::LcAll, ""); }
+    unsafe {
+        setlocale(LocaleCategory::LcAll, "");
+    }
     let dir = if std::path::Path::new("/app/share/locale").exists() {
         "/app/share/locale"
     } else {
@@ -191,7 +198,11 @@ impl SuiteApp {
         act_dark.connect_activate(move |_, _| {
             let sm = adw::StyleManager::default();
             let dark = !sm.is_dark();
-            sm.set_color_scheme(if dark { adw::ColorScheme::ForceDark } else { adw::ColorScheme::ForceLight });
+            sm.set_color_scheme(if dark {
+                adw::ColorScheme::ForceDark
+            } else {
+                adw::ColorScheme::ForceLight
+            });
             if let Some(settings) = app_settings(&id) {
                 let _ = settings.set_string("style", if dark { "dark" } else { "light" });
                 let _ = settings.set_boolean("dark-mode", dark);
@@ -200,7 +211,9 @@ impl SuiteApp {
         app.add_action(&act_dark);
         let id = app_id.to_string();
         app.connect_startup(move |_| {
-            if let Some(scheme) = app_settings(&id).and_then(|s| saved_scheme(&s.string("style"), s.boolean("dark-mode"))) {
+            if let Some(scheme) = app_settings(&id)
+                .and_then(|s| saved_scheme(&s.string("style"), s.boolean("dark-mode")))
+            {
                 adw::StyleManager::default().set_color_scheme(scheme);
             }
         });
@@ -219,7 +232,9 @@ impl SuiteApp {
         act_help.connect_activate(move |_, _| {
             if let Some(app) = app_weak.upgrade() {
                 let active = app.active_window();
-                let win = active.as_ref().and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
+                let win = active
+                    .as_ref()
+                    .and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
                 show_help_dialog(win);
             }
         });
@@ -230,10 +245,16 @@ impl SuiteApp {
         act_new_template.connect_activate(move |_, _| {
             if let Some(app) = app_weak.upgrade() {
                 let app_id = app.application_id().unwrap_or_default();
-                let app_name = app_id.split('.').next_back().unwrap_or("letters").to_string();
+                let app_name = app_id
+                    .split('.')
+                    .next_back()
+                    .unwrap_or("letters")
+                    .to_string();
                 let app_for_tmpl = app.clone();
                 let active = app.active_window();
-                let win = active.as_ref().and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
+                let win = active
+                    .as_ref()
+                    .and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
                 show_templates_dialog(win, &app_name, move |_name, _content| {
                     app_for_tmpl.activate_action("new-document", None);
                 });
@@ -263,15 +284,15 @@ impl SuiteApp {
         app.add_action(&act_quit);
 
         // ---- Keyboard accelerators ----
-        app.set_accels_for_action("app.new",        &["<Control>n"]);
+        app.set_accels_for_action("app.new", &["<Control>n"]);
         app.set_accels_for_action("app.new-from-template", &["<Control><Shift>n"]);
-        app.set_accels_for_action("app.open",        &["<Control>o"]);
-        app.set_accels_for_action("app.save",        &["<Control>s"]);
-        app.set_accels_for_action("app.save-as",     &["<Control><Shift>s"]);
+        app.set_accels_for_action("app.open", &["<Control>o"]);
+        app.set_accels_for_action("app.save", &["<Control>s"]);
+        app.set_accels_for_action("app.save-as", &["<Control><Shift>s"]);
         app.set_accels_for_action("app.preferences", &["<Control>comma"]);
-        app.set_accels_for_action("app.shortcuts",   &["<Control>question"]);
-        app.set_accels_for_action("app.help",        &["F1"]);
-        app.set_accels_for_action("app.quit",        &["<Control>q"]);
+        app.set_accels_for_action("app.shortcuts", &["<Control>question"]);
+        app.set_accels_for_action("app.help", &["F1"]);
+        app.set_accels_for_action("app.quit", &["<Control>q"]);
         app.set_accels_for_action("app.command-palette", &["<Control>k"]);
 
         actions::register_labels(&[
@@ -306,7 +327,6 @@ impl SuiteApp {
         let schema_id = self.app.application_id().unwrap_or_default();
         gio::Settings::new(&schema_id)
     }
-
 }
 
 /// The app's settings, if its schema (with `style` and `dark-mode` keys)
@@ -345,21 +365,35 @@ pub fn show_help_dialog(parent: Option<&adw::ApplicationWindow>) {
              Press Ctrl+K to find any command, and Ctrl+? for every keyboard shortcut.",
         )),
     );
-    dialog.add_responses(&[("close", &i18n("_Close")), ("open", &i18n("_Open Online Help"))]);
+    dialog.add_responses(&[
+        ("close", &i18n("_Close")),
+        ("open", &i18n("_Open Online Help")),
+    ]);
     dialog.set_response_appearance("open", adw::ResponseAppearance::Suggested);
     dialog.set_default_response(Some("open"));
     dialog.set_close_response("close");
     let window = parent.cloned();
-    dialog.choose(parent.map(|w| w.upcast_ref::<gtk::Widget>()), None::<&gio::Cancellable>, move |response| {
-        if response == "open" {
-            gtk::UriLauncher::new(HELP_URL).launch(window.as_ref(), None::<&gio::Cancellable>, |_| {});
-        }
-    });
+    dialog.choose(
+        parent.map(|w| w.upcast_ref::<gtk::Widget>()),
+        None::<&gio::Cancellable>,
+        move |response| {
+            if response == "open" {
+                gtk::UriLauncher::new(HELP_URL).launch(
+                    window.as_ref(),
+                    None::<&gio::Cancellable>,
+                    |_| {},
+                );
+            }
+        },
+    );
 }
 
 /// Show a template picker dialog for creating new documents from predefined templates.
-pub fn show_templates_dialog<F>(parent: Option<&adw::ApplicationWindow>, app_name: &str, on_select: F)
-where
+pub fn show_templates_dialog<F>(
+    parent: Option<&adw::ApplicationWindow>,
+    app_name: &str,
+    on_select: F,
+) where
     F: Fn(&'static str, &'static str) + 'static,
 {
     let templates = suite_common_core::templates::templates_for_app(app_name);
@@ -403,13 +437,18 @@ where
 
         let row = gtk::ListBoxRow::new();
         row.set_child(Some(&row_box));
-        unsafe { row.set_data("template-idx", idx); }
+        unsafe {
+            row.set_data("template-idx", idx);
+        }
         list.append(&row);
     }
 
     // Create makes the selected template; activating a row (a double
     // click, Enter) makes that one.
-    let dialogs::ActionDialog { dialog, action: create } = dialogs::action_dialog(&i18n("New From Template"), &i18n("_Create"), 520, &scroll);
+    let dialogs::ActionDialog {
+        dialog,
+        action: create,
+    } = dialogs::action_dialog(&i18n("New From Template"), &i18n("_Create"), 520, &scroll);
     dialog.set_content_height(400);
     list.select_row(list.row_at_index(0).as_ref());
     let make = std::rc::Rc::new(move |row: &gtk::ListBoxRow| {
@@ -464,7 +503,6 @@ pub fn clear_recent_files(settings: &gio::Settings) {
     let _ = settings.set_strv("recent-files", empty.as_slice());
 }
 
-
 // ---------------------------------------------------------------------------
 // SuiteToolbar — responsive formatting toolbar
 // ---------------------------------------------------------------------------
@@ -508,7 +546,9 @@ pub fn accent_rgb(widget: &impl IsA<gtk::Widget>) -> (f64, f64, f64) {
 /// any layout from `cr`; layouts pick the options up from it.
 pub fn use_ui_font_rendering(cr: &gtk4::cairo::Context) {
     use gtk4::cairo::{Antialias, FontOptions, HintMetrics, HintStyle};
-    let Ok(mut options) = FontOptions::new() else { return };
+    let Ok(mut options) = FontOptions::new() else {
+        return;
+    };
     options.set_antialias(Antialias::Gray);
     options.set_hint_style(HintStyle::Slight);
     options.set_hint_metrics(HintMetrics::Off);
@@ -518,7 +558,11 @@ pub fn use_ui_font_rendering(cr: &gtk4::cairo::Context) {
 /// Theme-aware foreground color for canvas text. Keep the fallback contrast
 /// explicit for high-contrast themes where a named color may be unavailable.
 pub fn canvas_foreground(is_dark: bool) -> (f64, f64, f64) {
-    if is_dark { (0.94, 0.94, 0.94) } else { (0.08, 0.08, 0.08) }
+    if is_dark {
+        (0.94, 0.94, 0.94)
+    } else {
+        (0.08, 0.08, 0.08)
+    }
 }
 
 /// A responsive toolbar with a primary (always-visible) section and an
@@ -785,12 +829,18 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
 
     let file_section = gio::Menu::new();
     file_section.append(Some(&i18n("_New")), Some("app.new"));
-    file_section.append(Some(&i18n("New From _Template\u{2026}")), Some("app.new-from-template"));
+    file_section.append(
+        Some(&i18n("New From _Template\u{2026}")),
+        Some("app.new-from-template"),
+    );
     file_section.append(Some(&i18n("_Open\u{2026}")), Some("app.open"));
     file_section.append(Some(&i18n("_Save")), Some("app.save"));
     file_section.append(Some(&i18n("Save _As\u{2026}")), Some("app.save-as"));
     file_section.append(Some(&i18n("Page Set_up\u{2026}")), Some("app.page-setup"));
-    file_section.append(Some(&i18n("Print Pre_view\u{2026}")), Some("app.print-preview"));
+    file_section.append(
+        Some(&i18n("Print Pre_view\u{2026}")),
+        Some("app.print-preview"),
+    );
     file_section.append(Some(&i18n("_Print\u{2026}")), Some("app.print"));
     // GNOME primary menus group items in unlabelled sections.
     menu.append_section(None, &file_section);
@@ -802,8 +852,14 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
     let help_section = gio::Menu::new();
     help_section.append(Some(&i18n("_Help")), Some("app.help"));
     help_section.append(Some(&i18n("_Keyboard Shortcuts")), Some("app.shortcuts"));
-    help_section.append(Some(&i18n("Report a _Problem\u{2026}")), Some("app.report-problem"));
-    help_section.append(Some(&i18n("_About %s").replace("%s", app_name)), Some("app.about"));
+    help_section.append(
+        Some(&i18n("Report a _Problem\u{2026}")),
+        Some("app.report-problem"),
+    );
+    help_section.append(
+        Some(&i18n("_About %s").replace("%s", app_name)),
+        Some("app.about"),
+    );
     menu.append_section(None, &help_section);
 
     // Primary: F10 opens it, as in every GNOME app.
@@ -836,9 +892,14 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
 fn present_shortcuts(groups: &[(String, Vec<(String, String)>)]) {
     let page = adw::PreferencesPage::new();
     for (title, items) in groups {
-        let group = adw::PreferencesGroup::builder().title(title.as_str()).build();
+        let group = adw::PreferencesGroup::builder()
+            .title(title.as_str())
+            .build();
         for (name, accel) in items {
-            let row = adw::ActionRow::builder().title(name.as_str()).title_lines(2).build();
+            let row = adw::ActionRow::builder()
+                .title(name.as_str())
+                .title_lines(2)
+                .build();
             let keys = gtk::ShortcutLabel::new(accel);
             keys.set_valign(gtk::Align::Center);
             row.add_suffix(&keys);
@@ -859,7 +920,8 @@ fn present_shortcuts(groups: &[(String, Vec<(String, String)>)]) {
 
 /// Human-readable label for an accelerator string ("<Primary>b" → "Ctrl+B").
 fn accel_display(accel: &str) -> Option<String> {
-    gtk::accelerator_parse(accel).map(|(key, mods)| gtk::accelerator_get_label(key, mods).to_string())
+    gtk::accelerator_parse(accel)
+        .map(|(key, mods)| gtk::accelerator_get_label(key, mods).to_string())
 }
 
 /// Collect every parameterless app action as a palette entry. Actions
@@ -869,8 +931,12 @@ fn collect_palette_entries(app: &adw::Application) -> Vec<palette::PaletteEntry>
     // SuiteApp's canonical actions (app.save, app.open, …) forward to these
     // per-app implementation actions; listing both would duplicate rows.
     const FORWARDING_TARGETS: &[&str] = &[
-        "save-file", "save-file-as", "open-file", "new-document",
-        "show-preferences", "show-shortcuts",
+        "save-file",
+        "save-file-as",
+        "open-file",
+        "new-document",
+        "show-preferences",
+        "show-shortcuts",
     ];
     let mut entries: Vec<palette::PaletteEntry> = app
         .list_actions()
@@ -879,10 +945,16 @@ fn collect_palette_entries(app: &adw::Application) -> Vec<palette::PaletteEntry>
         .filter(|name| !FORWARDING_TARGETS.contains(&name.as_str()))
         .map(|name| {
             let full = format!("app.{name}");
-            let label = actions::label_for(&full)
-                .unwrap_or_else(|| format!("unlabeled: {full}"));
-            let accel = app.accels_for_action(&full).first().and_then(|a| accel_display(a));
-            palette::PaletteEntry { name: full, label, accel }
+            let label = actions::label_for(&full).unwrap_or_else(|| format!("unlabeled: {full}"));
+            let accel = app
+                .accels_for_action(&full)
+                .first()
+                .and_then(|a| accel_display(a));
+            palette::PaletteEntry {
+                name: full,
+                label,
+                accel,
+            }
         })
         .collect();
     entries.sort_by(|a, b| a.label.cmp(&b.label));
@@ -895,12 +967,15 @@ pub fn show_command_palette(app: &adw::Application) {
     let entries = collect_palette_entries(app);
 
     // Recently used actions rank first (persisted per app).
-    let settings = app
-        .application_id()
-        .map(|id| gio::Settings::new(&id));
+    let settings = app.application_id().map(|id| gio::Settings::new(&id));
     let recent: Vec<String> = settings
         .as_ref()
-        .map(|s| s.strv("palette-recent").iter().map(|g| g.to_string()).collect())
+        .map(|s| {
+            s.strv("palette-recent")
+                .iter()
+                .map(|g| g.to_string())
+                .collect()
+        })
         .unwrap_or_default();
 
     let search = gtk::SearchEntry::new();
@@ -984,13 +1059,18 @@ pub fn show_command_palette(app: &adw::Application) {
         let app = app.clone();
         let dialog = dialog.clone();
         list.connect_row_activated(move |_, row| {
-            let name: Option<String> =
-                unsafe { row.data::<String>("action-name").map(|p| p.as_ref().clone()) };
+            let name: Option<String> = unsafe {
+                row.data::<String>("action-name")
+                    .map(|p| p.as_ref().clone())
+            };
             if let Some(full) = name {
                 dialog.close();
                 if let Some(s) = &settings {
-                    let mut r: Vec<String> =
-                        s.strv("palette-recent").iter().map(|g| g.to_string()).collect();
+                    let mut r: Vec<String> = s
+                        .strv("palette-recent")
+                        .iter()
+                        .map(|g| g.to_string())
+                        .collect();
                     palette::push_recent(&mut r, &full, 8);
                     let _ = s.set_strv(
                         "palette-recent",
@@ -1163,10 +1243,22 @@ mod tests {
     /// "follow the system"; an older install's `dark-mode` still opens dark.
     #[test]
     fn a_saved_style_is_the_scheme_the_app_opens_in() {
-        assert_eq!(saved_scheme("light", false), Some(adw::ColorScheme::ForceLight));
-        assert_eq!(saved_scheme("light", true), Some(adw::ColorScheme::ForceLight));
-        assert_eq!(saved_scheme("dark", false), Some(adw::ColorScheme::ForceDark));
-        assert_eq!(saved_scheme("default", true), Some(adw::ColorScheme::ForceDark));
+        assert_eq!(
+            saved_scheme("light", false),
+            Some(adw::ColorScheme::ForceLight)
+        );
+        assert_eq!(
+            saved_scheme("light", true),
+            Some(adw::ColorScheme::ForceLight)
+        );
+        assert_eq!(
+            saved_scheme("dark", false),
+            Some(adw::ColorScheme::ForceDark)
+        );
+        assert_eq!(
+            saved_scheme("default", true),
+            Some(adw::ColorScheme::ForceDark)
+        );
         assert_eq!(saved_scheme("default", false), None);
     }
 
@@ -1198,13 +1290,21 @@ pub mod clipboard {
 
     /// `provider`, plus `extra` (MIME type, data) pairs only the copying
     /// app reads back: Letters' section breaks beside its fragment.
-    pub fn provider_with(mime: &str, json: &str, html: &str, plain: &str, extra: &[(&str, &str)]) -> gdk::ContentProvider {
+    pub fn provider_with(
+        mime: &str,
+        json: &str,
+        html: &str,
+        plain: &str,
+        extra: &[(&str, &str)],
+    ) -> gdk::ContentProvider {
         let mut parts = vec![
             gdk::ContentProvider::for_bytes(mime, &glib::Bytes::from(json.as_bytes())),
             gdk::ContentProvider::for_bytes("text/html", &glib::Bytes::from(html.as_bytes())),
             gdk::ContentProvider::for_value(&glib::Value::from(plain)),
         ];
-        parts.extend(extra.iter().map(|(mime, data)| gdk::ContentProvider::for_bytes(mime, &glib::Bytes::from(data.as_bytes()))));
+        parts.extend(extra.iter().map(|(mime, data)| {
+            gdk::ContentProvider::for_bytes(mime, &glib::Bytes::from(data.as_bytes()))
+        }));
         gdk::ContentProvider::new_union(&parts)
     }
 
@@ -1219,29 +1319,34 @@ pub mod clipboard {
         mime: &'static str,
         cb: F,
     ) {
-        clipboard.read_async(&[mime], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
-            let Ok((stream, _)) = res else {
-                cb(None);
-                return;
-            };
-            let out = gio::MemoryOutputStream::new_resizable();
-            let flags = gio::OutputStreamSpliceFlags::CLOSE_SOURCE
-                | gio::OutputStreamSpliceFlags::CLOSE_TARGET;
-            let out2 = out.clone();
-            out.splice_async(
-                &stream,
-                flags,
-                glib::Priority::DEFAULT,
-                gio::Cancellable::NONE,
-                move |res| {
-                    if res.is_err() {
-                        cb(None);
-                        return;
-                    }
-                    let bytes = out2.steal_as_bytes();
-                    cb(String::from_utf8(bytes.to_vec()).ok());
-                },
-            );
-        });
+        clipboard.read_async(
+            &[mime],
+            glib::Priority::DEFAULT,
+            gio::Cancellable::NONE,
+            move |res| {
+                let Ok((stream, _)) = res else {
+                    cb(None);
+                    return;
+                };
+                let out = gio::MemoryOutputStream::new_resizable();
+                let flags = gio::OutputStreamSpliceFlags::CLOSE_SOURCE
+                    | gio::OutputStreamSpliceFlags::CLOSE_TARGET;
+                let out2 = out.clone();
+                out.splice_async(
+                    &stream,
+                    flags,
+                    glib::Priority::DEFAULT,
+                    gio::Cancellable::NONE,
+                    move |res| {
+                        if res.is_err() {
+                            cb(None);
+                            return;
+                        }
+                        let bytes = out2.steal_as_bytes();
+                        cb(String::from_utf8(bytes.to_vec()).ok());
+                    },
+                );
+            },
+        );
     }
 }

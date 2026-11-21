@@ -12,31 +12,79 @@ use suite_common_core::document::Run;
 
 /// A 3x3 table: a title across the top row, and a label down two rows.
 fn table() -> TableData {
-    let cell = |t: &str| TableCell { runs: if t.is_empty() { vec![] } else { vec![Run::plain(t)] }, ..Default::default() };
-    let mut rows: Vec<Vec<TableCell>> = (0..3).map(|r| (0..3).map(|c| cell(&format!("r{r}c{c}"))).collect()).collect();
-    rows[0][0] = TableCell { col_span: 3, ..cell("Title") };
-    rows[0][1] = TableCell { covered: true, ..cell("") };
-    rows[0][2] = TableCell { covered: true, ..cell("") };
-    rows[1][0] = TableCell { row_span: 2, ..cell("Label") };
-    rows[2][0] = TableCell { covered: true, ..cell("") };
-    TableData { col_widths: vec![100.0; 3], row_heights: vec![40.0; 3], rows, first_row: true, ..Default::default() }
+    let cell = |t: &str| TableCell {
+        runs: if t.is_empty() {
+            vec![]
+        } else {
+            vec![Run::plain(t)]
+        },
+        ..Default::default()
+    };
+    let mut rows: Vec<Vec<TableCell>> = (0..3)
+        .map(|r| (0..3).map(|c| cell(&format!("r{r}c{c}"))).collect())
+        .collect();
+    rows[0][0] = TableCell {
+        col_span: 3,
+        ..cell("Title")
+    };
+    rows[0][1] = TableCell {
+        covered: true,
+        ..cell("")
+    };
+    rows[0][2] = TableCell {
+        covered: true,
+        ..cell("")
+    };
+    rows[1][0] = TableCell {
+        row_span: 2,
+        ..cell("Label")
+    };
+    rows[2][0] = TableCell {
+        covered: true,
+        ..cell("")
+    };
+    TableData {
+        col_widths: vec![100.0; 3],
+        row_heights: vec![40.0; 3],
+        rows,
+        first_row: true,
+        ..Default::default()
+    }
 }
 
 fn deck() -> Deck {
     let mut d = Deck::new();
-    d.slides[0].objects = vec![SlideObject::Table { x: 100.0, y: 100.0, w: 300.0, h: 120.0, rotation: 0.0, table: table() }];
+    d.slides[0].objects = vec![SlideObject::Table {
+        x: 100.0,
+        y: 100.0,
+        w: 300.0,
+        h: 120.0,
+        rotation: 0.0,
+        table: table(),
+    }];
     d
 }
 
 fn spans(t: &TableData) -> Vec<Vec<(usize, usize, bool)>> {
-    t.rows.iter().map(|row| row.iter().map(|c| (c.span().0, c.span().1, c.covered)).collect()).collect()
+    t.rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|c| (c.span().0, c.span().1, c.covered))
+                .collect()
+        })
+        .collect()
 }
 
 fn table_of(d: &Deck) -> TableData {
-    d.slides[0].objects.iter().find_map(|o| match o {
-        SlideObject::Table { table, .. } => Some(table.clone()),
-        _ => None,
-    }).expect("a table")
+    d.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::Table { table, .. } => Some(table.clone()),
+            _ => None,
+        })
+        .expect("a table")
 }
 
 #[test]
@@ -69,5 +117,9 @@ fn merged_cells_are_written_to_an_odp() {
     std::io::Read::read_to_string(&mut zip.by_name("content.xml").unwrap(), &mut xml).unwrap();
     assert!(xml.contains("table:number-columns-spanned=\"3\""), "{xml}");
     assert!(xml.contains("table:number-rows-spanned=\"2\""), "{xml}");
-    assert_eq!(xml.matches("<table:covered-table-cell/>").count(), 3, "{xml}");
+    assert_eq!(
+        xml.matches("<table:covered-table-cell/>").count(),
+        3,
+        "{xml}"
+    );
 }

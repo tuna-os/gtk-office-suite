@@ -50,7 +50,10 @@ pub fn read() -> Option<AccountBook> {
     type Objects = HashMap<glib::variant::ObjectPath, HashMap<String, Props>>;
     let (objects,) = reply.get::<(Objects,)>()?;
     let mut book = AccountBook::default();
-    for props in objects.values().filter_map(|ifaces| ifaces.get(ACCOUNT_IFACE)) {
+    for props in objects
+        .values()
+        .filter_map(|ifaces| ifaces.get(ACCOUNT_IFACE))
+    {
         if let Some(account) = account_props(props) {
             book.add(from_goa_props(&account));
         }
@@ -91,7 +94,12 @@ fn matrix_from_describe(reply: &glib::Variant) -> Option<Account> {
 
 fn account_props(props: &HashMap<String, glib::Variant>) -> Option<GoaAccountProps> {
     let text = |key: &str| props.get(key).and_then(|v| v.str()).map(str::to_owned);
-    let flag = |key: &str| props.get(key).and_then(|v| v.get::<bool>()).unwrap_or(false);
+    let flag = |key: &str| {
+        props
+            .get(key)
+            .and_then(|v| v.get::<bool>())
+            .unwrap_or(false)
+    };
     Some(GoaAccountProps {
         id: text("Id")?,
         provider_type: text("ProviderType")?,
@@ -109,7 +117,10 @@ mod tests {
     use suite_common_core::accounts::Capability;
 
     fn props(pairs: &[(&str, glib::Variant)]) -> HashMap<String, glib::Variant> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     #[test]
@@ -128,7 +139,9 @@ mod tests {
     }
 
     fn describe(state: Option<&str>) -> glib::Variant {
-        let state = state.map(|s| format!("<{}>", s.to_variant().print(true))).unwrap_or_default();
+        let state = state
+            .map(|s| format!("<{}>", s.to_variant().print(true)))
+            .unwrap_or_default();
         let text = format!("((true, signature '', [{state}]),)");
         glib::Variant::parse(Some(glib::VariantTy::new("((bgav))").unwrap()), &text).unwrap()
     }

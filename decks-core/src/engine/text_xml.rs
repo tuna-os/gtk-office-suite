@@ -26,7 +26,10 @@
 
 use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
-use super::text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
+use super::text_body::{
+    Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing,
+    TextBody,
+};
 use super::SlideScale;
 use suite_common_core::document::RunStyle;
 
@@ -72,7 +75,10 @@ impl RunProps {
                 .child("a:solidFill")
                 .and_then(|f| first_color(f, theme, None))
                 .map(|c| c.to_hex().to_lowercase()),
-            latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
+            latin: rpr
+                .child("a:latin")
+                .and_then(|l| l.attr("typeface"))
+                .and_then(|t| theme.typeface(t)),
         }
     }
 
@@ -134,7 +140,11 @@ impl LevelProps {
             if let Some(p) = s.child("a:spcPts") {
                 return p.attr("val")?.parse().ok().map(RawSpacing::Points);
             }
-            s.child("a:spcPct")?.attr("val")?.parse().ok().map(RawSpacing::Percent)
+            s.child("a:spcPct")?
+                .attr("val")?
+                .parse()
+                .ok()
+                .map(RawSpacing::Percent)
         };
         let mut bullet = None;
         let (mut bu_font, mut bu_size, mut bu_clr) = (None, None, None);
@@ -147,7 +157,9 @@ impl LevelProps {
                 "a:buSzPct" => bu_size = Some(val().map(RawBuSize::Pct)),
                 "a:buSzPts" => bu_size = Some(val().map(RawBuSize::Pts)),
                 "a:buClrTx" => bu_clr = Some(None),
-                "a:buClr" => bu_clr = Some(first_color(c, theme, None).map(|c| c.to_hex().to_lowercase())),
+                "a:buClr" => {
+                    bu_clr = Some(first_color(c, theme, None).map(|c| c.to_hex().to_lowercase()))
+                }
                 "a:buNone" => bullet = Some(Bullet::None),
                 "a:buChar" => bullet = c.attr("char").map(|ch| Bullet::Char(ch.to_string())),
                 "a:buAutoNum" => {
@@ -169,7 +181,10 @@ impl LevelProps {
             bu_font,
             bu_size,
             bu_clr,
-            run: ppr.child("a:defRPr").map(|r| RunProps::of(r, theme)).unwrap_or_default(),
+            run: ppr
+                .child("a:defRPr")
+                .map(|r| RunProps::of(r, theme))
+                .unwrap_or_default(),
         }
     }
 }
@@ -207,13 +222,19 @@ struct BodyProps {
 
 impl BodyProps {
     fn of(body_pr: Option<&Node>) -> BodyProps {
-        let Some(b) = body_pr else { return BodyProps::default() };
+        let Some(b) = body_pr else {
+            return BodyProps::default();
+        };
         let num = |k: &str| b.attr(k).and_then(|v| v.parse::<f64>().ok());
         BodyProps {
             anchor: b.attr("anchor").and_then(Anchor::from_drawingml),
             ins: [num("lIns"), num("tIns"), num("rIns"), num("bIns")],
             autofit: if let Some(n) = b.child("a:normAutofit") {
-                let frac = |k: &str| n.attr(k).and_then(|v| v.parse::<f64>().ok()).map(|v| v / 100_000.0);
+                let frac = |k: &str| {
+                    n.attr(k)
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .map(|v| v / 100_000.0)
+                };
                 Some(Some(Autofit {
                     font_scale: frac("fontScale").unwrap_or(1.0).clamp(0.01, 1.0),
                     line_reduction: frac("lnSpcReduction").unwrap_or(0.0).clamp(0.0, 0.9),
@@ -294,7 +315,12 @@ impl Inherited {
 
     /// As `read`, with placeholder outlines scaled onto the model's slide
     /// (`scale` is the slide's EMU-to-model factor).
-    pub(crate) fn read_scaled(layout_xml: &str, master_xml: &str, theme: &Theme, scale: f64) -> Inherited {
+    pub(crate) fn read_scaled(
+        layout_xml: &str,
+        master_xml: &str,
+        theme: &Theme,
+        scale: f64,
+    ) -> Inherited {
         let master = parse_tree(master_xml);
         let tx = master.find("p:txStyles");
         let style = |name: &str| ListStyle::of(tx.and_then(|t| t.child(name)), theme);
@@ -313,13 +339,16 @@ impl Inherited {
         let lk: Vec<&PhKey> = self.layout.iter().map(|p| &p.key).collect();
         let mk: Vec<&PhKey> = self.master.iter().map(|p| &p.key).collect();
         let (l, m) = inherited_indices(key, &lk, &mk);
-        l.and_then(|i| self.layout[i].paint.as_ref()).or_else(|| m.and_then(|i| self.master[i].paint.as_ref()))
+        l.and_then(|i| self.layout[i].paint.as_ref())
+            .or_else(|| m.and_then(|i| self.master[i].paint.as_ref()))
     }
 
     /// The list styles and body properties a shape inherits, least
     /// specific first.
     fn chain(&self, key: Option<&PhKey>) -> (Vec<&ListStyle>, BodyProps) {
-        let Some(key) = key else { return (vec![&self.other], BodyProps::default()) };
+        let Some(key) = key else {
+            return (vec![&self.other], BodyProps::default());
+        };
         let base = match key.text_style_family() {
             "title" => &self.title,
             "body" => &self.body,
@@ -330,7 +359,10 @@ impl Inherited {
         let (l, m) = inherited_indices(key, &lk, &mk);
         let mut lists = vec![base];
         let mut body = BodyProps::default();
-        for ph in [m.map(|i| &self.master[i]), l.map(|i| &self.layout[i])].into_iter().flatten() {
+        for ph in [m.map(|i| &self.master[i]), l.map(|i| &self.layout[i])]
+            .into_iter()
+            .flatten()
+        {
             lists.push(&ph.lst);
             body.over(&ph.body);
         }
@@ -356,7 +388,10 @@ impl SpText {
     /// index of the `a:p` that line `k` came from.
     pub(crate) fn body_for(&self, line_paras: &[usize]) -> TextBody {
         TextBody {
-            paras: line_paras.iter().map(|&p| self.paras.get(p).cloned().unwrap_or_default()).collect(),
+            paras: line_paras
+                .iter()
+                .map(|&p| self.paras.get(p).cloned().unwrap_or_default())
+                .collect(),
             anchor: self.anchor,
             insets: self.insets,
             autofit: self.autofit,
@@ -375,7 +410,11 @@ impl SpText {
 /// defaults.
 pub(crate) fn own_para_style(ppr: Option<&Node>, theme: &Theme, scale: SlideScale) -> ParaStyle {
     let props = ppr.map(|p| LevelProps::of(p, theme)).unwrap_or_default();
-    let lvl = ppr.and_then(|n| n.attr("lvl")).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(8);
+    let lvl = ppr
+        .and_then(|n| n.attr("lvl"))
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0)
+        .min(8);
     let pt = 96.0 / 72.0 * scale.text_factor();
     let spacing = |s: Option<RawSpacing>| match s {
         Some(RawSpacing::Points(h)) => Spacing::Units(h / 100.0 * pt),
@@ -405,15 +444,25 @@ pub(crate) fn own_para_style(ppr: Option<&Node>, theme: &Theme, scale: SlideScal
 
 /// Whether `sp` is a text box (`p:cNvSpPr txBox="1"`), not a shape.
 fn is_text_box(sp: &Node) -> bool {
-    sp.child("p:nvSpPr").and_then(|n| n.child("p:cNvSpPr")).and_then(|c| c.attr("txBox")).is_some_and(|v| v == "1" || v == "true")
+    sp.child("p:nvSpPr")
+        .and_then(|n| n.child("p:cNvSpPr"))
+        .and_then(|c| c.attr("txBox"))
+        .is_some_and(|v| v == "1" || v == "true")
 }
 
 /// The resolved text of every `p:sp` in a slide part, in document order.
-pub(crate) fn sp_texts(slide_xml: &str, theme: &Theme, inh: &Inherited, scale: SlideScale) -> Vec<SpText> {
+pub(crate) fn sp_texts(
+    slide_xml: &str,
+    theme: &Theme,
+    inh: &Inherited,
+    scale: SlideScale,
+) -> Vec<SpText> {
     let root = parse_tree(slide_xml);
     let mut sps = Vec::new();
     root.find_all("p:sp", &mut sps);
-    sps.into_iter().map(|sp| resolve_sp_text(sp, theme, inh, scale)).collect()
+    sps.into_iter()
+        .map(|sp| resolve_sp_text(sp, theme, inh, scale))
+        .collect()
 }
 
 fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale) -> SpText {
@@ -438,7 +487,12 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         insets: if key.is_some() || body.ins.iter().any(Option::is_some) || !is_text_box(sp) {
             let d = [91440.0, 45720.0, 91440.0, 45720.0];
             let i = |n: usize| body.ins[n].unwrap_or(d[n]);
-            Some(Insets { left: emu(i(0)), top: i(1) * scale.y, right: emu(i(2)), bottom: i(3) * scale.y })
+            Some(Insets {
+                left: emu(i(0)),
+                top: i(1) * scale.y,
+                right: emu(i(2)),
+                bottom: i(3) * scale.y,
+            })
         } else {
             None
         },
@@ -449,19 +503,26 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     // and its theme font, over the master's text styles and under the
     // shape's own. A white-on-accent oval states its white only there,
     // and the master's tx1 would turn its text dark.
-    let font_ref = sp.child("p:style").and_then(|s| s.child("a:fontRef")).map(|f| RunProps {
-        color: first_color(f, theme, None).map(|c| c.to_hex().to_lowercase()),
-        latin: match f.attr("idx") {
-            Some("major") => theme.typeface("+mj-lt"),
-            Some("minor") => theme.typeface("+mn-lt"),
-            _ => None,
-        },
-        ..RunProps::default()
-    });
+    let font_ref = sp
+        .child("p:style")
+        .and_then(|s| s.child("a:fontRef"))
+        .map(|f| RunProps {
+            color: first_color(f, theme, None).map(|c| c.to_hex().to_lowercase()),
+            latin: match f.attr("idx") {
+                Some("major") => theme.typeface("+mj-lt"),
+                Some("minor") => theme.typeface("+mn-lt"),
+                _ => None,
+            },
+            ..RunProps::default()
+        });
     let pt = 96.0 / 72.0 * scale.text_factor();
     for p in tx.children_named("a:p") {
         let ppr = p.child("a:pPr");
-        let lvl = ppr.and_then(|n| n.attr("lvl")).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(8);
+        let lvl = ppr
+            .and_then(|n| n.attr("lvl"))
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0)
+            .min(8);
         let mut props = LevelProps::default();
         let (own, inherited) = lists.split_last().expect("the shape's own list style");
         for l in inherited {
@@ -497,7 +558,11 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
             },
             // A paragraph with no text is as tall as its end mark: the
             // level's run properties under its own `a:endParaRPr`.
-            end_run: (!p.children.iter().any(|c| c.name == "a:r" || c.name == "a:fld")).then(|| {
+            end_run: (!p
+                .children
+                .iter()
+                .any(|c| c.name == "a:r" || c.name == "a:fld"))
+            .then(|| {
                 let mut run = props.run.clone();
                 if let Some(end) = p.child("a:endParaRPr") {
                     run.over(&RunProps::of(end, theme));
@@ -505,7 +570,11 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
                 run.style()
             }),
         });
-        for r in p.children.iter().filter(|c| c.name == "a:r" || c.name == "a:fld") {
+        for r in p
+            .children
+            .iter()
+            .filter(|c| c.name == "a:r" || c.name == "a:fld")
+        {
             let mut run = props.run.clone();
             if let Some(rpr) = r.child("a:rPr") {
                 run.over(&RunProps::of(rpr, theme));
@@ -527,7 +596,11 @@ mod tests {
             let root = parse_tree(&format!(r#"<a:rPr sz="{sz}"/>"#));
             RunProps::of(&root.children[0], &t).style().font_size_hp
         };
-        assert_eq!(size("1984"), Some(40), "19.84 pt is 20 pt to the half point, not 19.5");
+        assert_eq!(
+            size("1984"),
+            Some(40),
+            "19.84 pt is 20 pt to the half point, not 19.5"
+        );
         assert_eq!(size("1800"), Some(36));
         assert_eq!(size("1824"), Some(36), "18.24 pt");
         assert_eq!(size("1826"), Some(37), "18.26 pt");
@@ -561,7 +634,9 @@ mod tests {
         </p:spTree></p:cSld></p:sldLayout>"#;
 
     fn slide(shapes: &str) -> String {
-        format!(r#"<p:sld xmlns:a="a" xmlns:p="p"><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:sld>"#)
+        format!(
+            r#"<p:sld xmlns:a="a" xmlns:p="p"><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:sld>"#
+        )
     }
 
     fn sp(ph: &str, body: &str) -> String {
@@ -578,21 +653,34 @@ mod tests {
 
     #[test]
     fn a_centred_title_takes_the_masters_title_style_and_anchor() {
-        let got = resolve(&sp(r#"<p:ph type="ctrTitle"/>"#, "<a:p><a:r><a:t>Hi</a:t></a:r></a:p>"));
+        let got = resolve(&sp(
+            r#"<p:ph type="ctrTitle"/>"#,
+            "<a:p><a:r><a:t>Hi</a:t></a:r></a:p>",
+        ));
         assert_eq!(got[0].paras[0].align, ParaAlign::Center);
         assert_eq!(got[0].paras[0].bullet, Bullet::None);
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(88), "44 pt");
         assert_eq!(got[0].runs[0].style().color.as_deref(), Some("000000"));
-        assert_eq!(got[0].anchor, Anchor::Middle, "from the master title's bodyPr");
+        assert_eq!(
+            got[0].anchor,
+            Anchor::Middle,
+            "from the master title's bodyPr"
+        );
         let ins = got[0].insets.expect("a placeholder has insets");
         assert!((ins.left - 9.6).abs() < 1e-9 && (ins.top - 4.8).abs() < 1e-9);
     }
 
     #[test]
     fn a_subtitle_is_centred_grey_body_text_without_a_bullet() {
-        let got = resolve(&sp(r#"<p:ph type="subTitle" idx="1"/>"#, "<a:p><a:r><a:t>Sub</a:t></a:r></a:p>"));
+        let got = resolve(&sp(
+            r#"<p:ph type="subTitle" idx="1"/>"#,
+            "<a:p><a:r><a:t>Sub</a:t></a:r></a:p>",
+        ));
         let p = &got[0].paras[0];
-        assert_eq!((p.align, &p.bullet, p.margin_left, p.indent), (ParaAlign::Center, &Bullet::None, 0.0, 0.0));
+        assert_eq!(
+            (p.align, &p.bullet, p.margin_left, p.indent),
+            (ParaAlign::Center, &Bullet::None, 0.0, 0.0)
+        );
         let st = got[0].runs[0].style();
         assert_eq!(st.font_size_hp, Some(64), "32 pt from the body style");
         // tx1 (black) at a 75% tint, in linear light: a mid grey.
@@ -626,8 +714,15 @@ mod tests {
         assert_eq!(got[0].paras[0].align, ParaAlign::Right);
         assert_eq!(got[0].paras[0].bullet, Bullet::None);
         let (x, y) = (got[0].runs[0].style(), got[0].runs[1].style());
-        assert_eq!((x.font_size_hp, x.bold, x.color.as_deref()), (Some(20), true, Some("c80000")));
-        assert_eq!((y.font_size_hp, y.bold), (Some(64), false), "the next run is back to the level's defaults");
+        assert_eq!(
+            (x.font_size_hp, x.bold, x.color.as_deref()),
+            (Some(20), true, Some("c80000"))
+        );
+        assert_eq!(
+            (y.font_size_hp, y.bold),
+            (Some(64), false),
+            "the next run is back to the level's defaults"
+        );
     }
 
     #[test]
@@ -637,8 +732,17 @@ mod tests {
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(36));
         assert_eq!(got[0].insets, None);
         // Text on a shape (no txBox) wraps inside DrawingML's insets.
-        let shape = sp("", "<a:p><a:r><a:t>t</a:t></a:r></a:p>").replace(r#"<p:cNvSpPr txBox="1"/>"#, "<p:cNvSpPr/>");
-        assert_eq!(resolve(&shape)[0].insets, Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }));
+        let shape = sp("", "<a:p><a:r><a:t>t</a:t></a:r></a:p>")
+            .replace(r#"<p:cNvSpPr txBox="1"/>"#, "<p:cNvSpPr/>");
+        assert_eq!(
+            resolve(&shape)[0].insets,
+            Some(Insets {
+                left: 9.6,
+                top: 4.8,
+                right: 9.6,
+                bottom: 4.8
+            })
+        );
     }
 
     #[test]
@@ -649,9 +753,24 @@ mod tests {
 </p:spTree></p:cSld></p:sldLayout>"#;
         let theme = Theme::default();
         let inh = Inherited::read(layout, MASTER, &theme);
-        let side = inh.paint(&PhKey { ty: "body".into(), idx: Some(14) }).map(|p| p.style.fill);
-        assert_eq!(side, Some(Some(super::super::shape::Color(0x2E, 0x5E, 0x2E))));
-        assert!(inh.paint(&PhKey { ty: "body".into(), idx: Some(13) }).is_none(), "a placeholder that states no paint gives none");
+        let side = inh
+            .paint(&PhKey {
+                ty: "body".into(),
+                idx: Some(14),
+            })
+            .map(|p| p.style.fill);
+        assert_eq!(
+            side,
+            Some(Some(super::super::shape::Color(0x2E, 0x5E, 0x2E)))
+        );
+        assert!(
+            inh.paint(&PhKey {
+                ty: "body".into(),
+                idx: Some(13)
+            })
+            .is_none(),
+            "a placeholder that states no paint gives none"
+        );
     }
 
     #[test]
@@ -662,7 +781,10 @@ mod tests {
         ));
         // The reader drops the leading empty paragraph: lines are paras 1, 2.
         let body = got[0].body_for(&[1, 2]);
-        assert_eq!(body.paras.iter().map(|p| p.level).collect::<Vec<_>>(), [0, 1]);
+        assert_eq!(
+            body.paras.iter().map(|p| p.level).collect::<Vec<_>>(),
+            [0, 1]
+        );
     }
 
     #[test]
@@ -671,12 +793,19 @@ mod tests {
             "",
             r#"<a:p><a:r><a:rPr sz="2000"/><a:t>a</a:t></a:r></a:p><a:p><a:endParaRPr sz="800"/></a:p><a:p/><a:p><a:r><a:t>b</a:t></a:r></a:p>"#,
         ));
-        let ends: Vec<_> = got[0].paras.iter().map(|p| p.end_run.as_ref().map(|r| r.font_size_hp)).collect();
+        let ends: Vec<_> = got[0]
+            .paras
+            .iter()
+            .map(|p| p.end_run.as_ref().map(|r| r.font_size_hp))
+            .collect();
         // A paragraph with text has no end look of its own; an empty one
         // takes its endParaRPr, or the level's size when it states none.
         assert_eq!(ends[0], None);
         assert_eq!(ends[1], Some(Some(16)));
-        assert!(ends[2].is_some(), "an empty paragraph with no endParaRPr still follows its level");
+        assert!(
+            ends[2].is_some(),
+            "an empty paragraph with no endParaRPr still follows its level"
+        );
         assert_ne!(ends[2], Some(Some(40)), "not the run before it");
         assert_eq!(ends[3], None);
     }
@@ -689,7 +818,15 @@ mod tests {
         let layout = LAYOUT.replace(r#"<p:ph idx="2"/>"#, r#"<p:ph type="dt" idx="10"/>"#);
         let theme = Theme::default();
         let inh = Inherited::read(&layout, MASTER, &theme);
-        let got = sp_texts(&slide(&sp(r#"<p:ph idx="13"/>"#, "<a:p><a:r><a:t>a</a:t></a:r></a:p>")), &theme, &inh, SlideScale::default());
+        let got = sp_texts(
+            &slide(&sp(
+                r#"<p:ph idx="13"/>"#,
+                "<a:p><a:r><a:t>a</a:t></a:r></a:p>",
+            )),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
         assert_eq!(got[0].paras[0].bullet, Bullet::Char("•".into()));
         assert_eq!(got[0].paras[0].align, ParaAlign::Left);
     }
@@ -697,11 +834,22 @@ mod tests {
     #[test]
     fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_is_nothing() {
         let body = |pr: &str| {
-            format!(r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr><p:ph idx="2"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody>{pr}<a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r></a:p></p:txBody></p:sp>"#)
+            format!(
+                r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr><p:ph idx="2"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody>{pr}<a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r></a:p></p:txBody></p:sp>"#
+            )
         };
-        let got = resolve(&(body(r#"<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>"#)
-            + &body(r#"<a:bodyPr><a:normAutofit/></a:bodyPr>"#)));
-        assert_eq!(got[0].autofit, Some(Autofit { font_scale: 0.625, line_reduction: 0.2 }));
+        let got = resolve(
+            &(body(
+                r#"<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>"#,
+            ) + &body(r#"<a:bodyPr><a:normAutofit/></a:bodyPr>"#)),
+        );
+        assert_eq!(
+            got[0].autofit,
+            Some(Autofit {
+                font_scale: 0.625,
+                line_reduction: 0.2
+            })
+        );
         assert_eq!(got[1].autofit, None);
         // The sizes themselves are the author's.
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(64));
@@ -725,10 +873,24 @@ mod tests {
             SlideScale::default(),
         );
         let m = &got[0].paras[0].marker;
-        assert_eq!((m.font.as_deref(), m.size, m.color.as_deref()), (Some("Arial"), Some(MarkerSize::Relative(0.75)), Some("c00000")));
+        assert_eq!(
+            (m.font.as_deref(), m.size, m.color.as_deref()),
+            (
+                Some("Arial"),
+                Some(MarkerSize::Relative(0.75)),
+                Some("c00000")
+            )
+        );
         let m = &got[0].paras[1].marker;
-        assert_eq!((m.font.as_deref(), m.size), (None, Some(MarkerSize::Points(12.0))));
-        assert_eq!(m.color.as_deref(), Some("c00000"), "the colour is still inherited");
+        assert_eq!(
+            (m.font.as_deref(), m.size),
+            (None, Some(MarkerSize::Points(12.0)))
+        );
+        assert_eq!(
+            m.color.as_deref(),
+            Some("c00000"),
+            "the colour is still inherited"
+        );
     }
 
     /// A white-on-accent oval states its white only in its style's
@@ -750,11 +912,32 @@ mod tests {
             <p:style><a:lnRef idx="2"><a:srgbClr val="000000"/></a:lnRef><a:fillRef idx="1"><a:srgbClr val="000000"/></a:fillRef>
             <a:effectRef idx="0"><a:srgbClr val="000000"/></a:effectRef><a:fontRef idx="major"><a:srgbClr val="FFFFFF"/></a:fontRef></p:style>
             <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r><a:r><a:rPr><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:rPr><a:t>b</a:t></a:r></a:p></p:txBody></p:sp>"#;
-        let got = sp_texts(&slide(&(styled.to_string() + &sp("", "<a:p><a:r><a:t>c</a:t></a:r></a:p>"))), &theme, &inh, SlideScale::default());
-        assert_eq!(got[0].runs[0].style().color.as_deref(), Some("ffffff"), "the style's, over the master's");
-        assert_eq!(got[0].runs[0].style().font_family.as_deref(), Some("Heading Face"), "idx=major is the heading face");
-        assert_eq!(got[0].runs[1].style().color.as_deref(), Some("00ff00"), "the run's own wins");
-        assert_eq!(got[1].runs[0].style().color.as_deref(), Some("111111"), "a box with no style keeps the master's");
+        let got = sp_texts(
+            &slide(&(styled.to_string() + &sp("", "<a:p><a:r><a:t>c</a:t></a:r></a:p>"))),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
+        assert_eq!(
+            got[0].runs[0].style().color.as_deref(),
+            Some("ffffff"),
+            "the style's, over the master's"
+        );
+        assert_eq!(
+            got[0].runs[0].style().font_family.as_deref(),
+            Some("Heading Face"),
+            "idx=major is the heading face"
+        );
+        assert_eq!(
+            got[0].runs[1].style().color.as_deref(),
+            Some("00ff00"),
+            "the run's own wins"
+        );
+        assert_eq!(
+            got[1].runs[0].style().color.as_deref(),
+            Some("111111"),
+            "a box with no style keeps the master's"
+        );
     }
 
     #[test]
@@ -764,24 +947,42 @@ mod tests {
                <a:majorFont><a:latin typeface="Heading Face"/><a:ea typeface=""/></a:majorFont>
                <a:minorFont><a:latin typeface="Body Face"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>"#,
         );
-        let master = MASTER.replace(
-            r#"<a:defRPr sz="4400">"#,
-            r#"<a:defRPr sz="4400"><a:latin typeface="+mj-lt"/>"#,
-        ).replace(
-            r#"<a:defRPr sz="3200"/>"#,
-            r#"<a:defRPr sz="3200"><a:latin typeface="+mn-lt"/></a:defRPr>"#,
-        );
+        let master = MASTER
+            .replace(
+                r#"<a:defRPr sz="4400">"#,
+                r#"<a:defRPr sz="4400"><a:latin typeface="+mj-lt"/>"#,
+            )
+            .replace(
+                r#"<a:defRPr sz="3200"/>"#,
+                r#"<a:defRPr sz="3200"><a:latin typeface="+mn-lt"/></a:defRPr>"#,
+            );
         let inh = Inherited::read(LAYOUT, &master, &theme);
         let got = sp_texts(
-            &slide(&(sp(r#"<p:ph type="title"/>"#, "<a:p><a:r><a:t>T</a:t></a:r></a:p>")
-                + &sp(r#"<p:ph idx="2"/>"#, r#"<a:p><a:r><a:t>a</a:t></a:r><a:r><a:rPr><a:latin typeface="Own Face"/></a:rPr><a:t>b</a:t></a:r></a:p>"#))),
+            &slide(
+                &(sp(
+                    r#"<p:ph type="title"/>"#,
+                    "<a:p><a:r><a:t>T</a:t></a:r></a:p>",
+                ) + &sp(
+                    r#"<p:ph idx="2"/>"#,
+                    r#"<a:p><a:r><a:t>a</a:t></a:r><a:r><a:rPr><a:latin typeface="Own Face"/></a:rPr><a:t>b</a:t></a:r></a:p>"#,
+                )),
+            ),
             &theme,
             &inh,
             SlideScale::default(),
         );
-        assert_eq!(got[0].runs[0].style().font_family.as_deref(), Some("Heading Face"));
-        assert_eq!(got[1].runs[0].style().font_family.as_deref(), Some("Body Face"));
-        assert_eq!(got[1].runs[1].style().font_family.as_deref(), Some("Own Face"));
+        assert_eq!(
+            got[0].runs[0].style().font_family.as_deref(),
+            Some("Heading Face")
+        );
+        assert_eq!(
+            got[1].runs[0].style().font_family.as_deref(),
+            Some("Body Face")
+        );
+        assert_eq!(
+            got[1].runs[1].style().font_family.as_deref(),
+            Some("Own Face")
+        );
         // A reference the theme can't answer is no font, not "+mj-lt".
         assert_eq!(Theme::default().typeface("+mj-lt"), None);
         assert_eq!(Theme::default().typeface("+mn-ea"), None);
@@ -792,7 +993,15 @@ mod tests {
         let theme = Theme::default();
         let inh = Inherited::read(LAYOUT, MASTER, &theme);
         let wide = SlideScale::from_emu(12_192_000.0, 6_858_000.0);
-        let got = sp_texts(&slide(&sp(r#"<p:ph idx="2"/>"#, r#"<a:p><a:pPr><a:spcBef><a:spcPts val="1200"/></a:spcBef></a:pPr><a:r><a:t>a</a:t></a:r></a:p>"#)), &theme, &inh, wide);
+        let got = sp_texts(
+            &slide(&sp(
+                r#"<p:ph idx="2"/>"#,
+                r#"<a:p><a:pPr><a:spcBef><a:spcPts val="1200"/></a:spcBef></a:pPr><a:r><a:t>a</a:t></a:r></a:p>"#,
+            )),
+            &theme,
+            &inh,
+            wide,
+        );
         // 12 pt of space on a 13.33in slide is 9 pt on the model's: 12 units.
         assert_eq!(got[0].paras[0].space_before, Spacing::Units(12.0));
         // 342900 EMU on the wide slide is 0.375 * 0.75 in = 27 units.

@@ -26,8 +26,14 @@ use support::{deck, pictures};
 const MB: usize = 1 << 20;
 
 fn within(name: &str, budget_mb: usize, peak: usize) {
-    eprintln!("{name}: peak heap {:.1} MB, budget {budget_mb} MB", peak as f64 / MB as f64);
-    assert!(peak <= budget_mb * MB, "{name}: peak heap {peak} bytes is over its {budget_mb} MB budget");
+    eprintln!(
+        "{name}: peak heap {:.1} MB, budget {budget_mb} MB",
+        peak as f64 / MB as f64
+    );
+    assert!(
+        peak <= budget_mb * MB,
+        "{name}: peak heap {peak} bytes is over its {budget_mb} MB budget"
+    );
 }
 
 #[test]

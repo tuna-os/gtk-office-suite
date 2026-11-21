@@ -6,9 +6,9 @@
 // libadwaita directly, so a dialog looks and behaves the same in all three.
 
 use crate::i18n;
+use adw::prelude::*;
 use gtk4 as gtk;
 use libadwaita as adw;
-use adw::prelude::*;
 
 /// Tell the user an operation failed, in a dialog they must acknowledge.
 ///
@@ -66,7 +66,11 @@ pub fn save_changes_question(names: &[String]) -> adw::AlertDialog {
         ),
     };
     let dialog = adw::AlertDialog::new(Some(&i18n("Save Changes?")), Some(&body));
-    dialog.add_responses(&[("cancel", &i18n("_Cancel")), ("discard", &discard), ("save", &save)]);
+    dialog.add_responses(&[
+        ("cancel", &i18n("_Cancel")),
+        ("discard", &discard),
+        ("save", &save),
+    ]);
     dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
     dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
     dialog.set_default_response(Some("save"));
@@ -77,9 +81,22 @@ pub fn save_changes_question(names: &[String]) -> adw::AlertDialog {
 /// The name of the document a window shows, from its title ("Budget —
 /// Tables" is "Budget"), for questions about it.
 pub fn document_name(window: &impl IsA<gtk::Window>) -> String {
-    let title = window.as_ref().title().map(|t| t.to_string()).unwrap_or_default();
-    let name = title.split(" — ").next().unwrap_or("").trim_end_matches(" (Recovered)").trim();
-    if name.is_empty() { i18n("Untitled") } else { name.to_string() }
+    let title = window
+        .as_ref()
+        .title()
+        .map(|t| t.to_string())
+        .unwrap_or_default();
+    let name = title
+        .split(" — ")
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(" (Recovered)")
+        .trim();
+    if name.is_empty() {
+        i18n("Untitled")
+    } else {
+        name.to_string()
+    }
 }
 
 /// Run `replace`, which swaps the window's document for another one (Open,
@@ -91,7 +108,12 @@ pub fn document_name(window: &impl IsA<gtk::Window>) -> String {
 /// Cancel is the default and the close response: dismissing the dialog
 /// keeps the document. `kind` names the document ("workbook",
 /// "presentation") in the question.
-pub fn confirm_discarding(parent: &adw::ApplicationWindow, dirty: bool, kind: &str, replace: impl FnOnce() + 'static) {
+pub fn confirm_discarding(
+    parent: &adw::ApplicationWindow,
+    dirty: bool,
+    kind: &str,
+    replace: impl FnOnce() + 'static,
+) {
     if !dirty {
         replace();
         return;
@@ -105,11 +127,15 @@ pub fn confirm_discarding(parent: &adw::ApplicationWindow, dirty: bool, kind: &s
     dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
     dialog.set_default_response(Some("cancel"));
     dialog.set_close_response("cancel");
-    dialog.choose(Some(parent), None::<&gtk::gio::Cancellable>, move |response| {
-        if response == "discard" {
-            replace();
-        }
-    });
+    dialog.choose(
+        Some(parent),
+        None::<&gtk::gio::Cancellable>,
+        move |response| {
+            if response == "discard" {
+                replace();
+            }
+        },
+    );
 }
 
 /// A prompt: an alert that asks for one line of text (Rename Sheet, Insert
@@ -132,7 +158,10 @@ pub const PROMPT_ACTION: &str = "action";
 
 pub fn prompt(heading: &str, body: Option<&str>, field: &str, text: &str, action: &str) -> Prompt {
     let dialog = adw::AlertDialog::new(Some(heading), body);
-    let entry = gtk::Entry::builder().text(text).activates_default(true).build();
+    let entry = gtk::Entry::builder()
+        .text(text)
+        .activates_default(true)
+        .build();
     entry.update_property(&[gtk::accessible::Property::Label(field)]);
     dialog.set_extra_child(Some(&entry));
     dialog.add_responses(&[("cancel", &i18n("_Cancel")), (PROMPT_ACTION, action)]);
@@ -145,7 +174,11 @@ pub fn prompt(heading: &str, body: Option<&str>, field: &str, text: &str, action
 impl Prompt {
     /// Show the prompt over `parent`. `done` gets the field's text when the
     /// action is chosen, and `None` when the prompt is cancelled.
-    pub fn present(self, parent: Option<&impl IsA<gtk::Widget>>, done: impl Fn(Option<String>) + 'static) {
+    pub fn present(
+        self,
+        parent: Option<&impl IsA<gtk::Widget>>,
+        done: impl Fn(Option<String>) + 'static,
+    ) {
         let Prompt { dialog, entry } = self;
         let field = entry.clone();
         dialog.connect_response(None, move |_, response| {
@@ -173,8 +206,16 @@ pub struct ActionDialog {
     pub action: gtk::Button,
 }
 
-pub fn action_dialog(title: &str, action: &str, width: i32, content: &impl IsA<gtk::Widget>) -> ActionDialog {
-    let dialog = adw::Dialog::builder().title(title).content_width(width).build();
+pub fn action_dialog(
+    title: &str,
+    action: &str,
+    width: i32,
+    content: &impl IsA<gtk::Widget>,
+) -> ActionDialog {
+    let dialog = adw::Dialog::builder()
+        .title(title)
+        .content_width(width)
+        .build();
     let action = gtk::Button::with_mnemonic(action);
     action.add_css_class("suggested-action");
     let cancel = gtk::Button::with_mnemonic(&i18n("_Cancel"));
@@ -184,7 +225,10 @@ pub fn action_dialog(title: &str, action: &str, width: i32, content: &impl IsA<g
             d.close();
         });
     }
-    let header = adw::HeaderBar::builder().show_start_title_buttons(false).show_end_title_buttons(false).build();
+    let header = adw::HeaderBar::builder()
+        .show_start_title_buttons(false)
+        .show_end_title_buttons(false)
+        .build();
     header.pack_start(&cancel);
     header.pack_end(&action);
     let view = adw::ToolbarView::new();
@@ -197,11 +241,21 @@ pub fn action_dialog(title: &str, action: &str, width: i32, content: &impl IsA<g
 
 /// A dialog that only shows something (Keyboard Shortcuts): a header bar
 /// with the title and a close button, above `content`.
-pub fn viewer_dialog(title: &str, width: i32, height: i32, content: &impl IsA<gtk::Widget>) -> adw::Dialog {
+pub fn viewer_dialog(
+    title: &str,
+    width: i32,
+    height: i32,
+    content: &impl IsA<gtk::Widget>,
+) -> adw::Dialog {
     let view = adw::ToolbarView::new();
     view.add_top_bar(&adw::HeaderBar::new());
     view.set_content(Some(content));
-    adw::Dialog::builder().title(title).content_width(width).content_height(height).child(&view).build()
+    adw::Dialog::builder()
+        .title(title)
+        .content_width(width)
+        .content_height(height)
+        .child(&view)
+        .build()
 }
 
 /// The body of a form: its groups of rows, one above the other, with the

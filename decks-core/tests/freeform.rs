@@ -16,11 +16,31 @@ fn paths() -> Vec<FreePath> {
         FreePath {
             w: 1000.0,
             h: 1000.0,
-            cmds: vec![PathCmd::Move(500.0, 500.0), PathCmd::Line(1000.0, 500.0), PathCmd::Arc { wr: 500.0, hr: 500.0, start: 0.0, swing: 90.0 }, PathCmd::Close],
+            cmds: vec![
+                PathCmd::Move(500.0, 500.0),
+                PathCmd::Line(1000.0, 500.0),
+                PathCmd::Arc {
+                    wr: 500.0,
+                    hr: 500.0,
+                    start: 0.0,
+                    swing: 90.0,
+                },
+                PathCmd::Close,
+            ],
             fill: true,
             stroke: true,
         },
-        FreePath { w: 1000.0, h: 1000.0, cmds: vec![PathCmd::Move(0.0, 0.0), PathCmd::Line(300.0, 100.0), PathCmd::Line(600.0, 0.0)], fill: false, stroke: true },
+        FreePath {
+            w: 1000.0,
+            h: 1000.0,
+            cmds: vec![
+                PathCmd::Move(0.0, 0.0),
+                PathCmd::Line(300.0, 100.0),
+                PathCmd::Line(600.0, 0.0),
+            ],
+            fill: false,
+            stroke: true,
+        },
     ]
 }
 
@@ -33,7 +53,16 @@ fn deck() -> Deck {
         w: 200.0,
         h: 200.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+        style: ShapeStyle {
+            glow: None,
+            shadow: None,
+            fill_alpha: None,
+            fill: Some(Color(0x44, 0x72, 0xC4)),
+            gradient: None,
+            stroke: None,
+            fill_src: None,
+            stroke_src: None,
+        },
     }];
     d
 }
@@ -43,7 +72,10 @@ fn freeform(d: &Deck) -> Vec<FreePath> {
         .objects
         .iter()
         .find_map(|o| match o {
-            SlideObject::Shape { kind: ShapeKind::Freeform(p), .. } => Some(p.clone()),
+            SlideObject::Shape {
+                kind: ShapeKind::Freeform(p),
+                ..
+            } => Some(p.clone()),
             _ => None,
         })
         .unwrap_or_else(|| panic!("no freeform: {:?}", d.slides[0].objects))
@@ -54,7 +86,10 @@ fn a_freeform_survives_a_pptx_save() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("f.pptx");
     write_pptx(path.to_str().unwrap(), &deck()).unwrap();
-    assert_eq!(freeform(&read_pptx(path.to_str().unwrap()).unwrap()), paths());
+    assert_eq!(
+        freeform(&read_pptx(path.to_str().unwrap()).unwrap()),
+        paths()
+    );
 }
 
 /// Through an odp the paths come back with the arc as Béziers, over the
@@ -66,10 +101,15 @@ fn a_freeform_survives_an_odp_save() {
     decks_core::odp::write(&deck(), path.to_str().unwrap()).unwrap();
     let back = freeform(&decks_core::odp::read(path.to_str().unwrap()).unwrap());
     assert_eq!(back.len(), 2);
-    assert_eq!(back.iter().map(|p| (p.fill, p.stroke)).collect::<Vec<_>>(), [(true, true), (false, true)]);
+    assert_eq!(
+        back.iter().map(|p| (p.fill, p.stroke)).collect::<Vec<_>>(),
+        [(true, true), (false, true)]
+    );
     let scale = back[0].w / 1000.0;
     assert_eq!(back[0].cmds[0], PathCmd::Move(500.0 * scale, 500.0 * scale));
-    assert!(matches!(back[0].cmds[2], PathCmd::Cubic(_, _, _, _, x, y) if (x - 500.0 * scale).abs() < 1.0 && (y - 1000.0 * scale).abs() < 1.0));
+    assert!(
+        matches!(back[0].cmds[2], PathCmd::Cubic(_, _, _, _, x, y) if (x - 500.0 * scale).abs() < 1.0 && (y - 1000.0 * scale).abs() < 1.0)
+    );
     assert_eq!(back[0].cmds.last(), Some(&PathCmd::Close));
 }
 
@@ -90,9 +130,13 @@ fn a_path_of_no_size_is_in_the_shapes_units() {
         let mut data = Vec::new();
         std::io::Read::read_to_end(&mut f, &mut data).unwrap();
         if name == "ppt/slides/slide1.xml" {
-            data = String::from_utf8(data).unwrap().replace(" w=\"1000\" h=\"1000\"", "").into_bytes();
+            data = String::from_utf8(data)
+                .unwrap()
+                .replace(" w=\"1000\" h=\"1000\"", "")
+                .into_bytes();
         }
-        out.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        out.start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
         std::io::Write::write_all(&mut out, &data).unwrap();
     }
     std::fs::write(&path, out.finish().unwrap().into_inner()).unwrap();

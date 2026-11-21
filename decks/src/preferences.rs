@@ -1,7 +1,7 @@
 // preferences.rs — Decks preferences dialog.
-use libadwaita as adw;
 use adw::prelude::*;
 use gtk4::{gdk, gio};
+use libadwaita as adw;
 
 pub struct DecksPreferences {
     pub window: adw::PreferencesDialog,
@@ -35,13 +35,19 @@ impl DecksPreferences {
 /// The displays a show can go on, as the system lists them: "Display 2 —
 /// DELL U2720Q". The index is what the setting stores.
 fn display_names() -> Vec<String> {
-    let Some(display) = gdk::Display::default() else { return vec![] };
+    let Some(display) = gdk::Display::default() else {
+        return vec![];
+    };
     let monitors = display.monitors();
     (0..monitors.n_items())
         .filter_map(|i| monitors.item(i).and_downcast::<gdk::Monitor>())
         .enumerate()
         .map(|(i, m)| {
-            let what = m.description().or_else(|| m.model()).or_else(|| m.connector()).map(|s| s.to_string());
+            let what = m
+                .description()
+                .or_else(|| m.model())
+                .or_else(|| m.connector())
+                .map(|s| s.to_string());
             match what {
                 Some(what) if !what.is_empty() => format!("Display {} — {what}", i + 1),
                 _ => format!("Display {}", i + 1),

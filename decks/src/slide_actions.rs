@@ -19,12 +19,24 @@ use crate::sidebar::rebuild_slide_list;
 const ACTIONS: [(&str, &str, &str); 3] = [
     ("duplicate-slide", "Duplicate Slide", "<Primary><Shift>d"),
     ("move-slide-up", "Move Slide Up", "<Primary><Shift>Page_Up"),
-    ("move-slide-down", "Move Slide Down", "<Primary><Shift>Page_Down"),
+    (
+        "move-slide-down",
+        "Move Slide Down",
+        "<Primary><Shift>Page_Down",
+    ),
 ];
 
 pub(crate) fn register(app: &adw::Application, h: EditorHandles) {
-    let labels: Vec<(String, &str)> = ACTIONS.iter().map(|(n, l, _)| (format!("app.{n}"), *l)).collect();
-    suite_common::actions::register_labels(&labels.iter().map(|(n, l)| (n.as_str(), *l)).collect::<Vec<_>>());
+    let labels: Vec<(String, &str)> = ACTIONS
+        .iter()
+        .map(|(n, l, _)| (format!("app.{n}"), *l))
+        .collect();
+    suite_common::actions::register_labels(
+        &labels
+            .iter()
+            .map(|(n, l)| (n.as_str(), *l))
+            .collect::<Vec<_>>(),
+    );
     for (name, _, accel) in ACTIONS {
         let (ctl, canvas, list, slides, masters, refresh) = (
             h.controller.clone(),
@@ -36,7 +48,9 @@ pub(crate) fn register(app: &adw::Application, h: EditorHandles) {
         );
         let act = gio::SimpleAction::new(name, None);
         act.connect_activate(move |_, _| {
-            let Some(slide_id) = ctl.selection().slide_id else { return };
+            let Some(slide_id) = ctl.selection().slide_id else {
+                return;
+            };
             let to_id = match name {
                 "duplicate-slide" => ctl.duplicate_slide(slide_id),
                 _ => {
@@ -44,7 +58,9 @@ pub(crate) fn register(app: &adw::Application, h: EditorHandles) {
                         "move-slide-up" => ctl.move_slide_up(slide_id),
                         _ => ctl.move_slide_down(slide_id),
                     };
-                    if !moved { return; }
+                    if !moved {
+                        return;
+                    }
                     Some(slide_id)
                 }
             };

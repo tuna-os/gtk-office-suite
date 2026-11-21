@@ -21,7 +21,9 @@
 //! which ODF paragraph margins can't express. It is written as nothing and
 //! read back as zero.
 
-use crate::engine::text_body::{Anchor, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
+use crate::engine::text_body::{
+    Anchor, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody,
+};
 use std::collections::HashMap;
 
 fn pt(v: f64) -> String {
@@ -105,16 +107,28 @@ fn scheme_of(fmt: &str, prefix: &str, suffix: &str) -> String {
 
 impl TextStyles {
     pub(crate) fn new(prefix: &str) -> Self {
-        TextStyles { prefix: prefix.to_string(), ..Default::default() }
+        TextStyles {
+            prefix: prefix.to_string(),
+            ..Default::default()
+        }
     }
 
     fn para_name(&mut self, st: &ParaStyle) -> Option<String> {
         // Level and bullet belong to the list; the rest to the paragraph.
-        let key = ParaStyle { level: 0, bullet: Bullet::None, end_run: None, ..st.clone() };
+        let key = ParaStyle {
+            level: 0,
+            bullet: Bullet::None,
+            end_run: None,
+            ..st.clone()
+        };
         if key == ParaStyle::default() {
             return None;
         }
-        Some(format!("{}P{}", self.prefix, index_of(&mut self.paras, &key)))
+        Some(format!(
+            "{}P{}",
+            self.prefix,
+            index_of(&mut self.paras, &key)
+        ))
     }
 
     fn list_name(&mut self, levels: Vec<Level>) -> String {
@@ -127,7 +141,11 @@ impl TextStyles {
         if body.anchor == Anchor::Top && body.insets.is_none() {
             return None;
         }
-        Some(format!("{}F{}", self.prefix, index_of(&mut self.frames, &(body.anchor, body.insets))))
+        Some(format!(
+            "{}F{}",
+            self.prefix,
+            index_of(&mut self.frames, &(body.anchor, body.insets))
+        ))
     }
 
     /// The `text:p`s (and lists) of a box. `inner[i]` is paragraph `i`'s
@@ -143,7 +161,9 @@ impl TextStyles {
                 continue;
             }
             // A block of consecutive list paragraphs is one list.
-            let end = (i..inner.len()).find(|&j| styles[j].bullet == Bullet::None).unwrap_or(inner.len());
+            let end = (i..inner.len())
+                .find(|&j| styles[j].bullet == Bullet::None)
+                .unwrap_or(inner.len());
             let mut levels: Vec<Level> = Vec::new();
             for st in &styles[i..end] {
                 if !levels.iter().any(|l| l.level == st.level) {
@@ -218,12 +238,21 @@ impl TextStyles {
                 props.push_str(&format!(" fo:text-align=\"{}\"", st.align.to_odf()));
             }
             if st.margin_left != 0.0 {
-                props.push_str(&format!(" fo:margin-left=\"{}\"", pt(crate::odp::page_x(st.margin_left))));
+                props.push_str(&format!(
+                    " fo:margin-left=\"{}\"",
+                    pt(crate::odp::page_x(st.margin_left))
+                ));
             }
             if st.indent != 0.0 {
-                props.push_str(&format!(" fo:text-indent=\"{}\"", pt(crate::odp::page_x(st.indent))));
+                props.push_str(&format!(
+                    " fo:text-indent=\"{}\"",
+                    pt(crate::odp::page_x(st.indent))
+                ));
             }
-            for (attr, sp) in [("fo:margin-top", st.space_before), ("fo:margin-bottom", st.space_after)] {
+            for (attr, sp) in [
+                ("fo:margin-top", st.space_before),
+                ("fo:margin-bottom", st.space_after),
+            ] {
                 if let Spacing::Units(u) = sp {
                     if u != 0.0 {
                         props.push_str(&format!(" {attr}=\"{}\"", pt(crate::odp::page_x(u))));
@@ -237,7 +266,11 @@ impl TextStyles {
             ));
         }
         for (i, levels) in self.lists.iter().enumerate() {
-            out.push_str(&format!("<text:list-style style:name=\"{}L{}\">", self.prefix, i + 1));
+            out.push_str(&format!(
+                "<text:list-style style:name=\"{}L{}\">",
+                self.prefix,
+                i + 1
+            ));
             for l in levels {
                 let props = format!(
                     "<style:list-level-properties text:list-level-position-and-space-mode=\"label-alignment\">\
@@ -257,9 +290,15 @@ impl TextStyles {
                 if let Some(c) = l.marker.color.as_deref() {
                     tp.push_str(&format!(" fo:color=\"#{c}\""));
                 }
-                let text_props = if tp.is_empty() { String::new() } else { format!("<style:text-properties{tp}/>") };
+                let text_props = if tp.is_empty() {
+                    String::new()
+                } else {
+                    format!("<style:text-properties{tp}/>")
+                };
                 let rel = match l.marker.size {
-                    Some(MarkerSize::Relative(f)) => format!(" text:bullet-relative-size=\"{}%\"", (f * 100.0).round()),
+                    Some(MarkerSize::Relative(f)) => {
+                        format!(" text:bullet-relative-size=\"{}%\"", (f * 100.0).round())
+                    }
                     _ => String::new(),
                 };
                 match &l.bullet {
@@ -336,7 +375,11 @@ fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|a| a.key.as_ref() == name)
-        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned()))
+        .and_then(|a| {
+            a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .ok()
+                .map(|v| v.into_owned())
+        })
 }
 
 fn len(e: &quick_xml::events::BytesStart, name: &str) -> Option<f64> {
@@ -358,11 +401,14 @@ impl TextDefs {
                     "style:style" => style = attr(&e, "style:name").zip(attr(&e, "style:family")),
                     "text:list-style" => list = attr(&e, "style:name"),
                     "style:paragraph-properties" => {
-                        if let Some((name, "paragraph")) = style.as_ref().map(|(n, f)| (n, f.as_str())) {
+                        if let Some((name, "paragraph")) =
+                            style.as_ref().map(|(n, f)| (n, f.as_str()))
+                        {
                             self.paras.insert(
                                 name.clone(),
                                 ParaDef {
-                                    align: attr(&e, "fo:text-align").and_then(|v| ParaAlign::from_odf(&v)),
+                                    align: attr(&e, "fo:text-align")
+                                        .and_then(|v| ParaAlign::from_odf(&v)),
                                     margin_left: len(&e, "fo:margin-left"),
                                     indent: len(&e, "fo:text-indent"),
                                     top: len(&e, "fo:margin-top"),
@@ -373,12 +419,16 @@ impl TextDefs {
                     }
                     "style:graphic-properties" => {
                         // A placeholder frame's style is a presentation one.
-                        if let Some((name, "graphic" | "presentation")) = style.as_ref().map(|(n, f)| (n, f.as_str())) {
-                            let anchor = attr(&e, "draw:textarea-vertical-align").and_then(|v| match v.as_str() {
-                                "top" => Some(Anchor::Top),
-                                "middle" => Some(Anchor::Middle),
-                                "bottom" => Some(Anchor::Bottom),
-                                _ => None,
+                        if let Some((name, "graphic" | "presentation")) =
+                            style.as_ref().map(|(n, f)| (n, f.as_str()))
+                        {
+                            let anchor = attr(&e, "draw:textarea-vertical-align").and_then(|v| {
+                                match v.as_str() {
+                                    "top" => Some(Anchor::Top),
+                                    "middle" => Some(Anchor::Middle),
+                                    "bottom" => Some(Anchor::Bottom),
+                                    _ => None,
+                                }
                             });
                             let pad = [
                                 len(&e, "fo:padding-left"),
@@ -391,8 +441,12 @@ impl TextDefs {
                             }
                         }
                     }
-                    tag @ ("text:list-level-style-bullet" | "text:list-level-style-number") if list.is_some() => {
-                        let n = attr(&e, "text:level").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1);
+                    tag @ ("text:list-level-style-bullet" | "text:list-level-style-number")
+                        if list.is_some() =>
+                    {
+                        let n = attr(&e, "text:level")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .unwrap_or(1);
                         let bullet = if tag == "text:list-level-style-bullet" {
                             Bullet::Char(attr(&e, "text:bullet-char").unwrap_or_else(|| "•".into()))
                         } else {
@@ -402,7 +456,9 @@ impl TextDefs {
                                     &attr(&e, "style:num-prefix").unwrap_or_default(),
                                     &attr(&e, "style:num-suffix").unwrap_or_default(),
                                 ),
-                                start: attr(&e, "text:start-value").and_then(|v| v.parse().ok()).unwrap_or(1),
+                                start: attr(&e, "text:start-value")
+                                    .and_then(|v| v.parse().ok())
+                                    .unwrap_or(1),
                             }
                         };
                         let marker = MarkerStyle {
@@ -411,9 +467,18 @@ impl TextDefs {
                                 .map(|p| MarkerSize::Relative(p / 100.0)),
                             ..MarkerStyle::default()
                         };
-                        let l = Level { level: n.saturating_sub(1), bullet, margin_left: 0.0, indent: 0.0, marker };
+                        let l = Level {
+                            level: n.saturating_sub(1),
+                            bullet,
+                            margin_left: 0.0,
+                            indent: 0.0,
+                            marker,
+                        };
                         if let Some(list) = &list {
-                            self.lists.entry(list.clone()).or_default().insert(l.level, l.clone());
+                            self.lists
+                                .entry(list.clone())
+                                .or_default()
+                                .insert(l.level, l.clone());
                         }
                         level = Some(l);
                     }
@@ -423,15 +488,22 @@ impl TextDefs {
                                 .or_else(|| attr(&e, "style:font-name"))
                                 .map(|f| f.trim().trim_matches('\'').to_string())
                                 .filter(|f| !f.is_empty());
-                            l.marker.color = attr(&e, "fo:color").map(|c| c.trim_start_matches('#').to_lowercase());
-                            self.lists.entry(list.clone()).or_default().insert(l.level, l.clone());
+                            l.marker.color = attr(&e, "fo:color")
+                                .map(|c| c.trim_start_matches('#').to_lowercase());
+                            self.lists
+                                .entry(list.clone())
+                                .or_default()
+                                .insert(l.level, l.clone());
                         }
                     }
                     "style:list-level-label-alignment" => {
                         if let (Some(list), Some(l)) = (&list, level.as_mut()) {
                             l.margin_left = len(&e, "fo:margin-left").unwrap_or(0.0);
                             l.indent = len(&e, "fo:text-indent").unwrap_or(0.0);
-                            self.lists.entry(list.clone()).or_default().insert(l.level, l.clone());
+                            self.lists
+                                .entry(list.clone())
+                                .or_default()
+                                .insert(l.level, l.clone());
                         }
                     }
                     _ => {}
@@ -451,8 +523,17 @@ impl TextDefs {
     /// A paragraph's style: its paragraph style name, the list style it is
     /// in (the outermost `text:list`'s) and how deep it is (0 = not in a
     /// list). `k` scales points to model units.
-    pub(crate) fn para(&self, style: Option<&str>, list: Option<&str>, depth: usize, k: f64) -> ParaStyle {
-        let d = style.and_then(|s| self.paras.get(s)).cloned().unwrap_or_default();
+    pub(crate) fn para(
+        &self,
+        style: Option<&str>,
+        list: Option<&str>,
+        depth: usize,
+        k: f64,
+    ) -> ParaStyle {
+        let d = style
+            .and_then(|s| self.paras.get(s))
+            .cloned()
+            .unwrap_or_default();
         let mut st = ParaStyle {
             align: d.align.unwrap_or_default(),
             margin_left: d.margin_left.unwrap_or(0.0) * k,
@@ -463,7 +544,10 @@ impl TextDefs {
         };
         if depth > 0 {
             st.level = (depth - 1).min(8) as u8;
-            if let Some(l) = list.and_then(|n| self.lists.get(n)).and_then(|ls| ls.get(&st.level)) {
+            if let Some(l) = list
+                .and_then(|n| self.lists.get(n))
+                .and_then(|ls| ls.get(&st.level))
+            {
                 st.bullet = l.bullet.clone();
                 st.marker = l.marker.clone();
                 // The paragraph's own indents win; the level's apply when
@@ -481,7 +565,9 @@ impl TextDefs {
 
     /// A frame's anchor and insets, from its graphic style.
     pub(crate) fn frame(&self, style: Option<&str>, k: (f64, f64)) -> (Anchor, Option<Insets>) {
-        let Some((anchor, pad)) = style.and_then(|s| self.frames.get(s)) else { return (Anchor::Top, None) };
+        let Some((anchor, pad)) = style.and_then(|s| self.frames.get(s)) else {
+            return (Anchor::Top, None);
+        };
         let insets = if pad.iter().any(Option::is_some) {
             let p = |i: usize, d: f64| pad[i].unwrap_or(d);
             let dflt = Insets::DRAWINGML;
@@ -521,13 +607,21 @@ mod tests {
     fn nested_levels_become_nested_lists_and_read_back() {
         let body = TextBody {
             paras: vec![
-                ParaStyle { align: ParaAlign::Center, ..Default::default() },
+                ParaStyle {
+                    align: ParaAlign::Center,
+                    ..Default::default()
+                },
                 bulleted(0, "•"),
                 bulleted(1, "–"),
                 bulleted(0, "•"),
             ],
             anchor: Anchor::Middle,
-            insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
+            insets: Some(Insets {
+                left: 9.6,
+                top: 4.8,
+                right: 9.6,
+                bottom: 4.8,
+            }),
             autofit: None,
             placeholder: None,
             placeholder_key: None,
@@ -549,11 +643,18 @@ mod tests {
         let frame = w.frame_name(&body).expect("a frame style");
 
         let mut defs = TextDefs::default();
-        defs.read(&format!("<office:automatic-styles>{}</office:automatic-styles>", w.declare()));
-        let got: Vec<ParaStyle> = [(Some("TP1"), None, 0), (Some("TP2"), Some("TL1"), 1), (Some("TP3"), Some("TL1"), 2)]
-            .iter()
-            .map(|(s, l, d)| defs.para(*s, *l, *d, 1.0))
-            .collect();
+        defs.read(&format!(
+            "<office:automatic-styles>{}</office:automatic-styles>",
+            w.declare()
+        ));
+        let got: Vec<ParaStyle> = [
+            (Some("TP1"), None, 0),
+            (Some("TP2"), Some("TL1"), 1),
+            (Some("TP3"), Some("TL1"), 2),
+        ]
+        .iter()
+        .map(|(s, l, d)| defs.para(*s, *l, *d, 1.0))
+        .collect();
         assert_eq!(got[0].align, ParaAlign::Center);
         assert_eq!(got[1], body.paras[1]);
         assert_eq!(got[2], body.paras[2]);
@@ -564,7 +665,13 @@ mod tests {
 
     #[test]
     fn numbering_schemes_round_trip_through_odf_formats() {
-        for scheme in ["arabicPeriod", "arabicParenR", "alphaLcParenBoth", "romanUcPeriod", "alphaUcPlain"] {
+        for scheme in [
+            "arabicPeriod",
+            "arabicParenR",
+            "alphaLcParenBoth",
+            "romanUcPeriod",
+            "alphaUcPlain",
+        ] {
             let (f, p, s) = num_format(scheme);
             assert_eq!(scheme_of(f, p, s), scheme);
         }

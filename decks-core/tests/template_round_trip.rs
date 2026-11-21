@@ -15,7 +15,15 @@ use decks_core::templates::{deck, templates};
 fn look(o: &SlideObject) -> String {
     let r = |v: f64| (v * 1000.0).round() / 1000.0;
     match o {
-        SlideObject::Shape { kind, x, y, w, h, style, .. } => {
+        SlideObject::Shape {
+            kind,
+            x,
+            y,
+            w,
+            h,
+            style,
+            ..
+        } => {
             format!("{kind:?} {} {} {} {} {style:?}", r(*x), r(*y), r(*w), r(*h))
         }
         SlideObject::TextBox { text, .. } => format!("text {text:?}"),
@@ -34,19 +42,44 @@ fn round_trip(d: &Deck, ext: &str) -> Deck {
 fn every_theme_keeps_its_master_through_pptx_and_odp() {
     for (i, t) in templates().iter().enumerate() {
         let (slides, masters) = deck(i).unwrap();
-        let d = Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
+        let d = Deck {
+            slides,
+            masters,
+            page_size: None,
+            themes: Vec::new(),
+            skipped_slides: Vec::new(),
+        };
         for ext in ["pptx", "odp"] {
             let back = round_trip(&d, ext);
             let (m, want) = (&back.masters[0], &d.masters[0]);
-            assert_eq!(m.background, want.background, "{} {ext}: background", t.name);
-            assert_eq!(m.font_family(), want.font_family(), "{} {ext}: font", t.name);
+            assert_eq!(
+                m.background, want.background,
+                "{} {ext}: background",
+                t.name
+            );
+            assert_eq!(
+                m.font_family(),
+                want.font_family(),
+                "{} {ext}: font",
+                t.name
+            );
             let got: Vec<String> = m.shapes.iter().map(look).collect();
             let wanted: Vec<String> = want.shapes.iter().map(look).collect();
             assert_eq!(got, wanted, "{} {ext}: the master's decorations", t.name);
             let texts = |d: &Deck| -> Vec<String> {
-                d.slides.iter().flat_map(|s| &s.objects).filter(|o| matches!(o, SlideObject::TextBox { .. })).map(look).collect()
+                d.slides
+                    .iter()
+                    .flat_map(|s| &s.objects)
+                    .filter(|o| matches!(o, SlideObject::TextBox { .. }))
+                    .map(look)
+                    .collect()
             };
-            assert_eq!(texts(&back), texts(&d), "{} {ext}: the slides' text", t.name);
+            assert_eq!(
+                texts(&back),
+                texts(&d),
+                "{} {ext}: the slides' text",
+                t.name
+            );
         }
     }
 }

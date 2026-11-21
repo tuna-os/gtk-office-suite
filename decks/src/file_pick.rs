@@ -22,7 +22,11 @@ fn test_pick() -> Option<std::path::PathBuf> {
 }
 
 /// `dialog.open` on `parent`, calling `done` with the choice.
-pub(crate) fn open(dialog: &gtk::FileDialog, parent: &impl IsA<gtk::Window>, done: impl FnOnce(Result<gio::File, glib::Error>) + 'static) {
+pub(crate) fn open(
+    dialog: &gtk::FileDialog,
+    parent: &impl IsA<gtk::Window>,
+    done: impl FnOnce(Result<gio::File, glib::Error>) + 'static,
+) {
     if let Some(path) = test_pick() {
         done(Ok(gio::File::for_path(path)));
         return;

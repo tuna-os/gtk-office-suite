@@ -12,29 +12,70 @@
 use decks_core::builds::{Build, BuildEffect};
 use decks_core::engine::{Slide, SlideObject, Transition};
 use decks_core::ops::{apply_all, ensure_ids, next_id, with_slides, Op, SlideProps};
-use suite_common_core::ops::History;
 use proptest::prelude::*;
+use suite_common_core::ops::History;
 
 #[derive(Clone, Debug)]
 enum Edit {
-    AddObject { slide: usize, at: usize, x: f64 },
-    DeleteObject { slide: usize, index: usize },
-    MoveObject { slide: usize, index: usize, to: usize },
-    NudgeObject { slide: usize, index: usize, dx: f64 },
-    AddSlide { at: usize, title: String },
-    DeleteSlide { slide: usize },
-    MoveSlide { slide: usize, to: usize },
-    SetNotes { slide: usize, notes: String },
-    AddBuild { slide: usize, index: usize },
+    AddObject {
+        slide: usize,
+        at: usize,
+        x: f64,
+    },
+    DeleteObject {
+        slide: usize,
+        index: usize,
+    },
+    MoveObject {
+        slide: usize,
+        index: usize,
+        to: usize,
+    },
+    NudgeObject {
+        slide: usize,
+        index: usize,
+        dx: f64,
+    },
+    AddSlide {
+        at: usize,
+        title: String,
+    },
+    DeleteSlide {
+        slide: usize,
+    },
+    MoveSlide {
+        slide: usize,
+        to: usize,
+    },
+    SetNotes {
+        slide: usize,
+        notes: String,
+    },
+    AddBuild {
+        slide: usize,
+        index: usize,
+    },
 }
 
 fn edit() -> impl Strategy<Value = Edit> {
     let n = 0usize..6;
     prop_oneof![
-        (n.clone(), n.clone(), 0.0..900.0).prop_map(|(slide, at, x)| Edit::AddObject { slide, at, x }),
+        (n.clone(), n.clone(), 0.0..900.0).prop_map(|(slide, at, x)| Edit::AddObject {
+            slide,
+            at,
+            x
+        }),
         (n.clone(), n.clone()).prop_map(|(slide, index)| Edit::DeleteObject { slide, index }),
-        (n.clone(), n.clone(), n.clone()).prop_map(|(slide, index, to)| Edit::MoveObject { slide, index, to }),
-        (n.clone(), n.clone(), -50.0..50.0).prop_map(|(slide, index, dx)| Edit::NudgeObject { slide, index, dx }),
+        (n.clone(), n.clone(), n.clone()).prop_map(|(slide, index, to)| Edit::MoveObject {
+            slide,
+            index,
+            to
+        }),
+        (n.clone(), n.clone(), -50.0..50.0).prop_map(|(slide, index, dx)| Edit::NudgeObject {
+            slide,
+            index,
+            dx
+        }),
         (n.clone(), "[a-z]{1,6}").prop_map(|(at, title)| Edit::AddSlide { at, title }),
         n.clone().prop_map(|slide| Edit::DeleteSlide { slide }),
         (n.clone(), n.clone()).prop_map(|(slide, to)| Edit::MoveSlide { slide, to }),
@@ -44,11 +85,18 @@ fn edit() -> impl Strategy<Value = Edit> {
 }
 
 fn rect(x: f64) -> SlideObject {
-    SlideObject::Rect { x, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 }
+    SlideObject::Rect {
+        x,
+        y: 10.0,
+        w: 20.0,
+        h: 20.0,
+        rotation: 0.0,
+    }
 }
 
 fn slide(title: &str, xs: &[f64]) -> Slide {
-    Slide { hidden: false,
+    Slide {
+        hidden: false,
         title: title.into(),
         background: "#ffffff".into(),
         background_picture: None,
@@ -70,16 +118,28 @@ fn ops_for(slides: &[Slide], e: &Edit) -> Vec<Op> {
     match e {
         Edit::AddObject { slide, at, x } => match slides.get(*slide) {
             Some(s) if *at <= s.objects.len() => {
-                vec![Op::InsertObject { slide: s.ids.slide, at: *at, id: next_id(slides), object: Box::new(rect(*x)) }]
+                vec![Op::InsertObject {
+                    slide: s.ids.slide,
+                    at: *at,
+                    id: next_id(slides),
+                    object: Box::new(rect(*x)),
+                }]
             }
             _ => vec![],
         },
         Edit::DeleteObject { slide, index } => match oid(*slide, *index) {
-            Some(id) => vec![Op::DeleteObject { slide: sid(*slide).unwrap(), id }],
+            Some(id) => vec![Op::DeleteObject {
+                slide: sid(*slide).unwrap(),
+                id,
+            }],
             None => vec![],
         },
         Edit::MoveObject { slide, index, to } => match (oid(*slide, *index), slides.get(*slide)) {
-            (Some(id), Some(s)) if *to < s.objects.len() => vec![Op::MoveObject { slide: s.ids.slide, id, to: *to }],
+            (Some(id), Some(s)) if *to < s.objects.len() => vec![Op::MoveObject {
+                slide: s.ids.slide,
+                id,
+                to: *to,
+            }],
             _ => vec![],
         },
         Edit::NudgeObject { slide, index, dx } => match (oid(*slide, *index), slides.get(*slide)) {
@@ -88,29 +148,50 @@ fn ops_for(slides: &[Slide], e: &Edit) -> Vec<Op> {
                 if let SlideObject::Rect { x, .. } = &mut o {
                     *x += dx;
                 }
-                vec![Op::SetObject { slide: s.ids.slide, id, object: Box::new(o) }]
+                vec![Op::SetObject {
+                    slide: s.ids.slide,
+                    id,
+                    object: Box::new(o),
+                }]
             }
             _ => vec![],
         },
-        Edit::AddSlide { at, title } if *at <= slides.len() => vec![Op::InsertSlide { at: *at, slide: Box::new(slide(title, &[])) }],
+        Edit::AddSlide { at, title } if *at <= slides.len() => vec![Op::InsertSlide {
+            at: *at,
+            slide: Box::new(slide(title, &[])),
+        }],
         Edit::AddSlide { .. } => vec![],
-        Edit::DeleteSlide { slide } if slides.len() > 1 => sid(*slide).map(|s| vec![Op::DeleteSlide { slide: s }]).unwrap_or_default(),
+        Edit::DeleteSlide { slide } if slides.len() > 1 => sid(*slide)
+            .map(|s| vec![Op::DeleteSlide { slide: s }])
+            .unwrap_or_default(),
         Edit::DeleteSlide { .. } => vec![],
-        Edit::MoveSlide { slide, to } if *to < slides.len() => sid(*slide).map(|s| vec![Op::MoveSlide { slide: s, to: *to }]).unwrap_or_default(),
+        Edit::MoveSlide { slide, to } if *to < slides.len() => sid(*slide)
+            .map(|s| vec![Op::MoveSlide { slide: s, to: *to }])
+            .unwrap_or_default(),
         Edit::MoveSlide { .. } => vec![],
         Edit::SetNotes { slide, notes } => match slides.get(*slide) {
             Some(s) => {
                 let mut p = SlideProps::of(s);
                 p.notes = notes.clone();
-                vec![Op::SetSlide { slide: s.ids.slide, props: Box::new(p) }]
+                vec![Op::SetSlide {
+                    slide: s.ids.slide,
+                    props: Box::new(p),
+                }]
             }
             None => vec![],
         },
         Edit::AddBuild { slide, index } => match slides.get(*slide) {
             Some(s) if *index < s.objects.len() => {
                 let mut p = SlideProps::of(s);
-                p.builds.push(Build { object: s.ids.objects[*index], effect: BuildEffect::Dissolve, out: false });
-                vec![Op::SetSlide { slide: s.ids.slide, props: Box::new(p) }]
+                p.builds.push(Build {
+                    object: s.ids.objects[*index],
+                    effect: BuildEffect::Dissolve,
+                    out: false,
+                });
+                vec![Op::SetSlide {
+                    slide: s.ids.slide,
+                    props: Box::new(p),
+                }]
             }
             _ => vec![],
         },
@@ -126,7 +207,11 @@ fn direct(slides: &mut Vec<Slide>, e: &Edit) {
     let fresh = |slides: &[Slide]| {
         slides
             .iter()
-            .flat_map(|s| std::iter::once(s.ids.slide).chain(s.ids.objects.iter().copied()).chain(s.ids.deleted.iter().copied()))
+            .flat_map(|s| {
+                std::iter::once(s.ids.slide)
+                    .chain(s.ids.objects.iter().copied())
+                    .chain(s.ids.deleted.iter().copied())
+            })
             .max()
             .unwrap_or(0)
             + 1
@@ -165,7 +250,10 @@ fn direct(slides: &mut Vec<Slide>, e: &Edit) {
             }
         }
         Edit::NudgeObject { slide, index, dx } => {
-            if let Some(SlideObject::Rect { x, .. }) = slides.get_mut(*slide).and_then(|s| s.objects.get_mut(*index)) {
+            if let Some(SlideObject::Rect { x, .. }) = slides
+                .get_mut(*slide)
+                .and_then(|s| s.objects.get_mut(*index))
+            {
                 *x += dx;
             }
         }
@@ -199,7 +287,11 @@ fn direct(slides: &mut Vec<Slide>, e: &Edit) {
             if let Some(s) = slides.get_mut(*slide) {
                 if *index < s.objects.len() {
                     let id = s.ids.objects[*index];
-                    s.builds.push(Build { object: id, effect: BuildEffect::Dissolve, out: false });
+                    s.builds.push(Build {
+                        object: id,
+                        effect: BuildEffect::Dissolve,
+                        out: false,
+                    });
                 }
             }
         }
@@ -208,7 +300,13 @@ fn direct(slides: &mut Vec<Slide>, e: &Edit) {
 
 /// A deck without its ids: what a user sees.
 fn content(slides: &[Slide]) -> String {
-    let plain: Vec<Slide> = slides.iter().map(|s| Slide { ids: Default::default(), ..s.clone() }).collect();
+    let plain: Vec<Slide> = slides
+        .iter()
+        .map(|s| Slide {
+            ids: Default::default(),
+            ..s.clone()
+        })
+        .collect();
     format!("{plain:?}")
 }
 

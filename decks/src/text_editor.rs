@@ -49,10 +49,26 @@ const PALETTE: [(&str, &str); 10] = [
 ];
 
 const ALIGNS: [(&str, &str, ParaAlign); 4] = [
-    ("format-justify-left-symbolic", "Align Paragraph Left", ParaAlign::Left),
-    ("format-justify-center-symbolic", "Centre Paragraph", ParaAlign::Center),
-    ("format-justify-right-symbolic", "Align Paragraph Right", ParaAlign::Right),
-    ("format-justify-fill-symbolic", "Justify Paragraph", ParaAlign::Justify),
+    (
+        "format-justify-left-symbolic",
+        "Align Paragraph Left",
+        ParaAlign::Left,
+    ),
+    (
+        "format-justify-center-symbolic",
+        "Centre Paragraph",
+        ParaAlign::Center,
+    ),
+    (
+        "format-justify-right-symbolic",
+        "Align Paragraph Right",
+        ParaAlign::Right,
+    ),
+    (
+        "format-justify-fill-symbolic",
+        "Justify Paragraph",
+        ParaAlign::Justify,
+    ),
 ];
 
 /// The formatting bar's controls, shown from the session's selection.
@@ -98,13 +114,19 @@ struct Editor {
 }
 
 fn toggle(icon: &str, label: &str) -> gtk::ToggleButton {
-    let b = gtk::ToggleButton::builder().icon_name(icon).tooltip_text(label).build();
+    let b = gtk::ToggleButton::builder()
+        .icon_name(icon)
+        .tooltip_text(label)
+        .build();
     b.update_property(&[gtk::accessible::Property::Label(label)]);
     b
 }
 
 fn button(icon: &str, label: &str) -> gtk::Button {
-    let b = gtk::Button::builder().icon_name(icon).tooltip_text(label).build();
+    let b = gtk::Button::builder()
+        .icon_name(icon)
+        .tooltip_text(label)
+        .build();
     b.update_property(&[gtk::accessible::Property::Label(label)]);
     b
 }
@@ -127,7 +149,11 @@ fn labelled_spin(label: &str, lo: f64, hi: f64, step: f64) -> gtk::SpinButton {
 
 /// Relative luminance of `RRGGBB`, 0 (black) to 1 (white).
 fn luminance(hex: &str) -> Option<f64> {
-    let c = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok().map(|v| v as f64 / 255.0);
+    let c = |i: usize| {
+        u8::from_str_radix(hex.get(i..i + 2)?, 16)
+            .ok()
+            .map(|v| v as f64 / 255.0)
+    };
     Some(0.299 * c(0)? + 0.587 * c(2)? + 0.114 * c(4)?)
 }
 
@@ -147,35 +173,75 @@ fn tag(table: &gtk::TextTagTable, name: &str, make: impl FnOnce() -> gtk::TextTa
 fn tags_for(table: &gtk::TextTagTable, style: &RunStyle, editor_ink: f64) -> Vec<gtk::TextTag> {
     let mut out = Vec::new();
     if style.bold {
-        out.push(tag(table, "bold", || gtk::TextTag::builder().name("bold").weight(700).build()));
+        out.push(tag(table, "bold", || {
+            gtk::TextTag::builder().name("bold").weight(700).build()
+        }));
     }
     if style.italic {
-        out.push(tag(table, "italic", || gtk::TextTag::builder().name("italic").style(pango::Style::Italic).build()));
+        out.push(tag(table, "italic", || {
+            gtk::TextTag::builder()
+                .name("italic")
+                .style(pango::Style::Italic)
+                .build()
+        }));
     }
     if style.underline {
-        out.push(tag(table, "underline", || gtk::TextTag::builder().name("underline").underline(pango::Underline::Single).build()));
+        out.push(tag(table, "underline", || {
+            gtk::TextTag::builder()
+                .name("underline")
+                .underline(pango::Underline::Single)
+                .build()
+        }));
     }
     if style.strikethrough {
-        out.push(tag(table, "strikethrough", || gtk::TextTag::builder().name("strikethrough").strikethrough(true).build()));
+        out.push(tag(table, "strikethrough", || {
+            gtk::TextTag::builder()
+                .name("strikethrough")
+                .strikethrough(true)
+                .build()
+        }));
     }
-    if let Some(family) = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty()) {
+    if let Some(family) = style
+        .font_family
+        .as_deref()
+        .map(str::trim)
+        .filter(|f| !f.is_empty())
+    {
         let name = format!("family:{family}");
-        out.push(tag(table, &name, || gtk::TextTag::builder().name(name.as_str()).family(family).build()));
+        out.push(tag(table, &name, || {
+            gtk::TextTag::builder()
+                .name(name.as_str())
+                .family(family)
+                .build()
+        }));
     }
     if let Some(hp) = style.font_size_hp {
         let name = format!("size:{hp}");
         let pt = (hp as f64 / 2.0).clamp(9.0, 32.0);
-        out.push(tag(table, &name, || gtk::TextTag::builder().name(name.as_str()).size_points(pt).build()));
+        out.push(tag(table, &name, || {
+            gtk::TextTag::builder()
+                .name(name.as_str())
+                .size_points(pt)
+                .build()
+        }));
     }
-    if let Some(hex) = style.color.as_deref().map(|c| c.trim_start_matches('#')).filter(|c| c.len() == 6) {
+    if let Some(hex) = style
+        .color
+        .as_deref()
+        .map(|c| c.trim_start_matches('#'))
+        .filter(|c| c.len() == 6)
+    {
         let lum = luminance(hex).unwrap_or(0.0);
         // The editor's own ground is the opposite of its ink.
         let unreadable = (lum - (1.0 - editor_ink)).abs() < 0.35;
         let name = format!("color:{hex}:{unreadable}");
         out.push(tag(table, &name, || {
-            let b = gtk::TextTag::builder().name(name.as_str()).foreground(format!("#{hex}"));
+            let b = gtk::TextTag::builder()
+                .name(name.as_str())
+                .foreground(format!("#{hex}"));
             if unreadable {
-                b.background(if lum > 0.5 { "#3d3d3d" } else { "#e6e6e6" }).build()
+                b.background(if lum > 0.5 { "#3d3d3d" } else { "#e6e6e6" })
+                    .build()
             } else {
                 b.build()
             }
@@ -205,15 +271,23 @@ fn retag(buffer: &gtk::TextBuffer, rt: &RichText, editor_ink: f64) {
 
 /// The session's working copy of the box on `slide`, for the canvas to
 /// draw in its place with the caret or selection.
-pub(crate) fn canvas_preview(ctl: &DecksController, slide: &Slide) -> Option<crate::canvas::TextPreview> {
-    let (slide_id, object_id, working, range) = ctl.text_session(|s| (s.slide_id, s.object_id, s.working().clone(), s.range()))?;
+pub(crate) fn canvas_preview(
+    ctl: &DecksController,
+    slide: &Slide,
+) -> Option<crate::canvas::TextPreview> {
+    let (slide_id, object_id, working, range) =
+        ctl.text_session(|s| (s.slide_id, s.object_id, s.working().clone(), s.range()))?;
     if slide.ids.slide != slide_id {
         return None;
     }
     let index = slide.object_index(object_id)?;
     let mut object = slide.objects.get(index)?.clone();
     working.write_to(&mut object);
-    Some(crate::canvas::TextPreview { index, object, range })
+    Some(crate::canvas::TextPreview {
+        index,
+        object,
+        range,
+    })
 }
 
 impl Editor {
@@ -231,7 +305,11 @@ impl Editor {
     /// Show the session: its text (when `text`), its styles, its
     /// selection (when `select`), the controls and the canvas preview.
     fn show(&self, text: bool, select: bool) {
-        let Some((working, (start, end))) = self.ctl.text_session(|s| (s.working().clone(), s.range())) else { return };
+        let Some((working, (start, end))) =
+            self.ctl.text_session(|s| (s.working().clone(), s.range()))
+        else {
+            return;
+        };
         let buffer = self.view.buffer();
         let was = self.syncing.replace(true);
         if text {
@@ -239,7 +317,9 @@ impl Editor {
         }
         retag(&buffer, &working, self.editor_ink());
         if select {
-            let at = |b: usize| buffer.iter_at_offset(byte_to_char(&working.text, b).unwrap_or(0) as i32);
+            let at = |b: usize| {
+                buffer.iter_at_offset(byte_to_char(&working.text, b).unwrap_or(0) as i32)
+            };
             buffer.select_range(&at(end), &at(start));
         }
         self.syncing.set(was);
@@ -250,14 +330,17 @@ impl Editor {
     /// The controls, from what the selection (or the caret's typing
     /// style) looks like.
     fn show_controls(&self) {
-        let Some(f) = self.ctl.text_session(|s| s.format_here()) else { return };
+        let Some(f) = self.ctl.text_session(|s| s.format_here()) else {
+            return;
+        };
         let was = self.syncing.replace(true);
         let c = &self.controls;
         c.bold.set_active(f.bold);
         c.italic.set_active(f.italic);
         c.underline.set_active(f.underline);
         c.strike.set_active(f.strikethrough);
-        c.size.set_value(f.font_size.unwrap_or(decks_core::format::DEFAULT_FONT_PT));
+        c.size
+            .set_value(f.font_size.unwrap_or(decks_core::format::DEFAULT_FONT_PT));
         let family = f.font_family.unwrap_or_default();
         let n = c.families.n_items();
         let found = (1..n).find(|i| c.families.string(*i).is_some_and(|s| s.as_str() == family));
@@ -301,7 +384,10 @@ impl Editor {
         if self.syncing.get() {
             return;
         }
-        let changed = self.ctl.edit_text_session(|s| s.format(&edit)).unwrap_or(false);
+        let changed = self
+            .ctl
+            .edit_text_session(|s| s.format(&edit))
+            .unwrap_or(false);
         if changed {
             self.show(false, false);
         } else {
@@ -310,7 +396,9 @@ impl Editor {
     }
 
     fn toggle_style(&self, key: gdk::Key) {
-        let Some(f) = self.ctl.text_session(|s| s.format_here()) else { return };
+        let Some(f) = self.ctl.text_session(|s| s.format_here()) else {
+            return;
+        };
         self.format(match key {
             gdk::Key::b => FormatEdit::Bold(!f.bold),
             gdk::Key::i => FormatEdit::Italic(!f.italic),
@@ -320,7 +408,10 @@ impl Editor {
 
     /// The session's own undo or redo.
     fn history(&self, undo: bool) {
-        let done = self.ctl.edit_text_session(|s| if undo { s.undo() } else { s.redo() }).unwrap_or(false);
+        let done = self
+            .ctl
+            .edit_text_session(|s| if undo { s.undo() } else { s.redo() })
+            .unwrap_or(false);
         if done {
             self.show(true, true);
         }
@@ -347,8 +438,15 @@ impl Editor {
             let (a, b) = s.range();
             (a < b).then(|| decks_core::fragment::copy_range(s.working(), a, b))
         });
-        let Some(frag) = frag.flatten() else { return false };
-        let provider = suite_common::clipboard::provider(decks_core::fragment::MIME, &frag.to_json(), &frag.to_html(), &frag.to_plain());
+        let Some(frag) = frag.flatten() else {
+            return false;
+        };
+        let provider = suite_common::clipboard::provider(
+            decks_core::fragment::MIME,
+            &frag.to_json(),
+            &frag.to_html(),
+            &frag.to_plain(),
+        );
         let _ = self.view.clipboard().set_content(Some(&provider));
         if cut {
             // Through the buffer, so the deletion is the same session
@@ -368,9 +466,17 @@ impl Editor {
         let weak = Rc::downgrade(self);
         suite_common::clipboard::read_string(&clipboard, decks_core::fragment::MIME, move |json| {
             let Some(ed) = weak.upgrade() else { return };
-            let Some(frag) = json.as_deref().and_then(decks_core::fragment::Fragment::from_json) else { return };
+            let Some(frag) = json
+                .as_deref()
+                .and_then(decks_core::fragment::Fragment::from_json)
+            else {
+                return;
+            };
             let pasted = decks_core::fragment::paste_runs(&frag);
-            let done = ed.ctl.edit_text_session(|s| s.insert_runs(pasted.runs, &pasted.paras).unwrap_or(false)).unwrap_or(false);
+            let done = ed
+                .ctl
+                .edit_text_session(|s| s.insert_runs(pasted.runs, &pasted.paras).unwrap_or(false))
+                .unwrap_or(false);
             if done {
                 ed.show(true, true);
             }
@@ -378,7 +484,13 @@ impl Editor {
                 ed.say(None, false);
             } else {
                 let what = pasted.flattened.join(", ");
-                ed.say(Some(&format!("{}: {what}", suite_common::i18n("Pasted as plain text"))), false);
+                ed.say(
+                    Some(&format!(
+                        "{}: {what}",
+                        suite_common::i18n("Pasted as plain text")
+                    )),
+                    false,
+                );
             }
         });
         true
@@ -416,15 +528,28 @@ impl Editor {
             .upgrade()
             .and_then(|w| gtk::prelude::GtkWindowExt::focus(&w))
             .and_then(|w| w.native())
-            .is_some_and(|n| n.upcast::<gtk::Widget>() == *self.popover.upcast_ref::<gtk::Widget>());
-        (focus_native || self.popover.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN) || self.view.has_focus())
+            .is_some_and(|n| {
+                n.upcast::<gtk::Widget>() == *self.popover.upcast_ref::<gtk::Widget>()
+            });
+        (focus_native
+            || self
+                .popover
+                .state_flags()
+                .contains(gtk::StateFlags::FOCUS_WITHIN)
+            || self.view.has_focus())
             && !self.menus.borrow().iter().any(|m| m.is_visible())
     }
 
     /// The session's keys. Both the window's capture controller (ahead of
     /// the application's shortcuts, which GTK runs from the window) and
     /// the popover's call this; an event is handled once.
-    fn key(self: &Rc<Self>, controller: &gtk::EventControllerKey, keyval: gdk::Key, mods: gdk::ModifierType, on_window: bool) -> glib::Propagation {
+    fn key(
+        self: &Rc<Self>,
+        controller: &gtk::EventControllerKey,
+        keyval: gdk::Key,
+        mods: gdk::ModifierType,
+        on_window: bool,
+    ) -> glib::Propagation {
         use glib::Propagation::{Proceed, Stop};
         let stamp = (controller.current_event_time(), keyval);
         if self.last_key.replace(Some(stamp)) == Some(stamp) {
@@ -489,7 +614,9 @@ impl Editor {
                 if !on_window {
                     if let Some(window) = self.window.upgrade() {
                         for detailed in &actions {
-                            if let Ok((name, target)) = gtk::gio::Action::parse_detailed_name(detailed) {
+                            if let Ok((name, target)) =
+                                gtk::gio::Action::parse_detailed_name(detailed)
+                            {
                                 let _ = window.activate_action(&name, target.as_ref());
                             }
                         }
@@ -533,14 +660,23 @@ fn build_controls() -> (gtk::Box, Controls) {
     let row2 = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     let families = gtk::StringList::new(&["Default"]);
     {
-        let mut names: Vec<String> = gtk::TextView::new().pango_context().list_families().iter().map(|f| f.name().to_string()).collect();
+        let mut names: Vec<String> = gtk::TextView::new()
+            .pango_context()
+            .list_families()
+            .iter()
+            .map(|f| f.name().to_string())
+            .collect();
         names.sort_by_key(|n| n.to_lowercase());
         names.dedup();
         for n in &names {
             families.append(n);
         }
     }
-    let expression = gtk::PropertyExpression::new(gtk::StringObject::static_type(), None::<gtk::Expression>, "string");
+    let expression = gtk::PropertyExpression::new(
+        gtk::StringObject::static_type(),
+        None::<gtk::Expression>,
+        "string",
+    );
     let family = gtk::DropDown::new(Some(families.clone()), Some(expression));
     family.set_enable_search(true);
     family.set_tooltip_text(Some("Font"));
@@ -549,12 +685,26 @@ fn build_controls() -> (gtk::Box, Controls) {
     size.set_digits(1);
     let bold = toggle("format-text-bold-symbolic", "Bold Selection (Ctrl+B)");
     let italic = toggle("format-text-italic-symbolic", "Italic Selection (Ctrl+I)");
-    let underline = toggle("format-text-underline-symbolic", "Underline Selection (Ctrl+U)");
-    let strike = toggle("format-text-strikethrough-symbolic", "Strike Through Selection");
+    let underline = toggle(
+        "format-text-underline-symbolic",
+        "Underline Selection (Ctrl+U)",
+    );
+    let strike = toggle(
+        "format-text-strikethrough-symbolic",
+        "Strike Through Selection",
+    );
     row1.append(&family);
     row1.append(&size);
-    row1.append(&linked(&[bold.upcast_ref(), italic.upcast_ref(), underline.upcast_ref(), strike.upcast_ref()]));
-    let aligns: Vec<gtk::ToggleButton> = ALIGNS.iter().map(|(icon, label, _)| toggle(icon, label)).collect();
+    row1.append(&linked(&[
+        bold.upcast_ref(),
+        italic.upcast_ref(),
+        underline.upcast_ref(),
+        strike.upcast_ref(),
+    ]));
+    let aligns: Vec<gtk::ToggleButton> = ALIGNS
+        .iter()
+        .map(|(icon, label, _)| toggle(icon, label))
+        .collect();
     let refs: Vec<&gtk::Widget> = aligns.iter().map(|b| b.upcast_ref()).collect();
     row2.append(&linked(&refs));
     let list = gtk::DropDown::from_strings(&["No List", "Bullets", "Numbers"]);
@@ -565,7 +715,19 @@ fn build_controls() -> (gtk::Box, Controls) {
     let space_after = labelled_spin("Space After Paragraph (pt)", 0.0, 400.0, 1.0);
     bar.append(&row1);
     bar.append(&row2);
-    let controls = Controls { family, families, size, bold, italic, underline, strike, aligns, list, space_before, space_after };
+    let controls = Controls {
+        family,
+        families,
+        size,
+        bold,
+        italic,
+        underline,
+        strike,
+        aligns,
+        list,
+        space_before,
+        space_after,
+    };
     (bar, controls)
 }
 
@@ -689,7 +851,9 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         let key = gtk::EventControllerKey::new();
         key.set_propagation_phase(gtk::PropagationPhase::Capture);
         key.connect_key_pressed(move |controller, keyval, _, mods| {
-            let Some(ed) = weak.upgrade() else { return glib::Propagation::Proceed };
+            let Some(ed) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
             if !ed.ctl.has_text_session() {
                 return glib::Propagation::Proceed;
             }
@@ -751,28 +915,52 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         let follow = gtk::GestureClick::new();
         follow.set_button(1);
         follow.connect_pressed(move |gesture, n, x, y| {
-            let ctrl = gesture.current_event_state().contains(gdk::ModifierType::CONTROL_MASK);
-            let Some(ed) = weak.upgrade().filter(|ed| ctrl && n == 1 && !ed.ctl.has_text_session()) else { return };
-            let Some(canvas) = ed.canvas.upgrade() else { return };
+            let ctrl = gesture
+                .current_event_state()
+                .contains(gdk::ModifierType::CONTROL_MASK);
+            let Some(ed) = weak
+                .upgrade()
+                .filter(|ed| ctrl && n == 1 && !ed.ctl.has_text_session())
+            else {
+                return;
+            };
+            let Some(canvas) = ed.canvas.upgrade() else {
+                return;
+            };
             let (cw, ch) = (canvas.width() as f64, canvas.height() as f64);
             let (hx, hy) = canvas_to_slide(x, y, cw, ch);
-            let Some(idx) = ed.ctl.selected_slide_index() else { return };
+            let Some(idx) = ed.ctl.selected_slide_index() else {
+                return;
+            };
             let link = {
                 let slides = slides.borrow();
                 slides.get(idx).and_then(|slide| {
                     let oi = hit_test_object(&slide.objects, hx, hy)?;
                     let obj = &slide.objects[oi];
-                    let SlideObject::TextBox { runs, .. } = obj else { return None };
+                    let SlideObject::TextBox { runs, .. } = obj else {
+                        return None;
+                    };
                     let masters = masters.borrow();
                     let master = crate::canvas::master_for(&slides, idx, &masters);
-                    let at = crate::canvas::text_offset_at(obj, crate::canvas::slide_geometry(cw, ch), master.as_deref(), (x, y))?;
+                    let at = crate::canvas::text_offset_at(
+                        obj,
+                        crate::canvas::slide_geometry(cw, ch),
+                        master.as_deref(),
+                        (x, y),
+                    )?;
                     decks_core::rich_text::link_at(runs, at).map(str::to_owned)
                 })
             };
-            let Some(uri) = link.filter(|u| decks_core::rich_text::is_followable(u)) else { return };
+            let Some(uri) = link.filter(|u| decks_core::rich_text::is_followable(u)) else {
+                return;
+            };
             gesture.set_state(gtk::EventSequenceState::Claimed);
             let parent = canvas.root().and_downcast::<gtk::Window>();
-            gtk::UriLauncher::new(&uri).launch(parent.as_ref(), gtk::gio::Cancellable::NONE, |_| {});
+            gtk::UriLauncher::new(&uri).launch(
+                parent.as_ref(),
+                gtk::gio::Cancellable::NONE,
+                |_| {},
+            );
         });
         h.canvas.add_controller(follow);
     }
@@ -806,17 +994,26 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
             dbl.connect_stopped(move |_| on_stop());
         }
         dbl.connect_pressed(move |gesture, n, x, y| {
-            crate::canvas_input::trace_input(|| format!("click {n} at {x:.1},{y:.1}, text session {}", ed.ctl.has_text_session()));
+            crate::canvas_input::trace_input(|| {
+                format!(
+                    "click {n} at {x:.1},{y:.1}, text session {}",
+                    ed.ctl.has_text_session()
+                )
+            });
             if n != 2 || ed.ctl.has_text_session() {
                 return;
             }
-            let Some(canvas) = ed.canvas.upgrade() else { return };
+            let Some(canvas) = ed.canvas.upgrade() else {
+                return;
+            };
             let (cw, ch) = (canvas.width() as f64, canvas.height() as f64);
             let (hx, hy) = canvas_to_slide(x, y, cw, ch);
             // Resolve the view index through the controller first: the
             // window's slide borrow below must never overlap a
             // controller call on the same RefCell.
-            let Some(idx) = ed.ctl.selected_slide_index() else { return };
+            let Some(idx) = ed.ctl.selected_slide_index() else {
+                return;
+            };
             let target = {
                 let mut slides = slides.borrow_mut();
                 decks_core::ops::ensure_ids(&mut slides);
@@ -828,12 +1025,29 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     }
                     let masters = masters.borrow();
                     let master = crate::canvas::master_for(&slides, idx, &masters);
-                    let caret = crate::canvas::text_offset_at(obj, crate::canvas::slide_geometry(cw, ch), master.as_deref(), (x, y));
-                    Some((slide.ids.slide, slide.ids.objects[oi], decks_core::undo::obj_bounds(obj), caret))
+                    let caret = crate::canvas::text_offset_at(
+                        obj,
+                        crate::canvas::slide_geometry(cw, ch),
+                        master.as_deref(),
+                        (x, y),
+                    );
+                    Some((
+                        slide.ids.slide,
+                        slide.ids.objects[oi],
+                        decks_core::undo::obj_bounds(obj),
+                        caret,
+                    ))
                 })
             };
-            crate::canvas_input::trace_input(|| format!("double-click at slide {hx:.1},{hy:.1} hits a text box: {}", target.is_some()));
-            let Some((slide_id, object_id, bounds, caret)) = target else { return };
+            crate::canvas_input::trace_input(|| {
+                format!(
+                    "double-click at slide {hx:.1},{hy:.1} hits a text box: {}",
+                    target.is_some()
+                )
+            });
+            let Some((slide_id, object_id, bounds, caret)) = target else {
+                return;
+            };
             gesture.set_state(gtk::EventSequenceState::Claimed);
             if !ed.ctl.begin_text_session(slide_id, object_id) {
                 crate::canvas_input::trace_input(|| "the text session did not begin".to_owned());
@@ -855,7 +1069,14 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
 }
 
 /// The formatting bar's signals: each one session format.
-fn connect_controls(ed: &Rc<Editor>, weak: &Weak<Editor>, colour: &gtk::Button, spacing: &gtk::Button, outdent: &gtk::Button, indent: &gtk::Button) {
+fn connect_controls(
+    ed: &Rc<Editor>,
+    weak: &Weak<Editor>,
+    colour: &gtk::Button,
+    spacing: &gtk::Button,
+    outdent: &gtk::Button,
+    indent: &gtk::Button,
+) {
     let c = &ed.controls;
     // Buttons hand the keyboard back to the text, so typing goes on.
     let fmt = |weak: &Weak<Editor>, edit: FormatEdit, refocus: bool| {
@@ -895,13 +1116,17 @@ fn connect_controls(ed: &Rc<Editor>, weak: &Weak<Editor>, colour: &gtk::Button, 
     }
     {
         let weak = weak.clone();
-        c.size.connect_value_changed(move |s| fmt(&weak, FormatEdit::FontSize(s.value()), false));
+        c.size
+            .connect_value_changed(move |s| fmt(&weak, FormatEdit::FontSize(s.value()), false));
     }
     {
         let weak = weak.clone();
         c.family.connect_selected_notify(move |d| {
             let Some(ed) = weak.upgrade() else { return };
-            let name = (d.selected() > 0).then(|| ed.controls.families.string(d.selected())).flatten().map(|s| s.to_string());
+            let name = (d.selected() > 0)
+                .then(|| ed.controls.families.string(d.selected()))
+                .flatten()
+                .map(|s| s.to_string());
             ed.format(FormatEdit::FontFamily(name));
         });
     }
@@ -925,8 +1150,13 @@ fn connect_controls(ed: &Rc<Editor>, weak: &Weak<Editor>, colour: &gtk::Button, 
     let palette = suite_common::popover::reused(colour, "text-colour-palette");
     for (i, (name, hex)) in PALETTE.iter().enumerate() {
         let swatch = gtk::Label::new(None);
-        swatch.set_markup(&format!("<span foreground=\"#{hex}\" size=\"x-large\">■</span>"));
-        let b = gtk::Button::builder().child(&swatch).tooltip_text(*name).build();
+        swatch.set_markup(&format!(
+            "<span foreground=\"#{hex}\" size=\"x-large\">■</span>"
+        ));
+        let b = gtk::Button::builder()
+            .child(&swatch)
+            .tooltip_text(*name)
+            .build();
         b.add_css_class("flat");
         b.update_property(&[gtk::accessible::Property::Label(name)]);
         let (weak, palette) = (weak.clone(), palette.downgrade());
@@ -962,7 +1192,10 @@ fn connect_controls(ed: &Rc<Editor>, weak: &Weak<Editor>, colour: &gtk::Button, 
     }
     // Paragraph spacing: above and below, in points.
     let sp = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    for (label, spin, before) in [("Space before (pt)", &c.space_before, true), ("Space after (pt)", &c.space_after, false)] {
+    for (label, spin, before) in [
+        ("Space before (pt)", &c.space_before, true),
+        ("Space after (pt)", &c.space_after, false),
+    ] {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         let l = gtk::Label::new(Some(&suite_common::i18n(label)));
         l.set_hexpand(true);
@@ -973,7 +1206,15 @@ fn connect_controls(ed: &Rc<Editor>, weak: &Weak<Editor>, colour: &gtk::Button, 
         let weak = weak.clone();
         spin.connect_value_changed(move |s| {
             let pt = s.value();
-            fmt(&weak, if before { FormatEdit::SpaceBefore(pt) } else { FormatEdit::SpaceAfter(pt) }, false);
+            fmt(
+                &weak,
+                if before {
+                    FormatEdit::SpaceBefore(pt)
+                } else {
+                    FormatEdit::SpaceAfter(pt)
+                },
+                false,
+            );
         });
     }
     let sp_popover = suite_common::popover::reused(spacing, "paragraph-spacing");
@@ -997,7 +1238,9 @@ fn connect_buffer(ed: &Rc<Editor>, weak: &Weak<Editor>) {
     {
         let weak = weak.clone();
         buffer.connect_insert_text(move |_, at, text| {
-            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else { return };
+            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else {
+                return;
+            };
             let chars = at.offset().max(0) as usize;
             ed.ctl.edit_text_session(|s| {
                 if let Some(b) = char_to_byte(&s.working().text, chars) {
@@ -1009,8 +1252,13 @@ fn connect_buffer(ed: &Rc<Editor>, weak: &Weak<Editor>) {
     {
         let weak = weak.clone();
         buffer.connect_delete_range(move |_, a, b| {
-            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else { return };
-            let (x, y) = (a.offset().min(b.offset()).max(0) as usize, a.offset().max(b.offset()).max(0) as usize);
+            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else {
+                return;
+            };
+            let (x, y) = (
+                a.offset().min(b.offset()).max(0) as usize,
+                a.offset().max(b.offset()).max(0) as usize,
+            );
             ed.ctl.edit_text_session(|s| {
                 let range = {
                     let t = &s.working().text;
@@ -1025,7 +1273,9 @@ fn connect_buffer(ed: &Rc<Editor>, weak: &Weak<Editor>) {
     {
         let weak = weak.clone();
         buffer.connect_changed(move |buffer| {
-            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else { return };
+            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else {
+                return;
+            };
             // Inserted text takes its run's tags from the session.
             if let Some(working) = ed.ctl.text_session(|s| s.working().clone()) {
                 ed.syncing.set(true);
@@ -1039,15 +1289,23 @@ fn connect_buffer(ed: &Rc<Editor>, weak: &Weak<Editor>) {
     {
         let weak = weak.clone();
         buffer.connect_mark_set(move |buffer, _, mark| {
-            if !matches!(mark.name().as_deref(), Some("insert") | Some("selection_bound")) {
+            if !matches!(
+                mark.name().as_deref(),
+                Some("insert") | Some("selection_bound")
+            ) {
                 return;
             }
-            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else { return };
+            let Some(ed) = weak.upgrade().filter(|ed| !ed.syncing.get()) else {
+                return;
+            };
             let (a, b) = buffer.selection_bounds().unwrap_or_else(|| {
                 let at = || buffer.iter_at_mark(&buffer.get_insert());
                 (at(), at())
             });
-            let (x, y) = (a.offset().min(b.offset()).max(0) as usize, a.offset().max(b.offset()).max(0) as usize);
+            let (x, y) = (
+                a.offset().min(b.offset()).max(0) as usize,
+                a.offset().max(b.offset()).max(0) as usize,
+            );
             ed.ctl.edit_text_session(|s| {
                 let range = {
                     let t = &s.working().text;
@@ -1076,7 +1334,9 @@ fn position_text_editor(
     // The host is the surrounding overlay, not the canvas. Translate
     // through the scrolled viewport so zoom/scroll offsets are respected.
     let Some(host) = popover.parent() else { return };
-    let Some(origin) = canvas.compute_point(&host, &gtk::graphene::Point::new(0.0, 0.0)) else { return };
+    let Some(origin) = canvas.compute_point(&host, &gtk::graphene::Point::new(0.0, 0.0)) else {
+        return;
+    };
     popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(
         (left + f64::from(origin.x())).round() as i32,
         (top + f64::from(origin.y())).round() as i32,
@@ -1094,13 +1354,21 @@ fn position_text_editor(
     // to a few lines.
     if let (Some(root), Some(top_in_root), Some(bottom_in_root)) = (
         canvas.root(),
-        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, top as f32)),
-        canvas.compute_point(&canvas.root().unwrap(), &gtk::graphene::Point::new(left as f32, bottom as f32)),
+        canvas.compute_point(
+            &canvas.root().unwrap(),
+            &gtk::graphene::Point::new(left as f32, top as f32),
+        ),
+        canvas.compute_point(
+            &canvas.root().unwrap(),
+            &gtk::graphene::Point::new(left as f32, bottom as f32),
+        ),
     ) {
         scrolled.set_size_request(text_w, text_h);
         // The popover itself measures 0 until it is shown; its content
         // has its real size already.
-        let content = popover.child().map_or(0, |c| c.measure(gtk::Orientation::Vertical, -1).1);
+        let content = popover
+            .child()
+            .map_or(0, |c| c.measure(gtk::Orientation::Vertical, -1).1);
         let chrome = content - text_h;
         let below = root.height() - bottom_in_root.y() as i32;
         let above = top_in_root.y() as i32;
@@ -1108,7 +1376,9 @@ fn position_text_editor(
         if chrome + text_h > room {
             text_h = (room - chrome).max(MIN_TEXT_HEIGHT);
         }
-        crate::canvas_input::trace_input(|| format!("editor fits {text_h} text over {chrome} chrome; {above} above, {below} below the box"));
+        crate::canvas_input::trace_input(|| {
+            format!("editor fits {text_h} text over {chrome} chrome; {above} above, {below} below the box")
+        });
     }
     scrolled.set_size_request(text_w, text_h);
 }

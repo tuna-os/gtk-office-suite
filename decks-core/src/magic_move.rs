@@ -24,11 +24,25 @@ fn identity(o: &SlideObject) -> String {
         SlideObject::Circle { .. } => "shape:ellipse".into(),
         SlideObject::Table { table, .. } => {
             let cells: Vec<String> = table.rows.iter().flatten().map(|c| c.text()).collect();
-            format!("table:{}x{}:{}", table.rows.len(), table.rows.first().map_or(0, |r| r.len()), cells.join("|"))
+            format!(
+                "table:{}x{}:{}",
+                table.rows.len(),
+                table.rows.first().map_or(0, |r| r.len()),
+                cells.join("|")
+            )
         }
         SlideObject::Chart { chart, .. } => {
-            let points: Vec<String> = chart.points.iter().map(|(c, v)| format!("{c}={v}")).collect();
-            format!("chart:{:?}:{}:{}", chart.kind, chart.series, points.join("|"))
+            let points: Vec<String> = chart
+                .points
+                .iter()
+                .map(|(c, v)| format!("{c}={v}"))
+                .collect();
+            format!(
+                "chart:{:?}:{}:{}",
+                chart.kind,
+                chart.series,
+                points.join("|")
+            )
         }
     }
 }
@@ -126,7 +140,13 @@ fn lerp_angle(a: f64, b: f64, t: f64) -> f64 {
 fn between(from: &SlideObject, to: &SlideObject, t: f64) -> SlideObject {
     let mut o = to.clone();
     let (a, b) = (obj_bounds(from), obj_bounds(to));
-    set_obj_bounds(&mut o, lerp(a.0, b.0, t), lerp(a.1, b.1, t), lerp(a.2, b.2, t), lerp(a.3, b.3, t));
+    set_obj_bounds(
+        &mut o,
+        lerp(a.0, b.0, t),
+        lerp(a.1, b.1, t),
+        lerp(a.2, b.2, t),
+        lerp(a.3, b.3, t),
+    );
     set_obj_rotation(&mut o, lerp_angle(obj_rotation(from), obj_rotation(to), t));
     match (from, &mut o) {
         (SlideObject::Shape { style: sa, .. }, SlideObject::Shape { style: sb, .. }) => {
@@ -138,7 +158,9 @@ fn between(from: &SlideObject, to: &SlideObject, t: f64) -> SlideObject {
                 lb.width = lerp(la.width, lb.width, t);
             }
         }
-        (SlideObject::TextBox { runs: ra, .. }, SlideObject::TextBox { runs: rb, .. }) if ra.len() == rb.len() => {
+        (SlideObject::TextBox { runs: ra, .. }, SlideObject::TextBox { runs: rb, .. })
+            if ra.len() == rb.len() =>
+        {
             for (x, y) in ra.iter().zip(rb.iter_mut()) {
                 let sa = x.style.font_size_hp.unwrap_or(36) as f64;
                 let sb = y.style.font_size_hp.unwrap_or(36) as f64;
@@ -162,18 +184,32 @@ pub struct FrameObject {
 /// The slide at `t` (0 → `from`, 1 → `to`, eased here). Objects only on
 /// `from` fade out underneath; then `to`'s objects in `to`'s stacking
 /// order, the shared ones moved part-way, the new ones fading in.
-pub fn frame(from: &[SlideObject], to: &[SlideObject], pairs: &[(usize, usize)], t: f64) -> Vec<FrameObject> {
+pub fn frame(
+    from: &[SlideObject],
+    to: &[SlideObject],
+    pairs: &[(usize, usize)],
+    t: f64,
+) -> Vec<FrameObject> {
     let e = ease(t);
     let mut out = Vec::new();
     for (fi, o) in from.iter().enumerate() {
         if !pairs.iter().any(|(f, _)| *f == fi) {
-            out.push(FrameObject { object: o.clone(), opacity: 1.0 - e });
+            out.push(FrameObject {
+                object: o.clone(),
+                opacity: 1.0 - e,
+            });
         }
     }
     for (ti, o) in to.iter().enumerate() {
         match pairs.iter().find(|(_, t2)| *t2 == ti) {
-            Some((fi, _)) => out.push(FrameObject { object: between(&from[*fi], o, e), opacity: 1.0 }),
-            None => out.push(FrameObject { object: o.clone(), opacity: e }),
+            Some((fi, _)) => out.push(FrameObject {
+                object: between(&from[*fi], o, e),
+                opacity: 1.0,
+            }),
+            None => out.push(FrameObject {
+                object: o.clone(),
+                opacity: e,
+            }),
         }
     }
     out
@@ -186,7 +222,16 @@ mod tests {
     use crate::engine::TextBody;
 
     fn text(t: &str, x: f64) -> SlideObject {
-        SlideObject::TextBox { text: t.into(), x, y: 10.0, w: 100.0, h: 40.0, rotation: 0.0, runs: vec![], body: TextBody::default() }
+        SlideObject::TextBox {
+            text: t.into(),
+            x,
+            y: 10.0,
+            w: 100.0,
+            h: 40.0,
+            rotation: 0.0,
+            runs: vec![],
+            body: TextBody::default(),
+        }
     }
 
     fn shape(kind: ShapeKind, x: f64, fill: Color) -> SlideObject {
@@ -197,14 +242,32 @@ mod tests {
             w: 50.0,
             h: 50.0,
             rotation: 0.0,
-            style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(fill), gradient: None, stroke: None, fill_src: None, stroke_src: None },
+            style: ShapeStyle {
+                glow: None,
+                shadow: None,
+                fill_alpha: None,
+                fill: Some(fill),
+                gradient: None,
+                stroke: None,
+                fill_src: None,
+                stroke_src: None,
+            },
         }
     }
 
     #[test]
     fn objects_match_on_kind_and_content_and_the_nearest_wins() {
-        let from = vec![text("Title", 0.0), shape(ShapeKind::Ellipse, 0.0, Color(0, 0, 0)), shape(ShapeKind::Ellipse, 500.0, Color(0, 0, 0))];
-        let to = vec![shape(ShapeKind::Ellipse, 480.0, Color(9, 9, 9)), text("Title", 300.0), text("New", 0.0), shape(ShapeKind::Rect, 0.0, Color(0, 0, 0))];
+        let from = vec![
+            text("Title", 0.0),
+            shape(ShapeKind::Ellipse, 0.0, Color(0, 0, 0)),
+            shape(ShapeKind::Ellipse, 500.0, Color(0, 0, 0)),
+        ];
+        let to = vec![
+            shape(ShapeKind::Ellipse, 480.0, Color(9, 9, 9)),
+            text("Title", 300.0),
+            text("New", 0.0),
+            shape(ShapeKind::Rect, 0.0, Color(0, 0, 0)),
+        ];
         let pairs = match_objects(&from, &to);
         // The ellipse at 480 is the one that was at 500, not the one at 0.
         assert_eq!(pairs, vec![(2, 0), (0, 1)]);
@@ -212,17 +275,33 @@ mod tests {
 
     #[test]
     fn a_shared_object_glides_and_the_rest_fade() {
-        let from = vec![shape(ShapeKind::Rect, 0.0, Color(0, 0, 0)), text("Gone", 0.0)];
-        let to = vec![shape(ShapeKind::Rect, 200.0, Color(200, 100, 0)), text("New", 0.0)];
+        let from = vec![
+            shape(ShapeKind::Rect, 0.0, Color(0, 0, 0)),
+            text("Gone", 0.0),
+        ];
+        let to = vec![
+            shape(ShapeKind::Rect, 200.0, Color(200, 100, 0)),
+            text("New", 0.0),
+        ];
         let pairs = match_objects(&from, &to);
         assert_eq!(pairs, vec![(0, 0)]);
         let mid = frame(&from, &to, &pairs, 0.5);
-        assert_eq!(mid.len(), 3, "the leaving text, the shape, the arriving text");
+        assert_eq!(
+            mid.len(),
+            3,
+            "the leaving text, the shape, the arriving text"
+        );
         assert!(matches!(&mid[0].object, SlideObject::TextBox { text, .. } if text == "Gone"));
         assert!((mid[0].opacity - 0.5).abs() < 1e-9 && (mid[2].opacity - 0.5).abs() < 1e-9);
         assert_eq!(obj_bounds(&mid[1].object).0, 100.0, "half way");
-        let SlideObject::Shape { style, .. } = &mid[1].object else { panic!() };
-        assert_eq!(style.fill, Some(Color(100, 50, 0)), "the colour turns as it goes");
+        let SlideObject::Shape { style, .. } = &mid[1].object else {
+            panic!()
+        };
+        assert_eq!(
+            style.fill,
+            Some(Color(100, 50, 0)),
+            "the colour turns as it goes"
+        );
         // The ends are the slides themselves.
         let end = frame(&from, &to, &pairs, 1.0);
         assert_eq!(obj_bounds(&end[1].object).0, 200.0);
@@ -249,11 +328,26 @@ mod tests {
     #[test]
     fn the_same_picture_in_two_files_is_one_picture() {
         let dir = tempfile::tempdir().unwrap();
-        let (a, b, c) = (dir.path().join("a"), dir.path().join("b"), dir.path().join("c"));
+        let (a, b, c) = (
+            dir.path().join("a"),
+            dir.path().join("b"),
+            dir.path().join("c"),
+        );
         std::fs::write(&a, b"png bytes").unwrap();
         std::fs::write(&b, b"png bytes").unwrap();
         std::fs::write(&c, b"other").unwrap();
-        let img = |p: &std::path::Path, x| SlideObject::Image { path: p.to_string_lossy().into(), x, y: 0.0, w: 10.0, h: 10.0, rotation: 0.0, crop: Default::default() };
-        assert_eq!(match_objects(&[img(&a, 0.0)], &[img(&c, 0.0), img(&b, 50.0)]), vec![(0, 1)]);
+        let img = |p: &std::path::Path, x| SlideObject::Image {
+            path: p.to_string_lossy().into(),
+            x,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            rotation: 0.0,
+            crop: Default::default(),
+        };
+        assert_eq!(
+            match_objects(&[img(&a, 0.0)], &[img(&c, 0.0), img(&b, 50.0)]),
+            vec![(0, 1)]
+        );
     }
 }

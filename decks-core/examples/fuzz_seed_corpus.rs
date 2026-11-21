@@ -7,11 +7,20 @@
 // suite's own writers rather than committed as binaries.
 
 use decks_core::engine::{Deck, Slide, SlideObject};
-use suite_common_core::document::{Run, RunStyle};
 use std::path::{Path, PathBuf};
+use suite_common_core::document::{Run, RunStyle};
 
 fn text_box(x: f64, y: f64, text: &str, runs: Vec<Run>) -> SlideObject {
-    SlideObject::TextBox { x, y, w: 300.0, h: 80.0, text: text.to_string(), runs, rotation: 0.0, body: Default::default() }
+    SlideObject::TextBox {
+        x,
+        y,
+        w: 300.0,
+        h: 80.0,
+        text: text.to_string(),
+        runs,
+        rotation: 0.0,
+        body: Default::default(),
+    }
 }
 
 /// Decks chosen for the reader branches they reach, not for looking real.
@@ -22,7 +31,9 @@ fn decks() -> Vec<(&'static str, Deck)> {
 
     let mut one = Deck::default();
     if let Some(slide) = one.slides.first_mut() {
-        slide.objects.push(text_box(40.0, 40.0, "A title on one slide", Vec::new()));
+        slide
+            .objects
+            .push(text_box(40.0, 40.0, "A title on one slide", Vec::new()));
     }
     out.push(("one-text-box", one));
 
@@ -30,7 +41,8 @@ fn decks() -> Vec<(&'static str, Deck)> {
     // resolution are both exercised.
     let many = Deck {
         slides: (0..4)
-            .map(|index| Slide { hidden: false,
+            .map(|index| Slide {
+                hidden: false,
                 title: format!("Slide {index}"),
                 background: String::new(),
                 background_picture: None,
@@ -55,15 +67,34 @@ fn decks() -> Vec<(&'static str, Deck)> {
             20.0,
             "bold italic",
             vec![
-                Run { text: "bold ".into(), style: RunStyle { bold: true, ..Default::default() } },
-                Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
+                Run {
+                    text: "bold ".into(),
+                    style: RunStyle {
+                        bold: true,
+                        ..Default::default()
+                    },
+                },
+                Run {
+                    text: "italic".into(),
+                    style: RunStyle {
+                        italic: true,
+                        ..Default::default()
+                    },
+                },
             ],
         ));
         slide.objects.push(SlideObject::Rect {
-            x: 60.0, y: 160.0, w: 120.0, h: 90.0, rotation: 0.0,
+            x: 60.0,
+            y: 160.0,
+            w: 120.0,
+            h: 90.0,
+            rotation: 0.0,
         });
         slide.objects.push(SlideObject::Circle {
-            x: 260.0, y: 200.0, r: 45.0, rotation: 0.0,
+            x: 260.0,
+            y: 200.0,
+            r: 45.0,
+            rotation: 0.0,
         });
     }
     out.push(("shapes-and-runs", shapes));
@@ -71,7 +102,8 @@ fn decks() -> Vec<(&'static str, Deck)> {
     let mut unicode = Deck::default();
     if let Some(slide) = unicode.slides.first_mut() {
         slide.objects.push(text_box(
-            40.0, 40.0,
+            40.0,
+            40.0,
             "héllo \u{4e16}\u{754c} e\u{301} \u{1f4dd} & < > \" '",
             Vec::new(),
         ));
@@ -101,21 +133,33 @@ fn verify(readable: &mut usize, label: &str, ok: bool) {
 
 fn main() {
     let root = PathBuf::from(
-        std::env::args().nth(1).unwrap_or_else(|| "fuzz/corpus".to_string()),
+        std::env::args()
+            .nth(1)
+            .unwrap_or_else(|| "fuzz/corpus".to_string()),
     );
 
     let mut readable = 0usize;
 
     for (name, deck) in decks() {
         if let Ok(bytes) = decks_core::odp::write_bytes(&deck) {
-            let tmp = tempfile::Builder::new().suffix(".odp").tempfile().expect("tempfile");
+            let tmp = tempfile::Builder::new()
+                .suffix(".odp")
+                .tempfile()
+                .expect("tempfile");
             std::fs::write(tmp.path(), &bytes).expect("stage the odp");
             let staged = tmp.path().to_str().expect("utf-8 temp path");
-            verify(&mut readable, &format!("{name}.odp"), decks_core::odp::read(staged).is_ok());
+            verify(
+                &mut readable,
+                &format!("{name}.odp"),
+                decks_core::odp::read(staged).is_ok(),
+            );
             write_seed(&root.join("decks_odp"), &format!("{name}.odp"), &bytes);
         }
 
-        let tmp = tempfile::Builder::new().suffix(".pptx").tempfile().expect("tempfile");
+        let tmp = tempfile::Builder::new()
+            .suffix(".pptx")
+            .tempfile()
+            .expect("tempfile");
         let path = tmp.path().to_str().expect("utf-8 temp path");
         if decks_core::engine::write_pptx(path, &deck).is_ok() {
             let bytes = std::fs::read(path).expect("read back the pptx");

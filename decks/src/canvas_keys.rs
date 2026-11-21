@@ -32,7 +32,16 @@ pub(crate) struct EditorHandles<'a> {
 /// Cross-app copy and paste (DESIGN-UI), in place text editing on a
 /// double-click, and the editor's keys: navigation, delete, undo and redo.
 pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
-    let EditorHandles { window, canvas, slide_list, slides, masters, controller, refresh_hud, transition } = h;
+    let EditorHandles {
+        window,
+        canvas,
+        slide_list,
+        slides,
+        masters,
+        controller,
+        refresh_hud,
+        transition,
+    } = h;
     // In-place rich text editing (text_editor.rs): while it is open the
     // controller holds a text session, and the canvas's keys stand aside.
     crate::text_editor::register(h, editor_host);
@@ -55,9 +64,10 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                 return glib::Propagation::Proceed;
             }
             // Text widgets keep their own clipboard behavior.
-            if text_editing.has_text_session() || gtk::prelude::GtkWindowExt::focus(&win)
-                .map(|w| w.is::<gtk::Text>() || w.is::<gtk::TextView>() || w.is::<gtk::Entry>())
-                .unwrap_or(false)
+            if text_editing.has_text_session()
+                || gtk::prelude::GtkWindowExt::focus(&win)
+                    .map(|w| w.is::<gtk::Text>() || w.is::<gtk::TextView>() || w.is::<gtk::Entry>())
+                    .unwrap_or(false)
             {
                 return glib::Propagation::Proceed;
             }
@@ -110,7 +120,6 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
         window.add_controller(key);
     }
 
-
     // ── Keyboard: navigation, delete, undo/redo ─────────────────────
     {
         let w = window.clone();
@@ -138,17 +147,30 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     // call -- rebuild_slide_list()'s select_row() fires
                     // row-selected synchronously, which reaches ss.borrow_mut().
                     let slides = ss.borrow().clone();
-                    rebuild_slide_list(&sl, &slides, &m.borrow(), controller.selected_slide_index().unwrap_or(0));
+                    rebuild_slide_list(
+                        &sl,
+                        &slides,
+                        &m.borrow(),
+                        controller.selected_slide_index().unwrap_or(0),
+                    );
                 }
                 return glib::Propagation::Stop;
             }
             // Ctrl+Shift+Z: redo
-            if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK) && keyval == gtk::gdk::Key::z {
+            if mods
+                .contains(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK)
+                && keyval == gtk::gdk::Key::z
+            {
                 if controller.redo() {
                     controller.repair_selection();
                     cs.queue_draw();
                     let slides = ss.borrow().clone();
-                    rebuild_slide_list(&sl, &slides, &m.borrow(), controller.selected_slide_index().unwrap_or(0));
+                    rebuild_slide_list(
+                        &sl,
+                        &slides,
+                        &m.borrow(),
+                        controller.selected_slide_index().unwrap_or(0),
+                    );
                 }
                 return glib::Propagation::Stop;
             }
@@ -172,10 +194,16 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     if count == 0 {
                         return glib::Propagation::Proceed;
                     }
-                    let back = keyval == gtk::gdk::Key::ISO_Left_Tab || mods.contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                    let back = keyval == gtk::gdk::Key::ISO_Left_Tab
+                        || mods.contains(gtk::gdk::ModifierType::SHIFT_MASK);
                     let next = next_object(controller.primary_object_index(), count, back);
                     if let Some(object_id) = controller.object_id_at(idx, next) {
-                        controller.select_objects(slide_id, &[object_id], Some(object_id), decks_core::controller::SelectionMode::Object);
+                        controller.select_objects(
+                            slide_id,
+                            &[object_id],
+                            Some(object_id),
+                            decks_core::controller::SelectionMode::Object,
+                        );
                     }
                     refresh();
                     cs.queue_draw();
@@ -188,8 +216,14 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                             if idx < sls.len() && idx > 0 {
                                 // Backwards, the slide being left plays
                                 // its own transition in reverse.
-                                TransitionState::start(&ts, TransitionType::of(sls[idx].transition),
-                                    &sls[idx], &sls[idx - 1], &m.borrow(), &cs);
+                                TransitionState::start(
+                                    &ts,
+                                    TransitionType::of(sls[idx].transition),
+                                    &sls[idx],
+                                    &sls[idx - 1],
+                                    &m.borrow(),
+                                    &cs,
+                                );
                             }
                             // Snapshot + drop before rebuild_slide_list(),
                             // whose select_row() reaches ss.borrow_mut().
@@ -208,8 +242,14 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                     if let Some(idx) = controller.selected_slide_index() {
                         let slides = ss.borrow();
                         if idx + 1 < slides.len() {
-                            TransitionState::start(&ts, TransitionType::of(slides[idx + 1].transition),
-                                &slides[idx], &slides[idx + 1], &m.borrow(), &cs);
+                            TransitionState::start(
+                                &ts,
+                                TransitionType::of(slides[idx + 1].transition),
+                                &slides[idx],
+                                &slides[idx + 1],
+                                &m.borrow(),
+                                &cs,
+                            );
                             let snap = slides.clone();
                             drop(slides);
                             if let Some(slide_id) = controller.slide_id_at(idx + 1) {
@@ -246,7 +286,8 @@ pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
                 }
                 gtk::gdk::Key::Delete | gtk::gdk::Key::BackSpace => {
                     let sel = controller.selection();
-                    if let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id) {
+                    if let (Some(slide_id), Some(object_id)) = (sel.slide_id, sel.primary_object_id)
+                    {
                         if controller.delete_object(slide_id, object_id) {
                             cs.queue_draw();
                         }
@@ -281,7 +322,11 @@ mod tests {
         assert_eq!(next_object(None, 3, false), 0);
         assert_eq!(next_object(Some(2), 3, false), 0, "Tab wraps to the first");
         assert_eq!(next_object(None, 3, true), 2);
-        assert_eq!(next_object(Some(0), 3, true), 2, "Shift+Tab wraps to the last");
+        assert_eq!(
+            next_object(Some(0), 3, true),
+            2,
+            "Shift+Tab wraps to the last"
+        );
         assert_eq!(next_object(Some(1), 3, true), 0);
     }
 }

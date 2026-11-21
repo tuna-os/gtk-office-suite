@@ -22,32 +22,40 @@
 //! - `resolver.rs` — the one object → layout → master → theme → fallback
 //!   precedence resolver (DCK-006)
 
+pub mod chart;
 mod diagram;
+pub mod freeform;
 mod model;
 mod notes;
 mod parse;
 mod placeholders;
-pub mod freeform;
+pub mod resolver;
 pub mod shape;
+mod shape_xml;
 pub mod symbol_font;
 pub mod table;
-pub mod resolver;
-pub mod theme;
-pub mod chart;
-mod shape_xml;
 pub mod text_body;
 mod text_xml;
+pub mod theme;
 mod timing;
 mod write;
 
-pub use model::{BackgroundPicture, Crop, Deck, FillRect, MasterSlide, SkippedSlide, Slide, SlideObject, Transition, LINE_BREAK, MODEL_UNITS_PER_INCH, shown_slides, slide_page_size_pt};
-pub use text_body::{shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
+pub use model::{
+    shown_slides, slide_page_size_pt, BackgroundPicture, Crop, Deck, FillRect, MasterSlide,
+    SkippedSlide, Slide, SlideObject, Transition, LINE_BREAK, MODEL_UNITS_PER_INCH,
+};
+pub use text_body::{
+    shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign,
+    ParaGeometry, ParaStyle, Spacing, TextBody,
+};
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.
-pub use suite_common_core::document::{Run, RunStyle};
-pub use parse::{parse_master_shapes, parse_master_shapes_scaled, parse_slide_size, read_pptx, SlideScale};
+pub use parse::{
+    parse_master_shapes, parse_master_shapes_scaled, parse_slide_size, read_pptx, SlideScale,
+};
 pub use resolver::PrecedenceResolver;
+pub use suite_common_core::document::{Run, RunStyle};
 pub use write::{write_pptx, write_pptx_bytes};
 
 // odp.rs and the shape parsers share these quick_xml helpers.

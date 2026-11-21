@@ -28,8 +28,11 @@ fn layouts(d: &Deck) -> Vec<String> {
         .layouts
         .iter()
         .map(|l| {
-            let places: Vec<String> =
-                l.placeholders.iter().map(|p| format!("{:?} {} {} {} {}", p.role, r(p.x), r(p.y), r(p.w), r(p.h))).collect();
+            let places: Vec<String> = l
+                .placeholders
+                .iter()
+                .map(|p| format!("{:?} {} {} {} {}", p.role, r(p.x), r(p.y), r(p.w), r(p.h)))
+                .collect();
             format!("{} {:?} {places:?}", l.name, l.kind)
         })
         .collect()
@@ -44,7 +47,16 @@ fn slides(d: &Deck) -> Vec<String> {
                 .objects
                 .iter()
                 .map(|o| match o {
-                    SlideObject::TextBox { text, x, y, w, h, .. } => format!("{:?} {} {} {} {} {text:?}", role_of(o), r(*x), r(*y), r(*w), r(*h)),
+                    SlideObject::TextBox {
+                        text, x, y, w, h, ..
+                    } => format!(
+                        "{:?} {} {} {} {} {text:?}",
+                        role_of(o),
+                        r(*x),
+                        r(*y),
+                        r(*w),
+                        r(*h)
+                    ),
                     other => format!("{other:?}"),
                 })
                 .collect();
@@ -57,7 +69,10 @@ fn slides(d: &Deck) -> Vec<String> {
 fn layouts_and_placeholders_survive_pptx_and_odp() {
     let d = deck();
     assert_eq!(d.masters[0].layouts.len(), 6);
-    assert_eq!(d.layout_of(&d.slides[1]).map(|l| l.name.clone()).as_deref(), Some("Two Content"));
+    assert_eq!(
+        d.layout_of(&d.slides[1]).map(|l| l.name.clone()).as_deref(),
+        Some("Two Content")
+    );
     // The applied layout added an empty second body.
     assert_eq!(d.slides[1].objects.len(), 3);
     for ext in ["pptx", "odp"] {
@@ -66,12 +81,20 @@ fn layouts_and_placeholders_survive_pptx_and_odp() {
         decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
         assert_eq!(layouts(&back), layouts(&d), "{ext}: the master's layouts");
-        assert_eq!(slides(&back), slides(&d), "{ext}: the slides' layouts and placeholders");
+        assert_eq!(
+            slides(&back),
+            slides(&d),
+            "{ext}: the slides' layouts and placeholders"
+        );
         // A second save changes nothing.
         let again = dir.path().join(format!("again.{ext}"));
         decks_core::write_deck(again.to_str().unwrap(), &back).unwrap();
         let twice = decks_core::read_deck(again.to_str().unwrap()).unwrap();
-        assert_eq!((layouts(&twice), slides(&twice)), (layouts(&d), slides(&d)), "{ext}: a second save");
+        assert_eq!(
+            (layouts(&twice), slides(&twice)),
+            (layouts(&d), slides(&d)),
+            "{ext}: a second save"
+        );
     }
 }
 
@@ -83,7 +106,11 @@ fn a_deck_without_layouts_is_read_back_without_any() {
         let path = dir.path().join(format!("plain.{ext}"));
         decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
-        assert!(back.masters[0].layouts.is_empty(), "{ext}: {:?}", back.masters[0].layouts);
+        assert!(
+            back.masters[0].layouts.is_empty(),
+            "{ext}: {:?}",
+            back.masters[0].layouts
+        );
         assert_eq!(back.slides[0].layout_id, None, "{ext}");
     }
 }
@@ -93,7 +120,13 @@ fn a_layout_with_its_own_look_keeps_it_in_both_formats() {
     // As an imported deck has them: a layout with its own background and a
     // decoration over the master's.
     let mut d = deck();
-    let bar = SlideObject::Rect { x: 0.0, y: 500.0, w: 960.0, h: 40.0, rotation: 0.0 };
+    let bar = SlideObject::Rect {
+        x: 0.0,
+        y: 500.0,
+        w: 960.0,
+        h: 40.0,
+        rotation: 0.0,
+    };
     d.masters[0].layouts[2].background = Some("#203040".into());
     d.masters[0].layouts[2].shapes.push(bar.clone());
     d.slides[0].layout_id = Some(d.masters[0].layouts[2].id);
@@ -106,9 +139,19 @@ fn a_layout_with_its_own_look_keeps_it_in_both_formats() {
         let l = &back.masters[0].layouts[2];
         assert_eq!(l.background.as_deref(), Some("#203040"), "{ext}");
         assert_eq!(l.shapes.len(), 1, "{ext}: {:?}", l.shapes);
-        assert_eq!(back.masters[0].shapes.len(), d.masters[0].shapes.len(), "{ext}: the master's own decorations");
+        assert_eq!(
+            back.masters[0].shapes.len(),
+            d.masters[0].shapes.len(),
+            "{ext}: the master's own decorations"
+        );
         // Layout ids are session-local; the name is what persists.
-        assert_eq!(back.layout_of(&back.slides[0]).map(|l| l.name.clone()).as_deref(), Some(look_name.as_str()), "{ext}");
+        assert_eq!(
+            back.layout_of(&back.slides[0])
+                .map(|l| l.name.clone())
+                .as_deref(),
+            Some(look_name.as_str()),
+            "{ext}"
+        );
         assert_eq!(layouts(&back), layouts(&d), "{ext}");
     }
 }

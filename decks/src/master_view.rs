@@ -22,7 +22,10 @@ const REPLACES_DECK: [&str; 3] = ["new-document", "new-from-template", "open-fil
 
 fn set_deck_actions(app: &adw::Application, enabled: bool) {
     for name in REPLACES_DECK {
-        if let Some(a) = app.lookup_action(name).and_then(|a| a.downcast::<gio::SimpleAction>().ok()) {
+        if let Some(a) = app
+            .lookup_action(name)
+            .and_then(|a| a.downcast::<gio::SimpleAction>().ok())
+        {
             a.set_enabled(enabled);
         }
     }
@@ -31,12 +34,20 @@ fn set_deck_actions(app: &adw::Application, enabled: bool) {
 /// Add Edit Master and Done (`app.edit-master`, `app.finish-master`) and
 /// the banner above the editor, into `add_bar`.
 pub(crate) fn register(app: &adw::Application, add_bar: impl Fn(&adw::Banner), h: EditorHandles) {
-    let banner = adw::Banner::builder().button_label("_Done").action_name("app.finish-master").build();
+    let banner = adw::Banner::builder()
+        .button_label("_Done")
+        .action_name("app.finish-master")
+        .build();
     add_bar(&banner);
 
     let redraw = {
-        let (canvas, list, slides, masters, refresh) =
-            (h.canvas.clone(), h.slide_list.clone(), h.slides.clone(), h.masters.clone(), h.refresh_hud.clone());
+        let (canvas, list, slides, masters, refresh) = (
+            h.canvas.clone(),
+            h.slide_list.clone(),
+            h.slides.clone(),
+            h.masters.clone(),
+            h.refresh_hud.clone(),
+        );
         move |at: usize| {
             let snapshot = slides.borrow().clone();
             rebuild_slide_list(&list, &snapshot, &masters.borrow(), at);
@@ -46,15 +57,30 @@ pub(crate) fn register(app: &adw::Application, add_bar: impl Fn(&adw::Banner), h
     };
 
     {
-        let (ctl, masters, banner, app2) =
-            (h.controller.clone(), h.masters.clone(), banner.clone(), app.clone());
+        let (ctl, masters, banner, app2) = (
+            h.controller.clone(),
+            h.masters.clone(),
+            banner.clone(),
+            app.clone(),
+        );
         let redraw = redraw.clone();
         let act = gio::SimpleAction::new("edit-master", None);
         act.connect_activate(move |_, _| {
-            let Some(slide_id) = ctl.selection().slide_id else { return };
-            let Some(master_id) = ctl.edit_master(slide_id) else { return };
-            let name = masters.borrow().iter().find(|m| m.id == master_id).map(|m| m.name.clone()).unwrap_or_default();
-            banner.set_title(&format!("Editing the master \u{201c}{name}\u{201d}: every slide that uses it changes"));
+            let Some(slide_id) = ctl.selection().slide_id else {
+                return;
+            };
+            let Some(master_id) = ctl.edit_master(slide_id) else {
+                return;
+            };
+            let name = masters
+                .borrow()
+                .iter()
+                .find(|m| m.id == master_id)
+                .map(|m| m.name.clone())
+                .unwrap_or_default();
+            banner.set_title(&format!(
+                "Editing the master \u{201c}{name}\u{201d}: every slide that uses it changes"
+            ));
             banner.set_revealed(true);
             set_deck_actions(&app2, false);
             redraw(0);
@@ -67,14 +93,20 @@ pub(crate) fn register(app: &adw::Application, add_bar: impl Fn(&adw::Banner), h
         let (ctl, redraw) = (h.controller.clone(), redraw.clone());
         let act = gio::SimpleAction::new("apply-layout", Some(gtk4::glib::VariantTy::UINT32));
         act.connect_activate(move |_, p| {
-            let Some(n) = p.and_then(|p| p.get::<u32>()) else { return };
+            let Some(n) = p.and_then(|p| p.get::<u32>()) else {
+                return;
+            };
             let row_idx = n as usize;
-            let Some(slide_id) = ctl.selection().slide_id else { return };
+            let Some(slide_id) = ctl.selection().slide_id else {
+                return;
+            };
             let apply = {
                 let slides = ctl.slides.borrow();
                 let slide = slides.iter().find(|s| s.ids.slide == slide_id);
                 let masters = ctl.masters.borrow();
-                let master = slide.and_then(|s| s.master_id).and_then(|id| masters.iter().find(|m| m.id == id));
+                let master = slide
+                    .and_then(|s| s.master_id)
+                    .and_then(|id| masters.iter().find(|m| m.id == id));
                 match master.filter(|m| !m.layouts.is_empty()) {
                     Some(m) => m.layouts.get(row_idx).map(|l| (false, l.id)),
                     None => Some((true, row_idx as u64)),
@@ -98,7 +130,9 @@ pub(crate) fn register(app: &adw::Application, add_bar: impl Fn(&adw::Banner), h
         let (ctl, banner, app2) = (h.controller.clone(), banner.clone(), app.clone());
         let act = gio::SimpleAction::new("finish-master", None);
         act.connect_activate(move |_, _| {
-            let Some(from_slide_id) = ctl.finish_master() else { return };
+            let Some(from_slide_id) = ctl.finish_master() else {
+                return;
+            };
             banner.set_revealed(false);
             set_deck_actions(&app2, true);
             ctl.select_slide(from_slide_id);

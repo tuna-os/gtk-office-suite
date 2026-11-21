@@ -7,13 +7,22 @@
 
 /// Width and height in pixels, for PNG, JPEG and GIF.
 pub fn pixel_size(b: &[u8]) -> Option<(u32, u32)> {
-    let be32 = |i: usize| b.get(i..i + 4).map(|s| u32::from_be_bytes([s[0], s[1], s[2], s[3]]));
-    let be16 = |i: usize| b.get(i..i + 2).map(|s| u16::from_be_bytes([s[0], s[1]]) as u32);
+    let be32 = |i: usize| {
+        b.get(i..i + 4)
+            .map(|s| u32::from_be_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    let be16 = |i: usize| {
+        b.get(i..i + 2)
+            .map(|s| u16::from_be_bytes([s[0], s[1]]) as u32)
+    };
     if b.starts_with(b"\x89PNG\r\n\x1a\n") && b.get(12..16) == Some(b"IHDR") {
         return Some((be32(16)?, be32(20)?));
     }
     if b.starts_with(b"GIF8") {
-        let le16 = |i: usize| b.get(i..i + 2).map(|s| u16::from_le_bytes([s[0], s[1]]) as u32);
+        let le16 = |i: usize| {
+            b.get(i..i + 2)
+                .map(|s| u16::from_le_bytes([s[0], s[1]]) as u32)
+        };
         return Some((le16(6)?, le16(8)?));
     }
     if b.starts_with(&[0xFF, 0xD8]) {
@@ -45,14 +54,19 @@ pub fn media_type(path: &str) -> (&'static str, &'static str) {
         .or_else(|| {
             use std::io::Read;
             let mut head = [0u8; 512];
-            let n = std::fs::File::open(path).and_then(|mut f| f.read(&mut head)).ok()?;
+            let n = std::fs::File::open(path)
+                .and_then(|mut f| f.read(&mut head))
+                .ok()?;
             media_type_for_bytes(&head[..n])
         })
         .unwrap_or(("png", "image/png"))
 }
 
 fn media_type_for_extension(path: &str) -> Option<(&'static str, &'static str)> {
-    let ext = std::path::Path::new(path).extension()?.to_str()?.to_ascii_lowercase();
+    let ext = std::path::Path::new(path)
+        .extension()?
+        .to_str()?
+        .to_ascii_lowercase();
     Some(match ext.as_str() {
         "png" => ("png", "image/png"),
         "jpg" | "jpeg" => ("jpg", "image/jpeg"),
@@ -69,7 +83,8 @@ fn media_type_for_extension(path: &str) -> Option<(&'static str, &'static str)> 
 fn is_svg(b: &[u8]) -> bool {
     let text = String::from_utf8_lossy(b);
     let t = text.trim_start_matches('\u{feff}').trim_start();
-    t.starts_with("<svg") || ((t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg"))
+    t.starts_with("<svg")
+        || ((t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg"))
 }
 
 /// The format a file's first bytes announce, for the formats above
@@ -116,7 +131,9 @@ mod tests {
         let gif = [b'G', b'I', b'F', b'8', b'9', b'a', 0x20, 0x03, 0x58, 0x02];
         assert_eq!(pixel_size(&gif), Some((800, 600)));
         // SOI, an APP0 of length 4, then SOF0 with height 300, width 400.
-        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 17, 8, 0x01, 0x2C, 0x01, 0x90];
+        let jpeg = [
+            0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 17, 8, 0x01, 0x2C, 0x01, 0x90,
+        ];
         assert_eq!(pixel_size(&jpeg), Some((400, 300)));
         assert_eq!(pixel_size(b"not an image"), None);
     }
@@ -126,7 +143,10 @@ mod tests {
         use super::media_type_for_bytes;
         let svg = br#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"/>"#;
         assert_eq!(media_type_for_bytes(svg), Some(("svg", "image/svg+xml")));
-        assert_eq!(media_type_for_bytes(b"<svg/>"), Some(("svg", "image/svg+xml")));
+        assert_eq!(
+            media_type_for_bytes(b"<svg/>"),
+            Some(("svg", "image/svg+xml"))
+        );
         assert_eq!(media_type_for_bytes(b"<html>"), None);
     }
 }

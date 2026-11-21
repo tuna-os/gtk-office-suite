@@ -227,7 +227,9 @@ pub fn encode_snapshot(controller: &DecksController, format_hint: &str) -> Resul
     let rev = controller.checkpoint();
     let deck = controller.deck();
     if rev != controller.checkpoint() {
-        return Err("the deck changed while its snapshot was being written; retrying next tick".to_string());
+        return Err(
+            "the deck changed while its snapshot was being written; retrying next tick".to_string(),
+        );
     }
     let mut unresolved = Vec::new();
     let assets = capture_assets(&deck, &mut unresolved);
@@ -239,7 +241,9 @@ pub fn encode_snapshot(controller: &DecksController, format_hint: &str) -> Resul
     let package = match crate::write_deck_bytes(format_hint, &deck) {
         Ok(bytes) => Some(base64::engine::general_purpose::STANDARD.encode(&bytes)),
         Err(reason) => {
-            unresolved.push(format!("no interchange fallback in this snapshot: {reason}"));
+            unresolved.push(format!(
+                "no interchange fallback in this snapshot: {reason}"
+            ));
             None
         }
     };
@@ -256,8 +260,8 @@ pub fn encode_snapshot(controller: &DecksController, format_hint: &str) -> Resul
         assets,
         unresolved,
     };
-    let mut json = serde_json::to_vec(&snapshot)
-        .map_err(|e| format!("could not snapshot the deck: {e}"))?;
+    let mut json =
+        serde_json::to_vec(&snapshot).map_err(|e| format!("could not snapshot the deck: {e}"))?;
     let mut out = Vec::with_capacity(MAGIC.len() + 8 + json.len());
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&(json.len() as u64).to_le_bytes());
@@ -298,7 +302,10 @@ pub fn decode_snapshot(bytes: &[u8]) -> SnapshotKind {
             };
         }
     };
-    debug_assert_eq!(snapshot.v, RECOVERY_VERSION, "the version gate above let a non-v1 body through");
+    debug_assert_eq!(
+        snapshot.v, RECOVERY_VERSION,
+        "the version gate above let a non-v1 body through"
+    );
     SnapshotKind::Versioned(Box::new(rebuild_session(snapshot)))
 }
 
@@ -374,7 +381,9 @@ fn capture_assets(deck: &Deck, unresolved: &mut Vec<String>) -> Vec<RecoveryAsse
                 None
             }
             Err(e) => {
-                unresolved.push(format!("{path} could not be captured into the snapshot: {e}"));
+                unresolved.push(format!(
+                    "{path} could not be captured into the snapshot: {e}"
+                ));
                 None
             }
         }
@@ -392,7 +401,11 @@ fn capture_assets(deck: &Deck, unresolved: &mut Vec<String>) -> Vec<RecoveryAsse
     };
     for slide in &deck.slides {
         if let Some(picture) = &slide.background_picture {
-            capture(AssetOwner::SlideBackground(slide.ids.slide), 0, &picture.path);
+            capture(
+                AssetOwner::SlideBackground(slide.ids.slide),
+                0,
+                &picture.path,
+            );
         }
         for (index, object) in slide.objects.iter().enumerate() {
             if let crate::engine::SlideObject::Image { path, .. } = object {
@@ -423,7 +436,10 @@ fn restage_assets(deck: &mut Deck, assets: &[RecoveryAsset], unresolved: &mut Ve
         let bytes = match base64::engine::general_purpose::STANDARD.decode(&asset.bytes_b64) {
             Ok(bytes) => bytes,
             Err(_) => {
-                unresolved.push(format!("{}: its snapshot bytes do not decode; keeping its path", asset.path));
+                unresolved.push(format!(
+                    "{}: its snapshot bytes do not decode; keeping its path",
+                    asset.path
+                ));
                 continue;
             }
         };
@@ -433,7 +449,11 @@ fn restage_assets(deck: &mut Deck, assets: &[RecoveryAsset], unresolved: &mut Ve
                 .iter_mut()
                 .find(|s| s.ids.slide == slide_id)
                 .and_then(|s| {
-                    s.ids.objects.iter().position(|id| *id == asset.object).and_then(|i| s.objects.get_mut(i))
+                    s.ids
+                        .objects
+                        .iter()
+                        .position(|id| *id == asset.object)
+                        .and_then(|i| s.objects.get_mut(i))
                 })
                 .and_then(|o| match o {
                     crate::engine::SlideObject::Image { path, .. } => Some(path),
@@ -456,7 +476,10 @@ fn restage_assets(deck: &mut Deck, assets: &[RecoveryAsset], unresolved: &mut Ve
                 }),
         };
         let Some(slot) = slot else {
-            unresolved.push(format!("{}: its object is gone from the recovered deck; keeping its path", asset.path));
+            unresolved.push(format!(
+                "{}: its object is gone from the recovered deck; keeping its path",
+                asset.path
+            ));
             continue;
         };
         if std::fs::read(&*slot).is_ok_and(|on_disk| on_disk == bytes) {
@@ -467,7 +490,10 @@ fn restage_assets(deck: &mut Deck, assets: &[RecoveryAsset], unresolved: &mut Ve
                 *slot = staged.to_string_lossy().into_owned();
             }
             Err(e) => {
-                unresolved.push(format!("{} could not be restaged after recovery: {e}", asset.path));
+                unresolved.push(format!(
+                    "{} could not be restaged after recovery: {e}",
+                    asset.path
+                ));
             }
         }
     }
@@ -479,13 +505,17 @@ mod tests {
 
     fn text_deck(text: &str) -> Deck {
         let mut deck = Deck {
-            slides: vec![crate::engine::Slide { hidden: false,
+            slides: vec![crate::engine::Slide {
+                hidden: false,
                 title: String::new(),
                 background: String::new(),
                 background_picture: None,
                 objects: vec![crate::engine::SlideObject::TextBox {
                     text: text.into(),
-                    x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                    x: 10.0,
+                    y: 10.0,
+                    w: 200.0,
+                    h: 50.0,
                     rotation: 0.0,
                     runs: vec![],
                     body: Default::default(),
@@ -511,13 +541,17 @@ mod tests {
     fn envelope_round_trip_and_legacy_recognition() {
         let controller = DecksController::new(vec![], vec![]);
         let deck = text_deck("kept");
-        controller.install_opened_deck(deck, DeckSourceContext::capture(std::path::Path::new("/nonexistent/deck.pptx")));
+        controller.install_opened_deck(
+            deck,
+            DeckSourceContext::capture(std::path::Path::new("/nonexistent/deck.pptx")),
+        );
         let bytes = encode_snapshot(&controller, "pptx").expect("encode");
         let SnapshotKind::Versioned(back) = decode_snapshot(&bytes) else {
             panic!("a snapshot this build wrote must decode as versioned");
         };
         assert_eq!(back.revision, controller.revision());
-        let crate::engine::SlideObject::TextBox { text, .. } = &back.deck.slides[0].objects[0] else {
+        let crate::engine::SlideObject::TextBox { text, .. } = &back.deck.slides[0].objects[0]
+        else {
             panic!("the text box came back as another kind");
         };
         assert_eq!(text, "kept");
@@ -528,14 +562,20 @@ mod tests {
         };
         assert_eq!(legacy, package);
         // Oversize input is declined, never allocated-against.
-        assert!(matches!(decode_snapshot(&vec![0u8; MAX_SNAPSHOT_BYTES + 1]), SnapshotKind::Unreadable));
+        assert!(matches!(
+            decode_snapshot(&vec![0u8; MAX_SNAPSHOT_BYTES + 1]),
+            SnapshotKind::Unreadable
+        ));
     }
 
     /// A newer version's body is opaque but its package still recovers.
     #[test]
     fn newer_version_falls_back_to_its_package() {
         let package = vec![0x50, 0x4b, 0x03, 0x04];
-        let head = SnapshotHead { v: RECOVERY_VERSION + 1, package: Some(base64::engine::general_purpose::STANDARD.encode(&package)) };
+        let head = SnapshotHead {
+            v: RECOVERY_VERSION + 1,
+            package: Some(base64::engine::general_purpose::STANDARD.encode(&package)),
+        };
         let mut out = Vec::new();
         let json = serde_json::to_vec(&head).unwrap();
         out.extend_from_slice(MAGIC);
@@ -556,17 +596,34 @@ mod tests {
         let bytes = b"background picture bytes".to_vec();
         std::fs::write(&src, &bytes).unwrap();
         let mut deck = text_deck("over a picture");
-        let fill = crate::engine::FillRect { left: -0.01, right: -0.01, ..Default::default() };
-        deck.slides[0].background_picture = Some(crate::engine::BackgroundPicture { path: src.to_string_lossy().into_owned(), fill });
+        let fill = crate::engine::FillRect {
+            left: -0.01,
+            right: -0.01,
+            ..Default::default()
+        };
+        deck.slides[0].background_picture = Some(crate::engine::BackgroundPicture {
+            path: src.to_string_lossy().into_owned(),
+            fill,
+        });
         let controller = DecksController::new(vec![], vec![]);
-        controller.install_opened_deck(deck, DeckSourceContext::capture(std::path::Path::new("/nonexistent/deck.pptx")));
+        controller.install_opened_deck(
+            deck,
+            DeckSourceContext::capture(std::path::Path::new("/nonexistent/deck.pptx")),
+        );
         let encoded = encode_snapshot(&controller, "pptx").expect("encode");
         std::fs::remove_file(&src).unwrap();
         let SnapshotKind::Versioned(back) = decode_snapshot(&encoded) else {
             panic!("a snapshot this build wrote must decode as versioned");
         };
-        assert!(back.unresolved_assets.is_empty(), "{:?}", back.unresolved_assets);
-        let picture = back.deck.slides[0].background_picture.as_ref().expect("the background picture");
+        assert!(
+            back.unresolved_assets.is_empty(),
+            "{:?}",
+            back.unresolved_assets
+        );
+        let picture = back.deck.slides[0]
+            .background_picture
+            .as_ref()
+            .expect("the background picture");
         assert_eq!(picture.fill, fill);
         assert_eq!(std::fs::read(&picture.path).unwrap(), bytes);
     }

@@ -32,14 +32,21 @@ fn with_smartart(path: &std::path::Path) {
         std::io::Read::read_to_end(&mut f, &mut data).unwrap();
         let text = String::from_utf8_lossy(&data).into_owned();
         if name == "ppt/slides/slide1.xml" {
-            data = text.replacen("</p:spTree>", &format!("{FRAME}</p:spTree>"), 1).into_bytes();
+            data = text
+                .replacen("</p:spTree>", &format!("{FRAME}</p:spTree>"), 1)
+                .into_bytes();
         } else if name == "ppt/slides/_rels/slide1.xml.rels" {
-            data = text.replacen("</Relationships>", &format!("{RELS}</Relationships>"), 1).into_bytes();
+            data = text
+                .replacen("</Relationships>", &format!("{RELS}</Relationships>"), 1)
+                .into_bytes();
         }
         out.start_file(name, opts).unwrap();
         std::io::Write::write_all(&mut out, &data).unwrap();
     }
-    for (name, data) in [("ppt/diagrams/data1.xml", DATA), ("ppt/diagrams/drawing1.xml", DRAWING)] {
+    for (name, data) in [
+        ("ppt/diagrams/data1.xml", DATA),
+        ("ppt/diagrams/drawing1.xml", DRAWING),
+    ] {
         out.start_file(name, opts).unwrap();
         std::io::Write::write_all(&mut out, data.as_bytes()).unwrap();
     }
@@ -56,7 +63,18 @@ fn a_smartart_box_reads_as_a_filled_shape_with_its_white_text() {
         .objects
         .iter()
         .find_map(|o| match o {
-            SlideObject::TextBox { text, x, y, w, h, runs, body, .. } if text.contains("Communication") => Some((*x, *y, *w, *h, runs.clone(), body.clone())),
+            SlideObject::TextBox {
+                text,
+                x,
+                y,
+                w,
+                h,
+                runs,
+                body,
+                ..
+            } if text.contains("Communication") => {
+                Some((*x, *y, *w, *h, runs.clone(), body.clone()))
+            }
             _ => None,
         })
         .unwrap_or_else(|| panic!("no diagram text: {:?}", deck.slides[0].objects));
@@ -64,8 +82,15 @@ fn a_smartart_box_reads_as_a_filled_shape_with_its_white_text() {
     // At the frame's place (1 inch in), the box half the frame's width,
     // not the dropped text rectangle's 100 EMU.
     let frame = body.frame.expect("the box's paint under its text");
-    assert_eq!(frame.style.fill.map(|c| c.to_hex()), Some("7F3F4F".to_string()));
+    assert_eq!(
+        frame.style.fill.map(|c| c.to_hex()),
+        Some("7F3F4F".to_string())
+    );
     assert!(x > 0.0 && y > 0.0, "({x}, {y})");
     assert!((w - h).abs() < 1.0 && w > 50.0, "{w} x {h}");
-    assert_eq!(runs[0].style.color.as_deref(), Some("ffffff"), "its style's fontRef white");
+    assert_eq!(
+        runs[0].style.color.as_deref(),
+        Some("ffffff"),
+        "its style's fontRef white"
+    );
 }

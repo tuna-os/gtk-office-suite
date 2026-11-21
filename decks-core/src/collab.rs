@@ -48,7 +48,9 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use loro::{ExportMode, LoroDoc, LoroMap, LoroTree, LoroValue, TreeID, TreeParentId, ValueOrContainer};
+use loro::{
+    ExportMode, LoroDoc, LoroMap, LoroTree, LoroValue, TreeID, TreeParentId, ValueOrContainer,
+};
 
 use crate::builds::{Build, BuildEffect};
 use crate::engine::{Slide, SlideObject, Transition};
@@ -68,7 +70,10 @@ fn string_at(map: &LoroMap, key: &str) -> Option<String> {
 }
 
 fn is_deleted(map: &LoroMap) -> bool {
-    matches!(map.get(DELETED), Some(ValueOrContainer::Value(LoroValue::Bool(true))))
+    matches!(
+        map.get(DELETED),
+        Some(ValueOrContainer::Value(LoroValue::Bool(true)))
+    )
 }
 
 /// Set `key` to `text`, unless it already is.
@@ -87,10 +92,15 @@ fn set_deleted(map: &LoroMap, deleted: bool) {
 /// An object as its kind and one encoded register per field.
 fn object_fields(object: &SlideObject) -> (String, BTreeMap<String, String>) {
     let value = serde_json::to_value(object).expect("objects serialize");
-    let serde_json::Value::Object(outer) = value else { panic!("an object serializes as its kind and fields") };
+    let serde_json::Value::Object(outer) = value else {
+        panic!("an object serializes as its kind and fields")
+    };
     let (kind, inner) = outer.into_iter().next().expect("an object has a kind");
     let fields = match inner {
-        serde_json::Value::Object(fields) => fields.into_iter().map(|(k, v)| (k, v.to_string())).collect(),
+        serde_json::Value::Object(fields) => fields
+            .into_iter()
+            .map(|(k, v)| (k, v.to_string()))
+            .collect(),
         _ => BTreeMap::new(),
     };
     (kind, fields)
@@ -102,7 +112,10 @@ fn write_object(meta: &LoroMap, object: &SlideObject) {
     let stale: Vec<String> = meta
         .keys()
         .map(|k| k.to_string())
-        .filter(|k| k.strip_prefix("f.").is_some_and(|name| !fields.contains_key(name)))
+        .filter(|k| {
+            k.strip_prefix("f.")
+                .is_some_and(|name| !fields.contains_key(name))
+        })
         .collect();
     for key in stale {
         meta.delete(&key).expect("map delete");
@@ -120,7 +133,10 @@ fn read_object(meta: &LoroMap) -> Option<SlideObject> {
     let mut fields = serde_json::Map::new();
     for key in keys {
         if let Some(name) = key.strip_prefix("f.") {
-            fields.insert(name.to_string(), serde_json::from_str(&string_at(meta, &key)?).ok()?);
+            fields.insert(
+                name.to_string(),
+                serde_json::from_str(&string_at(meta, &key)?).ok()?,
+            );
         }
     }
     let mut outer = serde_json::Map::new();
@@ -152,7 +168,13 @@ impl Replica {
             Some(root) => *root,
             None => tree.create(None).map_err(|e| e.to_string())?,
         };
-        Ok(Replica { doc, tree, root, deck: Vec::new(), nodes: HashMap::new() })
+        Ok(Replica {
+            doc,
+            tree,
+            root,
+            deck: Vec::new(),
+            nodes: HashMap::new(),
+        })
     }
 
     /// Start a shared document from `slides`, as peer `peer`. The slides
@@ -203,7 +225,10 @@ impl Replica {
     /// needs [`Replica::rebuild`] before the next local edit is recorded.
     pub fn merge_from(&mut self, other: &Replica) -> Result<(), String> {
         other.doc.commit();
-        let updates = other.doc.export(ExportMode::updates(&self.doc.oplog_vv())).map_err(|e| e.to_string())?;
+        let updates = other
+            .doc
+            .export(ExportMode::updates(&self.doc.oplog_vv()))
+            .map_err(|e| e.to_string())?;
         self.doc.import(&updates).map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -236,7 +261,10 @@ impl Replica {
     }
 
     fn slide_at(&self, id: u64) -> usize {
-        self.deck.iter().position(|s| s.ids.slide == id).expect("an applied op's slide")
+        self.deck
+            .iter()
+            .position(|s| s.ids.slide == id)
+            .expect("an applied op's slide")
     }
 
     /// The nodes of the slides (or of slide `si`'s objects) either side of
@@ -250,7 +278,10 @@ impl Replica {
     fn create(&self, parent: TreeID, prev: Option<TreeID>, next: Option<TreeID>) -> TreeID {
         let kids = self.tree.children(parent).unwrap_or_default();
         let index = match (prev, next) {
-            (Some(p), _) => kids.iter().position(|k| *k == p).map_or(kids.len(), |i| i + 1),
+            (Some(p), _) => kids
+                .iter()
+                .position(|k| *k == p)
+                .map_or(kids.len(), |i| i + 1),
             (None, Some(n)) => kids.iter().position(|k| *k == n).unwrap_or(0),
             (None, None) => kids.len(),
         };
@@ -275,14 +306,25 @@ impl Replica {
     /// it takes: the nodes already in order stay put.
     fn order(&self, parent: TreeID, order: &[TreeID]) {
         let wanted: HashSet<TreeID> = order.iter().copied().collect();
-        let now: Vec<TreeID> = self.tree.children(parent).unwrap_or_default().into_iter().filter(|k| wanted.contains(k)).collect();
+        let now: Vec<TreeID> = self
+            .tree
+            .children(parent)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|k| wanted.contains(k))
+            .collect();
         if now == order {
             return;
         }
         for (j, node) in order.iter().enumerate() {
             match j.checked_sub(1).map(|i| order[i]) {
                 Some(prev) => self.tree.mov_after(*node, prev).expect("tree move"),
-                None => self.place(*node, parent, None, now.first().copied().filter(|n| n != node)),
+                None => self.place(
+                    *node,
+                    parent,
+                    None,
+                    now.first().copied().filter(|n| n != node),
+                ),
             }
         }
     }
@@ -314,7 +356,11 @@ impl Replica {
                 let (prev, next) = self.neighbours(&slide_ids, *at);
                 // An id the op brings is an undone delete: the same node
                 // comes back. A new slide gets its id from `apply`.
-                let known = if slide.ids.slide != 0 { self.nodes.get(&s.ids.slide).copied() } else { None };
+                let known = if slide.ids.slide != 0 {
+                    self.nodes.get(&s.ids.slide).copied()
+                } else {
+                    None
+                };
                 let node = match known {
                     Some(node) => {
                         set_deleted(&self.meta(node), false);
@@ -385,7 +431,12 @@ impl Replica {
             }
             Op::SetObject { slide, id, .. } => {
                 let s = &self.deck[self.slide_at(*slide)];
-                let at = s.ids.objects.iter().position(|o| o == id).expect("an applied op's object");
+                let at = s
+                    .ids
+                    .objects
+                    .iter()
+                    .position(|o| o == id)
+                    .expect("an applied op's object");
                 write_object(&self.meta(self.nodes[id]), &s.objects[at]);
             }
             // Masters aren't replicated yet (see the module's limits).
@@ -400,7 +451,11 @@ impl Replica {
     pub fn rebuild(&mut self) -> Result<Vec<Slide>, String> {
         self.doc.commit();
         let all = self.tree.children(self.root).unwrap_or_default();
-        let mut live: Vec<TreeID> = all.iter().copied().filter(|n| !is_deleted(&self.meta(*n))).collect();
+        let mut live: Vec<TreeID> = all
+            .iter()
+            .copied()
+            .filter(|n| !is_deleted(&self.meta(*n)))
+            .collect();
         // A deck keeps one slide: if every slide is deleted (two peers each
         // deleted a different one), the first stays, on every peer alike.
         if live.is_empty() {
@@ -419,15 +474,25 @@ impl Replica {
             let mut s = Slide {
                 title: string_at(&meta, "title").unwrap_or_default(),
                 background: string_at(&meta, "bg").unwrap_or_default(),
-                background_picture: string_at(&meta, "bgpic").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
+                background_picture: string_at(&meta, "bgpic")
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or(None),
                 objects: Vec::new(),
                 notes: string_at(&meta, "notes").unwrap_or_default(),
-                master_id: string_at(&meta, "master").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
-                transition: string_at(&meta, "tr").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Transition::None),
+                master_id: string_at(&meta, "master")
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or(None),
+                transition: string_at(&meta, "tr")
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or(Transition::None),
                 builds: Vec::new(),
                 ids: Default::default(),
-                layout_id: string_at(&meta, "layout").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
-                hidden: string_at(&meta, "hidden").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(false),
+                layout_id: string_at(&meta, "layout")
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or(None),
+                hidden: string_at(&meta, "hidden")
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or(false),
             };
             s.ids.slide = id_for(node);
             let mut id_of_node: HashMap<String, u64> = HashMap::new();
@@ -436,16 +501,26 @@ impl Replica {
                 if is_deleted(&meta) {
                     continue;
                 }
-                let Some(object) = read_object(&meta) else { continue };
+                let Some(object) = read_object(&meta) else {
+                    continue;
+                };
                 let id = id_for(o);
                 id_of_node.insert(o.to_string(), id);
                 s.objects.push(object);
                 s.ids.objects.push(id);
             }
-            let stored: Vec<StoredBuild> = string_at(&meta, "builds").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+            let stored: Vec<StoredBuild> = string_at(&meta, "builds")
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or_default();
             s.builds = stored
                 .into_iter()
-                .filter_map(|(o, effect, out)| Some(Build { object: *id_of_node.get(&o)?, effect, out }))
+                .filter_map(|(o, effect, out)| {
+                    Some(Build {
+                        object: *id_of_node.get(&o)?,
+                        effect,
+                        out,
+                    })
+                })
                 .collect();
             deck.push(s);
         }

@@ -3,7 +3,7 @@
 //
 // Split out of engine.rs (issue #247).
 
-use quick_xml::events::{Event, BytesStart};
+use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use suite_common_core::document::RunStyle;
 
@@ -143,13 +143,14 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
     }
 }
 
-
 /// Parse b/i/u/strike attributes from an a:rPr element into the shared
 /// RunStyle (same WYSIWYG primitive Letters uses).
 pub(super) fn parse_run_style(e: &BytesStart) -> RunStyle {
     let mut st = RunStyle::default();
     for attr in e.attributes().flatten() {
-        let val = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_default();
+        let val = attr
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+            .unwrap_or_default();
         match attr.key.as_ref() {
             "b" => st.bold = val == "1" || val == "true",
             "i" => st.italic = val == "1" || val == "true",
@@ -164,5 +165,4 @@ pub(super) fn parse_run_style(e: &BytesStart) -> RunStyle {
         }
     }
     st
-
 }

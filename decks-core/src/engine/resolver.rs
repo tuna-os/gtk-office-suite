@@ -62,7 +62,11 @@ static DEFAULT_THEME: LazyLock<Theme> = LazyLock::new(|| Theme {
 /// means "states none" at every level. The pure half of the precedence,
 /// shared by [`PrecedenceResolver::background`] and
 /// `layouts::resolve_background` so there is one definition of it.
-pub(crate) fn stated_background<'a>(slide_bg: &'a str, layout_bg: Option<&'a str>, master_bg: &'a str) -> Option<&'a str> {
+pub(crate) fn stated_background<'a>(
+    slide_bg: &'a str,
+    layout_bg: Option<&'a str>,
+    master_bg: &'a str,
+) -> Option<&'a str> {
     if !slide_bg.is_empty() {
         return Some(slide_bg);
     }
@@ -89,7 +93,9 @@ impl<'a> PrecedenceResolver<'a> {
     /// The theme `master` resolves against: its retained theme, else the
     /// documented default theme.
     fn theme(&self, master: Option<&MasterSlide>) -> &'a Theme {
-        master.and_then(|m| self.deck.theme_of(m)).unwrap_or(&DEFAULT_THEME)
+        master
+            .and_then(|m| self.deck.theme_of(m))
+            .unwrap_or(&DEFAULT_THEME)
     }
 
     /// `r` as drawn under `master`'s theme: a literal as itself, a theme
@@ -100,8 +106,12 @@ impl<'a> PrecedenceResolver<'a> {
         match r {
             ColorRef::Rgb(hex) => Color::from_hex(hex),
             ColorRef::Theme(t) => {
-                let slot = master.and_then(|m| m.color_map.get(&t.slot)).map_or(t.slot.as_str(), String::as_str);
-                self.theme(master).slot(slot).map(|c| ColorMod::apply_all(&t.mods, c))
+                let slot = master
+                    .and_then(|m| m.color_map.get(&t.slot))
+                    .map_or(t.slot.as_str(), String::as_str);
+                self.theme(master)
+                    .slot(slot)
+                    .map(|c| ColorMod::apply_all(&t.mods, c))
             }
         }
     }
@@ -122,7 +132,10 @@ impl<'a> PrecedenceResolver<'a> {
         if let Some(bg) = stated {
             return Cow::Borrowed(bg);
         }
-        match self.color(master, &ColorRef::Theme(super::theme::ThemeColor::unmodulated("bg1"))) {
+        match self.color(
+            master,
+            &ColorRef::Theme(super::theme::ThemeColor::unmodulated("bg1")),
+        ) {
             Some(c) => Cow::Owned(format!("#{}", c.to_hex().to_lowercase())),
             None => Cow::Borrowed(FALLBACK_BACKGROUND),
         }
@@ -176,7 +189,12 @@ impl<'a> PrecedenceResolver<'a> {
     /// heading face ahead of the master's body font; every other text
     /// takes the master's `default_font` — the body font its theme gave
     /// it at import, or one the user set — ahead of the theme's body face.
-    pub fn font<'s>(&'s self, slide: &Slide, role: Option<Placeholder>, local: Option<&'s str>) -> &'s str {
+    pub fn font<'s>(
+        &'s self,
+        slide: &Slide,
+        role: Option<Placeholder>,
+        local: Option<&'s str>,
+    ) -> &'s str {
         let named = |s: &'s str| {
             let s = s.trim();
             (!s.is_empty()).then_some(s)

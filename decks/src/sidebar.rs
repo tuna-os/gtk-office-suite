@@ -1,9 +1,9 @@
 // sidebar.rs — Slide sidebar list and management controls.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use gtk4::{self as gtk, gdk, glib, prelude::*};
-use gtk4::cairo;
 use decks_core::engine::{MasterSlide, Slide};
+use gtk4::cairo;
+use gtk4::{self as gtk, gdk, glib, prelude::*};
 
 const THUMB_W: i32 = 160;
 const THUMB_H: i32 = 90;
@@ -35,7 +35,16 @@ pub fn render_thumbnail(
             crate::canvas::draw_slide_in(&cr, w as f64, h as f64, slides, index, masters, chrome);
         } else {
             // Thumbnails never show selection, so the accent is unused.
-            crate::canvas::draw_slide(&cr, w as f64, h as f64, slides, index, None, masters, (0.0, 0.5, 1.0));
+            crate::canvas::draw_slide(
+                &cr,
+                w as f64,
+                h as f64,
+                slides,
+                index,
+                None,
+                masters,
+                (0.0, 0.5, 1.0),
+            );
         }
     }
     surface.flush();
@@ -71,7 +80,11 @@ const PENDING: &str = "thumbnail-pending";
 
 /// Draw `list`'s thumbnails lazily from `source`, as rows come into view
 /// of `scrolled`.
-pub fn set_thumbnail_source(list: &gtk::ListBox, scrolled: &gtk::ScrolledWindow, source: ThumbnailSource) {
+pub fn set_thumbnail_source(
+    list: &gtk::ListBox,
+    scrolled: &gtk::ScrolledWindow,
+    source: ThumbnailSource,
+) {
     // SAFETY: stored and read back as the same type, under this key only.
     unsafe { list.set_data(SOURCE_KEY, source) };
     let adj = scrolled.vadjustment();
@@ -88,13 +101,20 @@ pub fn set_thumbnail_source(list: &gtk::ListBox, scrolled: &gtk::ScrolledWindow,
 
 fn source(list: &gtk::ListBox) -> Option<ThumbnailSource> {
     // SAFETY: only ever set by set_thumbnail_source, with this type.
-    unsafe { list.data::<ThumbnailSource>(SOURCE_KEY).map(|p| p.as_ref().clone()) }
+    unsafe {
+        list.data::<ThumbnailSource>(SOURCE_KEY)
+            .map(|p| p.as_ref().clone())
+    }
 }
 
 /// The rows whose band `(top, height)` meets `top..bottom`, widened by a
 /// screen either way so a short scroll finds them drawn; `bands` is in
 /// list order, so this stops at the first row past the end.
-pub fn rows_in_view(bands: impl IntoIterator<Item = (f64, f64)>, top: f64, bottom: f64) -> Vec<usize> {
+pub fn rows_in_view(
+    bands: impl IntoIterator<Item = (f64, f64)>,
+    top: f64,
+    bottom: f64,
+) -> Vec<usize> {
     let margin = bottom - top;
     let (lo, hi) = (top - margin, bottom + margin);
     let mut out = Vec::new();
@@ -112,7 +132,13 @@ pub fn rows_in_view(bands: impl IntoIterator<Item = (f64, f64)>, top: f64, botto
 /// Draw the pending thumbnails of the rows in view.
 pub fn render_visible_thumbnails(list: &gtk::ListBox) {
     let Some(source) = source(list) else { return };
-    let Some(adj) = list.parent().and_downcast::<gtk::Viewport>().and_then(|v| v.vadjustment()) else { return };
+    let Some(adj) = list
+        .parent()
+        .and_downcast::<gtk::Viewport>()
+        .and_then(|v| v.vadjustment())
+    else {
+        return;
+    };
     let (top, bottom) = (adj.value(), adj.value() + adj.page_size());
     if adj.page_size() <= 0.0 {
         return;
@@ -123,9 +149,18 @@ pub fn render_visible_thumbnails(list: &gtk::ListBox) {
         rows.push(row);
         i += 1;
     }
-    let bands = rows.iter().map(|r| r.compute_bounds(list).map_or((f64::MAX, 0.0), |b| (b.y() as f64, b.height() as f64)));
+    let bands = rows.iter().map(|r| {
+        r.compute_bounds(list)
+            .map_or((f64::MAX, 0.0), |b| (b.y() as f64, b.height() as f64))
+    });
     for index in rows_in_view(bands, top, bottom) {
-        let Some(pic) = rows[index].child().and_then(|c| c.first_child()).and_downcast::<gtk::Picture>() else { continue };
+        let Some(pic) = rows[index]
+            .child()
+            .and_then(|c| c.first_child())
+            .and_downcast::<gtk::Picture>()
+        else {
+            continue;
+        };
         if pic.has_css_class(PENDING) {
             if let Some(new_pic) = source(index) {
                 pic.set_paintable(new_pic.paintable().as_ref());
@@ -142,9 +177,13 @@ pub fn update_thumbnail(
     masters: &[MasterSlide],
     index: usize,
 ) {
-    let Some(row) = list.row_at_index(index as i32) else { return };
+    let Some(row) = list.row_at_index(index as i32) else {
+        return;
+    };
     let Some(column) = row.child() else { return };
-    let Some(pic) = column.first_child().and_downcast::<gtk::Picture>() else { return };
+    let Some(pic) = column.first_child().and_downcast::<gtk::Picture>() else {
+        return;
+    };
     // Not drawn yet: it is drawn from the deck as it is when it scrolls in.
     if pic.has_css_class(PENDING) {
         return;
@@ -223,11 +262,18 @@ mod tests {
             use std::time::{Duration, Instant};
             let deck = decks_core::engine::Deck::new();
             let mut slide = deck.slides[0].clone();
-            slide.objects.push(decks_core::engine::SlideObject::TextBox {
-                text: "A line of text on every slide".into(),
-                x: 100.0, y: 100.0, w: 600.0, h: 80.0,
-                runs: Vec::new(), rotation: 0.0, body: Default::default(),
-            });
+            slide
+                .objects
+                .push(decks_core::engine::SlideObject::TextBox {
+                    text: "A line of text on every slide".into(),
+                    x: 100.0,
+                    y: 100.0,
+                    w: 600.0,
+                    h: 80.0,
+                    runs: Vec::new(),
+                    rotation: 0.0,
+                    body: Default::default(),
+                });
             let slides = Rc::new(vec![slide; 300]);
             let masters = Rc::new(deck.masters.clone());
             let rendered = Rc::new(Cell::new(0usize));
@@ -235,37 +281,71 @@ mod tests {
             let scrolled = gtk::ScrolledWindow::new();
             scrolled.set_child(Some(&list));
             let (s, m, r) = (slides.clone(), masters.clone(), rendered.clone());
-            super::set_thumbnail_source(&list, &scrolled, Rc::new(move |i| {
-                r.set(r.get() + 1);
-                super::slide_thumbnail(&s, &m, i)
-            }));
+            super::set_thumbnail_source(
+                &list,
+                &scrolled,
+                Rc::new(move |i| {
+                    r.set(r.get() + 1);
+                    super::slide_thumbnail(&s, &m, i)
+                }),
+            );
             // With seven samples the p95 is the slowest, so a first call that
             // loads fonts and fills caches would be the measurement (a CI run's
             // slowest canvas frame was 167 ms against a ~1 ms median). One
             // unmeasured call first: the budget is for the frames after it.
             let measure = |name: &str, budget: Duration, f: &mut dyn FnMut()| {
                 f();
-                let mut samples: Vec<Duration> = (0..7).map(|_| { let t = Instant::now(); f(); t.elapsed() }).collect();
+                let mut samples: Vec<Duration> = (0..7)
+                    .map(|_| {
+                        let t = Instant::now();
+                        f();
+                        t.elapsed()
+                    })
+                    .collect();
                 samples.sort_unstable();
                 let (p50, p95) = (samples[3], samples[6]);
                 eprintln!("{name}: p50={p50:?} p95={p95:?} budget={budget:?} samples={samples:?}");
-                assert!(p95 <= budget, "{name}: p95 {p95:?} over {budget:?}; samples={samples:?}");
+                assert!(
+                    p95 <= budget,
+                    "{name}: p95 {p95:?} over {budget:?}; samples={samples:?}"
+                );
             };
-            measure("300-slide strip rebuild", Duration::from_millis(1_000), &mut || {
-                super::rebuild_slide_list(&list, &slides, &masters, 0);
-            });
+            measure(
+                "300-slide strip rebuild",
+                Duration::from_millis(1_000),
+                &mut || {
+                    super::rebuild_slide_list(&list, &slides, &masters, 0);
+                },
+            );
             let mut rows = 0;
             while list.row_at_index(rows).is_some() {
                 rows += 1;
             }
             assert_eq!(rows, 300);
-            assert_eq!(rendered.get(), 0, "a rebuild rendered thumbnails for rows not in view");
+            assert_eq!(
+                rendered.get(),
+                0,
+                "a rebuild rendered thumbnails for rows not in view"
+            );
 
             let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 1280, 720).unwrap();
-            measure("canvas frame of one slide in a 300-slide deck", Duration::from_millis(100), &mut || {
-                let cr = cairo::Context::new(&surface).unwrap();
-                crate::canvas::draw_slide(&cr, 1280.0, 720.0, &slides, 299, None, &masters, (0.0, 0.5, 1.0));
-            });
+            measure(
+                "canvas frame of one slide in a 300-slide deck",
+                Duration::from_millis(100),
+                &mut || {
+                    let cr = cairo::Context::new(&surface).unwrap();
+                    crate::canvas::draw_slide(
+                        &cr,
+                        1280.0,
+                        720.0,
+                        &slides,
+                        299,
+                        None,
+                        &masters,
+                        (0.0, 0.5, 1.0),
+                    );
+                },
+            );
         });
     }
 

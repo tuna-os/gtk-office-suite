@@ -75,9 +75,15 @@ impl Span {
 
 fn span(r: Rect, x_axis: bool) -> Span {
     if x_axis {
-        Span { start: r.0, len: r.2 }
+        Span {
+            start: r.0,
+            len: r.2,
+        }
     } else {
-        Span { start: r.1, len: r.3 }
+        Span {
+            start: r.1,
+            len: r.3,
+        }
     }
 }
 
@@ -112,7 +118,11 @@ fn align(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candidate
                 continue;
             }
             // A centre lines up with a centre, an edge with an edge.
-            let own_kind = if i == 1 { GuideKind::Centre } else { GuideKind::Edge };
+            let own_kind = if i == 1 {
+                GuideKind::Centre
+            } else {
+                GuideKind::Edge
+            };
             if own_kind != *kind {
                 continue;
             }
@@ -126,7 +136,16 @@ fn align(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candidate
                 }
                 None => (0.0, cross_len),
             };
-            out.push(Candidate { delta, guides: vec![Guide { vertical: x_axis, at: *at, from, to, kind: *kind }] });
+            out.push(Candidate {
+                delta,
+                guides: vec![Guide {
+                    vertical: x_axis,
+                    at: *at,
+                    from,
+                    to,
+                    kind: *kind,
+                }],
+            });
         }
     }
     out
@@ -144,7 +163,13 @@ fn gap_guide(a: Rect, b: Rect, x_axis: bool) -> Guide {
     let (sa, sb) = (span(a, x_axis), span(b, x_axis));
     let (ca, cb) = (span(a, !x_axis), span(b, !x_axis));
     let at = (ca.start.max(cb.start) + ca.end().min(cb.end())) / 2.0;
-    Guide { vertical: !x_axis, at, from: sa.end(), to: sb.start, kind: GuideKind::Spacing }
+    Guide {
+        vertical: !x_axis,
+        at,
+        from: sa.end(),
+        to: sb.start,
+        kind: GuideKind::Spacing,
+    }
 }
 
 /// Equal spacing on one axis, among the objects in line with `moving`:
@@ -152,21 +177,48 @@ fn gap_guide(a: Rect, b: Rect, x_axis: bool) -> Guide {
 /// keeps to the next one along.
 fn spacing(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candidate> {
     let m = span(moving, x_axis);
-    let mut row: Vec<Rect> = others.iter().copied().filter(|o| in_line(*o, moving, x_axis)).collect();
+    let mut row: Vec<Rect> = others
+        .iter()
+        .copied()
+        .filter(|o| in_line(*o, moving, x_axis))
+        .collect();
     row.sort_by(|a, b| span(*a, x_axis).start.total_cmp(&span(*b, x_axis).start));
-    let before: Vec<Rect> = row.iter().copied().filter(|o| span(*o, x_axis).end() <= m.start + tol).collect();
-    let after: Vec<Rect> = row.iter().copied().filter(|o| span(*o, x_axis).start >= m.end() - tol).collect();
-    let prev = before.iter().copied().max_by(|a, b| span(*a, x_axis).end().total_cmp(&span(*b, x_axis).end()));
-    let next = after.iter().copied().min_by(|a, b| span(*a, x_axis).start.total_cmp(&span(*b, x_axis).start));
+    let before: Vec<Rect> = row
+        .iter()
+        .copied()
+        .filter(|o| span(*o, x_axis).end() <= m.start + tol)
+        .collect();
+    let after: Vec<Rect> = row
+        .iter()
+        .copied()
+        .filter(|o| span(*o, x_axis).start >= m.end() - tol)
+        .collect();
+    let prev = before
+        .iter()
+        .copied()
+        .max_by(|a, b| span(*a, x_axis).end().total_cmp(&span(*b, x_axis).end()));
+    let next = after
+        .iter()
+        .copied()
+        .min_by(|a, b| span(*a, x_axis).start.total_cmp(&span(*b, x_axis).start));
     let mut out = Vec::new();
-    let shifted = |r: Rect, d: f64| if x_axis { (r.0 + d, r.1, r.2, r.3) } else { (r.0, r.1 + d, r.2, r.3) };
+    let shifted = |r: Rect, d: f64| {
+        if x_axis {
+            (r.0 + d, r.1, r.2, r.3)
+        } else {
+            (r.0, r.1 + d, r.2, r.3)
+        }
+    };
     // Midway between the two neighbours.
     if let (Some(p), Some(n)) = (prev, next) {
         let start = (span(p, x_axis).end() + span(n, x_axis).start - m.len) / 2.0;
         let delta = start - m.start;
         if delta.abs() <= tol && start >= span(p, x_axis).end() {
             let moved = shifted(moving, delta);
-            out.push(Candidate { delta, guides: vec![gap_guide(p, moved, x_axis), gap_guide(moved, n, x_axis)] });
+            out.push(Candidate {
+                delta,
+                guides: vec![gap_guide(p, moved, x_axis), gap_guide(moved, n, x_axis)],
+            });
         }
     }
     // The gap the previous neighbour keeps to the one before it.
@@ -181,7 +233,10 @@ fn spacing(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candida
             let delta = span(p, x_axis).end() + gap - m.start;
             if delta.abs() <= tol {
                 let moved = shifted(moving, delta);
-                out.push(Candidate { delta, guides: vec![gap_guide(pp, p, x_axis), gap_guide(p, moved, x_axis)] });
+                out.push(Candidate {
+                    delta,
+                    guides: vec![gap_guide(pp, p, x_axis), gap_guide(p, moved, x_axis)],
+                });
             }
         }
     }
@@ -197,7 +252,10 @@ fn spacing(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candida
             let delta = span(n, x_axis).start - gap - m.end();
             if delta.abs() <= tol {
                 let moved = shifted(moving, delta);
-                out.push(Candidate { delta, guides: vec![gap_guide(moved, n, x_axis), gap_guide(n, nn, x_axis)] });
+                out.push(Candidate {
+                    delta,
+                    guides: vec![gap_guide(moved, n, x_axis), gap_guide(n, nn, x_axis)],
+                });
             }
         }
     }
@@ -207,8 +265,15 @@ fn spacing(moving: Rect, others: &[Rect], x_axis: bool, tol: f64) -> Vec<Candida
 /// The closest candidate, and every guide of the candidates that agree
 /// with it (two objects lined up at once show both lines).
 fn best(cands: Vec<Candidate>) -> Option<(f64, Vec<Guide>)> {
-    let d = cands.iter().map(|c| c.delta).min_by(|a, b| a.abs().total_cmp(&b.abs()))?;
-    let mut guides: Vec<Guide> = cands.into_iter().filter(|c| (c.delta - d).abs() < 1e-6).flat_map(|c| c.guides).collect();
+    let d = cands
+        .iter()
+        .map(|c| c.delta)
+        .min_by(|a, b| a.abs().total_cmp(&b.abs()))?;
+    let mut guides: Vec<Guide> = cands
+        .into_iter()
+        .filter(|c| (c.delta - d).abs() < 1e-6)
+        .flat_map(|c| c.guides)
+        .collect();
     guides.dedup();
     Some((d, guides))
 }
@@ -243,7 +308,11 @@ pub fn snap_move(moving: Rect, others: &[Rect], tol: f64) -> Snapped {
         }
     }
     guides.dedup();
-    Snapped { rect, guides, snapped }
+    Snapped {
+        rect,
+        guides,
+        snapped,
+    }
 }
 
 /// Snap a rectangle being resized: the moving edges to the other objects'
@@ -254,17 +323,29 @@ pub fn snap_resize(rect: Rect, edges: Edges, others: &[Rect], tol: f64) -> Snapp
     let mut guides = Vec::new();
     let mut snapped = (false, false);
     for x_axis in [true, false] {
-        let (lo, hi) = if x_axis { (edges.left, edges.right) } else { (edges.top, edges.bottom) };
+        let (lo, hi) = if x_axis {
+            (edges.left, edges.right)
+        } else {
+            (edges.top, edges.bottom)
+        };
         if !lo && !hi {
             continue;
         }
         let s = span(out, x_axis);
         let edge = if hi { s.end() } else { s.start };
         // Treat the moving edge as a zero-width rectangle and align it.
-        let probe = if x_axis { (edge, out.1, 0.0, out.3) } else { (out.0, edge, out.2, 0.0) };
+        let probe = if x_axis {
+            (edge, out.1, 0.0, out.3)
+        } else {
+            (out.0, edge, out.2, 0.0)
+        };
         let cands: Vec<Candidate> = align(probe, others, x_axis, tol)
             .into_iter()
-            .filter(|c| c.guides.iter().all(|g| g.kind == GuideKind::Edge || g.kind == GuideKind::Centre))
+            .filter(|c| {
+                c.guides
+                    .iter()
+                    .all(|g| g.kind == GuideKind::Edge || g.kind == GuideKind::Centre)
+            })
             .collect();
         let mut delta = None;
         if let Some((d, g)) = best(cands) {
@@ -285,8 +366,20 @@ pub fn snap_resize(rect: Rect, edges: Edges, others: &[Rect], tol: f64) -> Snapp
                 let new_start = if hi { s.start } else { s.start - d };
                 let mc = span(out, !x_axis);
                 // A line along each of the two equal sides, just outside.
-                guides.push(Guide { vertical: !x_axis, at: oc.start - 4.0, from: os.start, to: os.start + target_len, kind: GuideKind::Size });
-                guides.push(Guide { vertical: !x_axis, at: mc.start - 4.0, from: new_start, to: new_start + target_len, kind: GuideKind::Size });
+                guides.push(Guide {
+                    vertical: !x_axis,
+                    at: oc.start - 4.0,
+                    from: os.start,
+                    to: os.start + target_len,
+                    kind: GuideKind::Size,
+                });
+                guides.push(Guide {
+                    vertical: !x_axis,
+                    at: mc.start - 4.0,
+                    from: new_start,
+                    to: new_start + target_len,
+                    kind: GuideKind::Size,
+                });
             }
         }
         if let Some(d) = delta {
@@ -309,7 +402,11 @@ pub fn snap_resize(rect: Rect, edges: Edges, others: &[Rect], tol: f64) -> Snapp
             }
         }
     }
-    Snapped { rect: out, guides, snapped }
+    Snapped {
+        rect: out,
+        guides,
+        snapped,
+    }
 }
 
 #[cfg(test)]
@@ -324,9 +421,16 @@ mod tests {
         let s = snap_move((103.0, 300.0, 80.0, 40.0), &[other], TOL);
         assert_eq!(s.rect.0, 100.0);
         assert!(s.snapped.0);
-        let g = s.guides.iter().find(|g| g.vertical).expect("a vertical guide");
+        let g = s
+            .guides
+            .iter()
+            .find(|g| g.vertical)
+            .expect("a vertical guide");
         assert_eq!((g.at, g.kind), (100.0, GuideKind::Edge));
-        assert!(g.from <= 100.0 && g.to >= 340.0, "spans both objects: {g:?}");
+        assert!(
+            g.from <= 100.0 && g.to >= 340.0,
+            "spans both objects: {g:?}"
+        );
     }
 
     #[test]
@@ -336,14 +440,22 @@ mod tests {
         assert_eq!(s.rect.0, 120.0);
         assert_eq!(s.guides[0].kind, GuideKind::Centre);
         let s = snap_move((428.0, 247.0, 100.0, 50.0), &[], TOL);
-        assert_eq!((s.rect.0, s.rect.1), (430.0, 245.0), "centred on the slide both ways");
+        assert_eq!(
+            (s.rect.0, s.rect.1),
+            (430.0, 245.0),
+            "centred on the slide both ways"
+        );
         assert_eq!(s.guides.len(), 2);
         assert!(s.guides.iter().all(|g| g.kind == GuideKind::Centre));
     }
 
     #[test]
     fn nothing_near_is_no_snap() {
-        let s = snap_move((300.0, 300.0, 50.0, 50.0), &[(100.0, 100.0, 50.0, 50.0)], TOL);
+        let s = snap_move(
+            (300.0, 300.0, 50.0, 50.0),
+            &[(100.0, 100.0, 50.0, 50.0)],
+            TOL,
+        );
         assert_eq!(s.rect, (300.0, 300.0, 50.0, 50.0));
         assert_eq!(s.snapped, (false, false));
         assert!(s.guides.is_empty());
@@ -365,9 +477,16 @@ mod tests {
         let r = (350.0, 100.0, 50.0, 50.0); // starts at 350
         let s = snap_move((223.0, 105.0, 50.0, 40.0), &[l, r], TOL); // midway start = 225
         assert_eq!(s.rect.0, 225.0);
-        let gaps: Vec<&Guide> = s.guides.iter().filter(|g| g.kind == GuideKind::Spacing).collect();
+        let gaps: Vec<&Guide> = s
+            .guides
+            .iter()
+            .filter(|g| g.kind == GuideKind::Spacing)
+            .collect();
         assert_eq!(gaps.len(), 2);
-        assert!(gaps.iter().all(|g| (g.to - g.from - 75.0).abs() < 1e-9), "two 75-unit gaps: {gaps:?}");
+        assert!(
+            gaps.iter().all(|g| (g.to - g.from - 75.0).abs() < 1e-9),
+            "two 75-unit gaps: {gaps:?}"
+        );
     }
 
     #[test]
@@ -382,16 +501,28 @@ mod tests {
     #[test]
     fn a_resized_edge_snaps_and_so_does_a_matching_width() {
         let other = (100.0, 100.0, 120.0, 50.0); // right edge 220
-        let right = Edges { right: true, ..Default::default() };
+        let right = Edges {
+            right: true,
+            ..Default::default()
+        };
         let s = snap_resize((100.0, 300.0, 118.0, 50.0), right, &[other], TOL);
         assert_eq!(s.rect, (100.0, 300.0, 120.0, 50.0));
         assert!(s.guides.iter().any(|g| g.vertical && g.at == 220.0));
         // Nowhere near an edge, but 3 short of the other's width.
         let s = snap_resize((600.0, 300.0, 117.0, 50.0), right, &[other], TOL);
         assert_eq!(s.rect.2, 120.0);
-        assert_eq!(s.guides.iter().filter(|g| g.kind == GuideKind::Size).count(), 2);
+        assert_eq!(
+            s.guides
+                .iter()
+                .filter(|g| g.kind == GuideKind::Size)
+                .count(),
+            2
+        );
         // Dragging the left edge keeps the right edge still.
-        let left = Edges { left: true, ..Default::default() };
+        let left = Edges {
+            left: true,
+            ..Default::default()
+        };
         let s = snap_resize((603.0, 300.0, 117.0, 50.0), left, &[other], TOL);
         assert_eq!((s.rect.0 + s.rect.2, s.rect.2), (720.0, 120.0));
         // An edge that isn't moving doesn't snap.

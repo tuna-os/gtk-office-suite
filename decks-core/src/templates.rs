@@ -8,8 +8,8 @@
 // from one saves and reopens like any other.
 
 use crate::engine::shape::{Color, GradientStop, LinearGradient, ShapeKind, ShapeStyle};
-use crate::engine::theme::{ColorRef, FillSrc, StrokeSrc};
 use crate::engine::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, TextBody};
+use crate::engine::theme::{ColorRef, FillSrc, StrokeSrc};
 use crate::engine::{MasterSlide, Slide, SlideObject};
 use crate::layouts::Placeholder;
 use suite_common_core::document::{Run, RunStyle};
@@ -40,7 +40,24 @@ fn filled(kind: ShapeKind, (x, y, w, h): (f64, f64, f64, f64), fill: Color) -> S
     // an authored shape has no outline, and the writer materialises that
     // as an explicit no-line, so the source states it too (DCK-006).
     let fill_src = Some(FillSrc::Color(ColorRef::Rgb(fill.to_hex())));
-    SlideObject::Shape { kind, x, y, w, h, rotation: 0.0, style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill: Some(fill), gradient: None, stroke: None, fill_src, stroke_src: Some(StrokeSrc::NoLine) } }
+    SlideObject::Shape {
+        kind,
+        x,
+        y,
+        w,
+        h,
+        rotation: 0.0,
+        style: ShapeStyle {
+            glow: None,
+            shadow: None,
+            fill_alpha: None,
+            fill: Some(fill),
+            gradient: None,
+            stroke: None,
+            fill_src,
+            stroke_src: Some(StrokeSrc::NoLine),
+        },
+    }
 }
 
 fn none() -> Vec<SlideObject> {
@@ -49,7 +66,19 @@ fn none() -> Vec<SlideObject> {
 
 fn ocean() -> Vec<SlideObject> {
     let (top, bottom) = (Color(0x0B, 0x3D, 0x6B), Color(0x13, 0x8D, 0x9C));
-    let gradient = LinearGradient { stops: vec![GradientStop { pos: 0.0, color: top }, GradientStop { pos: 1.0, color: bottom }], angle: 90.0 };
+    let gradient = LinearGradient {
+        stops: vec![
+            GradientStop {
+                pos: 0.0,
+                color: top,
+            },
+            GradientStop {
+                pos: 1.0,
+                color: bottom,
+            },
+        ],
+        angle: 90.0,
+    };
     let fill = gradient.mean();
     vec![SlideObject::Shape {
         kind: ShapeKind::Rect,
@@ -58,25 +87,49 @@ fn ocean() -> Vec<SlideObject> {
         w: 960.0,
         h: 540.0,
         rotation: 0.0,
-        style: ShapeStyle { glow: None, shadow: None, fill_alpha: None, fill, gradient: Some(gradient), stroke: None, fill_src: None, stroke_src: Some(StrokeSrc::NoLine) },
+        style: ShapeStyle {
+            glow: None,
+            shadow: None,
+            fill_alpha: None,
+            fill,
+            gradient: Some(gradient),
+            stroke: None,
+            fill_src: None,
+            stroke_src: Some(StrokeSrc::NoLine),
+        },
     }]
 }
 
 fn paper() -> Vec<SlideObject> {
-    vec![filled(ShapeKind::Rect, (80.0, 500.0, 800.0, 3.0), Color(0xB5, 0x5A, 0x3C))]
+    vec![filled(
+        ShapeKind::Rect,
+        (80.0, 500.0, 800.0, 3.0),
+        Color(0xB5, 0x5A, 0x3C),
+    )]
 }
 
 fn bold() -> Vec<SlideObject> {
     vec![
-        filled(ShapeKind::Rect, (0.0, 0.0, 28.0, 540.0), Color(0xE0, 0x1B, 0x24)),
-        filled(ShapeKind::Ellipse, (820.0, 400.0, 220.0, 220.0), Color(0xFF, 0xD6, 0xD6)),
+        filled(
+            ShapeKind::Rect,
+            (0.0, 0.0, 28.0, 540.0),
+            Color(0xE0, 0x1B, 0x24),
+        ),
+        filled(
+            ShapeKind::Ellipse,
+            (820.0, 400.0, 220.0, 220.0),
+            Color(0xFF, 0xD6, 0xD6),
+        ),
     ]
 }
 
 fn themes() -> Vec<Theme> {
     vec![
         Theme {
-            template: Template { name: "Basic White", description: "Dark text on white, nothing else" },
+            template: Template {
+                name: "Basic White",
+                description: "Dark text on white, nothing else",
+            },
             background: "#ffffff",
             font: "Sans",
             title: "1D1D1F",
@@ -84,7 +137,10 @@ fn themes() -> Vec<Theme> {
             decorations: none,
         },
         Theme {
-            template: Template { name: "Basic Black", description: "White text on black, for dark rooms" },
+            template: Template {
+                name: "Basic Black",
+                description: "White text on black, for dark rooms",
+            },
             background: "#1d1d1f",
             font: "Sans",
             title: "FFFFFF",
@@ -92,7 +148,10 @@ fn themes() -> Vec<Theme> {
             decorations: none,
         },
         Theme {
-            template: Template { name: "Ocean", description: "White text on a deep blue to teal gradient" },
+            template: Template {
+                name: "Ocean",
+                description: "White text on a deep blue to teal gradient",
+            },
             background: "#0b3d6b",
             font: "Sans",
             title: "FFFFFF",
@@ -100,7 +159,10 @@ fn themes() -> Vec<Theme> {
             decorations: ocean,
         },
         Theme {
-            template: Template { name: "Paper", description: "Serif type on warm paper, with a rule" },
+            template: Template {
+                name: "Paper",
+                description: "Serif type on warm paper, with a rule",
+            },
             background: "#f6f1e7",
             font: "Serif",
             title: "3B2F2F",
@@ -108,7 +170,10 @@ fn themes() -> Vec<Theme> {
             decorations: paper,
         },
         Theme {
-            template: Template { name: "Bold", description: "A red bar and a large soft circle" },
+            template: Template {
+                name: "Bold",
+                description: "A red bar and a large soft circle",
+            },
             background: "#ffffff",
             font: "Sans",
             title: "E01B24",
@@ -136,7 +201,12 @@ fn text(
     paras: Vec<ParaStyle>,
     anchor: Anchor,
 ) -> SlideObject {
-    let style = RunStyle { bold, font_size_hp: Some(size_pt * 2), color: Some(color.into()), ..Default::default() };
+    let style = RunStyle {
+        bold,
+        font_size_hp: Some(size_pt * 2),
+        color: Some(color.into()),
+        ..Default::default()
+    };
     SlideObject::TextBox {
         text: content.into(),
         x,
@@ -144,21 +214,38 @@ fn text(
         w,
         h,
         rotation: 0.0,
-        runs: vec![Run { text: content.into(), style }],
-        body: TextBody { paras, anchor, placeholder: Some(role), ..Default::default() },
+        runs: vec![Run {
+            text: content.into(),
+            style,
+        }],
+        body: TextBody {
+            paras,
+            anchor,
+            placeholder: Some(role),
+            ..Default::default()
+        },
     }
 }
 
 fn centred() -> ParaStyle {
-    ParaStyle { align: ParaAlign::Center, ..Default::default() }
+    ParaStyle {
+        align: ParaAlign::Center,
+        ..Default::default()
+    }
 }
 
 fn bullet() -> ParaStyle {
-    ParaStyle { bullet: Bullet::Char("\u{2022}".into()), margin_left: 36.0, indent: -28.0, ..Default::default() }
+    ParaStyle {
+        bullet: Bullet::Char("\u{2022}".into()),
+        margin_left: 36.0,
+        indent: -28.0,
+        ..Default::default()
+    }
 }
 
 fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
-    Slide { hidden: false,
+    Slide {
+        hidden: false,
         title: title.into(),
         // White is "unset": the slide shows its master's background.
         background: "#ffffff".into(),
@@ -197,15 +284,51 @@ pub fn deck(index: usize) -> Option<(Vec<Slide>, Vec<MasterSlide>)> {
         slide(
             "Title",
             vec![
-                text(Placeholder::Title, "Presentation Title", (80.0, 150.0, 800.0, 130.0), theme.title, 48, true, vec![centred()], Anchor::Bottom),
-                text(Placeholder::Subtitle, "Subtitle", (80.0, 300.0, 800.0, 60.0), theme.body, 24, false, vec![centred()], Anchor::Top),
+                text(
+                    Placeholder::Title,
+                    "Presentation Title",
+                    (80.0, 150.0, 800.0, 130.0),
+                    theme.title,
+                    48,
+                    true,
+                    vec![centred()],
+                    Anchor::Bottom,
+                ),
+                text(
+                    Placeholder::Subtitle,
+                    "Subtitle",
+                    (80.0, 300.0, 800.0, 60.0),
+                    theme.body,
+                    24,
+                    false,
+                    vec![centred()],
+                    Anchor::Top,
+                ),
             ],
         ),
         slide(
             "Title & Bullets",
             vec![
-                text(Placeholder::Title, "Slide Title", (80.0, 40.0, 800.0, 90.0), theme.title, 36, true, vec![ParaStyle::default()], Anchor::Bottom),
-                text(Placeholder::Body, points, (80.0, 150.0, 800.0, 320.0), theme.body, 24, false, vec![bullet()], Anchor::Top),
+                text(
+                    Placeholder::Title,
+                    "Slide Title",
+                    (80.0, 40.0, 800.0, 90.0),
+                    theme.title,
+                    36,
+                    true,
+                    vec![ParaStyle::default()],
+                    Anchor::Bottom,
+                ),
+                text(
+                    Placeholder::Body,
+                    points,
+                    (80.0, 150.0, 800.0, 320.0),
+                    theme.body,
+                    24,
+                    false,
+                    vec![bullet()],
+                    Anchor::Top,
+                ),
             ],
         ),
     ];
@@ -227,7 +350,10 @@ mod tests {
     #[test]
     fn every_template_is_a_deck_with_a_title_slide_and_a_bulleted_one() {
         let names: Vec<&str> = templates().iter().map(|t| t.name).collect();
-        assert_eq!(names, ["Basic White", "Basic Black", "Ocean", "Paper", "Bold"]);
+        assert_eq!(
+            names,
+            ["Basic White", "Basic Black", "Ocean", "Paper", "Bold"]
+        );
         for (i, name) in names.iter().enumerate() {
             let (slides, masters) = deck(i).unwrap();
             assert_eq!(slides.len(), 2);
@@ -235,7 +361,11 @@ mod tests {
             for s in &slides {
                 for o in &s.objects {
                     if let SlideObject::TextBox { text, runs, .. } = o {
-                        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<String>(), *text, "runs spell the box's text");
+                        assert_eq!(
+                            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+                            *text,
+                            "runs spell the box's text"
+                        );
                     }
                 }
             }
@@ -249,7 +379,13 @@ mod tests {
             let (slides, masters) = deck(i).unwrap();
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("t.pptx");
-            let d = crate::engine::Deck { slides, masters, page_size: None, themes: Vec::new(), skipped_slides: Vec::new() };
+            let d = crate::engine::Deck {
+                slides,
+                masters,
+                page_size: None,
+                themes: Vec::new(),
+                skipped_slides: Vec::new(),
+            };
             crate::engine::write_pptx(path.to_str().unwrap(), &d).unwrap();
             let back = crate::engine::read_pptx(path.to_str().unwrap()).unwrap();
             assert_eq!(back.slides.len(), 2, "template {i}");
@@ -261,8 +397,15 @@ mod tests {
                     _ => None,
                 })
                 .collect();
-            assert!(titles.iter().any(|t| t == "Presentation Title"), "template {i}: {titles:?}");
-            assert_eq!(back.masters[0].font_family(), d.masters[0].font_family(), "template {i}: the theme's font");
+            assert!(
+                titles.iter().any(|t| t == "Presentation Title"),
+                "template {i}: {titles:?}"
+            );
+            assert_eq!(
+                back.masters[0].font_family(),
+                d.masters[0].font_family(),
+                "template {i}: the theme's font"
+            );
         }
     }
 }

@@ -134,7 +134,10 @@ fn skipping_is_allowed() -> bool {
 /// message. An unset `DISPLAY` and a set one that nothing is serving fail
 /// identically inside GTK but need different fixes.
 fn display_for_diagnosis() -> String {
-    describe_display_and_server(std::env::var("DISPLAY").ok().as_deref(), server_socket_exists)
+    describe_display_and_server(
+        std::env::var("DISPLAY").ok().as_deref(),
+        server_socket_exists,
+    )
 }
 
 /// Split out from the environment read for the same reason as
@@ -274,7 +277,12 @@ where
         }
     };
     let (tx, rx) = mpsc::sync_channel(1);
-    if pool.push(move || { let _ = tx.send(panic::catch_unwind(f)); }).is_err() {
+    if pool
+        .push(move || {
+            let _ = tx.send(panic::catch_unwind(f));
+        })
+        .is_err()
+    {
         panic!("could not schedule work on the GTK test thread");
     }
     match rx.recv() {
@@ -403,7 +411,10 @@ mod tests {
             None => assert!(super::is_available(), "no reason, but GTK is unavailable"),
             Some(reason) => {
                 assert!(!super::is_available());
-                assert!(!reason.trim().is_empty(), "unavailable with an empty reason");
+                assert!(
+                    !reason.trim().is_empty(),
+                    "unavailable with an empty reason"
+                );
             }
         }
     }
@@ -425,7 +436,10 @@ mod tests {
         drop(tx);
         let ids: Vec<String> = rx.iter().collect();
         assert_eq!(ids.len(), 4, "every closure should have run");
-        assert!(ids.windows(2).all(|w| w[0] == w[1]), "ran on several threads: {ids:?}");
+        assert!(
+            ids.windows(2).all(|w| w[0] == w[1]),
+            "ran on several threads: {ids:?}"
+        );
     }
 
     /// A failing assertion inside the closure must fail the calling test —
@@ -438,6 +452,9 @@ mod tests {
         let result = std::panic::catch_unwind(|| {
             super::run(|| panic!("boom"));
         });
-        assert!(result.is_err(), "a panic inside run() must reach the caller");
+        assert!(
+            result.is_err(),
+            "a panic inside run() must reach the caller"
+        );
     }
 }

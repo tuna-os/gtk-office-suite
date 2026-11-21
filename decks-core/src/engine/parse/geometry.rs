@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
-pub(super) fn parse_coords(
-    e: &BytesStart,
-    k1: &str,
-    k2: &str
-) -> (Option<f64>, Option<f64>) {
+pub(super) fn parse_coords(e: &BytesStart, k1: &str, k2: &str) -> (Option<f64>, Option<f64>) {
     let mut v1 = None;
     let mut v2 = None;
     for attr in e.attributes().flatten() {
@@ -70,7 +66,9 @@ pub(super) fn parse_rotation(e: &BytesStart) -> Option<f64> {
         if attr.key.as_ref() != "rot" {
             continue;
         }
-        let val = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?;
+        let val = attr
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+            .ok()?;
         let deg = val.trim().parse::<f64>().ok()? / 60_000.0;
         return if deg.is_finite() { Some(deg) } else { None };
     }
@@ -110,7 +108,10 @@ impl SlideScale {
         let (dx, dy) = Self::DEFAULT_EMU;
         let cx = if cx > 0.0 { cx } else { dx };
         let cy = if cy > 0.0 { cy } else { dy };
-        SlideScale { x: 960.0 / cx, y: 540.0 / cy }
+        SlideScale {
+            x: 960.0 / cx,
+            y: 540.0 / cy,
+        }
     }
 }
 
@@ -144,7 +145,10 @@ impl SlideScale {
     /// `body` with each empty paragraph's end mark sized as `text_runs`
     /// sizes the runs: a blank line between bullets on a 13.33-inch slide
     /// was drawn at its unscaled size, 1.33x the height of the text round it.
-    pub fn text_body(&self, mut body: super::super::text_body::TextBody) -> super::super::text_body::TextBody {
+    pub fn text_body(
+        &self,
+        mut body: super::super::text_body::TextBody,
+    ) -> super::super::text_body::TextBody {
         let k = self.text_factor();
         if (k - 1.0).abs() >= 1e-6 {
             for end in body.paras.iter_mut().filter_map(|p| p.end_run.as_mut()) {
@@ -155,7 +159,9 @@ impl SlideScale {
     }
 
     fn scaled_hp(hp: Option<u16>, k: f64) -> u16 {
-        (hp.unwrap_or(36) as f64 * k).round().clamp(1.0, u16::MAX as f64) as u16
+        (hp.unwrap_or(36) as f64 * k)
+            .round()
+            .clamp(1.0, u16::MAX as f64) as u16
     }
 }
 
@@ -176,9 +182,7 @@ pub fn parse_slide_size(xml: &str) -> Option<(f64, f64)> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
-                if e.name().as_ref() == "p:sldSz" =>
-            {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) if e.name().as_ref() == "p:sldSz" => {
                 let (cx, cy) = parse_coords(e, "cx", "cy");
                 if let (Some(cx), Some(cy)) = (cx, cy) {
                     if cx > 0.0 && cy > 0.0 {
@@ -224,9 +228,9 @@ impl GroupFrame {
             "a:xfrm" => {
                 self.rot = parse_rotation(e).unwrap_or(0.0);
                 let on = |key: &str| {
-                    e.attributes().flatten().any(|a| {
-                        a.key.as_ref() == key && matches!(a.value.as_ref(), "1" | "true")
-                    })
+                    e.attributes()
+                        .flatten()
+                        .any(|a| a.key.as_ref() == key && matches!(a.value.as_ref(), "1" | "true"))
                 };
                 self.flip_h = on("flipH");
                 self.flip_v = on("flipV");
@@ -244,13 +248,32 @@ impl GroupFrame {
     /// centre moves with the group and its rotation adds the group's
     /// (mirrored first when the group flips once). The child's own flip,
     /// which the model cannot hold, is not drawn either way.
-    pub(super) fn place(&self, (x, y, w, h): (f64, f64, f64, f64), rotation: f64) -> ((f64, f64, f64, f64), f64) {
-        let (Some(off), Some(ext)) = (self.off, self.ext) else { return ((x, y, w, h), rotation) };
+    pub(super) fn place(
+        &self,
+        (x, y, w, h): (f64, f64, f64, f64),
+        rotation: f64,
+    ) -> ((f64, f64, f64, f64), f64) {
+        let (Some(off), Some(ext)) = (self.off, self.ext) else {
+            return ((x, y, w, h), rotation);
+        };
         let ch_off = self.ch_off.unwrap_or(off);
         let ch_ext = self.ch_ext.unwrap_or(ext);
-        let sx = if ch_ext.0 > 0.0 { ext.0 / ch_ext.0 } else { 1.0 };
-        let sy = if ch_ext.1 > 0.0 { ext.1 / ch_ext.1 } else { 1.0 };
-        let (x, y, w, h) = (off.0 + (x - ch_off.0) * sx, off.1 + (y - ch_off.1) * sy, w * sx, h * sy);
+        let sx = if ch_ext.0 > 0.0 {
+            ext.0 / ch_ext.0
+        } else {
+            1.0
+        };
+        let sy = if ch_ext.1 > 0.0 {
+            ext.1 / ch_ext.1
+        } else {
+            1.0
+        };
+        let (x, y, w, h) = (
+            off.0 + (x - ch_off.0) * sx,
+            off.1 + (y - ch_off.1) * sy,
+            w * sx,
+            h * sy,
+        );
         if self.rot == 0.0 && !self.flip_h && !self.flip_v {
             return ((x, y, w, h), rotation);
         }
@@ -269,20 +292,34 @@ impl GroupFrame {
         // y grows downward, so this turns clockwise on the slide, as `rot` does.
         let (sin, cos) = self.rot.to_radians().sin_cos();
         let (cx, cy) = (gcx + dx * cos - dy * sin, gcy + dx * sin + dy * cos);
-        ((cx - w / 2.0, cy - h / 2.0, w, h), (rotation + self.rot).rem_euclid(360.0))
+        (
+            (cx - w / 2.0, cy - h / 2.0, w, h),
+            (rotation + self.rot).rem_euclid(360.0),
+        )
     }
 }
 
 /// Whether a slide part is hidden: `show="0"` (or `false`) on its `p:sld`,
 /// which PowerPoint writes for "Hide Slide".
 pub(super) fn slide_is_hidden(slide_xml: &str) -> bool {
-    let Some(at) = slide_xml.find("<p:sld") else { return false };
-    let Some(len) = slide_xml[at..].find('>') else { return false };
+    let Some(at) = slide_xml.find("<p:sld") else {
+        return false;
+    };
+    let Some(len) = slide_xml[at..].find('>') else {
+        return false;
+    };
     let tag = &slide_xml[at..at + len];
     tag.contains(" show=\"0\"") || tag.contains(" show=\"false\"")
 }
 
 /// A rectangle and rotation given in the innermost of `groups`, on the slide.
-pub(super) fn in_groups(groups: &[GroupFrame], rect: (f64, f64, f64, f64), rotation: f64) -> ((f64, f64, f64, f64), f64) {
-    groups.iter().rev().fold((rect, rotation), |(r, rot), g| g.place(r, rot))
+pub(super) fn in_groups(
+    groups: &[GroupFrame],
+    rect: (f64, f64, f64, f64),
+    rotation: f64,
+) -> ((f64, f64, f64, f64), f64) {
+    groups
+        .iter()
+        .rev()
+        .fold((rect, rotation), |(r, rot), g| g.place(r, rot))
 }

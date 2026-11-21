@@ -11,17 +11,29 @@ pub(super) fn read_layout_placeholders(
 ) -> (Vec<Placeholder>, Vec<Placeholder>, Inherited) {
     let layout_xml = archive.optional_part_to_string(layout_path, budget);
     let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
-    let file = Path::new(layout_path).file_name().unwrap_or_default().to_string_lossy();
-    let rels = archive.optional_part_to_string(&format!("{}/_rels/{}.rels", dir.to_string_lossy(), file), budget);
+    let file = Path::new(layout_path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let rels = archive.optional_part_to_string(
+        &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
+        budget,
+    );
     let master_xml = rels
         .split("Target=\"")
         .skip(1)
         .filter_map(|s| s.split('"').next())
         .find(|t| t.contains("slideMaster"))
-        .map(|t| archive.optional_part_to_string(&format!("ppt/{}", t.trim_start_matches("../")), budget))
+        .map(|t| {
+            archive.optional_part_to_string(&format!("ppt/{}", t.trim_start_matches("../")), budget)
+        })
         .unwrap_or_default();
     let inherited = Inherited::read_scaled(&layout_xml, &master_xml, theme, scale);
-    (parse_placeholders(&layout_xml), parse_placeholders(&master_xml), inherited)
+    (
+        parse_placeholders(&layout_xml),
+        parse_placeholders(&master_xml),
+        inherited,
+    )
 }
 
 /// A layout's master and theme parts, through its relationships: the
@@ -34,11 +46,19 @@ pub(super) fn layout_master_theme_paths(
     budget: &mut ZipBudget,
     layout_path: &str,
 ) -> (Option<String>, Option<String>) {
-    let rels_of = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str| -> String {
-        let dir = Path::new(part).parent().unwrap_or(Path::new("ppt"));
-        let file = Path::new(part).file_name().unwrap_or_default().to_string_lossy().to_string();
-        archive.optional_part_to_string(&format!("{}/_rels/{}.rels", dir.to_string_lossy(), file), budget)
-    };
+    let rels_of =
+        |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str| -> String {
+            let dir = Path::new(part).parent().unwrap_or(Path::new("ppt"));
+            let file = Path::new(part)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            archive.optional_part_to_string(
+                &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
+                budget,
+            )
+        };
     let target = |base: &str, rels: &str, kind: &str| -> Option<String> {
         rels.split("Target=\"")
             .skip(1)
@@ -46,11 +66,19 @@ pub(super) fn layout_master_theme_paths(
             .find(|t| t.contains(kind))
             .map(|t| part_path(base, t))
     };
-    let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt")).to_string_lossy().into_owned();
+    let dir = Path::new(layout_path)
+        .parent()
+        .unwrap_or(Path::new("ppt"))
+        .to_string_lossy()
+        .into_owned();
     let layout_rels = rels_of(archive, budget, layout_path);
     let master = target(&dir, &layout_rels, "slideMaster");
     let theme = master.as_deref().and_then(|mp| {
-        let dir = Path::new(mp).parent().unwrap_or(Path::new("ppt")).to_string_lossy().into_owned();
+        let dir = Path::new(mp)
+            .parent()
+            .unwrap_or(Path::new("ppt"))
+            .to_string_lossy()
+            .into_owned();
         target(&dir, &rels_of(archive, budget, mp), "theme")
     });
     (master, theme)
@@ -65,13 +93,19 @@ pub(super) fn layout_theme(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
     layout_path: &str,
-    theme_path_of: &mut std::collections::HashMap<String, (Option<String>, std::collections::BTreeMap<String, String>)>,
+    theme_path_of: &mut std::collections::HashMap<
+        String,
+        (Option<String>, std::collections::BTreeMap<String, String>),
+    >,
     themes: &mut std::collections::HashMap<String, Theme>,
 ) -> (Theme, Option<String>) {
     if !theme_path_of.contains_key(layout_path) {
         let (_, theme) = layout_master_theme_paths(archive, budget, layout_path);
         let layout_xml = archive.optional_part_to_string(layout_path, budget);
-        theme_path_of.insert(layout_path.to_string(), (theme, parse_override_color_map(&layout_xml)));
+        theme_path_of.insert(
+            layout_path.to_string(),
+            (theme, parse_override_color_map(&layout_xml)),
+        );
     }
     let (path, remap) = theme_path_of.get(layout_path).cloned().unwrap_or_default();
     let theme = path
@@ -86,7 +120,11 @@ pub(super) fn layout_theme(
         .unwrap_or_default();
     // A layout that overrides the master's colour map (a dark section
     // layout: bg1 = dk1, tx1 = lt1) recolours the slides on it.
-    let theme = if remap.is_empty() { theme } else { theme.with_remap(&remap) };
+    let theme = if remap.is_empty() {
+        theme
+    } else {
+        theme.with_remap(&remap)
+    };
     (theme, path)
 }
 
@@ -94,7 +132,9 @@ pub(super) fn layout_theme(
 /// over the master's. Empty for `a:masterClrMapping` or none: the part
 /// follows the colour map above it.
 pub(super) fn parse_override_color_map(xml: &str) -> std::collections::BTreeMap<String, String> {
-    let Some(at) = xml.find("<a:overrideClrMapping") else { return Default::default() };
+    let Some(at) = xml.find("<a:overrideClrMapping") else {
+        return Default::default();
+    };
     let tag = &xml[at..];
     let end = tag.find('>').map_or(tag.len(), |e| e + 1);
     parse_color_map(&tag[..end].replacen("<a:overrideClrMapping", "<p:clrMap", 1))
@@ -112,7 +152,9 @@ pub(super) fn parse_color_map(xml: &str) -> std::collections::BTreeMap<String, S
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) if e.name().as_ref() == "p:clrMap" => {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.name().as_ref() == "p:clrMap" =>
+            {
                 let mut map = std::collections::BTreeMap::new();
                 for attr in e.attributes().flatten() {
                     let key: String = attr.key.as_ref().to_string();
@@ -138,7 +180,9 @@ pub(super) fn parse_color_map(xml: &str) -> std::collections::BTreeMap<String, S
 
 /// The slideLayout part a slide's relationships name, if any.
 pub(super) fn layout_path_of(rels: &std::collections::HashMap<String, String>) -> Option<String> {
-    rels.values().find(|t| t.contains("slideLayout")).map(|t| format!("ppt/{}", t.trim_start_matches("../")))
+    rels.values()
+        .find(|t| t.contains("slideLayout"))
+        .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
 }
 
 /// A layout part as the model's layout: its name and kind, its own
@@ -166,7 +210,11 @@ pub(super) fn read_layout(
                         .attributes()
                         .flatten()
                         .find(|a| a.key.as_ref() == "type")
-                        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.to_string()));
+                        .and_then(|a| {
+                            a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                                .ok()
+                                .map(|v| v.to_string())
+                        });
                     kind = LayoutKind::from_pptx(ty.as_deref());
                     break;
                 }
@@ -181,19 +229,44 @@ pub(super) fn read_layout(
         .iter()
         .filter_map(|p| {
             let role = crate::layouts::Placeholder::from_pptx(Some(&p.key.ty))?;
-            let r = p.rect.or_else(|| inherited_rect(&p.key, &layout_phs, master_phs))?;
-            Some(LayoutPlaceholder { id: 0, role, x: r.x * scale.x, y: r.y * scale.y, w: r.w * scale.x, h: r.h * scale.y, source_ty: p.key.ty.clone(), source_idx: p.key.idx })
+            let r = p
+                .rect
+                .or_else(|| inherited_rect(&p.key, &layout_phs, master_phs))?;
+            Some(LayoutPlaceholder {
+                id: 0,
+                role,
+                x: r.x * scale.x,
+                y: r.y * scale.y,
+                w: r.w * scale.x,
+                h: r.h * scale.y,
+                source_ty: p.key.ty.clone(),
+                source_idx: p.key.idx,
+            })
         })
         .collect();
     let name = parse_c_sld_name(xml).unwrap_or_else(|| {
-        Path::new(path).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Layout".into())
+        Path::new(path)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Layout".into())
     });
     // Ids are stamped by the caller from the session space (DCK-005):
     // 0 here means not assigned yet.
-    Layout { id: 0, name, kind, background: bg.filter(|b| Some(b.as_str()) != master_bg), shapes, placeholders }
+    Layout {
+        id: 0,
+        name,
+        kind,
+        background: bg.filter(|b| Some(b.as_str()) != master_bg),
+        shapes,
+        placeholders,
+    }
 }
 
 /// A part's own background, if it states one.
-pub(super) fn parse_layout_background(xml: &str, scale: SlideScale, theme: &Theme) -> Option<String> {
+pub(super) fn parse_layout_background(
+    xml: &str,
+    scale: SlideScale,
+    theme: &Theme,
+) -> Option<String> {
     master_shapes(xml, scale, theme, &mut |_| None).0
 }

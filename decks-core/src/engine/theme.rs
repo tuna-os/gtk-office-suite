@@ -42,8 +42,7 @@ use super::shape::{Color, ColorModulation};
 /// `a:lumMod`/`a:lumOff`), as the source states it, values in
 /// 1/100000ths. Mirrors `shape_xml::color_of`'s application order so a
 /// retained reference resolves to the colour the file drew.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ColorMod {
     Tint(i32),
     Shade(i32),
@@ -66,7 +65,11 @@ impl ColorMod {
     /// The modulation value, in 1/100000ths, as the source states it.
     pub fn value(&self) -> i32 {
         match *self {
-            ColorMod::Tint(v) | ColorMod::Shade(v) | ColorMod::SatMod(v) | ColorMod::LumMod(v) | ColorMod::LumOff(v) => v,
+            ColorMod::Tint(v)
+            | ColorMod::Shade(v)
+            | ColorMod::SatMod(v)
+            | ColorMod::LumMod(v)
+            | ColorMod::LumOff(v) => v,
         }
     }
 
@@ -94,8 +97,7 @@ impl ColorMod {
 /// A theme-slot colour with its source modulation: `a:schemeClr`
 /// `val` plus any following `a:tint`/`a:shade`/`a:satMod`/`a:lumMod`/
 /// `a:lumOff` children, in document order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ThemeColor {
     /// The slot as the file names it (`accent1`, `dk1`, `tx1`, `bg1`,
     /// `hlink` …). Presentation names (`tx1`, `bg1`) resolve through
@@ -107,7 +109,10 @@ pub struct ThemeColor {
 
 impl ThemeColor {
     pub fn unmodulated(slot: &str) -> Self {
-        ThemeColor { slot: slot.to_string(), mods: Vec::new() }
+        ThemeColor {
+            slot: slot.to_string(),
+            mods: Vec::new(),
+        }
     }
 }
 
@@ -115,8 +120,7 @@ impl ThemeColor {
 /// or a theme reference. Absence is `None` beside it (no statement),
 /// never a variant here: an absent fill is not white, and an absent
 /// line is not "no line".
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ColorRef {
     /// Literal sRGB, `RRGGBB` upper case as the writers emit it.
     Rgb(String),
@@ -168,8 +172,7 @@ impl ColorRef {
 /// A fill as its source states it. `None` beside it (no direct
 /// statement: a `p:style` reference, a group fill, or a predates-
 /// retention shape) leaves the resolved cache canonical, as before.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FillSrc {
     /// An explicit `a:noFill`: not the same as no statement. A theme
     /// edit that would fill an inheriting shape must not fill this one.
@@ -180,8 +183,7 @@ pub enum FillSrc {
 
 /// An outline colour as its source states it. `None` beside it means
 /// no direct `a:ln` statement was kept (see `FillSrc`).
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StrokeSrc {
     /// An explicit line with no colour (`a:noFill` inside `a:ln`, or a
     /// zero `lnRef`): drawn as no outline, and kept that way.
@@ -195,8 +197,7 @@ pub enum StrokeSrc {
 /// deliberately not retained: shapes keep their own references or
 /// their resolved colours (see the module note), and re-emitting an
 /// opaque scheme would be a second theme model beside this one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Theme {
     /// Stable identity within the session (DCK-005, as masters and
     /// layouts): readers assign ids once at import; 0 means not
@@ -261,7 +262,9 @@ impl Theme {
         if let Some(hex) = self.colors.get(slot) {
             return Color::from_hex(hex);
         }
-        Self::default_colors().get(slot).and_then(|hex| Color::from_hex(hex))
+        Self::default_colors()
+            .get(slot)
+            .and_then(|hex| Color::from_hex(hex))
     }
 
     /// The reference `r` draws as under this theme, if it names a
@@ -305,11 +308,20 @@ mod tests {
     #[test]
     fn modulation_replays_the_reader_order() {
         let t = theme();
-        let r = ColorRef::Theme(ThemeColor { slot: "accent1".into(), mods: vec![ColorMod::Shade(50_000)] });
+        let r = ColorRef::Theme(ThemeColor {
+            slot: "accent1".into(),
+            mods: vec![ColorMod::Shade(50_000)],
+        });
         let c = t.resolve(&r).expect("shaded accent1");
         let plain = Color::from_hex("4472C4").unwrap();
-        assert!(c.0 <= plain.0 && c.1 <= plain.1 && c.2 <= plain.2, "shade darkens: {c:?}");
-        assert_eq!(ColorRef::Rgb("ff0000".into()).resolve(&t), Color::from_hex("FF0000"));
+        assert!(
+            c.0 <= plain.0 && c.1 <= plain.1 && c.2 <= plain.2,
+            "shade darkens: {c:?}"
+        );
+        assert_eq!(
+            ColorRef::Rgb("ff0000".into()).resolve(&t),
+            Color::from_hex("FF0000")
+        );
     }
 
     #[test]

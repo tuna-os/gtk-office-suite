@@ -18,16 +18,31 @@ use decks_core::{Deck, DecksController};
 use proptest::prelude::*;
 
 fn bold() -> RunStyle {
-    RunStyle { bold: true, ..Default::default() }
+    RunStyle {
+        bold: true,
+        ..Default::default()
+    }
 }
 
 /// A slide holding one text box: "Alpha Beta Gamma" in mixed runs.
 fn deck_with_mixed_box() -> Deck {
     let mut d = Deck::new();
     let runs = vec![
-        Run { text: "Alpha ".into(), style: bold() },
-        Run { text: "Beta".into(), style: RunStyle::default() },
-        Run { text: " Gamma".into(), style: RunStyle { italic: true, ..Default::default() } },
+        Run {
+            text: "Alpha ".into(),
+            style: bold(),
+        },
+        Run {
+            text: "Beta".into(),
+            style: RunStyle::default(),
+        },
+        Run {
+            text: " Gamma".into(),
+            style: RunStyle {
+                italic: true,
+                ..Default::default()
+            },
+        },
     ];
     d.slides[0].objects = vec![SlideObject::TextBox {
         text: "Alpha Beta Gamma".into(),
@@ -70,7 +85,11 @@ fn spans(rt: &RichText) -> Vec<Span> {
 
 /// The colour of the run holding `word`.
 fn colour_of(rt: &RichText, word: &str) -> Option<String> {
-    rt.runs.iter().find(|r| r.text.contains(word)).and_then(|r| r.style.color.as_ref()).map(|c| c.to_lowercase())
+    rt.runs
+        .iter()
+        .find(|r| r.text.contains(word))
+        .and_then(|r| r.style.color.as_ref())
+        .map(|c| c.to_lowercase())
 }
 
 /// What the editor journey does: select "Beta" and bold, underline and
@@ -109,14 +128,30 @@ fn check_reopened(rt: &RichText, what: &str) {
     // The break may be written with either neighbour's style; compare the
     // visible text of each span.
     let visible = |v: Vec<Span>| -> Vec<Span> {
-        v.into_iter().map(|(t, b, i, u, s)| (t.trim_matches('\n').to_string(), b, i, u, s)).filter(|s| !s.0.is_empty()).collect()
+        v.into_iter()
+            .map(|(t, b, i, u, s)| (t.trim_matches('\n').to_string(), b, i, u, s))
+            .filter(|s| !s.0.is_empty())
+            .collect()
     };
-    assert_eq!(visible(spans(rt)), visible(expected_spans()), "{what}: {:?}", rt.runs);
+    assert_eq!(
+        visible(spans(rt)),
+        visible(expected_spans()),
+        "{what}: {:?}",
+        rt.runs
+    );
     assert_eq!(colour_of(rt, "Beta").as_deref(), Some("c00000"), "{what}");
-    assert_ne!(colour_of(rt, "Gamma").as_deref(), Some("c00000"), "{what}: the colour stayed on its range");
+    assert_ne!(
+        colour_of(rt, "Gamma").as_deref(),
+        Some("c00000"),
+        "{what}: the colour stayed on its range"
+    );
     let p0 = rt.body.para(0);
     let p1 = rt.body.para(1);
-    assert_eq!(p0.bullet, Bullet::None, "{what}: the first paragraph is no list item");
+    assert_eq!(
+        p0.bullet,
+        Bullet::None,
+        "{what}: the first paragraph is no list item"
+    );
     assert_eq!(p0.align, ParaAlign::Left, "{what}");
     assert!(matches!(p1.bullet, Bullet::Char(_)), "{what}: {p1:?}");
     assert_eq!(p1.align, ParaAlign::Center, "{what}");
@@ -143,7 +178,10 @@ fn a_range_formatted_box_saves_and_reopens_in_both_formats_and_across_them() {
         let cross = dir.path().join(format!("from-{ext}.{other}"));
         decks_core::write_deck(cross.to_str().unwrap(), &back).unwrap();
         let again = decks_core::read_deck(cross.to_str().unwrap()).unwrap();
-        check_reopened(&RichText::of(&again.slides[0].objects[0]).unwrap(), &format!("{ext} -> {other}"));
+        check_reopened(
+            &RichText::of(&again.slides[0].objects[0]).unwrap(),
+            &format!("{ext} -> {other}"),
+        );
     }
 }
 
@@ -161,10 +199,17 @@ fn an_imported_boxs_unaffected_runs_survive_an_edit_elsewhere_and_a_save() {
         // Type at the very end of the box: every existing run is untouched.
         assert!(c.replace_text_range(s, o, before.text.len(), before.text.len(), "!"));
         let after = text_of(&c);
-        assert_eq!(&after.runs[..before.runs.len() - 1], &before.runs[..before.runs.len() - 1], "{ext}");
+        assert_eq!(
+            &after.runs[..before.runs.len() - 1],
+            &before.runs[..before.runs.len() - 1],
+            "{ext}"
+        );
         let out = dir.path().join(format!("resaved.{ext}"));
         decks_core::write_deck(out.to_str().unwrap(), &c.deck()).unwrap();
-        let back = RichText::of(&decks_core::read_deck(out.to_str().unwrap()).unwrap().slides[0].objects[0]).unwrap();
+        let back = RichText::of(
+            &decks_core::read_deck(out.to_str().unwrap()).unwrap().slides[0].objects[0],
+        )
+        .unwrap();
         assert_eq!(back.text, "Alpha Beta Gamma!", "{ext}");
         let mut want = spans(&before);
         want.last_mut().unwrap().0.push('!');
@@ -176,12 +221,24 @@ fn an_imported_boxs_unaffected_runs_survive_an_edit_elsewhere_and_a_save() {
 fn text_typed_into_a_blank_box_stays_editable_after_a_save() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Deck::new();
-    d.slides[0].objects = vec![SlideObject::TextBox { text: String::new(), x: 0.0, y: 0.0, w: 300.0, h: 100.0, rotation: 0.0, runs: vec![], body: TextBody::default() }];
+    d.slides[0].objects = vec![SlideObject::TextBox {
+        text: String::new(),
+        x: 0.0,
+        y: 0.0,
+        w: 300.0,
+        h: 100.0,
+        rotation: 0.0,
+        runs: vec![],
+        body: TextBody::default(),
+    }];
     let c = controller(d);
     let (s, o) = (c.slide_id_at(0).unwrap(), c.object_id_at(0, 0).unwrap());
     assert!(c.begin_text_session(s, o));
     c.edit_text_session(|t| {
-        assert!(t.format(&FormatEdit::Bold(true)), "a caret format sets the typing style");
+        assert!(
+            t.format(&FormatEdit::Bold(true)),
+            "a caret format sets the typing style"
+        );
         t.replace(0, 0, "Typed").unwrap();
         assert!(t.format(&FormatEdit::Bold(false)));
         t.replace(5, 5, " plain").unwrap();
@@ -193,11 +250,24 @@ fn text_typed_into_a_blank_box_stays_editable_after_a_save() {
         decks_core::write_deck(path.to_str().unwrap(), &c.deck()).unwrap();
         let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
         let rt = RichText::of(&back.slides[0].objects[0]).unwrap();
-        assert_eq!(spans(&rt), vec![("Typed".into(), true, false, false, false), (" plain".into(), false, false, false, false)], "{ext}");
+        assert_eq!(
+            spans(&rt),
+            vec![
+                ("Typed".into(), true, false, false, false),
+                (" plain".into(), false, false, false, false)
+            ],
+            "{ext}"
+        );
         // Reopened, it is still a box the editor can open and change.
         let again = controller(back);
-        let (s, o) = (again.slide_id_at(0).unwrap(), again.object_id_at(0, 0).unwrap());
-        assert!(again.format_text_range(s, o, 0, 5, &FormatEdit::Italic(true)), "{ext}");
+        let (s, o) = (
+            again.slide_id_at(0).unwrap(),
+            again.object_id_at(0, 0).unwrap(),
+        );
+        assert!(
+            again.format_text_range(s, o, 0, 5, &FormatEdit::Italic(true)),
+            "{ext}"
+        );
     }
 }
 
@@ -215,7 +285,19 @@ enum Op {
 fn op() -> impl Strategy<Value = Op> {
     prop_oneof![
         (0usize..40, 0usize..40).prop_map(|(a, b)| Op::Caret(a, b)),
-        prop::sample::select(vec!["a", "Zz", " ", "\n", "é", "e\u{301}", "😀", "東京", "שלום 12", "\n\n"]).prop_map(|s| Op::Type(s.to_string())),
+        prop::sample::select(vec![
+            "a",
+            "Zz",
+            " ",
+            "\n",
+            "é",
+            "e\u{301}",
+            "😀",
+            "東京",
+            "שלום 12",
+            "\n\n"
+        ])
+        .prop_map(|s| Op::Type(s.to_string())),
         Just(Op::Delete),
         (0u8..5, any::<bool>()).prop_map(|(k, on)| Op::Format(k, on)),
         (0u8..4).prop_map(Op::Para),

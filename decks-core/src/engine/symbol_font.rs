@@ -85,10 +85,20 @@ mod tests {
         assert_eq!(unicode_bullet(Some("Wingdings"), "§"), Some("\u{25AA}"));
         assert_eq!(unicode_bullet(Some("Wingdings"), "v"), Some("\u{2756}"));
         assert_eq!(unicode_bullet(Some("Wingdings"), "ü"), Some("\u{2714}"));
-        assert_eq!(unicode_bullet(Some("Wingdings"), "\u{F0A7}"), Some("\u{25AA}"), "private-use form");
+        assert_eq!(
+            unicode_bullet(Some("Wingdings"), "\u{F0A7}"),
+            Some("\u{25AA}"),
+            "private-use form"
+        );
         assert_eq!(unicode_bullet(Some("Symbol"), "·"), Some("\u{2022}"));
-        assert_eq!(unicode_bullet(Some("Wingdings 2"), "\u{F09F}"), Some("\u{2B1D}"));
-        assert_eq!(unicode_bullet(Some("Wingdings 2"), "\u{9F}"), Some("\u{2B1D}"));
+        assert_eq!(
+            unicode_bullet(Some("Wingdings 2"), "\u{F09F}"),
+            Some("\u{2B1D}")
+        );
+        assert_eq!(
+            unicode_bullet(Some("Wingdings 2"), "\u{9F}"),
+            Some("\u{2B1D}")
+        );
     }
 
     #[test]

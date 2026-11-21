@@ -37,7 +37,11 @@ pub struct Page {
 /// and whether it is landscape.
 pub fn paper_of(page: &Page) -> (usize, bool) {
     let landscape = page.width_pt > page.height_pt;
-    let (short, long) = if landscape { (page.height_pt, page.width_pt) } else { (page.width_pt, page.height_pt) };
+    let (short, long) = if landscape {
+        (page.height_pt, page.width_pt)
+    } else {
+        (page.width_pt, page.height_pt)
+    };
     let index = PAPERS
         .iter()
         .enumerate()
@@ -54,7 +58,11 @@ pub fn paper_of(page: &Page) -> (usize, bool) {
 pub fn with_paper(page: Page, index: usize, landscape: bool) -> Page {
     let (_, w, h) = PAPERS[index.min(PAPERS.len() - 1)];
     let (width_pt, height_pt) = if landscape { (h, w) } else { (w, h) };
-    Page { width_pt, height_pt, ..page }
+    Page {
+        width_pt,
+        height_pt,
+        ..page
+    }
 }
 
 /// Show Page Setup over `parent`, starting from `current`; `apply` gets the
@@ -63,7 +71,11 @@ pub fn with_paper(page: Page, index: usize, landscape: bool) -> Page {
 pub fn show(parent: &impl IsA<gtk::Widget>, current: Page, apply: impl Fn(Page) + 'static) {
     let (paper, landscape) = paper_of(&current);
     let papers = gtk::StringList::new(&PAPERS.map(|p| p.0));
-    let paper_row = adw::ComboRow::builder().title(i18n("Paper size")).model(&papers).selected(paper as u32).build();
+    let paper_row = adw::ComboRow::builder()
+        .title(i18n("Paper size"))
+        .model(&papers)
+        .selected(paper as u32)
+        .build();
     let orientations = gtk::StringList::new(&[&i18n("Portrait"), &i18n("Landscape")]);
     let orientation_row = adw::ComboRow::builder()
         .title(i18n("Orientation"))
@@ -79,19 +91,31 @@ pub fn show(parent: &impl IsA<gtk::Widget>, current: Page, apply: impl Fn(Page) 
             .title(title)
             .subtitle(i18n("Millimetres"))
             .digits(1)
-            .adjustment(&gtk::Adjustment::new((pt / PT_PER_MM * 10.0).round() / 10.0, 0.0, 100.0, 1.0, 5.0, 0.0))
+            .adjustment(&gtk::Adjustment::new(
+                (pt / PT_PER_MM * 10.0).round() / 10.0,
+                0.0,
+                100.0,
+                1.0,
+                5.0,
+                0.0,
+            ))
             .build()
     };
     let top = margin(i18n("Top"), current.margin_top_pt);
     let bottom = margin(i18n("Bottom"), current.margin_bottom_pt);
     let left = margin(i18n("Left"), current.margin_left_pt);
     let right = margin(i18n("Right"), current.margin_right_pt);
-    let margins = adw::PreferencesGroup::builder().title(i18n("Margins")).build();
+    let margins = adw::PreferencesGroup::builder()
+        .title(i18n("Margins"))
+        .build();
     for row in [&top, &bottom, &left, &right] {
         margins.add(row);
     }
 
-    let crate::dialogs::ActionDialog { dialog, action: apply_button } = crate::dialogs::action_dialog(
+    let crate::dialogs::ActionDialog {
+        dialog,
+        action: apply_button,
+    } = crate::dialogs::action_dialog(
         &i18n("Page Setup"),
         &i18n("_Apply"),
         400,
@@ -109,7 +133,11 @@ pub fn show(parent: &impl IsA<gtk::Widget>, current: Page, apply: impl Fn(Page) 
                 margin_right_pt: mm(&right),
                 ..current
             };
-            apply(with_paper(page, paper_row.selected() as usize, orientation_row.selected() == 1));
+            apply(with_paper(
+                page,
+                paper_row.selected() as usize,
+                orientation_row.selected() == 1,
+            ));
             d.close();
         });
     }
@@ -121,7 +149,14 @@ mod tests {
     use super::*;
 
     fn page(w: f64, h: f64) -> Page {
-        Page { width_pt: w, height_pt: h, margin_top_pt: 72.0, margin_bottom_pt: 72.0, margin_left_pt: 36.0, margin_right_pt: 36.0 }
+        Page {
+            width_pt: w,
+            height_pt: h,
+            margin_top_pt: 72.0,
+            margin_bottom_pt: 72.0,
+            margin_left_pt: 36.0,
+            margin_right_pt: 36.0,
+        }
     }
 
     /// A page is matched to its paper either way round, and a landscape
