@@ -1053,11 +1053,6 @@ fn odf_styles_by_family(xml: &str, family: &str, prop_attr: &str) -> std::collec
     out
 }
 
-/// A `table:number-*-repeated` count, defaulting to 1.
-///
-/// Capped because ODF's way of saying "the rest of the sheet is empty" is
-/// a repeat count in the millions on a trailing row or column; taking it
-/// literally would allocate for a sheet nobody has.
 /// Whether a `table:table-column` or `table:table-row` is hidden: ODF's
 /// `table:visibility` is `collapse` for a row or column hidden by hand and
 /// `filter` for one a filter hides (ODF 1.3 §19.749); both are drawn as
@@ -1066,6 +1061,11 @@ fn odf_hidden(tag: &str) -> bool {
     matches!(xml_attr(tag, "table:visibility"), Some("collapse" | "filter"))
 }
 
+/// A `table:number-*-repeated` count, defaulting to 1.
+///
+/// Capped because ODF's way of saying "the rest of the sheet is empty" is
+/// a repeat count in the millions on a trailing row or column; taking it
+/// literally would allocate for a sheet nobody has.
 fn odf_repeat(tag: &str, attr: &str) -> usize {
     xml_attr(tag, attr)
         .and_then(|v| v.parse::<usize>().ok())
