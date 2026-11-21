@@ -46,6 +46,9 @@ fn delimited_text_is_told_apart_from_workbooks() {
     assert!(tables_core::io::is_delimited_text(&text_named_xlsx));
     assert!(!tables_core::io::is_delimited_text(&zip_named_xlsx));
     assert!(!tables_core::io::is_delimited_text(&other), "only what load_workbook reads as text");
+}
+
+#[test]
 fn a_csv_keeps_its_commas_when_a_quoted_header_holds_semicolons() {
     let dir = tempfile::tempdir().unwrap();
     let body = b"\"Tags (a; b; c; d)\",Count\nx,1\n";
