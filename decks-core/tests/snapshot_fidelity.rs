@@ -1924,6 +1924,8 @@ fn recovery_rich_state_round_trip() {
         margins: None,
         paras: Vec::new(),
         anchor: Default::default(),
+        no_fill: false,
+        edges: [None; 4],
     };
     let slide = slide_of(
         vec![

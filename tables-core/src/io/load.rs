@@ -3,7 +3,7 @@
 //
 // Split out of io.rs (issue #247).
 
-use super::props::{parse_sheet_qualified_range, read_sheet_props_from_ods, read_sheet_props_from_xlsx};
+use super::props::{parse_sheet_qualified_range, read_sheet_props_from_ods_within, read_sheet_props_from_xlsx};
 
 // io.rs — Spreadsheet file I/O: xlsx/ods/csv/tsv import, xlsx export.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -144,15 +144,23 @@ fn load_xlsx_ranges_into_engine(
     // writes (#1983). A cell with a formula loads as the formula, any other
     // as its value.
     let (vr0, vc0) = values.start().unwrap_or((0, 0));
+    // A formula over another workbook (`'[1]Sheet'!A1`) can't be
+    // recalculated without it: it loads as the value the file cached for
+    // it, as Excel and Calc show it until the link is updated, rather than
+    // as #REF!. The package scan reports the link as not carried.
+    let live = |f: &String| !f.is_empty() && !names_another_workbook(f);
     for (r, c, cell) in values.used_cells() {
         let (row, col) = (vr0 + r as u32, vc0 + c as u32);
-        if formulas.get_value((row, col)).is_some_and(|f| !f.is_empty()) {
+        if formulas.get_value((row, col)).is_some_and(live) {
             continue;
         }
         put_data(engine, row as usize, col as usize, cell).map_err(|e| format!("import {e}"))?;
     }
     let (fr0, fc0) = formulas.start().unwrap_or((0, 0));
     for (r, c, formula) in formulas.used_cells() {
+        if !live(formula) {
+            continue;
+        }
         let input = if formula.starts_with('=') {
             formula.to_string()
         } else {
@@ -163,6 +171,44 @@ fn load_xlsx_ranges_into_engine(
     }
     engine.evaluate();
     Ok((rows.max(1), cols.max(1)))
+}
+
+/// Whether a formula refers to another workbook: an external reference's
+/// index in brackets (`[1]Sheet1!A1`, `'[2]Q1:Q4'!B2`), outside any string
+/// and not after a name, where brackets index a table's column
+/// (`Sales[2024]`).
+fn names_another_workbook(formula: &str) -> bool {
+    let b = formula.as_bytes();
+    let mut in_string = false;
+    for i in 0..b.len() {
+        match b[i] {
+            b'"' => in_string = !in_string,
+            b'[' if !in_string => {
+                let after_name = i > 0 && (b[i - 1].is_ascii_alphanumeric() || matches!(b[i - 1], b'_' | b'.' | b']' | b'['));
+                let digits = b[i + 1..].iter().take_while(|c| c.is_ascii_digit()).count();
+                if !after_name && digits > 0 && b.get(i + 1 + digits) == Some(&b']') {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// A file's merges, each cut to the part of it inside `sheet`, as a merge
+/// made in the app must be (`controller::ops`, `Op::Merge`). A file can
+/// state a merge of the whole grid in forty bytes, and the writer, the
+/// export and the used range walk every cell a merge covers: the sheet
+/// opened, and the first save ran out of memory. A merge left with one
+/// cell is no merge.
+fn merges_within(sheet: &SheetModel, merges: &[(usize, usize, usize, usize)]) -> Vec<(usize, usize, usize, usize)> {
+    merges
+        .iter()
+        .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
+        .map(|&(r, c, rows, cols)| (r, c, rows.min(sheet.rows - r), cols.min(sheet.cols - c)))
+        .filter(|&(_, _, rows, cols)| rows > 1 || cols > 1)
+        .collect()
 }
 
 /// `.xlsb` is a binary container, not the XML package the xlsx reader
@@ -578,17 +624,17 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                     sheet.cell_protections[*r][*c] = x.protection.clone();
                 }
             }
+            for (r, c, runs) in &props.rich_text {
+                if *r < sheet.rows && *c < sheet.cols {
+                    sheet.rich_text.insert((*r, *c), runs.clone());
+                }
+            }
             for (r, c, note) in &props.notes {
                 if *r < sheet.rows && *c < sheet.cols {
                     sheet.notes[*r][*c] = Some(note.clone());
                 }
             }
-            sheet.merges = props
-                .merges
-                .iter()
-                .copied()
-                .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
-                .collect();
+            sheet.merges = merges_within(&sheet, &props.merges);
             sheet.protection = props.protection.clone();
         }
         sheets.push(sheet);
@@ -610,7 +656,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         if name == "_xlnm.Print_Area" {
             if let Some((sheet_name, r0, c0, r1, c1)) = parse_sheet_qualified_range(formula) {
                 if let Some(sheet) = sheets.iter_mut().find(|s| s.name == sheet_name) {
-                    sheet.print_area = Some((r0, c0, r1, c1));
+                    // Inside the sheet, as a merge is (`merges_within`):
+                    // the export walks every cell of it.
+                    if r0 < sheet.rows && c0 < sheet.cols {
+                        sheet.print_area = Some((r0, c0, r1.min(sheet.rows - 1), c1.min(sheet.cols - 1)));
+                    }
                 }
             }
             continue;
@@ -821,7 +871,8 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     // Indices are clamped to this grid for the same reason as there: the
     // sheet is sized from its cell content, and a file can legally name a
     // width for a column past the last one holding data.
-    let props = read_sheet_props_from_ods(path);
+    let sizes = sheets.iter().map(|s| (s.name.clone(), (s.rows, s.cols))).collect();
+    let props = read_sheet_props_from_ods_within(path, Some(&sizes));
     for sheet in &mut sheets {
         let Some(p) = props.get(&sheet.name) else { continue };
         if let Some(setup) = &p.page_setup {
@@ -840,12 +891,12 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
                 sheet.row_heights[r] = px;
             }
         }
-        sheet.merges = p
-            .merges
-            .iter()
-            .copied()
-            .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
-            .collect();
+        sheet.merges = merges_within(sheet, &p.merges);
+        // Rows and columns the file hides (`table:visibility`), as Calc
+        // draws them: a collapsed row or column takes no space. ods has no
+        // autofilter definition here, so every hide is a manual one.
+        *sheet.hidden_rows_manual = p.hidden_rows.iter().copied().filter(|&r| r < sheet.rows).collect();
+        *sheet.hidden_cols = p.hidden_cols.iter().copied().filter(|&c| c < sheet.cols).collect();
         // Number formats, cell styles, borders and cell protection, as the
         // xlsx reader applies them, and the sheet's protection (TBL-005).
         for (r, c, x) in &p.cell_styles {
@@ -937,6 +988,25 @@ mod tests {
         }
         zip.finish().unwrap();
         path
+    }
+
+    /// A formula over another workbook opens as the value the file cached
+    /// for it, not #REF!; a formula over this workbook still recalculates,
+    /// and a table's column named by a number isn't taken for a link.
+    #[test]
+    fn a_formula_over_another_workbook_keeps_its_cached_value() {
+        let styles = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="1"><xf/></cellXfs></styleSheet>"#;
+        let body = r#"<sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><f>SUM('[1]1:34'!E5)</f><v>1051</v></c><c r="C1"><f>[2]Sheet1!A1*2</f><v>7</v></c><c r="D1"><f>A1*3</f><v>0</v></c></row></sheetData>"#;
+        let path = protection_fixture(styles, &[("Sheet1", body)]);
+        let (engine, _) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!(engine.cell_at(0, 0, 1), "1051");
+        assert_eq!(engine.cell_at(0, 0, 2), "7");
+        assert_eq!(engine.cell_at(0, 0, 3), "6", "a formula over this workbook recalculates");
+        assert!(names_another_workbook("SUM('[1]1:34'!E4)"));
+        assert!(names_another_workbook("=[12]Data!B2+1"));
+        assert!(!names_another_workbook("SUM(Sales[2024])"));
+        assert!(!names_another_workbook("Sales[[#This Row],[Q1]]"));
+        assert!(!names_another_workbook(r#"CONCAT("[1]", A1)"#));
     }
 
     #[test]
@@ -1301,6 +1371,41 @@ mod tests {
         let names: Vec<&str> = sheets.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Accounts"]);
         assert_eq!(engine.cell(0, 1), "42");
+    }
+
+    /// A row or column Calc hides (`table:visibility="collapse"`) opens
+    /// hidden: the reader ignored it, so a sheet's collapsed working rows
+    /// all showed (render-real `2020-deep-sea-stock`).
+    #[test]
+    fn an_ods_opens_with_its_hidden_rows_and_columns_hidden() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hidden.ods");
+        let cell = |v: &str| format!(r#"<table:table-cell office:value-type="string"><text:p>{v}</text:p></table:table-cell>"#);
+        let row = |vis: &str, v: &str| format!(r#"<table:table-row{vis}>{}{}{}</table:table-row>"#, cell(v), cell(v), cell(v));
+        let content = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.3">
+<office:body><office:spreadsheet><table:table table:name="S">
+<table:table-column/><table:table-column table:visibility="collapse"/><table:table-column/>
+{}{}{}</table:table></office:spreadsheet></office:body></office:document-content>"#,
+            row("", "a"),
+            row(r#" table:visibility="collapse""#, "b"),
+            row("", "c"),
+        );
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/vnd.oasis.opendocument.spreadsheet").unwrap();
+        zip.start_file("META-INF/manifest.xml", stored).unwrap();
+        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>"#).unwrap();
+        zip.start_file("content.xml", stored).unwrap();
+        zip.write_all(content.as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let (_, sheets) = load_ods_workbook(path.to_str().unwrap()).expect("the workbook opens");
+        let s = &sheets[0];
+        assert!(s.is_row_hidden(1) && !s.is_row_hidden(0) && !s.is_row_hidden(2));
+        assert!(s.is_col_hidden(1) && !s.is_col_hidden(0) && !s.is_col_hidden(2));
     }
 
     /// Calc's sheet protection opens protected, with its selection and

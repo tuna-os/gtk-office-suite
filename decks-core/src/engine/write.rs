@@ -62,6 +62,15 @@ fn write_xfrm<W: std::io::Write>(
     writer: &mut Writer<W>,
     at: Placement,
 ) -> Result<(), quick_xml::Error> {
+    write_xfrm_flipped(writer, at, (false, false))
+}
+
+/// `a:xfrm`, mirrored as `(flip_h, flip_v)` say.
+fn write_xfrm_flipped<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    at: Placement,
+    (flip_h, flip_v): (bool, bool),
+) -> Result<(), quick_xml::Error> {
     let Placement { x, y, w, h, rotation } = at;
     let mut xfrm = BytesStart::new("a:xfrm");
     if rotation.is_finite() && rotation.abs() > f64::EPSILON {
@@ -69,6 +78,12 @@ fn write_xfrm<W: std::io::Write>(
         if rot != 0 {
             xfrm.push_attribute(("rot", rot.to_string().as_str()));
         }
+    }
+    if flip_h {
+        xfrm.push_attribute(("flipH", "1"));
+    }
+    if flip_v {
+        xfrm.push_attribute(("flipV", "1"));
     }
     writer.write_event(Event::Start(xfrm))?;
 
@@ -349,6 +364,7 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     if style.italic { r_pr.push_attribute(("i", "1")); }
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
+    if style.caps { r_pr.push_attribute(("cap", "all")); } else if style.small_caps { r_pr.push_attribute(("cap", "small")); }
     let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
     let link = style.link.as_ref().and_then(|target| links.get(target));
     if style.color.is_some() || family.is_some() || link.is_some() {
@@ -895,17 +911,36 @@ fn write_table<W: std::io::Write>(
                     tc_pr.push_attribute((k, v.as_str()));
                 }
             }
-            match cell.fill {
-                Some(fill) => {
-                    writer.write_event(Event::Start(tc_pr))?;
+            // Its own edges, then its fill, in the schema's order.
+            let edges: Vec<_> = ["a:lnL", "a:lnR", "a:lnT", "a:lnB"].into_iter().zip(cell.edges).filter_map(|(k, e)| Some((k, e?))).collect();
+            if edges.is_empty() && cell.fill.is_none() && !cell.no_fill {
+                writer.write_event(Event::Empty(tc_pr))?;
+            } else {
+                writer.write_event(Event::Start(tc_pr))?;
+                let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> quick_xml::Result<()> {
                     writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
                     let mut srgb = BytesStart::new("a:srgbClr");
-                    srgb.push_attribute(("val", fill.to_hex().as_str()));
+                    srgb.push_attribute(("val", color.to_hex().as_str()));
                     writer.write_event(Event::Empty(srgb))?;
                     writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
-                    writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
+                    Ok(())
+                };
+                for (k, e) in edges {
+                    let mut ln = BytesStart::new(k);
+                    ln.push_attribute(("w", ((e.width_pt * 12700.0).round() as i64).to_string().as_str()));
+                    writer.write_event(Event::Start(ln))?;
+                    match e.color {
+                        Some(color) => solid(writer, color)?,
+                        None => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    }
+                    writer.write_event(Event::End(BytesEnd::new(k)))?;
                 }
-                None => writer.write_event(Event::Empty(tc_pr))?,
+                match cell.fill {
+                    Some(fill) => solid(writer, fill)?,
+                    None if cell.no_fill => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    None => {}
+                }
+                writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
             }
             writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
         }
@@ -1005,7 +1040,7 @@ fn write_image<W: std::io::Write>(
 
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    write_xfrm(writer, at)?;
+    write_xfrm_flipped(writer, at, (crop.flip_h, crop.flip_v))?;
 
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "rect"));

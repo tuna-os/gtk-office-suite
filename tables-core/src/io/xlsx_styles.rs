@@ -193,6 +193,60 @@ fn parse_font(body: &str) -> Font {
     }
 }
 
+/// Each shared string's runs, in order, for the ones that are rich text
+/// (`<si>` of `<r>` runs); plain strings are `None`.
+pub fn rich_shared_strings(sst_xml: &str) -> Vec<Option<Vec<crate::sheet::TextRun>>> {
+    use crate::sheet::{RunFont, TextRun};
+    elements(sst_xml, "si")
+        .into_iter()
+        .map(|(_, body)| {
+            let runs = elements(body, "r");
+            if runs.is_empty() {
+                return None;
+            }
+            let runs: Vec<TextRun> = runs
+                .into_iter()
+                .map(|(_, run)| {
+                    // Line ends as an XML reader hands them over (the
+                    // cell's value has "\n" where the file has CR LF).
+                    let text = elements(run, "t").iter().map(|(_, t)| unescape(t).replace("\r\n", "\n").replace('\r', "\n")).collect();
+                    let font = elements(run, "rPr").first().map(|(_, props)| {
+                        let f = parse_font(props);
+                        // A run names its font `rFont`, a style `name`.
+                        let family = f.family.or_else(|| {
+                            elements(props, "rFont").first().and_then(|(a, _)| xml_attr(&format!(" {a}"), "val").map(unescape))
+                        });
+                        RunFont { family, size: f.size, bold: f.bold, italic: f.italic, underline: f.underline, strikethrough: f.strikethrough, color: f.color }
+                    });
+                    TextRun { text, font }
+                })
+                .collect();
+            // Runs that all use the cell's font are just its text.
+            runs.iter().any(|r| r.font.is_some()).then_some(runs)
+        })
+        .collect()
+}
+
+/// Every shared-string cell of a worksheet, 0-based `(row, col, index)`.
+pub fn shared_string_cells(sheet_xml: &str) -> Vec<(usize, usize, usize)> {
+    let Some(data) = sheet_xml.split("<sheetData").nth(1) else { return Vec::new() };
+    let data = data.split("</sheetData>").next().unwrap_or("");
+    data.split("<c ")
+        .skip(1)
+        .filter_map(|chunk| {
+            let tag_end = chunk.find('>')?;
+            let tag = format!(" {}", &chunk[..tag_end]);
+            if xml_attr(&tag, "t") != Some("s") || tag.ends_with('/') {
+                return None;
+            }
+            let (r, c) = crate::sheet::parse_cell_ref(xml_attr(&tag, "r")?)?;
+            let body = chunk[tag_end..].split("</c>").next()?;
+            let v = body.split("<v>").nth(1)?.split("</v>").next()?;
+            Some((r, c, v.trim().parse().ok()?))
+        })
+        .collect()
+}
+
 /// A solid pattern fill's colour; other patterns and "none" are no fill.
 fn parse_fill(body: &str) -> Option<Rgb> {
     let (attrs, inner) = *elements(body, "patternFill").first()?;
@@ -354,6 +408,23 @@ pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
 mod tests {
     use super::*;
     use suite_common_core::format::NumberFormatKind;
+
+    #[test]
+    fn rich_shared_strings_keep_each_runs_font() {
+        // The EWCO claim form's title, trimmed.
+        let sst = "<sst><si><t>plain</t></si><si><r><t xml:space=\"preserve\">Claim Form\r\n</t></r><r><rPr><i/><sz val=\"10\"/><rFont val=\"Verdana\"/></rPr><t>v2.5.1</t></r></si><si><r><t>all one</t></r></si></sst>";
+        let rich = rich_shared_strings(sst);
+        assert_eq!(rich.len(), 3);
+        assert!(rich[0].is_none(), "a plain string has no runs");
+        let runs = rich[1].as_ref().unwrap();
+        assert_eq!(runs[0].text, "Claim Form\n", "line ends as the cell's value has them");
+        assert!(runs[0].font.is_none(), "a run without rPr uses the cell's font");
+        let f = runs[1].font.as_ref().unwrap();
+        assert_eq!((f.family.as_deref(), f.size, f.italic, f.bold), (Some("Verdana"), Some(10.0), true, false));
+        assert!(rich[2].is_none(), "runs that all use the cell's font are its text");
+        let sheet = r#"<worksheet><sheetData><row r="1"><c r="B1" s="3" t="s"><v>1</v></c><c r="C1"><v>5</v></c><c r="D1" t="s"/></row></sheetData></worksheet>"#;
+        assert_eq!(shared_string_cells(sheet), vec![(0, 1, 1)]);
+    }
 
     #[test]
     fn protection_resolves_defaults_inheritance_and_application_flags() {

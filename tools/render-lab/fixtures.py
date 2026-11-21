@@ -2474,6 +2474,17 @@ def decks(img):
     save(p, "text-columns",
          "Eight 16pt paragraphs in one box set in two columns: items 1 to 4 down the left, 5 to 8 down the right")
 
+    # DCK-004, reduced from the adults' nature survey: its illustration of
+    # people walking in a park is mirrored (a:xfrm flipH="1" on the
+    # picture). Decks drew it the way the file stores it, facing away.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    plain = s.shapes.add_picture(img, Inches(0.5), Inches(1.5), Inches(4), Inches(2.4))
+    flipped = s.shapes.add_picture(img, Inches(5.5), Inches(1.5), Inches(4), Inches(2.4))
+    flipped._element.spPr.get_or_add_xfrm().set("flipH", "1")
+    save(p, "picture-flip",
+         "The test picture twice: as stored on the left, mirrored left to right on the right")
+
     # DCK-004, reduced from the HR and pay monthly status report: the
     # master carries a plain text box (not a placeholder) holding a
     # slide-number field, cached as "‹#›". Decks drew that cache, grey and

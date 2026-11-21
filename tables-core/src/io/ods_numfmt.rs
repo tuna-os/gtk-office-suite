@@ -156,6 +156,100 @@ pub fn parse_data_styles(xml: &str) -> HashMap<String, NumberFormat> {
             }
         }
     }
+    // A style that hands values on to others by sign (`style:map`) is one
+    // Excel code with a section per sign. HM Treasury's tables show
+    // negatives as "(2)" and zero as "-" this way; read as the plain text
+    // style they drew "-2" and "0" (render-real
+    // `hmt-annual-report-and-accounts-core-tables-2025`).
+    let codes = excel_codes(xml, &KINDS);
+    for (name, maps) in style_maps(xml, &KINDS) {
+        let Some(base) = codes.get(&name) else { continue };
+        let target = |cond: &str| maps.iter().find(|m| m.0 == cond).and_then(|m| codes.get(&m.1)).cloned();
+        let (pos, neg, zero) = (target("value()>0"), target("value()<0"), target("value()=0"));
+        let non_neg = target("value()>=0");
+        if pos.is_none() && neg.is_none() && zero.is_none() && non_neg.is_none() {
+            continue;
+        }
+        let pos = pos.or_else(|| non_neg.clone()).unwrap_or_else(|| base.clone());
+        // The second section drops the sign, as Calc's remaining style
+        // does: its currency formats write their own "-" there.
+        let neg = neg.unwrap_or_else(|| base.clone());
+        let zero = zero.or(non_neg).unwrap_or_else(|| base.clone());
+        out.insert(name, NumberFormat::new(NumberFormatKind::Custom(format!("{pos};{neg};{zero}"))));
+    }
+    out
+}
+
+/// `(condition, target style)` for each `style:map` of each data style.
+fn style_maps(xml: &str, kinds: &[&str]) -> Vec<(String, Vec<(String, String)>)> {
+    let mut out = Vec::new();
+    for kind in kinds {
+        let close = format!("</{kind}>");
+        for block in xml.split(format!("<{kind}").as_str()).skip(1) {
+            let head = format!(" {}", block.split('>').next().unwrap_or(""));
+            let Some(name) = attr(&head, "style:name") else { continue };
+            let body = block.split(close.as_str()).next().unwrap_or("");
+            let maps: Vec<(String, String)> = children(body)
+                .iter()
+                .filter(|p| p.0 == "style:map")
+                .filter_map(|p| {
+                    let cond = unescape(attr(&p.1, "style:condition")?).replace(' ', "");
+                    Some((cond, attr(&p.1, "style:apply-style-name")?.to_string()))
+                })
+                .collect();
+            if !maps.is_empty() {
+                out.push((name.to_string(), maps));
+            }
+        }
+    }
+    out
+}
+
+/// One Excel format section for each number, currency, percentage and text
+/// style, from its parts in order.
+fn excel_codes(xml: &str, kinds: &[&str]) -> HashMap<String, String> {
+    let quote = |t: &str| if t.is_empty() || t.contains('"') { String::new() } else { format!("\"{t}\"") };
+    let mut out = HashMap::new();
+    for kind in kinds {
+        if matches!(*kind, "number:date-style" | "number:time-style" | "number:boolean-style") {
+            continue;
+        }
+        let close = format!("</{kind}>");
+        for block in xml.split(format!("<{kind}").as_str()).skip(1) {
+            let head = format!(" {}", block.split('>').next().unwrap_or(""));
+            let Some(name) = attr(&head, "style:name") else { continue };
+            let body = block.split(close.as_str()).next().unwrap_or("");
+            let parts = children(body);
+            let mut code = String::new();
+            for (i, (el, attrs, text)) in parts.iter().enumerate() {
+                match *el {
+                    "number:text" if *kind == "number:percentage-style" && text.trim() == "%" => code.push('%'),
+                    "number:text" | "number:currency-symbol" => code.push_str(&quote(text)),
+                    "number:text-content" => code.push('@'),
+                    "number:number" => {
+                        let int = if attr(attrs, "number:grouping") == Some("true") { "#,##0" } else { "0" };
+                        // Text set into the number (Calc's `(#,##0)` keeps
+                        // its bracket there) goes after the whole part.
+                        let embedded: String = parts[i + 1..]
+                            .iter()
+                            .take_while(|p| p.0 == "number:embedded-text")
+                            .map(|p| quote(&p.2))
+                            .collect();
+                        code.push_str(int);
+                        code.push_str(&embedded);
+                        match decimals(attrs) {
+                            0 => {}
+                            d => code.push_str(&format!(".{}", "0".repeat(d as usize))),
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if !code.is_empty() {
+                out.insert(name.to_string(), code);
+            }
+        }
+    }
     out
 }
 
@@ -205,6 +299,27 @@ mod tests {
         assert_eq!(s["N4"].format("2574.5"), "2,574.50");
         assert_eq!(s["N50"].kind, NumberFormatKind::DateTime("%-m/%-d/%y %H:%M".into()));
         assert_eq!(s["N153"].kind, NumberFormatKind::Currency("$".into(), 2), "a quoted symbol is still a currency");
+    }
+
+    #[test]
+    fn mapped_styles_become_a_section_per_sign() {
+        // From HM Treasury's core tables: grouped, bracketed, a dash.
+        let xml = r#"<number:number-style style:name="N36P0" style:volatile="true"><number:number number:decimal-places="0" number:min-decimal-places="0" number:min-integer-digits="1" number:grouping="true"/></number:number-style>
+          <number:number-style style:name="N36P1" style:volatile="true"><number:text>(</number:text><number:number number:decimal-places="0" number:min-decimal-places="0" number:min-integer-digits="1" number:grouping="true"><number:embedded-text number:position="0">)</number:embedded-text></number:number></number:number-style>
+          <number:text-style style:name="N36"><number:text>-</number:text><style:map style:condition="value()&gt;0" style:apply-style-name="N36P0"/><style:map style:condition="value()&lt;0" style:apply-style-name="N36P1"/></number:text-style>"#;
+        let s = parse_data_styles(xml);
+        assert_eq!(s["N36"].kind, NumberFormatKind::Custom("#,##0;\"(\"#,##0\")\";\"-\"".into()));
+        assert_eq!(s["N36"].format("1234"), "1,234");
+        assert_eq!(s["N36"].format("-2"), "(2)");
+        assert_eq!(s["N36"].format("0"), "-");
+        // Calc's own currency style: the base is the negative, red, with
+        // its own minus.
+        let xml = r##"<number:currency-style style:name="N104P0" style:volatile="true"><number:currency-symbol>$</number:currency-symbol><number:number number:decimal-places="2" number:min-integer-digits="1" number:grouping="true"/></number:currency-style>
+          <number:currency-style style:name="N104"><style:text-properties fo:color="#ff0000"/><number:text>-</number:text><number:currency-symbol>$</number:currency-symbol><number:number number:decimal-places="2" number:min-integer-digits="1" number:grouping="true"/><style:map style:condition="value()&gt;=0" style:apply-style-name="N104P0"/></number:currency-style>"##;
+        let s = parse_data_styles(xml);
+        assert_eq!(s["N104"].format("-5"), "-$5.00");
+        assert_eq!(s["N104"].format("5"), "$5.00");
+        assert_eq!(s["N104"].format("0"), "$0.00");
     }
 
     #[test]
