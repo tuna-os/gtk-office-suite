@@ -110,7 +110,7 @@
     "C": "amber"
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -280,7 +280,7 @@
     "C": "green"
   },
   "letters/real-tier-2-3-notification-of-dealing-with-a-non-uk-t": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -300,7 +300,7 @@
     "C": "amber"
   },
   "tables/real-2020-deep-sea-stock": {
-    "A": "green",
+    "A": "amber",
     "B": "red",
     "C": "red"
   },
@@ -363,7 +363,7 @@
     "C": "amber"
   },
   "tables/real-hmt-annual-report-and-accounts-core-tables-2025": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -417,7 +417,7 @@
     "C": "amber"
   },
   "tables/real-safeguarding-children-affected-by-a-parent-s-alc": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
