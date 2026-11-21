@@ -452,6 +452,7 @@ pub fn set_styled_text(
     let attrs = pango::AttrList::new();
     attrs.insert(pango::AttrInt::new_insert_hyphens(false));
     if runs.is_empty() {
+        hang_trailing_spaces(&attrs, text);
         layout.set_text(text);
         layout.set_attributes(Some(&attrs));
         return;
@@ -511,8 +512,28 @@ pub fn set_styled_text(
             add(pango::AttrColor::new_foreground(r, g, b).into());
         }
     }
+    hang_trailing_spaces(&attrs, &buf);
     layout.set_text(&buf);
     layout.set_attributes(Some(&attrs));
+}
+
+/// Spaces that end a paragraph take no room: PowerPoint and Impress let
+/// them hang past the box's edge, so they neither wrap the last word nor
+/// shift a centred line. Pango counts them, and "Phase One & Two
+/// Transactions" followed by two spaces wrapped its last word in a box it
+/// fits (aiva-progress-dashboard, slide 2). Given zero width, not removed,
+/// so the text and its indices are unchanged; a paragraph of nothing but
+/// spaces keeps them, as they hold its line open.
+fn hang_trailing_spaces(attrs: &pango::AttrList, text: &str) {
+    let kept = text.trim_end_matches([' ', '\t', '\u{a0}']).len();
+    if kept == 0 || kept == text.len() {
+        return;
+    }
+    let none = pango::Rectangle::new(0, 0, 0, 0);
+    let mut a: pango::Attribute = pango::AttrShape::new(&none, &none).into();
+    a.set_start_index(kept as u32);
+    a.set_end_index(text.len() as u32);
+    attrs.insert(a);
 }
 
 /// `RRGGBB` (optionally `#`-prefixed) as Pango's 16-bit colour channels.
@@ -2220,6 +2241,35 @@ mod font_tests {
         assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
         assert_eq!(desc.size(), (18.0 * 96.0 / 72.0 * pango::SCALE as f64) as i32);
         assert!(desc.is_size_absolute());
+    }
+
+    /// Spaces that end a paragraph hang past the edge, as in PowerPoint
+    /// and Impress: a title exactly as wide as its box with two spaces
+    /// after it stays on one line, and the text keeps its spaces. Spaces
+    /// inside a paragraph still take room.
+    #[test]
+    fn spaces_that_end_a_paragraph_take_no_room() {
+        let font = pango::FontDescription::from_string("Sans Bold 44");
+        let title = "Phase One & Two Transactions";
+        let l = layout();
+        l.set_font_description(Some(&font));
+        set_styled_text(&l, title, &[], 1.0);
+        let width = l.extents().1.width();
+        let l = layout();
+        l.set_font_description(Some(&font));
+        l.set_wrap(pango::WrapMode::WordChar);
+        l.set_width(width + pango::SCALE);
+        let padded = format!("{title}  ");
+        set_styled_text(&l, &padded, &[Run { text: padded.clone(), style: Default::default() }], 1.0);
+        assert_eq!(l.line_count(), 1, "the trailing spaces wrapped the last word");
+        assert_eq!(l.text().as_str(), padded, "the spaces are kept");
+        let inner = layout();
+        inner.set_font_description(Some(&font));
+        set_styled_text(&inner, "Phase  One", &[], 1.0);
+        let one = layout();
+        one.set_font_description(Some(&font));
+        set_styled_text(&one, "Phase One", &[], 1.0);
+        assert!(inner.extents().1.width() > one.extents().1.width(), "a space inside the text still takes room");
     }
 
     fn layout() -> pango::Layout {
