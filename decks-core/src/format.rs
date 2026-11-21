@@ -286,7 +286,11 @@ pub fn edit_style(s: &mut RunStyle, edit: &FormatEdit) -> bool {
     let before = s.clone();
     match edit {
         FormatEdit::FontFamily(f) => s.font_family = f.clone(),
-        FormatEdit::FontSize(pt) => s.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16),
+        FormatEdit::FontSize(pt) => {
+            s.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16);
+            // A size the user picks is the size: a read run's finer one goes.
+            s.font_size_cpt = None;
+        }
         FormatEdit::Bold(b) => s.bold = *b,
         FormatEdit::Italic(i) => s.italic = *i,
         FormatEdit::Underline(u) => s.underline = *u,
