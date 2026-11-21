@@ -1606,32 +1606,61 @@ fn draw_table_rules(
     cr.set_line_width(width(rules.width_pt));
     let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
     let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
-    let (right, bottom) = (col_x[cols.len()], row_y[rows.len()]);
+    // A cell that states an edge as no line (`a:lnL` with `a:noFill`)
+    // takes the style's rule off that side, as PowerPoint and LibreOffice
+    // draw it: the rule is drawn a cell side at a time, and only where
+    // neither cell on it says "none". A merged cell's anchor speaks for
+    // the whole cell.
+    use decks_core::engine::table::{CellBorders, Edge};
+    type Side = fn(&CellBorders) -> Edge;
+    let none = |r: usize, c: usize, side: Side| {
+        let (ar, ac) = owner(r, c);
+        table.rows.get(ar).and_then(|row| row.get(ac)).is_some_and(|cell| side(&cell.borders) == Edge::None)
+    };
+    let (left, top, right, bottom): (Side, Side, Side, Side) = (|b| b.left, |b| b.top, |b| b.right, |b| b.bottom);
+    let (last_r, last_c) = (rows.len().saturating_sub(1), cols.len().saturating_sub(1));
+    let horizontal = |c: usize, at: f64| {
+        cr.move_to(col_x[c], at);
+        cr.line_to(col_x[c + 1], at);
+    };
+    let vertical = |r: usize, at: f64| {
+        cr.move_to(at, row_y[r]);
+        cr.line_to(at, row_y[r + 1]);
+    };
     for r in 0..rows.len() {
         for c in 0..cols.len() {
-            if rules.inside_v && c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
-                cr.move_to(col_x[c + 1], row_y[r]);
-                cr.line_to(col_x[c + 1], row_y[r + 1]);
+            if rules.inside_v && c < last_c && owner(r, c) != owner(r, c + 1) && !none(r, c, right) && !none(r, c + 1, left) {
+                vertical(r, col_x[c + 1]);
             }
-            if rules.inside_h && r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
-                cr.move_to(col_x[c], row_y[r + 1]);
-                cr.line_to(col_x[c + 1], row_y[r + 1]);
+            if rules.inside_h && r < last_r && owner(r, c) != owner(r + 1, c) && !none(r, c, bottom) && !none(r + 1, c, top) {
+                horizontal(c, row_y[r + 1]);
+            }
+            if rules.outer || rules.top_bottom {
+                if r == 0 && !none(r, c, top) {
+                    horizontal(c, row_y[0]);
+                }
+                if r == last_r && !none(r, c, bottom) {
+                    horizontal(c, row_y[rows.len()]);
+                }
+            }
+            if rules.outer {
+                if c == 0 && !none(r, c, left) {
+                    vertical(r, col_x[0]);
+                }
+                if c == last_c && !none(r, c, right) {
+                    vertical(r, col_x[cols.len()]);
+                }
             }
         }
-    }
-    if rules.outer {
-        cr.rectangle(x, y, right - x, bottom - y);
-    } else if rules.top_bottom {
-        cr.move_to(x, y);
-        cr.line_to(right, y);
-        cr.move_to(x, bottom);
-        cr.line_to(right, bottom);
     }
     cr.stroke().unwrap();
     if let (Some(pt), Some(&under)) = (rules.header, row_y.get(1)) {
         cr.set_line_width(width(pt));
-        cr.move_to(x, under);
-        cr.line_to(right, under);
+        for c in 0..cols.len() {
+            if !none(0, c, bottom) && !(rows.len() > 1 && none(1, c, top)) {
+                horizontal(c, under);
+            }
+        }
         cr.stroke().unwrap();
     }
 }
@@ -1736,6 +1765,41 @@ mod table_tests {
         // 20 units.
         let lowest = (0..200).rev().find(|&y| data[y * stride + 10 * 4 + 3] > 0).unwrap();
         assert!(lowest > 45, "the rule ends at y = {lowest}");
+    }
+
+    /// A cell edge stated as no line (`a:lnR` with `a:noFill`) takes the
+    /// table style's rule off that side: on a Table Grid table, whose style
+    /// draws every rule black, the rule between two cells goes when either
+    /// says "none", and the outer edge goes where its cell says so. Decks
+    /// read and saved the edge but drew the style's rule all the same.
+    #[test]
+    fn a_cell_edge_stated_as_no_line_hides_the_styles_rule() {
+        use decks_core::engine::table::{CellBorders, Edge};
+        let draw = |borders: CellBorders| -> Vec<u8> {
+            let table = TableData {
+                col_widths: vec![40.0, 40.0],
+                row_heights: vec![20.0],
+                rows: vec![vec![TableCell { borders, ..Default::default() }, TableCell::default()]],
+                style_id: Some("{5940675A-B579-460E-94D1-54222C63F5DA}".into()),
+                ..Default::default()
+            };
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 50).unwrap();
+            {
+                let cr = cairo::Context::new(&surface).unwrap();
+                let font = pango::FontDescription::from_string("Sans 8");
+                super::draw_table(&cr, &table, (10.0, 10.0, 80.0, 20.0), 1.0, &font);
+            }
+            let stride = surface.stride() as usize;
+            let data = surface.data().unwrap();
+            // Alpha down the middle rule (x = 50) and the outer left (x = 10), at y = 20.
+            vec![data[20 * stride + 50 * 4 + 3], data[20 * stride + 10 * 4 + 3]]
+        };
+        let plain = draw(CellBorders::default());
+        assert!(plain[0] > 0 && plain[1] > 0, "the style draws both rules: {plain:?}");
+        let off = draw(CellBorders { right: Edge::None, left: Edge::None, ..Default::default() });
+        assert_eq!(off, vec![0, 0], "stated as no line, neither rule is drawn");
+        let top_only = draw(CellBorders { top: Edge::None, ..Default::default() });
+        assert!(top_only[0] > 0 && top_only[1] > 0, "an edge left to the style keeps its rule: {top_only:?}");
     }
 }
 
