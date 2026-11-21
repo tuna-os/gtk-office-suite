@@ -2481,6 +2481,31 @@ def decks(img):
     save(p, "table-cell-grid",
          "A 3x4 table drawn as a white grid with thin black rules (every cell states no fill and black edges), header text bold")
 
+    # DCK-004, reduced from the HR and pay monthly status report: the
+    # master carries a plain text box (not a placeholder) holding a
+    # slide-number field, cached as "‹#›". Decks drew that cache, grey and
+    # faint, on every slide instead of the slide's number.
+    from lxml import etree
+
+    p = deck()
+    master = p.slide_master
+    master.shapes._spTree.append(etree.fromstring(
+        '<p:sp xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        '<p:nvSpPr><p:cNvPr id="90" name="Page number"/><p:cNvSpPr txBox="1"/><p:nvPr userDrawn="1"/></p:nvSpPr>'
+        '<p:spPr><a:xfrm><a:off x="8001000" y="6172200"/><a:ext cx="914400" cy="369332"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>'
+        '<p:txBody><a:bodyPr wrap="none"><a:spAutoFit/></a:bodyPr><a:lstStyle/><a:p><a:pPr algn="r"/>'
+        '<a:fld id="{8670F7E3-4535-4F13-B622-75272AD0E151}" type="slidenum"><a:rPr lang="en-CA" sz="1800" b="1">'
+        '<a:solidFill><a:srgbClr val="1F4E79"/></a:solidFill></a:rPr><a:t>\u2039#\u203a</a:t></a:fld></a:p></p:txBody></p:sp>'))
+    s = p.slides.add_slide(p.slide_layouts[6])
+    tb = s.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1)).text_frame
+    fixed_box(tb)
+    tb.text = "A slide numbered by its master"
+    tb.paragraphs[0].runs[0].font.size = Pt(28)
+    save(p, "master-slide-number",
+         "28pt text at the top left; a bold navy 18pt '1' at the bottom right, the master's slide-number field")
+
     # DCK-004, reduced from the CCRM deck's closing slide: its section
     # layout overrides the master's colour map (bg1 = dk1, tx1 = lt1), so
     # the slide is navy with white text, and its icon is saved only as SVG
