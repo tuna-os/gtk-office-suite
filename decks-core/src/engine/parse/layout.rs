@@ -7,6 +7,7 @@ pub(super) fn read_layout_placeholders(
     budget: &mut ZipBudget,
     layout_path: &str,
     theme: &Theme,
+    scale: f64,
 ) -> (Vec<Placeholder>, Vec<Placeholder>, Inherited) {
     let layout_xml = archive.optional_part_to_string(layout_path, budget);
     let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
@@ -19,7 +20,7 @@ pub(super) fn read_layout_placeholders(
         .find(|t| t.contains("slideMaster"))
         .map(|t| archive.optional_part_to_string(&format!("ppt/{}", t.trim_start_matches("../")), budget))
         .unwrap_or_default();
-    let inherited = Inherited::read(&layout_xml, &master_xml, theme);
+    let inherited = Inherited::read_scaled(&layout_xml, &master_xml, theme, scale);
     (parse_placeholders(&layout_xml), parse_placeholders(&master_xml), inherited)
 }
 

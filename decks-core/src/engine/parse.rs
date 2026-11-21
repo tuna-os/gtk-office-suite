@@ -484,7 +484,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // inherit their geometry from. Read once per layout.
         if let Some(lp) = &layout_path {
             if !placeholder_cache.contains_key(lp) {
-                let found = read_layout_placeholders(&mut archive, &mut budget, lp, &slide_theme);
+                let found = read_layout_placeholders(&mut archive, &mut budget, lp, &slide_theme, scale.x);
                 placeholder_cache.insert(lp.clone(), found);
             }
         }
@@ -908,6 +908,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let geometry = sp_geom.get(sp_index).cloned().flatten();
                             sp_index += 1;
                             if let Some(mut shape) = current_shape.take() {
+                                // A placeholder that paints nothing itself is
+                                // drawn with its layout's (or master's)
+                                // placeholder fill and outline.
+                                let bare = paint.style.fill.is_none() && paint.style.gradient.is_none() && paint.style.stroke.is_none();
+                                let paint = match shape.ph.as_ref().filter(|_| bare).and_then(|k| inherited.paint(k)) {
+                                    Some(p) => p.clone(),
+                                    None => paint,
+                                };
                                 let text = text_of(&shape.runs);
                                 let has_text = !text.trim().is_empty();
                                 // A title, subtitle or body placeholder is a

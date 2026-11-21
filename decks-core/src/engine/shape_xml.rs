@@ -580,6 +580,15 @@ pub(crate) struct SpStyle {
     pub round_adj: Option<f64>,
 }
 
+/// A layout's or master's placeholder paint, when its own `p:spPr` states
+/// a fill or an outline: what a slide placeholder that states neither is
+/// drawn with (the green panel a section layout gives its side body).
+pub(crate) fn placeholder_paint(sp: &Node, theme: &Theme, scale: f64) -> Option<SpStyle> {
+    let sppr = sp.child("p:spPr")?;
+    let states = sppr.children.iter().any(|c| matches!(c.name.as_str(), "a:solidFill" | "a:gradFill" | "a:ln"));
+    states.then(|| resolve_sp(sp, theme, scale, None))
+}
+
 fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -> SpStyle {
     use super::theme::{FillSrc, StrokeSrc};
     let sppr = sp.child("p:spPr");
