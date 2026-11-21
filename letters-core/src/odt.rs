@@ -2266,10 +2266,13 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 // setting in Writer: a style that sets
                                 // either has none of its parent's other
                                 // (a heading's space above, and no
-                                // space after from Normal).
+                                // space after from Normal), but the
+                                // document default's, which
+                                // `inherited_spacing` fills in. So each
+                                // is flagged as stated on its own.
                                 sets: [
-                                    ["fo:margin-top", "fo:space-before", "fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
-                                    ["fo:margin-top", "fo:space-before", "fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
+                                    ["fo:margin-top", "fo:space-before"].iter().any(|a| attr_val(&e, a).is_some()),
+                                    ["fo:margin-bottom", "fo:space-after"].iter().any(|a| attr_val(&e, a).is_some()),
                                     attr_val(&e, "fo:line-height").is_some(),
                                 ],
                                 sets_indent: ["fo:margin-left", "fo:margin-right", "fo:text-indent"].map(|a| attr_val(&e, a).is_some()),
@@ -3084,7 +3087,15 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
                 if st.sets[1] && after.is_none() {
                     after = Some(st.space_after_pt);
                 }
-                spacing_settled = auto.contextual.contains_key(&n) || named.contextual.contains_key(&n);
+                // A style that states its space above or below settles
+                // both: what it leaves out is the document default's, not
+                // its parent's. Measured in LibreOffice 24.2: a 6pt
+                // `fo:margin-top` under a named parent's 20pt
+                // `fo:margin-bottom` has nothing below, under only the
+                // default style's 20pt it has 20pt below. The data
+                // dictionary's blank line between its tables states 6pt
+                // above and keeps the default's 8pt below, which was lost.
+                spacing_settled = st.sets[0] || st.sets[1] || auto.contextual.contains_key(&n) || named.contextual.contains_key(&n);
             }
             if st.sets[2] && line.is_none() {
                 line = Some(st.line_spacing);
@@ -6722,6 +6733,20 @@ mod tests {
         let st = |i: usize| &d.paragraphs[i].style;
         assert_eq!((st(0).space_before_pt, st(0).space_after_pt, st(0).line_height), (24.0, 0.0, None), "the heading's own");
         assert_eq!((st(1).space_after_pt, st(1).line_height), (12.0, Some(LineHeight::Exact(16.0))), "Normal's own");
+        // What it leaves out is the document default's, though: under a
+        // default 8pt below, a blank line stating only 6pt above keeps the
+        // 8pt (LibreOffice 24.2; the social housing data dictionary).
+        let styles = "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"8pt\"/></style:default-style>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"/>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:paragraph-properties fo:margin-top=\"6pt\"/></style:style>\
+             </office:automatic-styles><office:body><office:text><text:p text:style-name=\"P1\"/><text:p text:style-name=\"Normal\">x</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let st = |i: usize| &d.paragraphs[i].style;
+        assert_eq!((st(0).space_before_pt, st(0).space_after_pt), (6.0, 8.0), "its own above, the default's below");
+        assert_eq!((st(1).space_before_pt, st(1).space_after_pt), (0.0, 8.0));
     }
 
     /// A span named by a style of styles.xml takes its look, with what its
