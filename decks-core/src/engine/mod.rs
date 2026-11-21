@@ -22,6 +22,7 @@
 //! - `resolver.rs` — the one object → layout → master → theme → fallback
 //!   precedence resolver (DCK-006)
 
+mod diagram;
 mod model;
 mod notes;
 mod parse;

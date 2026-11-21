@@ -96,6 +96,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/translucent-fill": {
+    "A": "green"
+  },
   "letters/alignment": {
     "A": "green",
     "B": "green",
