@@ -2271,6 +2271,27 @@ def decks(img):
         r.font.size = Pt(18)
     save(p, "shape-text", "White text wrapped inside two navy ovals; four Wingdings-bulleted lines (three squares, a diamond) beside their text")
 
+    # Translucent fills (#2350): 79 shape fills across 12 real decks carry
+    # a:alpha, as the CNSC roundtable's boxes at 75% over a navy slide. Two
+    # overlapping boxes at 50% and 75% over a navy band, so both the band
+    # and each other show through.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    band = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(1.5), Inches(13.333), Inches(4.5))
+    band.fill.solid()
+    band.fill.fore_color.rgb = RGBColor(0x16, 0x26, 0x3E)
+    band.line.fill.background()
+    for x, rgb, alpha in ((1.5, "C0504D", 50000), (4.5, "F2C14E", 75000)):
+        sh = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(0.8), Inches(4.5), Inches(4.0))
+        sh.line.fill.background()
+        # After the geometry, before the outline, as CT_ShapeProperties orders them.
+        sh._element.spPr.find(qn("a:prstGeom")).addnext(parse_xml(f'<a:solidFill {a_ns}><a:srgbClr val="{rgb}"><a:alpha val="{alpha}"/></a:srgbClr></a:solidFill>'))
+    # python-pptx's p:style names the theme's shadow (effectRef idx 2),
+    # which LibreOffice draws; the fills are what this fixture is about.
+    for sh in s.shapes:
+        sh._element.remove(sh._element.find(qn("p:style")))
+    save(p, "translucent-fill", "A red box at 50% and a gold box at 75% overlap each other and a navy band that shows through them")
+
     # The presets drawn with BetterOffice's DrawingML outlines
     # (decks-core shape.rs, borrowed_outline): stars, polygons, arrows,
     # a donut's hole, a cube's faces, callouts. Without them each was its box.
