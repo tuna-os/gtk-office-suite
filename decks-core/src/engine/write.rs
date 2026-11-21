@@ -780,6 +780,9 @@ fn write_table<W: std::io::Write>(
     if table.band_row {
         tbl_pr.push_attribute(("bandRow", "1"));
     }
+    if table.first_col {
+        tbl_pr.push_attribute(("firstCol", "1"));
+    }
     writer.write_event(Event::Start(tbl_pr))?;
     writer.write_event(Event::Start(BytesStart::new("a:tableStyleId")))?;
     let style_id = table.style_id.as_deref().unwrap_or(super::table::DEFAULT_STYLE_ID);

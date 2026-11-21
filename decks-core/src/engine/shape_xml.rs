@@ -796,6 +796,7 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                     rows,
                     first_row: flag("firstRow"),
                     band_row: flag("bandRow"),
+                    first_col: flag("firstCol"),
                     // The style's own colour: an accent, or the dark text
                     // colour for a family's plain style.
                     accent: theme.slot(style.map_or("accent1", |(_, slot)| slot)),
