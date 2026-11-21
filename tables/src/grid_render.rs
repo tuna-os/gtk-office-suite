@@ -826,6 +826,29 @@ pub fn render_sheet_pdf(
 
 #[cfg(test)]
 mod tests {
+    /// A picture's size is read from its header, and a huge one is refused
+    /// before it is decoded: a few bytes of PNG can declare 60000 x 60000.
+    #[test]
+    fn an_oversized_picture_is_refused_from_its_header() {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&[8, 2, 0, 0, 0]);
+        assert_eq!(super::picture_size(&png), Some((60_000, 60_000)));
+        assert!(super::decode_picture(&png).is_none(), "refused unread");
+        let gif = [b"GIF89a".as_slice(), &[10, 0, 20, 0]].concat();
+        assert_eq!(super::picture_size(&gif), Some((10, 20)));
+        let mut bmp = vec![0u8; 26];
+        bmp[..2].copy_from_slice(b"BM");
+        bmp[18..22].copy_from_slice(&30i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&(-40i32).to_le_bytes());
+        assert_eq!(super::picture_size(&bmp), Some((30, 40)), "a top-down BMP's negative height");
+        // SOI, an APP0 of length 4, then SOF0: precision, height 7, width 9.
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 11, 8, 0, 7, 0, 9];
+        assert_eq!(super::picture_size(&jpeg), Some((9, 7)));
+        assert_eq!(super::picture_size(b"not a picture"), None);
+    }
+
     use super::*;
     use tables_core::style::VAlign;
 
@@ -1048,9 +1071,61 @@ fn picture_surface(data: &std::sync::Arc<[u8]>) -> Option<gtk4::cairo::ImageSurf
     })
 }
 
+/// The most pixels a worksheet picture may decode to: a few bytes of PNG
+/// can declare tens of thousands of pixels a side, and the decode (and the
+/// surface after it) would then ask for gigabytes on the UI thread. The
+/// same budget Lifafa's logo decoder keeps (`MAX_PIXELS`, 2048 x 2048).
+const MAX_PICTURE_PIXELS: i64 = 4_194_304;
+
+/// A PNG, JPEG, GIF or BMP picture's pixel size, read from its header: the
+/// formats a worksheet picture is kept in. `None` for anything else.
+fn picture_size(data: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])));
+    let le16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])));
+    let be32 = |i: usize| data.get(i..i + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    let le32 = |i: usize| data.get(i..i + 4).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]).unsigned_abs());
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Some((be32(16)?, be32(20)?));
+    }
+    if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if data.starts_with(b"BM") {
+        return Some((le32(18)?, le32(22)?));
+    }
+    if data.starts_with(&[0xFF, 0xD8]) {
+        // Walk the markers to a start-of-frame (SOF0..SOF15, less DHT,
+        // JPG and DAC), which holds the height then the width.
+        let mut i = 2;
+        while i + 4 <= data.len() {
+            if data[i] != 0xFF {
+                return None;
+            }
+            let marker = data[i + 1];
+            if marker == 0xFF {
+                i += 1;
+                continue;
+            }
+            let len = be16(i + 2)? as usize;
+            if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+                return Some((be16(i + 7)?, be16(i + 5)?));
+            }
+            i += 2 + len;
+        }
+    }
+    None
+}
+
 fn decode_picture(data: &[u8]) -> Option<gtk4::cairo::ImageSurface> {
     use gtk4::gdk::prelude::GdkCairoContextExt;
     use gtk4::gdk_pixbuf::prelude::PixbufLoaderExt;
+    // Refuse an oversized picture from its header, before any decoder
+    // allocates for it (gdk-pixbuf allocates the full size even when asked
+    // to scale), and one whose size can't be read.
+    let (w, h) = picture_size(data)?;
+    if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PICTURE_PIXELS as u64 {
+        return None;
+    }
     let loader = gtk4::gdk_pixbuf::PixbufLoader::new();
     loader.write(data).ok()?;
     loader.close().ok()?;
