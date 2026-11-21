@@ -1018,7 +1018,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     // Its text size onto the model's slide,
                                     // as every run's is: a 9 pt label on a
                                     // 13.33-inch deck is 6.75 pt here.
-                                    chart.text_size = chart.text_size.map(|v| ((v as f64) * scale.text_factor()).round().max(1.0) as u32);
+                                    let k = scale.text_factor();
+                                    let onto = |v: u32| ((v as f64) * k).round().max(1.0) as u32;
+                                    chart.text_size = chart.text_size.map(onto);
+                                    if let Some(t) = chart.title.as_mut() {
+                                        t.size = t.size.map(onto);
+                                    }
                                     objects.push(SlideObject::Chart {
                                         x: c.x * scale.x,
                                         y: c.y * scale.y,

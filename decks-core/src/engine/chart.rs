@@ -86,6 +86,22 @@ pub struct ChartData {
     /// The category axis hidden (`c:catAx/c:delete`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hide_category_axis: bool,
+    /// The title over the chart (`c:title`), where the file shows one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<ChartTitle>,
+}
+
+/// A chart's title: its text and the look of its first run.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ChartTitle {
+    pub text: String,
+    /// Hundredths of a point (`a:rPr/@sz`); `None` is the chart's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bold: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 3]>,
 }
 
 impl ChartData {
@@ -122,6 +138,7 @@ impl ChartData {
             series_colors: Vec::new(),
             gap: None,
             hide_category_axis: false,
+            title: None,
         }
     }
 
@@ -179,6 +196,7 @@ impl ChartData {
             || self.series_colors.iter().any(Option::is_some)
             || self.gap.is_some()
             || self.hide_category_axis
+            || self.title.is_some()
     }
 
     /// Whether a legend is drawn: a named series, a pie's categories or
@@ -517,6 +535,23 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     } else {
         String::new()
     };
+    let title = match &chart.title {
+        Some(t) => {
+            let rpr = format!(
+                "<a:defRPr{}{}>{}</a:defRPr>",
+                t.size.map(|v| format!(" sz=\"{v}\"")).unwrap_or_default(),
+                if t.bold { " b=\"1\"" } else { " b=\"0\"" },
+                t.color.map(|[r, g, b]| format!("<a:solidFill><a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill>")).unwrap_or_default()
+            );
+            let run = rpr.replacen("<a:defRPr", "<a:rPr lang=\"en-US\"", 1).replace("</a:defRPr>", "</a:rPr>");
+            format!(
+                "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{rpr}</a:pPr><a:r>{run}<a:t>{}</a:t></a:r></a:p></c:rich></c:tx>\
+                 <c:overlay val=\"0\"/></c:title><c:autoTitleDeleted val=\"0\"/>",
+                esc(&t.text)
+            )
+        }
+        None => "<c:autoTitleDeleted val=\"1\"/>".to_string(),
+    };
     let legend = if chart.shows_legend() {
         "<c:legend><c:legendPos val=\"r\"/><c:overlay val=\"0\"/></c:legend>"
     } else {
@@ -528,7 +563,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
          xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
          xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
          <c:date1904 val=\"0\"/><c:roundedCorners val=\"0\"/>\
-         <c:chart><c:autoTitleDeleted val=\"1\"/><c:plotArea><c:layout/>{plot}</c:plotArea>{legend}\
+         <c:chart>{title}<c:plotArea><c:layout/>{plot}</c:plotArea>{legend}\
          <c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/></c:chart>{background}{text}</c:chartSpace>"
     )
 }
@@ -878,9 +913,45 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
         gap: (kind == ChartKind::Bar).then(|| group.child("gapWidth").and_then(|g| g.attr("val")).and_then(|v| v.parse::<u16>().ok())).flatten().map(|g| g.min(500)).filter(|g| *g != 150),
         hide_category_axis: kind != ChartKind::Pie
             && plot.children.iter().filter(|c| c.local == "catAx").any(|ax| ax.child("delete").is_some_and(on)),
+        title: None,
     };
     c.no_legend = !has_legend && c.has_default_legend();
+    c.title = chart_el.and_then(chart_title);
     Some(c)
+}
+
+/// A chart's title as its rich text gives it (`c:title/c:tx/c:rich`): the
+/// paragraphs' text a line each, sized, weighted and coloured as its first
+/// run is, else as the paragraph's defaults. A title with no text of its
+/// own (PowerPoint's automatic "Chart Title" or the series name) isn't
+/// read, nor one `c:autoTitleDeleted` removes.
+fn chart_title(chart: &El) -> Option<ChartTitle> {
+    let rich = chart.child("title")?.child("tx")?.child("rich")?;
+    let lines: Vec<String> = rich
+        .children
+        .iter()
+        .filter(|p| p.local == "p")
+        .map(|p| p.children.iter().filter(|r| r.local == "r" || r.local == "fld").filter_map(|r| r.child("t")).map(El::deep_text).collect())
+        .collect();
+    let text = lines.join("\n");
+    if text.trim().is_empty() {
+        return None;
+    }
+    let first_p = rich.child("p");
+    let run = first_p.and_then(|p| p.child("r")).and_then(|r| r.child("rPr"));
+    let def = first_p.and_then(|p| p.child("pPr")).and_then(|p| p.child("defRPr"));
+    let attr = |name: &str| run.and_then(|r| r.attr(name)).or_else(|| def.and_then(|d| d.attr(name)));
+    let color = [run, def]
+        .into_iter()
+        .flatten()
+        .find_map(|r| r.child("solidFill").and_then(|f| f.child("srgbClr")).and_then(|c| c.attr("val")).and_then(hex_rgb));
+    Some(ChartTitle {
+        text,
+        size: attr("sz").and_then(|v| v.parse::<u32>().ok()).filter(|v| (100..=40000).contains(v)),
+        // A title is bold unless it says otherwise.
+        bold: attr("b").is_none_or(|v| v == "1" || v == "true"),
+        color,
+    })
 }
 
 // ── odp: the embedded ODF chart ──────────────────────────────────────────
@@ -1203,6 +1274,7 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
         series_colors: Vec::new(),
         gap: None,
         hide_category_axis: false,
+        title: None,
     };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
@@ -1252,6 +1324,30 @@ mod tests {
 <c:val><c:numLit><c:formatCode>0%</c:formatCode><c:pt idx="0"><c:v>0.81</c:v></c:pt><c:pt idx="1"><c:v>0.66</c:v></c:pt></c:numLit></c:val></c:ser>
 </c:barChart><c:catAx><c:scaling><c:orientation val="maxMin"/></c:scaling><c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr sz="900" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:defRPr></a:pPr></a:p></c:txPr></c:catAx><c:valAx/></c:plotArea></c:chart>
 <c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr/></a:pPr></a:p></c:txPr></c:chartSpace>"#;
+
+    /// The staffing deck's satisfaction chart, reduced: a bold 24 pt title
+    /// in the file's colour, its run's properties over the paragraph's.
+    #[test]
+    fn a_charts_title_reads_and_round_trips() {
+        let titled = HORIZONTAL.replacen(
+            "<c:chart>",
+            r#"<c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1800" b="0"/></a:pPr>
+<a:r><a:rPr lang="en-US" sz="2400" b="1" cap="small"><a:solidFill><a:srgbClr val="1F3864"/></a:solidFill></a:rPr><a:t>percentage of satisfaction</a:t></a:r>
+<a:r><a:rPr lang="en-US" sz="2400" b="1"/><a:t> by product</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>"#,
+            1,
+        );
+        let c = parse_chart_space(&titled).expect("a bar chart");
+        let want = ChartTitle { text: "percentage of satisfaction by product".into(), size: Some(2400), bold: true, color: Some([0x1f, 0x38, 0x64]) };
+        assert_eq!(c.title.as_ref(), Some(&want));
+        assert!(c.is_rich(), "a titled chart is drawn with its options");
+        let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
+        assert_eq!(back, c, "a save keeps it");
+        // No title, or an automatic one with no text of its own, reads as none.
+        assert_eq!(parse_chart_space(HORIZONTAL).unwrap().title, None);
+        let auto = HORIZONTAL.replacen("<c:chart>", "<c:chart><c:title><c:overlay val=\"0\"/></c:title>", 1);
+        assert_eq!(parse_chart_space(&auto).unwrap().title, None);
+        assert!(!chart_space_xml(&parse_chart_space(HORIZONTAL).unwrap()).contains("<c:title>"));
+    }
 
     /// An area or line chart keeps a reversed, deleted category axis on
     /// save, as a bar chart does: the reader sets both for every kind with

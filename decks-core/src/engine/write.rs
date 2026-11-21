@@ -1882,7 +1882,11 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         // The text size back onto the file's slide, as
                         // a run's is (`file_size`).
                         let mut chart = chart.clone();
-                        chart.text_size = chart.text_size.map(|v| file_size(v as f64).round().max(1.0) as u32);
+                        let back = |v: u32| file_size(v as f64).round().max(1.0) as u32;
+                        chart.text_size = chart.text_size.map(back);
+                        if let Some(t) = chart.title.as_mut() {
+                            t.size = t.size.map(back);
+                        }
                         charts.push(super::chart::chart_space_xml(&chart));
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
                         slide_rels.push((rel_id.clone(), super::chart::CHART_REL, format!("../charts/chart{}.xml", charts.len())));

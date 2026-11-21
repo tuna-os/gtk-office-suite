@@ -125,6 +125,14 @@ pub struct Options<'a> {
     pub gap: Option<f64>,
     /// No category labels: the file deletes the category axis.
     pub hide_category_axis: bool,
+    /// A title centred over the plot, a line per line of it.
+    pub title: Option<&'a str>,
+    /// The title's size in the drawing's units; 1.4 times the chart's text
+    /// otherwise.
+    pub title_px: Option<f64>,
+    pub title_bold: bool,
+    /// The title's colour; the chart's text colour otherwise.
+    pub title_color: Option<(f64, f64, f64)>,
 }
 
 /// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
@@ -141,7 +149,29 @@ pub fn draw_chart_with(cr: &Context, categories: &[String], series: &[Series], k
     cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
     cr.set_font_size(opts.text_px.unwrap_or(CHART_TEXT_PX));
     TEXT.with(|t| t.set(opts.text_color.unwrap_or(CHART_TEXT)));
-    let (w, h) = (width, height);
+    let (w, mut h) = (width, height);
+    // The title first, over the plot, which takes the room below it.
+    if let Some(title) = opts.title.filter(|t| !t.trim().is_empty()) {
+        let px = opts.title_px.unwrap_or(opts.text_px.unwrap_or(CHART_TEXT_PX) * 1.4);
+        let weight = if opts.title_bold { gtk4::cairo::FontWeight::Bold } else { gtk4::cairo::FontWeight::Normal };
+        let _ = cr.save();
+        cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, weight);
+        cr.set_font_size(px);
+        let (r, g, b) = opts.title_color.or(opts.text_color).unwrap_or(CHART_TEXT);
+        cr.set_source_rgb(r, g, b);
+        let line_h = px * 1.2;
+        let mut y = px * 0.4;
+        for line in title.lines() {
+            y += line_h;
+            let tw = cr.text_extents(line).map(|e| e.x_advance()).unwrap_or(0.0);
+            cr.move_to((w - tw).max(0.0) / 2.0, y - px * 0.25);
+            let _ = cr.show_text(line);
+        }
+        let _ = cr.restore();
+        let used = (y + px * 0.3).min(h * 0.5);
+        cr.translate(0.0, used);
+        h -= used;
+    }
     if !series.is_empty() {
         match kind {
             ChartKind::Bar => draw_bars(cr, categories, series, w, h, opts),
@@ -914,6 +944,31 @@ mod tests {
         let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
         let px = s.data().unwrap();
         (0..w).filter(|x| (0..h).any(|y| px[y * stride + x * 4..][..3] == [b, g, r])).collect()
+    }
+
+    /// The first row that holds `rgb` anywhere.
+    fn top_row_with(s: &mut ImageSurface, (r, g, b): (u8, u8, u8)) -> Option<usize> {
+        let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+        let px = s.data().unwrap();
+        (0..h).find(|y| (0..w).any(|x| px[y * stride + x * 4..][..3] == [b, g, r]))
+    }
+
+    /// A title is drawn over the plot in its own colour, and the plot moves
+    /// down below it rather than under it.
+    #[test]
+    fn a_title_sits_over_the_plot() {
+        let categories: Vec<String> = ["A", "B"].iter().map(|s| s.to_string()).collect();
+        let a = [3.0, 5.0];
+        let one = [Series { name: None, values: &a }];
+        let plain = Options { no_legend: true, ..Options::default() };
+        let titled = Options { title: Some("Satisfaction"), title_bold: true, title_color: Some((1.0, 0.0, 0.0)), ..plain };
+        let mut p = draw_with(&categories, &one, ChartKind::Bar, &plain);
+        let mut t = draw_with(&categories, &one, ChartKind::Bar, &titled);
+        assert_eq!(top_row_with(&mut p, (0xff, 0, 0)), None);
+        let red = top_row_with(&mut t, (0xff, 0, 0)).expect("the title in its colour");
+        let (bar_p, bar_t) = (top_row_with(&mut p, (0x4f, 0x81, 0xbd)).unwrap(), top_row_with(&mut t, (0x4f, 0x81, 0xbd)).unwrap());
+        assert!(red < bar_t, "the title is above the bars");
+        assert!(bar_t > bar_p + 10, "the plot gives the title room: {bar_p} → {bar_t}");
     }
 
     /// A reversed line chart is the plain one mirrored: its first category

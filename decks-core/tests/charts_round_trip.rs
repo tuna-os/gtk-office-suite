@@ -204,6 +204,7 @@ fn a_charts_text_size_scales_with_the_slide() {
         d.page_size = page;
         let mut chart = ChartData::sample(ChartKind::Bar);
         chart.text_size = Some(model);
+        chart.title = Some(decks_core::engine::chart::ChartTitle { text: "Sales".into(), size: Some(model * 2), ..Default::default() });
         d.slides[0].objects = vec![SlideObject::Chart { x: 40.0, y: 40.0, w: 400.0, h: 250.0, rotation: 0.0, chart }];
         let path = dir.path().join("c.pptx");
         decks_core::engine::write_pptx(path.to_str().unwrap(), &d).unwrap();
@@ -211,11 +212,12 @@ fn a_charts_text_size_scales_with_the_slide() {
         let mut xml = String::new();
         zip.by_name("ppt/charts/chart1.xml").unwrap().read_to_string(&mut xml).unwrap();
         assert!(xml.contains("sz=\"900\""), "9 pt in the file on a {page:?} page: {xml}");
+        assert!(xml.contains("sz=\"1800\""), "the 18 pt title too, on a {page:?} page: {xml}");
         let back = decks_core::engine::read_pptx(path.to_str().unwrap()).unwrap();
-        let size = back.slides[0].objects.iter().find_map(|o| match o {
-            SlideObject::Chart { chart, .. } => chart.text_size,
+        let sizes = back.slides[0].objects.iter().find_map(|o| match o {
+            SlideObject::Chart { chart, .. } => Some((chart.text_size, chart.title.as_ref().and_then(|t| t.size))),
             _ => None,
         });
-        assert_eq!(size, Some(model), "on the model's slide, for a {page:?} page");
+        assert_eq!(sizes, Some((Some(model), Some(model * 2))), "on the model's slide, for a {page:?} page");
     }
 }
