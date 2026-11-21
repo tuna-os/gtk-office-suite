@@ -2454,6 +2454,33 @@ def decks(img):
     save(p, "pay-centre-reduced-leading-blank-paragraphs",
          "Three navy tiles, each with a bold white 14pt figure two blank lines below the tile's top edge")
 
+    # DCK-004, reduced from the backlog-reduction deck's timeline: the
+    # table keeps PowerPoint's default style (Medium Style 2: blue header,
+    # banded fills), but every cell states a:noFill and black 0.5 pt edges,
+    # so the table is a white grid with black rules. Decks drew the style.
+    from lxml import etree
+
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    rows, cols = 3, 4
+    t = s.shapes.add_table(rows, cols, Inches(0.5), Inches(1), Inches(9), Inches(3)).table
+    A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    edge = lambda name: (f'<a:{name} xmlns:a="{A}" w="6350"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:{name}>')
+    for r in range(rows):
+        for c in range(cols):
+            cell = t.cell(r, c)
+            cell.text = f"Q{c + 1}" if r == 0 else f"Item {r}.{c + 1}"
+            tc_pr = cell._tc.get_or_add_tcPr()
+            for name in ("lnL", "lnR", "lnT", "lnB"):
+                tc_pr.append(etree.fromstring(edge(name)))
+            tc_pr.append(etree.fromstring(f'<a:noFill xmlns:a="{A}"/>'))
+            for para in cell.text_frame.paragraphs:
+                for run in para.runs:
+                    run.font.color.rgb = RGBColor(0, 0, 0)
+                    run.font.bold = r == 0
+    save(p, "table-cell-grid",
+         "A 3x4 table drawn as a white grid with thin black rules (every cell states no fill and black edges), header text bold")
+
     # DCK-004, reduced from the HR and pay monthly status report: the
     # master carries a plain text box (not a placeholder) holding a
     # slide-number field, cached as "‹#›". Decks drew that cache, grey and

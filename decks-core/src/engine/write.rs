@@ -889,17 +889,25 @@ fn write_table<W: std::io::Write>(
                     tc_pr.push_attribute((k, v.as_str()));
                 }
             }
-            match cell.fill {
-                Some(fill) => {
-                    writer.write_event(Event::Start(tc_pr))?;
+            // Its own edges, then its fill, in CT_TableCellProperties' order.
+            if cell.fill.is_none() && !cell.no_fill && cell.borders.is_style() {
+                writer.write_event(Event::Empty(tc_pr))?;
+            } else {
+                writer.write_event(Event::Start(tc_pr))?;
+                let b = &cell.borders;
+                for (name, edge) in [("a:lnL", b.left), ("a:lnR", b.right), ("a:lnT", b.top), ("a:lnB", b.bottom)] {
+                    write_cell_edge(writer, name, edge)?;
+                }
+                if let Some(fill) = cell.fill {
                     writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
                     let mut srgb = BytesStart::new("a:srgbClr");
                     srgb.push_attribute(("val", fill.to_hex().as_str()));
                     writer.write_event(Event::Empty(srgb))?;
                     writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
-                    writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
+                } else if cell.no_fill {
+                    writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?;
                 }
-                None => writer.write_event(Event::Empty(tc_pr))?,
+                writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
             }
             writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
         }
@@ -909,6 +917,32 @@ fn write_table<W: std::io::Write>(
     writer.write_event(Event::End(BytesEnd::new("a:graphicData")))?;
     writer.write_event(Event::End(BytesEnd::new("a:graphic")))?;
     writer.write_event(Event::End(BytesEnd::new("p:graphicFrame")))?;
+    Ok(())
+}
+
+/// One stated edge of a table cell (`a:lnL` …); an edge left to the
+/// style writes nothing.
+fn write_cell_edge<W: std::io::Write>(writer: &mut Writer<W>, name: &str, edge: super::table::Edge) -> Result<(), quick_xml::Error> {
+    use super::table::Edge;
+    match edge {
+        Edge::Style => {}
+        Edge::None => {
+            writer.write_event(Event::Start(BytesStart::new(name)))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?;
+            writer.write_event(Event::End(BytesEnd::new(name)))?;
+        }
+        Edge::Line { color, width_pt } => {
+            let mut ln = BytesStart::new(name);
+            ln.push_attribute(("w", ((width_pt * 12700.0).round() as i64).to_string().as_str()));
+            writer.write_event(Event::Start(ln))?;
+            writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+            let mut srgb = BytesStart::new("a:srgbClr");
+            srgb.push_attribute(("val", color.to_hex().as_str()));
+            writer.write_event(Event::Empty(srgb))?;
+            writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+            writer.write_event(Event::End(BytesEnd::new(name)))?;
+        }
+    }
     Ok(())
 }
 
