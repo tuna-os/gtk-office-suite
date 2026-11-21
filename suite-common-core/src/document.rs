@@ -56,6 +56,10 @@ pub struct RunStyle {
     /// Drawn in capitals whatever case the text is stored in.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub caps: bool,
+    /// Drawn in small capitals: lower-case letters as capitals at a
+    /// smaller size, capitals as they are (DrawingML `cap="small"`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub small_caps: bool,
     pub underline: bool,
     pub strikethrough: bool,
     pub highlight: bool,

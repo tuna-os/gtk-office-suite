@@ -1,0 +1,1 @@
+- Tables: a workbook of a few kilobytes no longer ends or hangs Tables through a count or a range it states: rows and styled cells repeated past the sheet in an .ods, a chart anchored past the last row, and a merge or a print area of the whole grid (#2396).

@@ -52,12 +52,14 @@ pub(crate) struct RunProps {
     color: Option<String>,
     /// The Latin typeface, theme references resolved.
     latin: Option<String>,
+    /// `cap`: "all", "small" or "none".
+    cap: Option<String>,
 }
 
 impl RunProps {
     fn over(&mut self, top: &RunProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(sz, b, i, u, strike, color, latin);
+        take!(sz, b, i, u, strike, color, latin, cap);
     }
 
     fn of(rpr: &Node, theme: &Theme) -> RunProps {
@@ -73,6 +75,7 @@ impl RunProps {
                 .and_then(|f| first_color(f, theme, None))
                 .map(|c| c.to_hex().to_lowercase()),
             latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
+            cap: rpr.attr("cap").map(str::to_string),
         }
     }
 
@@ -89,6 +92,8 @@ impl RunProps {
             font_size_hp: self.sz.map(|s| (s as f64 / 50.0).round() as u16),
             color: self.color.clone(),
             font_family: self.latin.clone(),
+            caps: self.cap.as_deref() == Some("all"),
+            small_caps: self.cap.as_deref() == Some("small"),
             ..RunStyle::default()
         }
     }
@@ -427,9 +432,12 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     let emu = |v: f64| v * scale.x;
     let mut out = SpText {
         anchor: body.anchor.unwrap_or_default(),
-        // A master's plain `a:normAutofit` says "shrink if needed" with
-        // nothing shrunk yet: only a stated scale changes the drawing.
-        autofit: body.autofit.flatten().filter(|a| !a.is_identity()),
+        // A plain `a:normAutofit` (the slide's, or inherited) says "shrink
+        // if needed": the canvas measures the fit, so a box whose text
+        // overflows shrinks as PowerPoint and Impress shrink it, whether or
+        // not the last editor recorded a scale (the CNSC deck's closing
+        // slide ran past its box at full size).
+        autofit: body.autofit.flatten(),
         // A placeholder, a box that states its insets, and text on a shape
         // (an oval, a rectangle: not a text box) get DrawingML's insets,
         // 0.1" across and 0.05" down where unstated, as PowerPoint and
@@ -695,14 +703,14 @@ mod tests {
     }
 
     #[test]
-    fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_is_nothing() {
+    fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_still_shrinks() {
         let body = |pr: &str| {
             format!(r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr><p:ph idx="2"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody>{pr}<a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r></a:p></p:txBody></p:sp>"#)
         };
         let got = resolve(&(body(r#"<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>"#)
             + &body(r#"<a:bodyPr><a:normAutofit/></a:bodyPr>"#)));
         assert_eq!(got[0].autofit, Some(Autofit { font_scale: 0.625, line_reduction: 0.2 }));
-        assert_eq!(got[1].autofit, None);
+        assert_eq!(got[1].autofit, Some(Autofit { font_scale: 1.0, line_reduction: 0.0 }), "measured on the canvas, shrunk only on overflow");
         // The sizes themselves are the author's.
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(64));
     }

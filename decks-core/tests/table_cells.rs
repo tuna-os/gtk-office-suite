@@ -85,3 +85,28 @@ fn a_cells_paragraph_styles_and_anchor_survive_a_pptx_save() {
     assert_eq!(back.paras[1].bullet, Bullet::Char("•".into()));
     assert!((back.paras[1].margin_left - 20.0).abs() < 0.1 && (back.paras[1].indent + 20.0).abs() < 0.1, "{:?}", back.paras[1]);
 }
+
+/// A cell's own edges and its stated no-fill survive a save: the PMC
+/// Vanguard deck boxes every cell in a black 1 pt line (`a:lnL` … `a:lnB`)
+/// and states `a:noFill` over a banded table style, and was drawn banded
+/// with no verticals.
+#[test]
+fn a_cells_own_edges_and_no_fill_survive_a_pptx_save() {
+    use decks_core::engine::shape::Color;
+    use decks_core::engine::table::CellEdge;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("e.pptx");
+    let mut d = deck();
+    let black = CellEdge { color: Some(Color(0, 0, 0)), width_pt: 1.0 };
+    let none = CellEdge { color: None, width_pt: 1.0 };
+    if let SlideObject::Table { table, .. } = &mut d.slides[0].objects[0] {
+        let cell = &mut table.rows[0][0];
+        cell.edges = [Some(black), Some(black), None, Some(none)];
+        cell.no_fill = true;
+    }
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
+    let back = cell(&read_pptx(path.to_str().unwrap()).unwrap());
+    assert_eq!(back.edges, [Some(black), Some(black), None, Some(none)]);
+    assert!(back.no_fill);
+    assert_eq!(back.fill, None);
+}
