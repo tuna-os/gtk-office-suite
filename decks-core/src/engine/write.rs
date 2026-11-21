@@ -918,17 +918,36 @@ fn write_table<W: std::io::Write>(
                     tc_pr.push_attribute((k, v.as_str()));
                 }
             }
-            match cell.fill {
-                Some(fill) => {
-                    writer.write_event(Event::Start(tc_pr))?;
+            // Its own edges, then its fill, in the schema's order.
+            let edges: Vec<_> = ["a:lnL", "a:lnR", "a:lnT", "a:lnB"].into_iter().zip(cell.edges).filter_map(|(k, e)| Some((k, e?))).collect();
+            if edges.is_empty() && cell.fill.is_none() && !cell.no_fill {
+                writer.write_event(Event::Empty(tc_pr))?;
+            } else {
+                writer.write_event(Event::Start(tc_pr))?;
+                let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> quick_xml::Result<()> {
                     writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
                     let mut srgb = BytesStart::new("a:srgbClr");
-                    srgb.push_attribute(("val", fill.to_hex().as_str()));
+                    srgb.push_attribute(("val", color.to_hex().as_str()));
                     writer.write_event(Event::Empty(srgb))?;
                     writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
-                    writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
+                    Ok(())
+                };
+                for (k, e) in edges {
+                    let mut ln = BytesStart::new(k);
+                    ln.push_attribute(("w", ((e.width_pt * 12700.0).round() as i64).to_string().as_str()));
+                    writer.write_event(Event::Start(ln))?;
+                    match e.color {
+                        Some(color) => solid(writer, color)?,
+                        None => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    }
+                    writer.write_event(Event::End(BytesEnd::new(k)))?;
                 }
-                None => writer.write_event(Event::Empty(tc_pr))?,
+                match cell.fill {
+                    Some(fill) => solid(writer, fill)?,
+                    None if cell.no_fill => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+                    None => {}
+                }
+                writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
             }
             writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
         }
