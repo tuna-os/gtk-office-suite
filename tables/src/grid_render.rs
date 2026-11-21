@@ -87,6 +87,29 @@ fn pango_text_width(cr: &Context, text: &str) -> f64 {
     header_layout(cr, text).pixel_size().0 as f64
 }
 
+/// A cell's border with the edges inside its merged block taken off: a
+/// merge draws as one cell, so only the block's outline shows, as in Excel
+/// and Calc. The EWCO claim form's notes box (B4:E13) is bordered cell by
+/// cell, and drew its inner lines through the merged text.
+fn block_edges(border: &CellBorder, merge: Option<(usize, usize, usize, usize)>, r: usize, c: usize) -> CellBorder {
+    let mut b = border.clone();
+    if let Some((mr, mc, rs, cs)) = merge {
+        if r != mr {
+            b.top = BorderStyle::None;
+        }
+        if c != mc {
+            b.left = BorderStyle::None;
+        }
+        if r + 1 != mr + rs.max(1) {
+            b.bottom = BorderStyle::None;
+        }
+        if c + 1 != mc + cs.max(1) {
+            b.right = BorderStyle::None;
+        }
+    }
+    b
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_border_line(cr: &Context, style: &BorderStyle, color: (f64, f64, f64), x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
     if *style == BorderStyle::None { return; }
@@ -498,7 +521,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(px, py, pw, ph);
     cr.clip();
-    let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
+    let mut bordered: Vec<(f64, f64, f64, f64, CellBorder)> = Vec::new();
     // Text spilling into empty neighbours is drawn after every cell of the
     // pane, or their backgrounds would paint over it.
     let mut spilled: Vec<(usize, usize, CellRect)> = Vec::new();
@@ -537,7 +560,12 @@ pub fn draw_grid(
             } else {
                 cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
-            cr.rectangle(cx, cy, cw, rh);
+            // On whole pixels: a row 66.95 pt tall leaves every row after
+            // it on a half pixel, and two antialiased half-covered edges
+            // let the dark canvas through as a grey seam between each pair
+            // of filled cells (render-real `ewco-claim-form`).
+            let (x0, y0) = (cx.round(), cy.round());
+            cr.rectangle(x0, y0, (cx + cw).round() - x0, (cy + rh).round() - y0);
             cr.fill().unwrap();
 
             // A merged block draws as one cell: no gridlines inside it, and
@@ -571,7 +599,7 @@ pub fn draw_grid(
             // 3 px edge reaches into the neighbouring cell, whose fill
             // would otherwise paint over it.
             if !border.is_none() {
-                bordered.push((cx, cy, cw, rh, border));
+                bordered.push((cx, cy, cw, rh, block_edges(border, merge, r, c)));
             }
 
             // Active cell border (a merged block's is the selection outline)
@@ -614,8 +642,8 @@ pub fn draw_grid(
     for &(r, c, rect) in &spilled {
         draw_cell_text(cr, sheet, r, c, rect, cell_text);
     }
-    for &(x, y, w, h, border) in &bordered {
-        draw_border_edges(cr, x, y, w, h, border, is_dark);
+    for (x, y, w, h, border) in &bordered {
+        draw_border_edges(cr, *x, *y, *w, *h, border, is_dark);
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.
@@ -804,6 +832,20 @@ pub fn render_sheet_pdf(
 mod tests {
     use super::*;
     use tables_core::style::VAlign;
+
+    #[test]
+    fn a_merged_block_keeps_only_its_outline() {
+        let boxed = CellBorder::all(BorderStyle::Solid, (0.0, 0.0, 0.0));
+        let block = Some((3, 1, 10, 4)); // B4:E13
+        let inner = block_edges(&boxed, block, 6, 2);
+        assert!(inner.is_none(), "a cell inside the block draws no edge");
+        let corner = block_edges(&boxed, block, 3, 1);
+        assert_eq!((corner.top, corner.left), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!((corner.bottom, corner.right), (BorderStyle::None, BorderStyle::None));
+        let far = block_edges(&boxed, block, 12, 4);
+        assert_eq!((far.bottom, far.right), (BorderStyle::Solid, BorderStyle::Solid));
+        assert_eq!(block_edges(&boxed, None, 6, 2), boxed, "an unmerged cell keeps all four");
+    }
 
     /// Calibri 11's line box (17.9 px) in a 20 px row: bottom-aligned text
     /// starts just above the row, leaving its descent line 2 px clear of the
