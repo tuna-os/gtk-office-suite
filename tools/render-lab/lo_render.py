@@ -40,6 +40,8 @@ def csv_filter(src):
         head = f.read(65536)
     if head[:4] == b"PK\x03\x04" or head[:8] == bytes.fromhex("D0CF11E0A1B11AE1"):
         return None
+    if any(b == 0 or (b < 0x20 and b not in b"\t\n\r\x0c") for b in head[:512]):
+        return None  # binary: not a table of text
     try:
         text = head.decode("utf-8")
         charset = 76  # UTF-8

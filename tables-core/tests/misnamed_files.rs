@@ -60,9 +60,15 @@ fn a_csv_keeps_its_commas_when_a_quoted_header_holds_semicolons() {
 }
 
 #[test]
-fn an_empty_or_html_file_named_xlsx_is_still_a_load_error() {
+fn an_empty_html_or_binary_file_named_xlsx_is_still_a_load_error() {
     let dir = tempfile::tempdir().unwrap();
-    for (name, body) in [("empty.xlsx", &b""[..]), ("page.xlsx", &b"\n<!DOCTYPE html><html>Not found</html>"[..])] {
+    let corrupt = [0x50u8, 0x4B, 0x03, 0x00, 0x00, 0x00, 0x13, 0x07, 0xFF];
+    for (name, body) in [
+        ("empty.xlsx", &b""[..]),
+        ("page.xlsx", &b"\n<!DOCTYPE html><html>Not found</html>"[..]),
+        ("zeros.xlsx", &[0u8; 64][..]),
+        ("corrupt.ods", &corrupt[..]),
+    ] {
         let path = write(dir.path(), name, body);
         assert!(tables_core::io::load_workbook(&path).is_err(), "{name}");
     }
