@@ -693,6 +693,30 @@ pub fn draw_grid(
         }
         draw_cell_text(cr, sheet, mr, mc, (x, y, w, h), cell_text);
     }
+    // Pictures float above the cells at their anchor (offset into it),
+    // under the charts, scaled to the size the file gives them.
+    for picture in sheet.pictures.iter().filter(|p| in_pane(p.anchor.0, p.anchor.1)) {
+        let x = tables_core::sheet::col_x(picture.anchor.1, scroll_x, sheet) + picture.offset_px.0;
+        let y = tables_core::sheet::row_y(picture.anchor.0, scroll_y, sheet) + picture.offset_px.1;
+        let (w, h) = (picture.width_px, picture.height_px);
+        if x > width || y > height || x + w < ROW_HEADER_WIDTH || y + h < COL_HEADER_HEIGHT {
+            continue;
+        }
+        let Some(surface) = picture_surface(&picture.data) else {
+            continue;
+        };
+        let (iw, ih) = (surface.width() as f64, surface.height() as f64);
+        if iw < 1.0 || ih < 1.0 {
+            continue;
+        }
+        cr.save().unwrap();
+        cr.translate(x, y);
+        cr.scale(w / iw, h / ih);
+        cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+        cr.source().set_filter(gtk4::cairo::Filter::Good);
+        cr.paint().unwrap();
+        cr.restore().unwrap();
+    }
     // Charts float above the cells at their anchor. They were read from
     // xlsx and saved back, but only ever drawn in the chart dialog's preview
     // (render lab `tables/chart`).
@@ -866,6 +890,29 @@ pub fn render_sheet_pdf(
 
 #[cfg(test)]
 mod tests {
+    /// A picture's size is read from its header, and a huge one is refused
+    /// before it is decoded: a few bytes of PNG can declare 60000 x 60000.
+    #[test]
+    fn an_oversized_picture_is_refused_from_its_header() {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&60_000u32.to_be_bytes());
+        png.extend_from_slice(&[8, 2, 0, 0, 0]);
+        assert_eq!(super::picture_size(&png), Some((60_000, 60_000)));
+        assert!(super::decode_picture(&png).is_none(), "refused unread");
+        let gif = [b"GIF89a".as_slice(), &[10, 0, 20, 0]].concat();
+        assert_eq!(super::picture_size(&gif), Some((10, 20)));
+        let mut bmp = vec![0u8; 26];
+        bmp[..2].copy_from_slice(b"BM");
+        bmp[18..22].copy_from_slice(&30i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&(-40i32).to_le_bytes());
+        assert_eq!(super::picture_size(&bmp), Some((30, 40)), "a top-down BMP's negative height");
+        // SOI, an APP0 of length 4, then SOF0: precision, height 7, width 9.
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 4, 0, 0, 0xFF, 0xC0, 0, 11, 8, 0, 7, 0, 9];
+        assert_eq!(super::picture_size(&jpeg), Some((9, 7)));
+        assert_eq!(super::picture_size(b"not a picture"), None);
+    }
+
     use super::*;
     use tables_core::style::VAlign;
 
@@ -915,6 +962,23 @@ mod tests {
         // the baseline there, where an ellipsis would leave only dots.
         let inked_rows = (0..h as usize).filter(|&y| (w as usize - 6..w as usize - 2).any(|x| dark(x, y))).count();
         assert!(inked_rows >= 6, "the text stops short of the edge: {inked_rows} rows inked at the right");
+    }
+
+    /// A sheet picture's file decodes to its own pixel size, once: a second
+    /// redraw gets the same surface back, and bytes that aren't an image
+    /// give none rather than failing the draw.
+    #[test]
+    fn a_sheet_picture_decodes_once() {
+        let img = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 7, 3).unwrap();
+        let mut png = Vec::new();
+        img.write_to_png(&mut png).unwrap();
+        let data: std::sync::Arc<[u8]> = png.into();
+        let first = picture_surface(&data).expect("a PNG decodes");
+        assert_eq!((first.width(), first.height()), (7, 3));
+        let again = picture_surface(&data).unwrap();
+        assert_eq!(first.to_raw_none(), again.to_raw_none(), "decoded once");
+        let junk: std::sync::Arc<[u8]> = b"not an image".to_vec().into();
+        assert!(picture_surface(&junk).is_none());
     }
 
     #[test]
@@ -1055,4 +1119,100 @@ mod tests {
             .unwrap_err();
         assert!(err.contains("no cells"), "{err}");
     }
+}
+
+/// A decoded picture beside a handle on the bytes it was decoded from.
+type DecodedPicture = (std::sync::Weak<[u8]>, Option<gtk4::cairo::ImageSurface>);
+
+thread_local! {
+    /// Decoded sheet pictures, by the address of their shared bytes: a
+    /// redraw paints them again without decoding the file each frame.
+    static PICTURES: std::cell::RefCell<std::collections::HashMap<usize, DecodedPicture>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// A sheet picture's image as a cairo surface, decoded once.
+fn picture_surface(data: &std::sync::Arc<[u8]>) -> Option<gtk4::cairo::ImageSurface> {
+    let key = std::sync::Arc::as_ptr(data) as *const u8 as usize;
+    PICTURES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((weak, surface)) = cache.get(&key) {
+            if weak.upgrade().is_some_and(|d| std::sync::Arc::ptr_eq(&d, data)) {
+                return surface.clone();
+            }
+        }
+        // Forget the pictures whose sheets are gone.
+        cache.retain(|_, (weak, _)| weak.strong_count() > 0);
+        let surface = decode_picture(data);
+        cache.insert(key, (std::sync::Arc::downgrade(data), surface.clone()));
+        surface
+    })
+}
+
+/// The most pixels a worksheet picture may decode to: a few bytes of PNG
+/// can declare tens of thousands of pixels a side, and the decode (and the
+/// surface after it) would then ask for gigabytes on the UI thread. The
+/// same budget Lifafa's logo decoder keeps (`MAX_PIXELS`, 2048 x 2048).
+const MAX_PICTURE_PIXELS: i64 = 4_194_304;
+
+/// A PNG, JPEG, GIF or BMP picture's pixel size, read from its header: the
+/// formats a worksheet picture is kept in. `None` for anything else.
+fn picture_size(data: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_be_bytes([b[0], b[1]])));
+    let le16 = |i: usize| data.get(i..i + 2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]])));
+    let be32 = |i: usize| data.get(i..i + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    let le32 = |i: usize| data.get(i..i + 4).map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]).unsigned_abs());
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Some((be32(16)?, be32(20)?));
+    }
+    if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if data.starts_with(b"BM") {
+        return Some((le32(18)?, le32(22)?));
+    }
+    if data.starts_with(&[0xFF, 0xD8]) {
+        // Walk the markers to a start-of-frame (SOF0..SOF15, less DHT,
+        // JPG and DAC), which holds the height then the width.
+        let mut i = 2;
+        while i + 4 <= data.len() {
+            if data[i] != 0xFF {
+                return None;
+            }
+            let marker = data[i + 1];
+            if marker == 0xFF {
+                i += 1;
+                continue;
+            }
+            let len = be16(i + 2)? as usize;
+            if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+                return Some((be16(i + 7)?, be16(i + 5)?));
+            }
+            i += 2 + len;
+        }
+    }
+    None
+}
+
+fn decode_picture(data: &[u8]) -> Option<gtk4::cairo::ImageSurface> {
+    use gtk4::gdk::prelude::GdkCairoContextExt;
+    use gtk4::gdk_pixbuf::prelude::PixbufLoaderExt;
+    // Refuse an oversized picture from its header, before any decoder
+    // allocates for it (gdk-pixbuf allocates the full size even when asked
+    // to scale), and one whose size can't be read.
+    let (w, h) = picture_size(data)?;
+    if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PICTURE_PIXELS as u64 {
+        return None;
+    }
+    let loader = gtk4::gdk_pixbuf::PixbufLoader::new();
+    loader.write(data).ok()?;
+    loader.close().ok()?;
+    let pixbuf = loader.pixbuf()?;
+    let surface = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
+    {
+        let cr = gtk4::cairo::Context::new(&surface).ok()?;
+        cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+        cr.paint().ok()?;
+    }
+    Some(surface)
 }
