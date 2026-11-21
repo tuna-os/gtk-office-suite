@@ -89,6 +89,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/table-text-panel": {
+    "A": "green"
+  },
   "decks/text-styles": {
     "A": "green",
     "B": "green",

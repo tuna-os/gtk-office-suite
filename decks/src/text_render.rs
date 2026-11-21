@@ -210,6 +210,21 @@ fn place_inner(
     (placed, content_h)
 }
 
+/// The height a text body needs laid out `w` canvas pixels wide, its
+/// insets included: what a table row grows to so its cells' text fits.
+pub fn text_body_height(
+    cr: &cairo::Context,
+    text: &str,
+    runs: &[Run],
+    body: &TextBody,
+    w: f64,
+    scale: f64,
+    desc: &pango::FontDescription,
+) -> f64 {
+    let (_, t, _, b) = insets(body, (w, 0.0), scale);
+    place_inner(cr, text, runs, body, (0.0, 0.0, w, 0.0), scale, desc, None).1 + t + b
+}
+
 /// Draw a text box whose `body` carries paragraph styles, in the current
 /// source colour for runs that name none.
 #[allow(clippy::too_many_arguments)]

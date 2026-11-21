@@ -2546,6 +2546,30 @@ def decks(img):
             t.cell(r, c).text = f"R{r + 1}C{c + 1}"
     save(p, "table", "A 3x3 table with a styled header row")
 
+    # A one-cell table as a text panel (the HR delegations deck's
+    # objectives): its style draws the first row as a white bold header,
+    # but the runs state black and regular, one phrase bold pink, and the
+    # cell states its own wide margins. Each run's own colour and weight,
+    # and the cell's margins, win over the style.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    panel = s.shapes.add_table(1, 1, Inches(1.3), Inches(1.7), Inches(10.5), Inches(4.2)).table
+    cell = panel.cell(0, 0)
+    cell.margin_left, cell.margin_top = Inches(0.7), Inches(0.5)
+    cell.fill.solid()
+    cell.fill.fore_color.rgb = RGBColor(0xD9, 0xD9, 0xD9)
+    tf = cell.text_frame
+    for i, (lead, key, tail) in enumerate((("Review the ", "laws and policies", " relevant to the role"),
+                                           ("Discuss ", "emerging priorities", " in management"))):
+        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        for text, highlight in ((lead, False), (key, True), (tail, False)):
+            r = para.add_run()
+            r.text = text
+            r.font.size = Pt(28)
+            r.font.bold = highlight
+            r.font.color.rgb = RGBColor(0xD5, 0x00, 0x57) if highlight else RGBColor(0, 0, 0)
+    save(p, "table-text-panel", "A grey one-cell table: two lines of black regular 28pt text, each with a bold pink phrase, inset 0.7 in")
+
     p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     sh = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5), Inches(2.5), Inches(3), Inches(2))
