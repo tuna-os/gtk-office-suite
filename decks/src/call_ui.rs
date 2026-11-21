@@ -81,23 +81,34 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
     });
     app.add_action(&act);
     // Enabled while Mandelbrot is on the bus. The watch lasts as long as the
-    // application, so its id is not kept.
+    // application, so its id is not kept. It watches on the session bus
+    // once that is had: `gio::bus_watch_name` hands its "vanished" callback
+    // the connection GLib passes, which is NULL when there is no session
+    // bus, and gio-rs unwraps it inside a callback that cannot unwind, so
+    // Decks aborted wherever no bus could be reached. Render lab Tier B
+    // runs with none: every real deck aborted there, most after their
+    // capture, and the two slowest (ccrm-dgpod, supporting-every-young-
+    // person) before it, which made them red. With no bus there is no
+    // Mandelbrot to call: the item stays off.
     let (on, off) = (act.downgrade(), act.downgrade());
-    let _ = gio::bus_watch_name(
-        gio::BusType::Session,
-        MANDELBROT,
-        gio::BusNameWatcherFlags::NONE,
-        move |_, _, _| {
-            if let Some(a) = on.upgrade() {
-                a.set_enabled(true);
-            }
-        },
-        move |_, _| {
-            if let Some(a) = off.upgrade() {
-                a.set_enabled(false);
-            }
-        },
-    );
+    gio::bus_get(gio::BusType::Session, gio::Cancellable::NONE, move |bus| {
+        let Ok(bus) = bus else { return };
+        let _ = gio::bus_watch_name_on_connection(
+            &bus,
+            MANDELBROT,
+            gio::BusNameWatcherFlags::NONE,
+            move |_, _, _| {
+                if let Some(a) = on.upgrade() {
+                    a.set_enabled(true);
+                }
+            },
+            move |_, _| {
+                if let Some(a) = off.upgrade() {
+                    a.set_enabled(false);
+                }
+            },
+        );
+    });
 }
 
 #[cfg(test)]

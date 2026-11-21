@@ -78,6 +78,11 @@ pub fn marker(kind: ListKind, ordinal: u32) -> Option<String> {
 pub fn marker_for(style: &ParaStyle, ordinal: u32) -> Option<String> {
     match (&style.list, &style.list_label) {
         (ListKind::Numbered, Some(label)) => Some(label_text(label, ordinal)),
+        // A bullet the file draws with its own glyph ("o", "-", "\u{25aa}"):
+        // a label with no number, which is that glyph.
+        (ListKind::Bullet, Some(label)) if label.format == NumberFormat::None && label.suffix.is_empty() && !label.prefix.is_empty() => {
+            Some(label.prefix.clone())
+        }
         (kind, _) => marker(*kind, ordinal),
     }
 }

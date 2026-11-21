@@ -2641,6 +2641,46 @@ fn a_list_numbered_by_its_level_overrides_is_numbered() {
     assert_eq!((label.prefix.as_str(), label.suffix.as_str()), ("6.", "."));
 }
 
+/// A bulleted level draws its own glyph (`w:lvlText`): Word's "o" and
+/// "-" as they are, Symbol's private-use bullet as the plain bullet, and
+/// Wingdings' private-use square as the square LibreOffice draws. Every
+/// bullet was drawn as "\u{2022}", so a form's "o" sub-items and "-" lists
+/// all looked the same (render-real `sma-positive-result-call-checklist`,
+/// `dcms-business-appointment-rules`).
+#[test]
+fn a_bulleted_level_draws_its_own_glyph() {
+    let mut d = Document::from_plain_text("one\ntwo\nthree\nfour\nafter");
+    for p in &mut d.paragraphs[..4] {
+        p.style.list = ListKind::Bullet;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        let lvl = |i: u32, text: &str| format!("<w:lvl w:ilvl=\"{i}\"><w:start w:val=\"1\"/><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"{text}\"/></w:lvl>");
+        numbering.insert_str(
+            abs_at,
+            &format!("<w:abstractNum w:abstractNumId=\"92\">{}{}{}{}</w:abstractNum>", lvl(0, "o"), lvl(1, "-"), lvl(2, "\u{f0b7}"), lvl(3, "\u{f0a7}")),
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"92\"><w:abstractNumId w:val=\"92\"/></w:num></w:numbering>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let mut out = String::new();
+        let mut rest = body.as_str();
+        let mut n = 0;
+        while let Some(at) = rest.find("<w:numPr>") {
+            let end = at + rest[at..].find("</w:numPr>").unwrap() + "</w:numPr>".len();
+            out.push_str(&rest[..at]);
+            out.push_str(&format!("<w:numPr><w:ilvl w:val=\"{n}\"/><w:numId w:val=\"92\"/></w:numPr>"));
+            rest = &rest[end..];
+            n += 1;
+        }
+        out.push_str(rest);
+        assert_eq!(n, 4, "fixture shape changed: {body}");
+        *body = out;
+    });
+    let markers: Vec<Option<String>> = rt.paragraphs[..4].iter().map(|p| letters_core::lists::marker_for(&p.style, 1)).collect();
+    assert_eq!(markers, [Some("o".into()), Some("-".into()), Some("\u{2022}".into()), Some("\u{25aa}".into())]);
+}
+
 /// A list item numbered by its own `w:numPr` takes its level's indent
 /// over its paragraph style's, as Word and Writer resolve it: a "List
 /// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One

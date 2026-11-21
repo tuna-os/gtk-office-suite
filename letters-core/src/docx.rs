@@ -3033,6 +3033,35 @@ impl WordCounter {
     }
 }
 
+/// The glyph a bulleted level's text (`w:lvlText`) draws, where it is not
+/// the plain bullet: Word's "o" and "-" as they are, and the Symbol and
+/// Wingdings characters Word stores in the private use area as the
+/// Unicode characters LibreOffice maps them to. `None` for the plain
+/// bullet and for a symbol it has no mapping for, which draw as the
+/// plain bullet. A level's "o" or "\u{25aa}" drawn as "\u{2022}" was
+/// a visible miss on most real forms with nested lists.
+fn bullet_glyph(text: &str) -> Option<String> {
+    let mut chars = text.chars();
+    let (c, rest) = (chars.next()?, chars.next());
+    if rest.is_some() {
+        return None;
+    }
+    let glyph = match c as u32 {
+        // Symbol's bullet, and Wingdings' square, arrowhead, tick, diamond,
+        // filled square and hollow square.
+        0xF0B7 => '\u{2022}',
+        0xF0A7 => '\u{25aa}',
+        0xF0D8 => '\u{27a2}',
+        0xF0FC => '\u{2713}',
+        0xF076 => '\u{2756}',
+        0xF06E => '\u{25a0}',
+        0xF071 => '\u{274f}',
+        0xF000..=0xF0FF => return None,
+        _ => c,
+    };
+    (glyph != crate::lists::BULLET && !glyph.is_whitespace()).then(|| glyph.to_string())
+}
+
 /// Level `level` of list instance `num_id`: its first number, format and
 /// level text. The instance's own replacement of the level (a
 /// `w:lvlOverride` holding a `w:lvl`) wins over its definition's.
@@ -3517,6 +3546,13 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
         style: ParaStyle {
             heading, alignment, list, code_block, block_quote,
             list_level, list_start,
+            // A bullet drawn with its level's own glyph ("o", "-"); a
+            // numbered item's label is the counter's (`WordCounter`).
+            list_label: numbering
+                .filter(|_| list == ListKind::Bullet)
+                .and_then(|(num_id, level)| numbering_level(doc, num_id, level)?.2)
+                .and_then(|text| bullet_glyph(&text))
+                .map(|glyph| ListLabel { prefix: glyph, format: NumberFormat::None, suffix: String::new() }),
             named_style, own_look, page_break_before, keep_with_next, keep_lines, widow_control,
             line_height: para_line_height(
                 p.line_spacing_multiple(),
