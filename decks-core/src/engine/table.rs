@@ -30,6 +30,21 @@ pub struct TableCell {
     /// Covered by a merged cell before it.
     #[serde(default)]
     pub covered: bool,
+    /// The cell's own text margins (`a:tcPr marL/marT/marR/marB`), left,
+    /// top, right and bottom in model units; None takes the table's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub margins: Option<(f64, f64, f64, f64)>,
+    /// Each paragraph's style, in order (`a:p/a:pPr`): its alignment,
+    /// bullet and indents. Empty is every paragraph plain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paras: Vec<super::text_body::ParaStyle>,
+    /// Where the text sits down the cell (`a:tcPr anchor`).
+    #[serde(default, skip_serializing_if = "is_top")]
+    pub anchor: super::text_body::Anchor,
+}
+
+fn is_top(a: &super::text_body::Anchor) -> bool {
+    *a == super::text_body::Anchor::Top
 }
 
 impl TableCell {
@@ -56,6 +71,9 @@ pub struct TableData {
     pub first_row: bool,
     /// `a:tblPr bandRow`: alternate rows are banded.
     pub band_row: bool,
+    /// `a:tblPr firstCol`: the first column is drawn as the header is.
+    #[serde(default)]
+    pub first_col: bool,
     /// The accent colour the table style is built from (the theme's
     /// accent 1 for the default style).
     pub accent: Option<Color>,
@@ -201,7 +219,10 @@ impl TableData {
     pub fn cell_paint(&self, r: usize, c: usize) -> CellPaint {
         let accent = self.accent.unwrap_or(Color(0x44, 0x72, 0xC4));
         let own = self.rows.get(r).and_then(|row| row.get(c)).and_then(|cell| cell.fill);
-        let header = self.first_row && r == 0;
+        // The first column, when the style marks it, is drawn as the header
+        // row is (Office's table styles: the accent with white bold text in
+        // the medium styles, bold in the light ones).
+        let header = (self.first_row && r == 0) || (self.first_col && c == 0);
         let banded = !header && self.band_row && (if self.first_row { r - 1 } else { r }) % 2 == 0;
         let black = Color(0, 0, 0);
         let white = Color(255, 255, 255);
@@ -269,6 +290,7 @@ mod tests {
             rows: vec![vec![TableCell::default(); 3]; 4],
             first_row,
             band_row,
+            first_col: false,
             accent: Some(Color(0x4F, 0x81, 0xBD)),
             cell_margins: None,
             style_id: None,
@@ -325,6 +347,19 @@ mod tests {
         let t = table(true, true);
         let p = t.cell_paint(0, 1);
         assert_eq!((p.fill, p.text, p.bold), (Some(Color(0x4F, 0x81, 0xBD)), Color(255, 255, 255), true));
+    }
+
+    /// A first column the style marks is drawn as the header row is: the
+    /// HR-to-Pay go-live deck's module tables (30 such tables in the real
+    /// decks).
+    #[test]
+    fn a_marked_first_column_is_drawn_as_the_header() {
+        let t = TableData { first_col: true, ..table(true, true) };
+        let header = t.cell_paint(0, 1);
+        assert_eq!(t.cell_paint(2, 0), header, "a body row's first cell is the header's paint");
+        assert!(t.cell_paint(2, 0).bold);
+        assert_ne!(t.cell_paint(2, 1), header, "the rest of the row is a body cell");
+        assert!(!table(true, true).cell_paint(2, 0).bold, "unmarked, the first column is a body cell");
     }
 
     #[test]

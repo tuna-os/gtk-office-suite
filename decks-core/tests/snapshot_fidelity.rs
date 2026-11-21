@@ -1921,6 +1921,9 @@ fn recovery_rich_state_round_trip() {
         col_span: 1,
         row_span: 1,
         covered: false,
+        margins: None,
+        paras: Vec::new(),
+        anchor: Default::default(),
     };
     let slide = slide_of(
         vec![
@@ -1940,6 +1943,7 @@ fn recovery_rich_state_round_trip() {
                     rows: vec![vec![cell("a"), cell("b")], vec![cell("c"), cell("d")]],
                     first_row: true,
                     band_row: false,
+                    first_col: false,
                     accent: None,
                     cell_margins: None,
                     style_id: None,

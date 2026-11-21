@@ -135,11 +135,27 @@ impl SlideScale {
         runs.iter()
             .map(|r| {
                 let mut r = r.clone();
-                let hp = r.style.font_size_hp.unwrap_or(36) as f64;
-                r.style.font_size_hp = Some((hp * k).round().clamp(1.0, u16::MAX as f64) as u16);
+                r.style.font_size_hp = Some(Self::scaled_hp(r.style.font_size_hp, k));
                 r
             })
             .collect()
+    }
+
+    /// `body` with each empty paragraph's end mark sized as `text_runs`
+    /// sizes the runs: a blank line between bullets on a 13.33-inch slide
+    /// was drawn at its unscaled size, 1.33x the height of the text round it.
+    pub fn text_body(&self, mut body: super::super::text_body::TextBody) -> super::super::text_body::TextBody {
+        let k = self.text_factor();
+        if (k - 1.0).abs() >= 1e-6 {
+            for end in body.paras.iter_mut().filter_map(|p| p.end_run.as_mut()) {
+                end.font_size_hp = Some(Self::scaled_hp(end.font_size_hp, k));
+            }
+        }
+        body
+    }
+
+    fn scaled_hp(hp: Option<u16>, k: f64) -> u16 {
+        (hp.unwrap_or(36) as f64 * k).round().clamp(1.0, u16::MAX as f64) as u16
     }
 }
 

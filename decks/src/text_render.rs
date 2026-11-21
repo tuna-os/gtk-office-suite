@@ -144,7 +144,12 @@ fn place_inner(
         // An empty paragraph still has its runs' height: give it a space,
         // in the run its break was written in.
         if para_text.is_empty() {
-            let style = para.first().map(|r| r.style.clone()).or_else(|| lead.get(i).cloned().flatten()).unwrap_or_default();
+            let style = st
+                .end_run
+                .clone()
+                .or_else(|| para.first().map(|r| r.style.clone()))
+                .or_else(|| lead.get(i).cloned().flatten())
+                .unwrap_or_default();
             set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], text_scale);
         } else {
             set_styled_text(&layout, &para_text, para, text_scale);
@@ -220,6 +225,21 @@ fn place_inner(
         }
     }
     (placed, content_h)
+}
+
+/// The height a text body needs laid out `w` canvas pixels wide, its
+/// insets included: what a table row grows to so its cells' text fits.
+pub fn text_body_height(
+    cr: &cairo::Context,
+    text: &str,
+    runs: &[Run],
+    body: &TextBody,
+    w: f64,
+    scale: f64,
+    desc: &pango::FontDescription,
+) -> f64 {
+    let (_, t, _, b) = insets(body, (w, 0.0), scale);
+    place_inner(cr, text, runs, body, (0.0, 0.0, w, 0.0), scale, desc, None).1 + t + b
 }
 
 /// Draw a text box whose `body` carries paragraph styles, in the current

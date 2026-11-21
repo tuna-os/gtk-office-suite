@@ -125,6 +125,12 @@ pub struct ParaStyle {
     pub space_after: Spacing,
     /// How the marker is drawn, where it differs from the text.
     pub marker: MarkerStyle,
+    /// An empty paragraph's look (`a:endParaRPr` over the inherited run
+    /// properties): with no run of its own, it is this tall. A blank line
+    /// set at 8 pt between 20 pt paragraphs is a small gap, not a line of
+    /// the text before it. `None` follows the run its break was written in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_run: Option<suite_common_core::document::RunStyle>,
 }
 
 /// A bullet's own font, size and colour (`a:buFont`, `a:buSzPct` or
