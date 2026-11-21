@@ -2454,6 +2454,17 @@ def decks(img):
     save(p, "pay-centre-reduced-leading-blank-paragraphs",
          "Three navy tiles, each with a bold white 14pt figure two blank lines below the tile's top edge")
 
+    # DCK-004, reduced from the adults' nature survey: its illustration of
+    # people walking in a park is mirrored (a:xfrm flipH="1" on the
+    # picture). Decks drew it the way the file stores it, facing away.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    plain = s.shapes.add_picture(img, Inches(0.5), Inches(1.5), Inches(4), Inches(2.4))
+    flipped = s.shapes.add_picture(img, Inches(5.5), Inches(1.5), Inches(4), Inches(2.4))
+    flipped._element.spPr.get_or_add_xfrm().set("flipH", "1")
+    save(p, "picture-flip",
+         "The test picture twice: as stored on the left, mirrored left to right on the right")
+
     # DCK-004, reduced from the 2024-2025 delegated authorities report: its
     # theme was saved on a machine in a dark mode, so lt1 is the system
     # "window" colour with lastClr="202020". The master's background is

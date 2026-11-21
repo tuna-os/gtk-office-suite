@@ -594,6 +594,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if rot.is_some() { shape.rotation = rot; }
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if rot.is_some() { pic.rotation = rot; }
+                                    // A mirrored picture (a figure facing the
+                                    // other way): drawn flipped in its box.
+                                    let on = |key: &str| e.attributes().flatten().any(|a| a.key.as_ref() == key && matches!(a.value.as_ref(), "1" | "true"));
+                                    pic.crop.flip_h = on("flipH");
+                                    pic.crop.flip_v = on("flipV");
                                 } else if in_grp_pr {
                                     // The group's own rotation and flips (#1989).
                                     if let Some(g) = groups.last_mut() {
@@ -665,7 +670,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             }
                             "a:srcRect" => {
                                 if let Some(pic) = current_picture.as_mut() {
-                                    pic.crop = parse_src_rect(e);
+                                    pic.crop = crate::engine::Crop { flip_h: pic.crop.flip_h, flip_v: pic.crop.flip_v, ..parse_src_rect(e) };
                                 }
                             }
                             "a:t" => {
@@ -811,7 +816,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:fillRect" if in_bg_blip => background_fill = parse_fill_rect(e),
                             "a:srcRect" => {
                                 if let Some(pic) = current_picture.as_mut() {
-                                    pic.crop = parse_src_rect(e);
+                                    pic.crop = crate::engine::Crop { flip_h: pic.crop.flip_h, flip_v: pic.crop.flip_v, ..parse_src_rect(e) };
                                 }
                             }
                             "a:srgbClr" if in_bg && !in_bg_blip => {

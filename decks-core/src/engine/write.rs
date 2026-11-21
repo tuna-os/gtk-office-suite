@@ -62,6 +62,15 @@ fn write_xfrm<W: std::io::Write>(
     writer: &mut Writer<W>,
     at: Placement,
 ) -> Result<(), quick_xml::Error> {
+    write_xfrm_flipped(writer, at, (false, false))
+}
+
+/// `a:xfrm`, mirrored as `(flip_h, flip_v)` say.
+fn write_xfrm_flipped<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    at: Placement,
+    (flip_h, flip_v): (bool, bool),
+) -> Result<(), quick_xml::Error> {
     let Placement { x, y, w, h, rotation } = at;
     let mut xfrm = BytesStart::new("a:xfrm");
     if rotation.is_finite() && rotation.abs() > f64::EPSILON {
@@ -69,6 +78,12 @@ fn write_xfrm<W: std::io::Write>(
         if rot != 0 {
             xfrm.push_attribute(("rot", rot.to_string().as_str()));
         }
+    }
+    if flip_h {
+        xfrm.push_attribute(("flipH", "1"));
+    }
+    if flip_v {
+        xfrm.push_attribute(("flipV", "1"));
     }
     writer.write_event(Event::Start(xfrm))?;
 
@@ -966,7 +981,7 @@ fn write_image<W: std::io::Write>(
 
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    write_xfrm(writer, at)?;
+    write_xfrm_flipped(writer, at, (crop.flip_h, crop.flip_v))?;
 
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "rect"));

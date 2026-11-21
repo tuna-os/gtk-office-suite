@@ -935,6 +935,15 @@ pub fn draw_object(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.clip();
                     cr.translate(sx, sy);
+                    // A mirrored picture is mirrored within its box.
+                    if crop.flip_h {
+                        cr.translate(sw, 0.0);
+                        cr.scale(-1.0, 1.0);
+                    }
+                    if crop.flip_v {
+                        cr.translate(0.0, sh);
+                        cr.scale(1.0, -1.0);
+                    }
                     cr.scale(sw / cw, sh / ch);
                     cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
                     cr.paint().unwrap();

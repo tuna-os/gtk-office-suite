@@ -273,7 +273,7 @@ impl GraphicDefs {
             .collect::<Option<_>>()?;
         let [t, r, b, l] = v[..] else { return None };
         let (w, h) = natural;
-        (w > 0.0 && h > 0.0).then(|| crate::engine::Crop { left: l / w, top: t / h, right: r / w, bottom: b / h })
+        (w > 0.0 && h > 0.0).then(|| crate::engine::Crop { left: l / w, top: t / h, right: r / w, bottom: b / h, ..Default::default() })
     }
 
     /// The paint of graphic style `name`, its outline scaled by `k` (model
