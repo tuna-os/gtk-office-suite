@@ -357,7 +357,6 @@ impl SpText {
 /// style (the table's style speaks only to the text's weight and colour).
 // The struct update keeps fields this style doesn't read (line spacing,
 // as other changes add it) at their defaults.
-#[allow(clippy::needless_update)]
 pub(crate) fn own_para_style(ppr: Option<&Node>, theme: &Theme, scale: SlideScale) -> ParaStyle {
     let props = ppr.map(|p| LevelProps::of(p, theme)).unwrap_or_default();
     let lvl = ppr.and_then(|n| n.attr("lvl")).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(8);
@@ -383,7 +382,6 @@ pub(crate) fn own_para_style(ppr: Option<&Node>, theme: &Theme, scale: SlideScal
             }),
             color: props.bu_clr.clone().flatten(),
         },
-        ..ParaStyle::default()
     }
 }
 
