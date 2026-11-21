@@ -246,6 +246,8 @@ struct PhText {
     key: PhKey,
     lst: ListStyle,
     body: BodyProps,
+    /// The placeholder's own fill and outline, when it states them.
+    paint: Option<super::shape_xml::SpStyle>,
 }
 
 fn ph_key(sp: &Node) -> Option<PhKey> {
@@ -256,7 +258,7 @@ fn ph_key(sp: &Node) -> Option<PhKey> {
     })
 }
 
-fn placeholder_texts(root: &Node, theme: &Theme) -> Vec<PhText> {
+fn placeholder_texts(root: &Node, theme: &Theme, scale: f64) -> Vec<PhText> {
     let mut sps = Vec::new();
     root.find_all("p:sp", &mut sps);
     sps.into_iter()
@@ -267,6 +269,7 @@ fn placeholder_texts(root: &Node, theme: &Theme) -> Vec<PhText> {
                 key,
                 lst: ListStyle::of(tx.and_then(|t| t.child("a:lstStyle")), theme),
                 body: BodyProps::of(tx.and_then(|t| t.child("a:bodyPr"))),
+                paint: super::shape_xml::placeholder_paint(sp, theme, scale),
             })
         })
         .collect()
@@ -284,17 +287,33 @@ pub(crate) struct Inherited {
 }
 
 impl Inherited {
+    #[cfg(test)]
     pub(crate) fn read(layout_xml: &str, master_xml: &str, theme: &Theme) -> Inherited {
+        Self::read_scaled(layout_xml, master_xml, theme, 1.0)
+    }
+
+    /// As `read`, with placeholder outlines scaled onto the model's slide
+    /// (`scale` is the slide's EMU-to-model factor).
+    pub(crate) fn read_scaled(layout_xml: &str, master_xml: &str, theme: &Theme, scale: f64) -> Inherited {
         let master = parse_tree(master_xml);
         let tx = master.find("p:txStyles");
         let style = |name: &str| ListStyle::of(tx.and_then(|t| t.child(name)), theme);
         Inherited {
-            layout: placeholder_texts(&parse_tree(layout_xml), theme),
-            master: placeholder_texts(&master, theme),
+            layout: placeholder_texts(&parse_tree(layout_xml), theme, scale),
+            master: placeholder_texts(&master, theme, scale),
             title: style("p:titleStyle"),
             body: style("p:bodyStyle"),
             other: style("p:otherStyle"),
         }
+    }
+
+    /// The fill and outline a slide placeholder that states neither is
+    /// drawn with: its layout placeholder's, else its master's.
+    pub(crate) fn paint(&self, key: &PhKey) -> Option<&super::shape_xml::SpStyle> {
+        let lk: Vec<&PhKey> = self.layout.iter().map(|p| &p.key).collect();
+        let mk: Vec<&PhKey> = self.master.iter().map(|p| &p.key).collect();
+        let (l, m) = inherited_indices(key, &lk, &mk);
+        l.and_then(|i| self.layout[i].paint.as_ref()).or_else(|| m.and_then(|i| self.master[i].paint.as_ref()))
     }
 
     /// The list styles and body properties a shape inherits, least
@@ -578,6 +597,19 @@ mod tests {
         // Text on a shape (no txBox) wraps inside DrawingML's insets.
         let shape = sp("", "<a:p><a:r><a:t>t</a:t></a:r></a:p>").replace(r#"<p:cNvSpPr txBox="1"/>"#, "<p:cNvSpPr/>");
         assert_eq!(resolve(&shape)[0].insets, Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }));
+    }
+
+    #[test]
+    fn a_slide_placeholder_takes_its_layout_placeholders_fill() {
+        let layout = r#"<p:sldLayout xmlns:a="a" xmlns:p="p"><p:cSld><p:spTree>
+<p:sp><p:nvSpPr><p:cNvPr id="2" name="Side"/><p:cNvSpPr/><p:nvPr><p:ph type="body" sz="quarter" idx="14"/></p:nvPr></p:nvSpPr><p:spPr><a:solidFill><a:srgbClr val="2E5E2E"/></a:solidFill></p:spPr></p:sp>
+<p:sp><p:nvSpPr><p:cNvPr id="3" name="Plain"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="13"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>
+</p:spTree></p:cSld></p:sldLayout>"#;
+        let theme = Theme::default();
+        let inh = Inherited::read(layout, MASTER, &theme);
+        let side = inh.paint(&PhKey { ty: "body".into(), idx: Some(14) }).map(|p| p.style.fill);
+        assert_eq!(side, Some(Some(super::super::shape::Color(0x2E, 0x5E, 0x2E))));
+        assert!(inh.paint(&PhKey { ty: "body".into(), idx: Some(13) }).is_none(), "a placeholder that states no paint gives none");
     }
 
     #[test]

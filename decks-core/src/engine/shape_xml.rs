@@ -580,6 +580,28 @@ pub(crate) struct SpStyle {
     pub round_adj: Option<f64>,
 }
 
+/// A layout's or master's placeholder paint, when its own `p:spPr` states
+/// a fill or an outline: what a slide placeholder that states neither is
+/// drawn with (the green panel a section layout gives its side body).
+pub(crate) fn placeholder_paint(sp: &Node, theme: &Theme, scale: f64) -> Option<SpStyle> {
+    let sppr = sp.child("p:spPr")?;
+    let states = sppr.children.iter().any(|c| matches!(c.name.as_str(), "a:solidFill" | "a:gradFill" | "a:ln"));
+    states.then(|| resolve_sp(sp, theme, scale, None))
+}
+
+/// A slide placeholder's paint: its own, unless it states neither a fill
+/// nor an outline, when it takes its layout's (or master's) placeholder
+/// paint. An explicit `a:noFill` is a statement: a slide that removes a
+/// placeholder's fill keeps it removed.
+pub(crate) fn placeholder_or_own(own: SpStyle, inherited: Option<&SpStyle>) -> SpStyle {
+    let s = &own.style;
+    let states = s.fill.is_some() || s.gradient.is_some() || s.stroke.is_some() || s.fill_src.is_some() || s.stroke_src.is_some();
+    match inherited {
+        Some(p) if !states => p.clone(),
+        _ => own,
+    }
+}
+
 fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -> SpStyle {
     use super::theme::{FillSrc, StrokeSrc};
     let sppr = sp.child("p:spPr");
@@ -942,6 +964,21 @@ pub(super) fn cust_geom(geom: &Node) -> Option<Vec<super::freeform::FreePath>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_placeholder_takes_its_layouts_paint_only_when_it_states_none() {
+        let theme = Theme::default();
+        let sp = |sppr: &str| {
+            let root = parse_tree(&format!(r#"<p:sp xmlns:a="a" xmlns:p="p"><p:spPr>{sppr}</p:spPr></p:sp>"#));
+            resolve_sp(root.find("p:sp").unwrap(), &theme, 1.0, None)
+        };
+        let layout = sp(r#"<a:solidFill><a:srgbClr val="2E5E2E"/></a:solidFill>"#);
+        let green = Some(Color(0x2E, 0x5E, 0x2E));
+        assert_eq!(placeholder_or_own(sp(""), Some(&layout)).style.fill, green, "states nothing: the layout's");
+        assert_eq!(placeholder_or_own(sp("<a:noFill/>"), Some(&layout)).style.fill, None, "an explicit noFill stays");
+        assert_eq!(placeholder_or_own(sp(r#"<a:ln><a:noFill/></a:ln>"#), Some(&layout)).style.fill, None, "a stated outline is a statement");
+        assert_eq!(placeholder_or_own(sp(""), None).style.fill, None);
+    }
 
     /// A table names its style by GUID: the reader keeps it and takes the
     /// style's own colour (dark 1 for a plain style).
