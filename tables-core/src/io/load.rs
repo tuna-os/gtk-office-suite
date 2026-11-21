@@ -891,6 +891,7 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
                 sheet.col_widths[c] = px;
             }
         }
+        sheet.fit_rows = p.fit_rows.iter().copied().filter(|&r| r < sheet.rows).collect();
         for (&r, &px) in &p.row_heights {
             if r < sheet.row_heights.len() {
                 sheet.row_heights[r] = px;

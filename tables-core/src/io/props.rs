@@ -29,6 +29,9 @@ pub struct SheetXlsxProps {
     /// produces an empty map rather than a row of defaults.
     pub col_widths: std::collections::HashMap<usize, f64>,
     pub row_heights: std::collections::HashMap<usize, f64>,
+    /// Rows the file asks to be fitted to their content on open (an ods
+    /// row style with `style:use-optimal-row-height="true"`), 0-based.
+    pub fit_rows: std::collections::HashSet<usize>,
     /// Worksheet default row height in pixels, including rows absent from
     /// sheetData. Explicit row heights override this value.
     pub default_row_height: Option<f64>,
@@ -1067,6 +1070,22 @@ fn odf_styles_by_family(xml: &str, family: &str, prop_attr: &str) -> std::collec
     out
 }
 
+/// The row styles whose height is Calc's own fit
+/// (`style:use-optimal-row-height="true"`) rather than the author's.
+fn odf_optimal_row_styles(xml: &str) -> Vec<String> {
+    split_elements(xml, "style:style")
+        .into_iter()
+        .filter_map(|block| {
+            let head = block.split('>').next().unwrap_or("");
+            if xml_attr(head, "style:family") != Some("table-row") {
+                return None;
+            }
+            let body = block.split("</style:style>").next().unwrap_or("");
+            (xml_attr(body, "style:use-optimal-row-height") == Some("true")).then(|| xml_attr(head, "style:name").map(str::to_string)).flatten()
+        })
+        .collect()
+}
+
 /// Whether a `table:table-column` or `table:table-row` is hidden: ODF's
 /// `table:visibility` is `collapse` for a row or column hidden by hand and
 /// `filter` for one a filter hides (ODF 1.3 §19.749); both are drawn as
@@ -1265,7 +1284,17 @@ pub(super) fn read_sheet_props_from_ods_within(
     };
 
     let col_styles = odf_styles_by_family(&xml, "table-column", "style:column-width");
+    // A row style marked optimal (`style:use-optimal-row-height="true"`)
+    // states the height Calc last fitted, not one the author set: Calc
+    // fits the row again on open, as an xlsx row without `customHeight` is
+    // fitted. Hampshire's postcode list stores 15.76 pt on every optimal
+    // row and Calc draws them at its own 13.9 pt; read as fixed, Tables'
+    // grid came out 1.28x LibreOffice's.
+    // The stored height stays as the row's height until it is fitted (an
+    // empty row is not: mining-remediation's empty optimal rows keep their
+    // stored 12.75 pt in Calc).
     let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+    let optimal: std::collections::HashSet<String> = odf_optimal_row_styles(&xml).into_iter().collect();
     // Data styles live in content.xml's automatic styles, and a named one
     // can be in styles.xml.
     let styles_xml = zip.optional_part_to_string("styles.xml", &mut budget);
@@ -1341,6 +1370,10 @@ pub(super) fn read_sheet_props_from_ods_within(
                 for r in rows_within.clone() {
                     props.row_heights.insert(r, *px);
                 }
+            }
+            // A long repeated run is the sheet's empty tail, nothing to fit.
+            if repeat <= 1000 && xml_attr(head, "table:style-name").is_some_and(|s| optimal.contains(s)) {
+                props.fit_rows.extend((row..row + repeat).filter(|&r| r < crate::sheet::SHEET_MAX_ROWS));
             }
             if odf_hidden(head) {
                 props.hidden_rows.extend(rows_within.clone());
@@ -1491,6 +1524,35 @@ mod odf_tests {
         let props = read_sheet_props_from_ods(path.to_str().unwrap());
         let s = props.get("S").expect("the sheet was not found at all");
         assert_eq!(s.col_widths.get(&0), Some(&144.0), "1.5in is 144px");
+    }
+
+    /// A row style Calc marks optimal holds Calc's last fit, not a height
+    /// the author set: the row is fitted again, as Calc fits it on open.
+    /// One marked not optimal keeps its height.
+    #[test]
+    fn an_optimal_rows_stored_height_is_not_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("o.ods");
+        write_ods_fixture(
+            &path,
+            "<office:automatic-styles>\
+             <style:style style:name=\"ro1\" style:family=\"table-row\">\
+             <style:table-row-properties style:row-height=\"0.5in\" style:use-optimal-row-height=\"true\"/></style:style>\
+             <style:style style:name=\"ro2\" style:family=\"table-row\">\
+             <style:table-row-properties style:row-height=\"0.5in\" style:use-optimal-row-height=\"false\"/></style:style>\
+             </office:automatic-styles>\
+             <office:body><office:spreadsheet>\
+             <table:table table:name=\"S\">\
+             <table:table-column/>\
+             <table:table-row table:style-name=\"ro1\"><table:table-cell office:value-type=\"string\"><text:p>fitted</text:p></table:table-cell></table:table-row>\
+             <table:table-row table:style-name=\"ro2\"><table:table-cell office:value-type=\"string\"><text:p>set</text:p></table:table-cell></table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let s = props.get("S").expect("sheet S");
+        assert!(s.fit_rows.contains(&0) && !s.fit_rows.contains(&1), "Calc's fit is fitted again: {:?}", s.fit_rows);
+        assert_eq!(s.row_heights.get(&0), Some(&48.0), "kept until the row is fitted");
+        assert_eq!(s.row_heights.get(&1), Some(&48.0), "the author's height stays");
     }
 
     /// ODF says "these forty columns are all like this" with a repeat
