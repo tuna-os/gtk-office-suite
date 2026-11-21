@@ -70,6 +70,7 @@ fn deck_with_links() -> Deck {
                 rows: vec![vec![cell, TableCell::default()]],
                 first_row: false,
                 band_row: false,
+                first_col: false,
                 accent: None,
                 cell_margins: None,
                 style_id: None,

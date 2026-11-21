@@ -192,7 +192,8 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
 /// placeholder inherits its master's body style (bullets, indents), which a
 /// plain box of ours never asked for.
 fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, placeholder: bool) -> Result<(), quick_xml::Error> {
-    if *st == ParaStyle::default() && !placeholder {
+    // The end mark is written after the runs (`write_end_para`), not here.
+    if (ParaStyle { end_run: None, ..st.clone() }) == ParaStyle::default() && !placeholder {
         return Ok(());
     }
     let mut p = BytesStart::new("a:pPr");
@@ -297,6 +298,9 @@ fn write_paragraphs<W: std::io::Write>(
     // precisely why it needed fixing rather than measuring once and
     // trusting.
     let mut para = 0usize;
+    // Whether the open paragraph has a run: an empty one writes its end
+    // mark's size, which is how tall PowerPoint sets it.
+    let mut wrote = false;
     writer.write_event(Event::Start(BytesStart::new("a:p")))?;
     write_para_pr(writer, &body.para(0), body.placeholder.is_some())?;
     for (run, piece, starts_paragraph) in effective.iter().flat_map(|run| {
@@ -306,6 +310,8 @@ fn write_paragraphs<W: std::io::Write>(
         })
     }) {
         if starts_paragraph {
+            write_end_para(writer, &body.para(para), wrote)?;
+            wrote = false;
             writer.write_event(Event::End(BytesEnd::new("a:p")))?;
             writer.write_event(Event::Start(BytesStart::new("a:p")))?;
             para += 1;
@@ -322,10 +328,22 @@ fn write_paragraphs<W: std::io::Write>(
             }
             if !line.is_empty() {
                 write_run(writer, &run.style, line, links)?;
+                wrote = true;
             }
         }
     }
+    write_end_para(writer, &body.para(para), wrote)?;
     writer.write_event(Event::End(BytesEnd::new("a:p")))?;
+    Ok(())
+}
+
+/// An empty paragraph's `a:endParaRPr`, with the size it was read with.
+fn write_end_para<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, wrote: bool) -> Result<(), quick_xml::Error> {
+    let Some(hp) = st.end_run.as_ref().and_then(|r| r.font_size_hp).filter(|_| !wrote) else { return Ok(()) };
+    let mut end = BytesStart::new("a:endParaRPr");
+    end.push_attribute(("lang", "en-US"));
+    end.push_attribute(("sz", ((file_size(hp as f64) * 50.0).round() as u32).to_string().as_str()));
+    writer.write_event(Event::Empty(end))?;
     Ok(())
 }
 
@@ -336,7 +354,7 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     r_pr.push_attribute(("lang", "en-US"));
     let sz = (file_size(style.font_size_hp.unwrap_or(36) as f64) * 50.0).round() as u32;
     r_pr.push_attribute(("sz", sz.to_string().as_str()));
-    if style.bold { r_pr.push_attribute(("b", "1")); }
+    if style.bold { r_pr.push_attribute(("b", "1")); } else if style.regular { r_pr.push_attribute(("b", "0")); }
     if style.italic { r_pr.push_attribute(("i", "1")); }
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
@@ -823,6 +841,9 @@ fn write_table<W: std::io::Write>(
     if table.band_row {
         tbl_pr.push_attribute(("bandRow", "1"));
     }
+    if table.first_col {
+        tbl_pr.push_attribute(("firstCol", "1"));
+    }
     writer.write_event(Event::Start(tbl_pr))?;
     writer.write_event(Event::Start(BytesStart::new("a:tableStyleId")))?;
     let style_id = table.style_id.as_deref().unwrap_or(super::table::DEFAULT_STYLE_ID);
@@ -869,11 +890,23 @@ fn write_table<W: std::io::Write>(
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
-            write_paragraphs(writer, &cell.text(), &cell.runs, &TextBody::default(), links)?;
+            // The cell's paragraph styles (alignment, bullets, indents).
+            let body = TextBody { paras: cell.paras.clone(), ..TextBody::default() };
+            write_paragraphs(writer, &cell.text(), &cell.runs, &body, links)?;
             writer.write_event(Event::End(BytesEnd::new("a:txBody")))?;
+            // The cell's own margins, as it stated them.
+            let mut tc_pr = BytesStart::new("a:tcPr");
+            if cell.anchor != super::text_body::Anchor::Top {
+                tc_pr.push_attribute(("anchor", cell.anchor.to_drawingml()));
+            }
+            if let Some((l, t, r, b)) = cell.margins {
+                for (k, v) in [("marL", emu(l)), ("marR", emu(r)), ("marT", emu_y(t)), ("marB", emu_y(b))] {
+                    tc_pr.push_attribute((k, v.as_str()));
+                }
+            }
             match cell.fill {
                 Some(fill) => {
-                    writer.write_event(Event::Start(BytesStart::new("a:tcPr")))?;
+                    writer.write_event(Event::Start(tc_pr))?;
                     writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
                     let mut srgb = BytesStart::new("a:srgbClr");
                     srgb.push_attribute(("val", fill.to_hex().as_str()));
@@ -881,7 +914,7 @@ fn write_table<W: std::io::Write>(
                     writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
                     writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
                 }
-                None => writer.write_event(Event::Empty(BytesStart::new("a:tcPr")))?,
+                None => writer.write_event(Event::Empty(tc_pr))?,
             }
             writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
         }

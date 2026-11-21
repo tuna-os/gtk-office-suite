@@ -470,11 +470,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let cxn_paint = cxn_styles(&slide_xml, &slide_theme, scale.x);
         let mut cxn_index = 0usize;
         // Tables live in p:graphicFrame, which the walker used to skip.
-        let mut tables = frame_tables(&slide_xml, &slide_theme, &slide_link_rels);
+        let mut tables = frame_tables(&slide_xml, &slide_theme, &slide_link_rels, scale);
         for t in &mut tables {
             t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
                 cell.runs = scale.text_runs(&cell.runs);
+                cell.margins = cell.margins.map(|(l, t, r, b)| (l * scale.x, t * scale.y, r * scale.x, b * scale.y));
             }
         }
         let charts = frame_charts(&slide_xml);
@@ -983,7 +984,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     let blank = role.is_some() && !has_text;
                                     let text = if blank { String::new() } else { text };
                                     let runs = if blank { Vec::new() } else { runs };
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body: scale.text_body(body) });
                                 } else {
                                     // The shape as the file draws it: its own
                                     // preset and paint. It used to become a
