@@ -76,6 +76,7 @@ pub fn table(rows: usize, cols: usize) -> SlideObject {
             rows: vec![vec![TableCell::default(); cols]; rows],
             first_row: true,
             band_row: true,
+            first_col: false,
             accent: None,
             cell_margins: None,
             style_id: None,

@@ -368,14 +368,47 @@ impl SpText {
     }
 }
 
-/// The resolved text of every `p:sp` in a slide part, in document order.
-/// `ph_of(n)` is the placeholder key of the nth shape (None for a plain
-/// shape), which the caller already knows.
+/// A paragraph's style from its own `a:pPr` alone, scaled onto the
+/// model's slide: a table cell's paragraphs, which inherit no list
+/// style (the table's style speaks only to the text's weight and colour).
+/// Fields this does not read (and any a later change adds) keep their
+/// defaults.
+pub(crate) fn own_para_style(ppr: Option<&Node>, theme: &Theme, scale: SlideScale) -> ParaStyle {
+    let props = ppr.map(|p| LevelProps::of(p, theme)).unwrap_or_default();
+    let lvl = ppr.and_then(|n| n.attr("lvl")).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0).min(8);
+    let pt = 96.0 / 72.0 * scale.text_factor();
+    let spacing = |s: Option<RawSpacing>| match s {
+        Some(RawSpacing::Points(h)) => Spacing::Units(h / 100.0 * pt),
+        Some(RawSpacing::Percent(v)) => Spacing::Lines(v / 100_000.0),
+        None => Spacing::default(),
+    };
+    let mut st = ParaStyle {
+        marker: MarkerStyle {
+            font: props.bu_font.clone().flatten(),
+            size: props.bu_size.flatten().map(|s| match s {
+                RawBuSize::Pct(v) => MarkerSize::Relative(v / 100_000.0),
+                RawBuSize::Pts(v) => MarkerSize::Points(v / 100.0 * scale.text_factor()),
+            }),
+            color: props.bu_clr.clone().flatten(),
+        },
+        ..ParaStyle::default()
+    };
+    st.align = props.algn.unwrap_or_default();
+    st.level = lvl as u8;
+    st.bullet = props.bullet.clone().unwrap_or_default();
+    st.margin_left = props.mar_l.unwrap_or(0.0) * scale.x;
+    st.indent = props.indent.unwrap_or(0.0) * scale.x;
+    st.space_before = spacing(props.spc_bef);
+    st.space_after = spacing(props.spc_aft);
+    st
+}
+
 /// Whether `sp` is a text box (`p:cNvSpPr txBox="1"`), not a shape.
 fn is_text_box(sp: &Node) -> bool {
     sp.child("p:nvSpPr").and_then(|n| n.child("p:cNvSpPr")).and_then(|c| c.attr("txBox")).is_some_and(|v| v == "1" || v == "true")
 }
 
+/// The resolved text of every `p:sp` in a slide part, in document order.
 pub(crate) fn sp_texts(slide_xml: &str, theme: &Theme, inh: &Inherited, scale: SlideScale) -> Vec<SpText> {
     let root = parse_tree(slide_xml);
     let mut sps = Vec::new();
@@ -462,6 +495,15 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
                 }),
                 color: props.bu_clr.clone().flatten(),
             },
+            // A paragraph with no text is as tall as its end mark: the
+            // level's run properties under its own `a:endParaRPr`.
+            end_run: (!p.children.iter().any(|c| c.name == "a:r" || c.name == "a:fld")).then(|| {
+                let mut run = props.run.clone();
+                if let Some(end) = p.child("a:endParaRPr") {
+                    run.over(&RunProps::of(end, theme));
+                }
+                run.style()
+            }),
         });
         for r in p.children.iter().filter(|c| c.name == "a:r" || c.name == "a:fld") {
             let mut run = props.run.clone();
@@ -621,6 +663,22 @@ mod tests {
         // The reader drops the leading empty paragraph: lines are paras 1, 2.
         let body = got[0].body_for(&[1, 2]);
         assert_eq!(body.paras.iter().map(|p| p.level).collect::<Vec<_>>(), [0, 1]);
+    }
+
+    #[test]
+    fn an_empty_paragraph_is_as_tall_as_its_end_mark() {
+        let got = resolve(&sp(
+            "",
+            r#"<a:p><a:r><a:rPr sz="2000"/><a:t>a</a:t></a:r></a:p><a:p><a:endParaRPr sz="800"/></a:p><a:p/><a:p><a:r><a:t>b</a:t></a:r></a:p>"#,
+        ));
+        let ends: Vec<_> = got[0].paras.iter().map(|p| p.end_run.as_ref().map(|r| r.font_size_hp)).collect();
+        // A paragraph with text has no end look of its own; an empty one
+        // takes its endParaRPr, or the level's size when it states none.
+        assert_eq!(ends[0], None);
+        assert_eq!(ends[1], Some(Some(16)));
+        assert!(ends[2].is_some(), "an empty paragraph with no endParaRPr still follows its level");
+        assert_ne!(ends[2], Some(Some(40)), "not the run before it");
+        assert_eq!(ends[3], None);
     }
 
     #[test]
