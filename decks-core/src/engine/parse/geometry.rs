@@ -135,7 +135,7 @@ impl SlideScale {
         runs.iter()
             .map(|r| {
                 let mut r = r.clone();
-                r.style.font_size_hp = Some(Self::scaled_hp(r.style.font_size_hp, k));
+                Self::scale_size(&mut r.style, k);
                 r
             })
             .collect()
@@ -148,14 +148,19 @@ impl SlideScale {
         let k = self.text_factor();
         if (k - 1.0).abs() >= 1e-6 {
             for end in body.paras.iter_mut().filter_map(|p| p.end_run.as_mut()) {
-                end.font_size_hp = Some(Self::scaled_hp(end.font_size_hp, k));
+                Self::scale_size(end, k);
             }
         }
         body
     }
 
-    fn scaled_hp(hp: Option<u16>, k: f64) -> u16 {
-        (hp.unwrap_or(36) as f64 * k).round().clamp(1.0, u16::MAX as f64) as u16
+    /// The style's size on the model's slide: half points, rounded, and
+    /// the exact size in hundredths of a point beside them, so the 14.25 pt
+    /// a 19 pt run becomes isn't drawn at 14.5 or saved back as 19.33.
+    fn scale_size(style: &mut suite_common_core::document::RunStyle, k: f64) {
+        let pt = style.size_pt().unwrap_or(18.0) * k;
+        style.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16);
+        style.font_size_cpt = Some((pt * 100.0).round().clamp(1.0, u32::MAX as f64) as u32);
     }
 }
 
