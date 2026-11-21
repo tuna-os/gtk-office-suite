@@ -1448,16 +1448,40 @@ pub fn draw_table(
     let owners = table.owners();
     let owner = |r: usize, c: usize| owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
     // A cell's text, laid out to its width (`cw`) in its paint.
+    // A cell's margins (left, top, right, bottom) in canvas pixels: its
+    // own, else the table's.
+    let pad = |r: usize, c: usize| {
+        table.rows.get(r).and_then(|row| row.get(c)).and_then(|cell| cell.margins).map_or(
+            (pad_x, pad_y, pad_x, pad_y),
+            |(l, t, rr, b)| (l * scale, t * scale, rr * scale, b * scale),
+        )
+    };
     let layout_of = |r: usize, c: usize, cw: f64| -> Option<pango::Layout> {
         let cell = table.rows.get(r)?.get(c)?;
+        let (l, _, rr, _) = pad(r, c);
         let layout = pangocairo::functions::create_layout(cr);
         layout.set_font_description(Some(font));
-        layout.set_width(((cw - 2.0 * pad_x).max(1.0) * pango::SCALE as f64) as i32);
+        layout.set_width(((cw - l - rr).max(1.0) * pango::SCALE as f64) as i32);
         layout.set_wrap(pango::WrapMode::WordChar);
         set_styled_text(&layout, &cell.text(), &cell.runs, scale);
+        // The style's bold header, on each run that doesn't state itself
+        // regular (b="0").
         if table.cell_paint(r, c).bold {
             let attrs = layout.attributes().unwrap_or_default();
-            attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
+            let mut at = 0u32;
+            for run in &cell.runs {
+                let end = at + run.text.len() as u32;
+                if !run.style.regular {
+                    let mut bold = pango::AttrInt::new_weight(pango::Weight::Bold);
+                    bold.set_start_index(at);
+                    bold.set_end_index(end);
+                    attrs.insert(bold);
+                }
+                at = end;
+            }
+            if cell.runs.is_empty() {
+                attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
+            }
             layout.set_attributes(Some(&attrs));
         }
         Some(layout)
@@ -1473,7 +1497,8 @@ pub fn draw_table(
             }
             let cw: f64 = cols.iter().skip(c).take(table.rows[r][c].span().0).sum();
             if let Some(layout) = layout_of(r, c, cw) {
-                *row_h = row_h.max(f64::from(layout.pixel_size().1) + 2.0 * pad_y);
+                let (_, t, _, b) = pad(r, c);
+                *row_h = row_h.max(f64::from(layout.pixel_size().1) + t + b);
             }
         }
     }
@@ -1506,7 +1531,8 @@ pub fn draw_table(
                 cr.save().unwrap();
                 cr.rectangle(cx, cy, *cw, *rh);
                 cr.clip();
-                cr.move_to(cx + pad_x, cy + pad_y);
+                let (l, t, _, _) = pad(r, c);
+                cr.move_to(cx + l, cy + t);
                 pangocairo::functions::show_layout(cr, &layout);
                 cr.restore().unwrap();
             }

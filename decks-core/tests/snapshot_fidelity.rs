@@ -1920,6 +1920,7 @@ fn recovery_rich_state_round_trip() {
         col_span: 1,
         row_span: 1,
         covered: false,
+        margins: None,
     };
     let slide = slide_of(
         vec![

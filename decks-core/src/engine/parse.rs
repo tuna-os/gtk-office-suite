@@ -459,6 +459,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
                 cell.runs = scale.text_runs(&cell.runs);
+                cell.margins = cell.margins.map(|(l, t, r, b)| (l * scale.x, t * scale.y, r * scale.x, b * scale.y));
             }
         }
         let charts = frame_charts(&slide_xml);

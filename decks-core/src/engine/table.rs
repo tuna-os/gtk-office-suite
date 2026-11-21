@@ -30,6 +30,10 @@ pub struct TableCell {
     /// Covered by a merged cell before it.
     #[serde(default)]
     pub covered: bool,
+    /// The cell's own text margins (`a:tcPr marL/marT/marR/marB`), left,
+    /// top, right and bottom in model units; None takes the table's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub margins: Option<(f64, f64, f64, f64)>,
 }
 
 impl TableCell {

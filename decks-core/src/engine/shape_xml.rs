@@ -675,7 +675,7 @@ pub(crate) struct FrameTable {
 
 /// A table cell's runs. `links` are the part's external hyperlink
 /// relationships, for an `a:hlinkClick` on a run (#1998).
-fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>) -> Vec<suite_common_core::document::Run> {
+fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>, theme: &Theme) -> Vec<suite_common_core::document::Run> {
     use suite_common_core::document::{Run, RunStyle};
     let mut runs = Vec::new();
     for (pi, p) in tx_body.children_named("a:p").enumerate() {
@@ -695,7 +695,12 @@ fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>) ->
             if let Some(rpr) = r.child("a:rPr") {
                 let on = |k: &str| matches!(rpr.attr(k), Some("1") | Some("true"));
                 style.bold = on("b");
+                // A stated b="0": regular even in a header row the table's
+                // style draws bold.
+                style.regular = matches!(rpr.attr("b"), Some("0") | Some("false"));
                 style.italic = on("i");
+                // The run's own colour: over the style's header white.
+                style.color = rpr.child("a:solidFill").and_then(|f| first_color(f, theme, None)).map(|c| c.to_hex().to_lowercase());
                 if let Some(sz) = rpr.attr("sz").and_then(|v| v.parse::<u32>().ok()) {
                     style.font_size_hp = Some((sz / 50) as u16);
                 }
@@ -749,7 +754,7 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                             let span = |k: &str| tc.attr(k).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1000);
                             let set = |k: &str| matches!(tc.attr(k), Some("1" | "true"));
                             TableCell {
-                                runs: tc.child("a:txBody").map(|b| runs_of(b, links)).unwrap_or_default(),
+                                runs: tc.child("a:txBody").map(|b| runs_of(b, links, theme)).unwrap_or_default(),
                                 fill: tc
                                     .child("a:tcPr")
                                     .and_then(|p| p.child("a:solidFill"))
@@ -757,6 +762,13 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                                 col_span: span("gridSpan"),
                                 row_span: span("rowSpan"),
                                 covered: set("hMerge") || set("vMerge"),
+                                // Its own margins (EMU here; the slide's
+                                // scale applies in parse.rs), DrawingML's
+                                // defaults for any it leaves out.
+                                margins: tc.child("a:tcPr").filter(|p| ["marL", "marT", "marR", "marB"].iter().any(|k| p.attr(k).is_some())).map(|p| {
+                                    let m = |k: &str, d: f64| p.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
+                                    (m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0))
+                                }),
                             }
                         })
                         .collect()
