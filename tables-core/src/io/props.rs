@@ -29,6 +29,9 @@ pub struct SheetXlsxProps {
     /// produces an empty map rather than a row of defaults.
     pub col_widths: std::collections::HashMap<usize, f64>,
     pub row_heights: std::collections::HashMap<usize, f64>,
+    /// Rows the file asks to be fitted to their content on open (an ods
+    /// row style with `style:use-optimal-row-height="true"`), 0-based.
+    pub fit_rows: std::collections::HashSet<usize>,
     /// Worksheet default row height in pixels, including rows absent from
     /// sheetData. Explicit row heights override this value.
     pub default_row_height: Option<f64>,
@@ -1256,10 +1259,11 @@ pub fn read_sheet_props_from_ods(
     // fitted. Hampshire's postcode list stores 15.76 pt on every optimal
     // row and Calc draws them at its own 13.9 pt; read as fixed, Tables'
     // grid came out 1.28x LibreOffice's.
-    let mut row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
-    for name in odf_optimal_row_styles(&xml) {
-        row_styles.remove(&name);
-    }
+    // The stored height stays as the row's height until it is fitted (an
+    // empty row is not: mining-remediation's empty optimal rows keep their
+    // stored 12.75 pt in Calc).
+    let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+    let optimal: std::collections::HashSet<String> = odf_optimal_row_styles(&xml).into_iter().collect();
     // Data styles live in content.xml's automatic styles, and a named one
     // can be in styles.xml.
     let styles_xml = zip.optional_part_to_string("styles.xml", &mut budget);
@@ -1322,6 +1326,10 @@ pub fn read_sheet_props_from_ods(
                 for i in 0..repeat {
                     props.row_heights.insert(row + i, *px);
                 }
+            }
+            // A long repeated run is the sheet's empty tail, nothing to fit.
+            if repeat <= 1000 && xml_attr(head, "table:style-name").is_some_and(|s| optimal.contains(s)) {
+                props.fit_rows.extend((row..row + repeat).filter(|&r| r < crate::sheet::SHEET_MAX_ROWS));
             }
             if odf_hidden(head) {
                 props.hidden_rows.extend(row..(row + repeat).min(crate::sheet::SHEET_MAX_ROWS));
@@ -1497,7 +1505,8 @@ mod odf_tests {
         );
         let props = read_sheet_props_from_ods(path.to_str().unwrap());
         let s = props.get("S").expect("sheet S");
-        assert_eq!(s.row_heights.get(&0), None, "Calc's fit is fitted again");
+        assert!(s.fit_rows.contains(&0) && !s.fit_rows.contains(&1), "Calc's fit is fitted again: {:?}", s.fit_rows);
+        assert_eq!(s.row_heights.get(&0), Some(&48.0), "kept until the row is fitted");
         assert_eq!(s.row_heights.get(&1), Some(&48.0), "the author's height stays");
     }
 

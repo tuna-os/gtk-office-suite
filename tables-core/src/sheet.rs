@@ -1388,6 +1388,11 @@ pub struct SheetModel {
     /// Cell notes (Excel's notes, Calc's comments): plain text shown on
     /// hover, marked by a red corner.
     pub notes: Vec<Vec<Option<String>>>,
+    /// Rows the file asked to be fitted to their content when it is opened
+    /// (an ods optimal-height row): fitted to every cell's text, the
+    /// sheet's default font included, not only wrapped or resized cells.
+    /// Read once, on open; the fitted heights are what the sheet keeps.
+    pub fit_rows: std::collections::HashSet<usize>,
     /// The explicit filter definition (TBL-003), if the sheet has one.
     /// `hidden_rows` below is derived from it; the definition is what
     /// persists (xlsx autoFilter), undoes and clears as one.
@@ -1468,6 +1473,7 @@ impl SheetModel {
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
+            fit_rows: std::collections::HashSet::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],
