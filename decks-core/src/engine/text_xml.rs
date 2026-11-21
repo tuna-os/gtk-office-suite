@@ -373,9 +373,10 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         // A master's plain `a:normAutofit` says "shrink if needed" with
         // nothing shrunk yet: only a stated scale changes the drawing.
         autofit: body.autofit.flatten().filter(|a| !a.is_identity()),
-        // Only a placeholder or a box that states its insets gets them;
-        // a plain box keeps the canvas's default so it draws as before.
-        insets: if key.is_some() || body.ins.iter().any(Option::is_some) {
+        // DrawingML's default insets (0.1" across, 0.05" down) where a
+        // body states none, as PowerPoint and LibreOffice lay every shape's
+        // text out: the canvas's own 4 px inset is for boxes made here.
+        insets: if true {
             let d = [91440.0, 45720.0, 91440.0, 45720.0];
             let i = |n: usize| body.ins[n].unwrap_or(d[n]);
             Some(Insets { left: emu(i(0)), top: i(1) * scale.y, right: emu(i(2)), bottom: i(3) * scale.y })
