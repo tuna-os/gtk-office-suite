@@ -184,7 +184,10 @@ fn place_inner(
         // give the first line the same pitch, so a paragraph at 130% stands
         // 30% of a line further from the one before it (the CNSC deck's
         // outline: 66 px between one-line bullets where both draw 80).
-        // More than single goes above the line; less comes off its advance.
+        // More than single goes above the line. Less than single leaves
+        // the first line whole, as Impress measures it: a title at 90% on
+        // three lines is 2.8 lines tall, and taking a tenth off its first
+        // line made the pay-centre deck's title fit unshrunk.
         let pitch = match layout.line_spacing() {
             f if f > 0.0 => f as f64,
             _ => 1.0,
@@ -236,8 +239,8 @@ fn place_inner(
         let h = layout.pixel_size().1 as f64;
         placed.push(Placed { layout, marker, x: g.text_x, y });
         // Pango tightens the lines after a paragraph's first; the first
-        // line's share comes off the advance.
-        let first_cut = (-first_extra).max(0.0);
+        // line's share of a shrunk box's reduction comes off the advance.
+        let first_cut = fit.map_or(0.0, |a| a.line_reduction) * line_h;
         y += h - first_cut + st.space_after.resolve(line_h / scale) * scale;
     }
     let content_h = y;
