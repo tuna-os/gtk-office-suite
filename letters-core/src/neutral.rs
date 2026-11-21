@@ -21,6 +21,8 @@ impl From<&RunStyle> for neutral::RunStyle {
             italic: s.italic,
             upright: s.upright,
             caps: s.caps,
+            // Letters has no small capitals.
+            small_caps: false,
             underline: s.underline,
             strikethrough: s.strikethrough,
             highlight: s.highlight,

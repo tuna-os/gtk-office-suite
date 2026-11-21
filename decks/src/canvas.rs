@@ -476,6 +476,15 @@ pub fn set_styled_text(
         if run.style.strikethrough {
             add(pango::AttrInt::new_strikethrough(true).into());
         }
+        // Capitals as the run asks (pptx `cap="all"` / `cap="small"`), drawn
+        // by Pango so the stored text keeps its case: a title typed in lower
+        // case under `cap="small"` reads as small capitals in PowerPoint and
+        // Impress, and was drawn in lower case.
+        if run.style.caps {
+            add(pango::AttrInt::new_text_transform(pango::TextTransform::Uppercase).into());
+        } else if run.style.small_caps {
+            add(pango::AttrInt::new_variant(pango::Variant::SmallCaps).into());
+        }
         if let Some(hp) = run.style.font_size_hp {
             let pt = hp as f64 / 2.0 * scale;
             add(pango::AttrSize::new_size_absolute(
@@ -2002,6 +2011,26 @@ mod font_tests {
         assert_eq!(fam.len(), 1);
         assert_eq!(fam[0].downcast_ref::<pango::AttrString>().unwrap().value().as_str(), "Liberation Serif");
         assert_eq!((fam[0].start_index(), fam[0].end_index()), (6, 11));
+    }
+
+    /// A run in capitals or small capitals is drawn so, whatever case it
+    /// is typed in: "lower" under `cap="all"` takes the width of "LOWER",
+    /// and under `cap="small"` more than the lower case and less than the
+    /// full capitals (render-real staffing questionnaire's titles).
+    #[test]
+    fn a_runs_capitals_are_drawn() {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 10, 10).unwrap();
+        let cr = cairo::Context::new(&surface).unwrap();
+        let width = |text: &str, style: RunStyle| {
+            let layout = pangocairo::functions::create_layout(&cr);
+            layout.set_font_description(Some(&pango::FontDescription::from_string("Liberation Sans 20")));
+            set_styled_text(&layout, text, &[Run { text: text.into(), style }], 1.0);
+            layout.pixel_size().0
+        };
+        let (lower, upper) = (width("lower", RunStyle::default()), width("LOWER", RunStyle::default()));
+        assert_eq!(width("lower", RunStyle { caps: true, ..Default::default() }), upper, "all capitals");
+        let small = width("lower", RunStyle { small_caps: true, ..Default::default() });
+        assert!(small > lower && small < upper, "small capitals: {lower} < {small} < {upper}");
     }
 
     #[test]

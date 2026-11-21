@@ -10,7 +10,7 @@ libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
 decks-core = { path = "../decks-core" }
 cairo-rs = { version = "0.22", features = ["png", "pdf"] }
-pango = { version = "0.22", features = ["v1_44"] }
+pango = { version = "0.22", features = ["v1_50"] }
 pangocairo = { version = "0.22" }
 pulldown-cmark = "0.13"
 image = "0.25"
