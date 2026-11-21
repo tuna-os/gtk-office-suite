@@ -1762,6 +1762,29 @@ mod tests {
         // Top-aligned, the line is as tall as the taller of text and label;
         // on a shared baseline, as tall as the larger ascent and descent.
         assert!(top[1] - top[0] <= centred[1] - centred[0] + 0.01, "a top-aligned line grew past a baseline-aligned one: {centred:?} {top:?}");
+        // The label's own top is the line's top, so its baseline sits
+        // below the text's by the difference in ascents; on a shared
+        // baseline it sits on the text's.
+        let marker_drop = |top: bool| {
+            let mut d = doc(2, "item");
+            d.paragraphs[0].style.list = crate::model::ListKind::Bullet;
+            d.paragraphs[0].style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+            d.paragraphs[0].style.list_label_font = Some("DejaVu Sans".into());
+            d.paragraphs[0].style.text_align_top = top;
+            let t = Typeset::new(d, LayoutOptions::default());
+            let items = &t.tree().pages[0].items;
+            let line = items.iter().find_map(|i| match i {
+                Item::Line { source: Source::Paragraph(0), line: 0, baseline_pt, .. } => Some(*baseline_pt),
+                _ => None,
+            });
+            let marker = items.iter().find_map(|i| match i {
+                Item::Marker { para: 0, baseline_pt, .. } => Some(*baseline_pt),
+                _ => None,
+            });
+            marker.unwrap() - line.unwrap()
+        };
+        assert!(marker_drop(false).abs() < 0.01, "a baseline-aligned label left the text's baseline: {}", marker_drop(false));
+        assert!(marker_drop(true) > 0.05, "a top-aligned taller label stayed on the text's baseline: {}", marker_drop(true));
     }
 
     /// A table of contents laid out: each page number ends at the right
