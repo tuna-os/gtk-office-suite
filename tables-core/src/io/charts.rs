@@ -261,12 +261,12 @@ const MIN_CHART_PX: f64 = 16.0;
 const MAX_CHART_PX: f64 = 20_000.0;
 pub(crate) const DEFAULT_CHART_SIZE_PX: (f64, f64) = (480.0, 280.0);
 
-fn valid_size(size_px: (f64, f64)) -> Option<(f64, f64)> {
+fn valid_size(size_px: (f64, f64), min_px: f64) -> Option<(f64, f64)> {
     let (w, h) = size_px;
     if w.is_finite()
         && h.is_finite()
-        && w >= MIN_CHART_PX
-        && h >= MIN_CHART_PX
+        && w >= min_px
+        && h >= min_px
         && w <= MAX_CHART_PX
         && h <= MAX_CHART_PX
     {
@@ -279,7 +279,9 @@ fn valid_size(size_px: (f64, f64)) -> Option<(f64, f64)> {
 /// Resolve one drawing anchor to a cell and a pixel size. `widths`/`heights`
 /// are the owning sheet's real geometry; missing entries read as this app's
 /// own defaults, which is also what the writer lays two-cell anchors out
-/// on.
+/// on. `min_px` is the smallest size taken as stated: a chart's floor
+/// ([`MIN_CHART_PX`]), or a pixel for a picture, where a 10 px icon is a
+/// real size, not a broken one.
 fn resolve_anchor(
     anchor_xml: &str,
     kind: &str,
@@ -287,6 +289,7 @@ fn resolve_anchor(
     heights: &[f64],
     location: &str,
     issues: &mut Vec<ChartReadIssue>,
+    min_px: f64,
 ) -> Option<Anchor> {
     use crate::sheet::{COL_WIDTH, ROW_HEIGHT};
     if kind == "absoluteAnchor" {
@@ -312,7 +315,7 @@ fn resolve_anchor(
     };
     if kind == "oneCellAnchor" {
         let size_px = match anchor_ext(anchor_xml) {
-            Some(ext) => match valid_size(ext) {
+            Some(ext) => match valid_size(ext, min_px) {
                 Some(size) => size,
                 None => {
                     issues.push(ChartReadIssue {
@@ -382,7 +385,7 @@ fn resolve_anchor(
     };
     let w: f64 = (col..to_col).map(width_of).sum::<f64>() + (to_col_off - from_col_off) / 9525.0;
     let h: f64 = (row..to_row).map(height_of).sum::<f64>() + (to_row_off - from_row_off) / 9525.0;
-    let size_px = match valid_size((w, h)) {
+    let size_px = match valid_size((w, h), min_px) {
         Some(size) => size,
         None => {
             issues.push(ChartReadIssue {
@@ -832,7 +835,7 @@ pub fn read_charts_detailed(
                 let Some(kind) = admitted_kind(&chart_xml) else {
                     continue;
                 };
-                let anchor = resolve_anchor(anchor_xml, anchor_kind, &widths, &heights, &location, &mut issues);
+                let anchor = resolve_anchor(anchor_xml, anchor_kind, &widths, &heights, &location, &mut issues, MIN_CHART_PX);
                 let Some(anchor) = anchor else {
                     continue;
                 };
@@ -940,9 +943,17 @@ pub fn read_pictures(path: &str, sheets: &[crate::sheet::SheetModel]) -> Vec<(St
                 if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
                     continue;
                 }
-                let Some(Anchor::Placed { cell, size_px }) = resolve_anchor(anchor_xml, kind, &widths, &heights, "", &mut ignored) else {
+                // Any size the anchor doesn't state usably (no end cell, one
+                // that ends before it starts, an unreadable or huge extent)
+                // came back at the chart default; a picture is left out
+                // rather than stretched to 480×280 and saved so.
+                let before = ignored.len();
+                let Some(Anchor::Placed { cell, size_px }) = resolve_anchor(anchor_xml, kind, &widths, &heights, "", &mut ignored, 1.0) else {
                     continue;
                 };
+                if ignored.len() > before {
+                    continue;
+                }
                 let offset_px = anchor_xml
                     .split("<from>")
                     .nth(1)
@@ -1028,7 +1039,11 @@ mod chart_tests {
         // From B2 + (10 px, 5 px) to B2 + (110 px, 45 px): 100 × 40 px.
         let shown = anchor("", (1, 95250, 1, 47625), (1, 1047750, 1, 428625));
         let hidden = anchor(r#" hidden="1""#, (3, 0, 3, 0), (4, 0, 5, 0));
-        let drawing = format!(r#"<xdr:wsDr xmlns:xdr="x" xmlns:a="a">{shown}{hidden}</xdr:wsDr>"#);
+        // A 10 px icon in D8 keeps its size (the chart floor is 16 px); one
+        // that ends before it starts is left out, not stretched to 480×280.
+        let icon = anchor("", (3, 0, 7, 0), (3, 95250, 7, 95250));
+        let backwards = anchor("", (5, 0, 9, 0), (4, 0, 8, 0));
+        let drawing = format!(r#"<xdr:wsDr xmlns:xdr="x" xmlns:a="a">{shown}{hidden}{icon}{backwards}</xdr:wsDr>"#);
         let png: &[u8] = b"\x89PNG\r\n\x1a\nnot really";
         let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
         let parts: Vec<(&str, Vec<u8>)> = vec![
@@ -1046,7 +1061,8 @@ mod chart_tests {
         }
         z.finish().unwrap();
         let pictures = read_pictures(path.to_str().unwrap(), &[]);
-        assert_eq!(pictures.len(), 1, "the hidden picture is left out: {pictures:?}");
+        assert_eq!(pictures.len(), 2, "the hidden and the backwards pictures are left out: {pictures:?}");
+        assert_eq!((pictures[1].1.anchor, pictures[1].1.width_px, pictures[1].1.height_px), ((7, 3), 10.0, 10.0), "a small icon keeps its size");
         let (sheet, p) = &pictures[0];
         assert_eq!(sheet, "Form");
         assert_eq!(p.anchor, (1, 1));

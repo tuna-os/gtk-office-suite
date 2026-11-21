@@ -260,10 +260,10 @@ fn inspect_package(
         record(report, MACROS, "xl/vbaProject.bin", "macros aren't kept");
     }
     if any("xl/media/") || any("xl/drawings/drawing") && !drawings_hold_only_charts(zip, names, budget)? {
-        // Deliberately broad: visible PNG, JPEG and GIF pictures are kept,
+        // Deliberately broad: visible PNG, JPEG, GIF and BMP pictures are kept,
         // but the scan doesn't open each drawing to tell those from shapes,
         // grouped or hidden pictures and other image formats, which aren't.
-        record(report, PICTURES, "xl/drawings", "shapes, and pictures other than plain PNG, JPEG or GIF images, aren't kept");
+        record(report, PICTURES, "xl/drawings", "shapes, and pictures other than plain PNG, JPEG, GIF or BMP images, aren't kept");
     }
     if any("xl/threadedComments/") {
         record(report, THREADED, "xl/threadedComments", "a thread's replies aren't kept; its first note is");
