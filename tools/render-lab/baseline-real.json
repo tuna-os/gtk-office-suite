@@ -37,12 +37,12 @@
   "decks/real-2024-11-20-presentation-pay-centre-impact-assess": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "decks/real-2024-2025-annual-report-on-delegated-authorities": {
     "A": "amber",
@@ -212,7 +212,7 @@
   "letters/real-opt-out-form-accessible-version": {
     "A": "green",
     "B": "amber",
-    "C": "green"
+    "C": "amber"
   },
   "letters/real-order-for-service-by-an-alternative-method-or-at": {
     "A": "green",
@@ -302,7 +302,7 @@
   "tables/real-2020-deep-sea-stock": {
     "A": "green",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
     "A": "amber",
@@ -316,7 +316,7 @@
   "tables/real-available-data-and-their-modes-of-access": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-avian-influenza-in-wild-birds-2026": {
     "A": "amber",
@@ -325,7 +325,7 @@
   "tables/real-bics-sectoral-consumption-estimates": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-competition-in-uk-electricity-markets-2025-data": {
     "A": "amber",
@@ -370,7 +370,7 @@
   "tables/real-insolvency-service-transactions-april-2026": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-july-2026-fiscal-risks-and-sustainability-charts": {
     "A": "amber",
@@ -399,7 +399,7 @@
   "tables/real-norfolk-public-review-annex-c-additional-postcod": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-otsi-annual-review-2025-2026-tables": {
     "A": "amber",
@@ -442,6 +442,6 @@
   "tables/real-ukhsa-government-procurement-card-gpc-transactio": {
     "A": "amber",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   }
 }

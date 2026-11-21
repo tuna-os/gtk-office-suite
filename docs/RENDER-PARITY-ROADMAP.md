@@ -623,12 +623,18 @@ journeys run in `edit_journeys.py`. Tier C now runs over the real corpus
 too: `render-parity.yml`'s nightly `vm-real` job opens every real document
 in the shipped Flatpak in the GNOME VM, in the window Tiers A and B use
 (1100x1700; it had been GNOME's default 960x680, which turned 12 real
-workbooks red in Tier C alone, #2319). Its first verdicts are committed:
-of the 85 documents that can still be fetched, 19 are green, 62 amber and 4
-red, and the 4 red ones are red in Tiers A and B too. Five Tables documents
-have no Tier C verdict: three sources now answer HTTP 410, and two were not
-captured. The exit still waits on those reds and ambers: Tier C on the real
-corpus is ratcheted, not yet green.*
+workbooks red in Tier C alone, #2319). Its first verdicts had 19 of the 85
+documents that can still be fetched green, 62 amber and 4 red.
+
+The run of 2026-11-21 on main (render-parity run 44892542989) has none red:
+22 green and 63 amber. The four red workbooks are amber now that hidden rows
+and columns, merged-cell borders and the wide-sheet window are drawn; two
+more workbooks and two decks turned green. One Letters form moved from green
+to amber on two lines the VM capture's OCR misread (its Tier A is green with
+none lost, and the page reads the same). Five Tables documents still have no
+Tier C verdict: three sources answer HTTP 410, and two were not captured.
+The exit still waits on the ambers: Tier C on the real corpus is ratcheted,
+not yet green.*
 
 ### Phase 4: Earn "usable"
 
