@@ -1526,9 +1526,6 @@ mod odf_tests {
         assert_eq!(s.col_widths.get(&0), Some(&144.0), "1.5in is 144px");
     }
 
-    /// ODF says "these forty columns are all like this" with a repeat
-    /// count, so a reader that treats each element as one column puts
-    /// every later width on the wrong index.
     /// A row style Calc marks optimal holds Calc's last fit, not a height
     /// the author set: the row is fitted again, as Calc fits it on open.
     /// One marked not optimal keeps its height.
@@ -1558,6 +1555,9 @@ mod odf_tests {
         assert_eq!(s.row_heights.get(&1), Some(&48.0), "the author's height stays");
     }
 
+    /// ODF says "these forty columns are all like this" with a repeat
+    /// count, so a reader that treats each element as one column puts
+    /// every later width on the wrong index.
     #[test]
     fn repeated_columns_and_rows_land_on_every_index_they_cover() {
         let dir = tempfile::tempdir().unwrap();
