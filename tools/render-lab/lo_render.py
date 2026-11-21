@@ -75,7 +75,7 @@ def csv_filter(src):
 
 def unscaled_copy(src, tmpdir):
     """A copy of workbook `src` that prints at 100%, or `src` itself when it
-    already does (or is not an xlsx package).
+    already does (or is not an xlsx or ods package).
 
     Tables draws a sheet's cells at their own size, as Excel and Calc show
     them, whatever the sheet's page setup says about printing: a print scale
@@ -92,14 +92,18 @@ def unscaled_copy(src, tmpdir):
         return src
     scaled = re.compile(r'(<(?:\w+:)?pageSetup\b[^>]*?)\s(?:scale|fitToWidth|fitToHeight)="[^"]*"')
     fit = re.compile(r'(<(?:\w+:)?pageSetUpPr\b[^>]*?)\sfitToPage="(?:1|true)"')
+    # ods: a page layout's `style:scale-to="80%"`, or fit to pages
+    # (`scale-to-pages`, `scale-to-X`/`-Y`), in styles.xml.
+    ods_scaled = re.compile(r'(<style:page-layout-properties\b[^>]*?)\sstyle:scale-to(?:-pages|-X|-Y)?="[^"]*"')
     changed, parts = False, []
     with zipfile.ZipFile(src) as z:
         for info in z.infolist():
             data = z.read(info.filename)
-            if info.filename.startswith("xl/worksheets/") and info.filename.endswith(".xml"):
+            xlsx_sheet = info.filename.startswith("xl/worksheets/") and info.filename.endswith(".xml")
+            if xlsx_sheet or info.filename == "styles.xml":
                 text = data.decode("utf-8", "replace")
                 new = text
-                for pat in (scaled, fit):
+                for pat in ((scaled, fit) if xlsx_sheet else (ods_scaled,)):
                     while True:
                         nxt = pat.sub(r"\1", new)
                         if nxt == new:
