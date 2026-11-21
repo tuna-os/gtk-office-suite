@@ -1053,6 +1053,22 @@ fn odf_styles_by_family(xml: &str, family: &str, prop_attr: &str) -> std::collec
     out
 }
 
+/// The row styles whose height is Calc's own fit
+/// (`style:use-optimal-row-height="true"`) rather than the author's.
+fn odf_optimal_row_styles(xml: &str) -> Vec<String> {
+    split_elements(xml, "style:style")
+        .into_iter()
+        .filter_map(|block| {
+            let head = block.split('>').next().unwrap_or("");
+            if xml_attr(head, "style:family") != Some("table-row") {
+                return None;
+            }
+            let body = block.split("</style:style>").next().unwrap_or("");
+            (xml_attr(body, "style:use-optimal-row-height") == Some("true")).then(|| xml_attr(head, "style:name").map(str::to_string)).flatten()
+        })
+        .collect()
+}
+
 /// Whether a `table:table-column` or `table:table-row` is hidden: ODF's
 /// `table:visibility` is `collapse` for a row or column hidden by hand and
 /// `filter` for one a filter hides (ODF 1.3 §19.749); both are drawn as
@@ -1234,7 +1250,16 @@ pub fn read_sheet_props_from_ods(
     };
 
     let col_styles = odf_styles_by_family(&xml, "table-column", "style:column-width");
-    let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+    // A row style marked optimal (`style:use-optimal-row-height="true"`)
+    // states the height Calc last fitted, not one the author set: Calc
+    // fits the row again on open, as an xlsx row without `customHeight` is
+    // fitted. Hampshire's postcode list stores 15.76 pt on every optimal
+    // row and Calc draws them at its own 13.9 pt; read as fixed, Tables'
+    // grid came out 1.28x LibreOffice's.
+    let mut row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+    for name in odf_optimal_row_styles(&xml) {
+        row_styles.remove(&name);
+    }
     // Data styles live in content.xml's automatic styles, and a named one
     // can be in styles.xml.
     let styles_xml = zip.optional_part_to_string("styles.xml", &mut budget);
@@ -1448,6 +1473,34 @@ mod odf_tests {
     /// ODF says "these forty columns are all like this" with a repeat
     /// count, so a reader that treats each element as one column puts
     /// every later width on the wrong index.
+    /// A row style Calc marks optimal holds Calc's last fit, not a height
+    /// the author set: the row is fitted again, as Calc fits it on open.
+    /// One marked not optimal keeps its height.
+    #[test]
+    fn an_optimal_rows_stored_height_is_not_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("o.ods");
+        write_ods_fixture(
+            &path,
+            "<office:automatic-styles>\
+             <style:style style:name=\"ro1\" style:family=\"table-row\">\
+             <style:table-row-properties style:row-height=\"0.5in\" style:use-optimal-row-height=\"true\"/></style:style>\
+             <style:style style:name=\"ro2\" style:family=\"table-row\">\
+             <style:table-row-properties style:row-height=\"0.5in\" style:use-optimal-row-height=\"false\"/></style:style>\
+             </office:automatic-styles>\
+             <office:body><office:spreadsheet>\
+             <table:table table:name=\"S\">\
+             <table:table-column/>\
+             <table:table-row table:style-name=\"ro1\"><table:table-cell office:value-type=\"string\"><text:p>fitted</text:p></table:table-cell></table:table-row>\
+             <table:table-row table:style-name=\"ro2\"><table:table-cell office:value-type=\"string\"><text:p>set</text:p></table:table-cell></table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let s = props.get("S").expect("sheet S");
+        assert_eq!(s.row_heights.get(&0), None, "Calc's fit is fitted again");
+        assert_eq!(s.row_heights.get(&1), Some(&48.0), "the author's height stays");
+    }
+
     #[test]
     fn repeated_columns_and_rows_land_on_every_index_they_cover() {
         let dir = tempfile::tempdir().unwrap();

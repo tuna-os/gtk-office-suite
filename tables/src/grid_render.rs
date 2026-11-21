@@ -283,6 +283,14 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     cr.restore().unwrap();
 }
 
+/// What a fitted row adds to its text's line height, in pixels. Calc fits
+/// an 11 pt row to 13.78 pt (18.4 px) and a 20 pt one to 24.44 pt
+/// (32.6 px), whatever the face (LibreOffice 24.2, Liberation Sans, Serif
+/// and Carlito alike): Pango's lines for those sizes are 16.9 and 30.6 px.
+/// It was 6, which made every row with a font size of its own 4 px taller
+/// than Calc's.
+const FIT_ROW_PAD: f64 = 2.0;
+
 /// Grow each row to fit cells that need more than the default height (a
 /// wrapped cell, or a font size of its own), unless the row already has a
 /// height of its own (anything other than the default), as spreadsheets
@@ -312,7 +320,7 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
             };
             let text = sheet.formats[r][c].format(sheet.cell(r, c));
             let layout = cell_layout(&cr, sheet, r, c, &text, width);
-            need = need.max(layout.pixel_size().1 as f64 + 6.0);
+            need = need.max(layout.pixel_size().1 as f64 + FIT_ROW_PAD);
         }
         sheet.row_heights[r] = need;
     }
