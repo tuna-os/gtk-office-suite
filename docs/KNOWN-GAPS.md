@@ -26,6 +26,10 @@ a release has confirmed it yet; the row goes once one has.
 | ODT frames, page-break spacing and one-sided margins | A frame's line too short; space above lost after a page break; a style giving one margin loses the other | Fixed on main (#2371, #2375, #2377) |
 | Numbered items from 10 on | A wider label ("10.") measured as "1.", so the text did not tab on past it | Open PR #2412 |
 | Small drift on long forms | Up to ~4 pt by mid-page on crime-supervisor-declaration-form, one paragraph wrapping a word differently | Not yet root-caused |
+| Repeated table header rows (`w:tblHeader`, `table:table-header-rows`) | A table that runs onto another page does not repeat its heading row there, so the continued rows start a header's height higher than Writer's and the page holds more (crime-supervisor-declaration-form page 4: its "Skills/ Procedure/ Knowledge" row). The rows are read, and kept whole, but not repeated | Not started |
+| List labels in their level's own face (`w:lvl/w:rPr/w:rFonts`) | A "●" in Noto Sans Symbols or an "o" in Courier New drawn in the item's face, and the line not as tall as the label's face makes it; a page of bullets runs about a pixel a line short of Writer's (dcms-business-appointment-rules) | Open PR #2417 |
+| Underlines on screen between pixel rows | A thin underline drawn as two pale rows instead of one in its colour; links read light blue (sma-positive-result-call-checklist) | Open PR #2416 |
+| ODT automatic styles that state their own spacing under a contextual parent | Their space below dropped as if contextual spacing still applied; list items packed together where Writer leaves 8pt between them (notes-on-the-completion-of-form-w1) | Open PR #2418 |
 
 ## Tables
 
@@ -40,7 +44,7 @@ a release has confirmed it yet; the row goes once one has.
 | ODS conditional number formats (`style:map` by sign) | Negatives as `-2` and zero as `0` where Calc shows `(2)` and `-` (hmt-annual-report core tables) | Fixed on main (#2390) |
 | Merged blocks bordered cell by cell; fills on half pixels | Inner borders drawn through merged text; grey seams between filled rows after a fractional-height row (ewco-claim-form) | Fixed on main (#2391) |
 | Rich text in a cell (xlsx runs) | Every run in the cell's one font: a bold title's small italic version line, bold labels in a notes box | Fixed on main for xlsx (#2392: read, drawn, saved); ODS `text:span` styles not read |
-| Hyperlinked cells | Drawn in the cell style's blue where Calc draws a cell's link navy (otsi-annual-review, record-of-non-lethal-actions) | Open PR to port #2393 to main: it merged into its stacked base after that branch had merged, so main never got it |
+| Hyperlinked cells | Drawn in the cell style's blue where Calc draws a cell's link navy (otsi-annual-review, record-of-non-lethal-actions) | Fixed on main (#2415, the port of #2393, which had merged into its stacked base after that branch had merged); a cell typed over after load stays navy until the file is reopened |
 
 Render-lab note: the Tables `scale` metric compared our grid with a
 printout shrunk by the file's print scale; open PR #2384 compares against
