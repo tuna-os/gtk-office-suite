@@ -375,7 +375,7 @@ mod tests {
     /// In the light styles Impress draws a marked first column as a body
     /// cell, banded with its row (LibreOffice 24.2).
     #[test]
-    fn the_light_styles_leave_the_first_column_and_dark_bands_plain() {
+    fn the_light_styles_leave_the_first_column_a_body_cell() {
         let light = |id: &str| TableData { first_col: true, style_id: Some(id.into()), accent: Some(Color(0, 0, 0)), ..table(true, true) };
         let l3 = light("{616DA210-FB5B-4158-B5E0-FEB733F419BA}");
         assert_eq!(l3.cell_paint(1, 0), l3.cell_paint(1, 1), "the first column bands with its row");
