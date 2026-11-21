@@ -31,8 +31,8 @@ a release has confirmed it yet; the row goes once one has.
 
 | Gap | How it shows | Tracked |
 |---|---|---|
-| Sheet pictures (logos) | Not drawn; rows under a form's logo look empty | Open PR #2380 |
-| Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Open PR #2380 (saved at their cell, offset and size; shapes still dropped) |
+| Sheet pictures (logos) | Not drawn; rows under a form's logo look empty | Fixed on main (#2380) |
+| Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Fixed on main (#2380: saved at their cell, offset and size; shapes still dropped) |
 | Formulas referring to another workbook | Shown as `#REF!` instead of the cached value | Fixed on main (#2381: loads the cached value; the link itself is not kept, as the package scan warns) |
 | Hidden rows/columns in ODS (`collapse`/`filter`) | Shown | Fixed on main (#2368) |
 | Sheet view zoom (`zoomScale`) | Opens at 100% where Excel opens at the file's zoom | Not started |
@@ -50,7 +50,7 @@ the cells at their own size.
 | Gap | How it shows | Tracked |
 |---|---|---|
 | Explicit table cell borders (`a:lnL`/`lnT`/`lnR`/`lnB`) | Not drawn; only the table style's rules show | Fixed on main (#2401: edges, no-fill and the cell's typeface); #2365 is superseded |
-| Chart titles | Not drawn | Open PR #2379 |
+| Chart titles | Not drawn | Fixed on main (#2379); open PR #2363 scales the title's and the chart's text size with a slide not 13.33 inches wide |
 | Theme-coloured, horizontal and percent-labelled charts | Bars in the accent colour, columns where the file has bars, labels without % | Open PR #2363 |
 | Paragraph line spacing (`a:lnSpc`, ODP `fo:line-height`) | Lines at default spacing | Open PR #2353 |
 | A deck opened with no session bus | Decks aborts (Mandelbrot watch) | Fixed on main (#2373) |
