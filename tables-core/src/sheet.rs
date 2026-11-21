@@ -1349,6 +1349,29 @@ pub struct RunFont {
     pub color: Option<crate::style::Rgb>,
 }
 
+/// Move a map keyed by (row, col) with its cells when rows (`rows`) or
+/// columns are inserted (`delta` > 0) or deleted (< 0) at `at`; deleted
+/// cells' entries go with them.
+fn shift_cell_keys<V>(map: &mut std::collections::HashMap<(usize, usize), V>, rows: bool, at: usize, delta: isize) {
+    if map.is_empty() {
+        return;
+    }
+    let old = std::mem::take(map);
+    for ((r, c), v) in old {
+        let k = if rows { r } else { c };
+        let moved = if k < at {
+            Some(k)
+        } else if delta < 0 && k < at + delta.unsigned_abs() {
+            None
+        } else {
+            k.checked_add_signed(delta)
+        };
+        if let Some(k) = moved {
+            map.insert(if rows { (k, c) } else { (r, k) }, v);
+        }
+    }
+}
+
 /// One piece of a rich-text cell's value.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextRun {
@@ -1414,6 +1437,8 @@ pub struct SheetModel {
     /// only while the cell still shows exactly these runs' text, so an edit
     /// falls back to the cell's own style.
     pub rich_text: std::collections::HashMap<(usize, usize), Vec<TextRun>>,
+    /// Hyperlinked cells and their targets, keyed by (row, col).
+    pub links: std::collections::HashMap<(usize, usize), String>,
     /// The explicit filter definition (TBL-003), if the sheet has one.
     /// `hidden_rows` below is derived from it; the definition is what
     /// persists (xlsx autoFilter), undoes and clears as one.
@@ -1495,6 +1520,7 @@ impl SheetModel {
             merges: Vec::new(),
             charts: Vec::new(),
             rich_text: std::collections::HashMap::new(),
+            links: std::collections::HashMap::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],
@@ -1519,23 +1545,8 @@ impl SheetModel {
     /// inserted (`delta` > 0) or deleted (< 0) at `at`; deleted cells'
     /// runs go with them.
     fn shift_rich_text(&mut self, rows: bool, at: usize, delta: isize) {
-        if self.rich_text.is_empty() {
-            return;
-        }
-        let old = std::mem::take(&mut self.rich_text);
-        for ((r, c), runs) in old {
-            let k = if rows { r } else { c };
-            let moved = if k < at {
-                Some(k)
-            } else if delta < 0 && k < at + delta.unsigned_abs() {
-                None
-            } else {
-                k.checked_add_signed(delta)
-            };
-            if let Some(k) = moved {
-                self.rich_text.insert(if rows { (k, c) } else { (r, k) }, runs);
-            }
-        }
+        shift_cell_keys(&mut self.rich_text, rows, at, delta);
+        shift_cell_keys(&mut self.links, rows, at, delta);
     }
 
     /// The cell's styled runs, if it has them and still shows their text.
@@ -2745,8 +2756,10 @@ mod sort_tests {
         s.insert_rows(0, 2);
         s.insert_cols(1, 1);
         assert!(s.rich_runs(3, 2, "Title\nv2").is_some(), "the runs move with the cell");
+        s.links.insert((5, 0), "https://example.org".into());
         s.delete_rows(3, 1);
         assert!(s.rich_text.is_empty(), "a deleted cell's runs go with it");
+        assert!(s.links.contains_key(&(4, 0)), "a link moves with its cell");
     }
 
     #[test]
