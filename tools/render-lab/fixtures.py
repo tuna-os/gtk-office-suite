@@ -2195,6 +2195,22 @@ def decks(img):
         r.font.color.rgb = RGBColor(*rgb)
     save(p, "text-styles", "Three lines: 14pt black, 32pt red, 54pt blue")
 
+    # Line spacing (#2353): Office's themes set text at 90%; a paragraph may
+    # set its own. Three wrapped paragraphs at 90%, 100% and 150%, side by
+    # side, so each column's lines sit at their own pitch.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    words = "Line spacing sets how far apart the lines of one paragraph sit, from tight to open."
+    for i, spacing in enumerate((0.9, 1.0, 1.5)):
+        tf = s.shapes.add_textbox(Inches(0.6 + i * 4.2), Inches(1.5), Inches(3.8), Inches(4.5)).text_frame
+        fixed_box(tf)
+        para = tf.paragraphs[0]
+        para.line_spacing = spacing
+        r = para.add_run()
+        r.text = words
+        r.font.size = Pt(24)
+    save(p, "line-spacing", "Three 24pt paragraphs wrapped over several lines at 90%, 100% and 150% line spacing")
+
     p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     for kind, x, color in ((MSO_SHAPE.RECTANGLE, 1, (220, 40, 40)), (MSO_SHAPE.OVAL, 5, (40, 160, 60)), (MSO_SHAPE.ROUNDED_RECTANGLE, 9, (40, 80, 220))):

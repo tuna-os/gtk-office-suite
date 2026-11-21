@@ -469,7 +469,7 @@ impl TextDefs {
             indent: d.indent.unwrap_or(0.0) * k,
             space_before: Spacing::Units(d.top.unwrap_or(0.0) * k),
             space_after: Spacing::Units(d.bottom.unwrap_or(0.0) * k),
-            line_spacing: d.line.filter(|l| *l != 1.0).map(Spacing::Lines),
+            line_spacing: d.line.map(Spacing::Lines),
             ..ParaStyle::default()
         };
         if depth > 0 {

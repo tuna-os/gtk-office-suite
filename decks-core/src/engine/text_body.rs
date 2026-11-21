@@ -127,7 +127,7 @@ pub struct ParaStyle {
     pub marker: MarkerStyle,
     /// Line spacing (`a:lnSpc`): `Lines` a fraction of single spacing
     /// (90% is 0.9), `Units` an exact line pitch in model units. None is
-    /// single spacing.
+    /// no statement (single spacing, or what the paragraph inherits).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line_spacing: Option<Spacing>,
 }

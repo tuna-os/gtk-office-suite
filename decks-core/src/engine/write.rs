@@ -194,13 +194,20 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, plac
         p.push_attribute(("algn", st.align.to_drawingml()));
     }
     writer.write_event(Event::Start(p))?;
-    // CT_TextParagraphProperties order: lnSpc, spcBef, spcAft.
-    let line = st.line_spacing.unwrap_or(Spacing::Lines(1.0));
-    let single = line == Spacing::Lines(1.0);
-    for (name, sp) in [("a:lnSpc", line), ("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
-        if name == "a:lnSpc" && single {
-            continue;
-        }
+    // CT_TextParagraphProperties order: lnSpc, spcBef, spcAft. A stated
+    // line spacing is written whatever it is, 100% included.
+    if let Some(line) = st.line_spacing {
+        let (el, val) = match line {
+            Spacing::Units(u) => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
+            Spacing::Lines(f) => ("a:spcPct", (f * 100_000.0).round() as i64),
+        };
+        writer.write_event(Event::Start(BytesStart::new("a:lnSpc")))?;
+        let mut e = BytesStart::new(el);
+        e.push_attribute(("val", val.to_string().as_str()));
+        writer.write_event(Event::Empty(e))?;
+        writer.write_event(Event::End(BytesEnd::new("a:lnSpc")))?;
+    }
+    for (name, sp) in [("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
         let (el, val) = match sp {
             Spacing::Units(u) if u != 0.0 => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
             Spacing::Lines(f) if f != 0.0 => ("a:spcPct", (f * 100_000.0).round() as i64),

@@ -428,8 +428,9 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
             margin_left: emu(props.mar_l.unwrap_or(0.0)),
             indent: emu(props.indent.unwrap_or(0.0)),
             space_before: spacing(props.spc_bef),
-            // 100% is single spacing, which is no statement.
-            line_spacing: props.ln_spc.map(|s| spacing(Some(s))).filter(|s| *s != Spacing::Lines(1.0)),
+            // Kept as stated, 100% included: a paragraph's 100% overrides
+            // a master's 90% and must say so when it is saved.
+            line_spacing: props.ln_spc.map(|s| spacing(Some(s))),
             space_after: spacing(props.spc_aft),
             marker: MarkerStyle {
                 font: props.bu_font.clone().flatten(),

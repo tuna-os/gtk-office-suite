@@ -134,9 +134,10 @@ fn place_inner(
             Some(decks_core::engine::Spacing::Lines(f)) => Some(f),
             _ => None,
         };
-        layout.set_line_spacing(match (fraction, fit) {
-            (Some(f), _) => (f * (1.0 - fit.map_or(0.0, |a| a.line_reduction))) as f32,
-            (None, _) => line_factor,
+        // lnSpcReduction is taken off the spacing (90% less 20% is 70%).
+        layout.set_line_spacing(match fraction {
+            Some(f) => (f - fit.map_or(0.0, |a| a.line_reduction)).max(0.1) as f32,
+            None => line_factor,
         });
         match st.align {
             ParaAlign::Left => layout.set_alignment(pango::Alignment::Left),

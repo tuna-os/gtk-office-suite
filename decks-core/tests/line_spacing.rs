@@ -61,10 +61,25 @@ fn a_proportional_line_spacing_survives_an_odp_save() {
     assert_eq!(line_spacing(&decks_core::odp::read(path.to_str().unwrap()).unwrap()), [Some(Spacing::Lines(0.9)); 2]);
 }
 
+/// A stated 100% is kept: it overrides a master's 90% (review on #2353).
 #[test]
-fn single_spacing_is_no_statement() {
+fn a_stated_single_spacing_is_kept() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("s.pptx");
     write_pptx(path.to_str().unwrap(), &deck(Spacing::Lines(1.0))).unwrap();
+    assert_eq!(line_spacing(&read_pptx(path.to_str().unwrap()).unwrap()), [Some(Spacing::Lines(1.0)); 2]);
+}
+
+#[test]
+fn no_stated_spacing_writes_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("n.pptx");
+    let mut d = deck(Spacing::Lines(1.0));
+    if let SlideObject::TextBox { body, .. } = &mut d.slides[0].objects[0] {
+        for p in &mut body.paras {
+            p.line_spacing = None;
+        }
+    }
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
     assert_eq!(line_spacing(&read_pptx(path.to_str().unwrap()).unwrap()), [None; 2]);
 }
