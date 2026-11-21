@@ -144,15 +144,23 @@ fn load_xlsx_ranges_into_engine(
     // writes (#1983). A cell with a formula loads as the formula, any other
     // as its value.
     let (vr0, vc0) = values.start().unwrap_or((0, 0));
+    // A formula over another workbook (`'[1]Sheet'!A1`) can't be
+    // recalculated without it: it loads as the value the file cached for
+    // it, as Excel and Calc show it until the link is updated, rather than
+    // as #REF!. The package scan reports the link as not carried.
+    let live = |f: &String| !f.is_empty() && !names_another_workbook(f);
     for (r, c, cell) in values.used_cells() {
         let (row, col) = (vr0 + r as u32, vc0 + c as u32);
-        if formulas.get_value((row, col)).is_some_and(|f| !f.is_empty()) {
+        if formulas.get_value((row, col)).is_some_and(live) {
             continue;
         }
         put_data(engine, row as usize, col as usize, cell).map_err(|e| format!("import {e}"))?;
     }
     let (fr0, fc0) = formulas.start().unwrap_or((0, 0));
     for (r, c, formula) in formulas.used_cells() {
+        if !live(formula) {
+            continue;
+        }
         let input = if formula.starts_with('=') {
             formula.to_string()
         } else {
@@ -163,6 +171,29 @@ fn load_xlsx_ranges_into_engine(
     }
     engine.evaluate();
     Ok((rows.max(1), cols.max(1)))
+}
+
+/// Whether a formula refers to another workbook: an external reference's
+/// index in brackets (`[1]Sheet1!A1`, `'[2]Q1:Q4'!B2`), outside any string
+/// and not after a name, where brackets index a table's column
+/// (`Sales[2024]`).
+fn names_another_workbook(formula: &str) -> bool {
+    let b = formula.as_bytes();
+    let mut in_string = false;
+    for i in 0..b.len() {
+        match b[i] {
+            b'"' => in_string = !in_string,
+            b'[' if !in_string => {
+                let after_name = i > 0 && (b[i - 1].is_ascii_alphanumeric() || matches!(b[i - 1], b'_' | b'.' | b']' | b'['));
+                let digits = b[i + 1..].iter().take_while(|c| c.is_ascii_digit()).count();
+                if !after_name && digits > 0 && b.get(i + 1 + digits) == Some(&b']') {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// `.xlsb` is a binary container, not the XML package the xlsx reader
@@ -937,6 +968,25 @@ mod tests {
         }
         zip.finish().unwrap();
         path
+    }
+
+    /// A formula over another workbook opens as the value the file cached
+    /// for it, not #REF!; a formula over this workbook still recalculates,
+    /// and a table's column named by a number isn't taken for a link.
+    #[test]
+    fn a_formula_over_another_workbook_keeps_its_cached_value() {
+        let styles = r#"<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cellXfs count="1"><xf/></cellXfs></styleSheet>"#;
+        let body = r#"<sheetData><row r="1"><c r="A1"><v>2</v></c><c r="B1"><f>SUM('[1]1:34'!E5)</f><v>1051</v></c><c r="C1"><f>[2]Sheet1!A1*2</f><v>7</v></c><c r="D1"><f>A1*3</f><v>0</v></c></row></sheetData>"#;
+        let path = protection_fixture(styles, &[("Sheet1", body)]);
+        let (engine, _) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!(engine.cell_at(0, 0, 1), "1051");
+        assert_eq!(engine.cell_at(0, 0, 2), "7");
+        assert_eq!(engine.cell_at(0, 0, 3), "6", "a formula over this workbook recalculates");
+        assert!(names_another_workbook("SUM('[1]1:34'!E4)"));
+        assert!(names_another_workbook("=[12]Data!B2+1"));
+        assert!(!names_another_workbook("SUM(Sales[2024])"));
+        assert!(!names_another_workbook("Sales[[#This Row],[Q1]]"));
+        assert!(!names_another_workbook(r#"CONCAT("[1]", A1)"#));
     }
 
     #[test]
