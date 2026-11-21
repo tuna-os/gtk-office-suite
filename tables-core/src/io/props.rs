@@ -47,6 +47,8 @@ pub struct SheetXlsxProps {
     /// Resolved cell styles, including protection, 0-based `(row, col, style)`.
     /// Cells whose resolved style equals the model defaults are absent.
     pub cell_styles: Vec<(usize, usize, super::XfStyle)>,
+    /// Cells whose shared string is rich text, 0-based `(row, col, runs)`.
+    pub rich_text: Vec<(usize, usize, Vec<crate::sheet::TextRun>)>,
     /// Cell notes, 0-based `(row, col, text)`: xlsx's `comments` part,
     /// ODF's `office:annotation`.
     pub notes: Vec<(usize, usize, String)>,
@@ -477,6 +479,9 @@ pub fn read_sheet_props_from_xlsx(
     let theme_xml = zip.optional_part_to_string("xl/theme/theme1.xml", &mut budget);
     let xf_styles = super::xlsx_styles::parse_cell_styles_with_theme(&styles_xml, &theme_xml);
     let default_font = super::xlsx_styles::default_font(&styles_xml);
+    // After the styles: a run's theme colours resolve against the palette
+    // they set.
+    let rich_strings = super::xlsx_styles::rich_shared_strings(&zip.optional_part_to_string("xl/sharedStrings.xml", &mut budget));
 
     for name in names {
         let Some(part) = parts.get(name) else { continue };
@@ -492,6 +497,15 @@ pub fn read_sheet_props_from_xlsx(
                 .filter(|(_, _, x)| *x != super::XfStyle::default())
                 .collect(),
             default_font: default_font.clone(),
+            rich_text: if rich_strings.iter().any(Option::is_some) {
+                super::xlsx_styles::shared_string_cells(&xml)
+                    .into_iter()
+                    .filter(|&(r, c, _)| r < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS)
+                    .filter_map(|(r, c, i)| Some((r, c, rich_strings.get(i)?.clone()?)))
+                    .collect()
+            } else {
+                Vec::new()
+            },
             ..SheetXlsxProps::default()
         };
 

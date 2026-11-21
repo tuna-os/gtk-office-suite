@@ -578,6 +578,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                     sheet.cell_protections[*r][*c] = x.protection.clone();
                 }
             }
+            for (r, c, runs) in &props.rich_text {
+                if *r < sheet.rows && *c < sheet.cols {
+                    sheet.rich_text.insert((*r, *c), runs.clone());
+                }
+            }
             for (r, c, note) in &props.notes {
                 if *r < sheet.rows && *c < sheet.cols {
                     sheet.notes[*r][*c] = Some(note.clone());
