@@ -16,7 +16,7 @@ a release has confirmed it yet; the row goes once one has.
 
 | Gap | How it shows | Tracked |
 |---|---|---|
-| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Open PR #2409 (cell lists resolve their declared indent; #2410 keeps them on save) |
+| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Fixed on main (#2409: cell lists resolve their declared indent); open PR #2410 keeps them on save |
 | Word bullet glyphs other than the default dot (`-`, `o`, Symbol/Wingdings) | Every bullet level draws `•` | Fixed on main (#2374) |
 | Legacy Word form checkboxes (`FORMCHECKBOX`) | No box drawn | Fixed on main (#2372) |
 | A ruled table's top rule takes no height | Text below ruled tables drifts up by the rule width; a full page can gain a line Writer pushes to the next page (annex-a page 5) | Fixed on main (#2382) |
@@ -60,8 +60,8 @@ the cells at their own size.
 | All caps / small caps (`cap`) | Text drawn as typed | Fixed on main (#2378) |
 | Shrink-to-fit (`normAutofit`) and trailing line breaks | A break that ends a paragraph took no line, so centred titles ending in `<a:br/>` sat half a line low; the fit scaled the font alone where Impress closes the line spacing to 90%/80% first | Fixed on main (#2388: Impress's own search; whole-point rounding of shrunk sizes not repeated) |
 | Table style headers and first columns | Header rows drawn bold in every style, and a marked first column painted as the header, where Impress bolds only Light Style 1's and paints the first column as the header only in the medium styles | Fixed on main (#2387) |
-| Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Open PR #2405 |
-| Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Open PR #2407 |
+| Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Fixed on main (#2405) |
+| Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Fixed on main (#2407) |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps
