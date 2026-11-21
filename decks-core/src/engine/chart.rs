@@ -805,7 +805,7 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
             .filter(|c| c.local == "catAx")
             .any(|ax| ax.child("scaling").and_then(|s| s.child("orientation")).and_then(|o| o.attr("val")) == Some("maxMin"));
     // A percent format on the labels, or on the values the labels show.
-    let pct = |code: Option<&str>| code.is_some_and(|c| c.contains('%'));
+    let pct = |code: Option<&str>| code.is_some_and(scales_by_percent);
     let label_fmt = |d: Option<&El>| pct(d.and_then(|d| d.child("numFmt")).and_then(|f| f.attr("formatCode")));
     let value_fmt = ser.child("val").and_then(|v| v.find("formatCode")).map(|f| f.deep_text());
     let percent = labels && (label_fmt(group.child("dLbls")) || sers.iter().any(|s| label_fmt(s.child("dLbls"))) || pct(value_fmt.as_deref()));
@@ -1199,9 +1199,38 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
     Some(c)
 }
 
+/// Whether an Excel number format multiplies by 100: an unquoted, unescaped
+/// `%`. `0"%"` and `0\%` print a literal percent sign beside the stored value,
+/// so 72 stays "72%" rather than "7200%".
+fn scales_by_percent(code: &str) -> bool {
+    let mut quoted = false;
+    let mut chars = code.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => quoted = !quoted,
+            '\\' if !quoted => {
+                chars.next();
+            }
+            '%' if !quoted => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_an_unquoted_percent_scales_the_labels() {
+        assert!(scales_by_percent("0%"));
+        assert!(scales_by_percent("0.0%"));
+        assert!(!scales_by_percent("0\"%\""), "a quoted % is a literal");
+        assert!(!scales_by_percent("0\\%"), "an escaped % is a literal");
+        assert!(!scales_by_percent("#,##0"));
+        assert!(scales_by_percent("\"of \"0%"), "a % after a closed quote scales");
+    }
 
     const KINDS: [ChartKind; 5] = [ChartKind::Bar, ChartKind::Line, ChartKind::Pie, ChartKind::Scatter, ChartKind::Area];
 
