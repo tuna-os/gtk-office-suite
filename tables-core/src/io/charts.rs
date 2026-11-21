@@ -267,12 +267,12 @@ const MIN_CHART_PX: f64 = 16.0;
 const MAX_CHART_PX: f64 = 20_000.0;
 pub(crate) const DEFAULT_CHART_SIZE_PX: (f64, f64) = (480.0, 280.0);
 
-fn valid_size(size_px: (f64, f64)) -> Option<(f64, f64)> {
+fn valid_size(size_px: (f64, f64), min_px: f64) -> Option<(f64, f64)> {
     let (w, h) = size_px;
     if w.is_finite()
         && h.is_finite()
-        && w >= MIN_CHART_PX
-        && h >= MIN_CHART_PX
+        && w >= min_px
+        && h >= min_px
         && w <= MAX_CHART_PX
         && h <= MAX_CHART_PX
     {
@@ -285,7 +285,9 @@ fn valid_size(size_px: (f64, f64)) -> Option<(f64, f64)> {
 /// Resolve one drawing anchor to a cell and a pixel size. `widths`/`heights`
 /// are the owning sheet's real geometry; missing entries read as this app's
 /// own defaults, which is also what the writer lays two-cell anchors out
-/// on.
+/// on. `min_px` is the smallest size taken as stated: a chart's floor
+/// ([`MIN_CHART_PX`]), or a pixel for a picture, where a 10 px icon is a
+/// real size, not a broken one.
 fn resolve_anchor(
     anchor_xml: &str,
     kind: &str,
@@ -293,6 +295,7 @@ fn resolve_anchor(
     heights: &[f64],
     location: &str,
     issues: &mut Vec<ChartReadIssue>,
+    min_px: f64,
 ) -> Option<Anchor> {
     use crate::sheet::{COL_WIDTH, ROW_HEIGHT};
     if kind == "absoluteAnchor" {
@@ -318,7 +321,7 @@ fn resolve_anchor(
     };
     if kind == "oneCellAnchor" {
         let size_px = match anchor_ext(anchor_xml) {
-            Some(ext) => match valid_size(ext) {
+            Some(ext) => match valid_size(ext, min_px) {
                 Some(size) => size,
                 None => {
                     issues.push(ChartReadIssue {
@@ -388,7 +391,7 @@ fn resolve_anchor(
     };
     let w: f64 = (col..to_col).map(width_of).sum::<f64>() + (to_col_off - from_col_off) / 9525.0;
     let h: f64 = (row..to_row).map(height_of).sum::<f64>() + (to_row_off - from_row_off) / 9525.0;
-    let size_px = match valid_size((w, h)) {
+    let size_px = match valid_size((w, h), min_px) {
         Some(size) => size,
         None => {
             issues.push(ChartReadIssue {
@@ -838,7 +841,7 @@ pub fn read_charts_detailed(
                 let Some(kind) = admitted_kind(&chart_xml) else {
                     continue;
                 };
-                let anchor = resolve_anchor(anchor_xml, anchor_kind, &widths, &heights, &location, &mut issues);
+                let anchor = resolve_anchor(anchor_xml, anchor_kind, &widths, &heights, &location, &mut issues, MIN_CHART_PX);
                 let Some(anchor) = anchor else {
                     continue;
                 };
@@ -878,6 +881,122 @@ pub fn read_charts_detailed(
     (out, issues)
 }
 
+/// The largest picture read back: past it the picture is left out rather
+/// than held in memory for a sheet.
+const MAX_PICTURE_BYTES: usize = 32 << 20;
+
+/// Read the pictures each sheet's drawing anchors (`xdr:pic`), resolved
+/// through the same workbook→worksheet→drawing chain as charts and placed
+/// on the owning sheet's real geometry. Best-effort: a picture with no
+/// cell anchor, a hidden one, one inside a group, or one whose image part
+/// is missing or not a raster format is left out (the package scan
+/// already reports every picture as not carried on save).
+pub fn read_pictures(path: &str, sheets: &[crate::sheet::SheetModel]) -> Vec<(String, crate::sheet::SheetPicture)> {
+    use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
+    let mut out = Vec::new();
+    let Ok(f) = std::fs::File::open(path) else {
+        return out;
+    };
+    let Ok(mut zip) = zip::ZipArchive::new(f) else {
+        return out;
+    };
+    let mut budget = ZipBudget::default();
+    if budget.check_entry_count(zip.len()).is_err() {
+        return out;
+    }
+    let mut ignored = Vec::new();
+    for (sheet_name, sheet_part) in resolve_sheet_parts(&mut zip, &mut budget) {
+        let Some(drawing_part) = drawing_part_for_sheet(&mut zip, &sheet_part, &mut budget) else {
+            continue;
+        };
+        let Some(drawing_xml) = read_part(&mut zip, &drawing_part, &mut budget) else {
+            continue;
+        };
+        if !drawing_xml.contains("pic>") && !drawing_xml.contains("pic ") {
+            continue;
+        }
+        let drawing_xml = unprefix(&drawing_xml);
+        let dir = part_dir(&drawing_part).to_string();
+        let base = drawing_part.rsplit('/').next().unwrap_or(&drawing_part).to_string();
+        let rels = read_part(&mut zip, &format!("{dir}/_rels/{base}.rels"), &mut budget)
+            .map(|xml| rel_targets(&xml, &dir))
+            .unwrap_or_default();
+        let (widths, heights) = sheet_geometry(sheets, &sheet_name);
+        for kind in ["oneCellAnchor", "twoCellAnchor"] {
+            for anchor_xml in drawing_xml.split(&format!("<{kind}")).skip(1) {
+                let anchor_xml = anchor_xml.split(&format!("</{kind}>")).next().unwrap_or(anchor_xml);
+                if anchor_xml.contains("<grpSp") {
+                    continue;
+                }
+                let Some(pic) = anchor_xml.split("<pic>").nth(1).or_else(|| anchor_xml.split("<pic ").nth(1)) else {
+                    continue;
+                };
+                let hidden = pic
+                    .split("<cNvPr")
+                    .nth(1)
+                    .and_then(|t| attr(t.split('>').next().unwrap_or(""), "hidden"))
+                    .is_some_and(|v| v == "1" || v == "true");
+                if hidden {
+                    continue;
+                }
+                let Some(rid) = pic.split("<blip ").nth(1).and_then(|t| attr(t.split('>').next().unwrap_or(""), "r:embed")) else {
+                    continue;
+                };
+                let Some(target) = rels.get(&rid) else {
+                    continue;
+                };
+                let ext = target.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+                if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "bmp") {
+                    continue;
+                }
+                // Any size the anchor doesn't state usably (no end cell, one
+                // that ends before it starts, an unreadable or huge extent)
+                // came back at the chart default; a picture is left out
+                // rather than stretched to 480×280 and saved so.
+                let before = ignored.len();
+                let Some(Anchor::Placed { cell, size_px }) = resolve_anchor(anchor_xml, kind, &widths, &heights, "", &mut ignored, 1.0) else {
+                    continue;
+                };
+                if ignored.len() > before {
+                    continue;
+                }
+                let offset_px = anchor_xml
+                    .split("<from>")
+                    .nth(1)
+                    .and_then(|f| anchor_cell(f.split("</from>").next().unwrap_or(f)))
+                    .map(|(_, _, co, ro)| (co / 9525.0, ro / 9525.0))
+                    .unwrap_or((0.0, 0.0));
+                let Ok(bytes) = zip.part_to_bytes(target, &mut budget) else {
+                    continue;
+                };
+                if bytes.is_empty() || bytes.len() > MAX_PICTURE_BYTES {
+                    continue;
+                }
+                out.push((
+                    sheet_name.clone(),
+                    crate::sheet::SheetPicture { anchor: cell, offset_px, width_px: size_px.0, height_px: size_px.1, data: bytes.into() },
+                ));
+            }
+        }
+    }
+    out
+}
+
+/// A sheet's column widths and row heights in pixels, a hidden line taking
+/// none, as a drawing's two-cell anchors are laid out over them.
+fn sheet_geometry(sheets: &[crate::sheet::SheetModel], name: &str) -> (Vec<f64>, Vec<f64>) {
+    sheets
+        .iter()
+        .find(|s| s.name == name)
+        .map(|s| {
+            (
+                (0..s.cols.max(s.col_widths.len())).map(|c| if s.is_col_hidden(c) { 0.0 } else { s.col_width(c) }).collect(),
+                (0..s.rows.max(s.row_heights.len())).map(|r| if s.is_row_hidden(r) { 0.0 } else { s.row_height(r) }).collect(),
+            )
+        })
+        .unwrap_or_default()
+}
+
 /// Read embedded charts back from an xlsx (ours or a Calc rewrite).
 /// Best-effort: unknown chart kinds and foreign anchoring are skipped.
 ///
@@ -907,6 +1026,55 @@ mod chart_tests {
             z.write_all(data.as_bytes()).unwrap();
         }
         z.finish().unwrap();
+    }
+
+    /// A sheet's picture comes back on its sheet with its cell, offset and
+    /// size and its image's bytes; a hidden one, and an anchor holding a
+    /// chart rather than a picture, are left out.
+    #[test]
+    fn a_sheets_picture_reads_back_placed_and_sized() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pic.xlsx");
+        let anchor = |hidden: &str, from: (u32, u32, u32, u32), to: (u32, u32, u32, u32)| {
+            format!(
+                r#"<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>{}</xdr:col><xdr:colOff>{}</xdr:colOff><xdr:row>{}</xdr:row><xdr:rowOff>{}</xdr:rowOff></xdr:from><xdr:to><xdr:col>{}</xdr:col><xdr:colOff>{}</xdr:colOff><xdr:row>{}</xdr:row><xdr:rowOff>{}</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"{hidden}/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="r" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr/></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>"#,
+                from.0, from.1, from.2, from.3, to.0, to.1, to.2, to.3
+            )
+        };
+        // From B2 + (10 px, 5 px) to B2 + (110 px, 45 px): 100 × 40 px.
+        let shown = anchor("", (1, 95250, 1, 47625), (1, 1047750, 1, 428625));
+        let hidden = anchor(r#" hidden="1""#, (3, 0, 3, 0), (4, 0, 5, 0));
+        // A 10 px icon in D8 keeps its size (the chart floor is 16 px); one
+        // that ends before it starts is left out, not stretched to 480×280.
+        let icon = anchor("", (3, 0, 7, 0), (3, 95250, 7, 95250));
+        let backwards = anchor("", (5, 0, 9, 0), (4, 0, 8, 0));
+        let drawing = format!(r#"<xdr:wsDr xmlns:xdr="x" xmlns:a="a">{shown}{hidden}{icon}{backwards}</xdr:wsDr>"#);
+        let png: &[u8] = b"\x89PNG\r\n\x1a\nnot really";
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let parts: Vec<(&str, Vec<u8>)> = vec![
+            ("xl/workbook.xml", workbook_xml(&[("Form", "rId1")]).into_bytes()),
+            ("xl/_rels/workbook.xml.rels", workbook_rels(&[("rId1", "worksheets/sheet1.xml")]).into_bytes()),
+            ("xl/worksheets/sheet1.xml", sheet_xml("rId1").into_bytes()),
+            ("xl/worksheets/_rels/sheet1.xml.rels", workbook_rels(&[("rId1", "../drawings/drawing1.xml")]).into_bytes()),
+            ("xl/drawings/drawing1.xml", drawing.into_bytes()),
+            ("xl/drawings/_rels/drawing1.xml.rels", workbook_rels(&[("rId1", "../media/image1.png")]).into_bytes()),
+            ("xl/media/image1.png", png.to_vec()),
+        ];
+        for (name, data) in parts {
+            z.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            z.write_all(&data).unwrap();
+        }
+        z.finish().unwrap();
+        let pictures = read_pictures(path.to_str().unwrap(), &[]);
+        assert_eq!(pictures.len(), 2, "the hidden and the backwards pictures are left out: {pictures:?}");
+        assert_eq!((pictures[1].1.anchor, pictures[1].1.width_px, pictures[1].1.height_px), ((7, 3), 10.0, 10.0), "a small icon keeps its size");
+        let (sheet, p) = &pictures[0];
+        assert_eq!(sheet, "Form");
+        assert_eq!(p.anchor, (1, 1));
+        assert_eq!(p.offset_px, (10.0, 5.0));
+        assert_eq!((p.width_px, p.height_px), (100.0, 40.0));
+        assert_eq!(&*p.data, png);
     }
 
     fn workbook_xml(sheets: &[(&str, &str)]) -> String {
