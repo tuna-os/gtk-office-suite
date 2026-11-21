@@ -1305,6 +1305,13 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                             // An empty paragraph is a line of the cell:
                             // a form's answer box is a cell of them.
                             let mut para = map_paragraph(&doc, &cp, table.style_id(), raw_cell);
+                            // A list in a cell resolves its indent as one in
+                            // the body does: its own `w:ind w:left` over its
+                            // level's, with the level's hanging indent. It
+                            // kept the raw left, and the layout added the
+                            // list's indent on top: the outside-appointments
+                            // decision's numbers stood 24 px right of Word's.
+                            list_indent_from_declared(&doc, &cp, &mut para.style);
                             drop_cell_page_breaks(&mut para, &cp);
                             keep(para);
                         }

@@ -423,6 +423,35 @@ pub(super) fn first_color(node: &Node, theme: &Theme, placeholder: Option<Color>
         .and_then(|c| color_of(c, theme, placeholder))
 }
 
+/// `xml` (a chart part) with every theme colour (`a:schemeClr`, with its
+/// modifiers) replaced by the RGB it resolves to on the slide that shows
+/// it: a chart's colours follow that slide's theme and colour map, and the
+/// chart reader knows no theme.
+pub(crate) fn inline_scheme_colors(xml: &str, theme: &Theme) -> String {
+    const CLOSE: &str = "</a:schemeClr>";
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(at) = rest.find("<a:schemeClr") {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        let Some(tag_end) = tail.find('>') else { break };
+        let end = if tail[..tag_end].ends_with('/') {
+            tag_end + 1
+        } else {
+            tail.find(CLOSE).map_or(tag_end + 1, |e| e + CLOSE.len())
+        };
+        let element = &tail[..end];
+        let root = parse_tree(&format!(r#"<x xmlns:a="a">{element}</x>"#));
+        match root.find("x").and_then(|x| first_color(x, theme, None)) {
+            Some(c) => out.push_str(&format!(r#"<a:srgbClr val="{:02X}{:02X}{:02X}"/>"#, c.0, c.1, c.2)),
+            None => out.push_str(element),
+        }
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A resolved fill.
 #[derive(Clone)]
 enum Fill {
@@ -763,6 +792,23 @@ fn runs_of(tx_body: &Node, links: &std::collections::HashMap<String, String>, th
     runs
 }
 
+/// The weight each table style in `ppt/tableStyles.xml` gives its header
+/// row and first column (`a:firstRow`/`a:firstCol` `a:tcTxStyle b="on"`),
+/// by style id (upper-cased, braces kept).
+pub(crate) fn table_style_bold(xml: &str) -> std::collections::HashMap<String, (bool, bool)> {
+    let root = parse_tree(xml);
+    let mut styles = Vec::new();
+    root.find_all("a:tblStyle", &mut styles);
+    styles
+        .into_iter()
+        .filter_map(|st| {
+            let id = st.attr("styleId")?.trim().to_ascii_uppercase();
+            let bold = |part: &str| st.child(part).and_then(|p| p.child("a:tcTxStyle")).and_then(|t| t.attr("b")) == Some("on");
+            Some((id, (bold("a:firstRow"), bold("a:firstCol"))))
+        })
+        .collect()
+}
+
 /// A cell edge (`a:lnL` and the like): a line in its colour and width
 /// (EMU, default 12700, 1 pt), or an explicit no-line. An edge stating
 /// neither is the style's, `None`.
@@ -858,6 +904,7 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                     accent: theme.slot(style.map_or("accent1", |(_, slot)| slot)),
                     cell_margins: None,
                     style_id: style_id.filter(|_| style.is_some()),
+                    file_bold: None,
                 },
             })
         })
@@ -1007,6 +1054,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_charts_theme_colours_become_the_rgb_they_resolve_to() {
+        let theme = Theme::default();
+        let xml = r#"<c:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></c:spPr><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill>"#;
+        let out = inline_scheme_colors(xml, &theme);
+        assert!(!out.contains("schemeClr"), "{out}");
+        let accent = first_color(&parse_tree(r#"<x xmlns:a="a"><a:schemeClr val="accent1"/></x>"#).children[0], &theme, None).unwrap();
+        assert!(out.contains(&format!("{:02X}{:02X}{:02X}", accent.0, accent.1, accent.2)), "{out}");
+        assert_eq!(out.matches("<a:srgbClr").count(), 2, "the modified one too: {out}");
+        assert_eq!(inline_scheme_colors("<a:srgbClr val=\"123456\"/>", &theme), "<a:srgbClr val=\"123456\"/>");
+    }
+
+    #[test]
     fn a_placeholder_takes_its_layouts_paint_only_when_it_states_none() {
         let theme = Theme::default();
         let sp = |sppr: &str| {
@@ -1119,6 +1178,17 @@ mod tests {
         assert_eq!(cell.edges, [Some(line), Some(line), None, Some(CellEdge { color: None, width_pt: 0.5 })]);
         assert!(cell.no_fill);
         assert_eq!(t[0].table.cell_paint(0, 0).fill, None, "the band doesn't paint a cell that states no fill");
+    }
+
+    #[test]
+    fn a_packages_table_styles_say_which_parts_are_bold() {
+        let xml = r#"<a:tblStyleLst xmlns:a="a" def="{X}"><a:tblStyle styleId="{5c22544a-7ee6-4342-b048-85bdc9fd1c3a}" styleName="Medium Style 2 - Accent 1">
+          <a:firstCol><a:tcTxStyle b="on"/></a:firstCol><a:firstRow><a:tcTxStyle b="on"><a:schemeClr val="lt1"/></a:tcTxStyle></a:firstRow></a:tblStyle>
+          <a:tblStyle styleId="{OTHER}"><a:firstRow><a:tcTxStyle b="off"/></a:firstRow></a:tblStyle></a:tblStyleLst>"#;
+        let got = table_style_bold(xml);
+        assert_eq!(got.get("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"), Some(&(true, true)));
+        assert_eq!(got.get("{OTHER}"), Some(&(false, false)));
+        assert!(table_style_bold("").is_empty());
     }
 
     #[test]
