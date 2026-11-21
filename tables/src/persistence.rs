@@ -21,11 +21,16 @@ use tables_core::sheet::SheetModel;
 use crate::window::AppState;
 
 /// Finish an opened workbook for display: rows are auto-fitted to wrapped
-/// or resized text, as spreadsheets do on open. Charts and conditional
+/// or resized text, as spreadsheets do on open, and a delimited text
+/// file's columns to their contents, as Calc's CSV import does. Charts and conditional
 /// formats used to be attached here; `load_workbook` reads them itself now,
 /// so every opener gets them, not only the window.
-pub(crate) fn attach_xlsx_sidecars(_path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
+pub(crate) fn attach_xlsx_sidecars(path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
+    let text = tables_core::io::is_delimited_text(path);
     for sheet in sheets {
+        if text {
+            crate::grid_render::fit_columns_to_content(&mut sheet.borrow_mut());
+        }
         crate::grid_render::fit_rows_to_content(&mut sheet.borrow_mut());
     }
 }

@@ -318,6 +318,33 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     }
 }
 
+/// Size each column that holds text to its widest cell, as Calc's CSV
+/// import does: a delimited text file carries no widths, and at the
+/// default width most of a statistics table's text is cut off. Only the
+/// first rows are measured so a large file still opens quickly; empty
+/// columns keep the default width.
+pub fn fit_columns_to_content(sheet: &mut SheetModel) {
+    const MEASURED_ROWS: usize = 2000;
+    let Ok(surface) = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 1, 1) else { return };
+    let Ok(cr) = Context::new(&surface) else { return };
+    suite_common::use_ui_font_rendering(&cr);
+    let layout = pangocairo::functions::create_layout(&cr);
+    for c in 0..sheet.cols {
+        let mut widest: Option<f64> = None;
+        for r in 0..sheet.rows.min(MEASURED_ROWS) {
+            if sheet.cell(r, c).is_empty() {
+                continue;
+            }
+            layout.set_text(&sheet.formats[r][c].format(sheet.cell(r, c)));
+            let w = layout.pixel_size().0 as f64 + 12.0;
+            widest = Some(widest.map_or(w, |m: f64| m.max(w)));
+        }
+        if let Some(w) = widest {
+            sheet.set_col_width(c, w);
+        }
+    }
+}
+
 /// Scroll so the selection's moving end (the active cell, or the far
 /// corner a Shift+arrow is extending) is on screen, frozen panes
 /// included, then tell the accessibility tree where the cells now are.

@@ -223,24 +223,96 @@ pub fn load_file_into_engine(
                 .map_err(|e| format!("Cannot read formulas: {}", e))?;
             load_xlsx_ranges_into_engine(&range, &super::odf_formula::a1_formulas(&formulas), engine)
         }
-        "csv" | "tsv" => {
-            let content =
-                std::fs::read_to_string(path).map_err(|e| format!("Cannot read file: {}", e))?;
-            let delim = if ext == "tsv" { '\t' } else { ',' };
-            let records = parse_delimited(&content, delim);
-            let mut max_cols = 0usize;
-            for (r, cols) in records.iter().enumerate() {
-                max_cols = max_cols.max(cols.len());
-                for (c, val) in cols.iter().enumerate() {
-                    engine.put_cell_text(r, c, val)
-                        .map_err(|e| format!("import {e}"))?;
-                }
-            }
-            engine.evaluate();
-            Ok((records.len().max(1), max_cols.max(1)))
-        }
+        // The name says which delimiter; only a file misnamed as a workbook
+        // has its delimiter guessed (load_text_workbook).
+        "csv" | "tsv" => load_delimited_into_engine(path, Some(if ext == "tsv" { '\t' } else { ',' }), engine),
         _ => Err(format!("Unsupported format: .{}", ext)),
     }
+}
+
+/// Load a delimited text file into the engine: comma-separated unless
+/// `delim` says otherwise or, with none given, the first line is plainly
+/// tab- or semicolon-separated. Text that is not UTF-8 is read as Latin-1,
+/// as the GOV.UK statistics CSVs are (ISO-8859-1).
+fn load_delimited_into_engine(
+    path: &str,
+    delim: Option<char>,
+    engine: &mut TablesEngine,
+) -> Result<(usize, usize), String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Cannot read file: {}", e))?;
+    let content = match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(e) => e.into_bytes().iter().map(|&b| b as char).collect(),
+    };
+    let delim = delim.unwrap_or_else(|| guess_delimiter(&content));
+    let records = parse_delimited(&content, delim);
+    let mut max_cols = 0usize;
+    for (r, cols) in records.iter().enumerate() {
+        max_cols = max_cols.max(cols.len());
+        for (c, val) in cols.iter().enumerate() {
+            engine
+                .put_cell_text(r, c, val)
+                .map_err(|e| format!("import {e}"))?;
+        }
+    }
+    engine.evaluate();
+    Ok((records.len().max(1), max_cols.max(1)))
+}
+
+/// The delimiter a text table's first record uses most, outside quoted
+/// fields: comma, tab or semicolon, comma when none. A header such as
+/// `"Tags (a; b; c)",Count` is comma-separated.
+fn guess_delimiter(content: &str) -> char {
+    let mut counts = [0usize; 3];
+    let mut quoted = false;
+    for ch in content.chars() {
+        match ch {
+            '"' => quoted = !quoted,
+            '\n' | '\r' if !quoted => break,
+            ',' if !quoted => counts[0] += 1,
+            '\t' if !quoted => counts[1] += 1,
+            ';' if !quoted => counts[2] += 1,
+            _ => {}
+        }
+    }
+    let delims = [',', '\t', ';'];
+    let best = (0..3).max_by_key(|&i| (counts[i], i == 0)).unwrap_or(0);
+    if counts[best] == 0 { ',' } else { delims[best] }
+}
+
+/// What a file holds, by its first bytes, whatever its name says.
+#[derive(Debug, PartialEq)]
+enum Content {
+    /// A zip package: xlsx, xlsm or ods.
+    Zip,
+    /// An OLE compound file: a legacy .xls.
+    Ole,
+    /// Anything else, read as delimited text.
+    Text,
+}
+
+fn sniff(path: &str) -> Option<Content> {
+    use std::io::Read;
+    let mut head = [0u8; 512];
+    let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
+    let head = &head[..n];
+    Some(if head.starts_with(b"PK\x03\x04") {
+        Content::Zip
+    } else if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {
+        Content::Ole
+    } else if head.iter().find(|b| !b.is_ascii_whitespace()).is_none_or(|&b| b == b'<') {
+        // Empty, or markup (an HTML error page saved under the download's
+        // name, a flat XML document): not a table of text, so the file is
+        // opened as its name says and fails there with a load error.
+        return None;
+    } else if head.iter().any(|&b| b == 0 || (b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r' | 0x0c))) {
+        // Binary: a corrupt, truncated or zero-filled download. Opened as
+        // its name says, it fails with a load error rather than showing a
+        // sheet of junk that a save would write over the file.
+        return None;
+    } else {
+        Content::Text
+    })
 }
 
 /// Parse CSV/TSV text into records of fields, following RFC 4180 (#1979):
@@ -586,6 +658,16 @@ pub fn load_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
         .and_then(|extension| extension.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
+    // A file is read as what it holds when its name says otherwise, as
+    // LibreOffice does: a GOV.UK statistics download served as .xlsx is a
+    // Latin-1 CSV, and opened as a workbook it showed nothing at all.
+    let workbook = matches!(extension.as_str(), "xlsx" | "xlsm" | "xls" | "ods");
+    match (sniff(path), extension.as_str()) {
+        (Some(Content::Text), _) if workbook => return load_text_workbook(path),
+        (Some(Content::Ole), ext) if ext != "xls" && workbook => return load_xls_workbook(path),
+        (Some(Content::Zip), "xls") => return load_xlsx_workbook(path),
+        _ => {}
+    }
     match extension.as_str() {
         "xlsb" => Err(XLSB_UNSUPPORTED.to_string()),
         "xlsx" | "xlsm" => load_xlsx_workbook(path),
@@ -593,6 +675,36 @@ pub fn load_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
         "ods" => load_ods_workbook(path),
         _ => load_single_sheet(path),
     }
+}
+
+/// Whether `load_workbook` reads `path` as delimited text: a .csv or .tsv,
+/// or text named as a workbook. Such a file carries no column widths, so
+/// Tables sizes its columns to their contents as Calc's CSV import does.
+pub fn is_delimited_text(path: &str) -> bool {
+    let extension = std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "csv" | "tsv" => true,
+        "xlsx" | "xlsm" | "xls" | "ods" => sniff(path) == Some(Content::Text),
+        _ => false,
+    }
+}
+
+/// A delimited text file named as a workbook, as one sheet.
+fn load_text_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
+    use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
+    let mut engine = TablesEngine::new(DEFAULT_ROWS, DEFAULT_COLS)?;
+    let (rows, cols) = load_delimited_into_engine(path, None, &mut engine)?;
+    engine.rows = engine.rows.max(rows);
+    engine.cols = engine.cols.max(cols);
+    crate::sheet::check_cell_budget([("Sheet1", engine.rows, engine.cols)])?;
+    let sheet_id = engine.sheet_id_at(0).unwrap_or(0);
+    let mut sheet = SheetModel::new("Sheet1", engine.rows, engine.cols, sheet_id);
+    sheet.sync_from_engine(&engine);
+    Ok((engine, vec![sheet]))
 }
 
 /// Fallback for formats that carry a single unnamed table (csv/tsv).
