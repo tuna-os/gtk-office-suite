@@ -34,6 +34,9 @@ use tables_core::sheet::{COL_HEADER_HEIGHT, ROW_HEADER_WIDTH};
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
 const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
+/// Calc's link colour (svtools' default "Links", #000080).
+const LINK: (f64, f64, f64) = (0.0, 0.0, 128.0 / 255.0);
+const LINK_DARK: (f64, f64, f64) = (0.45, 0.62, 1.0);
 const GRID_LINE_DARK: (f64, f64, f64) = (0.35, 0.35, 0.35);
 const CANVAS_BG: (f64, f64, f64) = (0.5, 0.5, 0.5);
 const CANVAS_BG_DARK: (f64, f64, f64) = (0.15, 0.15, 0.15);
@@ -280,7 +283,12 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     }
     let (cx, cy, cw, rh) = rect;
     let style = &sheet.styles[r][c];
-    let (red, green, blue) = style.color.map_or(color, |c| c.to_f64());
+    // A hyperlinked cell draws in the link colour, whatever its own: Calc
+    // shows a cell's URL field in navy, over the blue an xlsx or ods
+    // Hyperlink style gives it (render-real `record-of-non-lethal-actions`,
+    // `exceptional-learning-support`). On the dark canvas, a light blue.
+    let link = sheet.links.contains_key(&(r, c)).then_some(if color.0 + color.1 + color.2 < 1.5 { LINK } else { LINK_DARK });
+    let (red, green, blue) = link.unwrap_or_else(|| style.color.map_or(color, |c| c.to_f64()));
     cr.set_source_rgb(red, green, blue);
     let formatted = sheet.formats[r][c].format(val);
     let mut layout = cell_layout(cr, sheet, r, c, &formatted, cw);

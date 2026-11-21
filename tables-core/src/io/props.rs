@@ -47,6 +47,9 @@ pub struct SheetXlsxProps {
     /// Resolved cell styles, including protection, 0-based `(row, col, style)`.
     /// Cells whose resolved style equals the model defaults are absent.
     pub cell_styles: Vec<(usize, usize, super::XfStyle)>,
+    /// Hyperlinked cells, 0-based `(row, col, target)`; the target is the
+    /// URL, or the place in the workbook for an internal link.
+    pub links: Vec<(usize, usize, String)>,
     /// Cells whose shared string is rich text, 0-based `(row, col, runs)`.
     pub rich_text: Vec<(usize, usize, Vec<crate::sheet::TextRun>)>,
     /// Cell notes, 0-based `(row, col, text)`: xlsx's `comments` part,
@@ -321,6 +324,35 @@ fn runs_text(xml: &str, run: &str) -> String {
             continue;
         };
         out.push_str(&unescape(rest.split(&close).next().unwrap_or("")));
+    }
+    out
+}
+
+/// A worksheet's `<hyperlink ref=".." r:id=".."/>` cells, each with its
+/// target: the URL its relationship names, else its `location`. A range
+/// links every cell in it.
+pub(super) fn parse_xlsx_hyperlinks(xml: &str, rels: &std::collections::HashMap<String, String>) -> Vec<(usize, usize, String)> {
+    let mut out = Vec::new();
+    let Some(block) = xml.split("<hyperlinks>").nth(1) else { return out };
+    for tag in block.split("</hyperlinks>").next().unwrap_or("").split("<hyperlink ").skip(1) {
+        let tag = tag.split('>').next().unwrap_or("");
+        let Some(range) = xml_attr(tag, "ref") else { continue };
+        let target = xml_attr(tag, "r:id")
+            .and_then(|id| rels.get(id))
+            .map(|t| unescape(t))
+            .or_else(|| xml_attr(tag, "location").map(unescape))
+            .unwrap_or_default();
+        let (first, last) = range.split_once(':').unwrap_or((range, range));
+        let (Some((r0, c0)), Some((r1, c1))) = (crate::sheet::parse_cell_ref(first), crate::sheet::parse_cell_ref(last)) else { continue };
+        // A link over a whole column is not a cell of its own each.
+        if r1.saturating_sub(r0) > 10_000 || c1.saturating_sub(c0) > 1_000 {
+            continue;
+        }
+        for r in r0..=r1.min(crate::sheet::SHEET_MAX_ROWS - 1) {
+            for c in c0..=c1.min(crate::sheet::SHEET_MAX_COLS - 1) {
+                out.push((r, c, target.clone()));
+            }
+        }
     }
     out
 }
@@ -717,7 +749,9 @@ pub fn read_sheet_props_from_xlsx(
         // Notes: the sheet's rels name its comments part.
         let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
         let rels_part = format!("{dir}/_rels/{file}.rels");
-        if let Ok(rels_xml) = zip.part_to_string(&rels_part, &mut budget) {
+        let rels_xml = zip.part_to_string(&rels_part, &mut budget).ok();
+        props.links = parse_xlsx_hyperlinks(&xml, &rels_xml.as_deref().map(parse_rels).unwrap_or_default());
+        if let Some(rels_xml) = rels_xml {
             for rel in rels_xml.split("<Relationship ").skip(1) {
                 let rel = rel.split('>').next().unwrap_or("");
                 if !xml_attr(rel, "Type").is_some_and(|t| t.ends_with("/comments")) {
@@ -1334,6 +1368,14 @@ pub fn read_sheet_props_from_ods(
                         props.validations.push(((row, c, bottom, right), source.clone()));
                     }
                 }
+                // A link in the cell's own text, not in its note.
+                let own_text = cell.split("<office:annotation").next().unwrap_or("");
+                if let Some(link) = own_text.split("<text:a ").nth(1) {
+                    if row < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS {
+                        let href = xml_attr(link.split('>').next().unwrap_or(""), "xlink:href").map(unescape).unwrap_or_default();
+                        props.links.push((row, c, href));
+                    }
+                }
                 if let Some(note) = odf_annotation(cell) {
                     if row < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS {
                         props.notes.push((row, c, note));
@@ -1515,6 +1557,40 @@ mod odf_tests {
         );
         let props = read_sheet_props_from_ods(path.to_str().unwrap());
         assert_eq!(props["S"].notes, vec![(0, 2, "Check this\nwith Bob & co".to_string())]);
+    }
+
+    /// A cell whose text is a link (`text:a`) is a hyperlinked cell; a link
+    /// inside its note is not.
+    #[test]
+    fn an_ods_link_marks_its_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("l.ods");
+        write_ods_fixture(
+            &path,
+            "<office:body><office:spreadsheet>\
+             <table:table table:name=\"S\">\
+             <table:table-row><table:table-cell/>\
+             <table:table-cell office:value-type=\"string\"><text:p><text:a xlink:href=\"https://example.org/a?b=1&amp;c=2\">Find out more</text:a></text:p></table:table-cell>\
+             <table:table-cell office:value-type=\"string\"><office:annotation><text:p><text:a xlink:href=\"https://x\">x</text:a></text:p></office:annotation><text:p>plain</text:p></table:table-cell>\
+             </table:table-row></table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        assert_eq!(props["S"].links, vec![(0, 1, "https://example.org/a?b=1&c=2".to_string())]);
+    }
+
+    #[test]
+    fn xlsx_hyperlinks_mark_their_cells_with_the_target() {
+        let sheet = r#"<worksheet><sheetData/><hyperlinks><hyperlink ref="B21" r:id="rId1" display="x"/><hyperlink ref="C2:C3" location="'Data'!A1"/><hyperlink ref="A:A" r:id="rId1"/></hyperlinks></worksheet>"#;
+        let rels = parse_rels(r#"<Relationships><Relationship Id="rId1" Type="…/hyperlink" Target="https://www.gov.uk/x" TargetMode="External"/></Relationships>"#);
+        assert_eq!(
+            parse_xlsx_hyperlinks(sheet, &rels),
+            vec![
+                (20, 1, "https://www.gov.uk/x".to_string()),
+                (1, 2, "'Data'!A1".to_string()),
+                (2, 2, "'Data'!A1".to_string()),
+            ],
+            "a link over a whole column is not taken cell by cell"
+        );
     }
 
     #[test]
