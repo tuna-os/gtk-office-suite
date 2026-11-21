@@ -1012,6 +1012,9 @@ fn border_group(doc: &Document, i: usize, section_end: usize) -> (bool, Option<f
 fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shaped, ordinal: u32, keep_next: Option<f64>, group: (bool, Option<f64>)) {
     let (joins_prev, next_gap) = group;
     let st = &para.style;
+    // A page this paragraph opens itself: its own page break, or the
+    // section it starts (an odt paragraph style's new master page).
+    let hard_break = std::mem::take(&mut flow.section_broke) || (st.page_break_before && !flow.page_is_empty());
     if st.page_break_before && !flow.page_is_empty() {
         flow.new_page();
     }
@@ -1033,6 +1036,16 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     if !flow.column_is_empty() || document_top {
         let (before, after) = (st.space_before_pt.max(0.0), std::mem::take(&mut flow.pending_after));
         flow.y += if flow.opts.space_adds { before + after } else { before.max(after) };
+    } else if hard_break && flow.opts.space_adds {
+        // A Writer document keeps a paragraph's space before on the page
+        // its own page break opens; a Word document drops it there as at
+        // any page top (measured in LibreOffice 24.2: a 24pt space before
+        // under `fo:break-before="page"` puts the heading 24pt below the
+        // margin in an odt, at the margin once saved as docx). Dropped,
+        // every clause of an explanatory note began 24pt high and its
+        // pages ran 24pt long (render-real `explanatory-note-2`).
+        flow.pending_after = 0.0;
+        flow.y += st.space_before_pt.max(0.0);
     }
     // Below a floating object it may not sit beside (`shape_beside_floats`).
     if let Some(below) = flow.wrap_below.take() {
@@ -1781,6 +1794,10 @@ struct Flow<'o> {
     column_items: usize,
     /// Space after the last paragraph, not yet added (see place_paragraph).
     pending_after: f64,
+    /// The current page was opened by a section starting on it, not by
+    /// the text running over: the first paragraph placed treats it as its
+    /// own page break (`place_paragraph`).
+    section_broke: bool,
     /// Each footnote's line heights at the foot of a page, and its space
     /// after.
     note_lines: Vec<Vec<f64>>,
@@ -1831,6 +1848,7 @@ impl<'o> Flow<'o> {
             y: 0.0,
             column_items: 0,
             pending_after: 0.0,
+            section_broke: false,
             note_lines: Vec::new(),
             note_after: Vec::new(),
             page_notes: Vec::new(),
@@ -1882,6 +1900,7 @@ impl<'o> Flow<'o> {
             self.pending_after = 0.0;
         } else {
             self.new_page();
+            self.section_broke = true;
         }
         if (self.content_width() - width).abs() > 1e-6 && !doc.footnotes.is_empty() {
             self.shape_notes(doc, shaper);
@@ -2054,6 +2073,7 @@ impl<'o> Flow<'o> {
     }
 
     fn new_page(&mut self) {
+        self.section_broke = false;
         let index = self.pages.len();
         self.pages.push(Page {
             index,
