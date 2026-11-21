@@ -2158,6 +2158,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 out.add_paragraph("").add_run("").add_break(rdocx::BreakKind::Page);
                 post.push(ParaPost::trivial());
             }
+            // A list in a cell is numbered by the same instances as the
+            // body's lists, allocated before the table borrows the document.
+            for (slot, kind, level) in [(0usize, ListKind::Bullet, rdocx::ListLevel::bullet()), (1, ListKind::Numbered, rdocx::ListLevel::decimal())] {
+                if list_ids[slot].is_none() && group.iter().any(|p| p.style.list == kind) {
+                    list_ids[slot] = out.add_numbering_definition(&vec![level; 9]).and_then(|d| out.add_numbering_instance(d, &[])).ok();
+                }
+            }
             let mut tbl = out.add_table(rows, cols);
             // The file's column widths, when the table still has as many
             // columns as it was read with; rdocx's own are equal.
@@ -2236,13 +2243,22 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     // A cell paragraph's typography, which the reader maps
                     // the same way it maps a body paragraph's: without
                     // this a save dropped what a read kept.
-                    if p.style.left_indent_pt != 0.0 {
+                    let listed = list_ids[usize::from(p.style.list == ListKind::Numbered)].filter(|_| p.style.list != ListKind::None);
+                    if let Some(num_id) = listed {
+                        // Its list, written as a body item's is: the text one
+                        // list indent per level in from its own indent, the
+                        // marker a hanging indent before it. A save dropped
+                        // a cell's list entirely.
+                        let text = (p.style.left_indent_pt + crate::lists::text_indent_pt(p.style.list_level)).max(0.0);
+                        let hanging = p.style.list_hanging_pt.unwrap_or(crate::lists::HANGING_PT);
+                        cp = cp.numbering(num_id, u32::from(p.style.list_level)).indent_left(rdocx::Length::pt(text)).hanging_indent(rdocx::Length::pt(hanging));
+                    } else if p.style.left_indent_pt != 0.0 {
                         cp = cp.indent_left(rdocx::Length::pt(p.style.left_indent_pt));
                     }
                     if p.style.right_indent_pt != 0.0 {
                         cp = cp.indent_right(rdocx::Length::pt(p.style.right_indent_pt));
                     }
-                    if p.style.first_line_indent_pt != 0.0 {
+                    if p.style.first_line_indent_pt != 0.0 && listed.is_none() {
                         cp = cp.first_line_indent(rdocx::Length::pt(p.style.first_line_indent_pt));
                     }
                     if p.style.space_before_pt != 0.0 {
