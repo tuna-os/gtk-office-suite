@@ -1563,23 +1563,60 @@ pub fn draw_table(
         }
         cy += row_h;
     }
-    // The style's rules ("Medium Style 2": white 1 pt rules inside),
-    // between two grid positions only where they are different cells.
-    let Some(rules) = table.rules() else { return };
-    let (lr, lg, lb) = rules.color.to_f64();
-    cr.set_source_rgb(lr, lg, lb);
     let width = |pt: f64| (pt * 960.0 / 720.0 * scale).max(1.0);
-    cr.set_line_width(width(rules.width_pt));
     let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
     let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
-    let (right, bottom) = (col_x[cols.len()], row_y[rows.len()]);
-    for r in 0..rows.len() {
-        for c in 0..cols.len() {
-            if rules.inside_v && c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
+    if let Some(rules) = table.rules() {
+        draw_table_rules(cr, &rules, &col_x, &row_y, &owner, width);
+    }
+    // Each cell's own edges (`a:tcPr/a:lnL` and the like), over the
+    // style's rules: a table whose every cell states a black 1 pt box was
+    // drawn with the style's rules alone, no verticals at all.
+    for (r, row) in table.rows.iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            if owner(r, c) != (r, c) || cell.edges.iter().all(Option::is_none) {
+                continue;
+            }
+            let (cs, rs) = cell.span();
+            let (x0, x1) = (col_x[c], col_x[(c + cs).min(cols.len())]);
+            let (y0, y1) = (row_y[r], row_y[(r + rs).min(rows.len())]);
+            let lines = [((x0, y0), (x0, y1)), ((x1, y0), (x1, y1)), ((x0, y0), (x1, y0)), ((x0, y1), (x1, y1))];
+            for (edge, (from, to)) in cell.edges.iter().zip(lines) {
+                let Some(decks_core::engine::table::CellEdge { color: Some(color), width_pt }) = edge else { continue };
+                let (er, eg, eb) = color.to_f64();
+                cr.set_source_rgb(er, eg, eb);
+                cr.set_line_width(width(*width_pt));
+                cr.move_to(from.0, from.1);
+                cr.line_to(to.0, to.1);
+                cr.stroke().unwrap();
+            }
+        }
+    }
+}
+
+/// A table style's rules ("Medium Style 2": white 1 pt rules inside),
+/// between two grid positions only where they are different cells.
+fn draw_table_rules(
+    cr: &cairo::Context,
+    rules: &decks_core::engine::table::Rules,
+    col_x: &[f64],
+    row_y: &[f64],
+    owner: &dyn Fn(usize, usize) -> (usize, usize),
+    width: impl Fn(f64) -> f64,
+) {
+    let (cols, rows) = (col_x.len() - 1, row_y.len() - 1);
+    let (x, y) = (col_x[0], row_y[0]);
+    let (lr, lg, lb) = rules.color.to_f64();
+    cr.set_source_rgb(lr, lg, lb);
+    cr.set_line_width(width(rules.width_pt));
+    let (right, bottom) = (col_x[cols], row_y[rows]);
+    for r in 0..rows {
+        for c in 0..cols {
+            if rules.inside_v && c + 1 < cols && owner(r, c) != owner(r, c + 1) {
                 cr.move_to(col_x[c + 1], row_y[r]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
-            if rules.inside_h && r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
+            if rules.inside_h && r + 1 < rows && owner(r, c) != owner(r + 1, c) {
                 cr.move_to(col_x[c], row_y[r + 1]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
