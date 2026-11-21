@@ -494,8 +494,10 @@ pub fn set_styled_text(
         } else if run.style.small_caps {
             add(pango::AttrInt::new_variant(pango::Variant::SmallCaps).into());
         }
-        if let Some(hp) = run.style.font_size_hp {
-            let pt = hp as f64 / 2.0 * scale;
+        // The exact size where the reader kept one (a 19 pt run on a
+        // 13.33-inch deck is 14.25 pt here, not the 14.5 its half points say).
+        if let Some(pt) = run.style.size_pt() {
+            let pt = pt * scale;
             add(pango::AttrSize::new_size_absolute(
                 (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
             )
