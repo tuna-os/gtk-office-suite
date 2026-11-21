@@ -3,6 +3,8 @@ an xlsx sheet's print scale and fit to page, and an ods page layout's
 scale-to, come out of the copy LibreOffice prints."""
 
 import importlib.util
+
+import pytest
 import zipfile
 from pathlib import Path
 
@@ -55,3 +57,24 @@ def test_an_ods_page_layouts_scale_goes(tmp_path):
 def test_a_workbook_that_prints_at_its_own_size_is_used_as_is(tmp_path):
     src = _package(tmp_path / "s.ods", {"styles.xml": "<style:page-layout-properties style:print-orientation=\"portrait\"/>"})
     assert _lo_render().unscaled_copy(src, str(tmp_path)) == src
+
+
+def test_only_the_screen_tiers_print_unscaled(tmp_path, monkeypatch):
+    """The screen tiers' reference is printed unscaled; the export lab's
+    (`--keep-print-scale`, run-export.sh) keeps the file's print settings,
+    as a printout does."""
+    lo = _lo_render()
+    printed = []
+    monkeypatch.setattr(lo, "unscaled_copy", lambda src, tmp: printed.append(src) or src)
+    monkeypatch.setattr(lo.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(lo, "soffice", lambda: "soffice")
+    src = _package(tmp_path / "scaled.xlsx", {"xl/worksheets/sheet1.xml": '<worksheet><pageSetup scale="46"/></worksheet>'})
+    # LibreOffice is not run, so no PDF comes out: to_pdf says so.
+    with pytest.raises(RuntimeError):
+        lo.to_pdf(src, str(tmp_path), str(tmp_path / "profile"), "tables")
+    assert printed == [src], "the screen tiers' reference is unscaled"
+    printed.clear()
+    with pytest.raises(RuntimeError):
+        lo.to_pdf(src, str(tmp_path), str(tmp_path / "profile"), "tables", unscale=False)
+    assert printed == [], "the export lab's printout keeps its print scale"
+    assert "--keep-print-scale" in (ROOT / "tools/render-lab/run-export.sh").read_text()

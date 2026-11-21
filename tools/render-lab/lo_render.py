@@ -123,11 +123,14 @@ def unscaled_copy(src, tmpdir):
     return out
 
 
-def to_pdf(src, outdir, profile, app=None):
+def to_pdf(src, outdir, profile, app=None, unscale=True):
     # A private profile per run: a shared one serializes conversions and
     # carries state (recent files, first-start dialogs) between runs.
     infilter = csv_filter(src) if app == "tables" else None
-    if app == "tables" and not infilter:
+    # The screen tiers compare a sheet's cells at their own size, so their
+    # reference is printed unscaled (unscaled_copy). The export lab compares
+    # printouts, which keep the file's print settings (`--keep-print-scale`).
+    if app == "tables" and not infilter and unscale:
         src = unscaled_copy(src, outdir)
     subprocess.run(
         [
@@ -180,6 +183,11 @@ def main():
     ap.add_argument("fixtures")
     ap.add_argument("out")
     ap.add_argument("--app")
+    ap.add_argument(
+        "--keep-print-scale",
+        action="store_true",
+        help="print Tables files at their own print scale and fit (the export lab's printouts), not unscaled",
+    )
     args = ap.parse_args()
 
     manifest = json.load(open(os.path.join(args.fixtures, "manifest.json")))
@@ -191,7 +199,7 @@ def main():
                 continue
             dest = os.path.join(args.out, fx["app"], fx["feature"])
             try:
-                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile, fx["app"])
+                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile, fx["app"], unscale=not args.keep_print_scale)
                 n = rasterize(pdf, dest)
                 print(f"lo  {fx['app']}/{fx['feature']}: {n} page(s)")
             except Exception as e:  # keep going; the report shows the gap
