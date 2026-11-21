@@ -978,7 +978,32 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
+    // A label in a face of its own is part of its first line, as Writer
+    // lays it out: the line is as tall as that face needs (a "o" in Courier
+    // New, a bullet in Noto Sans Symbols adds a pixel or two a line, and
+    // dcms-business-appointment-rules' page ran 9px short of LibreOffice's).
+    if let Some(label) = label_line(p, opts, shaper) {
+        lines[0].ascent_pt = lines[0].ascent_pt.max(label.ascent_pt);
+        lines[0].descent_pt = lines[0].descent_pt.max(label.descent_pt);
+    }
     Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal: 1 }
+}
+
+/// The line a list item's label makes on its own when its list draws it
+/// in a face of its own (`ParaStyle::list_label_font`), at the size the
+/// label is drawn: the item's first run's.
+fn label_line(p: &Paragraph, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Option<LineBox> {
+    let face = p.style.list_label_font.as_ref().filter(|_| p.style.list != ListKind::None)?;
+    let text = lists::marker_for(&p.style, 1)?;
+    let mut run = crate::model::Run::plain(text);
+    run.style.font_family = Some(face.clone());
+    run.style.font_size_hp = p.runs.iter().find(|r| !r.text.is_empty()).and_then(|r| r.style.font_size_hp);
+    let runs = [run];
+    let mut req = paragraph_request(p, 1000.0, opts);
+    req.runs = &runs;
+    req.first_line_indent_pt = 0.0;
+    req.alignment = crate::model::Alignment::Left;
+    shaper.shape(&req).into_iter().next()
 }
 
 /// Place a shaped paragraph in the flow, splitting it across columns and

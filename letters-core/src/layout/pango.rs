@@ -1403,6 +1403,11 @@ impl Typeset {
                         run.style.font_size_hp = f.style.font_size_hp;
                         run.style.color = f.style.color.clone();
                     }
+                    // A label in its list's own face, as Word and
+                    // LibreOffice draw it (an "o" in Courier New).
+                    if let Some(face) = &p.style.list_label_font {
+                        run.style.font_family = Some(face.clone());
+                    }
                     let size = run.style.font_size_hp.map_or_else(
                         || p.style.heading.map_or(self.opts.font_size_pt, |l| self.opts.heading_size_pt(l)),
                         |hp| f64::from(hp) / 2.0,
@@ -1632,6 +1637,42 @@ mod tests {
         let mut d = Document::new();
         d.paragraphs = (0..n).map(|_| Paragraph { style: Default::default(), runs: vec![Run::plain(text)] }).collect();
         d
+    }
+
+    /// A list label drawn in a face of its own makes its line as tall as
+    /// that face needs, as Writer lays the label out as part of the line:
+    /// items labelled in DejaVu Sans (taller than the body's Liberation
+    /// Serif) stand further apart than items labelled in the body face,
+    /// and what follows them starts lower.
+    #[test]
+    fn a_label_in_a_taller_face_makes_its_line_taller() {
+        let baselines = |face: Option<&str>| {
+            let mut d = doc(3, "item");
+            for p in &mut d.paragraphs[..2] {
+                p.style.list = crate::model::ListKind::Bullet;
+                p.style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+                p.style.list_label_font = face.map(str::to_string);
+            }
+            let t = Typeset::new(d, LayoutOptions::default());
+            t.tree().pages[0]
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Line { source: Source::Paragraph(k), line: 0, baseline_pt, .. } => Some((*k, *baseline_pt)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let plain = baselines(None);
+        let tall = baselines(Some("DejaVu Sans"));
+        assert_eq!(plain.len(), 3);
+        assert_eq!(tall.len(), 3);
+        // The second item's line is taller, so its baseline is further
+        // from the first's, and everything after it is lower.
+        let gap = |b: &[(usize, f64)]| b[1].1 - b[0].1;
+        assert!(gap(&tall) > gap(&plain) + 0.05, "a DejaVu Sans label did not make its line taller: {plain:?} {tall:?}");
+        assert!(tall[2].1 > plain[2].1 + 0.1, "the paragraph after the list did not move down: {plain:?} {tall:?}");
+        assert!(tall[0].1 >= plain[0].1, "the first item's baseline moved up: {plain:?} {tall:?}");
     }
 
     /// A table of contents laid out: each page number ends at the right
