@@ -75,6 +75,17 @@ pub struct ChartData {
     /// The chart's text size in hundredths of a point (`a:defRPr sz`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_size: Option<u32>,
+    /// Each series' own colour as RGB (`c:ser/c:spPr`), the first included,
+    /// where the file sets one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub series_colors: Vec<Option<[u8; 3]>>,
+    /// A bar chart's gap between categories, in percent of one bar
+    /// (`c:gapWidth`); `None` is the default 150.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gap: Option<u16>,
+    /// The category axis hidden (`c:catAx/c:delete`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hide_category_axis: bool,
 }
 
 impl ChartData {
@@ -108,6 +119,9 @@ impl ChartData {
             percent: false,
             text_color: None,
             text_size: None,
+            series_colors: Vec::new(),
+            gap: None,
+            hide_category_axis: false,
         }
     }
 
@@ -162,6 +176,9 @@ impl ChartData {
             || self.percent
             || self.text_color.is_some()
             || self.text_size.is_some()
+            || self.series_colors.iter().any(Option::is_some)
+            || self.gap.is_some()
+            || self.hide_category_axis
     }
 
     /// Whether a legend is drawn: a named series, a pie's categories or
@@ -370,9 +387,15 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     let last = n + 1;
     let cats: Vec<&str> = chart.points.iter().map(|p| p.0.as_str()).collect();
     let vals: Vec<f64> = chart.points.iter().map(|p| p.1).collect();
+    // A series' own fill, as the file coloured it.
+    let ser_fill = |k: usize| match chart.series_colors.get(k).copied().flatten() {
+        Some([r, g, b]) => format!("<c:spPr><a:solidFill><a:srgbClr val=\"{r:02X}{g:02X}{b:02X}\"/></a:solidFill></c:spPr>"),
+        None => String::new(),
+    };
     let head = format!(
-        "<c:ser><c:idx val=\"0\"/><c:order val=\"0\"/><c:tx>{}</c:tx>",
-        str_ref("Sheet1!$B$1", &[chart.series.as_str()])
+        "<c:ser><c:idx val=\"0\"/><c:order val=\"0\"/><c:tx>{}</c:tx>{}",
+        str_ref("Sheet1!$B$1", &[chart.series.as_str()]),
+        ser_fill(0)
     );
     let cat = format!("<c:cat>{}</c:cat>", str_ref(&format!("Sheet1!$A$2:$A${last}"), &cats));
     let val = format!("<c:val>{}</c:val>", num_ref(&format!("Sheet1!$B$2:$B${last}"), &vals));
@@ -388,7 +411,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
             let val = format!("<c:val>{}</c:val>", num_ref(&format!("Sheet1!${c}$2:${c}${last}"), values));
             let invert = if chart.kind == ChartKind::Bar { "<c:invertIfNegative val=\"0\"/>" } else { "" };
             let smooth = if chart.kind == ChartKind::Line { "<c:smooth val=\"0\"/>" } else { "" };
-            format!("<c:ser><c:idx val=\"{i}\"/><c:order val=\"{i}\"/><c:tx>{tx}</c:tx>{invert}{cat}{val}{smooth}</c:ser>", i = k + 1)
+            format!("<c:ser><c:idx val=\"{i}\"/><c:order val=\"{i}\"/><c:tx>{tx}</c:tx>{}{invert}{cat}{val}{smooth}</c:ser>", ser_fill(k + 1), i = k + 1)
         })
         .collect();
     let dlbls = if chart.labels {
@@ -425,6 +448,9 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
         if chart.reversed {
             ax = ax.replacen("<c:orientation val=\"minMax\"/>", "<c:orientation val=\"maxMin\"/>", 1);
         }
+        if chart.hide_category_axis {
+            ax = ax.replacen("<c:delete val=\"0\"/>", "<c:delete val=\"1\"/>", 1);
+        }
         ax
     };
     let grouping = if chart.stacked { "stacked" } else { "clustered" };
@@ -436,8 +462,9 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     let plot = match chart.kind {
         ChartKind::Bar => format!(
             "<c:barChart><c:barDir val=\"{}\"/><c:grouping val=\"{grouping}\"/><c:varyColors val=\"0\"/>\
-             {head}<c:invertIfNegative val=\"0\"/>{dpts}{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"150\"/>{overlap}{ids}</c:barChart>{}{}",
+             {head}<c:invertIfNegative val=\"0\"/>{dpts}{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"{}\"/>{overlap}{ids}</c:barChart>{}{}",
             if chart.horizontal { "bar" } else { "col" },
+            chart.gap.unwrap_or(150),
             category_axis(),
             value_axis(AX_2, if chart.horizontal { "b" } else { "l" }, AX_1, true, "between")
         ),
@@ -817,6 +844,31 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
         percent,
         text_color,
         text_size,
+        series_colors: {
+            // A series' colour: its points' own, when every point states the
+            // same one (a one-category stacked bar colours each segment so),
+            // else its own fill.
+            let color = |s: &El| {
+                let points: Vec<Option<[u8; 3]>> = (0..n)
+                    .map(|i| {
+                        s.children
+                            .iter()
+                            .filter(|c| c.local == "dPt")
+                            .find(|d| d.child("idx").and_then(|x| x.attr("val")).and_then(|v| v.parse::<usize>().ok()) == Some(i))
+                            .and_then(|d| rgb_of(d.child("spPr")))
+                    })
+                    .collect();
+                match points.first().copied().flatten() {
+                    Some(c) if points.iter().all(|p| *p == Some(c)) => Some(c),
+                    _ => rgb_of(s.child("spPr")),
+                }
+            };
+            let colors: Vec<Option<[u8; 3]>> = sers.iter().take(MAX_SERIES).map(|s| color(s)).collect();
+            if colors.iter().any(Option::is_some) { colors } else { Vec::new() }
+        },
+        gap: (kind == ChartKind::Bar).then(|| group.child("gapWidth").and_then(|g| g.attr("val")).and_then(|v| v.parse::<u16>().ok())).flatten().map(|g| g.min(500)).filter(|g| *g != 150),
+        hide_category_axis: kind != ChartKind::Pie
+            && plot.children.iter().filter(|c| c.local == "catAx").any(|ax| ax.child("delete").is_some_and(on)),
     };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
@@ -1139,6 +1191,9 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
         percent: false,
         text_color: None,
         text_size: None,
+        series_colors: Vec::new(),
+        gap: None,
+        hide_category_axis: false,
     };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
@@ -1168,6 +1223,26 @@ mod tests {
         assert_eq!((c.text_color, c.text_size), (Some([255, 255, 255]), Some(900)), "the axis's text, past the chart's empty txPr");
         let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
         assert_eq!(back, c, "a save keeps it");
+    }
+
+    /// The adults' nature survey's distance bar, reduced: one category,
+    /// four series stacked to 100% with no gap and no axes, each segment
+    /// coloured on its one point.
+    const STACKED_SEGMENTS: &str = r#"<c:chartSpace xmlns:c="c" xmlns:a="a"><c:chart><c:plotArea><c:barChart><c:barDir val="bar"/><c:grouping val="percentStacked"/>
+<c:ser><c:idx val="0"/><c:tx><c:v>A</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="111111"/></a:solidFill></c:spPr><c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="7F4F94"/></a:solidFill></c:spPr></c:dPt>
+<c:cat><c:strLit><c:pt idx="0"><c:v>Response</c:v></c:pt></c:strLit></c:cat><c:val><c:numLit><c:pt idx="0"><c:v>0.41</c:v></c:pt></c:numLit></c:val></c:ser>
+<c:ser><c:idx val="1"/><c:tx><c:v>B</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="8D9132"/></a:solidFill></c:spPr>
+<c:cat><c:strLit><c:pt idx="0"><c:v>Response</c:v></c:pt></c:strLit></c:cat><c:val><c:numLit><c:pt idx="0"><c:v>0.59</c:v></c:pt></c:numLit></c:val></c:ser>
+<c:gapWidth val="0"/><c:overlap val="100"/></c:barChart><c:catAx><c:delete val="1"/></c:catAx><c:valAx><c:delete val="1"/></c:valAx></c:plotArea></c:chart></c:chartSpace>"#;
+
+    #[test]
+    fn stacked_segments_keep_their_colours_gap_and_hidden_axes() {
+        let c = parse_chart_space(STACKED_SEGMENTS).expect("a bar chart");
+        assert!(c.horizontal && c.stacked && c.hide_category_axis && c.hide_value_axis, "{c:?}");
+        assert_eq!(c.series_colors, vec![Some([0x7F, 0x4F, 0x94]), Some([0x8D, 0x91, 0x32])], "a point's own colour, else the series' fill");
+        assert_eq!(c.gap, Some(0));
+        let back = parse_chart_space(&chart_space_xml(&c)).expect("its own part");
+        assert_eq!((back.series_colors, back.gap, back.hide_category_axis), (c.series_colors.clone(), Some(0), true), "a save keeps them");
     }
 
     #[test]

@@ -900,6 +900,11 @@ pub fn draw_object(
                     .iter()
                     .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
                     .collect();
+                let series_colors: Vec<Option<(f64, f64, f64)>> = chart
+                    .series_colors
+                    .iter()
+                    .map(|c| c.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)))
+                    .collect();
                 let opts = suite_common::charts::Options {
                     stacked: chart.stacked,
                     labels: chart.labels,
@@ -915,6 +920,9 @@ pub fn draw_object(
                     // Hundredths of a point; the chart is drawn in the
                     // slide's own units, which are points.
                     text_px: chart.text_size.map(|v| v as f64 / 100.0),
+                    series_colors: &series_colors,
+                    gap: chart.gap.map(f64::from),
+                    hide_category_axis: chart.hide_category_axis,
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {
