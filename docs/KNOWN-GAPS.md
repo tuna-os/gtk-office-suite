@@ -35,6 +35,7 @@ a release has confirmed it yet; the row goes once one has.
 | Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Fixed on main (#2380: saved at their cell, offset and size; shapes still dropped) |
 | Formulas referring to another workbook | Shown as `#REF!` instead of the cached value | Fixed on main (#2381: loads the cached value; the link itself is not kept, as the package scan warns) |
 | Hidden rows/columns in ODS (`collapse`/`filter`) | Shown | Fixed on main (#2368) |
+| Office's Aptos fonts in the Flatpak | The Flatpak bundles no fonts, and the GNOME runtime has no Aptos or a narrow stand-in, so "Aptos Narrow" text is drawn in a much wider fallback. Column labels run into the next column (draft-schedule-4-complaint-log: Tier A green, Tier C amber at ssim 0.60). This affects any workbook or document in Office's default font since 2023 | Not started: needs a choice of substitute font to bundle or alias |
 | Sheet view zoom (`zoomScale`) | Opens at 100% where Excel opens at the file's zoom | Not started |
 | ODS conditional number formats (`style:map` by sign) | Negatives as `-2` and zero as `0` where Calc shows `(2)` and `-` (hmt-annual-report core tables) | Fixed on main (#2390) |
 | Merged blocks bordered cell by cell; fills on half pixels | Inner borders drawn through merged text; grey seams between filled rows after a fractional-height row (ewco-claim-form) | Fixed on main (#2391) |
