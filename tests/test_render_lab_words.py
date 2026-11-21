@@ -41,6 +41,31 @@ class MatchWordsTest(unittest.TestCase):
         self.assertEqual(disp, 0.0)
         self.assertEqual(lost, 0)
 
+    def test_an_address_read_as_several_words_on_one_side_pairs_with_one(self):
+        # The affordable-housing data dictionary's identical e-mail address:
+        # tesseract split it at its punctuation on LibreOffice's page and not
+        # on ours, and the line counted as lost.
+        def at(text, left, line=0):
+            return (text, left + 10, 100, ("1", "1", str(line)), (left, 95, 20, 10))
+
+        ref = [at("contact", 10), at("h", 60), at("ousing", 70), at("statistics", 110), at("communitiesgovuk", 170)]
+        ours = [at("contact", 10), at("housingstatisticscommunitiesgovuk", 61)]
+        found, disp, lost = self.compare.match_words(ref, ours)
+        self.assertEqual((found, lost), (1.0, 0))
+        self.assertLess(disp, 1.0, "the run's corner is the token's, a pixel off")
+        # The other way round: one reference word, several of ours.
+        found, _, lost = self.compare.match_words(ours, ref)
+        self.assertEqual((found, lost), (1.0, 0))
+
+    def test_a_joined_read_elsewhere_on_the_page_is_not_the_same_words(self):
+        def at(text, left, top, line=0):
+            return (text, left + 10, top + 5, ("1", "1", str(line)), (left, top, 20, 10))
+
+        ref = [at("annual", 10, 100), at("report", 40, 100)]
+        ours = [at("annualreport", 10, 400)]
+        found, _, _ = self.compare.match_words(ref, ours)
+        self.assertEqual(found, 0.0)
+
     def test_a_shifted_page_still_reports_its_shift(self):
         ref = [word("alpha", 100, 100), word("beta", 200, 100)]
         ours = [word("alpha", 100, 112), word("beta", 200, 112)]

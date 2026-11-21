@@ -516,6 +516,82 @@ def rescue_unread(ref_grey, ours_grey, box):
     return ref_text if ours_text == ref_text else None
 
 
+# How many neighbouring reads may join to one read on the other side, how
+# long their joined text must be, and how far apart (1x px, the corners of
+# the run and the token) they may stand.
+JOIN_MAX = 6
+JOIN_MIN_CHARS = 6
+JOIN_TOL = 40.0
+
+
+def join_matches(ref, ours, dist, taken):
+    """Pair the same text read as one word on one side and several on the
+    other, which `match_words`' same-text pairing cannot: tesseract splits
+    an e-mail address at its punctuation on one rendering and not on the
+    other, so the affordable-housing data dictionary's identical
+    `housing.statistics@communities.gov.uk` read as four words on
+    LibreOffice's page ("h ousing statistics communitiesgovuk") and one on
+    ours, and the line was counted lost.
+
+    A run of up to JOIN_MAX unpaired, adjacent words of one line on one side
+    whose texts join to an unpaired word of the other, starting within
+    JOIN_TOL of it, is paired with it: each reference word of the run, or
+    the one reference word, takes the distance between the run's and the
+    word's top-left corners. Updates `dist` (ref index -> distance) and
+    `taken` (ours indices) in place."""
+
+    def lines(words, free):
+        by_line = {}
+        for k in free:
+            by_line.setdefault(words[k][3], []).append(k)
+        return [sorted(ks, key=lambda k: words[k][4][0]) for ks in by_line.values()]
+
+    def corner(w):
+        return w[4][0], w[4][1]
+
+    def near(a, b):
+        return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+    def runs(words, free):
+        for ks in lines(words, free):
+            for n in range(2, JOIN_MAX + 1):
+                for start in range(len(ks) - n + 1):
+                    run = ks[start : start + n]
+                    text = "".join(words[k][0] for k in run)
+                    if len(text) >= JOIN_MIN_CHARS:
+                        yield run, text
+
+    # Several reference words, one of ours.
+    free_ref = [i for i in range(len(ref)) if i not in dist]
+    free_ours = [j for j in range(len(ours)) if j not in taken]
+    by_text = {}
+    for j in free_ours:
+        by_text.setdefault(ours[j][0], []).append(j)
+    for run, text in sorted(runs(ref, free_ref), key=lambda r: -len(r[0])):
+        if any(i in dist for i in run):
+            continue
+        at = corner(ref[run[0]])
+        best = min(((near(at, corner(ours[j])), j) for j in by_text.get(text, []) if j not in taken), default=None)
+        if best and best[0] <= JOIN_TOL:
+            for i in run:
+                dist[i] = best[0]
+            taken.add(best[1])
+    # One reference word, several of ours.
+    free_ref = [i for i in range(len(ref)) if i not in dist]
+    by_text = {}
+    for i in free_ref:
+        by_text.setdefault(ref[i][0], []).append(i)
+    free_ours = [j for j in range(len(ours)) if j not in taken]
+    for run, text in sorted(runs(ours, free_ours), key=lambda r: -len(r[0])):
+        if any(j in taken for j in run):
+            continue
+        at = corner(ours[run[0]])
+        best = min(((near(at, corner(ref[i])), i) for i in by_text.get(text, []) if i not in dist), default=None)
+        if best and best[0] <= JOIN_TOL:
+            dist[best[1]] = best[0]
+            taken.update(run)
+
+
 def match_words(ref, ours, reread=None):
     """(fraction of `ref`'s words found in `ours`, median displacement in
     points, lost lines: `ref` lines of LOST_LINE_MIN_WORDS or more words
@@ -548,6 +624,7 @@ def match_words(ref, ours, reread=None):
         if i not in dist and j not in taken:
             dist[i] = d
             taken.add(j)
+    join_matches(ref, ours, dist, taken)
     found, counted, disp = 0, 0, []
     per_line = {}
     for i, w in enumerate(ref):
