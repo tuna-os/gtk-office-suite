@@ -443,6 +443,15 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
                 }),
                 color: props.bu_clr.clone().flatten(),
             },
+            // A paragraph with no text is as tall as its end mark: the
+            // level's run properties under its own `a:endParaRPr`.
+            end_run: (!p.children.iter().any(|c| c.name == "a:r" || c.name == "a:fld")).then(|| {
+                let mut run = props.run.clone();
+                if let Some(end) = p.child("a:endParaRPr") {
+                    run.over(&RunProps::of(end, theme));
+                }
+                run.style()
+            }),
         });
         for r in p.children.iter().filter(|c| c.name == "a:r" || c.name == "a:fld") {
             let mut run = props.run.clone();
@@ -589,6 +598,22 @@ mod tests {
         // The reader drops the leading empty paragraph: lines are paras 1, 2.
         let body = got[0].body_for(&[1, 2]);
         assert_eq!(body.paras.iter().map(|p| p.level).collect::<Vec<_>>(), [0, 1]);
+    }
+
+    #[test]
+    fn an_empty_paragraph_is_as_tall_as_its_end_mark() {
+        let got = resolve(&sp(
+            "",
+            r#"<a:p><a:r><a:rPr sz="2000"/><a:t>a</a:t></a:r></a:p><a:p><a:endParaRPr sz="800"/></a:p><a:p/><a:p><a:r><a:t>b</a:t></a:r></a:p>"#,
+        ));
+        let ends: Vec<_> = got[0].paras.iter().map(|p| p.end_run.as_ref().map(|r| r.font_size_hp)).collect();
+        // A paragraph with text has no end look of its own; an empty one
+        // takes its endParaRPr, or the level's size when it states none.
+        assert_eq!(ends[0], None);
+        assert_eq!(ends[1], Some(Some(16)));
+        assert!(ends[2].is_some(), "an empty paragraph with no endParaRPr still follows its level");
+        assert_ne!(ends[2], Some(Some(40)), "not the run before it");
+        assert_eq!(ends[3], None);
     }
 
     #[test]

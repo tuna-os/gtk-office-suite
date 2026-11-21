@@ -137,7 +137,12 @@ fn place_inner(
         // An empty paragraph still has its runs' height: give it a space,
         // in the run its break was written in.
         if para_text.is_empty() {
-            let style = para.first().map(|r| r.style.clone()).or_else(|| lead.get(i).cloned().flatten()).unwrap_or_default();
+            let style = st
+                .end_run
+                .clone()
+                .or_else(|| para.first().map(|r| r.style.clone()))
+                .or_else(|| lead.get(i).cloned().flatten())
+                .unwrap_or_default();
             set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], text_scale);
         } else {
             set_styled_text(&layout, &para_text, para, text_scale);
