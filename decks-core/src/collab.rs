@@ -36,6 +36,18 @@
 //! of the deck and applies each op to it, so it knows where things are
 //! after every op of a group.
 //!
+//! # Pictures
+//!
+//! A picture object and a slide's background picture hold a path, and the
+//! writers read that path when the deck is saved. An update is bytes from
+//! someone else, so a path it brings names a file on this machine that the
+//! peer chose. So a replica keeps the paths this side put into the document
+//! itself (those of the deck it started from and of its own edits), and
+//! [`Replica::rebuild`] hands out a picture with any other path without
+//! it: an object keeps its place and its box with an empty path, a
+//! background picture is left out. The bytes of a picture are not
+//! replicated, so a peer's picture was never drawn here.
+//!
 //! # Known limits
 //! - A remote change rebuilds the deck from the document, with fresh local
 //!   ids, so the local undo history no longer applies to it (as for Tables).
@@ -128,6 +140,18 @@ fn read_object(meta: &LoroMap) -> Option<SlideObject> {
     serde_json::from_value(serde_json::Value::Object(outer)).ok()
 }
 
+/// The picture paths `deck` holds: its picture objects' and its slides'
+/// background pictures'.
+fn picture_paths(deck: &[Slide]) -> impl Iterator<Item = String> + '_ {
+    deck.iter().flat_map(|s| {
+        let objects = s.objects.iter().filter_map(|o| match o {
+            SlideObject::Image { path, .. } => Some(path.clone()),
+            _ => None,
+        });
+        s.background_picture.iter().map(|p| p.path.clone()).chain(objects)
+    })
+}
+
 /// A build as the document stores it: its object's node, effect and
 /// direction.
 type StoredBuild = (String, BuildEffect, bool);
@@ -141,6 +165,9 @@ pub struct Replica {
     deck: Vec<Slide>,
     /// Each local slide and object id's node.
     nodes: HashMap<u64, TreeID>,
+    /// The picture paths this side put into the document itself (module
+    /// docs, Pictures). A path a peer's update brings is not one of them.
+    pictures: HashSet<String>,
 }
 
 impl Replica {
@@ -152,7 +179,7 @@ impl Replica {
             Some(root) => *root,
             None => tree.create(None).map_err(|e| e.to_string())?,
         };
-        Ok(Replica { doc, tree, root, deck: Vec::new(), nodes: HashMap::new() })
+        Ok(Replica { doc, tree, root, deck: Vec::new(), nodes: HashMap::new(), pictures: HashSet::new() })
     }
 
     /// Start a shared document from `slides`, as peer `peer`. The slides
@@ -161,6 +188,7 @@ impl Replica {
         ensure_ids(slides);
         let mut me = Self::with_doc(LoroDoc::new(), peer)?;
         me.deck = slides.to_vec();
+        me.pictures.extend(picture_paths(slides));
         for s in slides.iter() {
             let node = me.tree.create(me.root).map_err(|e| e.to_string())?;
             me.nodes.insert(s.ids.slide, node);
@@ -179,12 +207,14 @@ impl Replica {
     pub fn fork(&self, peer: u64) -> Result<(Replica, Vec<Slide>), String> {
         self.doc.commit();
         let mut other = Self::with_doc(self.doc.fork(), peer)?;
+        other.pictures.clone_from(&self.pictures);
         let deck = other.rebuild()?;
         Ok((other, deck))
     }
 
     /// A peer that has only the history in `updates` (from
     /// [`Replica::export_all`]): the whole document replayed from its ops.
+    /// It has put no picture in, so every picture comes without its path.
     pub fn from_updates(peer: u64, updates: &[u8]) -> Result<(Replica, Vec<Slide>), String> {
         let doc = LoroDoc::new();
         doc.import(updates).map_err(|e| e.to_string())?;
@@ -231,6 +261,9 @@ impl Replica {
             }
             self.write(op);
         }
+        // The deck holds this side's own pictures and no other path
+        // (`rebuild` took those out), so a picture an op put in is its own.
+        self.pictures.extend(picture_paths(&self.deck));
         self.doc.commit();
         Ok(())
     }
@@ -396,7 +429,8 @@ impl Replica {
     // ---------------------------------------------------------------- the document's deck
 
     /// The deck the document holds, built from nothing but the document,
-    /// with fresh local ids. It becomes this replica's deck.
+    /// with fresh local ids. It becomes this replica's deck. A picture a
+    /// peer put in comes without its path (module docs, Pictures).
     pub fn rebuild(&mut self) -> Result<Vec<Slide>, String> {
         self.doc.commit();
         let all = self.tree.children(self.root).unwrap_or_default();
@@ -419,7 +453,10 @@ impl Replica {
             let mut s = Slide {
                 title: string_at(&meta, "title").unwrap_or_default(),
                 background: string_at(&meta, "bg").unwrap_or_default(),
-                background_picture: string_at(&meta, "bgpic").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
+                background_picture: string_at(&meta, "bgpic")
+                    .and_then(|t| serde_json::from_str::<Option<crate::engine::BackgroundPicture>>(&t).ok())
+                    .unwrap_or(None)
+                    .filter(|picture| self.pictures.contains(&picture.path)),
                 objects: Vec::new(),
                 notes: string_at(&meta, "notes").unwrap_or_default(),
                 master_id: string_at(&meta, "master").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
@@ -436,7 +473,12 @@ impl Replica {
                 if is_deleted(&meta) {
                     continue;
                 }
-                let Some(object) = read_object(&meta) else { continue };
+                let Some(mut object) = read_object(&meta) else { continue };
+                if let SlideObject::Image { path, .. } = &mut object {
+                    if !self.pictures.contains(path.as_str()) {
+                        path.clear();
+                    }
+                }
                 let id = id_for(o);
                 id_of_node.insert(o.to_string(), id);
                 s.objects.push(object);
