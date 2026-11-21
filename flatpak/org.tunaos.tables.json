@@ -21,6 +21,7 @@
       "install -Dm644 flatpak/org.tunaos.tables.service /app/share/dbus-1/services/org.tunaos.tables.service",
       "install -Dm644 flatpak/org.tunaos.tables.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.tables.gschema.xml",
       "install -Dm644 flatpak/org.tunaos.suite.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.suite.gschema.xml",
+      "install -Dm644 flatpak/fontconfig-local.conf /app/etc/fonts/local.conf",
       "glib-compile-schemas /app/share/glib-2.0/schemas/",
       "install -Dm644 flatpak/icons/org.tunaos.tables.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.tables.svg",
       "install -Dm644 flatpak/org.tunaos.tables.metainfo.xml /app/share/metainfo/org.tunaos.tables.metainfo.xml"

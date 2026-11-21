@@ -42,6 +42,7 @@
       "install -Dm644 flatpak/org.tunaos.letters.service /app/share/dbus-1/services/org.tunaos.letters.service",
       "install -Dm644 flatpak/org.tunaos.letters.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.letters.gschema.xml",
       "install -Dm644 flatpak/org.tunaos.suite.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.suite.gschema.xml",
+      "install -Dm644 flatpak/fontconfig-local.conf /app/etc/fonts/local.conf",
       "glib-compile-schemas /app/share/glib-2.0/schemas/",
       "install -Dm644 flatpak/icons/org.tunaos.letters.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.letters.svg",
       "install -Dm644 flatpak/org.tunaos.letters.metainfo.xml /app/share/metainfo/org.tunaos.letters.metainfo.xml"
