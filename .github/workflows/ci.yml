@@ -131,6 +131,7 @@ jobs:
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_tall_sheet.py \
             tests/test_render_lab_page_window.py \
+            tests/test_render_lab_unscaled.py \
             tests/test_render_lab_unprinted_headings.py \
             tests/test_render_lab_wrap.py \
             tests/test_pixel_scoreboard.py \
@@ -235,6 +236,7 @@ jobs:
             tests/test_render_lab_wide_column.py \
             tests/test_render_lab_tall_sheet.py \
             tests/test_render_lab_page_window.py \
+            tests/test_render_lab_unscaled.py \
             tests/test_render_lab_unprinted_headings.py \
             tests/test_render_lab_wrap.py \
             tests/test_pixel_scoreboard.py \
