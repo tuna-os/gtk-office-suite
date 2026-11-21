@@ -40,7 +40,7 @@
     "C": "amber"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
-    "A": "green",
+    "A": "amber",
     "B": "green",
     "C": "amber"
   },
@@ -120,7 +120,7 @@
     "C": "amber"
   },
   "decks/real-human-resources-policies-and-delegations-leaders": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
@@ -255,7 +255,7 @@
     "C": "green"
   },
   "letters/real-sma-positive-result-call-checklist": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -314,7 +314,7 @@
     "B": "red"
   },
   "tables/real-available-data-and-their-modes-of-access": {
-    "A": "amber",
+    "A": "green",
     "B": "red",
     "C": "red"
   },
@@ -402,7 +402,7 @@
     "C": "amber"
   },
   "tables/real-otsi-annual-review-2025-2026-tables": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },

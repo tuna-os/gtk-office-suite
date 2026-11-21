@@ -2930,3 +2930,28 @@ fn a_list_item_in_a_cell_keeps_its_own_indent() {
     let text_at = item.style.left_indent_pt + letters_core::lists::text_indent_pt(0);
     assert!((text_at - 20.25).abs() < 0.01, "text at its own 405 twips: {text_at}");
 }
+
+/// A table cell's list survives a save and reopen: its kind, level and
+/// indent. The writer wrote a cell's paragraphs without their numbering,
+/// so a numbered or bulleted list in a table came back as plain text.
+#[test]
+fn a_list_in_a_cell_survives_a_docx_save() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 1);
+    let cells: Vec<usize> = d.paragraphs.iter().enumerate().filter(|(_, p)| p.style.table_cell.is_some_and(|c| c.table == table)).map(|(i, _)| i).collect();
+    assert_eq!(cells.len(), 2, "two cells");
+    d.paragraphs[cells[0]].runs = vec![letters_core::model::Run::plain("numbered")];
+    d.paragraphs[cells[0]].style.list = ListKind::Numbered;
+    d.paragraphs[cells[1]].runs = vec![letters_core::model::Run::plain("bulleted")];
+    d.paragraphs[cells[1]].style.list = ListKind::Bullet;
+    d.paragraphs[cells[1]].style.list_level = 1;
+    d.paragraphs[cells[1]].style.left_indent_pt = 6.0;
+    let rt = round_trip(&d);
+    let got: Vec<_> = rt
+        .paragraphs
+        .iter()
+        .filter(|p| p.style.table_cell.is_some())
+        .map(|p| (p.runs.iter().map(|r| r.text.as_str()).collect::<String>(), p.style.list, p.style.list_level, p.style.left_indent_pt))
+        .collect();
+    assert_eq!(got, [("numbered".to_string(), ListKind::Numbered, 0, 0.0), ("bulleted".to_string(), ListKind::Bullet, 1, 6.0)]);
+}

@@ -646,7 +646,7 @@ pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> 
             i = end;
             continue;
         }
-        let shaped = shape_beside_floats(&mut flow, para, col_w, opts, shaper);
+        let shaped = shape_beside_floats(&mut flow, para, col_w, opts, shaper, ordinals[i]);
         // Keep a heading, and any paragraph set to keep with the next (a
         // Title, a Word style's keepNext), with the first lines of what
         // follows it — in its own section: the next section starts a page
@@ -675,7 +675,7 @@ fn keep_chain(doc: &Document, n: usize, section_end: usize, col_w: f64, opts: &L
     let mut total = 0.0;
     for (k, i) in (n..section_end).enumerate() {
         let p = doc.paragraphs.get(i).filter(|p| p.style.table_cell.is_none())?;
-        let s = shape_paragraph(p, col_w, opts, shaper);
+        let s = shape_paragraph(p, col_w, opts, shaper, 1);
         let chained = keeps_with_next(p) && i + 1 < section_end && k < 10 && doc.paragraphs.get(i + 1).is_some_and(|n| n.style.table_cell.is_none());
         // Its first lines, or all of it when it is too short to leave its
         // orphans here and its widows over, as `place_paragraph` breaks
@@ -833,9 +833,11 @@ pub fn paragraph_box_x(p: &Paragraph) -> f64 {
 /// past it: the business appointment rules' bullets hang 2 twips at the
 /// margin, and their text starts at the 0.5in default stop, with the
 /// lines below back at the margin.
-fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions) -> f64 {
+fn list_first_line_pt(p: &Paragraph, box_x: f64, opts: &LayoutOptions, ordinal: u32) -> f64 {
     let st = &p.style;
-    let Some(marker) = lists::marker_for(st, 1) else { return 0.0 };
+    // The item's own label: "10." is wider than "1.", and past a hanging
+    // indent that "1." fits (the explanatory note's items 10 to 12).
+    let Some(marker) = lists::marker_for(st, ordinal.max(1)) else { return 0.0 };
     let hanging = st.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x);
     // Measured without a shaper, as every renderer rebuilds this request.
     let size = p.runs.first().and_then(|r| r.style.font_size_hp).map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
@@ -945,6 +947,12 @@ fn request_tabs(
 /// engine and every renderer build it here, so a renderer re-shaping a
 /// paragraph to draw it gets exactly the lines the engine placed.
 pub fn paragraph_request<'a>(p: &'a Paragraph, box_w: f64, opts: &'a LayoutOptions) -> ShapeRequest<'a> {
+    paragraph_request_at(p, box_w, opts, 1)
+}
+
+/// `paragraph_request` for a list item numbered `ordinal` in its document
+/// (`lists::ordinals`), whose label decides where its first line starts.
+pub fn paragraph_request_at<'a>(p: &'a Paragraph, box_w: f64, opts: &'a LayoutOptions, ordinal: u32) -> ShapeRequest<'a> {
     let st = &p.style;
     let box_x = paragraph_box_x(p);
     ShapeRequest {
@@ -957,7 +965,7 @@ pub fn paragraph_request<'a>(p: &'a Paragraph, box_w: f64, opts: &'a LayoutOptio
         width_pt: box_w,
         // A list item's first line starts at its text indent; the marker
         // hangs in front of it.
-        first_line_indent_pt: if st.list == ListKind::None { st.first_line_indent_pt } else { list_first_line_pt(p, box_x, opts) },
+        first_line_indent_pt: if st.list == ListKind::None { st.first_line_indent_pt } else { list_first_line_pt(p, box_x, opts, ordinal) },
         tab_stops: if st.toc.is_some() { Vec::new() } else { request_tabs(st, box_x, box_w) },
         right_tab: st.toc.is_some(),
         defaults: opts,
@@ -970,10 +978,10 @@ pub fn heading_scale(level: u8) -> f64 {
     [1.6, 1.4, 1.2, 1.1, 1.0, 0.9][usize::from(level.clamp(1, 6) - 1)]
 }
 
-fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Shaped {
+fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper, ordinal: u32) -> Shaped {
     let box_x = paragraph_box_x(p);
     let box_w = (avail_w - box_x - p.style.right_indent_pt.max(0.0)).max(1.0);
-    let mut lines = shaper.shape(&paragraph_request(p, box_w, opts));
+    let mut lines = shaper.shape(&paragraph_request_at(p, box_w, opts, ordinal));
     if lines.is_empty() {
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
@@ -993,7 +1001,7 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
             first.descent_pt = first.descent_pt.max(label.descent_pt);
         }
     }
-    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal: 1 }
+    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal }
 }
 
 /// The line a list item's label makes on its own when its list draws it
@@ -1347,9 +1355,9 @@ fn floating_boxes<'p>(flow: &Flow, para: &'p Paragraph, top: f64) -> Vec<(&'p Ru
 /// one that runs on past the object is not widened again below it). One
 /// with too little room there, or beside an object it may not sit beside,
 /// starts below the object.
-fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Shaped {
+fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper, ordinal: u32) -> Shaped {
     use crate::model::Wrap;
-    let shaped = shape_paragraph(para, col_w, opts, shaper);
+    let shaped = shape_paragraph(para, col_w, opts, shaper, ordinal);
     // A paragraph that starts a page of its own is past this page's.
     if para.style.page_break_before && !flow.page_is_empty() {
         return shaped;
@@ -1392,7 +1400,7 @@ fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &Lay
     if l == cx && r == cx + col_w {
         return shaped;
     }
-    let mut narrow = shape_paragraph(para, r - l, opts, shaper);
+    let mut narrow = shape_paragraph(para, r - l, opts, shaper, ordinal);
     narrow.box_x += l - cx;
     narrow.marker_x += l - cx;
     narrow
@@ -1471,8 +1479,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             let mut paras = Vec::new();
             for &(i, _) in cells.iter().filter(|(_, c)| c.row == row && c.col == col) {
                 let p = &doc.paragraphs[i];
-                let mut s = shape_paragraph(p, inner_w, &opts, shaper);
-                s.ordinal = ordinals.get(i).copied().unwrap_or(1);
+                let s = shape_paragraph(p, inner_w, &opts, shaper, ordinals.get(i).copied().unwrap_or(1));
                 let ph: f64 = s.lines.iter().map(|l| line_height(p, l)).sum::<f64>()
                     + p.style.space_before_pt.max(0.0)
                     + p.style.space_after_pt.max(0.0);
@@ -1935,7 +1942,7 @@ impl<'o> Flow<'o> {
         self.note_after.clear();
         for i in 0..doc.footnotes.len() {
             let p = note_paragraph(doc, i, self.opts);
-            let shaped = shape_paragraph(&p, text_w, self.opts, shaper);
+            let shaped = shape_paragraph(&p, text_w, self.opts, shaper, 1);
             self.note_lines.push(shaped.lines.iter().map(|l| line_height(&p, l)).collect());
             self.note_after.push(p.style.space_after_pt.max(0.0));
         }
@@ -2220,7 +2227,7 @@ impl<'o> Flow<'o> {
                 .iter()
                 .map(|piece| {
                     let p = note_paragraph(doc, piece.note, opts);
-                    let lines = shape_paragraph(&p, width, opts, shaper).lines;
+                    let lines = shape_paragraph(&p, width, opts, shaper, 1).lines;
                     (p, lines)
                 })
                 .collect();
