@@ -567,6 +567,11 @@ fn shadow_of(shdw: &Node, theme: &Theme, scale: f64) -> Option<super::shape::Sha
     })
 }
 
+/// Whether `spPr` states no fill of its own, so a fillRef's applies.
+fn own_fill_absent(sppr: Option<&Node>) -> bool {
+    sppr.is_none_or(|p| !p.children.iter().any(|c| matches!(c.name.as_str(), "a:noFill" | "a:solidFill" | "a:gradFill" | "a:blipFill" | "a:pattFill" | "a:grpFill")))
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SpStyle {
     pub style: ShapeStyle,
@@ -656,7 +661,18 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -
     let glow = effects.and_then(|e| e.child("a:glow")).and_then(|g| glow_of(g, theme, scale));
     let shadow = effects.and_then(|e| e.child("a:outerShdw")).and_then(|s| shadow_of(s, theme, scale));
 
-    SpStyle { style: ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src }, round_adj }
+    // A solid fill's opacity: its own colour's a:alpha, else the
+    // fillRef colour's. Opaque is no statement.
+    let fill_alpha = match (fill, &gradient) {
+        (Some(_), None) => {
+            let own = sppr.and_then(|p| p.child("a:solidFill"));
+            let by_ref = || style.and_then(|st| st.child("a:fillRef"));
+            own.or_else(|| own_fill_absent(sppr).then(by_ref).flatten()).map(alpha_of).filter(|a| *a < 1.0)
+        }
+        _ => None,
+    };
+
+    SpStyle { style: ShapeStyle { glow, shadow, fill, gradient, stroke, fill_src, stroke_src, fill_alpha }, round_adj }
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────

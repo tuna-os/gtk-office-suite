@@ -8,7 +8,7 @@
 // they came; only the drawing takes the Unicode glyph.
 
 /// The Unicode a bullet `ch` in `font` shows, when `font` is a symbol font
-/// we know: Wingdings or Symbol. A private-use form (`U+F0A7` for `§`, as
+/// we know: Wingdings, Wingdings 2 or Symbol. A private-use form (`U+F0A7` for `§`, as
 /// some writers store it) maps as its low byte. None for any other font,
 /// or a character we have no mapping for.
 pub fn unicode_bullet(font: Option<&str>, ch: &str) -> Option<&'static str> {
@@ -25,6 +25,14 @@ pub fn unicode_bullet(font: Option<&str>, ch: &str) -> Option<&'static str> {
     };
     match font.as_str() {
         "wingdings" => wingdings(code),
+        "wingdings 2" => match code {
+            // As LibreOffice draws them: a very small square, a black
+            // circle and a large one (the real decks' Wingdings 2 bullets).
+            0x97 => Some("\u{25CF}"),
+            0x98 => Some("\u{2B24}"),
+            0x9F => Some("\u{2B1D}"),
+            _ => None,
+        },
         "symbol" => match code {
             0xB7 => Some("\u{2022}"), // bullet
             0xA8 => Some("\u{2666}"), // black diamond suit
@@ -79,6 +87,8 @@ mod tests {
         assert_eq!(unicode_bullet(Some("Wingdings"), "ü"), Some("\u{2714}"));
         assert_eq!(unicode_bullet(Some("Wingdings"), "\u{F0A7}"), Some("\u{25AA}"), "private-use form");
         assert_eq!(unicode_bullet(Some("Symbol"), "·"), Some("\u{2022}"));
+        assert_eq!(unicode_bullet(Some("Wingdings 2"), "\u{F09F}"), Some("\u{2B1D}"));
+        assert_eq!(unicode_bullet(Some("Wingdings 2"), "\u{9F}"), Some("\u{2B1D}"));
     }
 
     #[test]
