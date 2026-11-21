@@ -1519,8 +1519,51 @@ pub fn draw_table(
         }
         cy += row_h;
     }
-    // The style's rules ("Medium Style 2": white 1 pt rules inside),
-    // between two grid positions only where they are different cells.
+    // The style's rules, then each cell's own edges over them.
+    draw_table_rules(cr, table, (x, y), &cols, &rows, scale, &owner);
+    let width = |pt: f64| (pt * 960.0 / 720.0 * scale).max(1.0);
+    let mut cy = y;
+    for (r, row_h) in rows.iter().enumerate() {
+        let mut cx = x;
+        for (c, col_w) in cols.iter().enumerate() {
+            if owner(r, c) == (r, c) {
+                if let Some(cell) = table.rows.get(r).and_then(|row| row.get(c)) {
+                    let (cw, rh) = spanned(r, c);
+                    let b = &cell.borders;
+                    for (edge, (x0, y0, x1, y1)) in [
+                        (b.left, (cx, cy, cx, cy + rh)),
+                        (b.top, (cx, cy, cx + cw, cy)),
+                        (b.right, (cx + cw, cy, cx + cw, cy + rh)),
+                        (b.bottom, (cx, cy + rh, cx + cw, cy + rh)),
+                    ] {
+                        if let decks_core::engine::table::Edge::Line { color, width_pt } = edge {
+                            let (lr, lg, lb) = color.to_f64();
+                            cr.set_source_rgb(lr, lg, lb);
+                            cr.set_line_width(width(width_pt));
+                            cr.move_to(x0, y0);
+                            cr.line_to(x1, y1);
+                            cr.stroke().unwrap();
+                        }
+                    }
+                }
+            }
+            cx += col_w;
+        }
+        cy += row_h;
+    }
+}
+
+/// The table style's rules ("Medium Style 2": white 1 pt rules inside),
+/// between two grid positions only where they are different cells.
+fn draw_table_rules(
+    cr: &cairo::Context,
+    table: &decks_core::engine::table::TableData,
+    (x, y): (f64, f64),
+    cols: &[f64],
+    rows: &[f64],
+    scale: f64,
+    owner: &dyn Fn(usize, usize) -> (usize, usize),
+) {
     let Some(rules) = table.rules() else { return };
     let (lr, lg, lb) = rules.color.to_f64();
     cr.set_source_rgb(lr, lg, lb);

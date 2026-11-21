@@ -1923,6 +1923,12 @@ fn recovery_rich_state_round_trip() {
         margins: None,
         paras: Vec::new(),
         anchor: Default::default(),
+        no_fill: true,
+        borders: decks_core::engine::table::CellBorders {
+            left: decks_core::engine::table::Edge::Line { color: decks_core::engine::shape::Color(0, 0, 0), width_pt: 0.5 },
+            top: decks_core::engine::table::Edge::None,
+            ..Default::default()
+        },
     };
     let slide = slide_of(
         vec![

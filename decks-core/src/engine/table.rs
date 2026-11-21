@@ -41,6 +41,43 @@ pub struct TableCell {
     /// Where the text sits down the cell (`a:tcPr anchor`).
     #[serde(default, skip_serializing_if = "is_top")]
     pub anchor: super::text_body::Anchor,
+    /// No fill, as the cell states (`a:tcPr/a:noFill`): the table style's
+    /// fill is not drawn under it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_fill: bool,
+    /// The cell's own edges (`a:lnL`, `a:lnT`, `a:lnR`, `a:lnB`).
+    #[serde(default, skip_serializing_if = "CellBorders::is_style")]
+    pub borders: CellBorders,
+}
+
+/// One edge of a cell as the cell states it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum Edge {
+    /// Not stated: the table style's rule, if it draws one.
+    #[default]
+    Style,
+    /// Stated as no line (`a:noFill`, or a width of 0).
+    None,
+    /// A line in `color`, `width_pt` points wide.
+    Line { color: Color, width_pt: f64 },
+}
+
+/// A cell's own edges, left, top, right and bottom.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct CellBorders {
+    pub left: Edge,
+    pub top: Edge,
+    pub right: Edge,
+    pub bottom: Edge,
+}
+
+impl CellBorders {
+    /// Every edge left to the table style.
+    pub fn is_style(&self) -> bool {
+        *self == CellBorders::default()
+    }
 }
 
 fn is_top(a: &super::text_body::Anchor) -> bool {
@@ -246,7 +283,8 @@ impl TableData {
             StyleFamily::LightStyle2 => (header.then_some(accent), if header { white } else { black }, header),
             StyleFamily::NoStyle | StyleFamily::TableGrid => (None, black, false),
         };
-        CellPaint { fill: own.or(fill), text, bold }
+        let no_fill = self.rows.get(r).and_then(|row| row.get(c)).is_some_and(|cell| cell.no_fill);
+        CellPaint { fill: if no_fill { None } else { own.or(fill) }, text, bold }
     }
 
     /// The rules the table's style draws between and around its cells.

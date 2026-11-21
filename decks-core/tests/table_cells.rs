@@ -85,3 +85,26 @@ fn a_cells_paragraph_styles_and_anchor_survive_a_pptx_save() {
     assert_eq!(back.paras[1].bullet, Bullet::Char("•".into()));
     assert!((back.paras[1].margin_left - 20.0).abs() < 0.1 && (back.paras[1].indent + 20.0).abs() < 0.1, "{:?}", back.paras[1]);
 }
+
+/// The backlog-reduction deck's timeline table: its style is the default
+/// Medium Style 2 (blue header, banded fills), but every cell states
+/// `a:noFill` and black 0.5 pt edges, so PowerPoint and LibreOffice draw
+/// a white grid with black rules. Decks drew the style's blue bands.
+#[test]
+fn a_cells_own_no_fill_and_edges_survive_a_pptx_save_and_drop_the_style_fill() {
+    use decks_core::engine::shape::Color;
+    use decks_core::engine::table::{CellBorders, Edge};
+    let black = Edge::Line { color: Color(0, 0, 0), width_pt: 0.5 };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("g.pptx");
+    let mut d = deck();
+    if let SlideObject::Table { table, .. } = &mut d.slides[0].objects[0] {
+        table.rows[0][0].no_fill = true;
+        table.rows[0][0].borders = CellBorders { left: black, top: black, right: Edge::None, bottom: black };
+        assert_eq!(table.cell_paint(0, 0).fill, None, "no style fill under a cell that states none");
+    }
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
+    let back = cell(&read_pptx(path.to_str().unwrap()).unwrap());
+    assert!(back.no_fill);
+    assert_eq!(back.borders, CellBorders { left: black, top: black, right: Edge::None, bottom: black });
+}

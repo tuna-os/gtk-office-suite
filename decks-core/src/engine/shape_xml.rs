@@ -423,6 +423,29 @@ pub(super) fn first_color(node: &Node, theme: &Theme, placeholder: Option<Color>
         .and_then(|c| color_of(c, theme, placeholder))
 }
 
+/// A table cell's own edges from its `a:tcPr`: each `a:lnL`/`a:lnT`/
+/// `a:lnR`/`a:lnB` that states a colour is a line of that colour and
+/// width (EMU to points, 1 pt when unstated), one that states `a:noFill`
+/// or no width is no line, and one not stated is the table style's.
+fn cell_borders(tc_pr: &Node, theme: &Theme) -> super::table::CellBorders {
+    use super::table::Edge;
+    let edge = |name: &str| match tc_pr.child(name) {
+        None => Edge::Style,
+        Some(ln) => {
+            let width = ln.attr("w").and_then(|v| v.parse::<f64>().ok());
+            if ln.child("a:noFill").is_some() || width == Some(0.0) {
+                Edge::None
+            } else {
+                match ln.child("a:solidFill").and_then(|f| first_color(f, theme, None)) {
+                    Some(color) => Edge::Line { color, width_pt: width.unwrap_or(12700.0) / 12700.0 },
+                    None => Edge::Style,
+                }
+            }
+        }
+    };
+    super::table::CellBorders { left: edge("a:lnL"), top: edge("a:lnT"), right: edge("a:lnR"), bottom: edge("a:lnB") }
+}
+
 /// A resolved fill.
 #[derive(Clone)]
 enum Fill {
@@ -791,6 +814,8 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme, links: &std::collections::H
                                     .and_then(|p| p.attr("anchor"))
                                     .and_then(super::text_body::Anchor::from_drawingml)
                                     .unwrap_or_default(),
+                                no_fill: tc.child("a:tcPr").is_some_and(|p| p.child("a:noFill").is_some()),
+                                borders: tc.child("a:tcPr").map(|p| cell_borders(p, theme)).unwrap_or_default(),
                                 margins: tc.child("a:tcPr").filter(|p| ["marL", "marT", "marR", "marB"].iter().any(|k| p.attr(k).is_some())).map(|p| {
                                     let m = |k: &str, d: f64| p.attr(k).and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
                                     (m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0))

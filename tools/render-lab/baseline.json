@@ -86,6 +86,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/table-cell-grid": {
+    "A": "green"
+  },
   "decks/table-text-panel": {
     "A": "green"
   },
