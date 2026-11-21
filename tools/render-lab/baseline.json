@@ -36,6 +36,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/layout-rules": {
+    "A": "green"
+  },
   "decks/pay-centre-reduced-connector-rules": {
     "A": "green",
     "B": "green",
@@ -69,6 +72,9 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "decks/section-colour-map-svg": {
+    "A": "green"
   },
   "decks/shape-effects": {
     "A": "amber"
