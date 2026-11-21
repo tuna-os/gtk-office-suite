@@ -16,7 +16,7 @@ a release has confirmed it yet; the row goes once one has.
 
 | Gap | How it shows | Tracked |
 |---|---|---|
-| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Open PRs #2376, #2409 (cell lists resolve their declared indent; #2410 keeps them on save) |
+| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Open PR #2409 (cell lists resolve their declared indent; #2410 keeps them on save) |
 | Word bullet glyphs other than the default dot (`-`, `o`, Symbol/Wingdings) | Every bullet level draws `•` | Fixed on main (#2374) |
 | Legacy Word form checkboxes (`FORMCHECKBOX`) | No box drawn | Fixed on main (#2372) |
 | A ruled table's top rule takes no height | Text below ruled tables drifts up by the rule width; a full page can gain a line Writer pushes to the next page (annex-a page 5) | Fixed on main (#2382) |
