@@ -177,7 +177,7 @@ fn place_inner(
             let ml = pangocairo::functions::create_layout(cr);
             ml.set_font_description(Some(desc));
             let first = para.first().map(|r| r.style.clone()).unwrap_or_default();
-            let text_pt = first.font_size_hp.map_or(18.0, |hp| hp as f64 / 2.0);
+            let text_pt = first.size_pt().unwrap_or(18.0);
             let ms = &st.marker;
             // A Wingdings or Symbol bullet draws as the Unicode glyph it
             // shows, in the text's font: those fonts aren't installed.
