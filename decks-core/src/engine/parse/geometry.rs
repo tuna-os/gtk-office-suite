@@ -160,7 +160,10 @@ impl SlideScale {
     fn scale_size(style: &mut suite_common_core::document::RunStyle, k: f64) {
         let pt = style.size_pt().unwrap_or(18.0) * k;
         style.font_size_hp = Some((pt * 2.0).round().clamp(1.0, u16::MAX as f64) as u16);
-        style.font_size_cpt = Some((pt * 100.0).round().clamp(1.0, u32::MAX as f64) as u32);
+        // Only off the half-point grid: a size that lands on it is the
+        // half points alone, as a run a writer gave that size is.
+        let cpt = (pt * 100.0).round().clamp(1.0, u32::MAX as f64) as u32;
+        style.font_size_cpt = (!cpt.is_multiple_of(50)).then_some(cpt);
     }
 }
 

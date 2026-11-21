@@ -102,3 +102,33 @@ fn a_set_size_wins_over_the_read_one() {
     style.font_size_hp = Some(30);
     assert_eq!(style.size_pt(), Some(15.0), "a stale exact size is ignored");
 }
+
+/// A run with no size of its own, saved on a page wider than Decks' model
+/// and read back, is the 18 pt it was: the file's sz is off the half-point
+/// grid, and rounding it before scaling read it back as 18.14 pt.
+#[test]
+fn a_default_size_survives_a_save_on_a_wider_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = deck(36);
+    if let SlideObject::TextBox { runs, .. } = &mut d.slides[0].objects[0] {
+        runs[0].style.font_size_hp = None;
+    }
+    // A 28 cm x 15.75 cm ODP page.
+    d.page_size = Some((10_080_000.0, 5_670_000.0));
+    let path = dir.path().join("w.pptx");
+    write_pptx(path.to_str().unwrap(), &d).unwrap();
+    let xml = part(&path, "ppt/slides/slide1.xml");
+    let sz: u32 = xml[xml.find(r#"sz=""#).expect("a run size") + 4..].split('"').next().unwrap().parse().unwrap();
+    assert!(!sz.is_multiple_of(50), "the fixture's size is off the half-point grid: sz={sz}");
+    let back = read_pptx(path.to_str().unwrap()).unwrap();
+    let style = back.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::TextBox { runs, .. } => runs.first().map(|r| r.style.clone()),
+            _ => None,
+        })
+        .expect("the text");
+    assert_eq!(style.font_size_hp, Some(36));
+    assert_eq!(style.font_size_cpt, None, "18 pt is on the half-point grid");
+}
