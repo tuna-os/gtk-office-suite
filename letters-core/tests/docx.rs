@@ -2641,6 +2641,63 @@ fn a_list_numbered_by_its_level_overrides_is_numbered() {
     assert_eq!((label.prefix.as_str(), label.suffix.as_str()), ("6.", "."));
 }
 
+/// A list item in a table cell stands where its own and its level's
+/// indents put it, as the same item in the body does: a paragraph that
+/// says only `w:left` keeps its level's hanging marker. Cell items kept
+/// their paragraph's left as the marker's, so a form's numbered decision
+/// stood 16pt right and wrapped a third narrower than Word and Writer
+/// draw it (render-real `transparency-information-about-outside-appoint`).
+#[test]
+fn a_numbered_item_in_a_cell_is_indented_as_in_the_body() {
+    use letters_core::model::TableCell;
+    let mut d = Document::from_plain_text("item\nafter");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    let table = d.insert_table_at(1, 1, 1);
+    let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 0, col: 0 })).unwrap();
+    d.paragraphs[at].runs = vec![letters_core::model::Run::plain("cell item")];
+    d.paragraphs[at].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        numbering.insert_str(
+            abs_at,
+            "<w:abstractNum w:abstractNumId=\"93\"><w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/>\
+             <w:pPr><w:ind w:left=\"720\" w:hanging=\"240\"/></w:pPr></w:lvl></w:abstractNum>",
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"93\"><w:abstractNumId w:val=\"93\"/></w:num></w:numbering>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        while let Some(at) = body.find("<w:ind ") {
+            let end = at + body[at..].find("/>").unwrap() + 2;
+            body.replace_range(at..end, "");
+        }
+        let mut out = String::new();
+        let mut rest = body.as_str();
+        let mut n = 0;
+        while let Some(at) = rest.find("<w:numPr>") {
+            let end = at + rest[at..].find("</w:numPr>").unwrap() + "</w:numPr>".len();
+            out.push_str(&rest[..at]);
+            out.push_str("<w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"93\"/></w:numPr><w:ind w:left=\"405\"/>");
+            rest = &rest[end..];
+            n += 1;
+        }
+        out.push_str(rest);
+        assert_eq!(n, 1, "fixture shape changed: {body}");
+        // The writer does not number a cell's paragraph: the item's own
+        // properties, as a Word form spells them.
+        let cell = "<w:tc><w:p><w:r><w:t>cell item";
+        assert!(out.contains(cell), "fixture shape changed: {out}");
+        *body = out.replace(cell, "<w:tc><w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"93\"/></w:numPr><w:ind w:left=\"405\"/></w:pPr><w:r><w:t>cell item");
+    });
+    let item = rt.paragraphs.iter().find(|p| p.text() == "item").unwrap();
+    let cell = rt.paragraphs.iter().find(|p| p.text() == "cell item").unwrap();
+    assert_eq!(
+        (cell.style.left_indent_pt, cell.style.list_hanging_pt),
+        (item.style.left_indent_pt, item.style.list_hanging_pt),
+        "the cell's item as the body's"
+    );
+    assert_eq!(item.style.list_hanging_pt, Some(12.0), "the level's 240tw hanging under the paragraph's own left");
+}
+
 /// A list item numbered by its own `w:numPr` takes its level's indent
 /// over its paragraph style's, as Word and Writer resolve it: a "List
 /// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One

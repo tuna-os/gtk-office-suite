@@ -1279,6 +1279,12 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                             // An empty paragraph is a line of the cell:
                             // a form's answer box is a cell of them.
                             let mut para = map_paragraph(&doc, &cp, table.style_id(), raw_cell);
+                            // A list item in a cell stands where its own
+                            // and its level's indents put it, as in the
+                            // body: without this a numbered decision in a
+                            // form's cell kept the paragraph's left as its
+                            // marker's, and wrapped a third narrower.
+                            list_indent_from_declared(&doc, &cp, &mut para.style);
                             drop_cell_page_breaks(&mut para, &cp);
                             keep(para);
                         }
