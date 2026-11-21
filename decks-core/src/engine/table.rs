@@ -231,7 +231,12 @@ impl TableData {
             let mix = |v: u8| (f64::from(v) * 0.2 + 255.0 * 0.8).round() as u8;
             Color(mix(c.0), mix(c.1), mix(c.2))
         };
-        let (fill, text, bold) = match self.family() {
+        // No family draws its header bold in Impress (LibreOffice 24.2's
+        // built-in table styles keep the body's weight; verified for Light
+        // Style 1-3 and Medium Style 2-3, header row and first column), so
+        // only a run's own `b="1"` makes header text bold. PowerPoint's
+        // styles bold it; the render lab's reference is Impress.
+        let (fill, text, _office_bold) = match self.family() {
             StyleFamily::MediumStyle2 => (
                 Some(if header { accent } else if banded { accent.tint(40_000) } else { accent.tint(20_000) }),
                 if header { white } else { black },
@@ -246,7 +251,7 @@ impl TableData {
             StyleFamily::LightStyle2 => (header.then_some(accent), if header { white } else { black }, header),
             StyleFamily::NoStyle | StyleFamily::TableGrid => (None, black, false),
         };
-        CellPaint { fill: own.or(fill), text, bold }
+        CellPaint { fill: own.or(fill), text, bold: false }
     }
 
     /// The rules the table's style draws between and around its cells.
@@ -318,7 +323,7 @@ mod tests {
         t.style_id = Some("{616DA210-FB5B-4158-B5E0-FEB733F419BA}".into());
         t.accent = Some(Color(0, 0, 0));
         let header = t.cell_paint(0, 0);
-        assert_eq!((header.fill, header.bold), (None, true));
+        assert_eq!((header.fill, header.bold), (None, false), "Impress keeps the header's weight");
         assert_eq!(t.cell_paint(1, 0).fill, Some(Color(204, 204, 204)), "the first band");
         assert_eq!(t.cell_paint(2, 0).fill, None);
         let rules = t.rules().unwrap();
@@ -343,10 +348,10 @@ mod tests {
     }
 
     #[test]
-    fn the_header_row_is_the_accent_with_white_bold_text() {
+    fn the_header_row_is_the_accent_with_white_text() {
         let t = table(true, true);
         let p = t.cell_paint(0, 1);
-        assert_eq!((p.fill, p.text, p.bold), (Some(Color(0x4F, 0x81, 0xBD)), Color(255, 255, 255), true));
+        assert_eq!((p.fill, p.text, p.bold), (Some(Color(0x4F, 0x81, 0xBD)), Color(255, 255, 255), false), "white, not bold, as Impress draws it");
     }
 
     /// A first column the style marks is drawn as the header row is: the
@@ -357,9 +362,8 @@ mod tests {
         let t = TableData { first_col: true, ..table(true, true) };
         let header = t.cell_paint(0, 1);
         assert_eq!(t.cell_paint(2, 0), header, "a body row's first cell is the header's paint");
-        assert!(t.cell_paint(2, 0).bold);
         assert_ne!(t.cell_paint(2, 1), header, "the rest of the row is a body cell");
-        assert!(!table(true, true).cell_paint(2, 0).bold, "unmarked, the first column is a body cell");
+        assert_ne!(table(true, true).cell_paint(2, 0), header, "unmarked, the first column is a body cell");
     }
 
     #[test]
