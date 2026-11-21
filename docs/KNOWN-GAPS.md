@@ -34,6 +34,10 @@ waiting to merge; the gap stays listed until it has.
 | Formulas referring to another workbook | Shown as `#REF!` instead of the cached value | Open PR #2381 (loads the cached value; the link itself is not kept, as the package scan warns) |
 | Hidden rows/columns in ODS (`collapse`/`filter`) | Shown | Open PR #2368 |
 | Sheet view zoom (`zoomScale`) | Opens at 100% where Excel opens at the file's zoom | Not started |
+| ODS conditional number formats (`style:map` by sign) | Negatives as `-2` and zero as `0` where Calc shows `(2)` and `-` (hmt-annual-report core tables) | Open PR #2390 |
+| Merged blocks bordered cell by cell; fills on half pixels | Inner borders drawn through merged text; grey seams between filled rows after a fractional-height row (ewco-claim-form) | Open PR #2391 |
+| Rich text in a cell (xlsx runs) | Every run in the cell's one font: a bold title's small italic version line, bold labels in a notes box | Open PR #2392 (read, drawn, saved); ODS `text:span` styles not read |
+| Hyperlinked cells | Drawn in the cell style's blue where Calc draws a cell's link navy (otsi-annual-review, record-of-non-lethal-actions) | Open PR #2393 |
 
 Render-lab note: the Tables `scale` metric compared our grid with a
 printout shrunk by the file's print scale; open PR #2384 compares against
@@ -62,5 +66,13 @@ not listed above:
 
 - Fonts that differ between the Flatpak runtime and the reference container
   shift OCR word positions by a point or two.
+- xlsx column widths follow Excel, not Calc. Tables draws `<col width="w">`
+  at Excel's 7 px per character (Calibri 11 or Arial 10): widths 10, 20 and
+  40 are 70, 140 and 280 px. LibreOffice 24.2 draws them at the default
+  font's unrounded digit width, about 7.4 px: 74, 148 and 296 px (measured
+  on a ruled test workbook). A wide column can therefore wrap a line Calc
+  keeps whole (competition-in-uk-electricity's 159-character column A wraps
+  "markets." onto a third line). Matching Calc would put every xlsx column
+  about 6% off Excel, so this is kept as a deliberate difference.
 - A Tier C capture is a window, not a page: Tables shows the grid on screen
   where LibreOffice prints a page (`compare.py` `window_to_page`).
