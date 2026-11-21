@@ -3,7 +3,7 @@
 //
 // Split out of io.rs (issue #247).
 
-use super::props::{parse_sheet_qualified_range, read_sheet_props_from_ods, read_sheet_props_from_xlsx};
+use super::props::{parse_sheet_qualified_range, read_sheet_props_from_ods_within, read_sheet_props_from_xlsx};
 
 // io.rs — Spreadsheet file I/O: xlsx/ods/csv/tsv import, xlsx export.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -194,6 +194,21 @@ fn names_another_workbook(formula: &str) -> bool {
         }
     }
     false
+}
+
+/// A file's merges, each cut to the part of it inside `sheet`, as a merge
+/// made in the app must be (`controller::ops`, `Op::Merge`). A file can
+/// state a merge of the whole grid in forty bytes, and the writer, the
+/// export and the used range walk every cell a merge covers: the sheet
+/// opened, and the first save ran out of memory. A merge left with one
+/// cell is no merge.
+fn merges_within(sheet: &SheetModel, merges: &[(usize, usize, usize, usize)]) -> Vec<(usize, usize, usize, usize)> {
+    merges
+        .iter()
+        .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
+        .map(|&(r, c, rows, cols)| (r, c, rows.min(sheet.rows - r), cols.min(sheet.cols - c)))
+        .filter(|&(_, _, rows, cols)| rows > 1 || cols > 1)
+        .collect()
 }
 
 /// `.xlsb` is a binary container, not the XML package the xlsx reader
@@ -614,12 +629,7 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                     sheet.notes[*r][*c] = Some(note.clone());
                 }
             }
-            sheet.merges = props
-                .merges
-                .iter()
-                .copied()
-                .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
-                .collect();
+            sheet.merges = merges_within(&sheet, &props.merges);
             sheet.protection = props.protection.clone();
         }
         sheets.push(sheet);
@@ -641,7 +651,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         if name == "_xlnm.Print_Area" {
             if let Some((sheet_name, r0, c0, r1, c1)) = parse_sheet_qualified_range(formula) {
                 if let Some(sheet) = sheets.iter_mut().find(|s| s.name == sheet_name) {
-                    sheet.print_area = Some((r0, c0, r1, c1));
+                    // Inside the sheet, as a merge is (`merges_within`):
+                    // the export walks every cell of it.
+                    if r0 < sheet.rows && c0 < sheet.cols {
+                        sheet.print_area = Some((r0, c0, r1.min(sheet.rows - 1), c1.min(sheet.cols - 1)));
+                    }
                 }
             }
             continue;
@@ -852,7 +866,8 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     // Indices are clamped to this grid for the same reason as there: the
     // sheet is sized from its cell content, and a file can legally name a
     // width for a column past the last one holding data.
-    let props = read_sheet_props_from_ods(path);
+    let sizes = sheets.iter().map(|s| (s.name.clone(), (s.rows, s.cols))).collect();
+    let props = read_sheet_props_from_ods_within(path, Some(&sizes));
     for sheet in &mut sheets {
         let Some(p) = props.get(&sheet.name) else { continue };
         if let Some(setup) = &p.page_setup {
@@ -871,12 +886,7 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
                 sheet.row_heights[r] = px;
             }
         }
-        sheet.merges = p
-            .merges
-            .iter()
-            .copied()
-            .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
-            .collect();
+        sheet.merges = merges_within(sheet, &p.merges);
         // Rows and columns the file hides (`table:visibility`), as Calc
         // draws them: a collapsed row or column takes no space. ods has no
         // autofilter definition here, so every hide is a manual one.

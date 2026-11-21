@@ -428,16 +428,27 @@ fn deep_nesting_child() {
 
 #[test]
 fn deep_nesting_neither_overflows_nor_crawls() {
-    run_deep_nesting_child(std::time::Duration::from_secs(120));
+    run_child("deep_nesting_child", DEEP_NESTING_CHILD, "deep nesting", None, std::time::Duration::from_secs(120));
 }
 
-/// Start `deep_nesting_child` in a process of its own and fail on its death
-/// or on its overrunning `budget`, naming the input it had reached.
-fn run_deep_nesting_child(budget: std::time::Duration) {
+/// Start the test `test` in a process of its own, with `marker` set, and fail on its death or on its overrunning `budget`, naming the
+/// input it had reached. With `memory_kib` the child may address no more
+/// than that (`ulimit -v`), so an allocation that would take the machine
+/// down ends the child instead.
+fn run_child(test: &str, marker: &str, what: &str, memory_kib: Option<u64>, budget: std::time::Duration) {
     use std::io::Read;
-    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["deep_nesting_child", "--exact", "--ignored", "--nocapture", "--test-threads=1"])
-        .env(DEEP_NESTING_CHILD, "1")
+    let exe = std::env::current_exe().unwrap();
+    let mut command = match memory_kib {
+        Some(kib) => {
+            let mut shell = std::process::Command::new("sh");
+            shell.args(["-c", &format!("ulimit -v {kib} && exec \"$0\" \"$@\"")]).arg(exe);
+            shell
+        }
+        None => std::process::Command::new(exe),
+    };
+    let mut child = command
+        .args([test, "--exact", "--include-ignored", "--nocapture", "--test-threads=1"])
+        .env(marker, "1")
         .env_remove("RUST_MIN_STACK")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
@@ -464,10 +475,191 @@ fn run_deep_nesting_child(budget: std::time::Duration) {
     let text = reader.join().unwrap();
     let reached = text.lines().rfind(|l| l.starts_with("reading ")).unwrap_or("(nothing)");
     match status {
-        None => panic!("deep nesting took over {budget:?}; it was {reached}"),
+        None => panic!("{what} took over {budget:?}; it was {reached}"),
         Some(status) => {
-            assert!(status.success(), "a reader died on deep nesting ({status}) {reached}");
-            assert!(text.contains("deep nesting: all read"), "the child stopped early:\n{text}");
+            assert!(status.success(), "a reader died on {what} ({status}) {reached}\n{text}");
+            assert!(text.contains(&format!("{what}: all read")), "the child stopped early:\n{text}");
         }
     }
+}
+
+// ── counts and ranges that multiply, out of process ───────────────────
+// A file states a count or a range in a few bytes, and a reader that takes
+// it at its word allocates or loops for it. None of these panics: the
+// process runs out of memory or never comes back, which `catch_unwind`
+// cannot see and which, in process, would take the test run down with it.
+// So they run in a child that may address 4 GiB, and the parent fails when
+// the child dies, overruns its budget, or reads something it should not.
+// Each file is a few kilobytes. On the code before this section was added:
+// the two .ods files ended the process on open (one styled cell repeated
+// 4096 times in a row repeated 4096 times is 16.7 million styles), the
+// chart anchor never came back, and the merge and the print area opened
+// and then ended the process on the first save or PDF export.
+
+const SIZE_BOMBS_CHILD: &str = "SIZE_BOMBS_CHILD";
+
+fn temp_file(bytes: &[u8], suffix: &str) -> tempfile::NamedTempFile {
+    let mut file = tempfile::Builder::new().suffix(suffix).tempfile().unwrap();
+    file.write_all(bytes).unwrap();
+    file.flush().unwrap();
+    file
+}
+
+/// An .ods whose one sheet, `S`, holds a cell and then `rows`.
+fn ods_with_rows(rows: &str) -> Vec<u8> {
+    let content = format!(
+        "<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
+         xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
+         xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
+         xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\">\
+         <office:automatic-styles>\
+         <style:style style:name=\"ro1\" style:family=\"table-row\"><style:table-row-properties style:row-height=\"1cm\"/></style:style>\
+         <style:style style:name=\"ce1\" style:family=\"table-cell\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
+         </office:automatic-styles>\
+         <office:body><office:spreadsheet><table:table table:name=\"S\"><table:table-row>\
+         <table:table-cell office:value-type=\"string\"><text:p>x</text:p></table:table-cell></table:table-row>{rows}\
+         </table:table></office:spreadsheet></office:body></office:document-content>"
+    );
+    let manifest = "<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\">\
+                    <manifest:file-entry manifest:full-path=\"/\" manifest:media-type=\"application/vnd.oasis.opendocument.spreadsheet\"/>\
+                    <manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/></manifest:manifest>";
+    package(&[
+        ("mimetype", "application/vnd.oasis.opendocument.spreadsheet".to_string()),
+        ("META-INF/manifest.xml", manifest.to_string()),
+        ("content.xml", content),
+    ])
+}
+
+/// A workbook whose sheet holds one value and then `sheet_extra`, with
+/// `names` in its `definedNames` and `more` parts beside the sheet.
+fn xlsx_with(sheet_extra: &str, names: &str, more: &[(&str, &str)]) -> Vec<u8> {
+    let workbook = format!(
+        "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" \
+         xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>\
+         <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets><definedNames>{names}</definedNames></workbook>"
+    );
+    let sheet = format!(
+        "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" \
+         xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheetData><row r=\"1\">\
+         <c r=\"A1\"><v>1</v></c></row></sheetData>{sheet_extra}</worksheet>"
+    );
+    let mut parts = vec![
+        (
+            "_rels/.rels",
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" \
+             Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" \
+             Target=\"xl/workbook.xml\"/></Relationships>"
+                .to_string(),
+        ),
+        ("xl/workbook.xml", workbook),
+        (
+            "xl/_rels/workbook.xml.rels",
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" \
+             Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" \
+             Target=\"worksheets/sheet1.xml\"/></Relationships>"
+                .to_string(),
+        ),
+        ("xl/worksheets/sheet1.xml", sheet),
+    ];
+    parts.extend(more.iter().map(|(name, content)| (*name, content.to_string())));
+    package(&parts)
+}
+
+/// Does its work only as the child
+/// `a_count_or_range_that_multiplies_stays_in_the_sheet` starts, with
+/// `SIZE_BOMBS_CHILD` set; run with the other tests it returns at once.
+#[test]
+fn size_bombs_child() {
+    use tables_core::sheet::{MAX_SHEET_CELLS, SHEET_MAX_ROWS};
+    if std::env::var_os(SIZE_BOMBS_CHILD).is_none() {
+        return;
+    }
+    let inside = |sheet: &tables_core::sheet::SheetModel, (top, left, bottom, right): (usize, usize, usize, usize)| {
+        top <= bottom && left <= right && bottom < sheet.rows && right < sheet.cols
+    };
+
+    // 20,000 times 4096 rows with a height: 82 million rows, on a grid of
+    // one million.
+    eprintln!("reading ods rows repeated past the grid");
+    let rows = "<table:table-row table:style-name=\"ro1\" table:number-rows-repeated=\"4096\"><table:table-cell/></table:table-row>";
+    let file = temp_file(&ods_with_rows(&rows.repeat(20_000)), ".ods");
+    let path = file.path().to_str().unwrap();
+    let (_, sheets) = tables_core::io::load_workbook(path).expect("the sheet opens");
+    assert_eq!((sheets[0].rows, sheets[0].cols), (100, 26), "at the size of its one cell");
+    let props = tables_core::io::read_sheet_props_from_ods(path);
+    let heights = &props["S"].row_heights;
+    assert!(heights.len() <= SHEET_MAX_ROWS && heights.keys().all(|&r| r < SHEET_MAX_ROWS), "{} heights", heights.len());
+
+    // A styled cell repeated 4096 times in a row repeated 4096 times, 64
+    // times over. `office:value-type=` is in the tag, which is all the
+    // layout reader asks before it styles a repeated cell, and not where
+    // the value reader finds a value: so the sheet stays one cell large.
+    eprintln!("reading ods styled cells repeated in repeated rows");
+    let cells = "<table:table-row table:number-rows-repeated=\"4096\"><table:table-cell table:style-name=\"ce1\" \
+                 table:content-validation-name=\"office:value-type=\" table:number-columns-repeated=\"4096\"/></table:table-row>";
+    let file = temp_file(&ods_with_rows(&cells.repeat(64)), ".ods");
+    let path = file.path().to_str().unwrap();
+    let (_, sheets) = tables_core::io::load_workbook(path).expect("the sheet opens");
+    assert_eq!((sheets[0].rows, sheets[0].cols), (100, 26), "at the size of its one cell");
+    let styled = tables_core::io::read_sheet_props_from_ods(path)["S"].cell_styles.len();
+    assert!(styled <= MAX_SHEET_CELLS, "{styled} styles for a sheet that opens with at most {MAX_SHEET_CELLS} cells");
+
+    // A merge of the whole grid: the writer visits every cell it covers.
+    eprintln!("reading xlsx merge of the whole grid");
+    let file = temp_file(&xlsx_with("<mergeCells count=\"1\"><mergeCell ref=\"A1:XFD1048576\"/></mergeCells>", "", &[]), ".xlsx");
+    let (_, sheets) = tables_core::io::load_workbook(file.path().to_str().unwrap()).expect("the workbook opens");
+    let sheet = &sheets[0];
+    assert_eq!(sheet.merges, [(0, 0, sheet.rows, sheet.cols)], "the merge, as much of it as the sheet holds");
+    assert_eq!(sheet.used_extent(), Some((sheet.rows - 1, sheet.cols - 1)));
+    tables_core::io::save_sheets_to_xlsx_bytes(&sheets, None).expect("and saves");
+
+    // A print area of the whole grid: the PDF export writes every cell of it.
+    eprintln!("reading xlsx print area of the whole grid");
+    let names = "<definedName name=\"_xlnm.Print_Area\" localSheetId=\"0\">Sheet1!$A$1:$XFD$1048576</definedName>";
+    let file = temp_file(&xlsx_with("", names, &[]), ".xlsx");
+    let (engine, sheets) = tables_core::io::load_workbook(file.path().to_str().unwrap()).expect("the workbook opens");
+    let area = sheets[0].print_area.expect("the print area");
+    assert!(inside(&sheets[0], area), "{area:?} on a sheet of {} by {}", sheets[0].rows, sheets[0].cols);
+    let typst = tables_core::export::to_typst_for_sheet(&engine, &sheets[0]);
+    assert!(typst.len() < 1 << 20, "{} bytes of Typst for a sheet of one value", typst.len());
+
+    // A chart from row 1 to row 1e19: its height is a sum over the rows.
+    eprintln!("reading xlsx chart anchored past the grid");
+    let rels = |kind: &str, target: &str| {
+        format!(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" \
+             Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" Target=\"{target}\"/></Relationships>"
+        )
+    };
+    let drawing = "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" \
+                   xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+                   xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" \
+                   xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><xdr:twoCellAnchor>\
+                   <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>\
+                   <xdr:to><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>10000000000000000000</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>\
+                   <xdr:graphicFrame><a:graphic><a:graphicData><c:chart r:id=\"rId1\"/></a:graphicData></a:graphic></xdr:graphicFrame>\
+                   </xdr:twoCellAnchor></xdr:wsDr>";
+    let chart = "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:chart><c:plotArea><c:barChart>\
+                 <c:ser><c:val><c:numRef><c:f>Sheet1!$A$1:$A$1</c:f></c:numRef></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>";
+    let workbook = xlsx_with(
+        "<drawing r:id=\"rId1\"/>",
+        "",
+        &[
+            ("xl/worksheets/_rels/sheet1.xml.rels", &rels("drawing", "../drawings/drawing1.xml")),
+            ("xl/drawings/drawing1.xml", drawing),
+            ("xl/drawings/_rels/drawing1.xml.rels", &rels("chart", "../charts/chart1.xml")),
+            ("xl/charts/chart1.xml", chart),
+        ],
+    );
+    let file = temp_file(&workbook, ".xlsx");
+    let path = file.path().to_str().unwrap();
+    assert_eq!(tables_core::io::read_charts_from_xlsx(path).len(), 1, "the chart is read, at the default size");
+    tables_core::io::load_workbook(path).expect("the workbook opens");
+
+    eprintln!("size bombs: all read");
+}
+
+#[test]
+fn a_count_or_range_that_multiplies_stays_in_the_sheet() {
+    run_child("size_bombs_child", SIZE_BOMBS_CHILD, "size bombs", Some(4 << 20), std::time::Duration::from_secs(120));
 }
