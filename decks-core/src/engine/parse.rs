@@ -979,7 +979,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     let blank = role.is_some() && !has_text;
                                     let text = if blank { String::new() } else { text };
                                     let runs = if blank { Vec::new() } else { runs };
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body: scale.text_body(body) });
                                 } else {
                                     // The shape as the file draws it: its own
                                     // preset and paint. It used to become a

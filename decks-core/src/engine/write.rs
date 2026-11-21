@@ -177,7 +177,8 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
 /// placeholder inherits its master's body style (bullets, indents), which a
 /// plain box of ours never asked for.
 fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, placeholder: bool) -> Result<(), quick_xml::Error> {
-    if *st == ParaStyle::default() && !placeholder {
+    // The end mark is written after the runs (`write_end_para`), not here.
+    if (ParaStyle { end_run: None, ..st.clone() }) == ParaStyle::default() && !placeholder {
         return Ok(());
     }
     let mut p = BytesStart::new("a:pPr");
@@ -282,6 +283,9 @@ fn write_paragraphs<W: std::io::Write>(
     // precisely why it needed fixing rather than measuring once and
     // trusting.
     let mut para = 0usize;
+    // Whether the open paragraph has a run: an empty one writes its end
+    // mark's size, which is how tall PowerPoint sets it.
+    let mut wrote = false;
     writer.write_event(Event::Start(BytesStart::new("a:p")))?;
     write_para_pr(writer, &body.para(0), body.placeholder.is_some())?;
     for (run, piece, starts_paragraph) in effective.iter().flat_map(|run| {
@@ -291,6 +295,8 @@ fn write_paragraphs<W: std::io::Write>(
         })
     }) {
         if starts_paragraph {
+            write_end_para(writer, &body.para(para), wrote)?;
+            wrote = false;
             writer.write_event(Event::End(BytesEnd::new("a:p")))?;
             writer.write_event(Event::Start(BytesStart::new("a:p")))?;
             para += 1;
@@ -307,10 +313,22 @@ fn write_paragraphs<W: std::io::Write>(
             }
             if !line.is_empty() {
                 write_run(writer, &run.style, line, links)?;
+                wrote = true;
             }
         }
     }
+    write_end_para(writer, &body.para(para), wrote)?;
     writer.write_event(Event::End(BytesEnd::new("a:p")))?;
+    Ok(())
+}
+
+/// An empty paragraph's `a:endParaRPr`, with the size it was read with.
+fn write_end_para<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, wrote: bool) -> Result<(), quick_xml::Error> {
+    let Some(hp) = st.end_run.as_ref().and_then(|r| r.font_size_hp).filter(|_| !wrote) else { return Ok(()) };
+    let mut end = BytesStart::new("a:endParaRPr");
+    end.push_attribute(("lang", "en-US"));
+    end.push_attribute(("sz", ((file_size(hp as f64) * 50.0).round() as u32).to_string().as_str()));
+    writer.write_event(Event::Empty(end))?;
     Ok(())
 }
 
