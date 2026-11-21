@@ -43,9 +43,12 @@ impl Default for TutaDelivery {
     }
 }
 
-/// [`TutaDelivery`] as an Outbox row keeps it, passwords left out. Empty is
-/// a row queued before Hylki asked, or from another kind of account, which
-/// reads as the default.
+/// [`TutaDelivery`] as an Outbox row keeps it, passwords left out. A row
+/// that says nothing, or nothing known, was queued by a build that did not
+/// write the choice down, a confidential message's included. It reads as not
+/// agreed to: the helper refuses to send it outside Tuta as ordinary mail,
+/// and it waits in the Outbox for the user to choose. Mail to Tuta addresses
+/// only goes end-to-end encrypted either way.
 impl TutaDelivery {
     pub(crate) fn stored(&self) -> &'static str {
         match (self.confidential, self.ordinary_confirmed) {
@@ -62,12 +65,12 @@ impl TutaDelivery {
                 ordinary_confirmed: false,
                 passwords: TutaPasswords::default(),
             },
-            "unconfirmed" => TutaDelivery {
+            "ordinary" => TutaDelivery::default(),
+            _ => TutaDelivery {
                 confidential: false,
                 ordinary_confirmed: false,
                 passwords: TutaPasswords::default(),
             },
-            _ => TutaDelivery::default(),
         }
     }
 }
@@ -164,8 +167,11 @@ mod tests {
             assert_eq!(back.ordinary_confirmed, delivery.ordinary_confirmed);
             assert!(back.passwords.is_empty());
         }
-        // A row from before, or from another kind of account.
-        assert_eq!(TutaDelivery::from_stored(""), TutaDelivery::default());
+        // A row that does not say is never read as agreed to.
+        for unsaid in ["", "Confidential", "sealed"] {
+            let back = TutaDelivery::from_stored(unsaid);
+            assert!(!back.confidential && !back.ordinary_confirmed, "{unsaid}");
+        }
     }
 
     #[test]
