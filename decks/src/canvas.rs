@@ -91,6 +91,10 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
             }
         }
     }
+    if let Some(surf) = load_svg(path) {
+        IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surf.clone()); });
+        return Some(surf);
+    }
     // Sniff the format from the bytes: images extracted from a pptx are
     // written to extensionless temp files on purpose (gh-268: the
     // extension came from the untrusted document), and `image::open`
@@ -119,6 +123,37 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     }
     surface.flush();
     IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surface.clone()); });
+    Some(surface)
+}
+
+/// An SVG picture (Office's SVG-only graphics: icons, a title slide's
+/// artwork), rasterised through gdk-pixbuf's SVG loader at a size that
+/// stays sharp when the picture fills a slide. `None` for anything that is
+/// not SVG text, which the other decoders handle.
+fn load_svg(path: &str) -> Option<cairo::ImageSurface> {
+    use gtk4::gdk::prelude::GdkCairoContextExt;
+    use std::io::Read;
+    let mut head = [0u8; 512];
+    let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
+    let text = String::from_utf8_lossy(&head[..n]);
+    let t = text.trim_start_matches('\u{feff}').trim_start();
+    if !(t.starts_with("<svg") || (t.starts_with("<?xml") || t.starts_with("<!--")) && text.contains("<svg")) {
+        return None;
+    }
+    let (_, w, h) = gtk4::gdk_pixbuf::Pixbuf::file_info(path)?;
+    let (w, h) = (w.max(1) as f64, h.max(1) as f64);
+    // The long side at 2048 px: an icon drawn small, or artwork filling a
+    // slide, both stay crisp, and memory stays bounded.
+    let k = 2048.0 / w.max(h);
+    let (pw, ph) = ((w * k).round().max(1.0) as i32, (h * k).round().max(1.0) as i32);
+    let pixbuf = gtk4::gdk_pixbuf::Pixbuf::from_file_at_scale(path, pw, ph, true).ok()?;
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, pixbuf.width(), pixbuf.height()).ok()?;
+    {
+        let cr = cairo::Context::new(&surface).ok()?;
+        cr.set_source_pixbuf(&pixbuf, 0.0, 0.0);
+        cr.paint().ok()?;
+    }
+    surface.flush();
     Some(surface)
 }
 
