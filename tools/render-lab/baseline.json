@@ -33,6 +33,9 @@
     "B": "green",
     "C": "green"
   },
+  "decks/layout-rules": {
+    "A": "green"
+  },
   "decks/line-spacing": {
     "A": "green"
   },

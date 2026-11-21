@@ -95,9 +95,14 @@ pub(super) fn master_shapes(
         /// relationship.
         picture: bool,
         embed: Option<String>,
+        /// A connector (`p:cxnSp`); `sp_index` is then its index into
+        /// `cxn_paints`.
+        connector: bool,
     }
     let paints = sp_styles(xml, theme, scale.x);
+    let cxn_paints = cxn_styles(xml, theme, scale.x);
     let mut sp_count = 0usize;
+    let mut cxn_count = 0usize;
     impl Pending {
         fn push_run(&mut self, mut text: String) {
             // Leading blank paragraphs keep their lines, as on a slide.
@@ -148,8 +153,30 @@ pub(super) fn master_shapes(
                         sp_index: sp_count,
                         picture: false,
                         embed: None,
+                        connector: false,
                     });
                     sp_count += 1;
+                }
+                // A connector: a master's rule under the title (#1397 on
+                // slides). It used to be skipped here, so every slide on
+                // such a master lost its rule.
+                "p:cxnSp" => {
+                    cur = Some(Pending {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.0,
+                        h: 0.0,
+                        prst: None,
+                        has_ph: false,
+                        runs: Vec::new(),
+                        pending_breaks: 0,
+                        cur_style: RunStyle::default(),
+                        sp_index: cxn_count,
+                        picture: false,
+                        embed: None,
+                        connector: true,
+                    });
+                    cxn_count += 1;
                 }
                 "p:pic" => {
                     cur = Some(Pending {
@@ -165,6 +192,7 @@ pub(super) fn master_shapes(
                         sp_index: usize::MAX,
                         picture: true,
                         embed: None,
+                        connector: false,
                     });
                 }
                 "a:blip" => {
@@ -259,6 +287,19 @@ pub(super) fn master_shapes(
                         }
                     }
                 }
+                "p:cxnSp" => {
+                    if let Some(p) = cur.take().filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
+                        let paint = cxn_paints.get(p.sp_index).cloned().unwrap_or_default();
+                        // A connector with a flat box (a bent or curved one
+                        // whose ends are level) is a straight segment: drawn
+                        // as a line, not as a zero-height shape of its preset.
+                        let mut kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("line"));
+                        if (p.w == 0.0 || p.h == 0.0) && !crate::engine::shape::is_line(&kind) {
+                            kind = ShapeKind::from_prst("line");
+                        }
+                        shapes.push(SlideObject::Shape { kind, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, style: paint.style });
+                    }
+                }
                 "p:bg" => in_bg = false,
                 "a:t" => in_text = false,
                 "a:rPr" => in_rpr = false,
@@ -269,7 +310,10 @@ pub(super) fn master_shapes(
                 }
                 "p:sp" => {
                     if let Some(p) = cur.take() {
-                        if !p.has_ph && p.w > 0.0 && p.h > 0.0 {
+                        // A line has no height (or width) of its own.
+                        let line = crate::engine::shape::is_line(&ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect")));
+                        let sized = if line { p.w > 0.0 || p.h > 0.0 } else { p.w > 0.0 && p.h > 0.0 };
+                        if !p.has_ph && sized {
                             let text = text_of(&p.runs);
                             let has_text = !text.trim().is_empty();
                             if has_text {
