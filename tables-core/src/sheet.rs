@@ -1335,6 +1335,27 @@ impl Default for SheetProtection {
     }
 }
 
+/// The font of one run of a rich-text cell. A run with a font of its own
+/// (xlsx `<rPr>`) states all of it; one without uses the cell's.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct RunFont {
+    pub family: Option<String>,
+    /// Points.
+    pub size: Option<f64>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strikethrough: bool,
+    pub color: Option<crate::style::Rgb>,
+}
+
+/// One piece of a rich-text cell's value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextRun {
+    pub text: String,
+    pub font: Option<RunFont>,
+}
+
 #[derive(Clone)]
 pub struct SheetModel {
     pub name: String,
@@ -1388,6 +1409,11 @@ pub struct SheetModel {
     /// Cell notes (Excel's notes, Calc's comments): plain text shown on
     /// hover, marked by a red corner.
     pub notes: Vec<Vec<Option<String>>>,
+    /// Cells whose text is styled piece by piece (xlsx rich text: a bold
+    /// title over a small italic version line), keyed by (row, col). Drawn
+    /// only while the cell still shows exactly these runs' text, so an edit
+    /// falls back to the cell's own style.
+    pub rich_text: std::collections::HashMap<(usize, usize), Vec<TextRun>>,
     /// The explicit filter definition (TBL-003), if the sheet has one.
     /// `hidden_rows` below is derived from it; the definition is what
     /// persists (xlsx autoFilter), undoes and clears as one.
@@ -1468,6 +1494,7 @@ impl SheetModel {
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
+            rich_text: std::collections::HashMap::new(),
             pivot_tables: Vec::new(),
             protection: SheetProtection::default(),
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],
@@ -1488,9 +1515,43 @@ impl SheetModel {
     /// Insert blank rows while preserving every row-oriented sheet feature.
     /// Keeping this operation in the model prevents the UI and importers from
     /// silently shifting values without shifting their formats or metadata.
+    /// Move rich text with its cells when rows (`rows`) or columns are
+    /// inserted (`delta` > 0) or deleted (< 0) at `at`; deleted cells'
+    /// runs go with them.
+    fn shift_rich_text(&mut self, rows: bool, at: usize, delta: isize) {
+        if self.rich_text.is_empty() {
+            return;
+        }
+        let old = std::mem::take(&mut self.rich_text);
+        for ((r, c), runs) in old {
+            let k = if rows { r } else { c };
+            let moved = if k < at {
+                Some(k)
+            } else if delta < 0 && k < at + delta.unsigned_abs() {
+                None
+            } else {
+                k.checked_add_signed(delta)
+            };
+            if let Some(k) = moved {
+                self.rich_text.insert(if rows { (k, c) } else { (r, k) }, runs);
+            }
+        }
+    }
+
+    /// The cell's styled runs, if it has them and still shows their text.
+    pub fn rich_runs(&self, r: usize, c: usize, shown: &str) -> Option<&[TextRun]> {
+        let runs = self.rich_text.get(&(r, c))?;
+        let mut rest = shown;
+        for run in runs {
+            rest = rest.strip_prefix(run.text.as_str())?;
+        }
+        rest.is_empty().then_some(runs.as_slice())
+    }
+
     pub fn insert_rows(&mut self, at: usize, count: usize) {
         assert!(at <= self.rows);
         if count == 0 { return; }
+        self.shift_rich_text(true, at, count as isize);
         insert_matrix_rows(&mut self.data, at, count, self.cols);
         insert_matrix_rows(&mut self.formulas, at, count, self.cols);
         insert_matrix_rows(&mut self.formats, at, count, self.cols);
@@ -1508,6 +1569,7 @@ impl SheetModel {
         assert!(at <= self.rows && count <= self.rows - at);
         if count == 0 { return; }
         let end = at + count;
+        self.shift_rich_text(true, at, -(count as isize));
         delete_matrix_rows(&mut self.data, at, end);
         delete_matrix_rows(&mut self.formulas, at, end);
         delete_matrix_rows(&mut self.formats, at, end);
@@ -1526,6 +1588,7 @@ impl SheetModel {
     pub fn insert_cols(&mut self, at: usize, count: usize) {
         assert!(at <= self.cols);
         if count == 0 { return; }
+        self.shift_rich_text(false, at, count as isize);
         insert_matrix_cols(&mut self.data, at, count);
         insert_matrix_cols(&mut self.formulas, at, count);
         insert_matrix_cols(&mut self.formats, at, count);
@@ -1543,6 +1606,7 @@ impl SheetModel {
         assert!(at <= self.cols && count <= self.cols - at);
         if count == 0 { return; }
         let end = at + count;
+        self.shift_rich_text(false, at, -(count as isize));
         delete_matrix_cols(&mut self.data, at, end);
         delete_matrix_cols(&mut self.formulas, at, end);
         delete_matrix_cols(&mut self.formats, at, end);
@@ -2667,6 +2731,23 @@ mod selection_tests {
 #[cfg(test)]
 mod sort_tests {
     use super::*;
+
+    #[test]
+    fn rich_text_follows_its_cell_and_gives_way_to_an_edit() {
+        let mut s = SheetModel::new("t", 4, 4, 0);
+        let runs = vec![
+            TextRun { text: "Title\n".into(), font: None },
+            TextRun { text: "v2".into(), font: Some(RunFont { italic: true, ..RunFont::default() }) },
+        ];
+        s.rich_text.insert((1, 1), runs);
+        assert!(s.rich_runs(1, 1, "Title\nv2").is_some());
+        assert!(s.rich_runs(1, 1, "Edited").is_none(), "an edited cell draws in its own style");
+        s.insert_rows(0, 2);
+        s.insert_cols(1, 1);
+        assert!(s.rich_runs(3, 2, "Title\nv2").is_some(), "the runs move with the cell");
+        s.delete_rows(3, 1);
+        assert!(s.rich_text.is_empty(), "a deleted cell's runs go with it");
+    }
 
     #[test]
     fn toggle_sort_does_not_panic_and_sorts() {
