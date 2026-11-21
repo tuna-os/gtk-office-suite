@@ -110,7 +110,7 @@
     "C": "amber"
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -152,12 +152,12 @@
   "letters/real-affordable-housing-supply-data-dictionary": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-annex-a-annual-report-form": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-audit-and-risk-assurance-committee-minutes-24-ja": {
     "A": "green",
@@ -267,7 +267,7 @@
   "letters/real-social-housing-sales-data-dictionary": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-statistical-release-october-to-december-2020": {
     "A": "green",
@@ -302,7 +302,7 @@
   "tables/real-2020-deep-sea-stock": {
     "A": "amber",
     "B": "red",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
     "A": "amber",
