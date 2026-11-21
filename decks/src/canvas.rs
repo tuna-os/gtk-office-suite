@@ -1484,8 +1484,8 @@ pub fn draw_table(
             ..Default::default()
         };
         // A style's bold header, on each run that doesn't state itself
-        // regular (b="0"); no built-in style bolds it, as in Impress (see
-        // `TableData::cell_paint`).
+        // regular (b="0"); of the built-in styles only Light Style 1 bolds
+        // it, as in Impress (see `TableData::cell_paint`).
         let mut runs = cell.runs.clone();
         if table.cell_paint(r, c).bold {
             for run in runs.iter_mut().filter(|run| !run.style.regular) {

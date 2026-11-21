@@ -222,8 +222,12 @@ impl TableData {
         // The first column, when the style marks it, is drawn as the header
         // row is (Office's table styles: the accent with white bold text in
         // the medium styles, bold in the light ones).
-        let header = (self.first_row && r == 0) || (self.first_col && c == 0);
-        let banded = !header && self.band_row && (if self.first_row { r - 1 } else { r }) % 2 == 0;
+        // Impress paints a marked first column as the header only in the
+        // medium styles; in the light ones it is a body (or banded) cell
+        // (LibreOffice 24.2, Light Style 1-3 with firstCol).
+        let medium = matches!(self.family(), StyleFamily::MediumStyle2 | StyleFamily::MediumStyle3);
+        let header = (self.first_row && r == 0) || (medium && self.first_col && c == 0);
+        let banded = !header && self.band_row && (if self.first_row { r.saturating_sub(1) } else { r }) % 2 == 0 && !(self.first_row && r == 0);
         let black = Color(0, 0, 0);
         let white = Color(255, 255, 255);
         // A band in the colour at 20% over white (`alpha val="20000"`).
@@ -231,11 +235,13 @@ impl TableData {
             let mix = |v: u8| (f64::from(v) * 0.2 + 255.0 * 0.8).round() as u8;
             Color(mix(c.0), mix(c.1), mix(c.2))
         };
-        // No family draws its header bold in Impress (LibreOffice 24.2's
-        // built-in table styles keep the body's weight; verified for Light
-        // Style 1-3 and Medium Style 2-3, header row and first column), so
-        // only a run's own `b="1"` makes header text bold. PowerPoint's
-        // styles bold it; the render lab's reference is Impress.
+        // Impress bolds the header row and a marked first column in Light
+        // Style 1 only; Light Style 2 and 3 and Medium Style 2 and 3 keep
+        // the body's weight there (LibreOffice 24.2, verified from its PDF's
+        // fonts), so in those only a run's own `b="1"` makes header text
+        // bold. PowerPoint bolds them all; the render lab's reference is
+        // Impress.
+        let bold = self.family() == StyleFamily::LightStyle1 && ((self.first_row && r == 0) || (self.first_col && c == 0));
         let (fill, text, _office_bold) = match self.family() {
             StyleFamily::MediumStyle2 => (
                 Some(if header { accent } else if banded { accent.tint(40_000) } else { accent.tint(20_000) }),
@@ -251,7 +257,7 @@ impl TableData {
             StyleFamily::LightStyle2 => (header.then_some(accent), if header { white } else { black }, header),
             StyleFamily::NoStyle | StyleFamily::TableGrid => (None, black, false),
         };
-        CellPaint { fill: own.or(fill), text, bold: false }
+        CellPaint { fill: own.or(fill), text, bold }
     }
 
     /// The rules the table's style draws between and around its cells.
@@ -364,6 +370,23 @@ mod tests {
         assert_eq!(t.cell_paint(2, 0), header, "a body row's first cell is the header's paint");
         assert_ne!(t.cell_paint(2, 1), header, "the rest of the row is a body cell");
         assert_ne!(table(true, true).cell_paint(2, 0), header, "unmarked, the first column is a body cell");
+    }
+
+    /// In the light styles Impress draws a marked first column as a body
+    /// cell, banded with its row (LibreOffice 24.2).
+    #[test]
+    fn the_light_styles_leave_the_first_column_and_dark_bands_plain() {
+        let light = |id: &str| TableData { first_col: true, style_id: Some(id.into()), accent: Some(Color(0, 0, 0)), ..table(true, true) };
+        let l3 = light("{616DA210-FB5B-4158-B5E0-FEB733F419BA}");
+        assert_eq!(l3.cell_paint(1, 0), l3.cell_paint(1, 1), "the first column bands with its row");
+        assert_eq!(l3.cell_paint(1, 0).fill, Some(Color(204, 204, 204)));
+        let l2 = light("{7E9639D4-E3E2-4D34-9284-5A2195B3D0D7}");
+        assert_eq!(l2.cell_paint(2, 0), l2.cell_paint(2, 1), "no header paint down the first column");
+        let l1 = TableData { accent: Some(Color(0x4F, 0x81, 0xBD)), ..light("{3B4B98B0-60AC-42C2-AFA5-B58CD77FA1E5}") };
+        assert_eq!(l1.cell_paint(1, 0).fill, l1.cell_paint(1, 1).fill, "Light Style 1 too");
+        assert!(l1.cell_paint(0, 1).bold && l1.cell_paint(1, 0).bold, "Light Style 1 alone bolds its header and first column");
+        assert!(!l1.cell_paint(1, 1).bold && !l2.cell_paint(0, 1).bold && !l3.cell_paint(0, 1).bold);
+        assert_eq!(l1.cell_paint(1, 1).fill, Some(Color(220, 230, 242)), "the band is the accent at 20%");
     }
 
     #[test]
