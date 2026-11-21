@@ -73,10 +73,58 @@ def csv_filter(src):
     return f"Text - txt - csv (StarCalc):{ord(delim)},34,{charset},1"
 
 
+def unscaled_copy(src, tmpdir):
+    """A copy of workbook `src` that prints at 100%, or `src` itself when it
+    already does (or is not an xlsx package).
+
+    Tables draws a sheet's cells at their own size, as Excel and Calc show
+    them, whatever the sheet's page setup says about printing: a print scale
+    (`pageSetup scale`) or fit to page (`pageSetUpPr fitToPage`) shrinks the
+    printout, not the grid. Printed so, LibreOffice's reference drew every
+    cell at 46-67% of its size in the real workbooks that set one, and the
+    scale metric read a correct grid as 1.5-2.2x too big. The screen tiers
+    compare cells against cells, so the reference prints them at their own
+    size; the export lab keeps the file's print settings."""
+    import re
+    import zipfile
+
+    if not zipfile.is_zipfile(src):
+        return src
+    scaled = re.compile(r'(<(?:\w+:)?pageSetup\b[^>]*?)\s(?:scale|fitToWidth|fitToHeight)="[^"]*"')
+    fit = re.compile(r'(<(?:\w+:)?pageSetUpPr\b[^>]*?)\sfitToPage="(?:1|true)"')
+    changed, parts = False, []
+    with zipfile.ZipFile(src) as z:
+        for info in z.infolist():
+            data = z.read(info.filename)
+            if info.filename.startswith("xl/worksheets/") and info.filename.endswith(".xml"):
+                text = data.decode("utf-8", "replace")
+                new = text
+                for pat in (scaled, fit):
+                    while True:
+                        nxt = pat.sub(r"\1", new)
+                        if nxt == new:
+                            break
+                        new = nxt
+                if new != text:
+                    changed = True
+                    data = new.encode("utf-8")
+            parts.append((info, data))
+    if not changed:
+        return src
+    out = os.path.join(tmpdir, "unscaled", os.path.basename(src))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for info, data in parts:
+            z.writestr(info, data)
+    return out
+
+
 def to_pdf(src, outdir, profile, app=None):
     # A private profile per run: a shared one serializes conversions and
     # carries state (recent files, first-start dialogs) between runs.
     infilter = csv_filter(src) if app == "tables" else None
+    if app == "tables" and not infilter:
+        src = unscaled_copy(src, outdir)
     subprocess.run(
         [
             soffice(),
