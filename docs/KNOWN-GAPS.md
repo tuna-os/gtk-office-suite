@@ -78,5 +78,11 @@ not listed above:
   keeps whole (competition-in-uk-electricity's 159-character column A wraps
   "markets." onto a third line). Matching Calc would put every xlsx column
   about 6% off Excel, so this is kept as a deliberate difference.
+- LibreOffice lays text out with hinted glyph advances at its render size,
+  so Liberation Sans (Arial) runs about 3% off ours at small sizes. A line
+  near its box's width can wrap one word differently (pcm-draft-hcm-data
+  slide 3: "AI | Steering" where LibreOffice keeps "AI Steering"), which the
+  lab counts as a lost line. The sizes and box widths match; only the
+  advances differ.
 - A Tier C capture is a window, not a page: Tables shows the grid on screen
   where LibreOffice prints a page (`compare.py` `window_to_page`).
