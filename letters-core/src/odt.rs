@@ -4227,6 +4227,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                 }
                 "draw:frame" | "draw:custom-shape" | "draw:rect" => {
+                    // A floating frame holds its paragraph open a line tall,
+                    // the line of the text around its anchor: the span it
+                    // sits in, as Writer sizes it. The opt-out form floats
+                    // each answer box from a paragraph whose only content is
+                    // a 10pt Arial span around the frame; sized by the
+                    // paragraph's 12pt instead, every row stood 3pt taller.
+                    let mark = span_stack.last().map(|l| (l.font_size_hp, l.font_family.clone())).unwrap_or_default();
                     if frame.as_ref().is_some_and(|f| f.depth == frame_depth && f.text_box.is_some()) {
                         let f = frame.take().expect("the frame just checked");
                         // A shape that is neither a rectangle nor holds text
@@ -4247,6 +4254,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                     // One placed as a character floats at its
                                     // paragraph.
                                     image_anchor: Some(f.anchor.unwrap_or_default()),
+                                    font_size_hp: mark.0,
+                                    font_family: mark.1,
                                     ..Default::default()
                                 },
                             });
@@ -4270,6 +4279,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                     image_extent_emu: f.extent,
                                     image_sides_emu: f.sides,
                                     image_anchor: f.anchor,
+                                    font_size_hp: mark.0.filter(|_| f.anchor.is_some()),
+                                    font_family: mark.1.filter(|_| f.anchor.is_some()),
                                     ..Default::default()
                                 },
                             });
@@ -7143,6 +7154,29 @@ mod tests {
         assert_eq!(tb.padding_emu, [45_720, 91_440, 45_720, 91_440]);
         let a = boxes[0].style.image_anchor.unwrap();
         assert_eq!((a.h_from, a.h_align, a.v_from, a.y_emu, a.wrap), (AnchorFrame::Margin, Some(AnchorAlign::End), AnchorFrame::Text, 91_440, crate::model::Wrap::Parallel));
+    }
+
+    /// A floating frame's run carries the look of the span around it: the
+    /// paragraph it floats from is a line of that text tall, as in Writer.
+    /// The opt-out form wraps each answer box in a 10pt Arial span in a
+    /// paragraph otherwise empty; read without it, the line took the
+    /// paragraph's 12pt and every form row stood 3pt taller than Writer's.
+    #[test]
+    fn a_floating_frame_carries_the_look_of_the_span_around_it() {
+        let content = "<office:document-content><office:automatic-styles>\
+            <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties style:font-name=\"Arial\" fo:font-size=\"10pt\"/></style:style>\
+            <style:style style:name=\"a1\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"parallel\" style:vertical-rel=\"paragraph\"/></style:style>\
+            </office:automatic-styles><office:body><office:text>\
+            <text:p><text:span text:style-name=\"T1\"><draw:frame draw:style-name=\"a1\" text:anchor-type=\"paragraph\" svg:width=\"2in\" svg:height=\"0.3in\"><draw:text-box><text:p/></draw:text-box></draw:frame></text:span></text:p>\
+            <text:p><draw:frame draw:style-name=\"a1\" text:anchor-type=\"paragraph\" svg:width=\"2in\" svg:height=\"0.3in\"><draw:text-box><text:p/></draw:text-box></draw:frame></text:p>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let look = |p: usize| {
+            let r = d.paragraphs[p].runs.iter().find(|r| r.style.text_box.is_some()).expect("the box");
+            (r.style.font_size_hp, r.style.font_family.clone())
+        };
+        assert_eq!(look(0), (Some(20), Some("Arial".into())), "the 10pt Arial span's");
+        assert_eq!(look(1), (None, None), "outside a span, the paragraph's own");
     }
 
     /// A frame whose style fills it only with `fo:background-color` is
