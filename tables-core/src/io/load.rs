@@ -846,6 +846,11 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
             .copied()
             .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
             .collect();
+        // Rows and columns the file hides (`table:visibility`), as Calc
+        // draws them: a collapsed row or column takes no space. ods has no
+        // autofilter definition here, so every hide is a manual one.
+        *sheet.hidden_rows_manual = p.hidden_rows.iter().copied().filter(|&r| r < sheet.rows).collect();
+        *sheet.hidden_cols = p.hidden_cols.iter().copied().filter(|&c| c < sheet.cols).collect();
         // Number formats, cell styles, borders and cell protection, as the
         // xlsx reader applies them, and the sheet's protection (TBL-005).
         for (r, c, x) in &p.cell_styles {
@@ -1301,6 +1306,41 @@ mod tests {
         let names: Vec<&str> = sheets.iter().map(|s| s.name.as_str()).collect();
         assert_eq!(names, ["Accounts"]);
         assert_eq!(engine.cell(0, 1), "42");
+    }
+
+    /// A row or column Calc hides (`table:visibility="collapse"`) opens
+    /// hidden: the reader ignored it, so a sheet's collapsed working rows
+    /// all showed (render-real `2020-deep-sea-stock`).
+    #[test]
+    fn an_ods_opens_with_its_hidden_rows_and_columns_hidden() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hidden.ods");
+        let cell = |v: &str| format!(r#"<table:table-cell office:value-type="string"><text:p>{v}</text:p></table:table-cell>"#);
+        let row = |vis: &str, v: &str| format!(r#"<table:table-row{vis}>{}{}{}</table:table-row>"#, cell(v), cell(v), cell(v));
+        let content = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.3">
+<office:body><office:spreadsheet><table:table table:name="S">
+<table:table-column/><table:table-column table:visibility="collapse"/><table:table-column/>
+{}{}{}</table:table></office:spreadsheet></office:body></office:document-content>"#,
+            row("", "a"),
+            row(r#" table:visibility="collapse""#, "b"),
+            row("", "c"),
+        );
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/vnd.oasis.opendocument.spreadsheet").unwrap();
+        zip.start_file("META-INF/manifest.xml", stored).unwrap();
+        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>"#).unwrap();
+        zip.start_file("content.xml", stored).unwrap();
+        zip.write_all(content.as_bytes()).unwrap();
+        zip.finish().unwrap();
+        let (_, sheets) = load_ods_workbook(path.to_str().unwrap()).expect("the workbook opens");
+        let s = &sheets[0];
+        assert!(s.is_row_hidden(1) && !s.is_row_hidden(0) && !s.is_row_hidden(2));
+        assert!(s.is_col_hidden(1) && !s.is_col_hidden(0) && !s.is_col_hidden(2));
     }
 
     /// Calc's sheet protection opens protected, with its selection and
