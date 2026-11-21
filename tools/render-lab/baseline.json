@@ -474,12 +474,12 @@
     "C": "green"
   },
   "tables/print-fit-page": {
-    "A": "green",
+    "A": "amber",
     "B": "green",
     "C": "green"
   },
   "tables/print-scale": {
-    "A": "red",
+    "A": "green",
     "B": "red",
     "C": "red"
   },
