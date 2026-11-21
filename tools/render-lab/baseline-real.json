@@ -302,7 +302,7 @@
   "tables/real-2020-deep-sea-stock": {
     "A": "amber",
     "B": "red",
-    "C": "green"
+    "C": "amber"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
     "A": "amber",
