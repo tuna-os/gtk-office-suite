@@ -30,6 +30,8 @@ impl From<&RunStyle> for neutral::RunStyle {
             link: s.link.clone(),
             font_family: s.font_family.clone(),
             font_size_hp: s.font_size_hp,
+            // Letters keeps sizes in half points.
+            font_size_cpt: None,
             color: s.color.clone(),
             vert_align: s.vert_align,
         }
