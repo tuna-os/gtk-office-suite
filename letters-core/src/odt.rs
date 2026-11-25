@@ -4089,7 +4089,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     let tagged = attr_val(&e, "loext:tag").as_deref().and_then(chip_from_name);
                     let dated = || {
                         let v = attr_val(&e, "loext:current-date")?.get(..10)?.to_string();
-                        crate::chips::NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()?;
+                        crate::chips::parse_iso(&v)?;
                         (attr_val(&e, "loext:date").as_deref() == Some("true"))
                             .then_some(crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v })
                     };
@@ -4099,7 +4099,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:date" if para.is_some() => {
                     let value = attr_val(&e, "text:date-value").and_then(|v| v.get(..10).map(str::to_string));
-                    if let Some(v) = value.filter(|v| crate::chips::NaiveDate::parse_from_str(v, "%Y-%m-%d").is_ok()) {
+                    if let Some(v) = value.filter(|v| crate::chips::parse_iso(v).is_some()) {
                         chip = Some((crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v }, String::new(), "text:date"));
                     }
                 }

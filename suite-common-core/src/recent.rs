@@ -39,7 +39,7 @@ impl RecentManager {
         // Remove any prior entry for the same path
         self.items.retain(|item| item.path != path);
 
-        let now = chrono::Utc::now().timestamp();
+        let now = jiff::Timestamp::now().as_second();
         self.items.insert(
             0,
             RecentItem {
