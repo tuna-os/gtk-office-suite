@@ -2,7 +2,7 @@
 //! the list.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::ui::sidebar::SidebarInput;
 

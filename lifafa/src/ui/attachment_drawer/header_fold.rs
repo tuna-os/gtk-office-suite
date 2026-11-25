@@ -3,7 +3,7 @@
 //! drawn past the window's edge.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use super::{AttachmentDrawer, AttachmentDrawerInput, SLIDER_ROOM};
 

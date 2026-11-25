@@ -8,7 +8,7 @@ use crate::config::ComposeFormat;
 use crate::i18n::{i18n, i18n_f};
 use crate::ui::rich_editor::RichEditor;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 /// The buttons at the far end of the format bar: merge fields, template,
 /// signature, translate, preview and the format chooser, in that order.

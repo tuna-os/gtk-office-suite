@@ -4,7 +4,7 @@ use super::messages::ComposeInput;
 use super::Compose;
 use crate::ui::rich_editor::RichEditor;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 /// Development hooks for the capture scripts (`HYLKI_SHOWCASE_*`, most of
 /// them only with `HYLKI_DEMO`).

@@ -1,7 +1,7 @@
 //! Applying sidebar settings.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::ui::contacts_page::ContactsPageInput;
 use crate::ui::preferences::{PrefInput, PrefOutput};

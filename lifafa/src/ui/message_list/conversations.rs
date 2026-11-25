@@ -9,7 +9,7 @@ use super::types::{MessageListInput, MessageListOutput};
 use super::MessageList;
 use crate::models::Message;
 use crate::ui::message_row::{RowData, RowMeta};
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use std::rc::Rc;
 
 impl MessageList {
