@@ -268,10 +268,8 @@ fn scan_metadata(html: &str) -> Meta {
                         }
                     }
                 }
-                "time" => {
-                    if time_seen.is_none() {
-                        time_seen = attr(&attrs, "datetime").and_then(|d| clean(d, 64));
-                    }
+                "time" if time_seen.is_none() => {
+                    time_seen = attr(&attrs, "datetime").and_then(|d| clean(d, 64));
                 }
                 _ => {}
             },
@@ -710,13 +708,7 @@ impl<'m> Walker<'m> {
                 self.flush();
             }
             match name.as_str() {
-                "br" => {
-                    if self.pre_depth == 0 {
-                        self.flush();
-                    } else {
-                        self.flush();
-                    }
-                }
+                "br" => self.flush(),
                 "hr" => self.flush(),
                 "img" => self.image(&attrs),
                 _ => {}
