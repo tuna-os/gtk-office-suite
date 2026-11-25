@@ -19,7 +19,7 @@
 //! - Text and table sizes are capped; a cut is reported, never silent.
 //! - Only read tools exist. Any other `tools/call` is an unknown tool.
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
