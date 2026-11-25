@@ -46,7 +46,7 @@ jobs:
           sudo apt-get install -y -qq libreoffice libgtk-4-dev libadwaita-1-dev \
             xvfb dbus at-spi2-core matchbox-window-manager xdotool x11-utils gsettings-desktop-schemas \
             python3-dogtail python3-pytest python3-pil python3-requests
-          python3 -m pip install --break-system-packages mss
+          python3 -m pip install --break-system-packages --require-hashes -r tests/gui/requirements-capture.txt
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable

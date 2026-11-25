@@ -106,7 +106,7 @@ jobs:
       - name: Vendor the crate sources
         run: |
           set -euo pipefail
-          pip install --break-system-packages --quiet aiohttp tomlkit
+          pip install --break-system-packages --quiet --require-hashes -r fork/cargo-generator-requirements.txt
           curl -fsSL -o "$RUNNER_TEMP/flatpak-cargo-generator.py" "$CARGO_GENERATOR"
           python3 "$RUNNER_TEMP/flatpak-cargo-generator.py" Cargo.lock -o cargo-sources.json
           test -s cargo-sources.json

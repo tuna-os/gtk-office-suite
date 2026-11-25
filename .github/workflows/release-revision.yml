@@ -98,7 +98,7 @@ jobs:
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager xdotool \
             x11-utils python3-dogtail python3-pytest python3-pil python3-requests
-          python3 -m pip install --break-system-packages mss
+          python3 -m pip install --break-system-packages --require-hashes -r tests/gui/requirements-capture.txt
       - name: Run the release-critical journeys at the release revision
         if: always()
         run: |
