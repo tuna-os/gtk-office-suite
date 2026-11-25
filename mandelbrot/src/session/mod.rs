@@ -28,6 +28,7 @@ mod ignored_users;
 mod notifications;
 mod remote;
 mod room;
+mod recovery_screen;
 mod room_list;
 mod security;
 mod session_settings;
@@ -40,7 +41,7 @@ mod verification;
 
 pub(crate) use self::{
     call::*, global_account_data::*, ignored_users::*, notifications::*, remote::*, room::*,
-    room_list::*, security::*, session_settings::*, sidebar_data::*, space_hierarchy::*, user::*,
+    recovery_screen::*, room_list::*, security::*, session_settings::*, sidebar_data::*, space_hierarchy::*, user::*,
     user_sessions_list::*, verification::*,
 };
 use crate::{

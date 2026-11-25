@@ -12,6 +12,7 @@ use crate::{
     identity_verification_view::IdentityVerificationView,
     session::{
         CryptoIdentityState, IdentityVerification, RecoveryState, Session, SessionVerificationState,
+        can_recover,
     },
     spawn, toast,
     utils::BoundObjectWeakRef,
@@ -290,7 +291,7 @@ mod imp {
                 return;
             };
 
-            let can_recover = session.security().recovery_state() != RecoveryState::Disabled;
+            let can_recover = can_recover(session.security().recovery_state());
             self.use_recovery_btn.set_visible(can_recover);
         }
 
@@ -428,7 +429,7 @@ mod imp {
                 return;
             };
 
-            let can_recover = session.security().recovery_state() != RecoveryState::Disabled;
+            let can_recover = can_recover(session.security().recovery_state());
 
             if can_recover {
                 let recovery_view = self.recovery_page(CryptoRecoverySetupInitialPage::Reset);
