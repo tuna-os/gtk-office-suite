@@ -43,21 +43,53 @@ With --baseline, exits 1 if any fixture's verdict got worse (the ratchet).
 import argparse
 import functools
 import glob
-import html
 import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 from collections import Counter
 
 import numpy as np
 from PIL import Image, ImageOps
 
-TIERS = ("A", "B", "X", "C")
-VERDICT_RANK = {"missing": 0, "red": 1, "amber": 2, "green": 3}
-PX_TO_PT = 72.0 / 96.0
+# Sibling modules: this file is also loaded by path (tests, export_compare).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from compare_ocr import (  # noqa: F401  (re-exported: tests and export_compare use compare.<name>)
+    LOST_LINE_MIN_WORDS,
+    PX_TO_PT,
+    blank_rules,
+    is_printed,
+    join_matches,
+    mark_printed,
+    match_words,
+    norm_word,
+    ocr_crop_text,
+    ocr_pass,
+    ocr_words,
+    printed_words,
+    rescue_unread,
+    union_words,
+)
+from compare_pixels import (  # noqa: F401
+    background,
+    bridge,
+    color_groups,
+    color_presence,
+    erase_keys,
+    erase_rules,
+    ink_mask,
+    lo_cell_box,
+    load,
+    long_lines,
+    longest_run,
+    our_cell_origin,
+    run_lengths,
+    salient_colors,
+    ssim,
+)
+from compare_report import TIER_AGREE, TIERS, VERDICT_RANK, fmt, ratchet, write_report  # noqa: F401
 
 # Budgets. Deliberately explicit: moving one is a reviewed change.
 RED_INK = 0.10  # we drew <10% of LibreOffice's ink: "not rendered"
@@ -67,647 +99,12 @@ GREEN_DISP_PT = 6.0
 GREEN_COLORS = 0.90
 GREEN_SSIM = 0.75
 GREEN_SCALE = 0.10  # Tables: our grid within ±10% of LibreOffice's size
-# A line of LibreOffice's text is lost when at least this many words long
-# and half or more of them are missing from ours. `words` is a page-wide
-# fraction, so a header reading "Page  of" instead of "Page 2 of 5" (two
-# words out of ~500 on the page) scored 99% and was green; per line it is
-# half of its words gone. Three words: a two-word line losing one word is
-# too often an OCR split ("8pt text" read as one token) to judge.
-LOST_LINE_MIN_WORDS = 3
 METRICS = ("ink", "words", "disp_pt", "colors", "ssim", "scale")
 # How many of LibreOffice's printed pages a Tables sheet is matched against.
 SHEET_CANDIDATES = 10
 # The share of a printed page's words our opening sheet must hold for the
 # page to be the sheet's own.
 SHEET_CONTAINED = 0.5
-TIER_AGREE = 3.0  # grey levels; measured 0.0-0.3 when the tiers agree
-
-
-# ── image helpers ─────────────────────────────────────────────────────────
-def load(path, size=None):
-    img = Image.open(path).convert("RGB")
-    if size and img.size != size:
-        img = img.resize(size, Image.LANCZOS)
-    return img
-
-
-def background(arr):
-    """Most common colour along a ring just inside the image border: the
-    page/slide/grid background, whatever colour it is. Inset by a few px
-    because a crop can carry a 1 px frame line on its edge (the Decks
-    canvas draws one round the slide), which would otherwise win."""
-    i = 4 if min(arr.shape[:2]) > 16 else 0
-    border = np.concatenate([arr[i], arr[-1 - i], arr[:, i], arr[:, -1 - i]])
-    vals, counts = np.unique(border.reshape(-1, 3), axis=0, return_counts=True)
-    return vals[counts.argmax()].astype(int)
-
-
-def ink_mask(arr):
-    bg = background(arr)
-    return np.abs(arr.astype(int) - bg).sum(axis=2) > 60
-
-
-def long_lines(mask, axis):
-    """Indices of rows (axis=1) or columns (axis=0) of `mask` holding an
-    unbroken line over half the image long, grouped into (first, last) runs
-    of adjacent indices, in order."""
-    m = mask if axis == 1 else mask.T
-    hits = np.nonzero(longest_run(bridge(m), axis=1) > 0.5 * m.shape[1])[0]
-    groups = []
-    for i in hits:
-        if groups and i == groups[-1][1] + 1:
-            groups[-1][1] = i
-        else:
-            groups.append([i, i])
-    return [tuple(g) for g in groups]
-
-
-def lo_cell_box(ref):
-    """The cells inside LibreOffice's printed sheet: (left, top, right,
-    bottom), or None. With headings on and gridlines off (fixtures.py),
-    Calc frames the print range and boxes each heading in black, so the
-    long lines are, in order, the frame's top, the column headings' bottom
-    and the frame's bottom (and the same across: frame, row headings,
-    frame). The cells are what the second and last of each enclose."""
-    dark = np.asarray(ref.convert("L")) < 128
-    rows, cols = long_lines(dark, axis=1), long_lines(dark, axis=0)
-    if len(rows) < 3 or len(cols) < 3:
-        return None
-    return cols[1][1] + 1, rows[1][1] + 1, cols[-1][0], rows[-1][0]
-
-
-def our_cell_origin(ours):
-    """Where our cells start: the width of the row-header band and the
-    height of the column-header band, both drawn in one flat shade. A band
-    ends at the first column (row) where that shade covers under half the
-    pixels; labels cover far less than half their band. The shade is read
-    a few px in from the corner, clear of the 1 px frame a Broadway
-    capture can carry on its edge."""
-    a = np.asarray(ours).astype(int)
-    shade = a[4, 4]
-    is_shade = np.abs(a - shade).sum(axis=2) <= 6
-
-    def band(fraction):
-        inside = np.nonzero(fraction >= 0.5)[0]
-        if not len(inside):
-            return 0
-        past = np.nonzero(fraction[inside[0] :] < 0.5)[0]
-        return int(inside[0] + past[0]) if len(past) else 0
-
-    return band(is_shade.mean(axis=0)), band(is_shade.mean(axis=1))
-
-
-def bridge(mask, gap=3):
-    """`mask` with gaps of up to `gap` px along each row filled in: where a
-    rule crosses another, the crossing pixels continue both ways and are
-    not a thin line in either direction, so they would break the run."""
-    w = mask.shape[1]
-    left = np.zeros_like(mask)
-    right = np.zeros_like(mask)
-    for k in range(1, gap + 1):
-        left[:, k:] |= mask[:, : w - k]
-        right[:, : w - k] |= mask[:, k:]
-    return mask | (left & right)
-
-
-def longest_run(mask, axis):
-    """Length of the longest run of consecutive True along `axis`, for each
-    row (axis=1) or column (axis=0)."""
-    m = mask if axis == 1 else mask.T
-    best = np.zeros(m.shape[0], dtype=int)
-    cur = np.zeros(m.shape[0], dtype=int)
-    for j in range(m.shape[1]):
-        cur = np.where(m[:, j], cur + 1, 0)
-        best = np.maximum(best, cur)
-    return best
-
-
-def ssim(a, b):
-    """Mean SSIM over 8x8 windows (Wang et al. 2004), grayscale, after a 4x
-    downsample, so anti-aliasing and hinting noise don't dominate."""
-
-    def prep(img):
-        g = img.convert("L")
-        g = g.resize((max(8, g.width // 4), max(8, g.height // 4)), Image.BOX)
-        return np.asarray(g, dtype=np.float64)
-
-    x, y = prep(a), prep(b)
-    k = 8
-
-    def box(m):
-        c = np.cumsum(np.cumsum(np.pad(m, ((1, 0), (1, 0))), 0), 1)
-        return (c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / (k * k)
-
-    mx, my = box(x), box(y)
-    vx = box(x * x) - mx * mx
-    vy = box(y * y) - my * my
-    cxy = box(x * y) - mx * my
-    c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
-    s = ((2 * mx * my + c1) * (2 * cxy + c2)) / ((mx * mx + my * my + c1) * (vx + vy + c2))
-    return float(s.mean())
-
-
-def salient_colors(img, n=8, min_share=0.003):
-    """Distinct saturated colours covering a meaningful share of the image:
-    fills, coloured text, shapes. Greys are excluded (text/gridlines are
-    covered by the word metric)."""
-    q = img.quantize(colors=n, method=Image.MEDIANCUT)
-    pal = q.getpalette()[: n * 3]
-    idx = np.asarray(q).ravel()
-    px = np.asarray(img.convert("RGB"), dtype=int).reshape(-1, 3)
-    counts = np.bincount(idx, minlength=n)
-    total = counts.sum()
-    out = []
-    for i in range(n):
-        if counts[i] / total < min_share:
-            continue
-        rgb = np.array(pal[i * 3 : i * 3 + 3])
-        if rgb.max() - rgb.min() < 40:  # grey-ish
-            continue
-        # The colour the cluster's saturated pixels actually have, not the
-        # cluster's mean: small coloured text shares a cluster with the
-        # black text and grey anti-aliasing beside it, and their mean
-        # (C00000 red text averaged to 905050) is in neither image.
-        members = px[idx == i]
-        members = members[members.max(axis=1) - members.min(axis=1) >= 40]
-        out.append(np.median(members, axis=0).astype(int) if len(members) else rgb)
-    return out
-
-
-def color_groups(colors, near=60):
-    """`colors` grouped so that shades within `near` of one another count
-    as one colour. The anti-aliased edge of a single rotated fill quantises
-    into several clusters a few levels apart; they are one colour to look
-    for, not five, and each alone covers too little to be found."""
-    groups = []
-    for rgb in colors:
-        for g in groups:
-            if any(np.abs(rgb - other).sum() < near for other in g):
-                g.append(rgb)
-                break
-        else:
-            groups.append([rgb])
-    return groups
-
-
-def color_presence(ref, ours):
-    wanted = color_groups(salient_colors(ref))
-    if not wanted:
-        return None
-    # Full resolution: halving blends thin coloured strokes (red text)
-    # into the white round them until the colour is gone.
-    arr = np.asarray(ours.convert("RGB"), dtype=int).reshape(-1, 3)
-    hit = 0
-    for group in wanted:
-        near = np.zeros(len(arr), dtype=bool)
-        for rgb in group:
-            near |= np.abs(arr - rgb).sum(axis=1) < 60
-        if near.mean() > 0.0005:
-            hit += 1
-    return hit / len(wanted)
-
-
-# ── OCR ───────────────────────────────────────────────────────────────────
-# A rule is a run of ink at least this long (px at 96 DPI) and at most
-# RULE_THICK thick. No glyph of spreadsheet-sized text has a stroke that
-# long, so what it removes is gridlines, borders and chart axes.
-RULE_MIN = 24
-RULE_THICK = 4
-
-
-def run_lengths(mask):
-    """For each True pixel of `mask`, the length of the horizontal run of
-    True it is part of (0 elsewhere)."""
-    out = np.zeros(mask.shape, dtype=np.int32)
-    for r in range(mask.shape[0]):
-        row = mask[r]
-        if not row.any():
-            continue
-        edges = np.flatnonzero(np.diff(np.concatenate(([0], row.astype(np.int8), [0]))))
-        for a, b in zip(edges[::2], edges[1::2]):
-            out[r, a:b] = b - a
-    return out
-
-
-def erase_rules(g, rgb=None):
-    """`g` (greyscale, uint8 array) with its thin straight lines (grid-,
-    border- and axis lines) painted white.
-
-    Tesseract reads a line that runs past or through short text as part of
-    it: in a chart, LibreOffice's y-axis labels touch the first vertical
-    gridline and came back as "gs", "al", "tot" instead of 9, 8, 7, and our
-    own as "ee" and "40", so the word score measured where gridlines met
-    digits, not the digits (render lab tables/chart-scatter).
-
-    A pixel is a rule's when the ink it is in runs RULE_MIN or more one way
-    and RULE_THICK or less the other. Lengths are counted through crossing
-    lines, so a gridline between two others is still one long run; a
-    filled area (a cell's fill, a bar, a pie slice) is thick both ways and
-    stays, with any text on it."""
-    ink = g < 200
-    across = run_lengths(ink)
-    down = run_lengths(ink.T).T
-    flat = (across >= RULE_MIN) & (down <= RULE_THICK)
-    tall = (down >= RULE_MIN) & (across <= RULE_THICK)
-    # Where two rules cross, the ink is long both ways, like a fill. A
-    # crossing is what joins them: within RULE_THICK of it, the same row
-    # goes on as a flat rule and the same column as a tall one. A fill's
-    # rows and columns are thick, so its edges and corners never are.
-    near_flat = np.zeros_like(flat)
-    near_tall = np.zeros_like(tall)
-    for d in range(1, RULE_THICK + 1):
-        near_flat[:, d:] |= flat[:, :-d]
-        near_flat[:, :-d] |= flat[:, d:]
-        near_tall[d:, :] |= tall[:-d, :]
-        near_tall[:-d, :] |= tall[d:, :]
-    cross = (across >= RULE_MIN) & (down >= RULE_MIN) & near_flat & near_tall
-    rule = flat | tall | cross
-    out = g.copy()
-    out[rule] = 255
-    if rgb is not None:
-        erase_keys(out, ink & ~rule, rgb)
-    return out
-
-
-def erase_keys(out, ink, rgb):
-    """Paint white, in `out`, each solid blob of `ink` KEY_MIN to KEY_MAX px
-    across: a chart's legend keys and data-point markers. Tesseract reads
-    one beside a word as letters ("mqqi" for a key and "Q1", "oo" for a
-    marker), which scores where keys sit, not what the text says. Only a
-    coloured (saturated), square or round, solid blob counts: text is
-    black or grey, or thin-stroked if coloured, and never that solid."""
-    rgbf = rgb.astype(np.float32)
-    # HSV saturation measures chroma relative to brightness. Dividing by
-    # 255 instead misses dark colours such as the purple Q4 legend key
-    # (128, 100, 162), which OCR then joins to the label as "ma".
-    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / np.maximum(rgbf.max(axis=2), 1)
-    h, w = ink.shape
-    seen = np.zeros_like(ink)
-    for y, x in zip(*np.nonzero(ink)):
-        if seen[y, x]:
-            continue
-        stack, pixels = [(y, x)], []
-        seen[y, x] = True
-        while stack:
-            cy, cx = stack.pop()
-            pixels.append((cy, cx))
-            if len(pixels) > KEY_MAX * KEY_MAX:
-                break
-            for ny, nx in ((cy + 1, cx), (cy - 1, cx), (cy, cx + 1), (cy, cx - 1)):
-                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not seen[ny, nx]:
-                    seen[ny, nx] = True
-                    stack.append((ny, nx))
-        if stack:
-            continue  # bigger than a key: a fill, a bar, a slice
-        ys = [p[0] for p in pixels]
-        xs = [p[1] for p in pixels]
-        bh, bw = max(ys) - min(ys) + 1, max(xs) - min(xs) + 1
-        square = 0.8 <= bw / bh <= 1.25
-        coloured = np.mean([saturation[p] for p in pixels]) > 0.25
-        if KEY_MIN <= bh <= KEY_MAX and KEY_MIN <= bw <= KEY_MAX and square and coloured and len(pixels) >= 0.7 * bh * bw:
-            for py, px in pixels:
-                out[py, px] = 255
-
-
-# Legend keys are 8 px squares; markers 7-10 px circles (a circle fills
-# 79% of its box).
-KEY_MIN = 5
-KEY_MAX = 14
-
-
-OCR_TIMEOUT_S = float(os.environ.get("RENDER_LAB_OCR_TIMEOUT", "60"))
-
-
-def ocr_pass(g, k, psm):
-    """One tesseract TSV run over greyscale `g` upscaled by `k`. Coordinates
-    come back in 1x pixels so passes at several scales union directly."""
-    import tempfile
-
-    import observation
-
-    words = []
-    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
-        g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
-        # Bounded and checked: a hang, nonzero exit or malformed TSV raises
-        # observation.ObservationError instead of reading as "no words".
-        tsv, _attempt = observation.run_tesseract(tmp.name, psm=psm, timeout=OCR_TIMEOUT_S)
-    for line in tsv.splitlines()[1:]:
-        f = line.split("\t")
-        if len(f) < 12 or not f[11].strip():
-            continue
-        try:
-            conf = float(f[10])
-        except ValueError:
-            continue
-        text = re.sub(r"[^0-9a-z]", "", f[11].lower())
-        if conf < 30 or not text:
-            continue
-        left, top, w, h = (int(v) / k for v in f[6:10])
-        # Tesseract's own line: (block, paragraph, line). The box (in the
-        # input image's pixels) locates the word for the magnifier fallback
-        # in match_words.
-        words.append((text, left + w / 2, top + h / 2, tuple(f[2:5]), (left, top, w, h)))
-    return words
-
-
-def union_words(first, second, tol=6.0):
-    """`first` plus the words of `second` with no same-text word within
-    `tol` 1x px: a second OCR scale may only add reads, never take them.
-    Words carry their box (in 1x px) for the magnifier fallback."""
-    out = list(first)
-    for text, x, y, line, box in second:
-        if not any(t == text and abs(x - x2) <= tol and abs(y - y2) <= tol for t, x2, y2, _, _ in out):
-            out.append((text, x, y, line, box))
-    return out
-
-
-def ocr_words(img, sparse=False):
-    """OCR word boxes. `sparse` is for Tables' grids of short values, where
-    page-layout analysis (psm 3) drops most of them. They are read as one
-    uniform block of text (psm 6): sparse-text mode (psm 11) dropped whole
-    cells of short numbers from LibreOffice's own reference (5 of the 10
-    values in tables/conditional, 14 of 25 words in tables/chart) and, just
-    as arbitrarily, different ones from ours, so it measured which blobs
-    tesseract happened to find rather than what was drawn."""
-    if not shutil.which("tesseract"):
-        return None
-    # Upscale: 96 DPI body text is below tesseract's comfortable size, and a
-    # spreadsheet's 10-11 pt cell text more so; at 2x it dropped row numbers
-    # and short values like "1/2" from both images, which is noise in a
-    # fixture with only a handful of words.
-    g = img.convert("L")
-    if sparse:
-        g = Image.fromarray(erase_rules(np.asarray(g), np.asarray(img.convert("RGB"))))
-    if not sparse:
-        return ocr_pass(g, 2, "3")
-    # Sparse grids read at 4x and 6x unioned: a larger scale reads some
-    # tiny tokens the base scale mis-segments (chart-scatter's "7"s), but
-    # on its own it goes blind elsewhere (number-formats' "###" rows read
-    # 3 of 3, a vacuous green), so neither scale may replace the other.
-    # The union only adds reads, which is what the second scale is for.
-    return union_words(ocr_pass(g, 4, "6"), ocr_pass(g, 6, "6"))
-
-
-# A word the full-page read could not match gets one closer look: the word's
-# own box plus this pad, magnified RESCUE_K times and read as a single word
-# (psm 8). At 96 DPI a spreadsheet digit is ~7 px tall; the page-wide pass
-# segments it by its neighbours (a "7" beside a gridline reads "ri"), while
-# the crop reads the glyphs it actually holds.
-RESCUE_PAD = 4
-RESCUE_K = 3
-
-
-def ocr_crop_text(grey):
-    """Normalized text of one word-sized greyscale crop, or "": the same
-    confidence floor and normalization as ocr_words."""
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
-        grey.resize((grey.width * RESCUE_K, grey.height * RESCUE_K), Image.LANCZOS).save(tmp.name)
-        r = subprocess.run(["tesseract", tmp.name, "-", "--psm", "8", "tsv"], capture_output=True, text=True)
-    for line in r.stdout.splitlines()[1:]:
-        f = line.split("\t")
-        if len(f) < 12 or not f[11].strip():
-            continue
-        try:
-            conf = float(f[10])
-        except ValueError:
-            continue
-        text = re.sub(r"[^0-9a-z]", "", f[11].lower())
-        if conf < 30 or not text:
-            continue
-        return text
-    return ""
-
-
-# A row or column of a rescue crop inked along this much of its length is a
-# rule (a cell border, a frame), not part of a glyph: a word's strokes span
-# its x-height or cap height, which the crop's padding keeps well under it.
-# Ink is anything off-white: grid lines are drawn light (217 on 255).
-RESCUE_RULE_SPAN = 0.9
-RESCUE_RULE_INK = 245
-
-
-def blank_rules(grey):
-    """`grey`, a rescue crop, with its rules (rows and columns inked along
-    RESCUE_RULE_SPAN of the crop) painted white. A grid line beside a lone
-    digit stops tesseract's single-word mode reading the digit at all
-    (tables/chart-pie in Tier C, #1199), and a rule is never the text being
-    rescued. erase_rules can't do this: a crop is shorter than RULE_MIN, and
-    a light grid line is not ink by its measure."""
-    arr = np.asarray(grey).copy()
-    ink = arr < RESCUE_RULE_INK
-    rows, cols = ink.mean(axis=1) >= RESCUE_RULE_SPAN, ink.mean(axis=0) >= RESCUE_RULE_SPAN
-    arr[rows, :] = 255
-    arr[:, cols] = 255
-    return Image.fromarray(arr)
-
-
-def rescue_unread(ref_grey, ours_grey, box):
-    """The magnified crop of `box` (in either image's pixels) reads as the
-    same non-empty word on both sides, or None. The box comes from the
-    reference's own word, so both crops show the same location: agreement
-    means both renderings draw the same text there, read closely. It only
-    ever adds a match the page-wide pass missed; no budget changes."""
-    l, t, w, h = box
-    area = (
-        max(0, int(l - RESCUE_PAD)),
-        max(0, int(t - RESCUE_PAD)),
-        min(ref_grey.width, int(l + w + RESCUE_PAD)),
-        min(ref_grey.height, int(t + h + RESCUE_PAD)),
-    )
-    ref_text = ocr_crop_text(blank_rules(ref_grey.crop(area)))
-    if not ref_text:
-        return None
-    ours_text = ocr_crop_text(blank_rules(ours_grey.crop(area)))
-    return ref_text if ours_text == ref_text else None
-
-
-# How many neighbouring reads may join to one read on the other side, how
-# long their joined text must be, and how far apart (1x px, the corners of
-# the run and the token) they may stand.
-JOIN_MAX = 6
-JOIN_MIN_CHARS = 6
-JOIN_TOL = 40.0
-# The share of the longer text the shorter must cover when they differ by
-# a letter or two OCR lost at an edge ("ousing" for "housing").
-JOIN_COVER = 0.85
-
-
-def join_matches(ref, ours, dist, taken):
-    """Pair the same text read as one word on one side and several on the
-    other, which `match_words`' same-text pairing cannot: tesseract splits
-    an e-mail address at its punctuation on one rendering and not on the
-    other, so the affordable-housing data dictionary's identical
-    `housing.statistics@communities.gov.uk` read as four words on
-    LibreOffice's page ("h ousing statistics communitiesgovuk") and one on
-    ours, and the line was counted lost.
-
-    A run of up to JOIN_MAX unpaired, adjacent words of one line on one side
-    whose texts join to an unpaired word of the other, starting within
-    JOIN_TOL of it, is paired with it: each reference word of the run, or
-    the one reference word, takes the distance between the run's and the
-    word's top-left corners. Updates `dist` (ref index -> distance) and
-    `taken` (ours indices) in place. The texts may differ by what OCR
-    dropped at an edge (the same page read "ousing" there): the shorter
-    inside the longer, covering JOIN_COVER of it."""
-
-    def same(a, b):
-        if a == b:
-            return True
-        short, long_ = (a, b) if len(a) <= len(b) else (b, a)
-        return len(short) >= 8 and short in long_ and len(short) >= JOIN_COVER * len(long_)
-
-    def lines(words, free):
-        by_line = {}
-        for k in free:
-            by_line.setdefault(words[k][3], []).append(k)
-        return [sorted(ks, key=lambda k: words[k][4][0]) for ks in by_line.values()]
-
-    def corner(w):
-        return w[4][0], w[4][1]
-
-    def near(a, b):
-        return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
-
-    def runs(words, free):
-        for ks in lines(words, free):
-            for n in range(2, JOIN_MAX + 1):
-                for start in range(len(ks) - n + 1):
-                    run = ks[start : start + n]
-                    text = "".join(words[k][0] for k in run)
-                    if len(text) >= JOIN_MIN_CHARS:
-                        yield run, text
-
-    # Several reference words, one of ours.
-    free_ref = [i for i in range(len(ref)) if i not in dist]
-    free_ours = [j for j in range(len(ours)) if j not in taken]
-    for run, text in sorted(runs(ref, free_ref), key=lambda r: -len(r[0])):
-        if any(i in dist for i in run):
-            continue
-        at = corner(ref[run[0]])
-        best = min(((near(at, corner(ours[j])), j) for j in free_ours if j not in taken and same(ours[j][0], text)), default=None)
-        if best and best[0] <= JOIN_TOL:
-            for i in run:
-                dist[i] = best[0]
-            taken.add(best[1])
-    # One reference word, several of ours.
-    free_ref = [i for i in range(len(ref)) if i not in dist]
-    free_ours = [j for j in range(len(ours)) if j not in taken]
-    for run, text in sorted(runs(ours, free_ours), key=lambda r: -len(r[0])):
-        if any(j in taken for j in run):
-            continue
-        at = corner(ours[run[0]])
-        best = min(((near(at, corner(ref[i])), i) for i in free_ref if i not in dist and same(ref[i][0], text)), default=None)
-        if best and best[0] <= JOIN_TOL:
-            dist[best[1]] = best[0]
-            taken.update(run)
-
-
-def match_words(ref, ours, reread=None):
-    """(fraction of `ref`'s words found in `ours`, median displacement in
-    points, lost lines: `ref` lines of LOST_LINE_MIN_WORDS or more words
-    with half or more of them not found).
-
-    Same-text pairs are taken nearest first over the whole page, not in
-    reading order: in reading order one word OCR missed on our side let
-    its line's twin take the next line's copy, and every later repeat of
-    that word ("text" on each line of letters/font-sizes) then took the
-    line below its own, a cascade that read as 14pt of displacement on a
-    page that agrees to a pixel.
-
-    A reference word marked unprinted (`mark_printed`) that nothing on our
-    side matches is left out altogether: a misread of the reference is
-    never held against us. Matched, it counts like any other.
-
-    `reread`, when given, is called with an unmatched reference word's box
-    and returns the word both sides read there on a closer look, or None;
-    a rescued word counts as found where it stands (displacement 0)."""
-    if ref is None or ours is None or not ref:
-        return None, None, None
-    pairs = sorted(
-        (((w[1] - o[1]) ** 2 + (w[2] - o[2]) ** 2) ** 0.5, i, j)
-        for i, w in enumerate(ref)
-        for j, o in enumerate(ours)
-        if o[0] == w[0]
-    )
-    dist, taken = {}, set()
-    for d, i, j in pairs:
-        if i not in dist and j not in taken:
-            dist[i] = d
-            taken.add(j)
-    join_matches(ref, ours, dist, taken)
-    found, counted, disp = 0, 0, []
-    per_line = {}
-    for i, w in enumerate(ref):
-        line, box = w[3], w[4]
-        hit = i in dist
-        rescued = not hit and reread is not None and reread(box) is not None
-        if not (hit or rescued) and len(w) > 5 and not w[5]:
-            continue
-        counted += 1
-        total, hits = per_line.get(line, (0, 0))
-        per_line[line] = (total + 1, hits + (hit or rescued))
-        if hit:
-            found += 1
-            disp.append(dist[i])
-        elif rescued:
-            found += 1
-            disp.append(0.0)
-    median = float(np.median(disp)) * PX_TO_PT if disp else None
-    lost = sum(1 for total, hits in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hits <= total)
-    return (found / counted if counted else None), median, lost
-
-
-# A word tesseract reads off LibreOffice's own picture that LibreOffice did
-# not print may be a misread of the reference ("8pt" as "spt", a bullet as
-# "e"), which no rendering of ours can match. It may also be text inside a
-# picture (a logo's "Government of Canada"), which ours draws too. So an
-# unprinted read is marked, not dropped: match_words leaves it out only
-# where nothing on our side matches it. The reference's text layer
-# (lo-<n>.txt, lo_render.py) says what was printed.
-# The layer runs a raised or lowered digit into its word ("mc2", "h2o")
-# where OCR reads the letters alone, so printed words are also cut where
-# letters meet digits. A read may join neighbours ("8pttext") or, across a
-# hyphen or a tight kern, cut a word: up to TRUTH_JOIN printed pieces
-# joined, or TRUTH_PIECE_MIN or more characters of one word, still count.
-TRUTH_JOIN = 4
-TRUTH_PIECE_MIN = 4
-
-
-def norm_word(w):
-    return re.sub(r"[^0-9a-z]", "", w.lower())
-
-
-def printed_words(txt_path):
-    """The words of a reference page's text layer, normalized as OCR reads
-    are, in order; None when the layer is missing (an older reference)."""
-    try:
-        with open(txt_path, encoding="utf-8", errors="replace") as f:
-            raw = f.read()
-    except OSError:
-        return None
-    return [w for w in (norm_word(t) for t in raw.split()) if w]
-
-
-def is_printed(text, printed, joined):
-    if text in joined:
-        return True
-    return len(text) >= TRUTH_PIECE_MIN and any(text in w for w in printed)
-
-
-def mark_printed(words, printed):
-    """`words` (OCR reads of the reference), each with a sixth field: did
-    LibreOffice print it. A page whose text layer is empty (a scan, text
-    drawn as curves) or missing marks every read printed: there is nothing
-    to check them against."""
-    if words is None:
-        return None
-    if not printed:
-        return [(*w[:5], True) for w in words]
-    pieces = [p for w in printed for p in re.findall(r"[0-9]+|[a-z]+", w)]
-    joined = {"".join(pieces[i : i + n]) for n in range(1, TRUTH_JOIN + 1) for i in range(len(pieces) - n + 1)}
-    return [(*w[:5], is_printed(w[0], printed, joined)) for w in words]
 
 
 def reference_words(lo_path, ref, app):
@@ -733,6 +130,7 @@ def page_in_capture(ref, ours):
     Each word read exactly once on each side (three letters or more) pairs
     the two. Their spread gives the scale between the renderings, the
     median offset then places the page's corners."""
+
     def once(img):
         seen = Counter()
         found = {}
@@ -750,7 +148,7 @@ def page_in_capture(ref, ours):
         return None
     ratios = []
     for i, (ra, oa) in enumerate(pairs):
-        for rb, ob in pairs[i + 1:]:
+        for rb, ob in pairs[i + 1 :]:
             dr = np.hypot(rb[0] - ra[0], rb[1] - ra[1])
             if dr >= 20:
                 ratios.append(np.hypot(ob[0] - oa[0], ob[1] - oa[1]) / dr)
@@ -1055,7 +453,17 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
     per_page = []
     for i, lo in enumerate(lo_pages):
         if i >= len(ours_pages):
-            per_page.append({"ink": 0.0, "words": 0.0, "lost_lines": None, "disp_pt": None, "colors": 0.0, "ssim": 0.0, "ref_words": None})
+            per_page.append(
+                {
+                    "ink": 0.0,
+                    "words": 0.0,
+                    "lost_lines": None,
+                    "disp_pt": None,
+                    "colors": 0.0,
+                    "ssim": 0.0,
+                    "ref_words": None,
+                }
+            )
             continue
         ref, ours, scale = align(app, lo, ours_pages[i], page_window)
         key = (lo, ref.size)
@@ -1072,9 +480,7 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
         m["lo_page"] = lo_page
     if app == "tables" and feature == "wrap-text":
         m["wrap_structure"] = (
-            wrap_structure(lo_pages[0], ours_pages[0])
-            if len(lo_pages) == len(ours_pages) == 1
-            else {"passed": False}
+            wrap_structure(lo_pages[0], ours_pages[0]) if len(lo_pages) == len(ours_pages) == 1 else {"passed": False}
         )
     m["verdict"] = verdict(m)
     return m
@@ -1138,119 +544,6 @@ def diff_overlay(app, lo_path, ours_path, dest):
     Image.fromarray(out).save(dest)
 
 
-# ── report ────────────────────────────────────────────────────────────────
-def fmt(v, spec="{:.2f}"):
-    return "–" if v is None else spec.format(v)
-
-
-def write_report(out, manifest, results, agreement):
-    rows = []
-    totals = {t: {k: 0 for k in VERDICT_RANK} for t in TIERS}
-    for fx in manifest:
-        key = f"{fx['app']}/{fx['feature']}"
-        d = os.path.join(out, fx["app"], fx["feature"])
-        r = results.get(key, {})
-        for t in TIERS:
-            totals[t][(r.get(t) or {"verdict": "missing"})["verdict"]] += 1
-        imgs = []
-        lo1 = os.path.join(d, "lo-1.png")
-        if os.path.exists(lo1):
-            imgs.append(("LibreOffice", os.path.relpath(lo1, out)))
-        for t in TIERS:
-            p = os.path.join(d, f"{t}-1.png")
-            if os.path.exists(p):
-                imgs.append((f"Tier {t}", os.path.relpath(p, out)))
-                if os.path.exists(lo1):
-                    dp = os.path.join(d, f"diff-{t}-1.png")
-                    diff_overlay(fx["app"], lo1, p, dp)
-                    imgs.append((f"diff {t}", os.path.relpath(dp, out)))
-        cells = "".join(
-            f'<figure><a href="{html.escape(src)}"><img loading="lazy" src="{html.escape(src)}"></a>'
-            f"<figcaption>{html.escape(label)}</figcaption></figure>"
-            for label, src in imgs
-        )
-        tiers = ""
-        checks = []
-        for t in TIERS:
-            m = r.get(t)
-            if not m:
-                continue
-            if "wrap_structure" in m:
-                evidence = m["wrap_structure"]
-                detail = "; ".join(
-                    f'{side}: {v["lines"]} lines, row {v["row_height"]}px / heading {v["heading_height"]}px, '
-                    f'wholly visible: {v["unclipped"]}'
-                    for side, v in evidence.items() if side != "passed"
-                )
-                checks.append(f'Tier {t} wrap check: {"pass" if evidence["passed"] else "fail"} ({detail}).')
-            tiers += (
-                f'<tr><td>{t}</td><td><span class="v {m["verdict"]}">{m["verdict"]}</span></td>'
-                f'<td>{fmt(m["ink"])}</td><td>{fmt(m["words"], "{:.0%}")}</td>'
-                f'<td>{fmt(m["disp_pt"], "{:.1f}pt")}</td><td>{fmt(m["colors"], "{:.0%}")}</td>'
-                f'<td>{fmt(m["ssim"])}</td><td>{fmt(m.get("scale"), "{:.2f}×")}</td><td>{m["pages_ours"]}/{m["pages_lo"]}</td></tr>'
-            )
-        worst = min(
-            [(r[t]["verdict"]) for t in TIERS if r.get(t)] or ["missing"],
-            key=lambda v: VERDICT_RANK[v],
-        )
-        agree = agreement.get(key)
-        agree_html = (
-            ""
-            if agree is None
-            else f'<p class="expect">Tier A↔B: {agree:.2f} grey levels '
-            + ('(agree)' if agree <= TIER_AGREE else '<b class="red">DISAGREE: pixels changed between GTK and the browser</b>')
-            + "</p>"
-        )
-        rows.append(
-            f'<section class="fx" data-app="{fx["app"]}" data-verdict="{worst}">'
-            f'<h2><span class="v {worst}">{worst}</span> {html.escape(key)}</h2>'
-            f'<p class="expect">Expect: {html.escape(fx["expect"])}</p>{agree_html}'
-            + "".join(f'<p class="expect">{html.escape(check)}</p>' for check in checks)
-            + f'<table><tr><th>tier</th><th>verdict</th><th>ink</th><th>words</th><th>Δpos</th>'
-            f"<th>colours</th><th>SSIM</th><th>scale</th><th>pages</th></tr>{tiers or '<tr><td colspan=9>no captures</td></tr>'}</table>"
-            f'<div class="imgs">{cells}</div></section>'
-        )
-    summary = "".join(
-        f"<tr><td>Tier {t}</td>" + "".join(f'<td class="{k}">{totals[t][k]}</td>' for k in ("green", "amber", "red", "missing")) + "</tr>"
-        for t in TIERS
-        if any(totals[t][k] for k in ("green", "amber", "red"))
-    )
-    page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Render Parity Report</title>
-<style>
-:root{{--bg:#fafafa;--fg:#1d1d1f;--muted:#666;--card:#fff;--line:#ddd;
---green:#1a7f37;--amber:#b35900;--red:#c62828;--missing:#777}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#1b1b1d;--fg:#eee;--muted:#aaa;--card:#26262a;--line:#3a3a40;
---green:#4ac26b;--amber:#f0a040;--red:#ff6b6b;--missing:#999}}}}
-body{{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif;margin:0;padding:16px;max-width:1400px;margin-inline:auto}}
-h1{{font-size:22px}} h2{{font-size:16px;margin:0 0 4px}}
-.fx{{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin:12px 0}}
-.expect{{color:var(--muted);margin:0 0 8px}}
-table{{border-collapse:collapse;font-variant-numeric:tabular-nums}} td,th{{padding:2px 10px;text-align:left;border-bottom:1px solid var(--line)}}
-.v{{font-weight:600;text-transform:uppercase;font-size:12px}}
-.green{{color:var(--green)}}.amber{{color:var(--amber)}}.red{{color:var(--red)}}.missing{{color:var(--missing)}}
-.imgs{{display:flex;gap:8px;overflow-x:auto;margin-top:8px}}
-figure{{margin:0;flex:0 0 auto}} figure img{{max-height:300px;max-width:420px;border:1px solid var(--line);background:#fff}}
-figcaption{{color:var(--muted);font-size:12px}}
-.filters button{{margin-right:6px}}
-</style></head><body>
-<h1>Render parity: our apps vs LibreOffice</h1>
-<p>Each fixture isolates one feature. Diff overlay: <b class="red">red</b> = LibreOffice drew it and we didn't,
-<b style="color:#1e5ae6">blue</b> = we drew something LibreOffice didn't. Budgets: docs/RENDER-PARITY-ROADMAP.md.</p>
-<table><tr><th></th><th class="green">green</th><th class="amber">amber</th><th class="red">red</th><th class="missing">missing</th></tr>{summary}</table>
-<p class="filters">Show: <button data-f="all">all</button><button data-f="letters">letters</button><button data-f="tables">tables</button>
-<button data-f="decks">decks</button><button data-f="red">red only</button></p>
-{''.join(rows)}
-<script>
-document.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{{const f=b.dataset.f;
-document.querySelectorAll('.fx').forEach(s=>{{s.style.display=(f==='all'||s.dataset.app===f||s.dataset.verdict===f)?'':'none'}})}});
-</script></body></html>"""
-    with open(os.path.join(out, "report.html"), "w") as f:
-        f.write(page)
-    return totals
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fixtures")
@@ -1279,7 +572,7 @@ def main():
             line += f"  A~PDF:{printed[key]:.2f}"
         print(f"{key:32} {line}")
 
-    totals = write_report(args.out, manifest, results, agreement)
+    totals = write_report(args.out, manifest, results, agreement, diff_overlay)
     # Nothing captured at all is a broken pipeline, not a clean result: the
     # ratchet skips fixtures with no verdict, so an empty run would pass.
     if manifest and not any(results[k].get(t) for k in results for t in TIERS):
@@ -1288,10 +581,13 @@ def main():
     card = {
         k: {
             t: {
-                "verdict": m["verdict"], "lost_lines": m.get("lost_lines"), **{x: m.get(x) for x in METRICS},
+                "verdict": m["verdict"],
+                "lost_lines": m.get("lost_lines"),
+                **{x: m.get(x) for x in METRICS},
                 **({"wrap_structure": m["wrap_structure"]} if "wrap_structure" in m else {}),
             }
-            for t, m in v.items() if m
+            for t, m in v.items()
+            if m
         }
         for k, v in results.items()
     }
@@ -1303,123 +599,6 @@ def main():
 
     ratchet(args, manifest, card, agreement, printed)
 
-
-def ratchet(args, manifest, card, agreement, printed=None):
-    printed = printed or {}
-    """Compare verdicts with the committed baseline, write the machine-
-    readable summary (summary.json, summary.md) that CI, PR comments and
-    the hive consume, and exit non-zero on any change the PR didn't lock in.
-
-    The baseline stores verdicts only, not metrics: verdicts are stable
-    across runs, raw floats are not. Two ways to fail:
-      regressed  a fixture's verdict got worse than the baseline;
-      stale      it got better but the baseline wasn't updated, so the
-                 gain isn't locked in (re-run with --update-baseline and
-                 commit tools/render-lab/baseline.json).
-    """
-    now = {k: {t: m["verdict"] for t, m in v.items()} for k, v in card.items()}
-    base = {}
-    if args.baseline and os.path.exists(args.baseline):
-        base = json.load(open(args.baseline))
-    regressed, improved = [], []
-    # A tier counts as run when any fixture was measured in it. Within a run
-    # tier, a baselined fixture with no measurement lost its evidence -- an
-    # app whose CI job never uploaded, say -- and is reported, not skipped.
-    # A tier nobody ran (a local `--tier A`) stays out of it entirely.
-    ran = {t for tiers in now.values() for t in tiers}
-    for fx in manifest:
-        key = f"{fx['app']}/{fx['feature']}"
-        for t in TIERS:
-            b = base.get(key, {}).get(t)
-            n = now.get(key, {}).get(t)
-            if n is None:
-                if t in ran and b is not None and b != "missing":
-                    regressed.append({"fixture": key, "tier": t, "from": b, "to": "missing"})
-                continue
-            if b is None:
-                if base:  # a baseline exists but doesn't know this fixture yet
-                    improved.append({"fixture": key, "tier": t, "from": "missing", "to": n})
-                continue
-            if VERDICT_RANK[n] < VERDICT_RANK[b]:
-                regressed.append({"fixture": key, "tier": t, "from": b, "to": n})
-            elif VERDICT_RANK[n] > VERDICT_RANK[b]:
-                improved.append({"fixture": key, "tier": t, "from": b, "to": n})
-
-    counts = {t: {v: 0 for v in VERDICT_RANK} for t in TIERS}
-    for tiers in now.values():
-        for t, v in tiers.items():
-            counts[t][v] += 1
-    counts = {t: c for t, c in counts.items() if sum(c.values())}
-    fixtures = [
-        {
-            "fixture": f"{fx['app']}/{fx['feature']}",
-            "app": fx["app"],
-            "feature": fx["feature"],
-            "file": fx["file"],
-            "expect": fx["expect"],
-            "needs": fx.get("needs"),
-            "verdicts": now.get(f"{fx['app']}/{fx['feature']}", {}),
-            "metrics": card.get(f"{fx['app']}/{fx['feature']}", {}),
-            "tier_agreement": agreement.get(f"{fx['app']}/{fx['feature']}"),
-            "print_agreement": printed.get(f"{fx['app']}/{fx['feature']}"),
-        }
-        for fx in manifest
-    ]
-    disagree = sorted(k for k, v in agreement.items() if v is not None and v > TIER_AGREE)
-    summary = {
-        "counts": counts,
-        "regressed": regressed,
-        "improved": improved,
-        "tier_disagreements": disagree,
-        "print_disagreements": sorted(k for k, v in printed.items() if v is not None and v > TIER_AGREE),
-        "fixtures": fixtures,
-    }
-    with open(os.path.join(args.out, "summary.json"), "w") as f:
-        json.dump(summary, f, indent=2, sort_keys=True)
-
-    icon = {"green": "🟢", "amber": "🟠", "red": "🔴", "missing": "⚪"}
-    md = ["## Render parity vs LibreOffice", ""]
-    md.append("| tier | " + " | ".join(f"{icon[v]} {v}" for v in ("green", "amber", "red", "missing")) + " |")
-    md.append("|---|---|---|---|---|")
-    for t, c in counts.items():
-        md.append(f"| {t} | " + " | ".join(str(c[v]) for v in ("green", "amber", "red", "missing")) + " |")
-    for title, rows in (("Regressed", regressed), ("Improved", improved)):
-        if rows:
-            md += ["", f"**{title}:**", ""]
-            md += [f"- `{r['fixture']}` tier {r['tier']}: {icon[r['from']]} {r['from']} → {icon[r['to']]} {r['to']}" for r in rows]
-    if not regressed and not improved:
-        md += ["", "No verdict changes against the committed baseline."]
-    if disagree:
-        md += ["", f"**Tier A/B disagree** (> {TIER_AGREE:g} grey levels between the app's own render and the browser):", ""]
-        md += [f"- `{k}`: {agreement[k]:.1f}" for k in disagree]
-    with open(os.path.join(args.out, "summary.md"), "w") as f:
-        f.write("\n".join(md) + "\n")
-
-    if args.update_baseline:
-        # Merge per fixture *and* tier, so a single-app run (--app) keeps
-        # the other apps, and a run of one tier (the nightly Tier C job)
-        # keeps each fixture's verdicts in the tiers it did not run.
-        merged = {k: {**base.get(k, {}), **now.get(k, {})} for k in {*base, *now}}
-        with open(args.baseline, "w") as f:
-            json.dump(merged, f, indent=2, sort_keys=True)
-            f.write("\n")
-        print(f"baseline written: {args.baseline}")
-        # README's status table is generated from this file (#1211);
-        # rewrite it in the same step so the two are committed together.
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        import readme_status
-        if os.path.abspath(args.baseline) in (readme_status.BASELINE, readme_status.BASELINE_REAL) and os.path.exists(readme_status.README):
-            readme_status.main(["--write"])
-            print(f"README status table rewritten: {readme_status.README}")
-        return
-    if not args.baseline:
-        return
-    if regressed:
-        print("RATCHET FAILED: rendering got worse:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in regressed), file=sys.stderr)
-    if improved:
-        print(f"RATCHET STALE: improved or new fixtures are not in the baseline; lock them in with\n  tools/render-lab/run.sh --update-baseline\nand commit tools/render-lab/{os.path.basename(args.baseline)}:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in improved), file=sys.stderr)
-    if regressed or improved:
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()
