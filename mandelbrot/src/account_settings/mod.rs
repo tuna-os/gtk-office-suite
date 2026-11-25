@@ -11,6 +11,7 @@ mod encryption_page;
 mod general_page;
 mod notifications_page;
 mod safety_page;
+mod storage_page;
 mod user_session;
 
 use self::{
@@ -18,6 +19,7 @@ use self::{
     general_page::{ChangePasswordSubpage, DeactivateAccountSubpage, GeneralPage, LogOutSubpage},
     notifications_page::NotificationsPage,
     safety_page::{IgnoredUsersSubpage, SafetyPage},
+    storage_page::StoragePage,
     user_session::{LinkDeviceSubpage, UserSessionListSubpage, UserSessionSubpage},
 };
 use crate::{
@@ -80,6 +82,7 @@ mod imp {
             GeneralPage::ensure_type();
             NotificationsPage::ensure_type();
             SafetyPage::ensure_type();
+            StoragePage::ensure_type();
             EncryptionPage::ensure_type();
 
             Self::bind_template(klass);
