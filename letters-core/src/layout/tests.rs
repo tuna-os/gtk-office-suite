@@ -1865,3 +1865,36 @@ fn a_section_starting_with_a_table_keeps_the_table_whole() {
     assert!(cells_on(&t.pages[1]) > 0);
     assert_eq!(lines_per_page(&t)[0], 1, "the heading stays in its own section");
 }
+
+/// A shaper whose "Tall Symbols" font stands twice the size of the text.
+struct TallSymbols;
+
+impl Shaper for TallSymbols {
+    fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
+        let mut lines = MonoShaper.shape(req);
+        if req.runs.iter().any(|r| r.style.font_family.as_deref() == Some("Tall Symbols")) {
+            for l in &mut lines {
+                l.ascent_pt *= 2.0;
+                l.descent_pt *= 2.0;
+            }
+        }
+        lines
+    }
+}
+
+/// Writer lays a bullet out as text of the item's first line, so a marker
+/// font taller than the body makes that line (only) taller (#1871).
+#[test]
+fn a_tall_marker_font_grows_the_items_first_line() {
+    let long = "word ".repeat(40);
+    let mut d = doc_of(1, &long);
+    d.paragraphs[0].style.list = ListKind::Bullet;
+    let plain = layout(&d, &opts(), &mut TallSymbols);
+    d.paragraphs[0].style.list_marker_font = Some("Tall Symbols".into());
+    let tall = layout(&d, &opts(), &mut TallSymbols);
+    let tops = |t: &RenderTree| -> Vec<f64> { line_items(&t.pages[0]).iter().map(|l| l.3).collect() };
+    let (a, b) = (tops(&plain), tops(&tall));
+    assert!(a.len() > 2 && a.len() == b.len(), "{a:?} {b:?}");
+    assert!(b[1] - b[0] > a[1] - a[0] + 1.0, "first line taller: {a:?} {b:?}");
+    assert!((b[2] - b[1] - (a[2] - a[1])).abs() < 1e-6, "continuation lines unchanged: {a:?} {b:?}");
+}
