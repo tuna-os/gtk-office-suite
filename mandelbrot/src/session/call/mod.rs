@@ -150,7 +150,7 @@ mod imp {
         /// The local screen share, per room.
         #[cfg(feature = "calls-media")]
         pub(super) screens: RefCell<HashMap<OwnedRoomId, super::ScreenSlot>>,
-        /// The preferred foci from the `.well-known` of our homeserver.
+        /// The preferred foci advertised by our homeserver (RTC transports endpoint, `.well-known` fallback).
         pub(super) preferred_foci: RefCell<Vec<Transport>>,
         /// Guards keeping the SDK event handlers alive.
         pub(super) handler_guards: RefCell<Vec<matrix_sdk::event_handler::EventHandlerDropGuard>>,
