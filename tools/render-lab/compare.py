@@ -723,6 +723,7 @@ def reference_words(lo_path, ref, app):
 PAGE_WINDOW_OVERFLOW = 1.15
 # Words both sides read once each, needed to place the page in ours.
 PAGE_WINDOW_MIN_PAIRS = 4
+PAGE_ROWS_SKEW = 1.15
 
 
 def page_in_capture(ref, ours):
@@ -855,13 +856,34 @@ def align(app, lo_path, ours_path, page_window=False):
             ours = ours_ink.crop((0, 0, shared_w, ours_ink.height))
             scale = ours.height / ref.height
     if page_window:
+        before = ours.size
         ref, ours, scale = window_to_page(ref, ours, scale)
+        if ours.size == before:
+            ours, scale = trim_to_page_rows(ref, ours, scale)
     ours = ours.resize(ref.size, Image.LANCZOS)
     # A white margin, wider than background()'s 4 px inset, so the
     # background is read from the page and not from a cell's fill or
     # border at the crop's edge.
     pad = lambda im: ImageOps.expand(im, border=8, fill=(255, 255, 255))
     return pad(ref), pad(ours), scale
+
+
+def trim_to_page_rows(ref, ours, scale):
+    """Fallback for window_to_page when too few words pair (#1347).
+
+    A long sheet prints over several pages; the page scored is the first,
+    which starts at the sheet's top, while our capture is continuous and
+    holds more rows. Grids scale uniformly, so the rows the page shows are
+    the first ref.height * (ours.width / ref.width) pixels of ours. Applied
+    only when the vertical ratio exceeds the horizontal by PAGE_ROWS_SKEW,
+    so a capture that already matches is left whole."""
+    if not ref.width or not ref.height:
+        return ours, scale
+    k = ours.width / ref.width
+    rows = int(round(ref.height * k))
+    if rows < 16 or ours.height <= rows * PAGE_ROWS_SKEW:
+        return ours, scale
+    return ours.crop((0, 0, ours.width, rows)), k
 
 
 def compare_page(app, ref, ours, ref_words):
