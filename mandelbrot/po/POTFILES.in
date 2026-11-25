@@ -25,6 +25,8 @@ src/account_settings/safety_page/ignored_users_subpage/ignored_user_row.rs
 src/account_settings/safety_page/ignored_users_subpage/mod.blp
 src/account_settings/safety_page/mod.blp
 src/account_settings/safety_page/mod.rs
+src/account_settings/storage_page.blp
+src/account_settings/storage_page.rs
 src/account_settings/user_session/link_device_subpage.blp
 src/account_settings/user_session/link_device_subpage.rs
 src/account_settings/user_session/user_session_list_subpage.blp
