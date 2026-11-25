@@ -803,7 +803,12 @@ impl Session {
             client
                 .get_store_sizes()
                 .await
-                .map(|sizes| (sizes.media_store, sizes.event_cache_store))
+                .map(|sizes| {
+                    (
+                        sizes.media_store.map(|size| size as u64),
+                        sizes.event_cache_store.map(|size| size as u64),
+                    )
+                })
                 .map_err(|error| error.to_string())
         })
         .await
