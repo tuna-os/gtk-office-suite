@@ -375,16 +375,23 @@ KEY_MIN = 5
 KEY_MAX = 14
 
 
+OCR_TIMEOUT_S = float(os.environ.get("RENDER_LAB_OCR_TIMEOUT", "60"))
+
+
 def ocr_pass(g, k, psm):
     """One tesseract TSV run over greyscale `g` upscaled by `k`. Coordinates
     come back in 1x pixels so passes at several scales union directly."""
     import tempfile
 
+    import observation
+
     words = []
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
-        r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
-    for line in r.stdout.splitlines()[1:]:
+        # Bounded and checked: a hang, nonzero exit or malformed TSV raises
+        # observation.ObservationError instead of reading as "no words".
+        tsv, _attempt = observation.run_tesseract(tmp.name, psm=psm, timeout=OCR_TIMEOUT_S)
+    for line in tsv.splitlines()[1:]:
         f = line.split("\t")
         if len(f) < 12 or not f[11].strip():
             continue
