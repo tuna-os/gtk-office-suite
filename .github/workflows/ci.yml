@@ -85,6 +85,7 @@ jobs:
             tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
+            tests/test_render_lab_observation.py \
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
@@ -190,6 +191,7 @@ jobs:
             tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
+            tests/test_render_lab_observation.py \
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
