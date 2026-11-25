@@ -17,3 +17,4 @@ status line as the record of the reasoning.
 | [0003](0003-cloud-documents.md) | Cloud documents: Google Drive, Nextcloud and Microsoft 365 | draft |
 | [0004](0004-interoperable-document-collaboration.md) | An interoperable document-collaboration protocol (Matrix, OCM, WOPI and local-first bindings); spec: [DOCUMENT-COLLABORATION-SPEC](../DOCUMENT-COLLABORATION-SPEC.md) | draft |
 | [0005](0005-collaboration-in-the-apps.md) | Collaboration in the apps (Tables first) over the Matrix and Durable Streams bindings: seam, dependency architecture, permissions, UI slice, evidence, phases | draft |
+| [0006](0006-suite-desktop-integration.md) | Suite and desktop integration: target tuna-desktop, stay GNOME-compatible, carry GOA/GVFS gaps downstream | draft |
