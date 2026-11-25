@@ -33,7 +33,7 @@ Authoritative starting points: `docs/readiness-2026-09/letters-fidelity.md`
 - Model projections, not full semantics: `letters-core/src/docx.rs` (rdocx
   0.14.0 pinned) plus `docx_fields.rs`, `docx_anchors.rs`, `docx_chips.rs`,
   `docx_comments.rs`, `docx_revisions.rs`, `docx_toc.rs`; separate
-  `letters-core/src/odt.rs` reader/writer. `Document` is flat paragraphs with
+  `letters-core/src/odt/mod.rs` reader/writer. `Document` is flat paragraphs with
   `table_cell` membership plus `table_columns` / `table_rows` / `table_spans` /
   `table_fills`, one `PageGeometry`, plain-text `header`/`footer` plus
   `header_pictures` / `footer_pictures` and alignment, heading looks,
@@ -100,7 +100,7 @@ candidate is on separate branch PR #1552; docs branch is `6dacab4d`).
 **Target files/symbols:** `letters-core/src/session.rs::DocumentSession`,
 `letters-core/src/save.rs::{format_for_path,write,write_with_opaque,compatibility_report}`,
 `letters-core/src/loss.rs::content_a_save_drops`, `letters-core/src/docx.rs::read_with_report`,
-`letters-core/src/odt.rs::read_with_report`, `letters/src/window/saving.rs::{save_page_to_path,save_asking_about_loss,save_with_prompt}`,
+`letters-core/src/odt/mod.rs::read_with_report`, `letters/src/window/saving.rs::{save_page_to_path,save_asking_about_loss,save_with_prompt}`,
 `letters/src/bridge.rs::save_buffer_to_file`, `suite-common-core/src/interop.rs::{OpaquePackage,CompatibilityReport}`,
 `suite-common-core/src/zip_guard.rs`, `suite-common-core/src/carry.rs`.
 
@@ -325,7 +325,7 @@ SH-005).
 
 **Evidence:** layout already handles spacing collapse, keep-with-next, global orphans/widows (`LayoutOptions.orphans/widows = 2`), indents, tab stops, columns (page-wide + section-read), page breaks (three placements), lists, headers/footers with `{page}`/`{total}`. Missing: per-paragraph keep/widow/orphan overrides, exact vs proportional line-spacing gaps, tab leaders, numbering edge cases, font fallback policy, CJK/combining/RTL cursor parity.
 
-**Targets:** `letters-core/src/model.rs::{ParaStyle,BaseFont,RunStyle}`, `letters-core/src/layout/mod.rs::{LayoutOptions,relayout,spacing,flow}`, `letters-core/src/layout/pango.rs::{PangoShaper,Typeset,line_boxes}`, `letters-core/src/lists.rs`, `letters-core/src/docx.rs` (indents, spacing, numbering), `letters-core/src/odt.rs` (margins, tab-stop children), `letters/src/ruler.rs`, `letters/src/actions.rs::cycle_line_spacing_in`, `letters-core/tests/soffice_oracle.rs`, `lo_parity.rs`, render fixtures `letters/*spacing*`, `*indent*`, `*list*`, `*columns*`.
+**Targets:** `letters-core/src/model.rs::{ParaStyle,BaseFont,RunStyle}`, `letters-core/src/layout/mod.rs::{LayoutOptions,relayout,spacing,flow}`, `letters-core/src/layout/pango.rs::{PangoShaper,Typeset,line_boxes}`, `letters-core/src/lists.rs`, `letters-core/src/docx.rs` (indents, spacing, numbering), `letters-core/src/odt/mod.rs` (margins, tab-stop children), `letters/src/ruler.rs`, `letters/src/actions.rs::cycle_line_spacing_in`, `letters-core/tests/soffice_oracle.rs`, `lo_parity.rs`, render fixtures `letters/*spacing*`, `*indent*`, `*list*`, `*columns*`.
 
 **State contract (existing types only, no new model in this package):** paragraph state is the existing `ParaStyle` fields (`space_before/after_pt`, `left/right/first_line_indent_pt`, `tab_stops_pt`, `line_spacing`, `keep_with_next`, `page_break_before`, list fields) plus run state in `RunStyle`; document defaults are `BaseFont` + `LayoutOptions::{font_family,font_size_pt,orphans,widows}`. Mutation boundary: `Op::SetParaStyle` / `Mark` / block `SetParagraphs`; one control change is one history transaction with exact inverse; undo restores the prior style struct verbatim.
 
@@ -372,7 +372,7 @@ writer/reader (`w:bidi`, `style:writing-mode`), no control, caret/selection
 follow detection.
 
 **Targets:** `letters-core/src/model.rs::ParaStyle` (new field if admitted),
-`letters-core/src/docx.rs`, `letters-core/src/odt.rs`, layout/shaper direction,
+`letters-core/src/docx.rs`, `letters-core/src/odt/mod.rs`, layout/shaper direction,
 `letters/src/actions.rs` + dialogs control, `page_view.rs` caret/selection,
 `soffice_oracle.rs`, GUI journey.
 
@@ -403,7 +403,7 @@ a recorded OCR artifact, not a geometry pass.
 
 **Targets:** `letters-core/src/model.rs::{ParaStyle.named_style,heading,ListLabel,NumberFormat,TableCell,table_columns,table_rows,table_spans,table_fills}`,
 `letters-core/src/docx.rs` (numbering, indents in cells, `tblCellMar`, fills,
-widths/heights), `letters-core/src/odt.rs` (auto-style dedup key incl. tab-stop
+widths/heights), `letters-core/src/odt/mod.rs` (auto-style dedup key incl. tab-stop
 children, fills, padding), `letters-core/src/layout/mod.rs::{layout_table,column_widths,close_tall}`,
 `letters-core/src/lists.rs::{ordinals,marker_for}`, `letters-core/src/structured.rs`,
 `letters/src/actions.rs` (list/indent/outdent/restart), `letters/src/ruler.rs`.

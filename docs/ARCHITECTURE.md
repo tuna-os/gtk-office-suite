@@ -73,7 +73,7 @@ gtk-office-suite/
 │                            # gtk_test.rs
 ├── suite-export/src/
 │
-├── letters-core/src/        # model.rs  structured.rs  docx.rs  odt.rs
+├── letters-core/src/        # model.rs  structured.rs  docx.rs  odt/mod.rs
 │                            # markdown.rs  session.rs  fragment.rs
 ├── letters/src/             # window.rs  bridge.rs  actions.rs  doc_tab.rs
 │                            # live.rs  page_view.rs  style_picker.rs  outline.rs

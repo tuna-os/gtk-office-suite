@@ -62,7 +62,7 @@ without a test that fails first.
    matching the pptx writer default; per-run sizes honored) — WYSIWYG
    where a fixed 16pt used to be.
 7. ✅ **ODP read/write** (done 2026-07-18): `decks-core/src/odp.rs`,
-   same zip+XML pattern as `letters-core/src/odt.rs`. Text boxes with
+   same zip+XML pattern as `letters-core/src/odt/mod.rs`. Text boxes with
    styled runs, rects/circles, speaker notes, slide backgrounds, slide
    order. Open/Save dialogs and `open_path` dispatch by extension
    (`decks_core::read_deck`/`write_deck`). Oracle wave (7 tests) caught
