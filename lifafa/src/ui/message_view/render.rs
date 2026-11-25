@@ -11,7 +11,7 @@ use super::types::TrState;
 use super::MessageView;
 use crate::i18n::i18n;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl MessageView {
     /// Build the document for what is to be shown and load it; `false`

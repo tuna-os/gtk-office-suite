@@ -1,6 +1,6 @@
 //! Opening a folder or a unified view in the list.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config;
 use crate::models::{FolderKind, Message};
