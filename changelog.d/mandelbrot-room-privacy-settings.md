@@ -1,0 +1,1 @@
+- Mandelbrot: room directory visibility and publishing or removing room aliases now go through the SDK's room privacy settings; only listing a room's local aliases stays a raw request, as 0.19 has no call for it (#1965).

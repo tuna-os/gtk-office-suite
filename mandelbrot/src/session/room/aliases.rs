@@ -2,10 +2,7 @@ use gtk::{glib, glib::closure_local, prelude::*, subclass::prelude::*};
 use matrix_sdk::{deserialized_responses::RawSyncOrStrippedState, reqwest::StatusCode};
 use ruma::{
     OwnedRoomAliasId,
-    api::client::{
-        alias::{create_alias, delete_alias},
-        room,
-    },
+    api::client::room,
     events::{SyncStateEvent, room::canonical_alias::RoomCanonicalAliasEventContent},
 };
 use tracing::error;
@@ -455,15 +452,21 @@ impl RoomAliases {
             return Err(());
         };
 
-        // Check that the alias exists and points to the proper room.
-        let matrix_room = room.matrix_room();
-        let client = matrix_room.client();
-
-        let request = delete_alias::v3::Request::new(alias);
-        let handle = spawn_tokio!(async move { client.send(request).await });
+        let matrix_room = room.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            let result = matrix_room
+                .privacy_settings()
+                .remove_room_alias_from_room_directory(&alias)
+                .await;
+            result
+        });
 
         match handle.await.unwrap() {
-            Ok(_) => Ok(()),
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                error!("Could not unregister local alias: it is not registered");
+                Err(())
+            }
             Err(error) => {
                 error!("Could not unregister local alias: {error}");
                 Err(())
@@ -480,27 +483,24 @@ impl RoomAliases {
             return Err(RegisterLocalAliasError::Other);
         };
 
-        // Check that the alias exists and points to the proper room.
-        let matrix_room = room.matrix_room();
-        let client = matrix_room.client();
-        let room_id = matrix_room.room_id().to_owned();
-
-        let request = create_alias::v3::Request::new(alias, room_id);
-        let handle = spawn_tokio!(async move { client.send(request).await });
+        let matrix_room = room.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            let result = matrix_room
+                .privacy_settings()
+                .publish_room_alias_in_room_directory(&alias)
+                .await;
+            result
+        });
 
         match handle.await.unwrap() {
-            Ok(_) => Ok(()),
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                error!("Could not register local alias: already in use");
+                Err(RegisterLocalAliasError::AlreadyInUse)
+            }
             Err(error) => {
                 error!("Could not register local alias: {error}");
-
-                if error
-                    .as_client_api_error()
-                    .is_some_and(|e| e.status_code == StatusCode::CONFLICT)
-                {
-                    Err(RegisterLocalAliasError::AlreadyInUse)
-                } else {
-                    Err(RegisterLocalAliasError::Other)
-                }
+                Err(RegisterLocalAliasError::Other)
             }
         }
     }
