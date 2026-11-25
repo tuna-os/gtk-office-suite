@@ -12,7 +12,8 @@
 //! [h] [mm] [ss]` with `m` read as minutes after an hour or before
 //! seconds, as Excel reads it.
 
-use chrono::{Datelike, NaiveDateTime, Timelike};
+use jiff::civil::DateTime;
+use jiff::SignedDuration;
 
 /// One piece of a section, in order.
 #[derive(Debug, Clone, PartialEq)]
@@ -460,18 +461,18 @@ fn format_fraction(s: &Section, x: f64) -> String {
 }
 
 fn format_date(s: &Section, serial: f64) -> String {
-    let epoch = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
+    let epoch = jiff::civil::date(1899, 12, 30).at(0, 0, 0, 0);
     // Excel's 1900 is a leap year (the Lotus bug): serials 1 to 60 are a
     // day later than a plain count from 1899-12-30 gives.
     let shift = if (1.0..61.0).contains(&serial) { 86_400_000 } else { 0 };
     let millis = (serial * 86_400_000.0).round() as i64 + shift;
-    let Some(dt): Option<NaiveDateTime> = epoch.checked_add_signed(chrono::Duration::milliseconds(millis)) else {
+    let Ok(dt): Result<DateTime, _> = epoch.checked_add(SignedDuration::from_millis(millis)) else {
         return general(serial);
     };
     let twelve = s.toks.iter().any(|t| matches!(t, Tok::Date(c) if c == "AM/PM" || c == "A/P"));
     const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const DAYS: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    let hour = if twelve { (dt.hour() + 11) % 12 + 1 } else { dt.hour() };
+    let hour = if twelve { (dt.hour() as u32 + 11) % 12 + 1 } else { dt.hour() as u32 };
     let total_hours = (serial * 24.0).floor() as i64;
     let mut out = String::new();
     for t in &s.toks {
@@ -480,13 +481,13 @@ fn format_date(s: &Section, serial: f64) -> String {
             Tok::Date(c) => out.push_str(&match c.as_str() {
                 "yyyy" | "yyy" => format!("{:04}", dt.year()),
                 "yy" | "y" => format!("{:02}", dt.year() % 100),
-                "mmmmm" => MONTHS[dt.month0() as usize][..1].to_string(),
-                "mmmm" => MONTHS[dt.month0() as usize].to_string(),
-                "mmm" => MONTHS[dt.month0() as usize][..3].to_string(),
+                "mmmmm" => MONTHS[(dt.month() - 1) as usize][..1].to_string(),
+                "mmmm" => MONTHS[(dt.month() - 1) as usize].to_string(),
+                "mmm" => MONTHS[(dt.month() - 1) as usize][..3].to_string(),
                 "mm" => format!("{:02}", dt.month()),
                 "m" => dt.month().to_string(),
-                "dddd" => DAYS[dt.weekday().num_days_from_monday() as usize].to_string(),
-                "ddd" => DAYS[dt.weekday().num_days_from_monday() as usize][..3].to_string(),
+                "dddd" => DAYS[dt.weekday().to_monday_zero_offset() as usize].to_string(),
+                "ddd" => DAYS[dt.weekday().to_monday_zero_offset() as usize][..3].to_string(),
                 "dd" => format!("{:02}", dt.day()),
                 "d" => dt.day().to_string(),
                 "hh" => format!("{:02}", hour),

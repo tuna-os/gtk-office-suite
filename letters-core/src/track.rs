@@ -261,7 +261,9 @@ pub fn clamp(doc: &Document, at: usize) -> usize {
 /// Now, as a tracked change's date: UTC to the second, as Word and ODF
 /// store it.
 pub fn now() -> String {
-    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
+    let now = jiff::Timestamp::now();
+    // Whole seconds: `Timestamp`'s own Display adds fractional digits.
+    jiff::fmt::strtime::format("%Y-%m-%dT%H:%M:%SZ", now).unwrap_or_else(|_| now.to_string())
 }
 
 /// The colour a tracked change by `author` is drawn in (16-bit RGB): one of
