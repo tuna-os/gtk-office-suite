@@ -47,7 +47,7 @@
   unpublishes the track.
 
 * **Roadmap items in progress**: live testing against matrix.org (calls, QR, threads receipts),
-  threaded read receipts (MSC3771), location pin-drop.
+  threaded read receipts (MSC3771, per-thread receipts from the thread panel done), location pin-drop.
 
 Goal: take Fractal (the most GNOME-native Matrix client, matrix-sdk 0.18 +
 matrix-sdk-ui) and adopt the modern Matrix Rust SDK features it doesn't use.

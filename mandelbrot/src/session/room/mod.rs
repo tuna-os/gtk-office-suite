@@ -1854,6 +1854,85 @@ impl Room {
         }
     }
 
+    /// Whether the user follows the thread with the given root.
+    ///
+    /// Returns `None` if the homeserver does not support thread subscriptions
+    /// (MSC4306) or the request failed.
+    pub(crate) async fn is_thread_followed(&self, thread_root: OwnedEventId) -> Option<bool> {
+        let matrix_room = self.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            if !matrix_room.client().enabled_thread_subscriptions().await? {
+                return Ok(None);
+            }
+
+            matrix_room
+                .load_or_fetch_thread_subscription(&thread_root)
+                .await
+                .map(|sub| Some(sub.is_some()))
+        });
+
+        match handle.await.expect("task was not aborted") {
+            Ok(followed) => followed,
+            Err(error) => {
+                warn!("Could not get thread subscription: {error}");
+                None
+            }
+        }
+    }
+
+    /// Follow or unfollow the thread with the given root.
+    pub(crate) async fn set_thread_followed(
+        &self,
+        thread_root: OwnedEventId,
+        follow: bool,
+    ) -> Result<(), ()> {
+        let matrix_room = self.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            if follow {
+                matrix_room.subscribe_thread(thread_root, None).await
+            } else {
+                matrix_room.unsubscribe_thread(thread_root).await
+            }
+        });
+
+        handle
+            .await
+            .expect("task was not aborted")
+            .map_err(|error| {
+                error!("Could not change thread subscription: {error}");
+            })
+    }
+
+    /// Send a threaded read receipt for the given thread timeline.
+    ///
+    /// The thread of the receipt is inferred by the SDK from the timeline's
+    /// focus, so only the thread is marked as read.
+    pub(crate) async fn send_thread_receipt(
+        &self,
+        thread_timeline: &Timeline,
+        event_id: OwnedEventId,
+    ) {
+        let Some(session) = self.session() else {
+            return;
+        };
+        let receipt_type = if session.settings().public_read_receipts_enabled() {
+            ApiReceiptType::Read
+        } else {
+            ApiReceiptType::ReadPrivate
+        };
+
+        let matrix_timeline = thread_timeline.matrix_timeline();
+        let handle = spawn_tokio!(async move {
+            matrix_timeline
+                .send_single_receipt(receipt_type, event_id)
+                .await
+        });
+
+        if let Err(error) = handle.await.expect("task was not aborted") {
+            error!("Could not send thread read receipt: {error}");
+        }
+    }
+
     /// Mark the room as unread.
     pub(crate) async fn mark_as_unread(&self) {
         let matrix_room = self.matrix_room().clone();
