@@ -215,6 +215,7 @@ class OpeningSheetPageTest(unittest.TestCase):
             open(os.path.join(d, f"lo-{n}.png"), "w").close()
         open(os.path.join(d, "A-1.png"), "w").close()
         scored = []
+        stitched = []
 
         def page(app, lo, ours, ref_words):
             n = compare.page_no(lo)
@@ -229,9 +230,12 @@ class OpeningSheetPageTest(unittest.TestCase):
         # asks of a picture.
         with mock.patch.object(compare, "align", lambda app, lo, ours, page_window=False: (_Sized(lo), ours, 1.0)), mock.patch.object(
             compare, "ocr_words", lambda ref, tables: []
-        ), mock.patch.object(compare, "compare_page", page), mock.patch.object(compare, "page_bag", bag):
+        ), mock.patch.object(compare, "compare_page", page), mock.patch.object(compare, "page_bag", bag), mock.patch.object(
+            compare, "stitch_pages", lambda paths, dest: stitched.append([compare.page_no(x) for x in paths]) or paths[0]
+        ):
             m = compare.score_fixture(app, d, "A", {})
         m["scored"] = scored
+        m["stitched"] = stitched
         return m
 
     def test_the_sheet_is_scored_against_the_page_that_shows_it(self):
@@ -252,6 +256,8 @@ class OpeningSheetPageTest(unittest.TestCase):
         pages = {1: ["cover", "contents"], 2: ["total", "2024"], 3: ["2025", "north"]}
         m = self.score("tables", {1: 0.1, 2: 0.6, 3: 0.3}, pages=pages)
         self.assertEqual(m["lo_page"], 2)
+        # Pages 2 and 3 are one sheet: scored as one stitched reference.
+        self.assertEqual(m["stitched"], [[2, 3]])
 
     def test_a_tie_or_no_shared_words_keeps_the_first_page(self):
         m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95}, pages={1: ["a"], 2: ["b"], 3: ["c"]})
@@ -1039,3 +1045,28 @@ class WideColumnRightAlignFixtureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class StitchPagesTest(unittest.TestCase):
+    def test_pages_of_one_sheet_join_into_one_tall_reference(self):
+        import tempfile
+
+        import compare
+
+        with tempfile.TemporaryDirectory() as d:
+            paths = []
+            for n, rows in ((1, (20, 40)), (2, (30, 50))):
+                a = np.full((100, 80, 3), 255, dtype=np.uint8)
+                a[rows[0] : rows[0] + 5, 10:60] = 0
+                a[rows[1] : rows[1] + 5, 10:60] = 0
+                p = os.path.join(d, f"lo-{n}.png")
+                Image.fromarray(a).save(p)
+                with open(os.path.join(d, f"lo-{n}.txt"), "w") as f:
+                    f.write(f"page{n}")
+                paths.append(p)
+            dest = compare.stitch_pages(paths, os.path.join(d, "lo-stitched-1.png"))
+            out = Image.open(dest)
+            # Each page keeps the rows from its first to last ink; plus a gap.
+            self.assertEqual(out.size, (80, 25 + 25 + 4))
+            self.assertEqual(open(os.path.join(d, "lo-stitched-1.txt")).read(), "page1\npage2")

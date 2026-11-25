@@ -1002,6 +1002,57 @@ def pick_sheet_page(lo_pages, ours_path):
     return best
 
 
+def stitch_pages(paths, dest):
+    """Join consecutive printed pages of one sheet into a single tall
+    reference at `dest` (and their text layers beside it), so a sheet that
+    LibreOffice paginates is scored against Tables' continuous capture
+    (#1345). Each page is cut to the rows holding ink, keeping its full
+    width so columns stay aligned. Returns `dest`."""
+    strips = []
+    for path in paths:
+        img = load(path)
+        ys, _ = np.nonzero(ink_mask(np.asarray(img)))
+        if len(ys):
+            img = img.crop((0, int(ys.min()), img.width, int(ys.max()) + 1))
+        strips.append(img)
+    width = max(i.width for i in strips)
+    gap = 4
+    out = Image.new("RGB", (width, sum(i.height for i in strips) + gap * (len(strips) - 1)), (255, 255, 255))
+    y = 0
+    for img in strips:
+        out.paste(img, (0, y))
+        y += img.height + gap
+    out.save(dest)
+    texts = []
+    for path in paths:
+        try:
+            with open(os.path.splitext(path)[0] + ".txt", encoding="utf-8", errors="replace") as f:
+                texts.append(f.read())
+        except OSError:
+            pass
+    if texts:
+        with open(os.path.splitext(dest)[0] + ".txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(texts))
+    return dest
+
+
+def continuation_pages(lo_pages, start, ours_path):
+    """The pages after `start` that continue the same sheet: each directly
+    follows the last and is mostly (SHEET_CONTAINED) words our capture
+    holds. Stops at the first page that is not."""
+    ours = page_bag(ours_path)
+    if not ours:
+        return []
+    out = []
+    for lo in lo_pages[lo_pages.index(start) + 1 :]:
+        bag = page_bag(lo) or Counter()
+        n = sum(bag.values())
+        if not n or sum((ours & bag).values()) / n < SHEET_CONTAINED:
+            break
+        out.append(lo)
+    return out
+
+
 def score_fixture(app, d, tier, ref_words_cache, feature=None):
     lo_pages = sorted(glob.glob(os.path.join(d, "lo-[0-9]*.png")), key=page_no)
     ours_pages = sorted(glob.glob(os.path.join(d, f"{tier}-[0-9]*.png")), key=page_no)
@@ -1027,6 +1078,9 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
         page_window = True
         best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
         lo_page = page_no(best)
+        rest = continuation_pages(lo_pages[:SHEET_CANDIDATES], best, ours_pages[0])
+        if rest:
+            best = stitch_pages([best, *rest], os.path.join(d, f"lo-stitched-{lo_page}.png"))
         lo_pages = [best]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
