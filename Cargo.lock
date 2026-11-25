@@ -5006,6 +5006,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "suite-context-mcp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "suite-convert"
 version = "0.1.0"
 dependencies = [
