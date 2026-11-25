@@ -269,6 +269,7 @@ mod imp {
 
         /// Set the room data from a room summary.
         pub(super) fn set_data(&self, data: RoomSummary) {
+            self.set_avatar_url(data.avatar_url);
             self.set_fields(
                 data.room_id,
                 data.canonical_alias,
@@ -276,12 +277,12 @@ mod imp {
                 data.topic,
                 data.num_joined_members,
                 Some(&data.join_rule),
-                data.avatar_url,
             );
         }
 
         /// Set the room data from a room preview.
         fn set_preview(&self, preview: RoomPreview) {
+            self.set_avatar_url(preview.avatar_url);
             self.set_fields(
                 preview.room_id,
                 preview.canonical_alias,
@@ -289,12 +290,17 @@ mod imp {
                 preview.topic,
                 preview.num_joined_members,
                 preview.join_rule.as_ref(),
-                preview.avatar_url,
             );
         }
 
-        /// Set the room data from its individual fields.
-        #[allow(clippy::too_many_arguments)]
+        /// Set the avatar URI of the room.
+        fn set_avatar_url(&self, avatar_url: Option<OwnedMxcUri>) {
+            if let Some(image) = self.obj().avatar_data().image() {
+                image.set_uri_and_info(avatar_url, None);
+            }
+        }
+
+        /// Set the room data from its individual fields, except the avatar.
         fn set_fields(
             &self,
             room_id: OwnedRoomId,
@@ -303,7 +309,6 @@ mod imp {
             topic: Option<String>,
             num_joined_members: impl TryInto<u32>,
             join_rule: Option<&JoinRuleSummary>,
-            avatar_url: Option<OwnedMxcUri>,
         ) {
             self.set_room_id(room_id);
             self.set_canonical_alias(canonical_alias);
@@ -311,11 +316,6 @@ mod imp {
             self.set_topic(topic.into_clean_string());
             self.set_joined_members_count(num_joined_members.try_into().unwrap_or(u32::MAX));
             self.set_join_rule(join_rule);
-
-            if let Some(image) = self.obj().avatar_data().image() {
-                image.set_uri_and_info(avatar_url, None);
-            }
-
             self.update_identifiers();
             self.set_loading_state(LoadingState::Ready);
         }
