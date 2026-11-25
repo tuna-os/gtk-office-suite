@@ -986,6 +986,23 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
+    // Writer lays a list marker out as text of the first line, so a marker
+    // font taller than the body text makes that line taller.
+    if let (Some(font), Some(text), Some(first)) =
+        (p.style.list_marker_font.as_deref().filter(|_| p.style.list != ListKind::None), lists::marker_for(&p.style, ordinal), lines.first_mut())
+    {
+        let size_hp = p.runs.iter().find(|r| !r.text.is_empty()).and_then(|r| r.style.font_size_hp);
+        let run = crate::model::Run { text, style: crate::model::RunStyle { font_family: Some(font.to_string()), font_size_hp: size_hp, ..Default::default() } };
+        let runs = [run];
+        let mut req = paragraph_request_at(p, 1000.0, opts, ordinal);
+        req.runs = &runs;
+        req.first_line_indent_pt = 0.0;
+        req.tab_stops = Vec::new();
+        if let Some(m) = shaper.shape(&req).first() {
+            first.ascent_pt = first.ascent_pt.max(m.ascent_pt);
+            first.descent_pt = first.descent_pt.max(m.descent_pt);
+        }
+    }
     Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal }
 }
 

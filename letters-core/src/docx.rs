@@ -3671,6 +3671,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 .and_then(|(num_id, level)| numbering_level(doc, num_id, level)?.2)
                 .and_then(|text| bullet_glyph(&text))
                 .map(|glyph| ListLabel { prefix: glyph, format: NumberFormat::None, suffix: String::new() }),
+            list_marker_font: numbering
+                .filter(|_| list == ListKind::Bullet)
+                .and_then(|(num_id, level)| doc.numbering_level(num_id, level)?.marker_properties?.font_ascii.clone()),
             named_style, own_look, page_break_before, keep_with_next, keep_lines, widow_control,
             line_height: para_line_height(
                 p.line_spacing_multiple(),

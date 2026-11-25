@@ -1,0 +1,1 @@
+- Letters: a .docx bullet whose numbering level names a tall symbol font (Noto Sans Symbols) now makes the item's first line as tall as Writer does, so the lines below no longer sit too high (#1871).
