@@ -1,0 +1,1 @@
+- Tables: an xlsx column width is read in the workbook's own default-font digit widths (Arial 12 is 9 px a unit, not Calibri's 7), so a wide column in an Arial workbook no longer wraps its heading early (#1875).
