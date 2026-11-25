@@ -68,10 +68,21 @@ impl Grant {
             return Err(GrantError::NotRegularFile);
         }
         let canon = std::fs::canonicalize(path).map_err(|_| GrantError::NotFound)?;
-        // A symlinked parent directory canonicalizes to a different path.
+        // Any symlink on the way (not just the last component) makes the
+        // canonical path differ from the lexically normalised absolute one.
+        // `..` is folded lexically, so `sub/../f` still names the same file.
         let abs = std::path::absolute(path).map_err(|_| GrantError::NotFound)?;
-        let abs_canon_parent = abs.parent().and_then(|p| std::fs::canonicalize(p).ok());
-        if abs_canon_parent.as_deref() != canon.parent() {
+        let mut lexical = PathBuf::new();
+        for c in abs.components() {
+            match c {
+                std::path::Component::ParentDir => {
+                    lexical.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => lexical.push(other),
+            }
+        }
+        if lexical != canon {
             return Err(GrantError::Symlink);
         }
         Ok(Grant { path: canon, revoked: Arc::new(AtomicBool::new(false)) })
