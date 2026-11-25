@@ -28,10 +28,7 @@ mod relm;
 // files that only import it stay byte-identical to upstream and are not
 // touchpoints (#2247).
 extern crate self as relm4;
-#[allow(unused_imports)]
-mod prelude {
-    pub use crate::relm::prelude::*;
-}
+pub use relm::prelude;
 mod rng;
 mod services;
 mod ui;
