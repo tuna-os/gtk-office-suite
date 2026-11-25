@@ -220,6 +220,7 @@ mod imp {
                 }
             };
             let matrix_room = room.matrix_room().clone();
+            let utd_hook = crate::utils::matrix::utd::hook_manager(matrix_room.client());
             let focus = match self.thread_root_id() {
                 Some(root_event_id) => TimelineFocus::Thread {
                     root_event_id: root_event_id.to_owned(),
@@ -235,6 +236,7 @@ mod imp {
                     .timeline_builder()
                     .with_focus(focus)
                     .event_filter(filter)
+                    .with_unable_to_decrypt_hook(utd_hook)
                     .add_failed_to_parse(false)
                     .build()
                     .await
