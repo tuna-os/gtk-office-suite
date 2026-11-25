@@ -28,7 +28,7 @@ mod relm;
 // files that only import it stay byte-identical to upstream and are not
 // touchpoints (#2247).
 extern crate self as relm4;
-pub use relm::prelude;
+pub use relm::{main_application, prelude, ComponentSender, Sender};
 mod rng;
 mod services;
 mod ui;
