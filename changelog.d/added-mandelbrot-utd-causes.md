@@ -1,0 +1,1 @@
+- Mandelbrot: a message that cannot be decrypted now says why (not a member yet, key backup off, session unverified, withheld by the sender …) and, where it helps, offers a button to the encryption settings. Each undecryptable event is logged locally through the SDK hook; nothing is sent anywhere (#1968).
