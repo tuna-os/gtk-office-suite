@@ -1,0 +1,1 @@
+- Letters: "Import Saved Web Article…" turns a saved .html page into a new editable document with its title, byline, date and source address, keeping headings, lists, quotes, code, links and images saved beside the page. Scripts, frames, style sheets and remote images are never run or fetched, and the import says what it left out (#1787).

@@ -3,6 +3,7 @@
 //
 // See DESIGN.md for the model, invariants, and addressing scheme.
 
+pub mod article;
 pub mod chips;
 #[cfg(feature = "collab")]
 pub mod collab;
