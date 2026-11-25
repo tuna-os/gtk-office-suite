@@ -1,0 +1,1 @@
+- Mandelbrot: what the security banner, session setup and recovery dialog show for each recovery state (Unknown, Disabled, Incomplete, Enabled) now comes from one tested table, so the surfaces cannot disagree (#1971).

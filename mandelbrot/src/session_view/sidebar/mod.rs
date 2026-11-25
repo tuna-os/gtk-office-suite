@@ -24,8 +24,8 @@ use crate::{
     components::{Avatar, OfflineBanner},
     prelude::*,
     session::{
-        CryptoIdentityState, RecoveryState, Room, RoomCategory, Session, SessionVerificationState,
-        SidebarListModel, SidebarSection, SidebarSpaceList, TargetRoomCategory, User,
+        CryptoIdentityState, RecoveryBannerAction, RecoveryState, Room, RoomCategory, Session,
+        SessionVerificationState, SidebarListModel, SidebarSection, SidebarSpaceList, TargetRoomCategory, User, banner_action,
     },
     utils::{BoundObjectWeakRef, FixedSelection},
 };
@@ -618,14 +618,17 @@ mod imp {
             } else if verification_state == SessionVerificationState::Unverified {
                 (gettext("Crypto identity incomplete"), gettext("Verify"))
             } else {
-                match recovery_state {
-                    RecoveryState::Disabled => {
+                match banner_action(recovery_state) {
+                    Some(RecoveryBannerAction::Enable) => {
                         (gettext("Account recovery disabled"), gettext("Enable"))
                     }
-                    RecoveryState::Incomplete => {
+                    Some(RecoveryBannerAction::Recover) => {
                         (gettext("Account recovery incomplete"), gettext("Recover"))
                     }
-                    _ => unreachable!(),
+                    None => {
+                        self.security_banner.set_revealed(false);
+                        return;
+                    }
                 }
             };
 
