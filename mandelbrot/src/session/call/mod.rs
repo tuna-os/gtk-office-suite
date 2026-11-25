@@ -392,24 +392,21 @@ impl CallManager {
         }
     }
 
-    /// Fetch the preferred RTC foci from the `.well-known` of our
-    /// homeserver (MSC4143 `org.matrix.msc4143.rtc_foci`).
+    /// Fetch the preferred RTC transports (MSC4143) of our homeserver.
+    ///
+    /// The SDK asks the homeserver the client resolved at login (which can
+    /// differ from the server name) and falls back to the `.well-known` foci.
     fn fetch_preferred_foci(&self, session: &Session) {
-        let server_name = session.user_id().server_name().to_owned();
+        let client = session.client();
 
         let handle = spawn_tokio!(async move {
-            let url = format!("https://{server_name}/.well-known/matrix/client");
-            let response = matrix_sdk::reqwest::get(&url).await.ok()?;
-            let body = response.bytes().await.ok()?;
-            let well_known = serde_json::from_slice::<JsonValue>(&body).ok()?;
-
-            let foci = well_known
-                .get("org.matrix.msc4143.rtc_foci")?
-                .as_array()?
-                .iter()
-                .filter_map(|focus| serde_json::from_value::<Transport>(focus.clone()).ok())
-                .collect::<Vec<_>>();
-            Some(foci)
+            match client.discover_rtc_transports().await {
+                Ok(transports) => transports.map(|t| transports_from_sdk(&t)),
+                Err(error) => {
+                    warn!("Could not discover RTC transports: {error}");
+                    None
+                }
+            }
         });
 
         spawn!(clone!(
@@ -417,7 +414,7 @@ impl CallManager {
             self,
             async move {
                 if let Ok(Some(foci)) = handle.await {
-                    debug!("Found {} preferred RTC foci in .well-known", foci.len());
+                    debug!("Found {} preferred RTC transports", foci.len());
                     obj.imp().preferred_foci.replace(foci);
                 }
             }
@@ -1090,4 +1087,45 @@ async fn room_call_member_snapshot(
     }
 
     Some((events, joined))
+}
+
+/// Convert the SDK's RTC transports to our [`Transport`] type.
+///
+/// Transports that cannot be represented are skipped.
+fn transports_from_sdk(
+    transports: &[matrix_sdk::ruma::api::client::rtc::RtcTransport],
+) -> Vec<Transport> {
+    transports
+        .iter()
+        .filter_map(|transport| {
+            let value = serde_json::to_value(transport).ok()?;
+            serde_json::from_value::<Transport>(value).ok()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod rtc_transport_tests {
+    use matrix_sdk::ruma::api::client::rtc::RtcTransport;
+
+    use super::transports_from_sdk;
+
+    /// The transports keep the service URL the homeserver advertises, whatever
+    /// the server name of the user is.
+    #[test]
+    fn keeps_advertised_livekit_service_url() {
+        let sdk: RtcTransport = serde_json::from_value(serde_json::json!({
+            "type": "livekit",
+            "livekit_service_url": "https://matrix-rtc.example.org/livekit/jwt"
+        }))
+        .unwrap();
+
+        let transports = transports_from_sdk(&[sdk]);
+        assert_eq!(transports.len(), 1);
+        assert_eq!(transports[0].transport_type, "livekit");
+        assert_eq!(
+            transports[0].extra["livekit_service_url"],
+            "https://matrix-rtc.example.org/livekit/jwt"
+        );
+    }
 }
