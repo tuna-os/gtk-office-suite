@@ -29,3 +29,6 @@ path = "src/lib.rs"
 # Property tests for the shared op history (ops.rs); already in the
 # lockfile through letters-core, tables-core and decks-core.
 proptest = "1"
+
+[lints]
+workspace = true

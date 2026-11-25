@@ -473,6 +473,7 @@ pub fn restore_saved_view(state: &Rc<RefCell<crate::window::AppState>>, h: &gtk4
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
     width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,

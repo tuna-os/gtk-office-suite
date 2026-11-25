@@ -628,6 +628,7 @@ fn write_shape<W: std::io::Write>(
 }
 
 /// A shape's preset geometry, fill and outline, inside its `p:spPr`.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn write_geometry_and_paint<W: std::io::Write>(
     writer: &mut Writer<W>,
     kind: &super::shape::ShapeKind,
@@ -1606,6 +1607,7 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
 
 /// Render the deck to an in-memory .pptx buffer without touching disk —
 /// shared by the real save path (above) and autosave snapshots.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     // Every length below goes back onto the deck's own slide size.
     let _page = PageScale::set(deck);

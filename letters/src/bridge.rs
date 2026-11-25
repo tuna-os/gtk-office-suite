@@ -267,6 +267,7 @@ fn trailing_style(buf: &gtk::TextBuffer) -> Option<letters_core::ParaStyle> {
 /// table rows into cells: `capture_with_starts` does that for the whole
 /// buffer, and the live model uses this for the lines an edit touched.
 #[cfg(test)]
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Paragraph>, Vec<usize>) {
     let table = buf.tag_table();
     let run_tags: Vec<(usize, gtk::TextTag)> = RUN_TAGS

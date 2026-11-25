@@ -77,6 +77,7 @@ pub struct TablesWindow {
 }
 
 impl TablesWindow {
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     pub fn new(app: &adw::Application) -> Self {
         let controller = Rc::new(RefCell::new(
             WorkbookController::new(DEFAULT_ROWS, DEFAULT_COLS)

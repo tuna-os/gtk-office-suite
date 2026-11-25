@@ -31,6 +31,7 @@ pub(crate) struct EditorHandles<'a> {
 
 /// Cross-app copy and paste (DESIGN-UI), in place text editing on a
 /// double-click, and the editor's keys: navigation, delete, undo and redo.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
     let EditorHandles { window, canvas, slide_list, slides, masters, controller, refresh_hud, transition } = h;
     // In-place rich text editing (text_editor.rs): while it is open the

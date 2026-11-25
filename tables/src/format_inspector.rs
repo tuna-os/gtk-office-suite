@@ -87,6 +87,7 @@ fn clear_button(tooltip: &str) -> gtk::Button {
 }
 
 /// Build the inspector round `content` and add its toggle to `header`.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn build(
     ctl: &Ctl,
     grid: &gtk::DrawingArea,

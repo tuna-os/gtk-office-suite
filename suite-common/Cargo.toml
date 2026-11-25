@@ -17,3 +17,6 @@ glib-build-tools = "0.22"
 [lib]
 name = "suite_common"
 path = "src/lib.rs"
+
+[lints]
+workspace = true

@@ -121,6 +121,7 @@ fn resized(
 /// Install the drag gestures that move, resize and rotate the selected
 /// object. Call once during window construction.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub(crate) fn register_canvas_pointer_input(
     canvas: &gtk::DrawingArea,
     slides: &Rc<RefCell<Vec<Slide>>>,

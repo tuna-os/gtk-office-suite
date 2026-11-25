@@ -12,6 +12,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use crate::model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle};
 
 /// Parse Markdown into a Document.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn parse(md: &str) -> Document {
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current: Option<Paragraph> = None;

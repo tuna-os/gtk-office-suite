@@ -52,6 +52,7 @@ fn save_value_text(engine: &TablesEngine, sheet: usize, row: usize, col: usize) 
 /// Render the workbook to an in-memory xlsx buffer without touching disk —
 /// shared by the real save path (which then writes it atomically) and
 /// autosave (which writes it into a crash-recovery snapshot slot instead).
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn save_sheets_to_xlsx_bytes(
     sheets: &[SheetModel],
     engine: Option<&TablesEngine>,

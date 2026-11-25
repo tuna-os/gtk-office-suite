@@ -711,6 +711,7 @@ fn odf_number_format(format: NumberFormat) -> &'static str {
     }
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn content_xml(doc: &Document) -> String {
     let run_styles = collect_run_styles(doc);
     let mut pictures_written = 0usize;
@@ -1382,6 +1383,7 @@ fn page_layout_properties(page: Option<&PageGeometry>) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn styles_xml(doc: &Document) -> String {
     // One page layout and master page per section (LET-005S), each master
     // with the header and footer its section's pages show; a document of
@@ -1955,6 +1957,7 @@ fn list_style_indents(xml: &str) -> ListIndentMap {
 /// the named styles: the root every paragraph style's chain ends at.
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn parse_auto_styles(xml: &str) -> AutoStyles {
     let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), text_shift: Default::default(), para_shift: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
@@ -3291,6 +3294,7 @@ fn heading_style_names(styles: &str) -> [String; 6] {
 
 /// The document, and the package members its pictures were read from
 /// (which are therefore not opaque, #1292).
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     suite_common_core::zip_guard::check_not_encrypted(std::path::Path::new(path))?;
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;

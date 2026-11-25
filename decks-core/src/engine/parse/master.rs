@@ -59,6 +59,7 @@ pub fn parse_master_shapes_scaled(
 /// against `theme`), as on a slide: they used to come back as plain
 /// rectangles and circles, so a themed master lost its decorations on
 /// every save and reopen.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub(super) fn master_shapes(
     xml: &str,
     scale: SlideScale,

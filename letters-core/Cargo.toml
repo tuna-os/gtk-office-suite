@@ -55,3 +55,6 @@ render = ["dep:pango", "dep:pangocairo", "dep:cairo-rs"]
 # The document as a Loro rich text (src/collab.rs), off by default. The
 # paragraph and run styles travel as JSON, so floats must come back exactly.
 collab = ["dep:loro", "serde_json/float_roundtrip"]
+
+[lints]
+workspace = true

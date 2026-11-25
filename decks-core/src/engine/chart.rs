@@ -400,6 +400,7 @@ fn val_ax(id: &str, pos: &str, cross: &str, grid: bool, between: &str) -> String
 }
 
 /// `chart` as a DrawingML chart part (`c:chartSpace`).
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn chart_space_xml(chart: &ChartData) -> String {
     let n = chart.points.len();
     let last = n + 1;
@@ -745,6 +746,7 @@ fn cached(source: &El) -> Vec<Option<String>> {
 }
 
 /// The chart a DrawingML chart part draws, as its first series.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
     let root = tree(xml);
     let plot = root.find("plotArea")?;
@@ -1123,6 +1125,7 @@ fn column_of(address: &str) -> Option<usize> {
 
 /// The chart an embedded ODF chart object's `content.xml` draws, as its
 /// first series, with its data from the object's local table.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
     let root = tree(xml);
     let chart = root.find_q("chart:chart")?;

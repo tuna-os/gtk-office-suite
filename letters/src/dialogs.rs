@@ -264,6 +264,7 @@ fn buffer_ranges(buf: &gtk::TextBuffer, matches: &[(usize, usize)]) -> Vec<(i32,
 }
 
 /// Create and wire the search bar and find/replace controls for Letters.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEntry) {
     let search_bar = gtk::SearchBar::new();
     let search_entry = gtk::SearchEntry::new();

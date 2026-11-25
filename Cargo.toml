@@ -13,6 +13,13 @@ resolver = "2"
 # lockfile, so matrix-sdk, rustls and tokio never reach this lockfile.
 exclude = ["tools/crdt-spike", "tools/collab-spike", "collab", "lifafa", "mandelbrot"]
 
+# Function length is capped at 150 lines (clippy.toml), so a long function
+# cannot grow unnoticed. Every function over it today carries
+# `#[allow(clippy::too_many_lines)] // baseline (#2269)`; delete that line in
+# the change that splits the function. CI's `-D warnings` makes the lint fail.
+[workspace.lints.clippy]
+too_many_lines = "warn"
+
 [workspace.dependencies]
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
 

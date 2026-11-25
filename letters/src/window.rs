@@ -28,6 +28,7 @@ pub struct LettersWindow {
 }
 
 impl LettersWindow {
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     pub fn new(app: &adw::Application, settings: gio::Settings) -> Self {
         let tab_view = adw::TabView::new();
         tab_view.set_menu_model(Some(&make_tab_menu()));

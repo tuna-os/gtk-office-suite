@@ -575,6 +575,7 @@ fn build_controls() -> (gtk::Box, Controls) {
 /// assistive tools. The popover lives as long as the window
 /// (suite-common's surface-lifetime rule); moving focus inside it is not
 /// a commit.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub(crate) fn register(h: EditorHandles, editor_host: &gtk::Overlay) {
     let popover = suite_common::popover::reused(editor_host, "slide-text-editor");
     popover.set_position(gtk::PositionType::Bottom);

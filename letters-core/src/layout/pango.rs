@@ -103,6 +103,7 @@ impl PangoShaper {
     }
 
     /// The Pango layout of one paragraph, exactly as the engine shapes it.
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     pub fn layout(&self, req: &ShapeRequest<'_>) -> pango::Layout {
         let layout = pango::Layout::new(&self.context);
         let mut base = pango::FontDescription::new();
@@ -1374,6 +1375,7 @@ impl Typeset {
 
     /// Draw page `index`'s content (not the paper itself). An index out of
     /// range draws nothing.
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     pub fn draw_page(&self, cr: &cairo::Context, index: usize) {
         let Some(page) = self.tree.pages.get(index) else { return };
         cr.set_source_rgb(0.0, 0.0, 0.0);

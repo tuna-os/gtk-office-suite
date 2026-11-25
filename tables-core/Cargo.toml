@@ -36,3 +36,6 @@ proptest = "1"
 [lib]
 name = "tables_core"
 path = "src/lib.rs"
+
+[lints]
+workspace = true

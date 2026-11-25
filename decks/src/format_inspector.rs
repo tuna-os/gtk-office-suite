@@ -135,6 +135,7 @@ fn page(groups: &[&adw::PreferencesGroup]) -> adw::PreferencesPage {
 
 /// Build the inspector. `changed` redraws the canvas and the rest of the
 /// window after an edit.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> FormatInspector {
     // Set while widgets are filled from the model, so their change signals
     // don't write straight back into it.

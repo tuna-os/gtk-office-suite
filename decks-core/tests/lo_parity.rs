@@ -60,6 +60,7 @@ fn expect_texts(deck: &Deck, wanted: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn scenarios() -> Vec<Scenario> {
     let mut v = Vec::new();
 

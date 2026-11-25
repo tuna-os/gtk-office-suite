@@ -500,6 +500,7 @@ fn apply_validations(sheets: &mut [SheetModel], per_sheet: &[SheetValidations]) 
     }
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
     let mut book: calamine::Xlsx<_> =
         open_workbook(path).map_err(|e| format!("Cannot open file: {e}"))?;

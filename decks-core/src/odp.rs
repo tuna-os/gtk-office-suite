@@ -601,6 +601,7 @@ fn frame_attrs(body: &crate::engine::TextBody, text: &str, frame_style: Option<S
 /// outline, as a text box of ours has.
 const PRESENTATION_STYLE: &str = "prDecks";
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn shapes_xml(
     shapes: &[SlideObject],
     style_of: &dyn Fn(&RunStyle) -> usize,
@@ -1636,6 +1637,7 @@ const DEFAULT_PAGE_PT: (f64, f64) = (960.0, 540.0);
 // One argument per kind of style a page's shapes can name, plus the page
 // scale and the picture resolver: bundling them would only rename them.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn parse_pages(
     xml: &str,
     page_tag: &str,
@@ -2152,6 +2154,7 @@ fn extract_picture(
 }
 
 /// Read an .odp into a Deck.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn read(path: &str) -> Result<Deck, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;

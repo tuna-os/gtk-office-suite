@@ -492,6 +492,7 @@ fn resolve_sheet_parts(
 
 /// Read hidden rows/columns and page setup for every sheet in `names`,
 /// keyed by sheet name.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn read_sheet_props_from_xlsx(
     path: &str,
     names: &[String],

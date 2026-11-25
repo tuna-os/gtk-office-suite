@@ -37,3 +37,6 @@ proptest = "1"
 [lib]
 name = "decks_core"
 path = "src/lib.rs"
+
+[lints]
+workspace = true

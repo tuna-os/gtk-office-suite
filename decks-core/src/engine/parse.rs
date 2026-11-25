@@ -211,6 +211,7 @@ impl PendingShape {
 
 /// The placeholders of a slide layout and of the master it belongs to, for
 /// resolving slide placeholders that carry no geometry of their own.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;

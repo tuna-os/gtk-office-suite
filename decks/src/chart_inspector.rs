@@ -126,6 +126,7 @@ fn kind_button(kind: ChartKind, group: Option<&gtk::ToggleButton>) -> gtk::Toggl
     b
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn build(ctl: &Rc<DecksController>, changed: Rc<dyn Fn()>) -> ChartInspector {
     let syncing = Rc::new(Cell::new(false));
     let apply: Rc<dyn Fn(ChartEdit)> = {

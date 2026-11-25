@@ -87,6 +87,7 @@ impl SuiteApp {
     /// Create a new SuiteApp with the given application id.
     /// Registers standard actions: new, open, save, save-as, preferences,
     /// about, keyboard-shortcuts, toggle-dark-mode, quit.
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     pub fn new(app_id: &str) -> Self {
         crash_report::install();
         init_i18n();

@@ -28,3 +28,6 @@ collab = ["letters-core/collab", "dep:suite-collab"]
 [[bin]]
 name = "letters"
 path = "src/main.rs"
+
+[lints]
+workspace = true

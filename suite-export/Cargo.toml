@@ -29,3 +29,6 @@ tempfile = "3"
 [lib]
 name = "suite_export"
 path = "src/lib.rs"
+
+[lints]
+workspace = true

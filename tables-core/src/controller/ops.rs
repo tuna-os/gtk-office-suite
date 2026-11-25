@@ -292,6 +292,7 @@ impl Op {
 
     /// Apply this op to `state` and return the op that undoes it exactly.
     /// On an error nothing has changed.
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     fn apply_one(&self, state: &mut WorkbookState) -> Result<Op, String> {
         // The sheet's current position, for the ops that address one.
         let si = match self.sheet() {

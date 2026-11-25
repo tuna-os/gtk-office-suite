@@ -45,6 +45,7 @@ pub fn edit_opener(
     dialog(parent, state, controller, grid, true)
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn dialog(
     parent: Rc<RefCell<Option<adw::ApplicationWindow>>>,
     state: Rc<RefCell<WorkbookState>>,

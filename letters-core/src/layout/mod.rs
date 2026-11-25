@@ -1378,6 +1378,7 @@ type CellParagraph = (usize, Shaped, f64);
 /// nothing to that row's height, and makes its last row tall enough for
 /// what is left of it; its box is drawn once that row is placed. The grid
 /// positions a merged cell covers are not drawn.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, ordinals: &[u32], shaper: &mut dyn Shaper) {
     let cells: Vec<(usize, crate::model::TableCell)> =
         range.clone().filter_map(|i| doc.paragraphs[i].style.table_cell.map(|c| (i, c))).collect();

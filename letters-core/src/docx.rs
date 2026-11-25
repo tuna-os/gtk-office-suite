@@ -145,7 +145,9 @@ fn raw_section_child(sect: &mut RawSection, e: &quick_xml::events::BytesStart<'_
     }
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn raw_paragraph_props(path: &str) -> RawParas {
+    #[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
     fn scan(path: &str) -> Result<RawParas, Box<dyn std::error::Error>> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
         let mut xml = String::new();
@@ -1145,6 +1147,7 @@ fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<V
     Ok(out.finish().map_err(|e| e.to_string())?.into_inner())
 }
 
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
     RESTARTED.with(|r| r.borrow_mut().clear());
@@ -2079,6 +2082,7 @@ fn without_covered_cells(xml: &str) -> String {
 }
 
 /// Write a Document to a .docx file.
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let mut out = rdocx::Document::new();
     // Smart chips, written as sentinels and made content controls below.
@@ -3401,6 +3405,7 @@ fn for_each_nested_paragraph(table: &rdocx::TableRef<'_>, f: &mut dyn FnMut(&rdo
 /// `table_style` is the style of the table a cell paragraph is in.
 /// `raw` is the scan's direct properties for this paragraph, when the
 /// scan paired them (indents, tab stops, line rule, borders).
+#[allow(clippy::too_many_lines)] // baseline (#2269): remove when split
 fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style: Option<&str>, raw: Option<&RawPara>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
