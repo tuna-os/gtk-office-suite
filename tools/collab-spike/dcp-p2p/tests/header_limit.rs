@@ -24,6 +24,8 @@ fn application(ciphertext_len: usize) -> SpacesArgs<()> {
     SpacesArgs::Application {
         space_id: p2panda_core::Hash::digest(b"space"),
         space_dependencies: vec![p2panda_core::Hash::digest(b"dep")],
+        // New in p2panda-spaces 0.8: the auth heads at which the author claims write access.
+        proof: vec![p2panda_core::Hash::digest(b"auth")],
         group_secret_id: Default::default(),
         nonce,
         ciphertext: vec![0xAB; ciphertext_len],
