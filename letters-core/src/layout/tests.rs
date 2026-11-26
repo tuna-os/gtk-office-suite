@@ -1865,3 +1865,19 @@ fn a_section_starting_with_a_table_keeps_the_table_whole() {
     assert!(cells_on(&t.pages[1]) > 0);
     assert_eq!(lines_per_page(&t)[0], 1, "the heading stays in its own section");
 }
+
+/// A row whose content fits the space left on the page but whose declared
+/// minimum height does not starts the next page (render-parity
+/// table-row-min-height-page-break) instead of being clamped to the foot.
+#[test]
+fn a_row_whose_minimum_height_overflows_the_page_starts_the_next() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 2, 1);
+    d.table_rows.insert(table, vec![Some(RowHeight { pt: 540.0, exact: false }), Some(RowHeight { pt: 180.0, exact: false })]);
+    let t = lay(&d);
+    let on = |p: usize| t.pages[p].items.iter().filter(|i| matches!(i, Item::Cell { col: 0, .. })).count();
+    assert!(t.pages.len() >= 2);
+    assert_eq!((on(0), on(1)), (1, 1));
+    let h = t.pages[1].items.iter().find_map(|i| match i { Item::Cell { col: 0, height_pt, .. } => Some(*height_pt), _ => None }).unwrap();
+    assert!((h - 180.0).abs() < 1e-6, "{h}");
+}

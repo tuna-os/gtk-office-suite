@@ -1,0 +1,1 @@
+- Letters: a table row whose declared minimum height does not fit the rest of the page now starts the next page, as LibreOffice does, instead of being clamped to the page foot (#1930).

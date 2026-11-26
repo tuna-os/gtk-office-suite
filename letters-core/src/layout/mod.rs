@@ -1500,6 +1500,20 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 flow.next_column();
             }
         }
+        // A row whose content fits what is left of the page but whose
+        // declared minimum height does not starts the next page, as
+        // LibreOffice does, rather than being clamped to the page foot
+        // (render-parity table-row-min-height-page-break, #1353). A row
+        // whose minimum is taller than a page is split as before.
+        if let Some(h) = file_h.filter(|h| !h.exact) {
+            if !flow.column_is_empty() {
+                let content = slices.iter().map(|c| c.iter().map(Slice::height).sum::<f64>()).fold(0.0, f64::max) + rule_pt;
+                let room = flow.bottom() - flow.y;
+                if content <= room + 1e-6 && h.pt + rule_pt > room + 1e-6 && h.pt + rule_pt <= flow.bottom() - flow.top() {
+                    flow.next_column();
+                }
+            }
+        }
         let mut next = vec![0usize; slices.len()];
         // A merged cell that ends here needs the row to reach the end of
         // its content, when the two are in the same column of one page.
