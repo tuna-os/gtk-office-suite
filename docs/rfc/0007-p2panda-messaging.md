@@ -137,7 +137,7 @@ Shape:
 | Edit, redaction, reaction | Operations referencing a message id (`edit`, `redact`, `react`). Last-writer-wins by causal order for edits; a redaction is honoured by every client but, as with Matrix, cannot unsend what a member already synced. |
 | Read receipt | An operation `receipt {up_to}`, rate-limited (at most one per conversation per few seconds). |
 | Typing, presence | **Gossip only**, never stored: ephemeral by design, and p2panda's gossip reaches only online peers. |
-| Attachment | A blob (p2panda-blobs), referenced from the message by hash and size, encrypted with a per-file key carried in the message (as `dcp-p2p`'s `blobcrypt.rs` already does for documents). If p2panda-blobs is still unusable after the 0.8.2 measurement, small files (a limit to be measured) go inline in chunked operations and larger ones wait for blobs. |
+| Attachment | A blob (p2panda-blobs), referenced from the message by hash and size, encrypted with a per-file key carried in the message (as `dcp-p2p`'s `blobcrypt.rs` already does for documents). p2panda-blobs is still an empty crate in 0.8.2 (#2502), so until it ships, small files (a limit measured in phase 1) go inline in chunked operations, and larger ones over a direct iroh-blobs transfer between online peers, as the spike already does. |
 | Membership change | p2panda-auth operations (add, remove, promote, demote), which 0.8.0 integrated into the Node API. Removal must be checked against the Spike C leak before it is offered as a security property (section 10). |
 
 **Encryption scheme.** p2panda-encryption has a "data" scheme (a shared group key; post-compromise
@@ -263,8 +263,8 @@ Proposal, without waiting for upstream:
 | Risk | Consequence | Mitigation |
 |---|---|---|
 | Pre-1.0 API and format (0.8.1 broke data) | Stored history unreadable after an upgrade | Versioned operations; the sidecar migrates; pin exact versions; p2p behind a feature |
-| Spike C removal leak (0.7.1): a member who has not applied a removal can still share new content with the removed member | "Remove from group" is not a security property | Re-measured in the 0.8.2 spike; until it is fixed, the UI says removal stops future invitations and sync, not that it guarantees secrecy |
-| Spaces catch-up cost (0.7.1: about 81 s and 438 MB at 1,000 entries) | Long chats unusable on rejoin | Re-measured in the 0.8.2 spike (0.8.2's changelog rewrites sync sessions); if it holds, segment long conversations into epochs (new space per N thousand messages) |
+| Spike C removal leak (0.7.1): a member who has not applied a removal can still share new content with the removed member | "Remove from group" is not a security property | **Still present in 0.8.2** (#2502, debug and release); a server-free design cannot close it. The UI says removal stops future invitations and sync, not that it guarantees secrecy |
+| Spaces catch-up cost (0.7.1: about 81 s and 438 MB at 1,000 entries) | Long chats unusable on rejoin | **Unchanged in 0.8.2** (#2502: 95.5 and 102.0 s against 100.0 s for 0.7.1 on the same machine; the orderer keeps every message upstream). Segment long conversations into epochs (a new space per N hundred messages, N measured in phase 1) |
 | Forward secrecy depends on the message scheme being reachable from spaces | Weaker confidentiality than Signal or Matrix's Megolm | Phase 1 reads the code; the UI states the property it actually has |
 | No store-and-forward upstream | Undelivered messages | Support node (section 9) and visible delivery state |
 | No security audit read (one was pending in 2025) | Unknown flaws | Do not market p2p chat as end-to-end secure until an audit report is read |
@@ -276,7 +276,7 @@ Each phase ends with something measured or shown, and can be the last one.
 
 | # | Phase | Ships to users? | Done when |
 |---|---|---|---|
-| 0 | Re-run Spike C on p2panda 0.8.2 (running for #2499) | No | Results written up next to Spike C: catch-up cost, removal, role change, blobs, net |
+| 0 | Re-run Spike C on p2panda 0.8.2 | No | **Done, #2502**: role change works; catch-up cost and the removal leak unchanged; blobs still empty; p2panda-net gains sync gating |
 | 1 | `p2p/p2pd` and `p2p/p2p-proto`; a CLI with two and three nodes chatting in a space: messages, edits, reactions, receipts, attachment, add and remove member | No | A CI journey on loopback and on the relay spike's shaped links; the encryption scheme in use read from the code and written down |
 | 2 | Lifafa: invite by email and learn-from-mail (section 7a); `IMPP` on contacts; `Source::P2p` in `accounts.rs` | Behind a setting | A GUI journey: invite mailed, opened, contact card updated |
 | 3 | Mandelbrot: close the 56 leaks behind `Room`/`Timeline`/`Session` methods | No (refactor) | Existing journeys green after each pull request |
