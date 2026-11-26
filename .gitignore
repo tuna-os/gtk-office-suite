@@ -19,6 +19,9 @@ flatpak/gschemas.compiled
 
 # Rust build output
 /target/
+# The collab spikes are workspaces of their own (dcp-p2p is a second one inside).
+/tools/collab-spike/target/
+/tools/collab-spike/dcp-p2p/target/
 fuzz/artifacts/
 fuzz/corpus/
 

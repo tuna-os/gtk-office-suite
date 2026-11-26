@@ -107,12 +107,23 @@ pub(super) fn master_shapes(
         /// Its size in its own EMU, before groups and scale: the space a
         /// custom geometry's unsized path is drawn in.
         raw: (f64, f64),
+        /// Hidden (`p:cNvPr hidden="1"`): PowerPoint and Impress do not
+        /// draw it (think-cell's data store on a master, drawn here as a
+        /// broken picture at the slide's corner).
+        hidden: bool,
     }
     let paints = sp_styles(xml, theme, scale.x);
     // Each p:sp's own paths (`a:custGeom`): a logo's mark drawn as itself,
     // not as the rectangle its frame is.
     let geometries = super::super::shape_xml::sp_geometries(xml);
     let cxn_paints = cxn_styles(xml, theme, scale.x);
+    // Each p:sp's text body (alignment, insets, anchor, spacing) resolved
+    // as on a slide, under the part's own `p:otherStyle` where it has one:
+    // a master's or layout's text box kept only its runs, so a
+    // right-aligned classification label ("PROTECTED B") was drawn from
+    // its box's left edge, clear of the white patch a slide puts over it.
+    let inherited = crate::engine::text_xml::Inherited::read_scaled("", xml, theme, scale.x);
+    let texts = crate::engine::text_xml::sp_texts(xml, theme, &inherited, scale);
     let mut sp_count = 0usize;
     let mut cxn_count = 0usize;
     impl Pending {
@@ -188,6 +199,7 @@ pub(super) fn master_shapes(
                         connector: false,
                         rotation: 0.0,
                         raw: (0.0, 0.0),
+                        hidden: false,
                     });
                     sp_count += 1;
                 }
@@ -211,6 +223,7 @@ pub(super) fn master_shapes(
                         connector: true,
                         rotation: 0.0,
                         raw: (0.0, 0.0),
+                        hidden: false,
                     });
                     cxn_count += 1;
                 }
@@ -231,6 +244,7 @@ pub(super) fn master_shapes(
                         connector: false,
                         rotation: 0.0,
                         raw: (0.0, 0.0),
+                        hidden: false,
                     });
                 }
                 "a:blip" => {
@@ -248,6 +262,11 @@ pub(super) fn master_shapes(
                 "p:ph" => {
                     if let Some(p) = cur.as_mut() {
                         p.has_ph = true;
+                    }
+                }
+                "p:cNvPr" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.hidden |= e.try_get_attribute("hidden").ok().flatten().is_some_and(|a| matches!(a.value.as_ref(), "1" | "true"));
                     }
                 }
                 "a:off" => {
@@ -341,14 +360,14 @@ pub(super) fn master_shapes(
                 "p:pic" => {
                     // A master's or layout's picture (a logo, a band of
                     // colour), where it stands among its shapes.
-                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)) {
+                    if let Some(p) = cur.take().filter(|p| !p.hidden).map(|p| placed(p, &groups, scale)) {
                         if let Some(path) = p.embed.as_deref().filter(|_| !p.has_ph && p.w > 0.0 && p.h > 0.0).and_then(&mut *pictures) {
                             shapes.push(SlideObject::Image { path, x: p.x, y: p.y, w: p.w, h: p.h, rotation: p.rotation, crop: Default::default() });
                         }
                     }
                 }
                 "p:cxnSp" => {
-                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)).filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
+                    if let Some(p) = cur.take().filter(|p| !p.hidden).map(|p| placed(p, &groups, scale)).filter(|p| p.connector && (p.w > 0.0 || p.h > 0.0)) {
                         let paint = cxn_paints.get(p.sp_index).cloned().unwrap_or_default();
                         // A connector with a flat box (a bent or curved one
                         // whose ends are level) is a straight segment: drawn
@@ -369,7 +388,7 @@ pub(super) fn master_shapes(
                     }
                 }
                 "p:sp" => {
-                    if let Some(p) = cur.take().map(|p| placed(p, &groups, scale)) {
+                    if let Some(p) = cur.take().filter(|p| !p.hidden).map(|p| placed(p, &groups, scale)) {
                         // A line has no height (or width) of its own.
                         let line = crate::engine::shape::is_line(&ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect")));
                         let sized = if line { p.w > 0.0 || p.h > 0.0 } else { p.w > 0.0 && p.h > 0.0 };
@@ -377,6 +396,9 @@ pub(super) fn master_shapes(
                             let text = text_of(&p.runs);
                             let has_text = !text.trim().is_empty();
                             if has_text {
+                                // One line of the text per `a:p`, in order.
+                                let lines: Vec<usize> = (0..text.split('\n').count()).collect();
+                                let body = texts.get(p.sp_index).map(|t| t.body_for(&lines)).unwrap_or_default();
                                 shapes.push(SlideObject::TextBox {
                                     text,
                                     x: p.x,
@@ -385,7 +407,7 @@ pub(super) fn master_shapes(
                                     h: p.h,
                                     rotation: p.rotation,
                                     runs: p.runs,
-                                    body: Default::default(),
+                                    body,
                                 });
                             } else {
                                 let paint = paints.get(p.sp_index).cloned().unwrap_or_default();

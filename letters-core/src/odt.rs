@@ -572,6 +572,9 @@ struct OpenTable {
     spans: Vec<CellSpan>,
     /// Each shaded cell's style attribute, by (row, col).
     cell_styles: std::collections::HashMap<(u32, u32), String>,
+    /// How many of its first rows are its heading
+    /// (`table:table-header-rows`).
+    header_rows: u32,
 }
 
 impl OpenTable {
@@ -597,8 +600,19 @@ impl OpenTable {
     }
 
     fn open_row(&self, body: &mut String) {
+        if self.row == 0 && self.header_rows > 0 {
+            body.push_str("<table:table-header-rows>");
+        }
         let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
         body.push_str(&format!("<table:table-row{style}>"));
+    }
+
+    /// Close the current row, and the heading after its last row.
+    fn close_row(&self, body: &mut String) {
+        body.push_str("</table:table-row>");
+        if self.header_rows > 0 && self.row + 1 == self.header_rows {
+            body.push_str("</table:table-header-rows>");
+        }
     }
 
     fn close_cell(&mut self, body: &mut String) {
@@ -620,7 +634,7 @@ impl OpenTable {
             if self.col + 1 < self.cols {
                 self.col += 1;
             } else {
-                body.push_str("</table:table-row>");
+                self.close_row(body);
                 self.row += 1;
                 self.col = 0;
                 if self.row == self.rows {
@@ -637,7 +651,7 @@ impl OpenTable {
         self.move_to(body, last_row, last_col);
         if self.row < self.rows {
             self.close_cell(body);
-            body.push_str("</table:table-row>");
+            self.close_row(body);
         }
         body.push_str("</table:table>");
     }
@@ -987,7 +1001,8 @@ fn content_xml(doc: &Document) -> String {
                         cell_styles.insert((row, col), format!(" table:style-name=\"{name}\""));
                     }
                     let spans = doc.table_spans.get(&c.table).cloned().unwrap_or_default();
-                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans };
+                    let header_rows = doc.table_header_rows.get(&c.table).copied().unwrap_or(0).min(rows);
+                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans, header_rows };
                     t.open_row(&mut body);
                     t.open_cell(&mut body);
                     table = Some(t);
@@ -1906,6 +1921,85 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
     out
 }
 
+/// Where a list level's label face is named: in the level's own
+/// `style:text-properties`, or by the text style it names
+/// (`text:style-name`, Writer's "Bullet Symbols" and the like).
+#[derive(Clone, Debug, PartialEq)]
+enum LabelFace {
+    Own(String),
+    Style(String),
+}
+
+/// Each `text:list-style` in `xml`: where each level names its label's
+/// face (`LabelFace`), by level, 0-based. The level's own text properties
+/// win over its text style's.
+fn list_style_faces(xml: &str) -> std::collections::HashMap<String, Vec<Option<LabelFace>>> {
+    let mut out: std::collections::HashMap<String, Vec<Option<LabelFace>>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current: Option<String> = None;
+    let mut level: Option<usize> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                "text:list-level-style-number" | "text:list-level-style-bullet" | "text:list-level-style-image" => {
+                    level = attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok()).filter(|l| (1..=10).contains(l));
+                    let (Some(style), Some(l)) = (current.as_ref(), level) else { continue };
+                    let levels = out.entry(style.clone()).or_default();
+                    if levels.len() < l {
+                        levels.resize(l, None);
+                    }
+                    levels[l - 1] = attr_val(&e, "text:style-name").map(LabelFace::Style);
+                }
+                "style:text-properties" => {
+                    let (Some(style), Some(l)) = (current.as_ref(), level) else { continue };
+                    let face = attr_val(&e, "style:font-name").or_else(|| attr_val(&e, "fo:font-family"));
+                    if let (Some(face), Some(levels)) = (face, out.get_mut(style)) {
+                        levels[l - 1] = Some(LabelFace::Own(face));
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                "text:list-style" => current = None,
+                "text:list-level-style-number" | "text:list-level-style-bullet" | "text:list-level-style-image" => level = None,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Each `style:font-face` in `xml`: its family by its name.
+fn font_face_families(xml: &str) -> std::collections::HashMap<String, String> {
+    let mut out: std::collections::HashMap<String, String> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "style:font-face" => {
+                if let (Some(n), Some(f)) = (attr_val(&e, "style:name"), attr_val(&e, "svg:font-family")) {
+                    out.insert(n, f.trim_matches(|c| c == '\'' || c == '"').to_string());
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// A label face the model keeps: not a symbol face. Writer's OpenSymbol
+/// and Word's Symbol, Wingdings and Webdings hold their bullets at
+/// private-use points the reader already maps to Unicode glyphs
+/// (`docx::level_font` leaves the same faces out).
+fn kept_label_face(face: String) -> Option<String> {
+    let lower = face.trim().to_ascii_lowercase();
+    let symbol = ["symbol", "wingdings", "webdings", "opensymbol", "starsymbol"].iter().any(|s| lower.starts_with(s));
+    (!symbol && !lower.is_empty()).then_some(face)
+}
+
 /// One list level's position: (where its text starts, how far its marker
 /// hangs before that text), see `list_style_indents`.
 type ListLevelIndent = Option<(f64, Option<f64>)>;
@@ -2316,6 +2410,10 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     _ => {}
                 }
             }
+            // A style's properties end with it: a list style's level text
+            // properties after it (Writer writes the list styles last) are
+            // not that style's face.
+            Ok(Event::End(e)) if matches!(e.name().as_ref(), "style:style" | "style:default-style") => cur_name = None,
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -3312,6 +3410,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     list_labels.extend(list_style_labels(&content));
     let mut list_indents = list_style_indents(&styles);
     list_indents.extend(list_style_indents(&content));
+    let mut list_faces = list_style_faces(&styles);
+    list_faces.extend(list_style_faces(&content));
+    let mut face_families = font_face_families(&styles);
+    face_families.extend(font_face_families(&content));
     // The label of a numbered item at `level` (1-based) of the list style
     // `name`.
     let label_of = |name: Option<&String>, level: u8| -> Option<ListLabel> {
@@ -3333,7 +3435,16 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
+    // The face list style `name` draws its level `level` (1-based) label
+    // in, when it names one the model keeps (`kept_label_face`).
+    let label_face = |name: &String, level: u8| -> Option<String> {
+        let face = match list_faces.get(name)?.get(usize::from(level.checked_sub(1)?))?.as_ref()? {
+            LabelFace::Own(face) => face.clone(),
+            LabelFace::Style(style) => auto.text_font_name.get(style).or_else(|| named.text_font_name.get(style))?.clone(),
+        };
+        kept_label_face(face_families.get(&face).cloned().unwrap_or(face))
+    };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_header_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -3761,6 +3872,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         if in_header_rows || attr_val(&e, "table:style-name").is_some_and(|n| auto.row_whole.contains(&n) || named.row_whole.contains(&n)) {
                             doc.table_whole_rows.entry(t.0).or_default().insert(t.1 as u32);
                         }
+                        if in_header_rows {
+                            *doc.table_header_rows.entry(t.0).or_default() += 1;
+                        }
                         if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
                             let heights = row_heights.entry(t.0).or_default();
                             heights.resize(t.1 as usize, None);
@@ -3963,6 +4077,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     style.list_level = list_level.saturating_sub(1);
                     style.list_start = pending_start.take();
                     style.list_label = label;
+                    style.list_label_font = (kind != ListKind::None)
+                        .then(|| {
+                            let own = item_styles.get(usize::from(list_level.max(1) - 1)).cloned().flatten();
+                            let name = own.as_ref().or_else(|| list_style_names.last().and_then(Option::as_ref))?;
+                            label_face(name, list_level)
+                        })
+                        .flatten();
                     // Where the list style puts the item's text, unless the
                     // paragraph places it itself: the model's indent is
                     // that less the list indent the layout adds (as for a
@@ -5809,6 +5930,27 @@ mod tests {
         assert_eq!(d.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
     }
 
+    /// A table's heading rows (`table:table-header-rows`) are read as its
+    /// repeated header and written back inside the element, the rows after
+    /// them outside it.
+    #[test]
+    fn heading_rows_round_trip() {
+        let content = "<office:document-content><office:body><office:text><table:table table:name=\"T\">\
+            <table:table-column/><table:table-header-rows><table:table-row><table:table-cell><text:p>head</text:p></table:table-cell></table:table-row></table:table-header-rows>\
+            <table:table-row><table:table-cell><text:p>body</text:p></table:table-cell></table:table-row></table:table>\
+            <text:p>after</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let id = d.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(d.table_header_rows.get(&id), Some(&1));
+        let mut two = Document::from_plain_text("after");
+        let table = two.insert_table_at(0, 3, 1);
+        two.table_header_rows.insert(table, 2);
+        let rt = round_trip(&two);
+        let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(rt.table_header_rows.get(&id), Some(&2));
+        assert!(round_trip(&Document::from_plain_text("after")).table_header_rows.is_empty());
+    }
+
     /// A first page's master that names a different next master gives
     /// the first page its own header and footer and the pages after it
     /// the next master's, as Writer lays it out: a form's logo header and
@@ -5879,6 +6021,37 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].style.left_indent_pt, 0.0);
         assert_eq!(rt.paragraphs[1].style.left_indent_pt, 0.0);
+    }
+
+    /// A list level's label face is read from the level's own text
+    /// properties (a font-face declaration's family), else from the text
+    /// style it names; a symbol face (OpenSymbol) is left out, its bullets
+    /// already read as Unicode glyphs (#2421).
+    #[test]
+    fn a_list_label_takes_its_levels_face() {
+        let content = "<office:document-content><office:font-face-decls>\
+            <style:font-face style:name=\"Courier New1\" svg:font-family=\"&apos;Courier New&apos;\"/></office:font-face-decls>\
+            <office:automatic-styles>\
+            <style:style style:name=\"T9\" style:family=\"text\"><style:text-properties style:font-name=\"Noto Sans Symbols\"/></style:style>\
+            <text:list-style style:name=\"L1\">\
+              <text:list-level-style-bullet text:level=\"1\" text:bullet-char=\"●\" text:style-name=\"T9\"/>\
+              <text:list-level-style-bullet text:level=\"2\" text:bullet-char=\"o\"><style:text-properties style:font-name=\"Courier New1\"/></text:list-level-style-bullet>\
+              <text:list-level-style-bullet text:level=\"3\" text:bullet-char=\"■\"><style:text-properties style:font-name=\"OpenSymbol\"/></text:list-level-style-bullet>\
+              <text:list-level-style-bullet text:level=\"4\" text:bullet-char=\"-\"/>\
+            </text:list-style></office:automatic-styles><office:body><office:text>\
+            <text:list text:style-name=\"L1\"><text:list-item><text:p>one</text:p>\
+              <text:list><text:list-item><text:p>two</text:p>\
+                <text:list><text:list-item><text:p>three</text:p>\
+                  <text:list><text:list-item><text:p>four</text:p></text:list-item></text:list>\
+                </text:list-item></text:list>\
+              </text:list-item></text:list>\
+            </text:list-item></text:list><text:p>after</text:p>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let faces: Vec<Option<&str>> = d.paragraphs.iter().map(|p| p.style.list_label_font.as_deref()).collect();
+        assert_eq!(faces, [Some("Noto Sans Symbols"), Some("Courier New"), None, None, None]);
+        let levels: Vec<u8> = d.paragraphs.iter().map(|p| p.style.list_level).collect();
+        assert_eq!(levels, [0, 1, 2, 3, 0]);
     }
 
     /// A label-aligned list's item whose paragraph sets its own indents
