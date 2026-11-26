@@ -1922,3 +1922,51 @@ fn heading_rows_follow_row_edits() {
     assert!(d.delete_table_rows(table, 0, 1));
     assert!(!d.table_header_rows.contains_key(&table), "the last heading row gone, the table has none");
 }
+
+/// A floating label in a box that keeps its width (an ODF text frame
+/// narrower than its text, as Writer draws it) wraps inside the box: the
+/// box is centred across the page, its text set from its left edge, and
+/// the lines stack up from the foot so the last one ends where a single
+/// line would.
+#[test]
+fn a_floating_label_wraps_in_a_box_that_keeps_its_width() {
+    use crate::model::{HfFloat, HfLine};
+    let mut d = doc_of(1, "x");
+    // Two words of 2 and 4 chars at 6pt each: 30pt holds one at a time.
+    d.footer = Some("AB CDEF\n{page}".into());
+    d.footer_lines = vec![HfLine { alignment: Alignment::Center, float: Some(HfFloat::Bottom(15.0)), float_width_pt: Some(30.0), ..Default::default() }];
+    let t = lay(&d);
+    let page = &t.pages[0];
+    let footer: Vec<(String, f64, f64)> = page
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Line { source: Source::Footer, text, x_pt, top_pt, .. } => Some((text.trim().to_string(), *x_pt, *top_pt)), _ => None })
+        .collect();
+    let box_left = (page.width_pt - 30.0) / 2.0;
+    assert_eq!(footer[0].0, "AB");
+    assert_eq!(footer[1].0, "CDEF");
+    assert!((footer[0].1 - box_left).abs() < 1e-6 && (footer[1].1 - box_left).abs() < 1e-6, "both from the box's left: {footer:?}");
+    assert!((footer[1].2 - (page.height_pt - 15.0 - LINE)).abs() < 1e-6, "the last line ends where one line would: {footer:?}");
+    assert!((footer[0].2 - (footer[1].2 - LINE)).abs() < 1e-6, "the first line above it: {footer:?}");
+    // Without a box width the label is one centred line, as before.
+    d.footer_lines[0].float_width_pt = None;
+    let t = lay(&d);
+    let one: Vec<&str> = t.pages[0].items.iter().filter_map(|i| match i { Item::Line { source: Source::Footer, text, .. } => Some(text.as_str()), _ => None }).collect();
+    assert_eq!(one[0].trim(), "AB CDEF");
+}
+
+/// A header line set in a table cell (`HfLine::cell`) is laid out in the
+/// cell's box from the left margin: right-aligned text ends at the cell's
+/// edge, whatever the page's text width.
+#[test]
+fn a_header_line_in_a_cell_ends_at_the_cells_edge() {
+    use crate::model::{HfCell, HfLine};
+    let mut d = doc_of(1, "x");
+    d.header = Some("FINANCE".into());
+    d.header_lines = vec![HfLine { alignment: Alignment::Right, cell: Some(HfCell { left_pt: 200.0, width_pt: 100.0 }), ..Default::default() }];
+    let t = lay(&d);
+    let page = &t.pages[0];
+    let (x, text) = page.items.iter().find_map(|i| match i { Item::Line { source: Source::Header, x_pt, text, .. } => Some((*x_pt, text.clone())), _ => None }).unwrap();
+    let ends = x + text.chars().count() as f64 * 6.0;
+    assert!((ends - (page.geometry.margin_left_pt + 300.0)).abs() < 1e-6, "ends at the cell's right edge: {ends}");
+}
