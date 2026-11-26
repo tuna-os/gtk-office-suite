@@ -1,5 +1,0 @@
-cargo:rustc-check-cfg=cfg(wasm_browser)
-cargo:rustc-check-cfg=cfg(posix_minimal)
-cargo:rustc-check-cfg=cfg(netdev)
-cargo:rustc-cfg=netdev
-cargo:rustc-check-cfg=cfg(bsd)
