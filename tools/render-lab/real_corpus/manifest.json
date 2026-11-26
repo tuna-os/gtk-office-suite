@@ -853,14 +853,14 @@
   "file": "real/tables/service-reservoir-panel-engineers-contact-list.ods",
   "expect": "Service reservoir panel engineers: contact list",
   "source": "gov.uk",
-  "url": "https://assets.publishing.service.gov.uk/media/6abe6a2055bc01d752a7f24d/Service_reservoirs_panel_engineers_-_October_2026.ods",
+  "url": "https://assets.publishing.service.gov.uk/media/6aedd62127aaaf89d901b852/Service_reservoirs_panel_-_November_2026.ods",
   "page": "https://www.gov.uk/government/publications/contact-details-of-engineers-on-the-service-reservoir-panel",
   "license": "OGL-UK-3.0",
   "publisher": null,
-  "sha256": "3364dfb1b6adf02a614077ba9ad9ddfe6c0321061dc9fa0fc77a5885ba65a9c2",
-  "bytes": 5227,
+  "sha256": "147d0a571e4c124310c11745c70179e1cbf4f25f69895c483c8ca81d487eecc2",
+  "bytes": 5483,
   "lo_pages": 6,
-  "retrieved": "2026-10-01",
+  "retrieved": "2026-11-26",
   "needs": null
  },
  {
