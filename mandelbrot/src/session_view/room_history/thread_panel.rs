@@ -1,4 +1,5 @@
 use adw::{prelude::*, subclass::prelude::*};
+use gettextrs::gettext;
 use gtk::{glib, glib::clone};
 use matrix_sdk_ui::timeline::TimelineEventItemId;
 use ruma::{EventId, events::room::message::MessageType};
@@ -27,6 +28,10 @@ mod imp {
     pub struct ThreadPanel {
         #[template_child]
         stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        follow_button: TemplateChild<gtk::ToggleButton>,
+        /// Whether the follow button is being updated programmatically.
+        updating_follow: Cell<bool>,
         #[template_child]
         listview: TemplateChild<gtk::ListView>,
         #[template_child]
@@ -262,6 +267,7 @@ mod imp {
 
             self.update_view();
             self.load_more_events_if_needed();
+            self.update_follow_button();
 
             self.obj().notify_timeline();
         }
@@ -293,6 +299,7 @@ mod imp {
 
             self.is_sticky.set(self.is_at_bottom());
             self.load_more_events_if_needed();
+            self.send_thread_receipt();
         }
 
         /// Handle when the maximum scroll value changed.
@@ -442,6 +449,104 @@ mod imp {
             };
 
             self.message_toolbar.set_edit(&event);
+        }
+
+        /// Send a threaded read receipt for the last event of the thread, if
+        /// the user is looking at the bottom of it.
+        ///
+        /// Only this thread is marked as read, not the main timeline.
+        fn send_thread_receipt(&self) {
+            if !self.is_at_bottom() || !self.obj().is_mapped() {
+                return;
+            }
+
+            let Some(timeline) = self.timeline.obj() else {
+                return;
+            };
+            let Some(room) = self.timeline.obj().map(|t| t.room()) else {
+                return;
+            };
+            let Some(event_id) = timeline.last_event_id() else {
+                return;
+            };
+
+            spawn!(async move {
+                room.send_thread_receipt(&timeline, event_id).await;
+            });
+        }
+
+        /// Update the follow button for the current thread.
+        ///
+        /// The button stays hidden if the homeserver does not support thread
+        /// subscriptions.
+        fn update_follow_button(&self) {
+            self.follow_button.set_visible(false);
+
+            let Some(root_id) = self.timeline.obj().and_then(|t| t.thread_root_id()) else {
+                return;
+            };
+            let Some(room) = self.timeline.obj().map(|t| t.room()) else {
+                return;
+            };
+
+            spawn!(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    let Some(followed) = room.is_thread_followed(root_id.clone()).await else {
+                        return;
+                    };
+
+                    // The thread may have changed in the meantime.
+                    if imp.timeline.obj().and_then(|t| t.thread_root_id()) != Some(root_id) {
+                        return;
+                    }
+
+                    imp.set_followed(followed);
+                    imp.follow_button.set_visible(true);
+                }
+            ));
+        }
+
+        /// Show the given follow state without sending a request.
+        fn set_followed(&self, followed: bool) {
+            self.updating_follow.set(true);
+            self.follow_button.set_active(followed);
+            self.follow_button.set_tooltip_text(Some(&if followed {
+                gettext("Unfollow Thread")
+            } else {
+                gettext("Follow Thread")
+            }));
+            self.updating_follow.set(false);
+        }
+
+        /// Handle the user toggling the follow button.
+        #[template_callback]
+        fn follow_toggled(&self) {
+            if self.updating_follow.get() {
+                return;
+            }
+
+            let follow = self.follow_button.is_active();
+            let Some(root_id) = self.timeline.obj().and_then(|t| t.thread_root_id()) else {
+                return;
+            };
+            let Some(room) = self.timeline.obj().map(|t| t.room()) else {
+                return;
+            };
+
+            self.set_followed(follow);
+
+            spawn!(clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    if room.set_thread_followed(root_id, follow).await.is_err() {
+                        // Revert to the previous state.
+                        imp.set_followed(!follow);
+                    }
+                }
+            ));
         }
 
         /// Close the thread panel.

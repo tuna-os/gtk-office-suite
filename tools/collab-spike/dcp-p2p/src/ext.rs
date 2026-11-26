@@ -1,6 +1,6 @@
 //! The header extension of every operation of this binding, and why it is chunked.
 //!
-//! p2panda-core 0.7.1 decodes a header with `cbor_core::DecodeOptions::length_limit(512)`
+//! p2panda-core 0.7.1 (and still 0.8.2) decodes a header with `cbor_core::DecodeOptions::length_limit(512)`
 //! (`operation/any.rs`, "set rather low / pessimistic thresholds"): no CBOR array, map, byte string
 //! or text string in a header may be longer than 512 elements. A `p2panda_spaces::SpacesArgs`
 //! value carries its ciphertext (`Vec<u8>`) and its direct messages in the header extension, so an

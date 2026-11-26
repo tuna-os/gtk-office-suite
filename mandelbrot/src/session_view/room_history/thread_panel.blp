@@ -22,6 +22,14 @@ template $RoomHistoryThreadPanel: Adw.Bin {
         ]
       }
 
+      [start]
+      Gtk.ToggleButton follow_button {
+        visible: false;
+        icon-name: "preferences-system-notifications-symbolic";
+        tooltip-text: _("Follow Thread");
+        toggled => $follow_toggled() swapped;
+      }
+
       [end]
       Gtk.Button {
         icon-name: "close-symbolic";

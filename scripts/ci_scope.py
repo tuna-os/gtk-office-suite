@@ -20,8 +20,19 @@ A path is *inert* — it cannot change anything the heavy lanes judge — when i
   - under `.github/`, except the two workflows that run the heavy lanes
     (a workflow change is tested by the python lane, which stays on);
   - `renovate.json` or `codecov.yml`;
-  - prose (`docs/`, `skills/`, `runbooks/`, a top-level `*.md`) that no source the
-    heavy lanes build or run mentions. Derived, not listed: `include_str!`
+  - under `tools/render-lab/`: the render lab is judged by render-parity.yml
+    and render-real.yml, which scope it themselves (real_scope.py), and by
+    ci.yml's python lane, which always runs. Nothing the heavy lanes build,
+    run or read loads it: tests/gui/test_edit_render.py names
+    edit_journeys.py in its docstring only (the lab drives that test, not
+    the reverse). Counted as heavy, a baseline-only change built clippy,
+    nextest and three Flatpaks and ran the GUI journeys, all giving main's
+    result;
+  - prose (`docs/`, `skills/`, `runbooks/`, `changelog.d/`, a top-level `*.md`)
+    that no source the heavy lanes build or run mentions. A changelog fragment
+    is checked by the python lane and read at release time; as an unknown
+    top-level directory it made nearly every pull request build all three
+    Flatpaks, whichever app its code touched. Derived, not listed: `include_str!`
     of docs/FORMATS.md, the GUI harness's screenshot directory and the like
     keep those files non-inert because their path, a parent directory of it
     or their file name occurs in the sources. `docs/collab-spec/` always counts
@@ -59,7 +70,9 @@ OTHER_WORKSPACES = ("lifafa/", "mandelbrot/")
 # The workflows whose heavy lanes this scopes: editing one is not inert.
 HEAVY_WORKFLOWS = (".github/workflows/ci.yml", ".github/workflows/gui-tests.yml")
 INERT_FILES = ("renovate.json", "codecov.yml")
-PROSE_DIRS = ("docs/", "skills/", "runbooks/")
+# Read only by lanes that scope themselves or always run (see the docstring).
+INERT_DIRS = ("tools/render-lab/",)
+PROSE_DIRS = ("docs/", "skills/", "runbooks/", "changelog.d/")
 # Never inert even when nothing quotes them.
 PROSE_COMPILED = ("docs/collab-spec/",)
 # Where a prose file's path would be written if a heavy lane read it.
@@ -83,9 +96,12 @@ def mentioned(path: str, root: Path = REPO_ROOT) -> bool:
     needles = {path, parts[-1]}
     needles.update("/".join(parts[:n]) for n in range(2, len(parts)))
     existing = [s for s in SOURCES if (root / s).exists()]
+    # What the inert directories name is not read by the heavy lanes either:
+    # the render lab quotes README.md and docs/ files it checks itself.
+    excluded = [f":(exclude){d.rstrip('/')}" for d in INERT_DIRS if (root / d).exists()]
     for needle in needles:
         found = subprocess.run(
-            ["git", "grep", "-q", "-F", "-e", needle, "--", *existing],
+            ["git", "grep", "-q", "-F", "-e", needle, "--", *existing, *excluded],
             cwd=root, capture_output=True,
         )
         if found.returncode == 0:
@@ -100,7 +116,7 @@ def is_inert(path: str, root: Path = REPO_ROOT) -> bool:
         return True
     if path.startswith(".github/"):
         return path not in HEAVY_WORKFLOWS
-    if path in INERT_FILES:
+    if path in INERT_FILES or path.startswith(INERT_DIRS):
         return True
     if path.startswith(PROSE_COMPILED):
         return False

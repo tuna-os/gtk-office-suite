@@ -5,7 +5,7 @@ use std::{borrow::Cow, fmt, str::FromStr};
 use gettextrs::gettext;
 use gtk::{glib, prelude::*};
 use matrix_sdk::{
-    AuthSession, Client, ClientBuildError, SessionMeta, SessionTokens,
+    AuthSession, Client, ClientBuildError, SessionMeta, SessionTokens, ThreadingSupport,
     authentication::{
         matrix::MatrixSession,
         oauth::{OAuthSession, UserSession},
@@ -223,7 +223,12 @@ pub(crate) async fn client_with_stored_session(
         // auth for profiles:
         // https://gitlab.gnome.org/World/fractal/-/issues/934
         .request_config(RequestConfig::new().retry_limit(2).force_auth())
-        .with_encryption_settings(encryption_settings);
+        .with_encryption_settings(encryption_settings)
+        // Thread subscriptions (MSC4306); the SDK only uses them when the
+        // homeserver advertises support, and falls back to plain threads.
+        .with_threading_support(ThreadingSupport::Enabled {
+            with_subscriptions: true,
+        });
 
     if has_refresh_token {
         client_builder = client_builder.handle_refresh_tokens();

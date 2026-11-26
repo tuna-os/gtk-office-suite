@@ -133,6 +133,9 @@ pub struct Options<'a> {
     pub title_bold: bool,
     /// The title's colour; the chart's text colour otherwise.
     pub title_color: Option<(f64, f64, f64)>,
+    /// A data label's own text by category, for the first series' points,
+    /// where the file writes one in place of the value.
+    pub label_texts: &'a [Option<String>],
 }
 
 /// As [`draw_chart_series`], laid out as `opts` asks. Stacking and labels
@@ -509,6 +512,15 @@ fn label_for(v: f64, opts: &Options) -> String {
     if opts.percent { format!("{}%", (v * 100.0).round() as i64) } else { value_label(v) }
 }
 
+/// Series `k`'s label in category `i`: the point's own text where the file
+/// gives the first series' one, else its value as `label_for` reads it.
+fn point_label(k: usize, i: usize, v: f64, opts: &Options) -> String {
+    match opts.label_texts.get(i).filter(|_| k == 0) {
+        Some(Some(t)) => t.clone(),
+        _ => label_for(v, opts),
+    }
+}
+
 /// The colour of series `k`'s bar in category `i`: a one-series chart's
 /// bars take their points' own colours, as the file sets them.
 fn bar_color(series: &[Series], opts: &Options, k: usize, i: usize) -> (f64, f64, f64) {
@@ -580,7 +592,7 @@ fn draw_bars(cr: &Context, categories: &[String], series: &[Series], w: f64, h: 
             cr.rectangle(x, y_of(to), bar_w, y_of(from) - y_of(to));
             cr.fill().unwrap();
             if opts.labels {
-                let t = label_for(val, opts);
+                let t = point_label(k, i, val, opts);
                 let tw = text_w(cr, &t);
                 if opts.stacked {
                     // In the segment, white on the accent, as PowerPoint's
@@ -687,7 +699,7 @@ fn draw_horizontal_bars(cr: &Context, categories: &[String], series: &[Series], 
             cr.rectangle(x_of(from), y, x_of(to) - x_of(from), bar_h);
             cr.fill().unwrap();
             if opts.labels {
-                let t = label_for(val, opts);
+                let t = point_label(k, i, val, opts);
                 let ty = y + bar_h / 2.0 + CHART_TEXT_PX * 0.35;
                 if opts.stacked {
                     let tw = text_w(cr, &t);
@@ -814,7 +826,7 @@ fn draw_pie(cr: &Context, categories: &[String], series: &Series, w: f64, h: f64
             // On the segment, halfway across the ring (or the slice).
             let mid = angle + sweep / 2.0;
             let rad = (r + inner) / 2.0 + if inner > 0.0 { 0.0 } else { r * 0.15 };
-            let t = label_for(*val, opts);
+            let t = point_label(0, i, *val, opts);
             show(cr, cx + rad * mid.cos() - text_w(cr, &t) / 2.0, cy + rad * mid.sin() + CHART_TEXT_PX * 0.35, &t);
         }
         angle += sweep;
@@ -994,6 +1006,18 @@ mod tests {
     }
 
     /// Default options are the plain chart, pixel for pixel.
+    /// A point's own label text stands in for its value on the first
+    /// series; another series, or a point with none, reads its value.
+    #[test]
+    fn a_points_own_label_text_wins_on_the_first_series() {
+        let texts = [Some("7,984".to_string()), None];
+        let opts = Options { label_texts: &texts, ..Options::default() };
+        assert_eq!(point_label(0, 0, 9561.0, &opts), "7,984");
+        assert_eq!(point_label(0, 1, 150439.0, &opts), "150439");
+        assert_eq!(point_label(1, 0, 3.0, &opts), "3");
+        assert_eq!(point_label(0, 0, 0.5, &Options { percent: true, ..Options::default() }), "50%");
+    }
+
     #[test]
     fn default_options_are_the_plain_chart() {
         let categories: Vec<String> = ["1", "2", "3"].iter().map(|s| s.to_string()).collect();

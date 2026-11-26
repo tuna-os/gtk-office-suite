@@ -207,7 +207,11 @@ class ExportOptInTest(unittest.TestCase):
 
     def test_every_opt_in_fixture_is_defined(self):
         # An EXPORT key with no save() site would score missing forever.
-        src = open(fixtures.__file__).read()
+        # The fixtures are split across fixtures.py and its fixtures_*.py siblings.
+        here = os.path.dirname(fixtures.__file__)
+        src = "".join(
+            open(os.path.join(here, n)).read() for n in sorted(os.listdir(here)) if n.startswith("fixtures") and n.endswith(".py")
+        )
         for key in fixtures.EXPORT:
             _, feature = key.split("/", 1)
             self.assertIn(f'"{feature}"', src, f"{key} has no fixture")

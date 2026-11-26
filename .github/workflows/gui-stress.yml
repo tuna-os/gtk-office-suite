@@ -17,9 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       repeat:
-        description: 'Repetitions of the selection'
+        description: 'Repetitions of the selection (5 fits the 300-minute job limit)'
         required: false
-        default: '10'
+        default: '5'
       seed:
         description: 'Ordering seed (blank derives one and records it)'
         required: false
@@ -158,7 +158,10 @@ jobs:
           # assertion-mismatch (#442, #1951). Read-only evidence: it never
           # changes verdicts, only labels them.
           GUI_TEST_VERIFY_TYPING: '1'
-          REPEAT: ${{ github.event.inputs.repeat || '10' }}
+          # 10 repetitions of the 228 journeys outran the 300-minute job
+          # limit: the 2026-11-15 scheduled run was cancelled mid-baseline
+          # and left no signal on main (#1951). 5 finishes inside it.
+          REPEAT: ${{ github.event.inputs.repeat || '5' }}
           SEED: ${{ github.event.inputs.seed }}
           MATRIX: ${{ github.event.inputs.matrix || 'none' }}
           # 270 of the job's 300 minutes: the manifest, backtraces and
