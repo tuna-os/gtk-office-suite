@@ -1461,6 +1461,16 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             (!rows.is_empty()).then_some((ti as u32, rows))
         })
         .collect();
+    // Each table's heading: its leading rows marked `w:tblHeader`, which
+    // Word repeats at the top of every page the table runs on to.
+    let table_header_rows = tables
+        .iter()
+        .enumerate()
+        .filter_map(|(ti, t)| {
+            let n = (0..t.row_count()).take_while(|&r| t.row(r).is_some_and(|row| row.is_header())).count() as u32;
+            (n > 0).then_some((ti as u32, n))
+        })
+        .collect();
     // A table sized as a share of the text's width (`w:tblW w:type="pct"`).
     let table_relative = tables.iter().enumerate().filter(|(_, t)| matches!(t.width_mode(), Some(rdocx::TableWidth::Percentage(_)))).map(|(ti, _)| ti as u32).collect();
     let table_open_edges = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).filter_map(|(ti, t)| Some((ti as u32, cell_open_edges(t)?))).collect();
@@ -1502,6 +1512,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_rule_widths,
         table_rule_double,
         table_whole_rows,
+        table_header_rows,
         table_relative,
         table_open_edges,
         table_valign,
@@ -2224,6 +2235,11 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     row.set_cant_split();
                 }
             }
+            for r in 0..doc.table_header_rows.get(&tc0.table).copied().unwrap_or(0) {
+                if let Some(mut row) = tbl.row(r as usize) {
+                    row.set_header();
+                }
+            }
             if let Some(heights) = doc.table_rows.get(&tc0.table) {
                 for (r, h) in heights.iter().enumerate().take(rows) {
                     let (Some(h), Some(mut row)) = (h, tbl.row(r)) else { continue };
@@ -2269,6 +2285,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     }
                     if p.style.keep_lines {
                         cp = cp.keep_together(true);
+                    }
+                    if p.style.text_align_top {
+                        cp = cp.text_alignment(rdocx::ParagraphTextAlignment::Top);
                     }
                     if let Some(control) = p.style.widow_control {
                         cp = cp.widow_control(control);
@@ -2414,6 +2433,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
         if para.style.keep_lines {
             p = p.keep_together(true);
+        }
+        if para.style.text_align_top {
+            p = p.text_alignment(rdocx::ParagraphTextAlignment::Top);
         }
         if let Some(control) = para.style.widow_control {
             p = p.widow_control(control);
@@ -3186,6 +3208,21 @@ fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u3
     Some((l.start, number_format(l.format_name), l.level_text.map(str::to_string)))
 }
 
+/// The face level `level` of list instance `num_id` draws its label in
+/// (its `w:rPr/w:rFonts`), the replacement's before the definition's. Not
+/// Symbol, Wingdings or Webdings: their private-use bullets are read as
+/// the Unicode glyphs they show (`bullet_glyph`), which those faces lack.
+fn level_font(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<String> {
+    let replacement = level_replacement(doc, num_id, level);
+    let rpr = match &replacement {
+        Some(l) => l.marker_properties_value()?.clone(),
+        None => doc.numbering_level(num_id, level)?.marker_properties?.clone(),
+    };
+    let face = rpr.font_ascii.or(rpr.font_hansi)?;
+    let symbol = ["symbol", "wingdings", "webdings"].iter().any(|s| face.to_ascii_lowercase().starts_with(s));
+    (!symbol && !face.trim().is_empty()).then_some(face)
+}
+
 /// List instance `num_id`'s own replacement of level `level` (a
 /// `w:lvlOverride` holding a `w:lvl`), which wins over its definition's:
 /// a list whose definition only links a numbering style (`w:numStyleLink`)
@@ -3671,6 +3708,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 .and_then(|(num_id, level)| numbering_level(doc, num_id, level)?.2)
                 .and_then(|text| bullet_glyph(&text))
                 .map(|glyph| ListLabel { prefix: glyph, format: NumberFormat::None, suffix: String::new() }),
+            list_label_font: numbering.and_then(|(num_id, level)| level_font(doc, num_id, level)),
+            text_align_top: match p.text_alignment() {
+                Some(a) => a == rdocx::ParagraphTextAlignment::Top,
+                None => styled.text_alignment.as_deref() == Some("top"),
+            },
             named_style, own_look, page_break_before, keep_with_next, keep_lines, widow_control,
             line_height: para_line_height(
                 p.line_spacing_multiple(),

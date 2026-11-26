@@ -526,11 +526,22 @@ pub struct ParaStyle {
     /// "(%1)", ODF's num-prefix and num-suffix. `None` is "N.".
     #[serde(default)]
     pub list_label: Option<ListLabel>,
+    /// The face a list item's label is drawn in when its list names one:
+    /// Word's level `w:rPr/w:rFonts`, an "o" in Courier New or a "●" in
+    /// Noto Sans Symbols. Word and LibreOffice draw the label so, not in
+    /// the item's text face. `None` is the item's first run's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub list_label_font: Option<String>,
     /// How far a list item's marker sits before its text, in points, when
     /// the file says other than `lists::HANGING_PT` (Word's numbered
     /// "1.1" paragraphs hang their number 0.5in).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub list_hanging_pt: Option<f64>,
+    /// Text set to the top of a taller line (OOXML `w:textAlignment`
+    /// `top`): a list label's extra height goes below the text, not
+    /// above it, as Writer lays such a line out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub text_align_top: bool,
     /// Line spacing multiplier (1.0, 1.15, 1.5, 2.0). Applies to every
     /// line unless `line_height` fixes the height.
     pub line_spacing: f32,
@@ -623,7 +634,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_hanging_pt: None, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, list_label_font: None, list_hanging_pt: None, text_align_top: false, line_spacing: 1.0, line_height: None, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, own_look: false, table_cell: None, keep_with_next: false, keep_lines: false, widow_control: None, shading: None, borders: ParaBorders::default(), toc: None }
     }
 }
 
@@ -833,6 +844,12 @@ pub struct Document {
     /// taller than a page.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_whole_rows: std::collections::BTreeMap<u32, std::collections::BTreeSet<u32>>,
+    /// How many of each table's first rows are its heading, by table id
+    /// (Word's `w:tblHeader` on the leading rows, ODF's
+    /// `table:table-header-rows`): repeated at the top of every page the
+    /// table runs on to, as Word and Writer draw them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_header_rows: std::collections::BTreeMap<u32, u32>,
     /// The tables the file sized as a share of the text's width (Word's
     /// `pct`, ODF's `rel-width` or `margins` alignment), by table id: their
     /// columns fit the text however wide the file gave them. Any other
@@ -1096,6 +1113,7 @@ impl Document {
             table_rule_widths: Default::default(),
             table_rule_double: Default::default(),
             table_whole_rows: Default::default(),
+            table_header_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
             table_valign: Default::default(),
@@ -1306,6 +1324,7 @@ impl Document {
             // and a number's "a)" is no bullet.
             if style.list != kind {
                 style.list_label = None;
+                style.list_label_font = None;
             }
             style.list = kind;
             style.list_level = level;
@@ -1384,6 +1403,7 @@ impl Document {
         self.table_rule_widths.remove(&table);
         self.table_rule_double.remove(&table);
         self.table_whole_rows.remove(&table);
+        self.table_header_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);
         self.table_valign.remove(&table);
@@ -1491,6 +1511,12 @@ impl Document {
             let at = (at as usize).min(heights.len());
             heights.splice(at..at, std::iter::repeat_n(None, count as usize));
         }
+        // Rows inserted inside the heading are heading rows too.
+        if let Some(h) = self.table_header_rows.get_mut(&table) {
+            if at < *h {
+                *h += count;
+            }
+        }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, count as i64);
         self.move_fills(table, |row, col| Some((if row >= at { row + count } else { row }, col)));
         self.reflow_table(table);
@@ -1529,6 +1555,13 @@ impl Document {
         if let Some(heights) = self.table_rows.get_mut(&table) {
             let len = heights.len();
             heights.drain((at as usize).min(len)..(end as usize).min(len));
+        }
+        // The heading loses the rows of it deleted.
+        if let Some(h) = self.table_header_rows.get_mut(&table) {
+            *h -= end.min(*h).saturating_sub(at.min(*h));
+            if *h == 0 {
+                self.table_header_rows.remove(&table);
+            }
         }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, -(count as i64));
         self.move_fills(table, |row, col| match row {
