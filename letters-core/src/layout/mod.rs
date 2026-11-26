@@ -1378,7 +1378,12 @@ fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &Lay
     let top = flow.next_top(&para.style);
     let own: Vec<WrapBox> = floating_boxes(flow, para, top)
         .into_iter()
-        .filter_map(|(run, x, y, w, h)| run.style.image_anchor.filter(|a| a.wrap != Wrap::None && !a.behind).map(|a| WrapBox { x0: x, y0: y, x1: x + w, y1: y + h, wrap: a.wrap }))
+        .filter_map(|(run, x, y, w, h)| {
+            run.style.image_anchor.filter(|a| a.wrap != Wrap::None && !a.behind).map(|a| {
+                let contour = run.style.image.as_deref().filter(|_| a.contour && run.style.text_box.is_none()).and_then(contour_of);
+                WrapBox { x0: x, y0: y, x1: x + w, y1: y + h, wrap: a.wrap, contour }
+            })
+        })
         .collect();
     flow.wraps.extend(own);
     if flow.wraps.is_empty() {
@@ -1388,15 +1393,18 @@ fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &Lay
     let cx = flow.column_x();
     let (mut l, mut r) = (cx, cx + col_w);
     let mut below: Option<f64> = None;
-    let beside: Vec<WrapBox> = flow.wraps.iter().copied().filter(|b| b.y0 < top + first_h && b.y1 > top && b.x1 > cx && b.x0 < cx + col_w).collect();
+    let beside: Vec<WrapBox> = flow.wraps.iter().filter(|b| b.y0 < top + first_h && b.y1 > top && b.x1 > cx && b.x0 < cx + col_w).cloned().collect();
     for b in &beside {
         match b.wrap {
             Wrap::TopBottom => below = Some(below.map_or(b.y1, |y: f64| y.max(b.y1))),
             Wrap::Parallel => {
-                if b.x0 - l >= r - b.x1 {
-                    r = r.min(b.x0 - WRAP_GAP_PT);
+                // Beside its box, or with a contour beside its outline
+                // over the first line's height (none there: no limit).
+                let Some((x0, x1)) = b.across(top, top + first_h) else { continue };
+                if x0 - l >= r - x1 {
+                    r = r.min(x0 - WRAP_GAP_PT);
                 } else {
-                    l = l.max(b.x1 + WRAP_GAP_PT);
+                    l = l.max(x1 + WRAP_GAP_PT);
                 }
             }
             Wrap::None => {}
@@ -2007,13 +2015,90 @@ struct Flow<'o> {
 }
 
 /// A floating object text flows around: its box on the page and how.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct WrapBox {
     x0: f64,
     y0: f64,
     x1: f64,
     y1: f64,
     wrap: crate::model::Wrap,
+    /// Its picture's outline, when text wraps to that (`ImageAnchor::contour`).
+    contour: Option<std::sync::Arc<Contour>>,
+}
+
+impl WrapBox {
+    /// The part of it across the page that text between `y0` and `y1`
+    /// must keep clear of: its box, or with a contour the outline's widest
+    /// reach in those rows. None when the outline has nothing there.
+    fn across(&self, y0: f64, y1: f64) -> Option<(f64, f64)> {
+        let Some(c) = &self.contour else { return Some((self.x0, self.x1)) };
+        let h = self.y1 - self.y0;
+        let n = c.rows.len();
+        if n == 0 || h <= 0.0 {
+            return Some((self.x0, self.x1));
+        }
+        let row = |y: f64| (((y - self.y0) / h) * n as f64).clamp(0.0, n as f64) as usize;
+        let (from, to) = (row(y0.max(self.y0)), row(y1.min(self.y1)).max(row(y0.max(self.y0)) + 1).min(n));
+        let (l, r) = c.rows[from..to].iter().flatten().fold((f32::MAX, f32::MIN), |(l, r), &(a, b)| (l.min(a), r.max(b)));
+        (l <= r).then(|| {
+            let w = self.x1 - self.x0;
+            (self.x0 + f64::from(l) * w, self.x0 + f64::from(r) * w)
+        })
+    }
+}
+
+/// A picture's outline, row by row: the share of its width from the left
+/// at which each row's first and last drawn pixel are, or None for a row
+/// with none.
+#[derive(Debug, Default)]
+pub(crate) struct Contour {
+    rows: Vec<Option<(f32, f32)>>,
+}
+
+/// The outline of the picture at `path`, traced as Writer traces a
+/// picture's automatic contour: its opaque pixels when it has
+/// transparency, else its dark ones (under half brightness, Writer's
+/// one-bit threshold). Read once per picture.
+#[cfg(feature = "render")]
+fn contour_of(path: &str) -> Option<std::sync::Arc<Contour>> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<Arc<Contour>>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(c) = cache.lock().ok()?.get(path) {
+        return c.clone();
+    }
+    let traced = image::ImageReader::open(path).ok().and_then(|r| r.with_guessed_format().ok()).and_then(|r| r.decode().ok()).map(|img| {
+        let img = img.to_rgba8();
+        let (w, h) = img.dimensions();
+        let alpha = img.pixels().any(|p| p[3] < 255);
+        let drawn = |p: &image::Rgba<u8>| {
+            if alpha {
+                p[3] >= 128
+            } else {
+                0.299 * f32::from(p[0]) + 0.587 * f32::from(p[1]) + 0.114 * f32::from(p[2]) < 128.0
+            }
+        };
+        let rows = (0..h)
+            .map(|y| {
+                let xs = (0..w).filter(|&x| drawn(img.get_pixel(x, y)));
+                let (mut first, mut last) = (None, None);
+                for x in xs {
+                    first.get_or_insert(x);
+                    last = Some(x);
+                }
+                first.zip(last).map(|(a, b)| (a as f32 / w as f32, (b + 1) as f32 / w as f32))
+            })
+            .collect();
+        Arc::new(Contour { rows })
+    });
+    cache.lock().ok()?.insert(path.to_string(), traced.clone());
+    traced
+}
+
+#[cfg(not(feature = "render"))]
+fn contour_of(_path: &str) -> Option<std::sync::Arc<Contour>> {
+    None
 }
 
 /// The room kept between a floating object and the text beside it:
