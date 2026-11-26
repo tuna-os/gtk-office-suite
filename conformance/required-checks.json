@@ -149,9 +149,9 @@
     {"workflow": ".github/workflows/drop-bot-review-requests.yml", "job": "drop", "policy": "optional",
      "reason": "Bot-authored pull requests only, and only on open/reopen/ready: housekeeping, not a check of the change."},
     {"workflow": ".github/workflows/actions-security.yml", "job": "lockfile", "policy": "optional",
-     "reason": "New: checks that .github/workflows/actions.lock matches the workflows and that each locked commit verifies. It reports on every pull request; whether to require it is for the administrator."},
+     "reason": "New: checks that .github/workflows/actions.lock matches the workflows and that each locked commit verifies. Path-filtered to pull requests that touch a .github/ tree or an action.yml (the only inputs it reads), so it does not report on every pull request and cannot be required as it stands."},
     {"workflow": ".github/workflows/actions-security.yml", "job": "zizmor", "policy": "optional",
-     "reason": "New: zizmor security lint of the workflows, failing on any finding. It reports on every pull request; whether to require it is for the administrator."},
+     "reason": "New: zizmor security lint of the workflows, failing on any finding. Path-filtered like `lockfile` (it reads only workflows and actions), so it does not report on every pull request and cannot be required as it stands."},
     {"workflow": ".github/workflows/ratchet.yml", "job": "ratchet", "policy": "optional",
      "reason": "New: count ratchet over .ratchet.toml (#[ignore] tests, #[allow] attributes, undated deny.toml ignores). It reports on every pull request; whether to require it is for the administrator."}
   ]
