@@ -66,6 +66,7 @@ the cells at their own size.
 | Table style headers and first columns | Header rows drawn bold in every style, and a marked first column painted as the header, where Impress bolds only Light Style 1's and paints the first column as the header only in the medium styles | Fixed on main (#2387) |
 | Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Fixed on main (#2405) |
 | Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Fixed on main (#2407) |
+| A chart's own labels (`c:userShapes`) | Text the chart's author laid over it not drawn: a doughnut's "5.25%" in its hole and its "Complete / Forecast" key (aiva-progress-dashboard slide 2) | Open PR (read as text boxes over the chart; saved as slide text boxes) |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps

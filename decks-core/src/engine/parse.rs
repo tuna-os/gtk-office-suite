@@ -896,20 +896,40 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 // names, read on the same budget as the
                                 // slide; a part that isn't there or isn't a
                                 // chart we draw leaves no object.
-                                let chart = slide_image_rels
-                                    .get(&c.rel_id)
-                                    .map(|t| part_path(&slide_dir.to_string_lossy(), t))
-                                    .map(|p| archive.optional_part_to_string(&p, &mut budget))
+                                let chart_path = slide_image_rels.get(&c.rel_id).map(|t| part_path(&slide_dir.to_string_lossy(), t));
+                                let chart = chart_path
+                                    .as_ref()
+                                    .map(|p| archive.optional_part_to_string(p, &mut budget))
                                     .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
                                 if let Some(chart) = chart {
-                                    objects.push(SlideObject::Chart {
-                                        x: c.x * scale.x,
-                                        y: c.y * scale.y,
-                                        w: c.w * scale.x,
-                                        h: c.h * scale.y,
-                                        rotation: 0.0,
-                                        chart,
+                                    let (cx, cy, cw, ch) = (c.x * scale.x, c.y * scale.y, c.w * scale.x, c.h * scale.y);
+                                    objects.push(SlideObject::Chart { x: cx, y: cy, w: cw, h: ch, rotation: 0.0, chart });
+                                    // The labels the chart's own drawing lays
+                                    // over it (`c:userShapes`), as text boxes
+                                    // over the chart: a doughnut's "5.25%"
+                                    // and its key were not drawn.
+                                    let drawing = chart_path.as_deref().and_then(|p| {
+                                        let (dir, name) = p.rsplit_once('/').unwrap_or(("", p));
+                                        let rels = archive.optional_part_to_string(&format!("{dir}/_rels/{name}.rels"), &mut budget);
+                                        let tree = super::shape_xml::parse_tree(&rels);
+                                        let mut found = Vec::new();
+                                        tree.find_all("Relationship", &mut found);
+                                        let target = found.iter().find(|r| r.attr("Type").is_some_and(|t| t.ends_with("/chartUserShapes")))?.attr("Target")?.to_string();
+                                        Some(archive.optional_part_to_string(&part_path(dir, &target), &mut budget))
                                     });
+                                    for t in drawing.iter().flat_map(|xml| super::text_xml::chart_user_texts(xml, &slide_theme, scale)) {
+                                        let (x0, y0, x1, y1) = t.frame;
+                                        objects.push(SlideObject::TextBox {
+                                            text: t.text,
+                                            x: cx + x0 * cw,
+                                            y: cy + y0 * ch,
+                                            w: (x1 - x0).max(0.0) * cw,
+                                            h: (y1 - y0).max(0.0) * ch,
+                                            rotation: 0.0,
+                                            runs: scale.text_runs(&t.runs),
+                                            body: scale.text_body(t.body),
+                                        });
+                                    }
                                 }
                             }
                             frame_index += 1;
