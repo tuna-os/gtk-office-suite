@@ -35,14 +35,14 @@ mod client_api;
 mod media;
 #[cfg(feature = "calls-media")]
 mod screen;
+mod state;
 
-pub(crate) use self::client_api::SdkRtcClientApi;
-use super::Session;
-use crate::{
-    prelude::*,
-    session_view::{CallConnectionState, CallParticipant, CallState},
-    spawn, spawn_tokio,
+pub(crate) use self::{
+    client_api::SdkRtcClientApi,
+    state::{CallConnectionState, CallParticipant, CallState},
 };
+use super::Session;
+use crate::{prelude::*, spawn, spawn_tokio};
 
 /// The content of an `io.element.call.encryption_keys` to-device event.
 ///

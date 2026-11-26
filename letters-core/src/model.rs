@@ -203,6 +203,11 @@ pub struct ImageAnchor {
     /// How the text flows around it.
     #[serde(default)]
     pub wrap: Wrap,
+    /// Text beside it comes up to its drawn outline rather than its box
+    /// (Writer's contour wrap, `style:wrap-contour`): a picture's dark or
+    /// opaque pixels, as Writer traces a picture's automatic contour.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub contour: bool,
 }
 
 /// How text flows around a floating picture or text box.
@@ -295,6 +300,21 @@ pub struct HfLine {
     /// across the page by its alignment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub float: Option<HfFloat>,
+    /// A floating line's box width in points, when the box keeps its
+    /// width (an ODF text frame: Writer does not grow one to its text).
+    /// The text wraps inside it, set there by `float_text_alignment`, and
+    /// the box sits across the page by `alignment`. None: the box is as
+    /// wide as its text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub float_width_pt: Option<f64>,
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub float_text_alignment: Alignment,
+    /// The table cell the line's text is in, when the file sets the
+    /// header or footer as a table (a "FINANCE BILL" set right in a
+    /// table's last column): the text is set in that cell's box, not
+    /// across the text's whole width. None: the whole width.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<HfCell>,
     /// The room above and below the line's paragraph, in points (a
     /// letterhead's blank lines with Normal's space after).
     #[serde(default, skip_serializing_if = "is_no_space")]
@@ -333,6 +353,15 @@ pub struct HfStory {
     pub alignment: Alignment,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lines: Vec<HfLine>,
+}
+
+/// A header's or footer's table cell its line's text is set in: from the
+/// text's left margin to the cell's text (its padding inside), and that
+/// text's width, in points.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HfCell {
+    pub left_pt: f64,
+    pub width_pt: f64,
 }
 
 /// Where a floating header or footer line's text is: its distance from
@@ -844,6 +873,12 @@ pub struct Document {
     /// taller than a page.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_whole_rows: std::collections::BTreeMap<u32, std::collections::BTreeSet<u32>>,
+    /// How many of each table's first rows are its heading, by table id
+    /// (Word's `w:tblHeader` on the leading rows, ODF's
+    /// `table:table-header-rows`): repeated at the top of every page the
+    /// table runs on to, as Word and Writer draw them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_header_rows: std::collections::BTreeMap<u32, u32>,
     /// The tables the file sized as a share of the text's width (Word's
     /// `pct`, ODF's `rel-width` or `margins` alignment), by table id: their
     /// columns fit the text however wide the file gave them. Any other
@@ -1107,6 +1142,7 @@ impl Document {
             table_rule_widths: Default::default(),
             table_rule_double: Default::default(),
             table_whole_rows: Default::default(),
+            table_header_rows: Default::default(),
             table_relative: Default::default(),
             table_open_edges: Default::default(),
             table_valign: Default::default(),
@@ -1396,6 +1432,7 @@ impl Document {
         self.table_rule_widths.remove(&table);
         self.table_rule_double.remove(&table);
         self.table_whole_rows.remove(&table);
+        self.table_header_rows.remove(&table);
         self.table_relative.remove(&table);
         self.table_open_edges.remove(&table);
         self.table_valign.remove(&table);
@@ -1503,6 +1540,12 @@ impl Document {
             let at = (at as usize).min(heights.len());
             heights.splice(at..at, std::iter::repeat_n(None, count as usize));
         }
+        // Rows inserted inside the heading are heading rows too.
+        if let Some(h) = self.table_header_rows.get_mut(&table) {
+            if at < *h {
+                *h += count;
+            }
+        }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, count as i64);
         self.move_fills(table, |row, col| Some((if row >= at { row + count } else { row }, col)));
         self.reflow_table(table);
@@ -1541,6 +1584,13 @@ impl Document {
         if let Some(heights) = self.table_rows.get_mut(&table) {
             let len = heights.len();
             heights.drain((at as usize).min(len)..(end as usize).min(len));
+        }
+        // The heading loses the rows of it deleted.
+        if let Some(h) = self.table_header_rows.get_mut(&table) {
+            *h -= end.min(*h).saturating_sub(at.min(*h));
+            if *h == 0 {
+                self.table_header_rows.remove(&table);
+            }
         }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, -(count as i64));
         self.move_fills(table, |row, col| match row {

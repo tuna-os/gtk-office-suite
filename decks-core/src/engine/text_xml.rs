@@ -28,7 +28,7 @@ use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
 use super::text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
 use super::SlideScale;
-use suite_common_core::document::RunStyle;
+use suite_common_core::document::{RunStyle, VertAlign};
 
 /// Spacing as the file states it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -54,12 +54,15 @@ pub(crate) struct RunProps {
     latin: Option<String>,
     /// `cap`: "all", "small" or "none".
     cap: Option<String>,
+    /// `baseline`: the run's shift in thousandths of a percent of its
+    /// size, raised above 0 (superscript) and lowered below (subscript).
+    baseline: Option<i32>,
 }
 
 impl RunProps {
     fn over(&mut self, top: &RunProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(sz, b, i, u, strike, color, latin, cap);
+        take!(sz, b, i, u, strike, color, latin, cap, baseline);
     }
 
     fn of(rpr: &Node, theme: &Theme) -> RunProps {
@@ -76,6 +79,7 @@ impl RunProps {
                 .map(|c| c.to_hex().to_lowercase()),
             latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
             cap: rpr.attr("cap").map(str::to_string),
+            baseline: rpr.attr("baseline").and_then(|v| v.parse().ok()),
         }
     }
 
@@ -98,6 +102,11 @@ impl RunProps {
             font_family: self.latin.clone(),
             caps: self.cap.as_deref() == Some("all"),
             small_caps: self.cap.as_deref() == Some("small"),
+            vert_align: match self.baseline {
+                Some(b) if b > 0 => Some(VertAlign::Superscript),
+                Some(b) if b < 0 => Some(VertAlign::Subscript),
+                _ => None,
+            },
             ..RunStyle::default()
         }
     }
@@ -214,6 +223,9 @@ struct BodyProps {
     /// `a:normAutofit` (Some) or `a:noAutofit`/`a:spAutoFit` (None), when
     /// stated.
     autofit: Option<Option<Autofit>>,
+    /// `numCol` and `spcCol` (EMU), when stated.
+    num_col: Option<u8>,
+    spc_col: Option<f64>,
 }
 
 impl BodyProps {
@@ -234,9 +246,17 @@ impl BodyProps {
             } else {
                 None
             },
+            num_col: b.attr("numCol").and_then(|v| v.parse::<u8>().ok()).map(|n| n.clamp(1, 16)),
+            spc_col: num("spcCol"),
         }
     }
     fn over(&mut self, top: &BodyProps) {
+        if top.num_col.is_some() {
+            self.num_col = top.num_col;
+        }
+        if top.spc_col.is_some() {
+            self.spc_col = top.spc_col;
+        }
         if top.anchor.is_some() {
             self.anchor = top.anchor;
         }
@@ -359,6 +379,7 @@ pub(crate) struct SpText {
     pub runs: Vec<RunProps>,
     pub anchor: Anchor,
     pub insets: Option<Insets>,
+    pub columns: Option<super::text_body::Columns>,
     pub autofit: Option<Autofit>,
 }
 
@@ -370,6 +391,7 @@ impl SpText {
             paras: line_paras.iter().map(|&p| self.paras.get(p).cloned().unwrap_or_default()).collect(),
             anchor: self.anchor,
             insets: self.insets,
+            columns: self.columns,
             autofit: self.autofit,
             placeholder: None,
             // The caller (parse.rs) stamps the slide's own key after this.
@@ -456,6 +478,7 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
         } else {
             None
         },
+        columns: body.num_col.filter(|n| *n > 1).map(|count| super::text_body::Columns { count, gap: emu(body.spc_col.unwrap_or(0.0)) }),
         ..SpText::default()
     };
     let Some(tx) = tx else { return out };
@@ -532,6 +555,77 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     }
     out
 }
+
+/// A text shape of a chart's own drawing (`c:userShapes`, a
+/// `cdr:relSizeAnchor`): where it sits as shares of the chart's frame
+/// (left, top, right, bottom), and its text, runs and body resolved as a
+/// slide text box's.
+pub(crate) struct ChartUserText {
+    pub frame: (f64, f64, f64, f64),
+    pub text: String,
+    pub runs: Vec<suite_common_core::document::Run>,
+    pub body: TextBody,
+}
+
+/// The text shapes of a chart drawing part: the labels a chart's author
+/// laid over it, which PowerPoint and Impress draw with the chart (a
+/// doughnut's "5.25%" in its hole, a key beside it).
+pub(crate) fn chart_user_texts(drawing_xml: &str, theme: &Theme, scale: SlideScale) -> Vec<ChartUserText> {
+    use suite_common_core::document::Run;
+    // The chart drawing's shapes are a slide's under another prefix; its
+    // anchors' shares (`cdr:x`, `cdr:y`) keep theirs, whose text the tree
+    // keeps.
+    let mut xml = drawing_xml.to_string();
+    for tag in ["relSizeAnchor", "from", "to", "sp", "nvSpPr", "cNvPr", "cNvSpPr", "spPr", "txBody", "style"] {
+        xml = xml.replace(&format!("<cdr:{tag}"), &format!("<p:{tag}")).replace(&format!("</cdr:{tag}>"), &format!("</p:{tag}>"));
+    }
+    let root = parse_tree(&xml);
+    let mut anchors = Vec::new();
+    root.find_all("p:relSizeAnchor", &mut anchors);
+    let inh = Inherited::default();
+    let mut out = Vec::new();
+    for a in anchors {
+        let share = |end: &str, axis: &str| a.child(end).and_then(|e| e.child(axis)).and_then(|n| n.text.trim().parse::<f64>().ok()).map(|v| v.clamp(0.0, 1.0));
+        let (Some(x0), Some(y0), Some(x1), Some(y1)) = (share("p:from", "cdr:x"), share("p:from", "cdr:y"), share("p:to", "cdr:x"), share("p:to", "cdr:y")) else { continue };
+        let Some(sp) = a.find("p:sp") else { continue };
+        let Some(tx) = sp.child("p:txBody") else { continue };
+        let resolved = resolve_sp_text(sp, theme, &inh, scale);
+        let mut runs: Vec<Run> = Vec::new();
+        let mut k = 0usize;
+        let paras: Vec<&Node> = tx.children_named("a:p").collect();
+        for (i, p) in paras.iter().enumerate() {
+            if i > 0 {
+                match runs.last_mut() {
+                    Some(r) => r.text.push('\n'),
+                    None => runs.push(Run { text: "\n".into(), style: RunStyle::default() }),
+                }
+            }
+            for c in &p.children {
+                match c.name.as_str() {
+                    "a:r" | "a:fld" => {
+                        let text: String = c.child("a:t").map(|t| t.text.clone()).unwrap_or_default();
+                        let style = resolved.runs.get(k).map(RunProps::style).unwrap_or_default();
+                        k += 1;
+                        runs.push(Run { text, style });
+                    }
+                    "a:br" => match runs.last_mut() {
+                        Some(r) => r.text.push(super::LINE_BREAK),
+                        None => runs.push(Run { text: super::LINE_BREAK.to_string(), style: RunStyle::default() }),
+                    },
+                    _ => {}
+                }
+            }
+        }
+        let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+        if text.trim().is_empty() {
+            continue;
+        }
+        let lines: Vec<usize> = (0..paras.len()).collect();
+        out.push(ChartUserText { frame: (x0, y0, x1, y1), text, runs, body: resolved.body_for(&lines) });
+    }
+    out
+}
+
 
 #[cfg(test)]
 mod tests {

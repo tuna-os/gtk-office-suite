@@ -15,20 +15,15 @@ use std::time::Duration;
 use dcp_core::{Role, StoreError};
 use iroh::endpoint::Connection;
 use iroh::EndpointAddr;
-use p2panda_auth::group::GroupCrdtState;
 use p2panda_auth::AccessLevel;
 use p2panda_core::{Hash, Operation, SigningKey, VerifyingKey};
 use p2panda_encryption::crypto::x25519::SecretKey as IdentitySecret;
 use p2panda_encryption::Rng;
 use p2panda_spaces::manager::Manager;
-use p2panda_spaces::space::SpacesState;
-use p2panda_spaces::{
-    AuthMessage, Credentials, SpacesStoreState, StrongRemoveResolver,
-};
-use p2panda_store::groups::GroupsStore;
+use p2panda_spaces::{Credentials, SpacesStoreState};
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::SqliteStoreBuilder;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::SqliteStore;
 use tokio::sync::{mpsc, Notify};
 
 use crate::acl::Acl;
@@ -42,11 +37,8 @@ pub fn tr(e: impl std::fmt::Display) -> StoreError {
     StoreError::Transport(e.to_string())
 }
 
-pub type DcpManager = Manager<SqliteSpacesStore<DcpExt>, DcpForge, (), StrongRemoveResolver<()>>;
-pub type AuthState = GroupCrdtState<VerifyingKey, Hash, AuthMessage<()>, ()>;
-
-/// p2panda-spaces 0.7.1 keeps its auth graph under this fixed id (`manager.rs`, private).
-const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
+/// p2panda-spaces 0.8 dropped the resolver parameter (it is always `StrongRemoveResolver`).
+pub type DcpManager = Manager<SqliteSpacesStore<DcpExt>, DcpForge, ()>;
 
 #[derive(Clone)]
 pub struct P2pConfig {
@@ -156,6 +148,10 @@ pub struct Doc {
     pub forge: DcpForge,
     pub manager: DcpManager,
     pub lock: tokio::sync::Mutex<()>,
+    /// This principal's key bundle for the document as a signed operation (header bytes): the
+    /// contact card. p2panda-spaces 0.8 forges it once, when the pre-key is first generated
+    /// (`Manager::rotate_key_bundle`); 0.7.1 forged one on every `key_bundle_message` call.
+    pub card: Vec<u8>,
     /// Sessions that read this document's log hold it shared; a writer that must make several
     /// operations visible together (a role change is a removal and an addition) holds it exclusive
     /// while it creates them, and so does the receiver while it stores a batch.
@@ -164,47 +160,11 @@ pub struct Doc {
 }
 
 impl Doc {
-    /// Write the manager's returned state back (p2panda-spaces 0.7.1 returns states and leaves
-    /// persisting them to the caller; its `*_persisted` helpers exist only behind `test_utils`).
-    pub async fn persist(
-        &self,
-        groups_y: Option<&AuthState>,
-        space_y: Option<SpacesState<()>>,
-    ) -> Result<(), StoreError> {
-        let permit = self.store.begin().await.map_err(tr)?;
-        let res: Result<(), SqliteError> = async {
-            if let Some(g) = groups_y {
-                <SqliteSpacesStore<DcpExt> as GroupsStore<AuthMessage<()>, ()>>::set_groups_state_tx(
-                    &self.spaces_store,
-                    Hash::digest(GLOBAL_GROUPS_CONTEXT_ID),
-                    g,
-                )
-                .await?;
-            }
-            if let Some(y) = space_y {
-                let id = y.space_id;
-                let st: SpacesStoreState<()> = y.into();
-                <SqliteSpacesStore<DcpExt> as SpacesStore<SpacesStoreState<()>>>::set_space_state_tx(
-                    &self.spaces_store,
-                    &id,
-                    &st,
-                )
-                .await?;
-            }
-            Ok(())
-        }
-        .await;
-        match res {
-            Ok(()) => {
-                self.store.commit(permit).await.map_err(tr)?;
-                self.st.borrow_mut().cache = None;
-                Ok(())
-            }
-            Err(e) => {
-                let _ = self.store.rollback(permit).await;
-                Err(tr(e))
-            }
-        }
+    /// p2panda-spaces 0.8 persists its own state inside the transaction of every call (0.7.1
+    /// returned the states and left persisting them to the caller). What is left is to drop the
+    /// cached copy this side reads.
+    pub fn state_changed(&self) {
+        self.st.borrow_mut().cache = None;
     }
 
     /// The space-local auth state (cached until the next `persist`).
@@ -212,13 +172,12 @@ impl Doc {
         if let Some(s) = self.st.borrow().cache.clone() {
             return Ok(s);
         }
-        let permit = self.store.begin().await.map_err(tr)?;
-        let r = <SqliteSpacesStore<DcpExt> as SpacesStore<SpacesStoreState<()>>>::get_space_state_tx(
+        // A committed read; 0.8's store needs no transaction for it.
+        let r = <SqliteSpacesStore<DcpExt> as SpacesStore<SpacesStoreState<()>>>::get_space_state(
             &self.spaces_store,
             &self.space_id,
         )
         .await;
-        self.store.commit(permit).await.map_err(tr)?;
         let state = r
             .map_err(tr)?
             .ok_or_else(|| StoreError::NotFound(format!("document {} has no state yet", self.id)))?;
@@ -229,9 +188,11 @@ impl Doc {
 
     /// Recompute the member list from p2panda-spaces and publish it to the blob/sync gate.
     pub async fn refresh_members(&self, acl: &Acl) -> Result<(), StoreError> {
-        let Some(space) = self.manager.space(self.space_id).await.map_err(tr)? else {
+        if !self.manager.has_space(self.space_id).await.map_err(tr)? {
             return Ok(());
-        };
+        }
+        // `created()` resolves at once for a space that is known.
+        let space = self.manager.space(self.space_id).created().await.map_err(tr)?;
         let members = space.members().await.map_err(tr)?;
         let list: Vec<(VerifyingKey, AccessLevel)> =
             members.iter().map(|(id, a)| (*id, a.level.clone())).collect();
@@ -388,8 +349,18 @@ impl Inner {
         let rng = Rng::from_rng(&self.rng).map_err(tr)?;
         let manager = DcpManager::new(spaces_store.clone(), forge.clone(), credentials, rng)
             .map_err(tr)?;
-        // Generates the pre-keys the first time (it forges nothing).
-        manager.me().await.map_err(tr)?;
+        // Generates the pre-key and forges the key bundle message (the contact card) into the
+        // author's keys log.
+        forge.set_context(crate::msg::KEYS_LOG);
+        let card = manager
+            .rotate_key_bundle()
+            .await
+            .map_err(tr)?
+            .ok_or_else(|| StoreError::Transport("a fresh manager forged no key bundle".into()))?
+            .op
+            .header
+            .encode();
+        forge.clear_context();
         let doc = Rc::new(Doc {
             id: id.clone(),
             space_id,
@@ -399,6 +370,7 @@ impl Inner {
             forge,
             manager,
             lock: tokio::sync::Mutex::new(()),
+            card,
             serving: tokio::sync::RwLock::new(()),
             st: RefCell::new(DocState::default()),
         });

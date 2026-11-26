@@ -89,6 +89,11 @@ pub struct ChartData {
     /// The title over the chart (`c:title`), where the file shows one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<ChartTitle>,
+    /// A data label's own text by category, for the first series' points,
+    /// where the file writes one in place of the value (`c:dLbl/c:tx`):
+    /// "7,984" on a ring whose cached value is 9561.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub label_texts: Vec<Option<String>>,
 }
 
 /// A chart's title: its text and the look of its first run.
@@ -139,6 +144,7 @@ impl ChartData {
             gap: None,
             hide_category_axis: false,
             title: None,
+            label_texts: Vec::new(),
         }
     }
 
@@ -197,6 +203,7 @@ impl ChartData {
             || self.gap.is_some()
             || self.hide_category_axis
             || self.title.is_some()
+            || self.label_texts.iter().any(Option::is_some)
     }
 
     /// Whether a legend is drawn: a named series, a pie's categories or
@@ -441,6 +448,24 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     } else {
         String::new()
     };
+    // The first series' own label texts, in its own `c:dLbls`, which comes
+    // before its categories in every series the writer writes.
+    let own_dlbls = if chart.labels && chart.label_texts.iter().any(Option::is_some) {
+        let shows = "<c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/><c:showCatName val=\"0\"/>\
+                     <c:showSerName val=\"0\"/><c:showPercent val=\"0\"/><c:showBubbleSize val=\"0\"/>";
+        let points: String = chart
+            .label_texts
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| {
+                let paras: String = t.as_ref()?.split('\n').map(|l| format!("<a:p><a:r><a:t>{}</a:t></a:r></a:p>", esc(l))).collect();
+                Some(format!("<c:dLbl><c:idx val=\"{i}\"/><c:tx><c:rich><a:bodyPr/><a:lstStyle/>{paras}</c:rich></c:tx>{shows}</c:dLbl>"))
+            })
+            .collect();
+        format!("<c:dLbls>{points}{}{shows}</c:dLbls>", if chart.percent { "<c:numFmt formatCode=\"0%\" sourceLinked=\"0\"/>" } else { "" })
+    } else {
+        String::new()
+    };
     // Each point's own colour (a pie's slices, a one-series bar chart's
     // bars), as the file set it.
     let dpts: String = chart
@@ -480,7 +505,7 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
     let plot = match chart.kind {
         ChartKind::Bar => format!(
             "<c:barChart><c:barDir val=\"{}\"/><c:grouping val=\"{grouping}\"/><c:varyColors val=\"0\"/>\
-             {head}<c:invertIfNegative val=\"0\"/>{dpts}{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"{}\"/>{overlap}{ids}</c:barChart>{}{}",
+             {head}<c:invertIfNegative val=\"0\"/>{dpts}{own_dlbls}{cat}{val}</c:ser>{more}{dlbls}<c:gapWidth val=\"{}\"/>{overlap}{ids}</c:barChart>{}{}",
             if chart.horizontal { "bar" } else { "col" },
             chart.gap.unwrap_or(150),
             category_axis(),
@@ -488,25 +513,25 @@ pub fn chart_space_xml(chart: &ChartData) -> String {
         ),
         ChartKind::Line => format!(
             "<c:lineChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
-             {head}{cat}{val}<c:smooth val=\"0\"/></c:ser>{more}{dlbls}<c:marker val=\"1\"/>{ids}</c:lineChart>{}{}",
+             {head}{own_dlbls}{cat}{val}<c:smooth val=\"0\"/></c:ser>{more}{dlbls}<c:marker val=\"1\"/>{ids}</c:lineChart>{}{}",
             category_axis(),
             value_axis(AX_2, "l", AX_1, true, "between")
         ),
         ChartKind::Area => format!(
             "<c:areaChart><c:grouping val=\"standard\"/><c:varyColors val=\"0\"/>\
-             {head}{cat}{val}</c:ser>{more}{dlbls}{ids}</c:areaChart>{}{}",
+             {head}{own_dlbls}{cat}{val}</c:ser>{more}{dlbls}{ids}</c:areaChart>{}{}",
             category_axis(),
             value_axis(AX_2, "l", AX_1, true, "midCat")
         ),
         ChartKind::Pie => {
             if chart.hole > 0 {
                 format!(
-                    "<c:doughnutChart><c:varyColors val=\"1\"/>{head}{dpts}{cat}{val}</c:ser>{dlbls}\
+                    "<c:doughnutChart><c:varyColors val=\"1\"/>{head}{dpts}{own_dlbls}{cat}{val}</c:ser>{dlbls}\
                      <c:firstSliceAng val=\"0\"/><c:holeSize val=\"{}\"/></c:doughnutChart>",
                     chart.hole.clamp(10, 90)
                 )
             } else {
-                format!("<c:pieChart><c:varyColors val=\"1\"/>{head}{dpts}{cat}{val}</c:ser>{dlbls}<c:firstSliceAng val=\"0\"/></c:pieChart>")
+                format!("<c:pieChart><c:varyColors val=\"1\"/>{head}{dpts}{own_dlbls}{cat}{val}</c:ser>{dlbls}<c:firstSliceAng val=\"0\"/></c:pieChart>")
             }
         }
         ChartKind::Scatter => {
@@ -914,6 +939,7 @@ pub fn parse_chart_space(xml: &str) -> Option<ChartData> {
         hide_category_axis: kind != ChartKind::Pie
             && plot.children.iter().filter(|c| c.local == "catAx").any(|ax| ax.child("delete").is_some_and(on)),
         title: None,
+        label_texts: if labels { own_label_texts(&[group.child("dLbls"), ser.child("dLbls")], n) } else { Vec::new() },
     };
     c.no_legend = !has_legend && c.has_default_legend();
     c.title = chart_el.and_then(chart_title);
@@ -1275,9 +1301,30 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
         gap: None,
         hide_category_axis: false,
         title: None,
+        label_texts: Vec::new(),
     };
     c.no_legend = !has_legend && c.has_default_legend();
     Some(c)
+}
+
+/// Each of `n` points' own data label text (`c:dLbl` by `c:idx`, its
+/// `c:tx/c:rich` paragraphs a line each), from the chart group's labels
+/// and then the series' own, which win; empty where no point has one.
+fn own_label_texts(dlbls: &[Option<&El>], n: usize) -> Vec<Option<String>> {
+    let mut out: Vec<Option<String>> = vec![None; n.min(10_000)];
+    for d in dlbls.iter().flatten() {
+        for l in d.children.iter().filter(|c| c.local == "dLbl") {
+            let idx = l.child("idx").and_then(|i| i.attr("val")).and_then(|v| v.parse::<usize>().ok());
+            let rich = l.child("tx").and_then(|t| t.child("rich"));
+            if let (Some(i), Some(rich)) = (idx, rich) {
+                let text = rich.children.iter().filter(|p| p.local == "p").map(|p| p.deep_text()).collect::<Vec<_>>().join("\n");
+                if i < out.len() && !text.trim().is_empty() {
+                    out[i] = Some(text);
+                }
+            }
+        }
+    }
+    if out.iter().any(Option::is_some) { out } else { Vec::new() }
 }
 
 /// Whether an Excel number format multiplies by 100: an unquoted, unescaped
@@ -1491,6 +1538,28 @@ mod tests {
         let xml = chart_space_xml(&c);
         assert!(xml.contains("<c:holeSize val=\"55\"/>") && xml.contains("<a:srgbClr val=\"00B0F0\"/>") && !xml.contains("<c:legend>"), "{xml}");
         assert_eq!(parse_chart_space(&xml), Some(c), "{xml}");
+    }
+
+    /// A data label whose text the file writes in place of the value
+    /// (`c:dLbl/c:tx/c:rich`): the AIVA dashboard's ring labels its slices
+    /// "7,984" and "152, 016" over cached values of 9561 and 150439. Its
+    /// runs read as one line, and a save writes it back on its point.
+    #[test]
+    fn a_labels_own_text_reads_and_round_trips() {
+        let mut c = coloured_ring(55);
+        c.points = vec![("Completed".into(), 9561.0), ("Forecast".into(), 150439.0)];
+        let xml = chart_space_xml(&c).replacen(
+            "<c:cat>",
+            "<c:dLbls><c:dLbl><c:idx val=\"0\"/><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>7,984</a:t></a:r></a:p></c:rich></c:tx>\
+             <c:showVal val=\"1\"/></c:dLbl><c:dLbl><c:idx val=\"1\"/><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>152,</a:t></a:r>\
+             <a:r><a:t> 016</a:t></a:r></a:p></c:rich></c:tx><c:showVal val=\"1\"/></c:dLbl><c:showVal val=\"1\"/></c:dLbls><c:cat>",
+            1,
+        );
+        let read = parse_chart_space(&xml).expect("reads");
+        assert_eq!(read.label_texts, vec![Some("7,984".to_string()), Some("152, 016".to_string())]);
+        assert_eq!(parse_chart_space(&chart_space_xml(&read)), Some(read.clone()));
+        // No label of its own, and none shown, keeps none.
+        assert!(parse_chart_space(&chart_space_xml(&coloured_ring(55))).unwrap().label_texts.is_empty());
     }
 
     #[test]

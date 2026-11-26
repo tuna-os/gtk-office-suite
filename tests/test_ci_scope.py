@@ -50,8 +50,32 @@ class WhatIsInert(unittest.TestCase):
     def test_code_and_the_things_it_is_built_from_are_not_inert(self):
         for path in ("letters/src/window.rs", "Cargo.lock", "Cargo.toml", "flatpak/org.tunaos.letters.json",
                      "scripts/ci_scope.py", "tests/gui/test_smoke.py", "conformance/capabilities.json",
-                     "tools/render-lab/run.sh", "docs/collab-spec/schemas/meta.schema.json"):
+                     "tools/flatpak-smoke/letters_page_ink.py", "docs/collab-spec/schemas/meta.schema.json"):
             self.assertFalse(ci_scope.is_inert(path), path)
+
+    def test_the_render_lab_is_inert(self):
+        # Judged by render-parity.yml and render-real.yml (their own scope)
+        # and ci.yml's python lane, which always runs; no heavy lane loads it.
+        for path in ("tools/render-lab/run.sh", "tools/render-lab/baseline.json",
+                     "tools/render-lab/baseline-real.json", "tools/render-lab/compare.py"):
+            self.assertTrue(ci_scope.is_inert(path), path)
+
+    def test_a_prose_file_only_the_render_lab_quotes_is_inert(self):
+        root = repo_with({
+            "tools/render-lab/readme_status.py": "README = 'NOTES.md'\n",
+            "tools/flatpak-smoke/check.py": "print('built')\n",
+            "NOTES.md": "# notes\n",
+        })
+        self.assertTrue(ci_scope.is_inert("NOTES.md", root))
+        (root / "tools/flatpak-smoke/check.py").write_text("open('NOTES.md')\n")
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        self.assertFalse(ci_scope.is_inert("NOTES.md", root), "a heavy-lane source still counts")
+
+    def test_a_changelog_fragment_is_prose(self):
+        # Checked by the python lane, read at release time: no heavy lane
+        # reads it, so it must not make a one-app change build every Flatpak.
+        self.assertTrue(ci_scope.is_inert("changelog.d/fixed-decks-something.md"))
+        self.assertEqual(ci_scope.apps_reached(["changelog.d/fixed-decks-something.md", "decks/src/canvas.rs"]), ["decks"])
 
     def test_unclassified_paths_are_not_inert(self):
         for path in ("brand-new-top-level-dir/file.bin", "Makefile", "justfile"):
