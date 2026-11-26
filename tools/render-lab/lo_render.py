@@ -73,10 +73,65 @@ def csv_filter(src):
     return f"Text - txt - csv (StarCalc):{ord(delim)},34,{charset},1"
 
 
-def to_pdf(src, outdir, profile, app=None):
+def unscaled_copy(src, tmpdir):
+    """A copy of workbook `src` that prints at 100%, or `src` itself when it
+    already does (or is not an xlsx or ods package).
+
+    Tables draws a sheet's cells at their own size, as Excel and Calc show
+    them, whatever the sheet's page setup says about printing: a print scale
+    (`pageSetup scale`) or fit to page (`pageSetUpPr fitToPage`) shrinks the
+    printout, not the grid. Printed so, LibreOffice's reference drew every
+    cell at 46-67% of its size in the real workbooks that set one, and the
+    scale metric read a correct grid as 1.5-2.2x too big. The screen tiers
+    compare cells against cells, so the reference prints them at their own
+    size; the export lab keeps the file's print settings."""
+    import re
+    import zipfile
+
+    if not zipfile.is_zipfile(src):
+        return src
+    scaled = re.compile(r'(<(?:\w+:)?pageSetup\b[^>]*?)\s(?:scale|fitToWidth|fitToHeight)="[^"]*"')
+    fit = re.compile(r'(<(?:\w+:)?pageSetUpPr\b[^>]*?)\sfitToPage="(?:1|true)"')
+    # ods: a page layout's `style:scale-to="80%"`, or fit to pages
+    # (`scale-to-pages`, `scale-to-X`/`-Y`), in styles.xml.
+    ods_scaled = re.compile(r'(<style:page-layout-properties\b[^>]*?)\sstyle:scale-to(?:-pages|-X|-Y)?="[^"]*"')
+    changed, parts = False, []
+    with zipfile.ZipFile(src) as z:
+        for info in z.infolist():
+            data = z.read(info.filename)
+            xlsx_sheet = info.filename.startswith("xl/worksheets/") and info.filename.endswith(".xml")
+            if xlsx_sheet or info.filename == "styles.xml":
+                text = data.decode("utf-8", "replace")
+                new = text
+                for pat in ((scaled, fit) if xlsx_sheet else (ods_scaled,)):
+                    while True:
+                        nxt = pat.sub(r"\1", new)
+                        if nxt == new:
+                            break
+                        new = nxt
+                if new != text:
+                    changed = True
+                    data = new.encode("utf-8")
+            parts.append((info, data))
+    if not changed:
+        return src
+    out = os.path.join(tmpdir, "unscaled", os.path.basename(src))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for info, data in parts:
+            z.writestr(info, data)
+    return out
+
+
+def to_pdf(src, outdir, profile, app=None, unscale=True):
     # A private profile per run: a shared one serializes conversions and
     # carries state (recent files, first-start dialogs) between runs.
     infilter = csv_filter(src) if app == "tables" else None
+    # The screen tiers compare a sheet's cells at their own size, so their
+    # reference is printed unscaled (unscaled_copy). The export lab compares
+    # printouts, which keep the file's print settings (`--keep-print-scale`).
+    if app == "tables" and not infilter and unscale:
+        src = unscaled_copy(src, outdir)
     subprocess.run(
         [
             soffice(),
@@ -128,6 +183,11 @@ def main():
     ap.add_argument("fixtures")
     ap.add_argument("out")
     ap.add_argument("--app")
+    ap.add_argument(
+        "--keep-print-scale",
+        action="store_true",
+        help="print Tables files at their own print scale and fit (the export lab's printouts), not unscaled",
+    )
     args = ap.parse_args()
 
     manifest = json.load(open(os.path.join(args.fixtures, "manifest.json")))
@@ -139,7 +199,7 @@ def main():
                 continue
             dest = os.path.join(args.out, fx["app"], fx["feature"])
             try:
-                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile, fx["app"])
+                pdf = to_pdf(os.path.join(args.fixtures, fx["file"]), tmp, profile, fx["app"], unscale=not args.keep_print_scale)
                 n = rasterize(pdf, dest)
                 print(f"lo  {fx['app']}/{fx['feature']}: {n} page(s)")
             except Exception as e:  # keep going; the report shows the gap
