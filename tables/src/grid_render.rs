@@ -10,7 +10,7 @@ use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, SortDirection, col
 /// Lives here (not tables-core) because it needs Cairo/Pango to measure.
 pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll_x: f64) {
     suite_common::use_ui_font_rendering(cr);
-    let layout = pangocairo::functions::create_layout(cr);
+    let layout = text_layout(cr);
     let mut max_w: f64 = 30.0;
     let label = col_label(col);
     layout.set_text(&label);
@@ -63,6 +63,19 @@ pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &
 /// edge itself would smear across two half-covered pixel rows.
 fn crisp(edge: f64, width: f64) -> f64 {
     if (width.round() as i64) % 2 == 1 { edge.round() - 0.5 } else { edge.round() }
+}
+
+/// A layout for cell text on `cr`, its glyphs at their fractional
+/// positions, as Calc lays text out (and as Letters' and Decks' text is):
+/// Pango otherwise rounds each glyph's advance to a whole pixel, so a long
+/// cell's text drifts wide by up to half a pixel a glyph and wraps, or
+/// spills, a word Calc keeps. Cells and the widths fitted to them measure
+/// alike.
+fn text_layout(cr: &Context) -> pango::Layout {
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.context().set_round_glyph_positions(false);
+    layout.context_changed();
+    layout
 }
 
 /// A header label (column letter or row number) in the UI font at 9 pt,
@@ -235,7 +248,7 @@ fn run_attributes(attrs: &pango::AttrList, runs: &[tables_core::sheet::TextRun],
 fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str, width: f64) -> pango::Layout {
     use tables_core::style::HAlign;
     let style = &sheet.styles[r][c];
-    let layout = pangocairo::functions::create_layout(cr);
+    let layout = text_layout(cr);
     let mut font = layout.context().font_description().unwrap_or_default();
     font.set_family(style.font_family.as_deref().unwrap_or(&sheet.default_font_family));
     let size = style.font_size.unwrap_or(sheet.default_font_size);
@@ -420,7 +433,7 @@ pub fn fit_columns_to_content(sheet: &mut SheetModel) {
     let Ok(surface) = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 1, 1) else { return };
     let Ok(cr) = Context::new(&surface) else { return };
     suite_common::use_ui_font_rendering(&cr);
-    let layout = pangocairo::functions::create_layout(&cr);
+    let layout = text_layout(&cr);
     for c in 0..sheet.cols {
         let mut widest: Option<f64> = None;
         for r in 0..sheet.rows.min(MEASURED_ROWS) {
