@@ -37,7 +37,7 @@
   "decks/real-2024-11-20-presentation-pay-centre-impact-assess": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
     "A": "amber",
@@ -112,7 +112,7 @@
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
     "A": "amber",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "decks/real-dashboard-public-opinion-survey-pulse-check-janu": {
     "A": "amber",
@@ -152,12 +152,12 @@
   "letters/real-affordable-housing-supply-data-dictionary": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-annex-a-annual-report-form": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-audit-and-risk-assurance-committee-minutes-24-ja": {
     "A": "green",
@@ -192,7 +192,7 @@
   "letters/real-explanatory-note": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-explanatory-note-2": {
     "A": "amber",
@@ -212,7 +212,7 @@
   "letters/real-opt-out-form-accessible-version": {
     "A": "amber",
     "B": "amber",
-    "C": "green"
+    "C": "amber"
   },
   "letters/real-order-for-service-by-an-alternative-method-or-at": {
     "A": "green",
@@ -257,7 +257,7 @@
   "letters/real-sma-positive-result-call-checklist": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-sma-post-telephone-call-email-template": {
     "A": "green",
@@ -267,7 +267,7 @@
   "letters/real-social-housing-sales-data-dictionary": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-statistical-release-october-to-december-2020": {
     "A": "green",
@@ -287,7 +287,7 @@
   "letters/real-transparency-information-about-outside-appointme": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-uk-nsc-open-call-request-form": {
     "A": "green",
@@ -302,7 +302,7 @@
   "tables/real-2020-deep-sea-stock": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
     "A": "amber",
@@ -316,7 +316,7 @@
   "tables/real-available-data-and-their-modes-of-access": {
     "A": "green",
     "B": "red",
-    "C": "red"
+    "C": "green"
   },
   "tables/real-avian-influenza-in-wild-birds-2026": {
     "A": "amber",
@@ -325,7 +325,7 @@
   "tables/real-bics-sectoral-consumption-estimates": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-competition-in-uk-electricity-markets-2025-data": {
     "A": "amber",
@@ -370,7 +370,7 @@
   "tables/real-insolvency-service-transactions-april-2026": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/real-july-2026-fiscal-risks-and-sustainability-charts": {
     "A": "amber",
@@ -399,12 +399,12 @@
   "tables/real-norfolk-public-review-annex-c-additional-postcod": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-otsi-annual-review-2025-2026-tables": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-planning-inspectorate-management-information-app": {
     "A": "amber",
@@ -419,7 +419,7 @@
   "tables/real-safeguarding-children-affected-by-a-parent-s-alc": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-schedule-of-musts-2026": {
     "A": "amber",
