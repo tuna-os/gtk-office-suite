@@ -629,16 +629,21 @@ documents that can still be fetched green, 62 amber and 4 red.
 The runs of 2026-11-21 on main have none red. The first (render-parity run
 44892542989) had 22 green and 63 amber: the four red workbooks moved off red
 to amber once hidden rows and columns, merged-cell borders and the
-wide-sheet window were drawn. One Letters form moved from green to amber on two lines the VM
-capture's OCR misread (its Tier A is green with none lost, and the page
-reads the same). The later run (44919831054), which the baseline follows,
+wide-sheet window were drawn. One Letters form (opt-out-form) moved from
+green to amber on two lost lines: its bold title wraps "Armed" to the
+second line where Writer keeps it on the first. The later run (44919831054), which the baseline follows,
 has 25 green and 60 amber: three Letters documents turned green, and the
 ukhsa transactions workbook, green in the first, is amber at ssim 0.73, just
 under the line. deep-sea-stock read green there and amber in the next run
 (44941036908, 27 green and 58 amber), so it is held at amber. Five Tables documents still have no
 Tier C verdict: three sources answer HTTP 410, and two were not captured.
-The exit still waits on the ambers: Tier C on the real corpus is ratcheted,
-not yet green.*
+The nightlies of 2026-11-23, -24 and -25 (latest: 45621842241) agree:
+30 green, 55 amber, 0 red. Seven more documents turned green (cnsc,
+explanatory-note, sma, transparency-information, available-data,
+otsi-annual-review, safeguarding-children), and pay-centre-innovation, green
+on 2026-11-21, reads amber on one lost line in all three. The baseline
+follows them, so the nightly's ratchet passes. The exit still waits on the
+ambers: Tier C on the real corpus is ratcheted, not yet green.*
 
 ### Phase 4: Earn "usable"
 
