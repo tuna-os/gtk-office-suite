@@ -28,7 +28,7 @@ use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
 use super::text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
 use super::SlideScale;
-use suite_common_core::document::RunStyle;
+use suite_common_core::document::{RunStyle, VertAlign};
 
 /// Spacing as the file states it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -54,12 +54,15 @@ pub(crate) struct RunProps {
     latin: Option<String>,
     /// `cap`: "all", "small" or "none".
     cap: Option<String>,
+    /// `baseline`: the run's shift in thousandths of a percent of its
+    /// size, raised above 0 (superscript) and lowered below (subscript).
+    baseline: Option<i32>,
 }
 
 impl RunProps {
     fn over(&mut self, top: &RunProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(sz, b, i, u, strike, color, latin, cap);
+        take!(sz, b, i, u, strike, color, latin, cap, baseline);
     }
 
     fn of(rpr: &Node, theme: &Theme) -> RunProps {
@@ -76,6 +79,7 @@ impl RunProps {
                 .map(|c| c.to_hex().to_lowercase()),
             latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
             cap: rpr.attr("cap").map(str::to_string),
+            baseline: rpr.attr("baseline").and_then(|v| v.parse().ok()),
         }
     }
 
@@ -98,6 +102,11 @@ impl RunProps {
             font_family: self.latin.clone(),
             caps: self.cap.as_deref() == Some("all"),
             small_caps: self.cap.as_deref() == Some("small"),
+            vert_align: match self.baseline {
+                Some(b) if b > 0 => Some(VertAlign::Superscript),
+                Some(b) if b < 0 => Some(VertAlign::Subscript),
+                _ => None,
+            },
             ..RunStyle::default()
         }
     }

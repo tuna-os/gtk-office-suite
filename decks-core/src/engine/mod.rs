@@ -45,7 +45,7 @@ pub use text_body::{fit_like_impress, shrink_font_to_fit, Anchor, Autofit, Bulle
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.
-pub use suite_common_core::document::{Run, RunStyle};
+pub use suite_common_core::document::{Run, RunStyle, VertAlign};
 pub use parse::{parse_master_shapes, parse_master_shapes_scaled, parse_slide_size, read_pptx, SlideScale};
 pub use resolver::PrecedenceResolver;
 pub use write::{write_pptx, write_pptx_bytes};
