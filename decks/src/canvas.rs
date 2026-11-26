@@ -993,6 +993,7 @@ pub fn draw_object(
                     title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0),
                     title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
                     title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                    label_texts: &chart.label_texts,
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {
