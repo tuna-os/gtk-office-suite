@@ -245,6 +245,12 @@ pub enum Source {
     /// Footnote `Document::footnotes[i]`, at the foot of its page
     /// (`note_paragraph`).
     Footnote(usize),
+    /// A copy of `Document::paragraphs[i]`'s line in a table's heading row,
+    /// repeated at the top of a page the table runs onto
+    /// (`Document::table_header_rows`). Drawn like the paragraph's own
+    /// line, but not a place in the text: hit-testing, page breaks and
+    /// `Page::lines` skip it.
+    Repeat(usize),
 }
 
 /// A positioned element of a page. Coordinates are points from the page's
@@ -1482,8 +1488,18 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     flow.y += rule_pt;
 
     let mut tall: Vec<Tall> = Vec::new();
+    // The heading rows Word and Writer repeat at the top of each page the
+    // table runs onto (`w:tblHeader`, `table:table-header-rows`), once
+    // they have been placed: their items, top and height.
+    let header_rows = doc.table_header_rows.get(&first.table).copied().unwrap_or(0).min(rows.saturating_sub(1));
+    let mut header: Option<Header> = None;
+    let header_start = flow.pages.len();
 
     for row in 0..rows {
+        if row == header_rows && header_rows > 0 {
+            header = capture_header(flow, &cells, first.table, header_rows, header_start, rule_pt);
+        }
+        let header = header.as_ref().filter(|_| row >= header_rows);
         // Shape each cell of the row (a cell may hold several paragraphs).
         let mut row_cells: Vec<(u32, f64, Vec<CellParagraph>)> = Vec::new();
         let mut starting: Vec<(u32, f64, u32, Vec<CellParagraph>)> = Vec::new();
@@ -1524,7 +1540,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         // content runs past it, as Word clips it), and moves whole.
         if let Some(h) = file_h.filter(|h| h.exact) {
             if flow.y + h.pt > flow.bottom() && !flow.column_is_empty() {
-                flow.next_column();
+                break_table(flow, header);
             }
             let top = flow.y;
             let x0 = flow.column_x();
@@ -1553,7 +1569,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         if doc.table_whole_rows.get(&first.table).is_some_and(|w| w.contains(&row)) && !flow.column_is_empty() {
             let need = slices.iter().map(|c| c.iter().map(Slice::height).sum::<f64>()).fold(0.0, f64::max).max(file_h.map_or(0.0, |h| h.pt)) + rule_pt;
             if flow.y + need > flow.bottom() + 1e-6 && need <= flow.bottom() - flow.top() {
-                flow.next_column();
+                break_table(flow, header);
             }
         }
         let mut next = vec![0usize; slices.len()];
@@ -1634,7 +1650,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 takes.iter().zip(&next).any(|((n, _), from)| n > from)
             };
             if !done && !placed_any && !flow.column_is_empty() {
-                flow.next_column();
+                break_table(flow, header);
                 continue;
             }
             // A line taller than a whole page goes where it is anyway.
@@ -1687,9 +1703,100 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             if done && min_left <= 0.5 {
                 break;
             }
-            flow.next_column();
+            break_table(flow, header);
         }
         close_tall(flow, doc, &mut tall, first.table, row, &col_x, pad.left_pt);
+    }
+}
+
+/// A table's heading rows as placed on their page, to repeat at the top
+/// of the pages the table runs onto.
+struct Header {
+    items: Vec<Item>,
+    /// The top of the first heading row and the rows' height, rules in.
+    top: f64,
+    height: f64,
+    x: f64,
+    /// The rule above the first row.
+    rule_pt: f64,
+}
+
+/// The heading rows (`rows` of them) of `table` just placed, if they all
+/// sit on the current page and are not so tall that repeating them would
+/// leave a page little room. Sections in columns do not repeat them.
+fn capture_header(flow: &Flow, cells: &[(usize, crate::model::TableCell)], table: u32, rows: u32, start_page: usize, rule_pt: f64) -> Option<Header> {
+    if flow.geometry.columns > 1 {
+        return None;
+    }
+    let paras: std::collections::HashSet<usize> = cells.iter().filter(|(_, c)| c.row < rows).map(|(i, _)| *i).collect();
+    let belongs = |item: &Item| match item {
+        Item::Line { source: Source::Paragraph(p), .. } => paras.contains(p),
+        Item::Marker { para, .. } | Item::Image { para, .. } | Item::Chip { para, .. } | Item::NoteRef { para, .. } | Item::ParaBox { para, .. } | Item::TextBox { para, .. } => {
+            paras.contains(para)
+        }
+        Item::Cell { table: t, row, .. } => *t == table && *row < rows,
+        _ => false,
+    };
+    // A heading split across pages is not repeated.
+    if flow.pages.len() > start_page && flow.pages[start_page.saturating_sub(1)..flow.pages.len() - 1].iter().any(|p| p.items.iter().any(belongs)) {
+        return None;
+    }
+    let page = flow.pages.last()?;
+    let from = page.items.iter().position(belongs)?;
+    let items: Vec<Item> = page.items[from..].iter().filter(|i| belongs(i)).cloned().collect();
+    let top = items.iter().filter_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).fold(f64::INFINITY, f64::min);
+    if !top.is_finite() {
+        return None;
+    }
+    let height = flow.y - top;
+    (height + rule_pt <= (flow.bottom() - flow.top()) / 2.0).then(|| Header { items, top, height, x: flow.column_x(), rule_pt })
+}
+
+/// Go on to the next column or page inside a table, repeating its heading
+/// rows at the top there. The column still counts as empty after them, so
+/// a row that does not fit under the heading is placed anyway rather than
+/// moved on again.
+fn break_table(flow: &mut Flow, header: Option<&Header>) {
+    flow.next_column();
+    let Some(h) = header else { return };
+    let top = flow.y + h.rule_pt;
+    let (dx, dy) = (flow.column_x() - h.x, top - h.top);
+    for item in &h.items {
+        let mut item = item.clone();
+        shift_item(&mut item, dx, dy);
+        if let Item::Line { source, .. } = &mut item {
+            if let Source::Paragraph(p) = *source {
+                *source = Source::Repeat(p);
+            }
+        }
+        flow.push(item);
+    }
+    flow.y = top + h.height;
+    flow.column_items = 0;
+}
+
+/// Move a placed item by (`dx`, `dy`) points.
+fn shift_item(item: &mut Item, dx: f64, dy: f64) {
+    match item {
+        Item::Line { box_x_pt, x_pt, top_pt, baseline_pt, .. } => {
+            *box_x_pt += dx;
+            *x_pt += dx;
+            *top_pt += dy;
+            *baseline_pt += dy;
+        }
+        Item::Marker { x_pt, baseline_pt, .. } | Item::Chip { x_pt, baseline_pt, .. } | Item::NoteRef { x_pt, baseline_pt, .. } => {
+            *x_pt += dx;
+            *baseline_pt += dy;
+        }
+        Item::Image { x_pt, y_pt, .. }
+        | Item::Rule { x_pt, y_pt, .. }
+        | Item::Cell { x_pt, y_pt, .. }
+        | Item::ParaBox { x_pt, y_pt, .. }
+        | Item::PageBorder { x_pt, y_pt, .. }
+        | Item::TextBox { x_pt, y_pt, .. } => {
+            *x_pt += dx;
+            *y_pt += dy;
+        }
     }
 }
 
@@ -2408,6 +2515,21 @@ impl<'o> Flow<'o> {
                 // Under the pictures' row.
                 let (boxes, _) = hf_line_boxes(&text, &lines, story);
                 let chars: Vec<char> = text.chars().collect();
+                // Each line's story line (as many breaks before it), and
+                // where a floating story line's text wraps onto several
+                // lines in its box, the height of its lines before this
+                // one and of them all.
+                let story_of: Vec<usize> = lines.iter().map(|lb| chars[..lb.start.min(chars.len())].iter().filter(|&&c| c == '\n').count()).collect();
+                let stacked: Vec<(f64, f64)> = lines
+                    .iter()
+                    .enumerate()
+                    .map(|(k, _)| {
+                        let same = |j: &usize| story_of[*j] == story_of[k];
+                        let before: f64 = (0..k).filter(same).map(|j| lines[j].natural_height()).sum();
+                        let all: f64 = (0..lines.len()).filter(same).map(|j| lines[j].natural_height()).sum();
+                        (before, all)
+                    })
+                    .collect();
                 for (k, (lb, &(dy, h, ascent))) in lines.iter().zip(&boxes).enumerate() {
                     // The line of the text this one is on: as many breaks
                     // before it.
@@ -2419,18 +2541,41 @@ impl<'o> Flow<'o> {
                     // across the page, out of the flow.
                     let float = story_line.as_ref().and_then(|l| l.float);
                     let (x_pt, top_pt) = match float {
-                        None => (left + lb.x_pt, top + row_h + dy),
+                        None => {
+                            let cell = story_line.as_ref().and_then(|l| l.cell).filter(|c| c.left_pt.is_finite() && c.width_pt.is_finite() && c.width_pt > 0.0);
+                            (left + cell.map_or(0.0, |c| c.left_pt) + lb.x_pt, top + row_h + dy)
+                        }
                         Some(f) => {
-                            let across = match story_line.as_ref().map_or(alignment, |l| l.alignment) {
-                                crate::model::Alignment::Center => page.width_pt / 2.0 - (left + width / 2.0),
-                                crate::model::Alignment::Right => page.width_pt - (left + width),
-                                _ => -left,
+                            let across_by = story_line.as_ref().map_or(alignment, |l| l.alignment);
+                            let boxed = story_line.as_ref().and_then(|l| l.float_width_pt).filter(|w| w.is_finite() && *w > 0.0);
+                            let x = match boxed {
+                                // Its box across the page, its text inside.
+                                Some(w) => {
+                                    let box_left = match across_by {
+                                        crate::model::Alignment::Center => (page.width_pt - w) / 2.0,
+                                        crate::model::Alignment::Right => page.width_pt - w,
+                                        _ => 0.0,
+                                    };
+                                    box_left + lb.x_pt
+                                }
+                                None => {
+                                    let across = match across_by {
+                                        crate::model::Alignment::Center => page.width_pt / 2.0 - (left + width / 2.0),
+                                        crate::model::Alignment::Right => page.width_pt - (left + width),
+                                        _ => -left,
+                                    };
+                                    left + lb.x_pt + across
+                                }
                             };
+                            // A story line wrapped onto several lines
+                            // stacks them down from its top, or up from
+                            // its foot.
+                            let (before, all) = stacked[k];
                             let top = match f {
-                                HfFloat::Top(d) => d,
-                                HfFloat::Bottom(d) => height - d - lb.natural_height(),
+                                HfFloat::Top(d) => d + before,
+                                HfFloat::Bottom(d) => height - d - all + before,
                             };
-                            (left + lb.x_pt + across, top)
+                            (x, top)
                         }
                     };
                     page.items.push(Item::Line {
@@ -2474,14 +2619,14 @@ impl<'o> Flow<'o> {
 /// char ranges counted in the whole text; a line past their end is
 /// `alignment`'s, in the body's look.
 fn shape_header_footer(text: &str, alignment: crate::model::Alignment, story: &[HfLine], width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
-    let mut request = |runs: &[Run], alignment, tab_stops| {
+    let mut request = |runs: &[Run], alignment, tab_stops, width_pt: f64| {
         shaper.shape(&ShapeRequest {
             runs,
             heading: None,
             code: false,
             look: Look::Body,
             alignment,
-            width_pt: width,
+            width_pt,
             first_line_indent_pt: 0.0,
             tab_stops,
             right_tab: false,
@@ -2489,14 +2634,23 @@ fn shape_header_footer(text: &str, alignment: crate::model::Alignment, story: &[
         })
     };
     if story.is_empty() {
-        return request(&[Run::plain(text)], alignment, Vec::new());
+        return request(&[Run::plain(text)], alignment, Vec::new(), width);
     }
     let mut out = Vec::new();
     let mut offset = 0;
     for (k, piece) in text.split('\n').enumerate() {
         let line = story.get(k);
         let run = Run { text: piece.to_string(), style: line.map(|l| l.look.clone()).unwrap_or_default() };
-        let shaped = request(&[run], line.map_or(alignment, |l| l.alignment), line.map(|l| l.tab_stops.clone()).unwrap_or_default());
+        // A floating line in a box that keeps its width wraps inside it.
+        let boxed = line.filter(|l| l.float.is_some()).and_then(|l| l.float_width_pt.map(|w| (w, l.float_text_alignment)));
+        // A line in a table cell is set in the cell.
+        let cell = line.filter(|l| l.float.is_none()).and_then(|l| l.cell).filter(|c| c.width_pt.is_finite() && c.width_pt > 0.0);
+        let (width, aligned) = match (boxed, cell) {
+            (Some((w, a)), _) if w.is_finite() && w > 0.0 => (w, a),
+            (_, Some(c)) => (c.width_pt, line.map_or(alignment, |l| l.alignment)),
+            _ => (width, line.map_or(alignment, |l| l.alignment)),
+        };
+        let shaped = request(&[run], aligned, line.map(|l| l.tab_stops.clone()).unwrap_or_default(), width);
         out.extend(shaped.into_iter().map(|mut lb| {
             lb.start += offset;
             lb.end += offset;

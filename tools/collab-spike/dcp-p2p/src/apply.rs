@@ -28,7 +28,7 @@ impl Inner {
         let permit = doc.store.begin().await.map_err(tr)?;
         let mut result = Ok(());
         for op in ops {
-            if let Err(e) = doc.store.insert_operation(&op.hash, op, &doc.id).await {
+            if let Err(e) = doc.store.insert_operation_tx(&op.hash, op, &doc.id).await {
                 result = Err(tr(e));
                 break;
             }
@@ -89,11 +89,18 @@ impl Inner {
                 st.pending
                     .values()
                     .filter(|op| {
-                        op.header
-                            .extensions
-                            .args
-                            .dependencies()
+                        let args = &op.header.extensions.args;
+                        // p2panda-spaces 0.8 checks an application message's write `proof` (auth
+                        // operations) when it processes it, and `dependencies()` does not list the
+                        // proof: wait for those operations too, or a message that arrives before
+                        // them is refused for good.
+                        let proof: &[Hash] = match args {
+                            SpacesArgs::Application { proof, .. } => proof,
+                            _ => &[],
+                        };
+                        args.dependencies()
                             .iter()
+                            .chain(proof.iter())
                             .all(|d| st.applied.contains(d))
                     })
                     .cloned()
@@ -106,7 +113,7 @@ impl Inner {
                 doc.st.borrow_mut().pending.remove(&op.hash);
                 if matches!(
                     op.header.extensions.args,
-                    SpacesArgs::Auth { .. } | SpacesArgs::SpaceMembership { .. }
+                    SpacesArgs::Group { .. } | SpacesArgs::KeyAgreement { .. }
                 ) {
                     membership_changed = true;
                 }
@@ -126,15 +133,13 @@ impl Inner {
         let args = op.header.extensions.args.clone();
         let msg = DcpMsg { op };
         let verdict: Result<(), String> = match &args {
-            SpacesArgs::KeyBundle { .. } => Ok(()),
-            SpacesArgs::SpaceUpdate { .. } => {
-                Err("SpaceUpdate is unimplemented in p2panda-spaces 0.7.1 and is refused".into())
-            }
-            SpacesArgs::Auth { group_action, .. } => match group_action {
-                GroupAction::Promote { .. } | GroupAction::Demote { .. } => Err(
-                    "role changes are refused: p2panda-spaces 0.7.1 panics (unimplemented!) on a promote or demote"
-                        .into(),
-                ),
+            SpacesArgs::Member(_) => Ok(()),
+            SpacesArgs::SpaceUpdate { .. } => Err(
+                "SpaceUpdate is still unimplemented!() in p2panda-spaces 0.8.2 (manager.rs:422) and is refused"
+                    .into(),
+            ),
+            // Promote and demote are implemented in p2panda-spaces 0.8 and are processed.
+            SpacesArgs::Group { group_action, .. } => match group_action {
                 GroupAction::Create { .. } if author != doc.creator => {
                     Err("a group was created by someone other than the document's creator".into())
                 }
@@ -143,12 +148,12 @@ impl Inner {
                 }
                 _ => self.process_msg(doc, &msg).await,
             },
-            SpacesArgs::SpaceMembership { space_id, .. } | SpacesArgs::Application { space_id, .. }
+            SpacesArgs::KeyAgreement { space_id, .. } | SpacesArgs::Application { space_id, .. }
                 if *space_id != doc.space_id =>
             {
                 Err("the message belongs to another space".into())
             }
-            SpacesArgs::SpaceMembership { .. } | SpacesArgs::Application { .. } => {
+            SpacesArgs::KeyAgreement { .. } | SpacesArgs::Application { .. } => {
                 self.process_msg(doc, &msg).await
             }
         };
@@ -167,10 +172,8 @@ impl Inner {
     }
 
     async fn process_msg(self: &Rc<Self>, doc: &Rc<Doc>, msg: &DcpMsg) -> Result<(), String> {
-        let (groups_y, space_y, events) = doc.manager.process(msg).await.map_err(|e| e.to_string())?;
-        doc.persist(groups_y.as_ref(), space_y)
-            .await
-            .map_err(|e| e.to_string())?;
+        let events = doc.manager.process(msg).await.map_err(|e| e.to_string())?;
+        doc.state_changed();
         for ev in events {
             if let Event::Application { data, .. } = ev {
                 self.accept_plaintext(doc, &data);

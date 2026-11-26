@@ -1,0 +1,1 @@
+- Letters: an ODT footer that is a text box (a classification label) keeps its place and look on pages that use another master page with the same footer, instead of drawing as plain text at the margin.

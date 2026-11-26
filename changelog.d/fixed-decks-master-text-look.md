@@ -1,0 +1,1 @@
+- Decks: text on a slide master or layout keeps its alignment, spacing and insets, and a master's hidden shapes are no longer drawn. A right-aligned label on a master was drawn from its box's left edge, and a hidden helper shape drew as a broken picture in the slide's corner.
