@@ -375,6 +375,12 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
     if style.caps { r_pr.push_attribute(("cap", "all")); } else if style.small_caps { r_pr.push_attribute(("cap", "small")); }
+    // PowerPoint's own superscript and subscript shifts.
+    match style.vert_align {
+        Some(suite_common_core::document::VertAlign::Superscript) => r_pr.push_attribute(("baseline", "30000")),
+        Some(suite_common_core::document::VertAlign::Subscript) => r_pr.push_attribute(("baseline", "-25000")),
+        None => {}
+    }
     let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
     let link = style.link.as_ref().and_then(|target| links.get(target));
     if style.color.is_some() || family.is_some() || link.is_some() {
