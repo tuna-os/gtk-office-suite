@@ -139,8 +139,11 @@ Its tests in `matrixrtc/tests/` are ported from matrix-js-sdk, plus Element Call
 * `src/session/call/camera.rs` (feature `calls-media`) opens the camera through the camera portal
   (via `aperture`'s PipeWire device provider) and tees a GStreamer pipeline into the self-view and
   the published track.
-* `src/session_view/call/` renders `CallState` (`state.rs`): participants, connection state,
-  mute and camera toggles.
+* `src/session/call/state.rs` holds the call model the `CallManager` writes and the UI binds to:
+  `CallState` (participants, connection state, mute, camera and screen-share toggles),
+  `CallParticipant` and `CallConnectionState`. It sits in the session layer, so `src/session/`
+  never depends on `src/session_view/`.
+* `src/session_view/call/` renders `CallState`.
 
 ```text
 Join Call button ─► CallManager::join_call ─► RtcCallSession (matrixrtc)
