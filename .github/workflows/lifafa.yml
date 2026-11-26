@@ -19,6 +19,8 @@ name: lifafa
 #               name lifafa/; its licence policy is shared, with an exception
 #               for Lifafa's own AGPL-3.0-or-later), as collab-apps.yml does
 #               for collab/Cargo.lock.
+#   touchpoints lifafa/fork/check-touchpoints.sh: lifafa/ may differ from the
+#               upstream base only in the files of lifafa/fork/touchpoints.txt.
 on:
   push:
     branches: [main]
@@ -137,3 +139,17 @@ jobs:
           manifest-path: lifafa/Cargo.toml
           command: check advisories licenses
           arguments: --all-features --config deny.toml
+
+  touchpoints:
+    name: Lifafa touchpoint list
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # Compares lifafa/ with the upstream commit in lifafa/fork/UPSTREAM_BASE,
+      # which the script fetches from hyprlab/hylki itself; a shallow checkout
+      # is enough.
+      - name: lifafa/fork/check-touchpoints.sh
+        run: lifafa/fork/check-touchpoints.sh
