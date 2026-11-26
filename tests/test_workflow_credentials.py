@@ -113,5 +113,114 @@ class FeatureVerificationCredentials(unittest.TestCase):
             self.assertIs((step.get("with") or {}).get("persist-credentials"), False)
 
 
+# Every job below predates the gate: it holds a write scope in a workflow a
+# user with write access can start by hand on a branch of their choosing
+# (#1690). The set may only shrink. A new workflow, or a new job, that grants
+# write to a dispatchable workflow fails the test; so does an entry whose job
+# no longer needs it, so a fix has to delete its line here.
+DISPATCH_WRITE_KNOWN = {
+    ("autorelease.yml", "release"),
+    ("feature-verification.yml", "publish"),
+    ("gui-container.yml", "publish"),
+    ("gui-stress.yml", "image"),
+    ("lifafa-flatpak.yml", "publish"),
+    ("lifafa-flatpak.yml", "pages"),
+    ("lifafa-upstream-sync.yml", "sync"),
+    ("overview-videos.yml", "record"),
+    ("publish-flatpak.yml", "soak"),
+    ("publish-flatpak.yml", "publish"),
+    ("publish-flatpak.yml", "release"),
+    ("publish-mandelbrot.yml", "publish"),
+    ("publish-mandelbrot.yml", "github-release"),
+    ("release-evidence.yml", "visual"),
+    ("release-evidence.yml", "publish"),
+    ("release-soak.yml", "image"),
+    ("render-parity.yml", "report-post"),
+    ("render-parity.yml", "export-report-post"),
+    ("render-real.yml", "publish"),
+    ("screenshots.yml", "capture"),
+    ("visual-matrix.yml", "image"),
+}
+ISSUES_WRITE = WRITE_SCOPES | {"issues"}
+
+
+def triggers(wf):
+    # PyYAML reads the bare key `on` as the boolean True.
+    on = wf.get(True, wf.get("on"))
+    if isinstance(on, dict):
+        return set(on)
+    return set(on) if isinstance(on, list) else {on}
+
+
+def load_all():
+    out = {}
+    for name in sorted(os.listdir(WORKFLOWS)):
+        if name.endswith((".yml", ".yaml")):
+            out[name] = workflow(os.path.join(WORKFLOWS, name))
+    return out
+
+
+def dispatchable(workflows):
+    """Workflows a manual run can reach: those with `workflow_dispatch`, and
+    local reusable workflows a dispatchable workflow calls."""
+    reach = {n for n, wf in workflows.items() if "workflow_dispatch" in triggers(wf)}
+    changed = True
+    while changed:
+        changed = False
+        for name in list(reach):
+            for job in (workflows[name].get("jobs") or {}).values():
+                uses = str(job.get("uses", ""))
+                if uses.startswith("./.github/workflows/"):
+                    callee = uses.rsplit("/", 1)[1]
+                    if callee in workflows and callee not in reach:
+                        reach.add(callee)
+                        changed = True
+    return reach
+
+
+def job_writes(wf, job):
+    perms = job["permissions"] if "permissions" in job else wf.get("permissions")
+    if perms == "write-all":
+        return set(ISSUES_WRITE)
+    if not isinstance(perms, dict):
+        return set()
+    return {scope for scope, level in perms.items() if level == "write"} & ISSUES_WRITE
+
+
+class DispatchableWorkflowsHoldNoWrites(unittest.TestCase):
+    """A manual run can select any branch, so branch-selected workflow code
+    must not run with repository write authority (#1690). Write authority
+    belongs in a default-branch publisher that consumes artifacts."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.workflows = load_all()
+        reach = dispatchable(cls.workflows)
+        cls.found = {
+            (name, jname)
+            for name in reach
+            for jname, job in (cls.workflows[name].get("jobs") or {}).items()
+            if job_writes(cls.workflows[name], job)
+        }
+
+    def test_no_new_write_job_in_a_dispatchable_workflow(self):
+        new = sorted(self.found - DISPATCH_WRITE_KNOWN)
+        self.assertEqual(
+            new, [],
+            "these jobs hold a write scope in a workflow that can be run "
+            "manually on any branch; move the write steps into a "
+            "default-branch workflow_run publisher that only downloads "
+            "artifacts (do not add them to DISPATCH_WRITE_KNOWN)",
+        )
+
+    def test_known_list_has_no_stale_entries(self):
+        stale = sorted(DISPATCH_WRITE_KNOWN - self.found)
+        self.assertEqual(
+            stale, [],
+            "these jobs no longer hold writes in a dispatchable workflow; "
+            "delete them from DISPATCH_WRITE_KNOWN so the gate tightens",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -194,24 +194,36 @@ def locate(template_path, screen_path, size=None, hint=None):
 GTK_ICON_RACE = "object_ref: assertion '!object_already_finalized' failed"
 
 
+# A capture that produced nothing is run again, up to this many extra times.
+# The icon cache race above is the known cause, but the same fixtures were
+# lost (`green -> missing`, #1673) on runs whose log did not carry its
+# signature, so any empty capture is retried: the ratchet still fails a
+# fixture that stays empty, and every attempt's log is kept.
+EMPTY_CAPTURE_RETRIES = 2
+
+
 def retry_gtk_icon_race(run, log_path):
-    """`run()`, a capture or export returning its page count, run once more
-    if it produced nothing and its log shows GTK's icon cache race. The
-    first log is kept as <log>.race. Any other failure, or this one twice,
-    still counts."""
+    """`run()`, a capture or export returning its page count, run again (up
+    to EMPTY_CAPTURE_RETRIES more times) while it produces nothing. Each
+    empty attempt's log is kept as <log>.attempt<N>; one showing GTK's icon
+    cache race (#1648) is also kept as <log>.race. A capture that stays empty
+    still counts as missing."""
     n = run()
-    if n:
-        return n
-    try:
-        with open(log_path, errors="replace") as f:
-            raced = GTK_ICON_RACE in f.read()
-    except OSError:
-        return n
-    if not raced:
-        return n
-    os.replace(log_path, log_path + ".race")
-    print(f"render-lab: {log_path}: GTK icon cache race (#1648); running it again", file=sys.stderr)
-    return run()
+    for attempt in range(1, EMPTY_CAPTURE_RETRIES + 1):
+        if n:
+            return n
+        try:
+            with open(log_path, errors="replace") as f:
+                raced = GTK_ICON_RACE in f.read()
+        except OSError:
+            return n
+        if raced:
+            shutil.copyfile(log_path, log_path + ".race")
+        os.replace(log_path, f"{log_path}.attempt{attempt}")
+        why = "GTK icon cache race (#1648)" if raced else "no capture"
+        print(f"render-lab: {log_path}: {why}; running it again ({attempt}/{EMPTY_CAPTURE_RETRIES})", file=sys.stderr)
+        n = run()
+    return n
 
 
 def start(argv, env, log):
