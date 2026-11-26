@@ -307,3 +307,51 @@ fn master_trailing_empty_paragraph_adds_no_line() {
     assert_eq!(text, "Only line");
 }
 
+
+/// A master's or layout's text box keeps its paragraphs' look and its
+/// body's, as a slide's does: a right-aligned classification label
+/// ("PROTECTED B") comes back right-aligned, under a placeholder ahead of
+/// it in the part, each paragraph its own, where it was drawn from its
+/// box's left edge (future-delivery-structure: clear of the white patch
+/// its slides put over it).
+#[test]
+fn a_masters_text_box_keeps_its_paragraphs_alignment() {
+    use crate::engine::ParaAlign;
+    let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld><p:spTree>
+        <p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+          <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="95250" cy="95250"/></a:xfrm></p:spPr>
+          <p:txBody><a:p><a:r><a:t>Title</a:t></a:r></a:p></p:txBody></p:sp>
+        <p:sp><p:nvSpPr><p:cNvPr id="10" name="TextBox 9"/><p:cNvSpPr txBox="1"/><p:nvPr userDrawn="1"/></p:nvSpPr>
+          <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="190500" cy="95250"/></a:xfrm><a:prstGeom prst="rect"/><a:noFill/></p:spPr>
+          <p:txBody><a:bodyPr wrap="square" anchor="t"/><a:lstStyle/>
+          <a:p><a:pPr algn="r"/><a:r><a:rPr sz="1200"/><a:t>PROTECTED B</a:t></a:r></a:p>
+          <a:p><a:pPr algn="ctr"/><a:r><a:t>second</a:t></a:r></a:p></p:txBody></p:sp>
+        </p:spTree></p:cSld></p:sldMaster>"##;
+    let (_, shapes) = parse_master_shapes(xml);
+    match &shapes[..] {
+        [SlideObject::TextBox { text, body, .. }] => {
+            assert_eq!(text, "PROTECTED B\nsecond");
+            let aligns: Vec<ParaAlign> = body.paras.iter().map(|p| p.align).collect();
+            assert_eq!(aligns, [ParaAlign::Right, ParaAlign::Center]);
+        }
+        other => panic!("expected the label alone, got {other:?}"),
+    }
+}
+
+/// A hidden shape on a master (`p:cNvPr hidden="1"`: think-cell's data
+/// store) is not drawn, as PowerPoint and Impress do not draw it; the
+/// shapes around it are.
+#[test]
+fn a_masters_hidden_shape_is_not_drawn() {
+    let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld><p:spTree>
+        <p:sp><p:nvSpPr><p:cNvPr id="12" name="think-cell data - do not delete" hidden="1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="95250" cy="95250"/></a:xfrm><a:prstGeom prst="rect"/>
+          <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></p:spPr></p:sp>
+        <p:sp><p:nvSpPr><p:cNvPr id="13" name="Bar"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="190500" cy="95250"/></a:xfrm><a:prstGeom prst="rect"/>
+          <a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></p:spPr></p:sp>
+        </p:spTree></p:cSld></p:sldMaster>"##;
+    let (_, shapes) = parse_master_shapes(xml);
+    assert_eq!(shapes.len(), 1, "{shapes:?}");
+    assert!(matches!(&shapes[0], SlideObject::Shape { w, .. } if (w - 20.0).abs() < 0.01), "{shapes:?}");
+}
