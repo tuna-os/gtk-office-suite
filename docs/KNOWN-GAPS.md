@@ -66,6 +66,7 @@ the cells at their own size.
 | Table style headers and first columns | Header rows drawn bold in every style, and a marked first column painted as the header, where Impress bolds only Light Style 1's and paints the first column as the header only in the medium styles | Fixed on main (#2387) |
 | Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Fixed on main (#2405) |
 | Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Fixed on main (#2407) |
+| A paragraph that opens on a line break | The break was sized at the default 18pt, not as the text it breaks, and a title with an exact line pitch was measured against that small first line: its lines spaced far too wide, so shrink-to-fit took it to 75% where Impress draws 90% (ccrm-dgpod's cover) | Open PR |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps

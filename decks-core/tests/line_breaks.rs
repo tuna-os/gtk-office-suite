@@ -116,3 +116,25 @@ fn a_line_break_survives_odp_as_a_line_break() {
     let back = decks_core::odp::read(path.to_str().unwrap()).unwrap();
     assert_eq!(text_of(&back), text_of(&deck()));
 }
+
+/// A title that opens on an empty line (`a:br` before its first run)
+/// sizes that line as its text, as PowerPoint does: the break takes the
+/// look of the run it breaks. Left at the default size, an 18pt line led a
+/// 44pt title, and the title's exact line pitch, measured against that
+/// first line, spaced every line far too wide (ccrm-dgpod's cover).
+#[test]
+fn a_break_that_opens_a_paragraph_takes_its_texts_look() {
+    let dir = tempfile::tempdir().unwrap();
+    let ours = dir.path().join("ours.pptx");
+    write_pptx(ours.to_str().unwrap(), &Deck::new()).unwrap();
+    let slide = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="7" name="Title 1"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="549328" y="2534443"/><a:ext cx="9259690" cy="1789113"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr><a:defRPr sz="4400" b="1"/></a:lvl1pPr></a:lstStyle><a:p><a:br><a:rPr lang="en-CA"/></a:br><a:r><a:rPr lang="en-CA"/><a:t>Case/Client Relationship Management</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>"#;
+    let path = replace(&ours, "ppt/slides/slide1.xml", slide);
+    let d = read_pptx(path.to_str().unwrap()).unwrap();
+    let SlideObject::TextBox { runs, .. } = &d.slides[0].objects[0] else { unreachable!() };
+    let looks: Vec<(String, Option<u16>, bool)> = runs.iter().map(|r| (r.text.clone(), r.style.font_size_hp, r.style.bold)).collect();
+    assert_eq!(looks.len(), 2, "{looks:?}");
+    assert_eq!(looks[0].0, LINE_BREAK.to_string());
+    assert_eq!((looks[0].1, looks[0].2), (looks[1].1, looks[1].2), "the break as its text: {looks:?}");
+    assert!(looks[1].2, "the title is bold: {looks:?}");
+}
