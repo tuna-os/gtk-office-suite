@@ -336,7 +336,7 @@
   "letters/table-cell-numbered-list-indent": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/table-row-min-height-page-break": {
     "A": "amber",
@@ -524,7 +524,7 @@
   "tables/wide-borderless-hyperlinks": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/wide-column-no-headings": {
     "A": "amber",
@@ -564,7 +564,7 @@
   "tables/worksheet-image": {
     "A": "green",
     "B": "red",
-    "C": "red"
+    "C": "green"
   },
   "tables/wrap-merged": {
     "A": "amber",
