@@ -1,0 +1,1 @@
+- Decks: a PowerPoint paragraph that opens on a line break sizes that empty line as its text, as PowerPoint does. A title opening on an empty line was spaced too wide and shrunk much smaller than PowerPoint and Impress draw it.

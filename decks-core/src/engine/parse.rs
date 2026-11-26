@@ -148,14 +148,31 @@ impl PendingShape {
     /// their own properties), and the text body for the lines kept.
     fn resolve(&self, st: Option<&super::text_xml::SpText>) -> (Vec<Run>, super::text_body::TextBody) {
         let Some(st) = st else { return (self.runs.clone(), Default::default()) };
+        let resolved: Vec<Option<RunStyle>> = self.run_refs.iter().map(|i| i.and_then(|i| st.runs.get(i)).map(|p| p.style())).collect();
         let runs = self
             .runs
             .iter()
-            .zip(&self.run_refs)
-            .map(|(r, i)| match i.and_then(|i| st.runs.get(i)) {
+            .zip(&resolved)
+            .enumerate()
+            .map(|(k, (r, own))| match own {
                 // The resolved look, with the run's own link: a link is
                 // never inherited, so the resolver does not carry it.
-                Some(p) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..p.style() } },
+                Some(style) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..style.clone() } },
+                // A run of breaks alone (`a:br` with no run before it in
+                // its paragraph, a title opening on an empty line) takes
+                // the look of the text it breaks, the next run's, else the
+                // one before: PowerPoint sizes the break as its paragraph's
+                // text. Left at the default size, an 18pt line led a 40pt
+                // title and the title's exact pitch was measured against
+                // it, spacing every line two and a half times too far
+                // apart (ccrm-dgpod's cover, shrunk to 75% where Impress
+                // draws 90%).
+                None if r.text.chars().all(|c| c == super::LINE_BREAK || c == '\n') => {
+                    match resolved[k + 1..].iter().flatten().next().or_else(|| resolved[..k].iter().rev().flatten().next()) {
+                        Some(style) => Run { text: r.text.clone(), style: style.clone() },
+                        None => r.clone(),
+                    }
+                }
                 None => r.clone(),
             })
             .collect();

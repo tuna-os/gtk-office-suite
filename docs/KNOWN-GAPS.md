@@ -71,6 +71,7 @@ the cells at their own size.
 | Superscript and subscript (`a:rPr baseline`) | Drawn full size on the line: a PDF-converted dashboard's superscript data-table labels ("CIRNAC", "NRCan" at `baseline="33333"`) were too big for their boxes and wrapped (dashboard-overpayment-project-2019) | Open PR (drawn at 58% of the size, raised a third or lowered a quarter; kept on save; the file's exact shift is not kept) |
 | A master's or layout's text box look, and its hidden shapes | A master or layout text box kept only its runs: a right-aligned classification label ("PROTECTED B") was drawn from its box's left edge, clear of the white patch each slide puts over it, and think-cell's hidden data shape drew as a broken picture in the corner (future-delivery-structure, every slide) | Open PR |
 | A chart's own labels (`c:userShapes`) | Text the chart's author laid over it not drawn: a doughnut's "5.25%" in its hole and its "Complete / Forecast" key (aiva-progress-dashboard slide 2) | Open PR (read as text boxes over the chart; saved as slide text boxes) |
+| A paragraph that opens on a line break | The break was sized at the default 18pt, not as the text it breaks, and a title with an exact line pitch was measured against that small first line: its lines spaced far too wide, so shrink-to-fit took it to 75% where Impress draws 90% (ccrm-dgpod's cover) | Open PR |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps
