@@ -815,6 +815,11 @@ struct Shaped {
     /// A list item's number in its list, for its marker: a table sets its
     /// cells' (the body passes the paragraph's own).
     ordinal: u32,
+    /// How far below the first line's baseline the marker's baseline sits:
+    /// a label in a taller face on a line whose text is set to its top
+    /// (`ParaStyle::text_align_top`) has its own top at the line's top,
+    /// so its baseline is lower, as Writer draws it. Zero otherwise.
+    marker_drop_pt: f64,
 }
 
 /// Left edge of a paragraph's text box, in points from its column's (or
@@ -986,7 +991,50 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
-    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal }
+    // A label in a face of its own is part of its first line, as Writer
+    // lays it out: the line is as tall as that face needs (a "o" in Courier
+    // New, a bullet in Noto Sans Symbols adds a pixel or two a line, and
+    // dcms-business-appointment-rules' page ran 9px short of LibreOffice's).
+    // Text set to the line's top (`ParaStyle::text_align_top`) keeps its
+    // own ascent: the label's extra height goes below it.
+    let mut marker_drop_pt = 0.0;
+    if let Some(label) = label_line(p, opts, shaper) {
+        let first = &mut lines[0];
+        if p.style.text_align_top {
+            marker_drop_pt = (label.ascent_pt - first.ascent_pt).max(0.0);
+            first.descent_pt = first.descent_pt.max(label.ascent_pt + label.descent_pt - first.ascent_pt);
+        } else {
+            first.ascent_pt = first.ascent_pt.max(label.ascent_pt);
+            first.descent_pt = first.descent_pt.max(label.descent_pt);
+        }
+    }
+    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal, marker_drop_pt }
+}
+
+/// The line a list item's label makes on its own when its list draws it
+/// in a face of its own (`ParaStyle::list_label_font`), at the size the
+/// label is drawn: the item's first run's.
+fn label_line(p: &Paragraph, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Option<LineBox> {
+    let face = p.style.list_label_font.as_ref().filter(|_| p.style.list != ListKind::None)?;
+    let text = lists::marker_for(&p.style, 1)?;
+    let mut run = crate::model::Run::plain(text);
+    run.style.font_family = Some(face.clone());
+    run.style.font_size_hp = p.runs.iter().find(|r| !r.text.is_empty()).and_then(|r| r.style.font_size_hp);
+    // The face's own height, as Writer takes it, not that of whichever face
+    // has the label's glyph (`pango::face_metrics_pt`).
+    #[cfg(feature = "render")]
+    {
+        let size = run.style.font_size_hp.map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
+        if let Some((ascent_pt, descent_pt)) = pango::face_metrics_pt(face, size) {
+            return Some(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt, descent_pt, objects: Vec::new(), text_pt: None });
+        }
+    }
+    let runs = [run];
+    let mut req = paragraph_request(p, 1000.0, opts);
+    req.runs = &runs;
+    req.first_line_indent_pt = 0.0;
+    req.alignment = crate::model::Alignment::Left;
+    shaper.shape(&req).into_iter().next()
 }
 
 /// Place a shaped paragraph in the flow, splitting it across columns and
@@ -1142,7 +1190,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
             let x0 = flow.column_x();
             if k == 0 && st.list != ListKind::None {
                 if let Some(text) = lists::marker_for(st, ordinal) {
-                    flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline });
+                    flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline + shaped.marker_drop_pt });
                 }
             }
             emit_line(flow, idx, para, &text, k, lb, x0 + shaped.box_x, shaped.box_w, top, height);
@@ -1771,7 +1819,7 @@ fn place_slices(flow: &mut Flow, doc: &Document, paras: &[CellParagraph], slices
             // A list item in a cell has its marker, as in the body.
             if l == 0 && p.style.list != ListKind::None {
                 if let Some(marker) = lists::marker_for(&p.style, s.ordinal) {
-                    flow.push(Item::Marker { para: *i, text: marker, x_pt: text_x + s.marker_x, baseline_pt: y + line_ascent(p, &s.lines[l], h) });
+                    flow.push(Item::Marker { para: *i, text: marker, x_pt: text_x + s.marker_x, baseline_pt: y + line_ascent(p, &s.lines[l], h) + s.marker_drop_pt });
                 }
             }
             emit_line(flow, *i, p, &text, l, &s.lines[l], text_x + s.box_x, s.box_w, y, h);

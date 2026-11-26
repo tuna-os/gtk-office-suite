@@ -109,6 +109,7 @@ CLASS_ASSERTION = "assertion-mismatch"
 CLASS_TIMEOUT = "timeout"
 CLASS_INFRASTRUCTURE = "infrastructure"
 CLASS_INPUT = "input-not-delivered"
+CLASS_BUDGET = "budget-exhausted"
 CLASS_UNKNOWN = "unclassified"
 
 # Markers of the application dying, as opposed to a test disagreeing
@@ -300,6 +301,10 @@ def revision() -> dict:
 # ── collection and ordering ──────────────────────────────────────────
 
 
+# An attempt given less than this could only time out; do not start it.
+MIN_ATTEMPT_S = 60
+
+
 def collect(selection: list, select: str | None, python_bin: str | None) -> list:
     """Ask pytest which journeys the selection names, in file order."""
     args = [RUNNER, *selection]
@@ -482,6 +487,12 @@ def main(argv=None) -> int:
                              "must not already exist")
     parser.add_argument("--timeout", type=int, default=1800,
                         help="seconds allowed per attempt (default: 1800)")
+    parser.add_argument("--budget", type=int, default=None,
+                        help="seconds for the whole campaign. An attempt's timeout is "
+                             "clamped to what is left, and attempts that no longer fit "
+                             "are recorded as budget-exhausted (failed, never skipped) "
+                             "so the manifest and evidence are written before the CI "
+                             "job limit cancels the run")
     parser.add_argument("--video", choices=("off", "failures", "all"),
                         default="failures",
                         help="record journeys (default: failures)")
@@ -493,6 +504,8 @@ def main(argv=None) -> int:
         parser.error("--repeat must be at least 1")
     if args.timeout < 1:
         parser.error("--timeout must be at least 1 second")
+    if args.budget is not None and args.budget < 1:
+        parser.error("--budget must be at least 1 second")
     if os.path.exists(args.output):
         parser.error(f"{args.output} already exists; campaigns never overwrite "
                      "their own evidence")
@@ -526,10 +539,24 @@ def main(argv=None) -> int:
 
     print(f"campaign: {len(attempts)} attempt(s) over {len(journeys)} journey(s), "
           f"seed {seed}, matrix {args.matrix}")
+    campaign_started = time.monotonic()
     for attempt in attempts:
         print(f"  attempt {attempt.index}/{len(attempts)} "
               f"[{attempt.config.name}] ...", flush=True)
-        run_attempt(attempt, args.output, args.timeout, args.python, args.video)
+        remaining = (None if args.budget is None
+                     else args.budget - (time.monotonic() - campaign_started))
+        if remaining is not None and remaining < MIN_ATTEMPT_S:
+            # Still a failure: a campaign that ran fewer attempts than
+            # planned has not shown what it was asked to show.
+            attempt.classification = CLASS_BUDGET
+            attempt.failures = [{"kind": "budget",
+                                 "message": f"campaign budget of {args.budget}s exhausted "
+                                            "before this attempt could start",
+                                 "text": ""}]
+        else:
+            run_attempt(attempt, args.output,
+                        args.timeout if remaining is None else min(args.timeout, int(remaining)),
+                        args.python, args.video)
         print(f"    {attempt.classification} in {attempt.duration_s}s "
               f"({len(attempt.failures)} failure(s))", flush=True)
         manifest["attempts"].append(attempt.record())

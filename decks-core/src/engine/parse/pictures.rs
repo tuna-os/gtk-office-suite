@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use quick_xml::events::BytesStart;
+
 pub(super) struct PendingPicture {
     pub(super) embed_id: Option<String>,
     pub(super) x: Option<f64>,

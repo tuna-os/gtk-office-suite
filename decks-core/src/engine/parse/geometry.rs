@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
+use quick_xml::events::BytesStart;
+
 pub(super) fn parse_coords(
     e: &BytesStart,
     k1: &str,
