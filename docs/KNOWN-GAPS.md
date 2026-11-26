@@ -16,20 +16,20 @@ a release has confirmed it yet; the row goes once one has.
 
 | Gap | How it shows | Tracked |
 |---|---|---|
-| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Fixed on main (#2409: cell lists resolve their declared indent); open PR #2410 keeps them on save |
+| Table cell lists ignore the indent the paragraph declares | Numbered/bulleted items in a table cell sit about 25 px right of Writer's (transparency-information, sma-positive-result) | Fixed on main (#2409: cell lists resolve their declared indent; #2410 keeps them on save). A review of #2410 reads the code as numbering items in different cells `1.` each, where Word counts on through the table; not yet confirmed by a test |
 | Word bullet glyphs other than the default dot (`-`, `o`, Symbol/Wingdings) | Every bullet level draws `•` | Fixed on main (#2374) |
 | Legacy Word form checkboxes (`FORMCHECKBOX`) | No box drawn | Fixed on main (#2372) |
 | A ruled table's top rule takes no height | Text below ruled tables drifts up by the rule width; a full page can gain a line Writer pushes to the next page (annex-a page 5) | Fixed on main (#2382) |
 | ODF links whose span names a character style | Drawn in the span style's colour (Word's Hyperlink blue) where Writer draws its link navy | Fixed on main (#2383) |
-| Content controls (SDT) placeholders inside table cells | Placeholder text in cells not shown (tier-2-3 notification) | Open PR #2394 (a control around a cell or row keeps it) |
+| Content controls (SDT) placeholders inside table cells | Placeholder text in cells not shown (tier-2-3 notification) | Fixed on main (#2394: a control around a cell or row keeps it) |
 | EMF/WMF images | Not drawn | Not started |
 | ODT frames, page-break spacing and one-sided margins | A frame's line too short; space above lost after a page break; a style giving one margin loses the other | Fixed on main (#2371, #2375, #2377) |
-| Numbered items from 10 on | A wider label ("10.") measured as "1.", so the text did not tab on past it | Open PR #2412 |
+| Numbered items from 10 on | A wider label ("10.") measured as "1.", so the text did not tab on past it | Fixed on main (#2412) |
 | Small drift on long forms | Up to ~4 pt by mid-page on crime-supervisor-declaration-form, one paragraph wrapping a word differently | Not yet root-caused |
 | Repeated table header rows (`w:tblHeader`, `table:table-header-rows`) | A table that runs onto another page does not repeat its heading row there, so the continued rows start a header's height higher than Writer's and the page holds more (crime-supervisor-declaration-form page 4: its "Skills/ Procedure/ Knowledge" row). The rows are read, and kept whole, but not repeated | Not started |
-| List labels in their level's own face (`w:lvl/w:rPr/w:rFonts`) | A "●" in Noto Sans Symbols or an "o" in Courier New drawn in the item's face, and the line not as tall as the label's face makes it; a page of bullets runs about a pixel a line short of Writer's (dcms-business-appointment-rules) | Open PR #2417 |
-| Underlines on screen between pixel rows | A thin underline drawn as two pale rows instead of one in its colour; links read light blue (sma-positive-result-call-checklist) | Open PR #2416 |
-| ODT automatic styles that state their own spacing under a contextual parent | Their space below dropped as if contextual spacing still applied; list items packed together where Writer leaves 8pt between them (notes-on-the-completion-of-form-w1) | Open PR #2418 |
+| List labels in their level's own face (`w:lvl/w:rPr/w:rFonts`) | A "●" in Noto Sans Symbols or an "o" in Courier New drawn in the item's face, and the line not as tall as the label's face makes it; a page of bullets runs about a pixel a line short of Writer's (dcms-business-appointment-rules) | Open PR #2417 (docx, and `w:textAlignment top`); open PR #2425 reads an ODT level's face; ODT `style:vertical-align` is #2424 |
+| Underlines on screen between pixel rows | A thin underline drawn as two pale rows instead of one in its colour; links read light blue (sma-positive-result-call-checklist) | Fixed on main (#2416) |
+| ODT automatic styles that state their own spacing under a contextual parent | Their space below dropped as if contextual spacing still applied; list items packed together where Writer leaves 8pt between them (notes-on-the-completion-of-form-w1) | Fixed on main (#2418) |
 
 ## Tables
 
@@ -39,7 +39,7 @@ a release has confirmed it yet; the row goes once one has.
 | Sheet pictures on save | Pictures are dropped on save (the package scan warns) | Fixed on main (#2380: saved at their cell, offset and size; shapes still dropped) |
 | Formulas referring to another workbook | Shown as `#REF!` instead of the cached value | Fixed on main (#2381: loads the cached value; the link itself is not kept, as the package scan warns) |
 | Hidden rows/columns in ODS (`collapse`/`filter`) | Shown | Fixed on main (#2368) |
-| Fonts the Flatpak doesn't have (Aptos, Tahoma, Verdana, Segoe UI, Palatino Linotype, ...) | Measured in the Tier C VM (render-parity run 44941036908, `vm-work/fonts-<app>.log`): the GNOME 50 runtime's sans-serif and serif are DejaVu Sans and DejaVu Serif, as in the Ubuntu reference container, so Verdana, Tahoma, Aptos, Humnst777 and Yu Gothic fall back alike in both. Two differ, and in both the Flatpak has the closer face: Segoe UI is drawn in Adwaita Sans, and Palatino Linotype in TeX Gyre Pagella (a Palatino metric clone), which the reference container lacks. Documents set in those are Tier A green and Tier C amber because the reference falls back further than the app does | Not started: the reference container could install the same substitutes (`fonts-texgyre`, Adwaita Sans) so LibreOffice and Tier A see what the Flatpak shows; that changes every reference image and needs its own validated run |
+| Fonts the Flatpak doesn't have (Aptos, Tahoma, Verdana, Segoe UI, Palatino Linotype, ...) | Measured in the Tier C VM (render-parity run 44941036908, `vm-work/fonts-<app>.log`): the GNOME 50 runtime's sans-serif and serif are DejaVu Sans and DejaVu Serif, as in the Ubuntu reference container, so Verdana, Tahoma, Aptos, Humnst777 and Yu Gothic fall back alike in both. Two differ, and in both the Flatpak has the closer face: Segoe UI is drawn in Adwaita Sans, and Palatino Linotype in TeX Gyre Pagella (a Palatino metric clone), which the reference container lacks. Documents set in those are Tier A green and Tier C amber because the reference falls back further than the app does | Palatino fixed on main (#2423: the reference container installs `fonts-texgyre`, so LibreOffice draws TeX Gyre Pagella as the Flatpak does; explanatory-note has been Tier C green on every nightly since). Segoe UI → Adwaita Sans not started |
 | Sheet view zoom (`zoomScale`) | Opens at 100% where Excel opens at the file's zoom | Not started |
 | ODS conditional number formats (`style:map` by sign) | Negatives as `-2` and zero as `0` where Calc shows `(2)` and `-` (hmt-annual-report core tables) | Fixed on main (#2390) |
 | Merged blocks bordered cell by cell; fills on half pixels | Inner borders drawn through merged text; grey seams between filled rows after a fractional-height row (ewco-claim-form) | Fixed on main (#2391) |
@@ -57,7 +57,7 @@ the cells at their own size.
 | Explicit table cell borders (`a:lnL`/`lnT`/`lnR`/`lnB`) | Not drawn; only the table style's rules show | Fixed on main (#2401: edges, no-fill and the cell's typeface); #2365 is superseded |
 | Chart titles | Not drawn | Fixed on main (#2379); open PR #2363 scales the title's and the chart's text size with a slide not 13.33 inches wide |
 | Theme-coloured, horizontal and percent-labelled charts | Bars in the accent colour, columns where the file has bars, labels without % | Open PR #2363 |
-| Paragraph line spacing (`a:lnSpc`, ODP `fo:line-height`) | Lines at default spacing | Open PR #2353 |
+| Paragraph line spacing (`a:lnSpc`, ODP `fo:line-height`) | Lines at default spacing | Fixed on main (#2353) |
 | A deck opened with no session bus | Decks aborts (Mandelbrot watch) | Fixed on main (#2373) |
 | Text columns (`numCol`) | One column | Open PR #2366 |
 | Mirrored pictures lose the mirror when cropped, and in export | Picture unmirrored | Fixed on main (#2367) |
@@ -88,6 +88,9 @@ not listed above:
   near its box's width can wrap one word differently (pcm-draft-hcm-data
   slide 3: "AI | Steering" where LibreOffice keeps "AI Steering"), which the
   lab counts as a lost line. The sizes and box widths match; only the
-  advances differ.
+  advances differ. Letters shows a wrap of the same kind, not yet measured
+  to the advance: opt-out-form-accessible-version's bold Arial title wraps
+  "Armed" to its second line where Writer keeps it on the first, which is
+  its Tier C amber (two lost lines; the rest of both pages matches).
 - A Tier C capture is a window, not a page: Tables shows the grid on screen
   where LibreOffice prints a page (`compare.py` `window_to_page`).
