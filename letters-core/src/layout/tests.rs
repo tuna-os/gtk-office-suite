@@ -1865,3 +1865,60 @@ fn a_section_starting_with_a_table_keeps_the_table_whole() {
     assert!(cells_on(&t.pages[1]) > 0);
     assert_eq!(lines_per_page(&t)[0], 1, "the heading stays in its own section");
 }
+
+/// A table's heading rows (`w:tblHeader`, `table:table-header-rows`) are
+/// drawn again at the top of each page the table runs onto, as Word and
+/// Writer repeat them, and the continued rows start under them. The copy
+/// is drawn but is not text: `Page::lines` and the page breaks skip it.
+#[test]
+fn heading_rows_repeat_on_each_page_a_table_runs_onto() {
+    let build = |header_rows: u32| -> Document {
+        let mut d = doc_of(1, "after");
+        let table = d.insert_table_at(0, 80, 1);
+        for i in 0..d.paragraphs.len() {
+            if let Some(c) = d.paragraphs[i].style.table_cell.filter(|c| c.table == table) {
+                d.paragraphs[i].runs = vec![Run::plain(if c.row == 0 { "Heading".to_string() } else { format!("row {}", c.row) })];
+            }
+        }
+        if header_rows > 0 {
+            d.table_header_rows.insert(table, header_rows);
+        }
+        d
+    };
+    let plain = lay(&build(0));
+    let t = lay(&build(1));
+    assert!(t.pages.len() >= 2, "the table runs onto a second page");
+    let repeats = |p: &Page| p.items.iter().filter(|i| matches!(i, Item::Line { source: Source::Repeat(_), text, .. } if text == "Heading")).count();
+    assert_eq!(repeats(&t.pages[0]), 0, "the heading is the table's own on its first page");
+    for (k, page) in t.pages.iter().enumerate().skip(1).filter(|(_, p)| p.items.iter().any(|i| matches!(i, Item::Cell { row, .. } if *row > 0))) {
+        assert_eq!(repeats(page), 1, "page {k} repeats the heading");
+        assert!(!page.lines().any(|l| matches!(l, Item::Line { text, .. } if text == "Heading")), "page {k}: the copy is not a body line");
+        let cell_top = |row: u32| page.items.iter().find_map(|i| match i { Item::Cell { row: r, y_pt, height_pt, .. } if *r == row => Some((*y_pt, *height_pt)), _ => None });
+        let (h_top, h_height) = cell_top(0).expect("the heading's box");
+        let first_row = page.items.iter().find_map(|i| match i { Item::Cell { row, y_pt, .. } if *row > 0 => Some(*y_pt), _ => None }).unwrap();
+        assert!((first_row - (h_top + h_height)).abs() < 1e-6, "page {k}: the rows continue under the heading");
+    }
+    // Without a heading the second page starts a row higher, so holds a
+    // row the repeated heading pushes on.
+    let first_on = |t: &RenderTree, k: usize| t.pages[k].items.iter().find_map(|i| match i { Item::Cell { row, y_pt, .. } if *row > 0 => Some(*y_pt), _ => None }).unwrap();
+    assert!(first_on(&t, 1) > first_on(&plain, 1));
+    let breaks = t.page_breaks(&build(1));
+    assert!(breaks[1] > breaks[0], "page 2 breaks at its first own row, not the copied heading: {breaks:?}");
+}
+
+/// A table's heading count follows rows inserted and deleted above and
+/// inside it, and goes when its last heading row does.
+#[test]
+fn heading_rows_follow_row_edits() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 4, 1);
+    d.table_header_rows.insert(table, 2);
+    assert!(d.insert_table_rows(table, 3, 1));
+    assert_eq!(d.table_header_rows[&table], 2, "a row under the heading leaves it");
+    assert!(d.insert_table_rows(table, 1, 1));
+    assert_eq!(d.table_header_rows[&table], 3, "a row inside it joins it");
+    assert!(d.delete_table_rows(table, 0, 2));
+    assert_eq!(d.table_header_rows[&table], 1);
+    assert!(d.delete_table_rows(table, 0, 1));
+    assert!(!d.table_header_rows.contains_key(&table), "the last heading row gone, the table has none");
+}

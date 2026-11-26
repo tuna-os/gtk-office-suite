@@ -17,6 +17,25 @@ fn median(v: &mut Vec<u128>) -> u128 {
     v[v.len() / 2]
 }
 
+/// This process's CPU time (all threads, both nodes), from /proc/self/stat, in milliseconds.
+fn process_cpu_ms() -> u64 {
+    let st = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+    // The fields after `(comm)`: utime and stime are the 12th and 13th of them (CLK_TCK 100).
+    let rest = st.rsplit_once(')').map(|(_, r)| r).unwrap_or("");
+    let f: Vec<&str> = rest.split_whitespace().collect();
+    let t = |i: usize| f.get(i).and_then(|x| x.parse::<u64>().ok()).unwrap_or(0);
+    (t(11) + t(12)) * 10
+}
+
+/// Bytes iroh's socket received on this node (all transports), `Endpoint::metrics().socket`.
+async fn recv_bytes(n: &P2pStore) -> u64 {
+    let r = n.net_report().await.unwrap();
+    ["recv_data_ipv4", "recv_data_ipv6", "recv_data_relay"]
+        .iter()
+        .map(|k| r.metrics.get(k).copied().unwrap_or(0))
+        .sum()
+}
+
 fn update(base: &str, seq: u64, size: usize) -> Update {
     Update {
         dcp: 1,
@@ -86,17 +105,33 @@ async fn convergence_of_n_entries() {
     for n in [10usize, 100, 300, 1000] {
         let (a, b, doc) = pair().await;
         let base = a.versions(&doc).await.unwrap().remove(0).id;
+        let rx0 = recv_bytes(&b).await;
         let t = Instant::now();
         for i in 0..n {
             a.publish_update(&doc, update(&base, i as u64, 100)).await.unwrap();
         }
         let publish_ms = t.elapsed().as_millis();
         let published = Instant::now();
+        let cpu0 = process_cpu_ms();
+        let rx_wait0 = recv_bytes(&b).await;
         let seen = wait_soft(Duration::from_secs(600), || async {
             (b.updates(&doc).await.ok()?.len() == n).then_some(())
         })
         .await;
         let lag = published.elapsed().as_millis();
+        let cpu_wait = process_cpu_ms() - cpu0;
+        let rx_end = recv_bytes(&b).await;
+        let c = b.counters(&doc).await.unwrap();
+        let cw = a.counters(&doc).await.unwrap();
+        eprintln!(
+            "MEASURE n={n}: reader iroh socket bytes received {} since the first publish, {} during the wait; process CPU during the wait {cpu_wait} ms (both nodes); reader ops_received {} ops_applied {} sync_sessions {} (writer sync_sessions {})",
+            rx_end - rx0,
+            rx_end - rx_wait0,
+            c.ops_received,
+            c.ops_applied,
+            c.sync_sessions,
+            cw.sync_sessions
+        );
         let headers = a.raw_op_headers(&doc).await.unwrap();
         let bytes: usize = headers.iter().map(|h| h.len()).sum();
         eprintln!(

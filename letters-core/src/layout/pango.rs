@@ -67,6 +67,28 @@ fn with_fallback(family: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
+/// The ascent and descent, in points, of `family` itself at `size_pt`,
+/// whatever face draws a given character: what a line set in it is as tall
+/// as. Writer sizes a line by the font a portion asks for, so a list label
+/// in Noto Sans Symbols makes its line as tall as Noto Sans Symbols is,
+/// though that face has no "\u{25cf}" and another draws it
+/// (bullet-symbol-font-line-height). Shaping the label instead measured the
+/// fallback face's line, a third shorter.
+pub(super) fn face_metrics_pt(family: &str, size_pt: f64) -> Option<(f64, f64)> {
+    thread_local! {
+        static SHAPER: PangoShaper = PangoShaper::new();
+    }
+    SHAPER.with(|s| {
+        let mut desc = pango::FontDescription::new();
+        desc.set_family(&with_fallback(family));
+        desc.set_size(to_units(size_pt));
+        let font = s.context.load_font(&desc)?;
+        let m = font.metrics(None);
+        let (a, d) = (to_pt(m.ascent()), to_pt(m.descent()));
+        (a.is_finite() && d.is_finite() && a > 0.0).then_some((a, d))
+    })
+}
+
 impl PangoShaper {
     pub fn new() -> Self {
         let font_map = pangocairo::FontMap::new();
@@ -867,7 +889,7 @@ impl Typeset {
             };
             for item in &page.items {
                 match item {
-                    Item::Line { source: Source::Paragraph(p), .. }
+                    Item::Line { source: Source::Paragraph(p) | Source::Repeat(p), .. }
                     | Item::Marker { para: p, .. }
                     | Item::Chip { para: p, .. }
                     | Item::NoteRef { para: p, .. } => {
@@ -1391,7 +1413,7 @@ impl Typeset {
         }
         for item in &page.items {
             match item {
-                Item::Line { source: Source::Paragraph(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
+                Item::Line { source: Source::Paragraph(p) | Source::Repeat(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
                     let Some(layout) = self.paragraph_layout(*p, *box_width_pt) else { continue };
                     if let Some(l) = layout.line_readonly(*line as i32) {
                         cr.move_to(*x_pt, *baseline_pt);
@@ -1434,6 +1456,11 @@ impl Typeset {
                         run.style.font_family = f.style.font_family.clone();
                         run.style.font_size_hp = f.style.font_size_hp;
                         run.style.color = f.style.color.clone();
+                    }
+                    // A label in its list's own face, as Word and
+                    // LibreOffice draw it (an "o" in Courier New).
+                    if let Some(face) = &p.style.list_label_font {
+                        run.style.font_family = Some(face.clone());
                     }
                     let size = run.style.font_size_hp.map_or_else(
                         || p.style.heading.map_or(self.opts.font_size_pt, |l| self.opts.heading_size_pt(l)),
@@ -1664,6 +1691,100 @@ mod tests {
         let mut d = Document::new();
         d.paragraphs = (0..n).map(|_| Paragraph { style: Default::default(), runs: vec![Run::plain(text)] }).collect();
         d
+    }
+
+    /// A list label drawn in a face of its own makes its line as tall as
+    /// that face needs, as Writer lays the label out as part of the line:
+    /// items labelled in DejaVu Sans (taller than the body's Liberation
+    /// Serif) stand further apart than items labelled in the body face,
+    /// and what follows them starts lower.
+    #[test]
+    fn a_label_in_a_taller_face_makes_its_line_taller() {
+        let baselines = |face: Option<&str>| {
+            let mut d = doc(3, "item");
+            for p in &mut d.paragraphs[..2] {
+                p.style.list = crate::model::ListKind::Bullet;
+                p.style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+                p.style.list_label_font = face.map(str::to_string);
+            }
+            let t = Typeset::new(d, LayoutOptions::default());
+            t.tree().pages[0]
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Line { source: Source::Paragraph(k), line: 0, baseline_pt, .. } => Some((*k, *baseline_pt)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let plain = baselines(None);
+        let tall = baselines(Some("DejaVu Sans"));
+        assert_eq!(plain.len(), 3);
+        assert_eq!(tall.len(), 3);
+        // The second item's line is taller, so its baseline is further
+        // from the first's, and everything after it is lower.
+        let gap = |b: &[(usize, f64)]| b[1].1 - b[0].1;
+        assert!(gap(&tall) > gap(&plain) + 0.05, "a DejaVu Sans label did not make its line taller: {plain:?} {tall:?}");
+        assert!(tall[2].1 > plain[2].1 + 0.1, "the paragraph after the list did not move down: {plain:?} {tall:?}");
+        assert!(tall[0].1 >= plain[0].1, "the first item's baseline moved up: {plain:?} {tall:?}");
+    }
+
+    /// Text set to the top of its line (`w:textAlignment top`) keeps the
+    /// body's ascent when a taller label grows the line: the first item's
+    /// baseline stays where an unlabelled one would be, and the extra
+    /// height still pushes what follows down.
+    #[test]
+    fn a_top_aligned_item_puts_its_labels_extra_height_below() {
+        let baselines = |face: Option<&str>, top: bool| {
+            let mut d = doc(3, "item");
+            for p in &mut d.paragraphs[..2] {
+                p.style.list = crate::model::ListKind::Bullet;
+                p.style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+                p.style.list_label_font = face.map(str::to_string);
+                p.style.text_align_top = top;
+            }
+            let t = Typeset::new(d, LayoutOptions::default());
+            t.tree().pages[0]
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Line { source: Source::Paragraph(_), line: 0, baseline_pt, .. } => Some(*baseline_pt),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let plain = baselines(None, true);
+        let centred = baselines(Some("DejaVu Sans"), false);
+        let top = baselines(Some("DejaVu Sans"), true);
+        assert!((top[0] - plain[0]).abs() < 0.01, "the first baseline moved: {plain:?} {top:?}");
+        assert!(centred[0] > top[0] + 0.05, "a label above the text was not lower than one below: {centred:?} {top:?}");
+        assert!(top[2] > plain[2] + 0.1, "the label's height went nowhere: {plain:?} {top:?}");
+        // Top-aligned, the line is as tall as the taller of text and label;
+        // on a shared baseline, as tall as the larger ascent and descent.
+        assert!(top[1] - top[0] <= centred[1] - centred[0] + 0.01, "a top-aligned line grew past a baseline-aligned one: {centred:?} {top:?}");
+        // The label's own top is the line's top, so its baseline sits
+        // below the text's by the difference in ascents; on a shared
+        // baseline it sits on the text's.
+        let marker_drop = |top: bool| {
+            let mut d = doc(2, "item");
+            d.paragraphs[0].style.list = crate::model::ListKind::Bullet;
+            d.paragraphs[0].style.list_label = Some(crate::model::ListLabel { prefix: "o".into(), format: crate::model::NumberFormat::None, suffix: String::new() });
+            d.paragraphs[0].style.list_label_font = Some("DejaVu Sans".into());
+            d.paragraphs[0].style.text_align_top = top;
+            let t = Typeset::new(d, LayoutOptions::default());
+            let items = &t.tree().pages[0].items;
+            let line = items.iter().find_map(|i| match i {
+                Item::Line { source: Source::Paragraph(0), line: 0, baseline_pt, .. } => Some(*baseline_pt),
+                _ => None,
+            });
+            let marker = items.iter().find_map(|i| match i {
+                Item::Marker { para: 0, baseline_pt, .. } => Some(*baseline_pt),
+                _ => None,
+            });
+            marker.unwrap() - line.unwrap()
+        };
+        assert!(marker_drop(false).abs() < 0.01, "a baseline-aligned label left the text's baseline: {}", marker_drop(false));
+        assert!(marker_drop(true) > 0.05, "a top-aligned taller label stayed on the text's baseline: {}", marker_drop(true));
     }
 
     /// A table of contents laid out: each page number ends at the right

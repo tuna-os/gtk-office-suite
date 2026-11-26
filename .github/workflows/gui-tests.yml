@@ -2,7 +2,8 @@ name: GUI Tests
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # daily at 6am UTC
+    - cron: '0 6 * * *'   # daily at 6am UTC (smoke + app tests)
+    - cron: '0 6 * * 1'   # weekly, Monday 6am UTC (also runs vlm-audit)
   push:
     branches: [main]
   pull_request:
@@ -276,7 +277,8 @@ jobs:
   vlm-audit:
     runs-on: ubuntu-24.04
     needs: smoke
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # The VLM audit runs weekly (Gemini quota, #1688), not on the daily cron.
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1') || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -314,7 +316,21 @@ jobs:
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           VLM_BACKEND: gemini
           APP: ${{ matrix.app }}
-        run: tests/gui/run_gui_tests.sh "test_${APP}.py"
+        run: |
+          set +e
+          tests/gui/run_gui_tests.sh "test_${APP}.py" 2>&1 | tee vlm.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ] && grep -qiE 'rate.?limit|429|quota' vlm.log; then
+            {
+              echo "### vlm-audit ($APP): skipped: rate-limited"
+              echo
+              echo "Gemini returned rate-limit/quota errors, so no usable visual judgment was produced."
+              echo "This is not product evidence; the deterministic smoke job is unaffected."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=vlm-audit ($APP)::skipped: rate-limited"
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v7.0.2

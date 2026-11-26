@@ -245,6 +245,12 @@ pub enum Source {
     /// Footnote `Document::footnotes[i]`, at the foot of its page
     /// (`note_paragraph`).
     Footnote(usize),
+    /// A copy of `Document::paragraphs[i]`'s line in a table's heading row,
+    /// repeated at the top of a page the table runs onto
+    /// (`Document::table_header_rows`). Drawn like the paragraph's own
+    /// line, but not a place in the text: hit-testing, page breaks and
+    /// `Page::lines` skip it.
+    Repeat(usize),
 }
 
 /// A positioned element of a page. Coordinates are points from the page's
@@ -815,6 +821,11 @@ struct Shaped {
     /// A list item's number in its list, for its marker: a table sets its
     /// cells' (the body passes the paragraph's own).
     ordinal: u32,
+    /// How far below the first line's baseline the marker's baseline sits:
+    /// a label in a taller face on a line whose text is set to its top
+    /// (`ParaStyle::text_align_top`) has its own top at the line's top,
+    /// so its baseline is lower, as Writer draws it. Zero otherwise.
+    marker_drop_pt: f64,
 }
 
 /// Left edge of a paragraph's text box, in points from its column's (or
@@ -986,7 +997,50 @@ fn shape_paragraph(p: &Paragraph, avail_w: f64, opts: &LayoutOptions, shaper: &m
         let size = opts.font_size_pt;
         lines.push(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt: size * 0.9, descent_pt: size * 0.25, objects: Vec::new(), text_pt: None });
     }
-    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal }
+    // A label in a face of its own is part of its first line, as Writer
+    // lays it out: the line is as tall as that face needs (a "o" in Courier
+    // New, a bullet in Noto Sans Symbols adds a pixel or two a line, and
+    // dcms-business-appointment-rules' page ran 9px short of LibreOffice's).
+    // Text set to the line's top (`ParaStyle::text_align_top`) keeps its
+    // own ascent: the label's extra height goes below it.
+    let mut marker_drop_pt = 0.0;
+    if let Some(label) = label_line(p, opts, shaper) {
+        let first = &mut lines[0];
+        if p.style.text_align_top {
+            marker_drop_pt = (label.ascent_pt - first.ascent_pt).max(0.0);
+            first.descent_pt = first.descent_pt.max(label.ascent_pt + label.descent_pt - first.ascent_pt);
+        } else {
+            first.ascent_pt = first.ascent_pt.max(label.ascent_pt);
+            first.descent_pt = first.descent_pt.max(label.descent_pt);
+        }
+    }
+    Shaped { lines, box_x, box_w, marker_x: box_x - p.style.list_hanging_pt.unwrap_or(lists::HANGING_PT).max(0.0).min(box_x), ordinal, marker_drop_pt }
+}
+
+/// The line a list item's label makes on its own when its list draws it
+/// in a face of its own (`ParaStyle::list_label_font`), at the size the
+/// label is drawn: the item's first run's.
+fn label_line(p: &Paragraph, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Option<LineBox> {
+    let face = p.style.list_label_font.as_ref().filter(|_| p.style.list != ListKind::None)?;
+    let text = lists::marker_for(&p.style, 1)?;
+    let mut run = crate::model::Run::plain(text);
+    run.style.font_family = Some(face.clone());
+    run.style.font_size_hp = p.runs.iter().find(|r| !r.text.is_empty()).and_then(|r| r.style.font_size_hp);
+    // The face's own height, as Writer takes it, not that of whichever face
+    // has the label's glyph (`pango::face_metrics_pt`).
+    #[cfg(feature = "render")]
+    {
+        let size = run.style.font_size_hp.map_or(opts.font_size_pt, |hp| f64::from(hp) / 2.0);
+        if let Some((ascent_pt, descent_pt)) = pango::face_metrics_pt(face, size) {
+            return Some(LineBox { start: 0, end: 0, x_pt: 0.0, width_pt: 0.0, ascent_pt, descent_pt, objects: Vec::new(), text_pt: None });
+        }
+    }
+    let runs = [run];
+    let mut req = paragraph_request(p, 1000.0, opts);
+    req.runs = &runs;
+    req.first_line_indent_pt = 0.0;
+    req.alignment = crate::model::Alignment::Left;
+    shaper.shape(&req).into_iter().next()
 }
 
 /// Place a shaped paragraph in the flow, splitting it across columns and
@@ -1142,7 +1196,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
             let x0 = flow.column_x();
             if k == 0 && st.list != ListKind::None {
                 if let Some(text) = lists::marker_for(st, ordinal) {
-                    flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline });
+                    flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline + shaped.marker_drop_pt });
                 }
             }
             emit_line(flow, idx, para, &text, k, lb, x0 + shaped.box_x, shaped.box_w, top, height);
@@ -1426,8 +1480,18 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     flow.y += rule_pt;
 
     let mut tall: Vec<Tall> = Vec::new();
+    // The heading rows Word and Writer repeat at the top of each page the
+    // table runs onto (`w:tblHeader`, `table:table-header-rows`), once
+    // they have been placed: their items, top and height.
+    let header_rows = doc.table_header_rows.get(&first.table).copied().unwrap_or(0).min(rows.saturating_sub(1));
+    let mut header: Option<Header> = None;
+    let header_start = flow.pages.len();
 
     for row in 0..rows {
+        if row == header_rows && header_rows > 0 {
+            header = capture_header(flow, &cells, first.table, header_rows, header_start, rule_pt);
+        }
+        let header = header.as_ref().filter(|_| row >= header_rows);
         // Shape each cell of the row (a cell may hold several paragraphs).
         let mut row_cells: Vec<(u32, f64, Vec<CellParagraph>)> = Vec::new();
         let mut starting: Vec<(u32, f64, u32, Vec<CellParagraph>)> = Vec::new();
@@ -1468,7 +1532,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         // content runs past it, as Word clips it), and moves whole.
         if let Some(h) = file_h.filter(|h| h.exact) {
             if flow.y + h.pt > flow.bottom() && !flow.column_is_empty() {
-                flow.next_column();
+                break_table(flow, header);
             }
             let top = flow.y;
             let x0 = flow.column_x();
@@ -1497,7 +1561,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         if doc.table_whole_rows.get(&first.table).is_some_and(|w| w.contains(&row)) && !flow.column_is_empty() {
             let need = slices.iter().map(|c| c.iter().map(Slice::height).sum::<f64>()).fold(0.0, f64::max).max(file_h.map_or(0.0, |h| h.pt)) + rule_pt;
             if flow.y + need > flow.bottom() + 1e-6 && need <= flow.bottom() - flow.top() {
-                flow.next_column();
+                break_table(flow, header);
             }
         }
         let mut next = vec![0usize; slices.len()];
@@ -1578,7 +1642,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 takes.iter().zip(&next).any(|((n, _), from)| n > from)
             };
             if !done && !placed_any && !flow.column_is_empty() {
-                flow.next_column();
+                break_table(flow, header);
                 continue;
             }
             // A line taller than a whole page goes where it is anyway.
@@ -1631,9 +1695,100 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             if done && min_left <= 0.5 {
                 break;
             }
-            flow.next_column();
+            break_table(flow, header);
         }
         close_tall(flow, doc, &mut tall, first.table, row, &col_x, pad.left_pt);
+    }
+}
+
+/// A table's heading rows as placed on their page, to repeat at the top
+/// of the pages the table runs onto.
+struct Header {
+    items: Vec<Item>,
+    /// The top of the first heading row and the rows' height, rules in.
+    top: f64,
+    height: f64,
+    x: f64,
+    /// The rule above the first row.
+    rule_pt: f64,
+}
+
+/// The heading rows (`rows` of them) of `table` just placed, if they all
+/// sit on the current page and are not so tall that repeating them would
+/// leave a page little room. Sections in columns do not repeat them.
+fn capture_header(flow: &Flow, cells: &[(usize, crate::model::TableCell)], table: u32, rows: u32, start_page: usize, rule_pt: f64) -> Option<Header> {
+    if flow.geometry.columns > 1 {
+        return None;
+    }
+    let paras: std::collections::HashSet<usize> = cells.iter().filter(|(_, c)| c.row < rows).map(|(i, _)| *i).collect();
+    let belongs = |item: &Item| match item {
+        Item::Line { source: Source::Paragraph(p), .. } => paras.contains(p),
+        Item::Marker { para, .. } | Item::Image { para, .. } | Item::Chip { para, .. } | Item::NoteRef { para, .. } | Item::ParaBox { para, .. } | Item::TextBox { para, .. } => {
+            paras.contains(para)
+        }
+        Item::Cell { table: t, row, .. } => *t == table && *row < rows,
+        _ => false,
+    };
+    // A heading split across pages is not repeated.
+    if flow.pages.len() > start_page && flow.pages[start_page.saturating_sub(1)..flow.pages.len() - 1].iter().any(|p| p.items.iter().any(belongs)) {
+        return None;
+    }
+    let page = flow.pages.last()?;
+    let from = page.items.iter().position(belongs)?;
+    let items: Vec<Item> = page.items[from..].iter().filter(|i| belongs(i)).cloned().collect();
+    let top = items.iter().filter_map(|i| match i { Item::Cell { y_pt, .. } => Some(*y_pt), _ => None }).fold(f64::INFINITY, f64::min);
+    if !top.is_finite() {
+        return None;
+    }
+    let height = flow.y - top;
+    (height + rule_pt <= (flow.bottom() - flow.top()) / 2.0).then(|| Header { items, top, height, x: flow.column_x(), rule_pt })
+}
+
+/// Go on to the next column or page inside a table, repeating its heading
+/// rows at the top there. The column still counts as empty after them, so
+/// a row that does not fit under the heading is placed anyway rather than
+/// moved on again.
+fn break_table(flow: &mut Flow, header: Option<&Header>) {
+    flow.next_column();
+    let Some(h) = header else { return };
+    let top = flow.y + h.rule_pt;
+    let (dx, dy) = (flow.column_x() - h.x, top - h.top);
+    for item in &h.items {
+        let mut item = item.clone();
+        shift_item(&mut item, dx, dy);
+        if let Item::Line { source, .. } = &mut item {
+            if let Source::Paragraph(p) = *source {
+                *source = Source::Repeat(p);
+            }
+        }
+        flow.push(item);
+    }
+    flow.y = top + h.height;
+    flow.column_items = 0;
+}
+
+/// Move a placed item by (`dx`, `dy`) points.
+fn shift_item(item: &mut Item, dx: f64, dy: f64) {
+    match item {
+        Item::Line { box_x_pt, x_pt, top_pt, baseline_pt, .. } => {
+            *box_x_pt += dx;
+            *x_pt += dx;
+            *top_pt += dy;
+            *baseline_pt += dy;
+        }
+        Item::Marker { x_pt, baseline_pt, .. } | Item::Chip { x_pt, baseline_pt, .. } | Item::NoteRef { x_pt, baseline_pt, .. } => {
+            *x_pt += dx;
+            *baseline_pt += dy;
+        }
+        Item::Image { x_pt, y_pt, .. }
+        | Item::Rule { x_pt, y_pt, .. }
+        | Item::Cell { x_pt, y_pt, .. }
+        | Item::ParaBox { x_pt, y_pt, .. }
+        | Item::PageBorder { x_pt, y_pt, .. }
+        | Item::TextBox { x_pt, y_pt, .. } => {
+            *x_pt += dx;
+            *y_pt += dy;
+        }
     }
 }
 
@@ -1771,7 +1926,7 @@ fn place_slices(flow: &mut Flow, doc: &Document, paras: &[CellParagraph], slices
             // A list item in a cell has its marker, as in the body.
             if l == 0 && p.style.list != ListKind::None {
                 if let Some(marker) = lists::marker_for(&p.style, s.ordinal) {
-                    flow.push(Item::Marker { para: *i, text: marker, x_pt: text_x + s.marker_x, baseline_pt: y + line_ascent(p, &s.lines[l], h) });
+                    flow.push(Item::Marker { para: *i, text: marker, x_pt: text_x + s.marker_x, baseline_pt: y + line_ascent(p, &s.lines[l], h) + s.marker_drop_pt });
                 }
             }
             emit_line(flow, *i, p, &text, l, &s.lines[l], text_x + s.box_x, s.box_w, y, h);

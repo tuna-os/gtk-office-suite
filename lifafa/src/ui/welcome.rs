@@ -22,6 +22,7 @@ use crate::ui::accounts::{
 use crate::worker::{self, ConnTest};
 
 mod goa;
+mod helper_sign_in;
 mod manual;
 mod messages;
 mod pages;
@@ -29,6 +30,7 @@ mod steps;
 mod wordmark;
 
 use goa::rebuild_goa_rows;
+use helper_sign_in::sign_in_rows;
 use manual::{form_has_input, wizard_providers};
 pub(crate) use messages::{WelcomeCmd, WelcomeInput, WelcomeOutput, WelcomePrefs};
 use pages::{
