@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::models::{FolderKind, Message};
 use crate::ui::message_list::MessageListInput;

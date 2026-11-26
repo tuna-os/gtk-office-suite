@@ -8,7 +8,10 @@ use crate::{
     components::crypto::{
         CryptoIdentitySetupNextStep, CryptoIdentitySetupView, CryptoRecoverySetupView,
     },
-    session::{CryptoIdentityState, RecoveryState, Session, SessionVerificationState},
+    session::{
+        CryptoIdentityState, RecoveryState, Session, SessionVerificationState,
+        setup_needs_recovery_page,
+    },
     spawn, spawn_tokio,
 };
 
@@ -319,16 +322,10 @@ mod imp {
                 return;
             };
 
-            match session.security().recovery_state() {
-                RecoveryState::Disabled => {
-                    self.switch_to_recovery();
-                }
-                RecoveryState::Incomplete if !enable_only => {
-                    self.switch_to_recovery();
-                }
-                _ => {
-                    self.emit_completed();
-                }
+            if setup_needs_recovery_page(session.security().recovery_state(), enable_only) {
+                self.switch_to_recovery();
+            } else {
+                self.emit_completed();
             }
         }
 

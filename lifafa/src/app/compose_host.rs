@@ -1,7 +1,7 @@
 //! Where composers live: their own windows, or the reader's split pane.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config;
 use crate::models::Message;

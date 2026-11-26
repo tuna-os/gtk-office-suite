@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 
 use adw::prelude::*;
-use crate::relm::ComponentSender;
+use relm4::ComponentSender;
 
 use super::{AppModel, AppMsg};
 use crate::i18n::{i18n, i18n_f};

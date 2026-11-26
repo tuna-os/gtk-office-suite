@@ -66,5 +66,11 @@ password. This is a hint passed over the suite's D-Bus hand-off surface (see
 - Matrix OIDC versus a GNOME Online Accounts entry for Matrix (INTEGRATION-PLAN
   B7): GNOME Online Accounts has no Matrix provider today, so sign-in stays
   in-app.
-- The D-Bus method that carries the homeserver and user id hint: it belongs
-  with the `open-room`/`start-call` actions of #1974, in `mandelbrot/src/hand_off.rs`.
+- Which sign-in flow the sidecar runs (SSO or OAuth) once it has the hint.
+
+## Plumbing
+
+Mandelbrot publishes the hint as the state of two read-only application
+actions, `matrix-account` (user id) and `matrix-homeserver` (homeserver URL),
+both empty when nobody is signed in. A client reads them with
+`org.gtk.Actions.Describe`; no token or key is in either.

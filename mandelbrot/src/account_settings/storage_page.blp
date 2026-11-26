@@ -1,0 +1,55 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $StoragePage: Adw.PreferencesPage {
+  icon-name: "drive-harddisk-symbolic";
+  title: _("Storage");
+  name: "storage";
+
+  Adw.PreferencesGroup {
+    title: _("Media Cache");
+    description: _(
+      "Downloaded images, videos and files are kept on this device. The oldest are removed when the cache goes over the limit."
+    );
+
+    Adw.ActionRow media_size_row {
+      selectable: false;
+      title: _("Media Cache Size");
+      subtitle: _("Calculating…");
+
+      styles [
+        "property",
+      ]
+    }
+
+    Adw.ComboRow limit_row {
+      title: _("Cache Limit");
+      subtitle: _("Media above this total size is removed, oldest first");
+      notify::selected => $limit_selected() swapped;
+    }
+
+    Adw.ButtonRow clear_row {
+      selectable: false;
+      title: _("Clear Media Cache");
+      activated => $clear_media_cache() swapped;
+
+      styles [
+        "destructive-action",
+      ]
+    }
+  }
+
+  Adw.PreferencesGroup {
+    title: _("Message Cache");
+
+    Adw.ActionRow event_cache_size_row {
+      selectable: false;
+      title: _("Message Cache Size");
+      subtitle: _("Calculating…");
+
+      styles [
+        "property",
+      ]
+    }
+  }
+}

@@ -1,0 +1,1 @@
+- Mandelbrot: a Storage page in account settings shows the media and message cache sizes, lets you pick a media cache limit (applied through the SDK media retention policy at session start and on change), and clears the media cache (#1970).

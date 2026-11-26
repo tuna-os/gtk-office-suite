@@ -1,0 +1,1 @@
+- GUI test evidence: the recorded sidecar now carries the final outcome (passed/failed/skipped) written after teardown, plus revision, run/attempt and a video hash; the collector no longer reports "all recorded journeys passed" for skipped, unknown, stale, duplicate or mixed-revision clips (#1809).

@@ -1,6 +1,6 @@
-"""A capture that GTK's icon cache race killed before its first frame
-(#1648) runs once more; any other empty capture still counts
-(tools/render-lab/capture.py, retry_gtk_icon_race)."""
+"""A capture that produced nothing (GTK's icon cache race, #1648, or a loss
+with no signature, #1673) is run again, twice at most; one that stays empty
+still counts (tools/render-lab/capture.py, retry_gtk_icon_race)."""
 
 import os
 import sys
@@ -43,14 +43,20 @@ class GtkIconRaceTest(unittest.TestCase):
             self.assertIn("object_already_finalized", f.read(), "the raced run's log is kept")
 
     def test_racing_twice_still_fails(self):
-        run, calls = self.runs([RACE, RACE], [0, 0])
+        run, calls = self.runs([RACE] * 3, [0, 0, 0])
         self.assertEqual(capture.retry_gtk_icon_race(run, self.log), 0)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
 
-    def test_any_other_empty_capture_is_not_run_again(self):
-        run, calls = self.runs(["thread 'main' panicked at src/canvas.rs\n"], [0])
+    def test_an_empty_capture_without_the_race_signature_is_run_again(self):
+        run, calls = self.runs(["SIGSEGV\n", ""], [0, 1])
+        self.assertEqual(capture.retry_gtk_icon_race(run, self.log), 1)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(os.path.exists(self.log + ".attempt1"), "the empty run's log is kept")
+
+    def test_an_always_empty_capture_stops_after_the_retries(self):
+        run, calls = self.runs(["panicked\n"] * 3, [0, 0, 0])
         self.assertEqual(capture.retry_gtk_icon_race(run, self.log), 0)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 1 + capture.EMPTY_CAPTURE_RETRIES)
 
     def test_a_capture_that_drew_is_not_run_again(self):
         run, calls = self.runs([RACE], [1])

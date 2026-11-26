@@ -101,26 +101,53 @@ specified.
 
 ## Open questions
 
-1. **Per-app or shared schema?** Today there are three per-app schemas and no
-   shared one. Fleet-wide settings (telemetry, update policy, extension
-   loading) are not per-app and have no home. Adding `org.tunaos.suite` is the
-   obvious move but it is a new schema and needs deciding, not assuming.
-2. **Which dconf database?** The drafts variously use `local.d` and `site.d`.
-   Both work; the documentation should name one so examples are copy-pasteable.
-3. **Flatpak and dconf.** Several drafts assert that host dconf policy reaches
-   a Flatpak'd app "via GSettings portal forwarding". That needs verifying
-   rather than asserting — it is the load-bearing claim for the whole document,
-   since the suite ships as Flatpaks, and if it does not hold, fleet policy
-   needs a different mechanism entirely.
-4. **Keys that do not exist yet.** Telemetry, update-check and extension-loading
-   policy all presuppose settings the suite does not have. Each belongs with
-   the feature that introduces it.
-5. **Default autosave interval.** Drafts propose 60, 120 and 300 seconds; the
-   schema says 60. If 60 is wrong, change the schema and say why — do not
-   document a different number.
-6. **System template provisioning** (#646): standard paths for organization
-   templates, with fallback when the user directory is missing or read-only.
-   Reasonable and unspecified; overlaps the template-catalog drafts (#515, #670).
+Each question below is either **resolved** (answered, with the evidence) or
+**open** (with what closes it). The document stays a draft until every open
+item is closed.
+
+| # | Question | State | Closed by |
+|---|---|---|---|
+| 1 | Shared schema | Resolved | `org.tunaos.suite` shipped in #2135 |
+| 2 | dconf database | Resolved | `local.d` |
+| 3 | Flatpak and dconf | **Open** | Verification on the GNOME 50 runtime |
+| 4 | Missing keys | **Open** | Each feature that adds a key |
+| 5 | Autosave default | Resolved | 60 seconds is correct |
+| 6 | Template provisioning | **Open** | The template-catalog work ([#515], [#670]) |
+
+1. **Per-app or shared schema? Resolved.** A shared schema now exists:
+   `org.tunaos.suite`, path `/org/tunaos/suite/`, added in #2135 and installed
+   by all three apps' Flatpak manifests. Fleet-wide settings go there. It
+   currently holds only `default-mail-account`, `send-format`,
+   `notification-policy` and `welcome-shown`; none of the fleet keys in
+   question 4 are in it yet.
+2. **Which dconf database? Resolved: `local.d`.** It is the name used in the
+   dconf documentation's own examples and in the worked example above. Examples
+   stay `local.d`; an administrator running a different database name
+   substitutes it.
+3. **Flatpak and dconf. Open.** Several drafts assert that host dconf policy
+   reaches a Flatpak'd app "via GSettings portal forwarding". Nobody has
+   verified that, and it is the load-bearing claim for the whole document,
+   since the suite ships as Flatpaks. Acceptance criterion: on a GNOME 50
+   runtime, with a keyfile and lock for `/org/tunaos/letters/auto-save-interval`
+   installed in the host's `local.d` and `dconf update` run, the Flatpak'd
+   Letters reads the administrator's value and a write to the key fails. If
+   that does not hold, fleet policy needs another mechanism, and this document
+   must be rewritten around it. Until verified, the worked example is only
+   known to be correct for non-Flatpak installs.
+4. **Keys that do not exist yet. Open.** Telemetry, update-check and
+   extension-loading policy presuppose settings the suite does not have. Each
+   belongs with the feature that introduces it, in `org.tunaos.suite` (question
+   1) when it is fleet-wide. Link each key's issue or PR here as it lands; none
+   is scheduled today.
+5. **Default autosave interval. Resolved: 60 seconds.** The schemas define
+   `auto-save-interval` with default `60` and range 0–3600. The 120 and 300
+   in the drafts were values an administrator might set, not corrections to
+   the default. The worked example's `120` is a policy value.
+6. **System template provisioning. Open.** Standard paths for organization
+   templates, with fallback when the user directory is missing or read-only
+   (#646). This is the same feature as the template catalog, whose draft
+   ([TEMPLATE-CATALOG.md](TEMPLATE-CATALOG.md), [#515], [#670]) lists it as an
+   overlap. Specify it once, there, and link it from here.
 
 ## Relationship to the readiness plan
 
@@ -129,4 +156,6 @@ Nothing here is scheduled ahead of [Roadmap to dependable daily use](readiness-2
 works, and make the settings surface handle locked keys without crashing.
 
 [#678]: https://github.com/tuna-os/gtk-office-suite/issues/678
+[#515]: https://github.com/tuna-os/gtk-office-suite/issues/515
+[#670]: https://github.com/tuna-os/gtk-office-suite/issues/670
 [#443]: https://github.com/tuna-os/gtk-office-suite/issues/443

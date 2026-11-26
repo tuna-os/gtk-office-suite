@@ -111,9 +111,9 @@ fn decimals(code: &str) -> u8 {
         .unwrap_or(0)
 }
 
-/// A date/time code as a chrono format string. `m` means minutes after an
+/// A date/time code as a strftime format string. `m` means minutes after an
 /// hour or before seconds, months otherwise, as in Excel.
-fn chrono_format(code: &str) -> String {
+fn strftime_format(code: &str) -> String {
     let lower = code.to_ascii_lowercase();
     let chars: Vec<char> = lower.chars().collect();
     let mut out = String::new();
@@ -199,14 +199,14 @@ pub fn code_for_kind(kind: &NumberFormatKind) -> Option<String> {
         Percent(d) => Some(format!("0{}%", places(*d))),
         Scientific(d) => Some(format!("0{}E+00", places(*d))),
         Text => Some("@".into()),
-        Date(fmt) | DateTime(fmt) => Some(code_for_chrono(fmt)),
+        Date(fmt) | DateTime(fmt) => Some(code_for_strftime(fmt)),
         Fraction(d) => Some(format!("# {}/{}", "?".repeat(*d as usize), "?".repeat(*d as usize))),
         Custom(code) => Some(code.clone()),
     }
 }
 
-/// A chrono date format as a spreadsheet code (`%Y-%m-%d` → `yyyy-mm-dd`).
-fn code_for_chrono(fmt: &str) -> String {
+/// A strftime date format as a spreadsheet code (`%Y-%m-%d` → `yyyy-mm-dd`).
+fn code_for_strftime(fmt: &str) -> String {
     let mut out = String::new();
     let mut chars = fmt.chars().peekable();
     while let Some(c) = chars.next() {
@@ -266,7 +266,7 @@ pub fn nearest_kind(code: &str) -> NumberFormatKind {
         || (lower.contains('m') && !lower.contains('0') && !lower.contains('#'));
     let has_time = lower.contains('h') || lower.contains('s') && !lower.contains('0');
     if has_date || has_time {
-        let fmt = chrono_format(plain);
+        let fmt = strftime_format(plain);
         return if has_date && has_time {
             NumberFormatKind::DateTime(fmt)
         } else if has_date {
@@ -354,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn dates_and_times_translate_to_chrono() {
+    fn dates_and_times_translate_to_strftime() {
         let kind_for_code = nearest_kind;
         assert_eq!(kind_for_code("yyyy-mm-dd"), Date("%Y-%m-%d".into()));
         assert_eq!(kind_for_code("mm-dd-yy"), Date("%m-%d-%y".into()));

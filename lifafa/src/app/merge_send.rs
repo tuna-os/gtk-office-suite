@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config::AccountConfig;
 use crate::i18n::{i18n, ni18n_f};

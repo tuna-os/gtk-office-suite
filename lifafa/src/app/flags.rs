@@ -1,7 +1,7 @@
 //! Star, read and tag state: changing it on the server and showing the change
 //! before the server confirms it.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::i18n::i18n;
 use crate::models::Message;

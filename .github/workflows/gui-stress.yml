@@ -161,6 +161,11 @@ jobs:
           REPEAT: ${{ github.event.inputs.repeat || '10' }}
           SEED: ${{ github.event.inputs.seed }}
           MATRIX: ${{ github.event.inputs.matrix || 'none' }}
+          # 270 of the job's 300 minutes: the manifest, backtraces and
+          # evidence upload must run before the job limit cancels them
+          # (scheduled runs 43704267024 and 45014305854 lost all of it,
+          # #1672). Attempts that do not fit fail as budget-exhausted.
+          CAMPAIGN_BUDGET_S: '16200'
           SELECT: ${{ github.event.inputs.select }}
         run: |
           set --
@@ -168,6 +173,7 @@ jobs:
           [ -n "$SELECT" ] && set -- "$@" --select "$SELECT"
           python3 tests/gui/stress.py \
             --repeat "$REPEAT" --matrix "$MATRIX" \
+            --budget "$CAMPAIGN_BUDGET_S" \
             --output "$GITHUB_WORKSPACE/campaign" "$@"
 
       # Each retained core becomes a backtrace beside it, printed here too,

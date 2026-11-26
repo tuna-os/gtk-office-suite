@@ -3,7 +3,7 @@
 
 use adw::prelude::*;
 use gtk::glib;
-use crate::relm::ComponentSender;
+use relm4::ComponentSender;
 
 use crate::models::{GalleryItem, GallerySort};
 

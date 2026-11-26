@@ -1,15 +1,12 @@
 use std::{cell::RefCell, time::Duration};
 
 use gtk::{glib, glib::clone, prelude::*, subclass::prelude::*};
-use matrix_sdk::reqwest::StatusCode;
+use matrix_sdk::room_preview::RoomPreview;
 use ruma::{
-    OwnedRoomAliasId, OwnedRoomId,
-    api::client::{room::get_summary, space::get_hierarchy},
-    assign,
+    OwnedMxcUri, OwnedRoomAliasId, OwnedRoomId,
     room::{JoinRuleSummary, RoomSummary},
-    uint,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::{
     components::{AvatarImage, AvatarUriSource, PillSource},
@@ -240,10 +237,10 @@ mod imp {
         }
 
         /// Set the join rule of the room.
-        fn set_join_rule(&self, join_rule: &JoinRuleSummary) {
+        fn set_join_rule(&self, join_rule: Option<&JoinRuleSummary>) {
             let can_knock = matches!(
                 join_rule,
-                JoinRuleSummary::Knock | JoinRuleSummary::KnockRestricted(_)
+                Some(JoinRuleSummary::Knock | JoinRuleSummary::KnockRestricted(_))
             );
 
             if self.can_knock.get() == can_knock {
@@ -270,19 +267,55 @@ mod imp {
             self.obj().notify_loading_state();
         }
 
-        /// Set the room data.
+        /// Set the room data from a room summary.
         pub(super) fn set_data(&self, data: RoomSummary) {
-            self.set_room_id(data.room_id);
-            self.set_canonical_alias(data.canonical_alias);
-            self.set_name(data.name.into_clean_string());
-            self.set_topic(data.topic.into_clean_string());
-            self.set_joined_members_count(data.num_joined_members.try_into().unwrap_or(u32::MAX));
-            self.set_join_rule(&data.join_rule);
+            self.set_avatar_url(data.avatar_url);
+            self.set_fields(
+                data.room_id,
+                data.canonical_alias,
+                data.name,
+                data.topic,
+                data.num_joined_members,
+                Some(&data.join_rule),
+            );
+        }
 
+        /// Set the room data from a room preview.
+        fn set_preview(&self, preview: RoomPreview) {
+            self.set_avatar_url(preview.avatar_url);
+            self.set_fields(
+                preview.room_id,
+                preview.canonical_alias,
+                preview.name,
+                preview.topic,
+                preview.num_joined_members,
+                preview.join_rule.as_ref(),
+            );
+        }
+
+        /// Set the avatar URI of the room.
+        fn set_avatar_url(&self, avatar_url: Option<OwnedMxcUri>) {
             if let Some(image) = self.obj().avatar_data().image() {
-                image.set_uri_and_info(data.avatar_url, None);
+                image.set_uri_and_info(avatar_url, None);
             }
+        }
 
+        /// Set the room data from its individual fields, except the avatar.
+        fn set_fields(
+            &self,
+            room_id: OwnedRoomId,
+            canonical_alias: Option<OwnedRoomAliasId>,
+            name: Option<String>,
+            topic: Option<String>,
+            num_joined_members: impl TryInto<u32>,
+            join_rule: Option<&JoinRuleSummary>,
+        ) {
+            self.set_room_id(room_id);
+            self.set_canonical_alias(canonical_alias);
+            self.set_name(name.into_clean_string());
+            self.set_topic(topic.into_clean_string());
+            self.set_joined_members_count(num_joined_members.try_into().unwrap_or(u32::MAX));
+            self.set_join_rule(join_rule);
             self.update_identifiers();
             self.set_loading_state(LoadingState::Ready);
         }
@@ -300,6 +333,9 @@ mod imp {
         }
 
         /// Request the data of this room.
+        ///
+        /// The SDK tries the room summary endpoint first, then falls back to
+        /// the room directory and the room state.
         pub(super) async fn load_data(&self) {
             let Some(session) = self.session.upgrade() else {
                 self.last_request_time.take();
@@ -308,91 +344,12 @@ mod imp {
 
             self.set_loading_state(LoadingState::Loading);
 
-            // Try to load data from the summary endpoint first, and if it is not supported
-            // try the space hierarchy endpoint.
-            if !self.load_data_from_summary(&session).await {
-                self.load_data_from_space_hierarchy(&session).await;
-            }
-        }
-
-        /// Load the data of this room using the room summary endpoint.
-        ///
-        /// At the time of writing this code, MSC3266 has been accepted but the
-        /// endpoint is not part of a Matrix spec release.
-        ///
-        /// Returns `false` if the endpoint is not supported by the homeserver.
-        async fn load_data_from_summary(&self, session: &Session) -> bool {
             let uri = self.uri();
             let client = session.client();
+            let id = uri.id.clone();
+            let via = uri.via.clone();
 
-            let request = get_summary::v1::Request::new(uri.id.clone(), uri.via.clone());
-            let handle = spawn_tokio!(async move { client.send(request).await });
-
-            let Some(result) = self.request_abort_handle.await_task(handle).await else {
-                // The task was aborted, which means that the object was dropped.
-                return true;
-            };
-
-            match result {
-                Ok(response) => {
-                    self.set_data(response.summary);
-                    true
-                }
-                Err(error) => {
-                    if error
-                        .as_client_api_error()
-                        .is_some_and(|error| error.status_code == StatusCode::NOT_FOUND)
-                    {
-                        return false;
-                    }
-
-                    warn!(
-                        "Could not get room details from summary endpoint for room `{}`: {error}",
-                        uri.id
-                    );
-                    self.set_loading_state(LoadingState::Error);
-                    true
-                }
-            }
-        }
-
-        /// Load the data of this room using the space hierarchy endpoint.
-        ///
-        /// This endpoint should work for any room already known by the
-        /// homeserver.
-        async fn load_data_from_space_hierarchy(&self, session: &Session) {
-            let uri = self.uri();
-            let client = session.client();
-
-            // The endpoint only works with a room ID.
-            let room_id = match OwnedRoomId::try_from(uri.id.clone()) {
-                Ok(room_id) => room_id,
-                Err(alias) => {
-                    let client_clone = client.clone();
-                    let handle =
-                        spawn_tokio!(async move { client_clone.resolve_room_alias(&alias).await });
-
-                    let Some(result) = self.request_abort_handle.await_task(handle).await else {
-                        // The task was aborted, which means that the object was dropped.
-                        return;
-                    };
-
-                    match result {
-                        Ok(response) => response.room_id,
-                        Err(error) => {
-                            warn!("Could not resolve room alias `{}`: {error}", uri.id);
-                            self.set_loading_state(LoadingState::Error);
-                            return;
-                        }
-                    }
-                }
-            };
-
-            let request = assign!(get_hierarchy::v1::Request::new(room_id.clone()), {
-                // We are only interested in the single room.
-                limit: Some(uint!(1))
-            });
-            let handle = spawn_tokio!(async move { client.send(request).await });
+            let handle = spawn_tokio!(async move { client.get_room_preview(&id, via).await });
 
             let Some(result) = self.request_abort_handle.await_task(handle).await else {
                 // The task was aborted, which means that the object was dropped.
@@ -400,24 +357,9 @@ mod imp {
             };
 
             match result {
-                Ok(response) => {
-                    if let Some(chunk) = response
-                        .rooms
-                        .into_iter()
-                        .next()
-                        .filter(|c| c.summary.room_id == room_id)
-                    {
-                        self.set_data(chunk.summary);
-                    } else {
-                        debug!("Space hierarchy endpoint did not return requested room");
-                        self.set_loading_state(LoadingState::Error);
-                    }
-                }
+                Ok(preview) => self.set_preview(preview),
                 Err(error) => {
-                    warn!(
-                        "Could not get room details from space hierarchy endpoint for room `{}`: {error}",
-                        uri.id
-                    );
+                    warn!("Could not get room preview for room `{}`: {error}", uri.id);
                     self.set_loading_state(LoadingState::Error);
                 }
             }
