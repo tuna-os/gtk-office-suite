@@ -10,7 +10,7 @@ use crate::ui::message_list::MessageListInput;
 use adw::prelude::*;
 use gtk::glib;
 use gtk::subclass::prelude::ObjectSubclassIsExt;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 

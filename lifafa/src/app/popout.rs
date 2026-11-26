@@ -1,7 +1,7 @@
 //! Messages opened in their own window.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config;
 use crate::i18n::i18n;

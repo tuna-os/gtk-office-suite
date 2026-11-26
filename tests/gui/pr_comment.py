@@ -36,8 +36,11 @@ def build(bundle: dict, media_base: str = "", journey: str = "",
         headline = "⚠️ No journey was recorded"
     elif failed:
         headline = f"❌ {len(failed)} of {len(entries)} recorded journeys failed"
-    else:
+    elif bundle.get("all_passed"):
         headline = f"✅ {len(entries)} journey(s) verified on video"
+    else:
+        headline = (f"⚠️ {len(entries)} journey(s) recorded, not all verified as passed "
+                    "(skipped, unknown or inconsistent evidence)")
 
     lines = [MARKER, f"### Feature verification — {headline}", ""]
     if journey:
@@ -53,7 +56,7 @@ def build(bundle: dict, media_base: str = "", journey: str = "",
     else:
         lines += ["| Journey | Result | Length |", "|---|---|---|"]
         for e in entries:
-            mark = {"passed": "✅", "failed": "❌"}.get(e.get("outcome"), "·")
+            mark = {"passed": "✅", "failed": "❌", "skipped": "⏭"}.get(e.get("outcome"), "⚠️")
             length = (f"{e['duration_seconds']:.0f}s"
                       if e.get("duration_seconds") else "—")
             lines.append(f"| `{e['test']}` | {mark} {e.get('outcome', 'recorded')} | {length} |")

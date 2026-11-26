@@ -18,6 +18,7 @@ status is what gates.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -29,6 +30,20 @@ import sys
 # including a plain PR check with none of the GUI dependencies installed.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "framework"))
 import recorder  # noqa: E402
+
+
+#: Must match framework/base.py EVIDENCE_SCHEMA_VERSION (pinned by
+#: tests/test_gui_evidence.py, which reads both).
+EVIDENCE_SCHEMA_VERSION = 2
+
+#: Outcomes the producer can write. Anything else is reported as "unknown".
+KNOWN_OUTCOMES = ("passed", "failed", "skipped")
+
+#: Mapping onto the capability ledger's result vocabulary. A recording can
+#: never promote a capability: only "passed" maps to a result that could
+#: support a claim, and the ledger validator stays the admission authority.
+LEDGER_RESULT = {"passed": "pass", "failed": "fail", "skipped": "not-run",
+                 "unknown": "unknown", "invalid": "unknown"}
 
 
 def human_size(num_bytes: int) -> str:
@@ -55,6 +70,47 @@ def load_metadata(video_path: str) -> dict:
     return meta
 
 
+def validate_entry(meta: dict, video_path: str) -> list:
+    """Reasons this sidecar cannot be trusted as a verdict (empty if fine)."""
+    problems = []
+    if meta.get("schema_version") != EVIDENCE_SCHEMA_VERSION:
+        problems.append(f"schema_version {meta.get('schema_version')!r} "
+                        f"(expected {EVIDENCE_SCHEMA_VERSION})")
+    if meta.get("outcome") not in KNOWN_OUTCOMES:
+        problems.append(f"outcome {meta.get('outcome')!r} is not one of "
+                        f"{', '.join(KNOWN_OUTCOMES)}")
+    if not meta.get("revision"):
+        problems.append("no source revision recorded")
+    declared = meta.get("video_sha256")
+    if not declared:
+        problems.append("no video hash recorded")
+    elif declared != _sha256(video_path):
+        problems.append("video does not match its recorded hash (stale or replaced clip)")
+    return problems
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def bundle_problems(entries: list) -> list:
+    """Cross-entry problems: duplicate ids, mixed revisions or attempts."""
+    problems = []
+    seen = {}
+    for e in entries:
+        seen[e["test"]] = seen.get(e["test"], 0) + 1
+    problems += [f"duplicate journey id {t!r}" for t, n in sorted(seen.items()) if n > 1]
+    for key in ("revision", "run_id", "attempt"):
+        values = {e.get(key, "") for e in entries}
+        if len(values) > 1:
+            problems.append(f"mixed {key}s across clips: {sorted(values)}")
+    return problems
+
+
 def collect(video_dir: str, out_dir: str, title: str, gif: bool = True) -> dict:
     os.makedirs(out_dir, exist_ok=True)
     videos = sorted(
@@ -70,10 +126,25 @@ def collect(video_dir: str, out_dir: str, title: str, gif: bool = True) -> dict:
         if os.path.abspath(video) != os.path.abspath(dest_video):
             shutil.copy(video, dest_video)
 
+        problems = validate_entry(meta, video)
+        outcome = meta["outcome"]
+        if problems and outcome in ("passed", "skipped"):
+            # An untrustworthy sidecar can never carry a passing verdict.
+            outcome = "invalid"
+        elif outcome not in KNOWN_OUTCOMES and outcome != "invalid":
+            outcome = "unknown"
         entry = {
             "test": meta["test"],
             "app": meta["app"],
-            "outcome": meta["outcome"],
+            "outcome": outcome,
+            "declared_outcome": meta["outcome"],
+            "ledger_result": LEDGER_RESULT.get(outcome, "unknown"),
+            "problems": problems,
+            "revision": meta.get("revision", ""),
+            "run_id": meta.get("run_id", ""),
+            "attempt": meta.get("attempt", ""),
+            "video_sha256": meta.get("video_sha256", ""),
+            "trust": meta.get("trust", "unknown"),
             "video": os.path.basename(dest_video),
             "video_bytes": os.path.getsize(dest_video),
             "duration_seconds": recorder.duration_seconds(dest_video),
@@ -88,12 +159,23 @@ def collect(video_dir: str, out_dir: str, title: str, gif: bool = True) -> dict:
                 entry["gif_bytes"] = os.path.getsize(gif_path)
         entries.append(entry)
 
+    problems = bundle_problems(entries)
+    # The revision is what the clips themselves say, never the collector's
+    # environment. Mixed revisions leave it empty and are listed as a problem.
+    revisions = {e["revision"] for e in entries if e["revision"]}
     bundle = {
         "title": title,
-        "revision": os.environ.get("GITHUB_SHA", ""),
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "revision": revisions.pop() if len(revisions) == 1 else "",
         "run_url": run_url(),
         "recorded": len(entries),
         "failed": sum(1 for e in entries if e["outcome"] == "failed"),
+        "passed": sum(1 for e in entries if e["outcome"] == "passed"),
+        "skipped": sum(1 for e in entries if e["outcome"] == "skipped"),
+        "unverified": sum(1 for e in entries if e["outcome"] in ("unknown", "invalid")),
+        "bundle_problems": problems,
+        "all_passed": bool(entries) and not problems
+                      and all(e["outcome"] == "passed" for e in entries),
         "entries": entries,
         "ffmpeg": bool(recorder.available()),
     }
@@ -125,12 +207,25 @@ def render_markdown(bundle: dict) -> str:
         ]
         return "\n".join(lines)
 
-    status = ("all recorded journeys passed" if not bundle["failed"]
-              else f"{bundle['failed']} of {bundle['recorded']} recorded journeys failed")
-    lines += [f"{status}.", "", "| Journey | App | Result | Length | Video |",
+    if bundle.get("all_passed"):
+        status = "all recorded journeys passed"
+    elif bundle["failed"]:
+        status = f"{bundle['failed']} of {bundle['recorded']} recorded journeys failed"
+    else:
+        status = (f"not every recorded journey passed: "
+                  f"{bundle.get('passed', 0)} passed, {bundle.get('skipped', 0)} skipped, "
+                  f"{bundle.get('unverified', 0)} unverified of {bundle['recorded']}")
+    lines += [f"{status}.", ""]
+    for p in bundle.get("bundle_problems", []):
+        lines.append(f"- ⚠️ {p}")
+    if bundle.get("bundle_problems"):
+        lines.append("")
+    lines += ["| Journey | App | Result | Length | Video |",
               "|---|---|---|---|---|"]
     for e in bundle["entries"]:
-        mark = {"passed": "✅ passed", "failed": "❌ failed"}.get(e["outcome"], "· recorded")
+        mark = {"passed": "✅ passed", "failed": "❌ failed",
+                "skipped": "⏭ skipped", "invalid": "⚠️ unverified",
+                "unknown": "⚠️ unverified"}.get(e["outcome"], "⚠️ unverified")
         length = f"{e['duration_seconds']:.0f}s" if e.get("duration_seconds") else "—"
         lines.append(f"| `{e['test']}` | {e['app']} | {mark} | {length} | "
                      f"{e['video']} ({human_size(e['video_bytes'])}) |")

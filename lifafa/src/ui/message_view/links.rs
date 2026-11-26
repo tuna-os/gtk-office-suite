@@ -1,7 +1,7 @@
 //! Links in a message: which ones reach the desktop, what the hover preview
 //! says about them, and saving `data:` images.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 /// The HYLKI_SHOWCASE_CLICK_LINK probe: find the first web link in any
 /// message frame, say what the top document has at that point (the frame

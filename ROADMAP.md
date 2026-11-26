@@ -55,7 +55,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ## Current Status
 
-- **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
+- **Post-v1.0 release, pre-alpha quality**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks. The version label records a released milestone, not product maturity. The suite is pre-alpha and not a daily driver: it is not yet usable for real work or everyday documents. See the [README project status](README.md#project-status) and the [readiness ledger](docs/readiness-2026-09/README.md).
 - **Measured parity** (ratcheted corpora, docs/PARITY.md; each figure is the
   corpus baseline over the corpus size): CommonMark 652/652, LO-Letters 109/109,
   LO-Decks 9/9, OpenFormula 107/107.
@@ -72,7 +72,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
   | file | lines | ceiling |
   |---|---|---|
   | `tables/src/window.rs` | 2082 | 2300 |
-  | `decks/src/window.rs` | 1574 | 1800 |
+  | `decks/src/window.rs` | 1576 | 1800 |
   | `letters/src/window.rs` | 1246 | 1300 |
 
   The ceilings are enforced by `scripts/release_gate.py`, and

@@ -1,5 +1,7 @@
 use adw::subclass::prelude::*;
-use gtk::glib;
+use gtk::{glib, prelude::*};
+
+use crate::utils::matrix::utd::UtdAction;
 
 /// The icon to use for this message.
 #[derive(Debug, Clone, Copy)]
@@ -32,6 +34,8 @@ mod imp {
         icon: TemplateChild<gtk::Image>,
         #[template_child]
         label: TemplateChild<gtk::Label>,
+        #[template_child]
+        action_button: TemplateChild<gtk::Button>,
     }
 
     #[glib::object_subclass]
@@ -59,6 +63,22 @@ mod imp {
         pub(super) fn set_info(&self, icon: MessageInfoIcon, text: &str) {
             self.icon.set_icon_name(Some(icon.icon_name()));
             self.label.set_text(text);
+            self.set_action(UtdAction::None);
+        }
+
+        /// Sets the action offered for this message, if any.
+        pub(super) fn set_action(&self, action: UtdAction) {
+            match (action.action_name(), action.button_label()) {
+                (Some(name), Some(label)) => {
+                    self.action_button.set_action_name(Some(name));
+                    self.action_button.set_label(&label);
+                    self.action_button.set_visible(true);
+                }
+                _ => {
+                    self.action_button.set_action_name(None);
+                    self.action_button.set_visible(false);
+                }
+            }
         }
     }
 }
@@ -78,6 +98,13 @@ impl MessageInfo {
     /// Sets the necessary info for this message.
     pub(crate) fn set_info(&self, icon: MessageInfoIcon, text: &str) {
         self.imp().set_info(icon, text);
+    }
+}
+
+impl MessageInfo {
+    /// Offers an action that can fix the situation described by the message.
+    pub(crate) fn set_action(&self, action: UtdAction) {
+        self.imp().set_action(action);
     }
 }
 

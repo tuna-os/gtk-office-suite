@@ -92,6 +92,47 @@ render-lab fixture and check it against LibreOffice with
 fine to push a draft pull request and let CI run the heavy jobs: CI
 renders every app and uploads the report.
 
+### Add or update a render-lab fixture
+
+A fixture is one small document that isolates one visual feature, so a
+regression names the feature (`letters/bold` is red) instead of "the report
+is 3% different".
+
+1. **Write it** in `tools/render-lab/fixtures.py`, in the function for its
+   app (`letters()`, `tables()` or `decks()`). Build the document with the
+   foreign writer the file already uses (python-docx, openpyxl or
+   python-pptx), not our own writers, so our reader sees input we didn't
+   produce. Finish with that function's `save(...)` helper (or
+   `add(app, feature, path, expect)`), giving a short feature id and a
+   one-line `expect` saying what must be visible. Keep one feature per
+   fixture. To update a fixture, edit its existing block and keep its id,
+   or the baseline entry no longer matches.
+2. **Opt in to export checks** only if the fixture should also compare our
+   PDF export with LibreOffice's: add `"<app>/<feature>"` to the `EXPORT`
+   set in the same file. Do that only once its screenshot is green.
+3. **Render it.** `tools/render-lab/run.sh --app <app>` builds the
+   fixtures, renders them with LibreOffice and with our app, and writes
+   `render-lab-out/report.html` (git-ignored). Open the report and look at
+   your fixture's images; a green verdict on a page that isn't drawn is not
+   a pass. The script re-runs itself inside the `render-lab` container, so
+   build that first with `podman build -t render-lab tools/render-lab`.
+   Add `--tier A` to run one tier.
+4. **Lock it in.** The baseline `tools/render-lab/baseline.json` is a
+   ratchet: CI fails if a fixture gets worse (`regressed`) and also if one
+   gets better or is new and the baseline doesn't say so (`stale`). After
+   checking the images, run
+   `tools/render-lab/run.sh --app <app> --update-baseline` and commit the
+   changed `baseline.json` with your change. If you'd rather not render
+   locally, push a draft PR, download the `render-parity-report` artifact
+   (`gh run download <run> -n render-parity-report`) and commit its
+   `baseline.proposed.json` as `baseline.json`.
+
+Real-document fixtures (published forms, spreadsheets and decks) live in
+`tools/render-lab/real_corpus/`, are run with `RENDER_LAB_CORPUS=real`, and
+ratchet against `baseline-real.json`; see
+[its README](tools/render-lab/real_corpus/README.md). The design is in
+[docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md).
+
 ## Where code goes
 
 Keep logic out of widget code. Anything that doesn't need a GTK type

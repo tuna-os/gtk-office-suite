@@ -5,7 +5,9 @@
 // Formats numbers/dates/currencies/percentages for display in Tables cells,
 // Letters fields, and Decks text boxes.
 
-use chrono::{NaiveDate, NaiveDateTime};
+use jiff::civil::{Date, DateTime};
+use jiff::fmt::strtime;
+use jiff::Span;
 use num_format::{Locale, ToFormattedString};
 
 // ── Format kind ────────────────────────────────────────────────────────
@@ -111,12 +113,12 @@ fn format_date(raw: &str, fmt: &str) -> String {
     // Try Excel serial date first
     if let Ok(serial) = raw.parse::<f64>() {
         if let Some(date) = excel_serial_to_date(serial) {
-            return date.format(fmt).to_string();
+            return strtime::format(fmt, date).unwrap_or_else(|_| raw.to_string());
         }
     }
     // Try ISO date string
-    if let Ok(date) = NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
-        return date.format(fmt).to_string();
+    if let Ok(date) = strtime::parse("%Y-%m-%d", raw).and_then(|t| t.to_date()) {
+        return strtime::format(fmt, date).unwrap_or_else(|_| raw.to_string());
     }
     raw.to_string()
 }
@@ -124,7 +126,7 @@ fn format_date(raw: &str, fmt: &str) -> String {
 fn format_datetime(raw: &str, fmt: &str) -> String {
     if let Ok(serial) = raw.parse::<f64>() {
         if let Some(dt) = excel_serial_to_datetime(serial) {
-            return dt.format(fmt).to_string();
+            return strtime::format(fmt, dt).unwrap_or_else(|_| raw.to_string());
         }
     }
     raw.to_string()
@@ -173,37 +175,36 @@ fn format_scientific(raw: &str, decimal_places: u8) -> String {
 // with the infamous Lotus 1-2-3 bug: 1900 is treated as a leap year.
 // Serial 1 = 1899-12-31, Serial 60 = 1900-02-29 (fictional), Serial 61 = 1900-03-01.
 
-/// Convert an Excel serial date number to a chrono NaiveDate.
+/// Convert an Excel serial date number to a civil `Date`.
 ///
 /// Serial 1 is 1900-01-01. Serial 60 is Excel's fictional 1900-02-29 (the
 /// Lotus 1-2-3 bug), which has no real date; it maps to 1900-02-28. From
 /// serial 61 (1900-03-01) on, day N is simply 1899-12-30 + N: that epoch
 /// already absorbs the fictional day. This used to subtract one more day,
 /// so every modern date showed a day early (2023-03-15 as 2023-03-14).
-pub fn excel_serial_to_date(serial: f64) -> Option<NaiveDate> {
+pub fn excel_serial_to_date(serial: f64) -> Option<Date> {
     if serial < 1.0 { return None; }
     let days = serial.floor() as u64;
     let (epoch, days) = match days {
-        1..=59 => (NaiveDate::from_ymd_opt(1899, 12, 31)?, days),
-        60 => return NaiveDate::from_ymd_opt(1900, 2, 28),
-        _ => (NaiveDate::from_ymd_opt(1899, 12, 30)?, days),
+        1..=59 => (Date::new(1899, 12, 31).ok()?, days),
+        60 => return Date::new(1900, 2, 28).ok(),
+        _ => (Date::new(1899, 12, 30).ok()?, days),
     };
-    epoch.checked_add_days(chrono::Days::new(days))
+    epoch.checked_add(Span::new().try_days(i64::try_from(days).ok()?).ok()?).ok()
 }
 
-/// Convert an Excel serial date+time number to chrono NaiveDateTime.
+/// Convert an Excel serial date+time number to civil `DateTime`.
 /// Fractional part represents time (0.5 = noon).
-pub fn excel_serial_to_datetime(serial: f64) -> Option<NaiveDateTime> {
+pub fn excel_serial_to_datetime(serial: f64) -> Option<DateTime> {
     if serial <= 0.0 { return None; }
     let days = serial.floor() as i64;
     let time_fraction = serial - serial.floor();
     let seconds = (time_fraction * 86400.0).round() as i64; // 86400 secs/day
     let date = excel_serial_to_date(days as f64)?;
-    date.and_hms_opt(
-        (seconds / 3600) as u32,
-        ((seconds % 3600) / 60) as u32,
-        (seconds % 60) as u32,
-    )
+    // A fraction that rounds up to a whole day leaves 86400 seconds, which
+    // is not a time of day.
+    let (h, m, sec) = (i8::try_from(seconds / 3600).ok()?, ((seconds % 3600) / 60) as i8, (seconds % 60) as i8);
+    DateTime::new(date.year(), date.month(), date.day(), h, m, sec, 0).ok()
 }
 
 #[cfg(test)]
@@ -221,8 +222,6 @@ mod tests {
         assert_eq!(f(2, "0.3333"), "1/3");
         assert_eq!(f(1, "abc"), "abc");
     }
-    use chrono::Datelike;
-
     #[test]
     fn test_general() {
         let fmt = NumberFormat::default();

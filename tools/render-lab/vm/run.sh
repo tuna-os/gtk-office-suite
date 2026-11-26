@@ -157,6 +157,17 @@ sleep 2
 "${SCP[@]}" -r "$FIX"/. lab@127.0.0.1:lab/fixtures/
 "${SSH[@]}" 'for b in ~/lab/bundles/*.flatpak; do flatpak install --user -y --noninteractive "$b"; done'
 
+# The faces each Flatpak draws for the families Tier C documents ask for
+# most and the runtime lacks (docs/KNOWN-GAPS.md), so a run shows what a
+# missing face fell back to (vm-work/fonts-<app>.log, uploaded with the
+# VM logs). Diagnostic only: a runtime without fc-match
+# leaves a note in the log and the run goes on.
+for app in letters tables decks; do
+    "${SSH[@]}" "for f in Verdana Tahoma 'Segoe UI' Aptos 'Aptos Narrow' 'Humnst777 Lt BT' 'Yu Gothic' 'Palatino Linotype' Calibri Arial sans-serif serif; do \
+        printf '%s -> ' \"\$f\"; flatpak run --command=fc-match org.tunaos.$app \"\$f\" 2>&1 || echo '(no fc-match)'; done" \
+        >"fonts-$app.log" 2>&1 || true
+done
+
 
 # The window Tiers A and B lay the document out in (capture.py's window()):
 # Tables dumps the visible grid, so a different window shows different
