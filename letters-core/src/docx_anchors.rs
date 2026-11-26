@@ -168,6 +168,8 @@ pub(crate) fn placement(anchor: &str) -> ImageAnchor {
         } else {
             Wrap::None
         },
+        // Word's tight wrap follows its own wrap polygon, not read yet.
+        contour: false,
     }
 }
 
@@ -513,6 +515,7 @@ mod tests {
                 v_align: None,
                 behind: false,
                 wrap: Wrap::Parallel,
+                contour: false,
             })
         );
         let second = logos.pop_front().expect("the second use of rId7");

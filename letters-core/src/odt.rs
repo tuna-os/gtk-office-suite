@@ -482,7 +482,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
     format!(
         "<style:style style:name=\"{name}\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"{}\" \
          style:run-through=\"{}\" style:horizontal-pos=\"{}\" style:horizontal-rel=\"{}\" style:vertical-pos=\"{}\" \
-         style:vertical-rel=\"{}\"/></style:style>",
+         style:vertical-rel=\"{}\"{}/></style:style>",
         match a.wrap {
             crate::model::Wrap::None => "run-through",
             crate::model::Wrap::Parallel => "parallel",
@@ -493,6 +493,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
         rel(a.h_from),
         pos(a.v_align, ["from-top", "top", "middle", "bottom"]),
         rel(a.v_from),
+        if a.contour { " style:wrap-contour=\"true\" style:wrap-contour-mode=\"full\"" } else { "" },
     )
 }
 
@@ -524,6 +525,7 @@ fn graphic_placement(e: &quick_xml::events::BytesStart<'_>) -> crate::model::Ima
             Some("none") => crate::model::Wrap::TopBottom,
             _ => crate::model::Wrap::None,
         },
+        contour: attr_val(e, "style:wrap-contour").as_deref() == Some("true"),
         ..Default::default()
     }
 }
@@ -5405,7 +5407,8 @@ mod tests {
     }
 
     /// A floating picture is a frame anchored to its paragraph, placed by
-    /// a graphic style of its own, and reads back placed the same.
+    /// a graphic style of its own, and reads back placed the same, its
+    /// contour wrap too.
     #[test]
     fn a_floating_picture_round_trips_its_placement() {
         use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
@@ -5415,6 +5418,8 @@ mod tests {
         let placements = [
             ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
             ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+            // Wrapped to its contour (`style:wrap-contour`).
+            ImageAnchor { h_from: AnchorFrame::Margin, v_from: AnchorFrame::Text, wrap: crate::model::Wrap::Parallel, contour: true, ..Default::default() },
         ];
         let mut d = Document::from_plain_text("");
         d.paragraphs = placements

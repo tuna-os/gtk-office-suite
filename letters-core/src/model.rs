@@ -203,6 +203,11 @@ pub struct ImageAnchor {
     /// How the text flows around it.
     #[serde(default)]
     pub wrap: Wrap,
+    /// Text beside it comes up to its drawn outline rather than its box
+    /// (Writer's contour wrap, `style:wrap-contour`): a picture's dark or
+    /// opaque pixels, as Writer traces a picture's automatic contour.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub contour: bool,
 }
 
 /// How text flows around a floating picture or text box.

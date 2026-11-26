@@ -1865,3 +1865,43 @@ fn a_section_starting_with_a_table_keeps_the_table_whole() {
     assert!(cells_on(&t.pages[1]) > 0);
     assert_eq!(lines_per_page(&t)[0], 1, "the heading stays in its own section");
 }
+
+/// Wrapped to its contour, a picture keeps text clear of its drawn
+/// pixels in the rows beside each line, not of its whole box, as Writer
+/// wraps a logo whose words are narrower than the picture: here the top
+/// half of a 2in picture is drawn only in its left half, so the lines
+/// beside that half come 72pt nearer. Rows with nothing drawn leave a
+/// line the whole column. A picture that cannot be read wraps to its box.
+#[cfg(feature = "render")]
+#[test]
+fn a_contour_wrap_follows_the_pictures_drawn_pixels() {
+    use crate::model::{AnchorFrame, ImageAnchor, Wrap};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("logo.png");
+    // 200 x 100 px: black in the left half of the top half, white elsewhere.
+    let img = image::RgbImage::from_fn(200, 100, |x, y| if y < 50 && x < 100 { image::Rgb([0, 0, 0]) } else { image::Rgb([255, 255, 255]) });
+    img.save(&path).unwrap();
+    let lay_with = |src: &str, contour: bool| -> Vec<(f64, f64)> {
+        let mut d = doc_of(9, "text");
+        d.paragraphs[0].runs.push(Run {
+            text: String::new(),
+            style: crate::model::RunStyle {
+                image: Some(src.into()),
+                image_extent_emu: Some((2 * 914_400, 914_400)),
+                image_anchor: Some(ImageAnchor { h_from: AnchorFrame::Margin, v_from: AnchorFrame::Text, wrap: Wrap::Parallel, contour, ..Default::default() }),
+                ..Default::default()
+            },
+        });
+        let t = lay(&d);
+        line_items(&t.pages[0]).iter().filter(|l| l.1 == 0).map(|l| (l.2, l.3)).collect()
+    };
+    let traced = lay_with(path.to_str().unwrap(), true);
+    for (x, top) in &traced {
+        // The picture is 72pt tall from the first line's top (72pt); its
+        // drawn half is the top 36pt and 72pt wide.
+        let want = if top - 72.0 < 36.0 { 72.0 + 72.0 + 9.0 } else { 72.0 };
+        assert_eq!(*x, want, "line at {top}: {traced:?}");
+    }
+    assert_eq!(lay_with(path.to_str().unwrap(), false)[0].0, 72.0 + 144.0 + 9.0, "without a contour, beside the box");
+    assert_eq!(lay_with("/nonexistent.png", true)[0].0, 72.0 + 144.0 + 9.0, "an unreadable picture wraps to its box");
+}
