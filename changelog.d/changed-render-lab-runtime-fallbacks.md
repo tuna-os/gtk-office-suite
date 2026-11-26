@@ -1,1 +1,1 @@
-- Render lab: the reference container falls back to the shipped GNOME runtime's faces (DejaVu Sans) for Verdana, Tahoma, Aptos, Aptos Narrow, Humnst777 Lt BT and Yu Gothic, so LibreOffice's reference draws what users see.
+- Render lab: the reference container falls back to the shipped GNOME runtime's faces (DejaVu Sans) for Verdana, Tahoma, Aptos, Aptos Narrow, Humnst777 Lt BT and Yu Gothic, and Adwaita Sans for Segoe UI, so LibreOffice's reference draws what users see.
