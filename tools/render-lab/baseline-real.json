@@ -42,7 +42,7 @@
   "decks/real-2024-11-presentation-pay-centre-innovation": {
     "A": "amber",
     "B": "green",
-    "C": "green"
+    "C": "amber"
   },
   "decks/real-2024-2025-annual-report-on-delegated-authorities": {
     "A": "amber",
@@ -112,7 +112,7 @@
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "decks/real-dashboard-public-opinion-survey-pulse-check-janu": {
     "A": "amber",
@@ -192,7 +192,7 @@
   "letters/real-explanatory-note": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-explanatory-note-2": {
     "A": "amber",
@@ -257,7 +257,7 @@
   "letters/real-sma-positive-result-call-checklist": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-sma-post-telephone-call-email-template": {
     "A": "green",
@@ -287,7 +287,7 @@
   "letters/real-transparency-information-about-outside-appointme": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/real-uk-nsc-open-call-request-form": {
     "A": "green",
@@ -316,7 +316,7 @@
   "tables/real-available-data-and-their-modes-of-access": {
     "A": "green",
     "B": "red",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-avian-influenza-in-wild-birds-2026": {
     "A": "amber",
@@ -404,7 +404,7 @@
   "tables/real-otsi-annual-review-2025-2026-tables": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-planning-inspectorate-management-information-app": {
     "A": "amber",
@@ -419,7 +419,7 @@
   "tables/real-safeguarding-children-affected-by-a-parent-s-alc": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/real-schedule-of-musts-2026": {
     "A": "amber",
