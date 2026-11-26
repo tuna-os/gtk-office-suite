@@ -1021,14 +1021,15 @@ pub fn draw_object(
                     reversed: chart.reversed,
                     percent: chart.percent,
                     text_color: chart.text_color.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
-                    // Hundredths of a point; the chart is drawn in the
-                    // slide's own units, which are points.
-                    text_px: chart.text_size.map(|v| v as f64 / 100.0),
+                    // Hundredths of a point on the model's slide (the
+                    // reader scaled the file's), in the model's units
+                    // of 96 to the inch.
+                    text_px: chart.text_size.map(|v| v as f64 / 100.0 * 96.0 / 72.0),
                     series_colors: &series_colors,
                     gap: chart.gap.map(f64::from),
                     hide_category_axis: chart.hide_category_axis,
                     title: chart.title.as_ref().map(|t| t.text.as_str()),
-                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0),
+                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0 * 96.0 / 72.0),
                     title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
                     title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
                 };

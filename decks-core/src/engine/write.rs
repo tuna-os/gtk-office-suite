@@ -1907,7 +1907,15 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Chart { x, y, w, h, rotation, chart } => {
-                        charts.push(super::chart::chart_space_xml(chart));
+                        // The text size back onto the file's slide, as
+                        // a run's is (`file_size`).
+                        let mut chart = chart.clone();
+                        let back = |v: u32| file_size(v as f64).round().max(1.0) as u32;
+                        chart.text_size = chart.text_size.map(back);
+                        if let Some(t) = chart.title.as_mut() {
+                            t.size = t.size.map(back);
+                        }
+                        charts.push(super::chart::chart_space_xml(&chart));
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
                         slide_rels.push((rel_id.clone(), super::chart::CHART_REL, format!("../charts/chart{}.xml", charts.len())));
                         write_chart_frame(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
