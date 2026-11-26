@@ -2323,6 +2323,21 @@ impl<'o> Flow<'o> {
                 // Under the pictures' row.
                 let (boxes, _) = hf_line_boxes(&text, &lines, story);
                 let chars: Vec<char> = text.chars().collect();
+                // Each line's story line (as many breaks before it), and
+                // where a floating story line's text wraps onto several
+                // lines in its box, the height of its lines before this
+                // one and of them all.
+                let story_of: Vec<usize> = lines.iter().map(|lb| chars[..lb.start.min(chars.len())].iter().filter(|&&c| c == '\n').count()).collect();
+                let stacked: Vec<(f64, f64)> = lines
+                    .iter()
+                    .enumerate()
+                    .map(|(k, _)| {
+                        let same = |j: &usize| story_of[*j] == story_of[k];
+                        let before: f64 = (0..k).filter(same).map(|j| lines[j].natural_height()).sum();
+                        let all: f64 = (0..lines.len()).filter(same).map(|j| lines[j].natural_height()).sum();
+                        (before, all)
+                    })
+                    .collect();
                 for (k, (lb, &(dy, h, ascent))) in lines.iter().zip(&boxes).enumerate() {
                     // The line of the text this one is on: as many breaks
                     // before it.
@@ -2334,18 +2349,41 @@ impl<'o> Flow<'o> {
                     // across the page, out of the flow.
                     let float = story_line.as_ref().and_then(|l| l.float);
                     let (x_pt, top_pt) = match float {
-                        None => (left + lb.x_pt, top + row_h + dy),
+                        None => {
+                            let cell = story_line.as_ref().and_then(|l| l.cell).filter(|c| c.left_pt.is_finite() && c.width_pt.is_finite() && c.width_pt > 0.0);
+                            (left + cell.map_or(0.0, |c| c.left_pt) + lb.x_pt, top + row_h + dy)
+                        }
                         Some(f) => {
-                            let across = match story_line.as_ref().map_or(alignment, |l| l.alignment) {
-                                crate::model::Alignment::Center => page.width_pt / 2.0 - (left + width / 2.0),
-                                crate::model::Alignment::Right => page.width_pt - (left + width),
-                                _ => -left,
+                            let across_by = story_line.as_ref().map_or(alignment, |l| l.alignment);
+                            let boxed = story_line.as_ref().and_then(|l| l.float_width_pt).filter(|w| w.is_finite() && *w > 0.0);
+                            let x = match boxed {
+                                // Its box across the page, its text inside.
+                                Some(w) => {
+                                    let box_left = match across_by {
+                                        crate::model::Alignment::Center => (page.width_pt - w) / 2.0,
+                                        crate::model::Alignment::Right => page.width_pt - w,
+                                        _ => 0.0,
+                                    };
+                                    box_left + lb.x_pt
+                                }
+                                None => {
+                                    let across = match across_by {
+                                        crate::model::Alignment::Center => page.width_pt / 2.0 - (left + width / 2.0),
+                                        crate::model::Alignment::Right => page.width_pt - (left + width),
+                                        _ => -left,
+                                    };
+                                    left + lb.x_pt + across
+                                }
                             };
+                            // A story line wrapped onto several lines
+                            // stacks them down from its top, or up from
+                            // its foot.
+                            let (before, all) = stacked[k];
                             let top = match f {
-                                HfFloat::Top(d) => d,
-                                HfFloat::Bottom(d) => height - d - lb.natural_height(),
+                                HfFloat::Top(d) => d + before,
+                                HfFloat::Bottom(d) => height - d - all + before,
                             };
-                            (left + lb.x_pt + across, top)
+                            (x, top)
                         }
                     };
                     page.items.push(Item::Line {
@@ -2389,14 +2427,14 @@ impl<'o> Flow<'o> {
 /// char ranges counted in the whole text; a line past their end is
 /// `alignment`'s, in the body's look.
 fn shape_header_footer(text: &str, alignment: crate::model::Alignment, story: &[HfLine], width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
-    let mut request = |runs: &[Run], alignment, tab_stops| {
+    let mut request = |runs: &[Run], alignment, tab_stops, width_pt: f64| {
         shaper.shape(&ShapeRequest {
             runs,
             heading: None,
             code: false,
             look: Look::Body,
             alignment,
-            width_pt: width,
+            width_pt,
             first_line_indent_pt: 0.0,
             tab_stops,
             right_tab: false,
@@ -2404,14 +2442,23 @@ fn shape_header_footer(text: &str, alignment: crate::model::Alignment, story: &[
         })
     };
     if story.is_empty() {
-        return request(&[Run::plain(text)], alignment, Vec::new());
+        return request(&[Run::plain(text)], alignment, Vec::new(), width);
     }
     let mut out = Vec::new();
     let mut offset = 0;
     for (k, piece) in text.split('\n').enumerate() {
         let line = story.get(k);
         let run = Run { text: piece.to_string(), style: line.map(|l| l.look.clone()).unwrap_or_default() };
-        let shaped = request(&[run], line.map_or(alignment, |l| l.alignment), line.map(|l| l.tab_stops.clone()).unwrap_or_default());
+        // A floating line in a box that keeps its width wraps inside it.
+        let boxed = line.filter(|l| l.float.is_some()).and_then(|l| l.float_width_pt.map(|w| (w, l.float_text_alignment)));
+        // A line in a table cell is set in the cell.
+        let cell = line.filter(|l| l.float.is_none()).and_then(|l| l.cell).filter(|c| c.width_pt.is_finite() && c.width_pt > 0.0);
+        let (width, aligned) = match (boxed, cell) {
+            (Some((w, a)), _) if w.is_finite() && w > 0.0 => (w, a),
+            (_, Some(c)) => (c.width_pt, line.map_or(alignment, |l| l.alignment)),
+            _ => (width, line.map_or(alignment, |l| l.alignment)),
+        };
+        let shaped = request(&[run], aligned, line.map(|l| l.tab_stops.clone()).unwrap_or_default(), width);
         out.extend(shaped.into_iter().map(|mut lb| {
             lb.start += offset;
             lb.end += offset;
