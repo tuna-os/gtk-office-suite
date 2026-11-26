@@ -76,6 +76,7 @@ workflows:
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/mandelbrot.yml':
         - 'actions/checkout@v7.0.1'
+        - 'embarkstudios/cargo-deny-action@v2.1.1'
         - 'flatpak/flatpak-github-actions@v6.8'
     '.github/workflows/nightly.yml':
         - 'actions/checkout@v7.0.1'
