@@ -15,7 +15,8 @@
     "C": "green"
   },
   "decks/chart-horizontal-percent": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/delegated-authorities-reduced-dark-mode-window": {
     "A": "green",
@@ -37,13 +38,16 @@
     "C": "green"
   },
   "decks/layout-rules": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/line-spacing": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/master-slide-number": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/pay-centre-reduced-connector-rules": {
     "A": "green",
@@ -66,7 +70,8 @@
     "C": "green"
   },
   "decks/picture-flip": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/preset-shapes": {
     "A": "green",
@@ -83,13 +88,16 @@
     "C": "green"
   },
   "decks/section-colour-map-svg": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/shape-effects": {
-    "A": "amber"
+    "A": "amber",
+    "C": "amber"
   },
   "decks/shape-text": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/shapes": {
     "A": "green",
@@ -102,7 +110,8 @@
     "C": "green"
   },
   "decks/table-text-panel": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/text-columns": {
     "A": "green"
@@ -118,7 +127,8 @@
     "C": "green"
   },
   "decks/translucent-fill": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "letters/alignment": {
     "A": "green",
@@ -266,7 +276,7 @@
   "letters/odt-page-break-spacing": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/page-break": {
     "A": "green",
@@ -316,7 +326,7 @@
   "letters/table": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/table-cell-content-control": {
     "A": "green",
@@ -331,7 +341,7 @@
   "letters/table-cell-numbered-list-indent": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "letters/table-row-min-height-page-break": {
     "A": "amber",
@@ -470,7 +480,7 @@
   "tables/oversized-unheaded-instructions": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/paginated-columns": {
     "A": "red",
@@ -495,7 +505,7 @@
   "tables/tall-unheaded-postcodes": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/tall-unprinted-sheet": {
     "A": "amber",
@@ -505,7 +515,7 @@
   "tables/unheaded-bordered-musts": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/unprinted-headings": {
     "A": "green",
@@ -519,7 +529,7 @@
   "tables/wide-borderless-hyperlinks": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/wide-column-no-headings": {
     "A": "amber",
@@ -534,7 +544,7 @@
   "tables/wide-unheaded-complaint-log": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/wide-unheaded-consumption-estimates": {
     "A": "amber",
@@ -549,17 +559,17 @@
   "tables/wide-unheaded-deep-sea-stock": {
     "A": "green",
     "B": "amber",
-    "C": "amber"
+    "C": "green"
   },
   "tables/wide-unheaded-transactions": {
     "A": "amber",
     "B": "red",
-    "C": "red"
+    "C": "amber"
   },
   "tables/worksheet-image": {
     "A": "green",
     "B": "red",
-    "C": "red"
+    "C": "green"
   },
   "tables/wrap-merged": {
     "A": "amber",

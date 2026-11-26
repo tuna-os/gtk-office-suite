@@ -556,6 +556,77 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     out
 }
 
+/// A text shape of a chart's own drawing (`c:userShapes`, a
+/// `cdr:relSizeAnchor`): where it sits as shares of the chart's frame
+/// (left, top, right, bottom), and its text, runs and body resolved as a
+/// slide text box's.
+pub(crate) struct ChartUserText {
+    pub frame: (f64, f64, f64, f64),
+    pub text: String,
+    pub runs: Vec<suite_common_core::document::Run>,
+    pub body: TextBody,
+}
+
+/// The text shapes of a chart drawing part: the labels a chart's author
+/// laid over it, which PowerPoint and Impress draw with the chart (a
+/// doughnut's "5.25%" in its hole, a key beside it).
+pub(crate) fn chart_user_texts(drawing_xml: &str, theme: &Theme, scale: SlideScale) -> Vec<ChartUserText> {
+    use suite_common_core::document::Run;
+    // The chart drawing's shapes are a slide's under another prefix; its
+    // anchors' shares (`cdr:x`, `cdr:y`) keep theirs, whose text the tree
+    // keeps.
+    let mut xml = drawing_xml.to_string();
+    for tag in ["relSizeAnchor", "from", "to", "sp", "nvSpPr", "cNvPr", "cNvSpPr", "spPr", "txBody", "style"] {
+        xml = xml.replace(&format!("<cdr:{tag}"), &format!("<p:{tag}")).replace(&format!("</cdr:{tag}>"), &format!("</p:{tag}>"));
+    }
+    let root = parse_tree(&xml);
+    let mut anchors = Vec::new();
+    root.find_all("p:relSizeAnchor", &mut anchors);
+    let inh = Inherited::default();
+    let mut out = Vec::new();
+    for a in anchors {
+        let share = |end: &str, axis: &str| a.child(end).and_then(|e| e.child(axis)).and_then(|n| n.text.trim().parse::<f64>().ok()).map(|v| v.clamp(0.0, 1.0));
+        let (Some(x0), Some(y0), Some(x1), Some(y1)) = (share("p:from", "cdr:x"), share("p:from", "cdr:y"), share("p:to", "cdr:x"), share("p:to", "cdr:y")) else { continue };
+        let Some(sp) = a.find("p:sp") else { continue };
+        let Some(tx) = sp.child("p:txBody") else { continue };
+        let resolved = resolve_sp_text(sp, theme, &inh, scale);
+        let mut runs: Vec<Run> = Vec::new();
+        let mut k = 0usize;
+        let paras: Vec<&Node> = tx.children_named("a:p").collect();
+        for (i, p) in paras.iter().enumerate() {
+            if i > 0 {
+                match runs.last_mut() {
+                    Some(r) => r.text.push('\n'),
+                    None => runs.push(Run { text: "\n".into(), style: RunStyle::default() }),
+                }
+            }
+            for c in &p.children {
+                match c.name.as_str() {
+                    "a:r" | "a:fld" => {
+                        let text: String = c.child("a:t").map(|t| t.text.clone()).unwrap_or_default();
+                        let style = resolved.runs.get(k).map(RunProps::style).unwrap_or_default();
+                        k += 1;
+                        runs.push(Run { text, style });
+                    }
+                    "a:br" => match runs.last_mut() {
+                        Some(r) => r.text.push(super::LINE_BREAK),
+                        None => runs.push(Run { text: super::LINE_BREAK.to_string(), style: RunStyle::default() }),
+                    },
+                    _ => {}
+                }
+            }
+        }
+        let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+        if text.trim().is_empty() {
+            continue;
+        }
+        let lines: Vec<usize> = (0..paras.len()).collect();
+        out.push(ChartUserText { frame: (x0, y0, x1, y1), text, runs, body: resolved.body_for(&lines) });
+    }
+    out
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

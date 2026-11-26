@@ -91,11 +91,12 @@ fn element(e: &BytesStart) -> Node {
 /// The elements whose text the tree keeps: a run's text, and the GUID of
 /// the style a table names.
 fn keeps_text(name: &str) -> bool {
-    matches!(name, "a:t" | "a:tableStyleId")
+    matches!(name, "a:t" | "a:tableStyleId" | "cdr:x" | "cdr:y")
 }
 
 /// The element tree of `xml`. Text is kept only inside `a:t` (and a
-/// table's `a:tableStyleId`), untrimmed: a run ending in a space is a word
+/// table's `a:tableStyleId`, and a chart drawing's anchor shares
+/// `cdr:x`/`cdr:y`), untrimmed: a run ending in a space is a word
 /// boundary.
 pub(super) fn parse_tree(xml: &str) -> Node {
     let mut reader = Reader::from_str(xml);

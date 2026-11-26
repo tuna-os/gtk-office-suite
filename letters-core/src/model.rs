@@ -299,6 +299,21 @@ pub struct HfLine {
     /// across the page by its alignment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub float: Option<HfFloat>,
+    /// A floating line's box width in points, when the box keeps its
+    /// width (an ODF text frame: Writer does not grow one to its text).
+    /// The text wraps inside it, set there by `float_text_alignment`, and
+    /// the box sits across the page by `alignment`. None: the box is as
+    /// wide as its text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub float_width_pt: Option<f64>,
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub float_text_alignment: Alignment,
+    /// The table cell the line's text is in, when the file sets the
+    /// header or footer as a table (a "FINANCE BILL" set right in a
+    /// table's last column): the text is set in that cell's box, not
+    /// across the text's whole width. None: the whole width.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<HfCell>,
     /// The room above and below the line's paragraph, in points (a
     /// letterhead's blank lines with Normal's space after).
     #[serde(default, skip_serializing_if = "is_no_space")]
@@ -337,6 +352,15 @@ pub struct HfStory {
     pub alignment: Alignment,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lines: Vec<HfLine>,
+}
+
+/// A header's or footer's table cell its line's text is set in: from the
+/// text's left margin to the cell's text (its padding inside), and that
+/// text's width, in points.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HfCell {
+    pub left_pt: f64,
+    pub width_pt: f64,
 }
 
 /// Where a floating header or footer line's text is: its distance from

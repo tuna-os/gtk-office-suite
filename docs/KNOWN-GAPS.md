@@ -29,6 +29,7 @@ a release has confirmed it yet; the row goes once one has.
 | Repeated table header rows (`w:tblHeader`, `table:table-header-rows`) | A table that runs onto another page did not repeat its heading row there, so the continued rows started a heading's height higher than Writer's and the page held more. No table in the real corpus with heading rows crosses a page (expression-of-interest-form, tier-2-3 notification), so the lab does not show it | Open PR (repeated at the top of each continued page; kept through a save) |
 | List labels in their level's own face (`w:lvl/w:rPr/w:rFonts`) | A "●" in Noto Sans Symbols or an "o" in Courier New drawn in the item's face, and the line not as tall as the label's face makes it; a page of bullets runs about a pixel a line short of Writer's (dcms-business-appointment-rules) | Open PR #2417 |
 | Underlines on screen between pixel rows | A thin underline drawn as two pale rows instead of one in its colour; links read light blue (sma-positive-result-call-checklist) | Open PR #2416 |
+| ODT headers set as tables, and label frames narrower than their text | A header's right-aligned text ("FINANCE BILL" in a table's last column) ended at the margin, not at the column's edge, about 5pt right of Writer's, and 33pt left of it on a page with wider margins; a 0.49in "OFFICIAL" frame was drawn on one line where Writer keeps the frame's width and wraps it (explanatory-note-2 page 5). Writer breaks the label one letter later ("OFFICIA / L") because Pango measures "OFFICIA" 0.08pt wider than the box | Open PR |
 | ODT automatic styles that state their own spacing under a contextual parent | Their space below dropped as if contextual spacing still applied; list items packed together where Writer leaves 8pt between them (notes-on-the-completion-of-form-w1) | Open PR #2418 |
 
 ## Tables
@@ -67,6 +68,8 @@ the cells at their own size.
 | Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Fixed on main (#2405) |
 | Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Fixed on main (#2407) |
 | Superscript and subscript (`a:rPr baseline`) | Drawn full size on the line: a PDF-converted dashboard's superscript data-table labels ("CIRNAC", "NRCan" at `baseline="33333"`) were too big for their boxes and wrapped (dashboard-overpayment-project-2019) | Open PR (drawn at 58% of the size, raised a third or lowered a quarter; kept on save; the file's exact shift is not kept) |
+| A master's or layout's text box look, and its hidden shapes | A master or layout text box kept only its runs: a right-aligned classification label ("PROTECTED B") was drawn from its box's left edge, clear of the white patch each slide puts over it, and think-cell's hidden data shape drew as a broken picture in the corner (future-delivery-structure, every slide) | Open PR |
+| A chart's own labels (`c:userShapes`) | Text the chart's author laid over it not drawn: a doughnut's "5.25%" in its hole and its "Complete / Forecast" key (aiva-progress-dashboard slide 2) | Open PR (read as text boxes over the chart; saved as slide text boxes) |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps
