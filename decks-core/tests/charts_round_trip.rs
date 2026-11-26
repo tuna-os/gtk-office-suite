@@ -221,3 +221,62 @@ fn a_charts_text_size_scales_with_the_slide() {
         assert_eq!(sizes, Some((Some(model), Some(model * 2))), "on the model's slide, for a {page:?} page");
     }
 }
+
+/// The labels a chart's own drawing lays over it (`c:userShapes`: a
+/// doughnut's "5.25%" in its hole) come in as text boxes over the chart,
+/// placed by their shares of its frame and styled as the drawing says,
+/// as PowerPoint and Impress draw them; a save keeps them (as slide text
+/// boxes), once.
+#[test]
+fn a_charts_own_labels_are_drawn_over_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("chart.pptx");
+    let mut d = Deck::new();
+    d.slides[0].objects = vec![chart_at(ChartKind::Pie, 100.0, 50.0)];
+    decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
+    let out_path = dir.path().join("with-labels.pptx");
+    let mut out = zip::ZipWriter::new(std::fs::File::create(&out_path).unwrap());
+    let opt = zip::write::SimpleFileOptions::default();
+    use std::io::Write;
+    for name in names {
+        if name.ends_with('/') {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        zip.by_name(&name).unwrap().read_to_end(&mut bytes).unwrap();
+        if name == "ppt/charts/_rels/chart1.xml.rels" {
+            continue;
+        }
+        out.start_file(name.as_str(), opt).unwrap();
+        out.write_all(&bytes).unwrap();
+    }
+    out.start_file("ppt/charts/_rels/chart1.xml.rels", opt).unwrap();
+    out.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartUserShapes" Target="../drawings/drawing1.xml"/></Relationships>"#).unwrap();
+    out.start_file("ppt/drawings/drawing1.xml", opt).unwrap();
+    out.write_all(br#"<c:userShapes xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><cdr:relSizeAnchor xmlns:cdr="http://schemas.openxmlformats.org/drawingml/2006/chartDrawing"><cdr:from><cdr:x>0.25</cdr:x><cdr:y>0.4</cdr:y></cdr:from><cdr:to><cdr:x>0.75</cdr:x><cdr:y>0.6</cdr:y></cdr:to><cdr:sp macro="" textlink=""><cdr:nvSpPr><cdr:cNvPr id="2" name="TextBox 1"/><cdr:cNvSpPr txBox="1"/></cdr:nvSpPr><cdr:spPr/><cdr:txBody><a:bodyPr wrap="square"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-CA" sz="2400" b="1"/><a:t>5.25%</a:t></a:r></a:p></cdr:txBody></cdr:sp></cdr:relSizeAnchor></c:userShapes>"#).unwrap();
+    out.finish().unwrap();
+    let back = decks_core::read_deck(out_path.to_str().unwrap()).unwrap();
+    let labels: Vec<(String, f64, f64, f64, f64, bool)> = back.slides[0]
+        .objects
+        .iter()
+        .filter_map(|o| match o {
+            SlideObject::TextBox { text, x, y, w, h, runs, .. } => Some((text.clone(), *x, *y, *w, *h, runs.iter().all(|r| r.style.bold))),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(labels.len(), 1, "{labels:?}");
+    let (text, x, y, w, h, bold) = &labels[0];
+    assert_eq!(text, "5.25%");
+    assert!(*bold);
+    // The chart is 400 x 250 at (100, 50).
+    for (got, want) in [(x, 200.0), (y, 150.0), (w, 200.0), (h, 50.0)] {
+        assert!((got - want).abs() < 0.5, "{labels:?}");
+    }
+    // Saved again, the label is a slide text box, once.
+    let again = dir.path().join("again.pptx");
+    decks_core::write_deck(again.to_str().unwrap(), &back).unwrap();
+    let twice = decks_core::read_deck(again.to_str().unwrap()).unwrap();
+    assert_eq!(twice.slides[0].objects.iter().filter(|o| matches!(o, SlideObject::TextBox { text, .. } if text == "5.25%")).count(), 1);
+}
