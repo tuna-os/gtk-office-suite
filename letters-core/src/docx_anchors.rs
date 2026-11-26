@@ -168,6 +168,7 @@ pub(crate) fn placement(anchor: &str) -> ImageAnchor {
         } else {
             Wrap::None
         },
+        wrap_gap_emu: None,
     }
 }
 
@@ -513,6 +514,7 @@ mod tests {
                 v_align: None,
                 behind: false,
                 wrap: Wrap::Parallel,
+                wrap_gap_emu: None,
             })
         );
         let second = logos.pop_front().expect("the second use of rId7");

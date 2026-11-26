@@ -1378,7 +1378,7 @@ fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &Lay
     let top = flow.next_top(&para.style);
     let own: Vec<WrapBox> = floating_boxes(flow, para, top)
         .into_iter()
-        .filter_map(|(run, x, y, w, h)| run.style.image_anchor.filter(|a| a.wrap != Wrap::None && !a.behind).map(|a| WrapBox { x0: x, y0: y, x1: x + w, y1: y + h, wrap: a.wrap }))
+        .filter_map(|(run, x, y, w, h)| run.style.image_anchor.filter(|a| a.wrap != Wrap::None && !a.behind).map(|a| WrapBox { x0: x, y0: y, x1: x + w, y1: y + h, wrap: a.wrap, gap: a.wrap_gap_emu.map_or(WRAP_GAP_PT, |g| g as f64 / EMU_PER_PT) }))
         .collect();
     flow.wraps.extend(own);
     if flow.wraps.is_empty() {
@@ -1394,9 +1394,9 @@ fn shape_beside_floats(flow: &mut Flow, para: &Paragraph, col_w: f64, opts: &Lay
             Wrap::TopBottom => below = Some(below.map_or(b.y1, |y: f64| y.max(b.y1))),
             Wrap::Parallel => {
                 if b.x0 - l >= r - b.x1 {
-                    r = r.min(b.x0 - WRAP_GAP_PT);
+                    r = r.min(b.x0 - b.gap);
                 } else {
-                    l = l.max(b.x1 + WRAP_GAP_PT);
+                    l = l.max(b.x1 + b.gap);
                 }
             }
             Wrap::None => {}
@@ -2014,6 +2014,8 @@ struct WrapBox {
     x1: f64,
     y1: f64,
     wrap: crate::model::Wrap,
+    /// Gap kept beside it, in points.
+    gap: f64,
 }
 
 /// The room kept between a floating object and the text beside it:

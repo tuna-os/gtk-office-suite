@@ -482,7 +482,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
     format!(
         "<style:style style:name=\"{name}\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"{}\" \
          style:run-through=\"{}\" style:horizontal-pos=\"{}\" style:horizontal-rel=\"{}\" style:vertical-pos=\"{}\" \
-         style:vertical-rel=\"{}\"/></style:style>",
+         style:vertical-rel=\"{}\"{}/></style:style>",
         match a.wrap {
             crate::model::Wrap::None => "run-through",
             crate::model::Wrap::Parallel => "parallel",
@@ -493,6 +493,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
         rel(a.h_from),
         pos(a.v_align, ["from-top", "top", "middle", "bottom"]),
         rel(a.v_from),
+        a.wrap_gap_emu.map_or(String::new(), |g| format!(" fo:margin=\"{}pt\"", g as f64 / 12_700.0)),
     )
 }
 
@@ -524,6 +525,7 @@ fn graphic_placement(e: &quick_xml::events::BytesStart<'_>) -> crate::model::Ima
             Some("none") => crate::model::Wrap::TopBottom,
             _ => crate::model::Wrap::None,
         },
+        wrap_gap_emu: attr_val(e, "fo:margin").and_then(|m| length_emu(&m)).and_then(|v| u32::try_from(v).ok()),
         ..Default::default()
     }
 }

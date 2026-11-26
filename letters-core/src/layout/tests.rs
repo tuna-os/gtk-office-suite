@@ -1106,6 +1106,26 @@ fn paragraphs_beside_a_parallel_picture_are_set_beside_it() {
     }
 }
 
+/// A picture whose file asks for no clearance (`fo:margin="0pt"`) has the
+/// text touch its edge instead of keeping the default gap.
+#[test]
+fn a_picture_with_zero_wrap_gap_touches_the_text_beside_it() {
+    use crate::model::{AnchorFrame, ImageAnchor, Wrap};
+    let mut d = doc_of(2, "text");
+    d.paragraphs[0].runs.push(Run {
+        text: String::new(),
+        style: crate::model::RunStyle {
+            image: Some("/nonexistent.png".into()),
+            image_extent_emu: Some((2 * 914_400, 914_400)),
+            image_anchor: Some(ImageAnchor { h_from: AnchorFrame::Margin, v_from: AnchorFrame::Text, wrap: Wrap::Parallel, wrap_gap_emu: Some(0), ..Default::default() }),
+            ..Default::default()
+        },
+    });
+    let t = lay(&d);
+    let x = line_items(&t.pages[0]).iter().find(|l| l.1 == 0).map(|l| l.2).unwrap();
+    assert_eq!(x, 72.0 + 144.0);
+}
+
 /// Text wrapped top and bottom starts below the picture, and so does text
 /// with too little room beside one set to wrap parallel: the anchoring
 /// paragraph's own text too, as Writer moves it, while the picture stays
