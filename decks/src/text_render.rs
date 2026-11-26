@@ -12,6 +12,19 @@ use decks_core::engine::text_body::{markers, paragraph_lead_styles, paragraphs};
 use decks_core::engine::{fit_like_impress, Autofit, ParaAlign, Run, TextBody};
 use gtk4::{cairo, pango};
 
+/// A layout for slide text on `cr`, its glyphs at their fractional
+/// positions. Pango otherwise rounds each glyph's advance to a whole pixel,
+/// so a line's width drifts by up to half a pixel a glyph: a 24pt heading
+/// that fits its box in Impress with 2px to spare wrapped its last word
+/// (measures-to-improve-hr-and-pay slide 4). Impress lays text out on
+/// unrounded positions, as Letters' shaper does.
+fn text_layout(cr: &cairo::Context) -> pango::Layout {
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.context().set_round_glyph_positions(false);
+    layout.context_changed();
+    layout
+}
+
 /// A bullet or number: its layout, left edge, and how far below the
 /// paragraph's top it starts so that the two baselines line up.
 struct Marker {
@@ -126,7 +139,7 @@ fn place_inner(
     for (i, (para, st)) in paras.iter().zip(&styles).enumerate() {
         let para_text: String = para.iter().map(|r| r.text.as_str()).collect();
         let g = st.geometry(inner_w, scale, marks[i].is_some());
-        let layout = pangocairo::functions::create_layout(cr);
+        let layout = text_layout(cr);
         layout.set_font_description(Some(desc));
         layout.set_width((g.text_width * pango::SCALE as f64) as i32);
         layout.set_wrap(pango::WrapMode::WordChar);
@@ -204,7 +217,7 @@ fn place_inner(
         // The marker takes the first run's font, size and colour unless it
         // has its own, and sits on the first line's baseline.
         let marker = marks[i].as_ref().zip(g.marker_x).map(|(label, mx)| {
-            let ml = pangocairo::functions::create_layout(cr);
+            let ml = text_layout(cr);
             ml.set_font_description(Some(desc));
             let first = para.first().map(|r| r.style.clone()).unwrap_or_default();
             let text_pt = first.size_pt().unwrap_or(18.0);
@@ -304,7 +317,7 @@ pub fn plain_layout(
     scale: f64,
     desc: &pango::FontDescription,
 ) -> (pango::Layout, (f64, f64)) {
-    let layout = pangocairo::functions::create_layout(cr);
+    let layout = text_layout(cr);
     layout.set_width(((sw - 2.0 * PLAIN_INSET).max(8.0) as i32) * pango::SCALE);
     layout.set_wrap(pango::WrapMode::WordChar);
     layout.set_font_description(Some(desc));
