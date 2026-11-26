@@ -15,7 +15,8 @@
     "C": "green"
   },
   "decks/chart-horizontal-percent": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/delegated-authorities-reduced-dark-mode-window": {
     "A": "green",
@@ -41,7 +42,8 @@
     "C": "green"
   },
   "decks/line-spacing": {
-    "A": "green"
+    "A": "green",
+    "C": "green"
   },
   "decks/master-slide-number": {
     "A": "green",
