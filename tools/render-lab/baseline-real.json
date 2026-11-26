@@ -90,7 +90,7 @@
     "C": "amber"
   },
   "decks/real-2025-08-presentation-aiva-progress-dashboard": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
@@ -110,7 +110,7 @@
     "C": "amber"
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
-    "A": "green",
+    "A": "amber",
     "B": "green",
     "C": "amber"
   },
@@ -205,12 +205,12 @@
     "C": "green"
   },
   "letters/real-notes-on-the-completion-of-form-w1-excise-wareho": {
-    "A": "amber",
+    "A": "green",
     "B": "green",
     "C": "amber"
   },
   "letters/real-opt-out-form-accessible-version": {
-    "A": "green",
+    "A": "amber",
     "B": "amber",
     "C": "green"
   },
@@ -338,7 +338,7 @@
     "C": "amber"
   },
   "tables/real-draft-schedule-4-complaint-log": {
-    "A": "green",
+    "A": "amber",
     "B": "amber",
     "C": "amber"
   },
