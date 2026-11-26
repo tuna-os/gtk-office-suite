@@ -40,7 +40,7 @@ fn need_for(env: &Envelope) -> AccessLevel {
     }
 }
 
-fn map_space_err(e: SpaceError<crate::msg::DcpForge, (), p2panda_spaces::StrongRemoveResolver<()>>) -> StoreError {
+fn map_space_err(e: SpaceError<crate::msg::DcpForge, ()>) -> StoreError {
     match e {
         SpaceError::NotWelcomed(_) => {
             StoreError::Forbidden("this device is not (yet) a member of the document's group".into())
@@ -55,15 +55,14 @@ impl Inner {
     /// This principal's key bundle for `doc`, as a signed operation (header bytes). Another node
     /// registers it before it can add this principal to the document.
     pub async fn card(&self, doc: &Rc<Doc>) -> Result<Vec<u8>, StoreError> {
-        let _g = doc.lock.lock().await;
-        doc.forge.set_context(KEYS_LOG);
-        let msg = doc.manager.key_bundle_message().await.map_err(tr)?;
-        Ok(msg.op.header.encode())
+        // Forged once in `new_doc` (p2panda-spaces 0.8 `rotate_key_bundle`), into `KEYS_LOG`.
+        let _ = KEYS_LOG;
+        Ok(doc.card.clone())
     }
 
     pub async fn register_card(&self, doc: &Rc<Doc>, card: &[u8]) -> Result<VerifyingKey, StoreError> {
         let header = Header::<DcpExt>::decode(card).map_err(|e| StoreError::Invalid(format!("contact card: {e}")))?;
-        if !matches!(header.extensions.args, SpacesArgs::KeyBundle { .. }) {
+        if !matches!(header.extensions.args, SpacesArgs::Member(_)) {
             return Err(StoreError::Invalid("contact card: not a key bundle".into()));
         }
         let owner = header.verifying_key;
@@ -89,15 +88,15 @@ impl Inner {
         let _g = doc.lock.lock().await;
         doc.forge.set_context(&doc.id);
         let none: &[(VerifyingKey, Access<()>)] = &[];
-        let (groups_y, space_y, messages) = doc
+        let (_space, output) = doc
             .manager
             .create_space(doc.space_id, none)
             .await
             .map_err(tr)?;
-        doc.persist(Some(&groups_y), Some(space_y)).await?;
+        doc.state_changed();
         {
             let mut st = doc.st.borrow_mut();
-            for m in &messages {
+            for (m, _) in &output.messages {
                 st.applied.insert(m.op.hash);
             }
         }
@@ -165,14 +164,13 @@ impl Inner {
         let access = Self::access_for(role)?;
         match doc.level_of(&target) {
             Some(l) if l == access.level => Ok(()),
-            Some(_) => {
-                // Both operations become visible to sessions together.
-                let _both = self.hold_sessions(doc).await;
-                // p2panda-auth has promote and demote, but p2panda-spaces 0.7.1 panics when a
-                // space processes either (`unimplemented!()` in `encryption/message.rs`), so a
-                // role change is a removal followed by an addition: the group key rotates twice.
-                self.remove_member(doc, target).await?;
-                self.add_member(doc, target, access).await
+            Some(current) => {
+                // p2panda-spaces 0.7.1 panicked on a promote or demote (`unimplemented!()`), so
+                // the 0.7.1 binding changed a role by a removal and an addition (two key
+                // rotations). 0.8 implements `Space::promote` and `Space::demote`: one auth
+                // operation, and a key rotation only when read access is gained or lost.
+                let _g = self.hold_sessions(doc).await;
+                self.change_role(doc, target, current, access).await
             }
             None => self.add_member(doc, target, access).await,
         }
@@ -224,6 +222,57 @@ impl Inner {
         }
     }
 
+    async fn space(&self, doc: &Doc) -> Result<p2panda_spaces::space::Space<
+        p2panda_store::spaces::SqliteSpacesStore<DcpExt>,
+        crate::msg::DcpForge,
+        (),
+    >, StoreError> {
+        if !doc.manager.has_space(doc.space_id).await.map_err(tr)? {
+            return Err(StoreError::NotFound("space".into()));
+        }
+        doc.manager.space(doc.space_id).created().await.map_err(tr)
+    }
+
+    /// Mark every message of a local membership change as applied; returns the hash of the
+    /// space's key-agreement message (the one that carries a key rotation, if any).
+    fn take_output(
+        &self,
+        doc: &Doc,
+        output: &p2panda_spaces::space::SpaceOutput<(), DcpMsg>,
+    ) -> Option<Hash> {
+        doc.state_changed();
+        let mut st = doc.st.borrow_mut();
+        let mut rotation = None;
+        for (m, _) in &output.messages {
+            st.applied.insert(m.op.hash);
+            if matches!(m.op.header.extensions.args, SpacesArgs::KeyAgreement { .. }) {
+                rotation = Some(m.op.hash);
+            }
+        }
+        rotation
+    }
+
+    async fn change_role(
+        self: &Rc<Self>,
+        doc: &Rc<Doc>,
+        target: VerifyingKey,
+        current: AccessLevel,
+        access: Access<()>,
+    ) -> Result<(), StoreError> {
+        doc.forge.set_context(&doc.id);
+        let space = self.space(doc).await?;
+        let output = if access.level > current {
+            space.promote(target, access).await
+        } else {
+            space.demote(target, access).await
+        }
+        .map_err(map_space_err)?;
+        self.take_output(doc, &output);
+        doc.refresh_members(&self.acl).await?;
+        self.changed.notify_one();
+        Ok(())
+    }
+
     async fn add_member(
         self: &Rc<Self>,
         doc: &Rc<Doc>,
@@ -231,20 +280,9 @@ impl Inner {
         access: Access<()>,
     ) -> Result<(), StoreError> {
         doc.forge.set_context(&doc.id);
-        let space = doc
-            .manager
-            .space(doc.space_id)
-            .await
-            .map_err(tr)?
-            .ok_or_else(|| StoreError::NotFound("space".into()))?;
-        let (groups_y, space_y, auth_msg, space_msg) =
-            space.add(target, access).await.map_err(map_space_err)?;
-        doc.persist(Some(&groups_y), Some(space_y)).await?;
-        {
-            let mut st = doc.st.borrow_mut();
-            st.applied.insert(auth_msg.op.hash);
-            st.applied.insert(space_msg.op.hash);
-        }
+        let space = self.space(doc).await?;
+        let output = space.add(target, access).await.map_err(map_space_err)?;
+        self.take_output(doc, &output);
         doc.refresh_members(&self.acl).await?;
         self.changed.notify_one();
         Ok(())
@@ -253,21 +291,11 @@ impl Inner {
     /// Returns the hash of the space-membership message that carries the key rotation.
     async fn remove_member(self: &Rc<Self>, doc: &Rc<Doc>, target: VerifyingKey) -> Result<Hash, StoreError> {
         doc.forge.set_context(&doc.id);
-        let space = doc
-            .manager
-            .space(doc.space_id)
-            .await
-            .map_err(tr)?
-            .ok_or_else(|| StoreError::NotFound("space".into()))?;
-        let (groups_y, space_y, auth_msg, space_msg) =
-            space.remove(target).await.map_err(map_space_err)?;
-        doc.persist(Some(&groups_y), Some(space_y)).await?;
-        let rotation = space_msg.op.hash;
-        {
-            let mut st = doc.st.borrow_mut();
-            st.applied.insert(auth_msg.op.hash);
-            st.applied.insert(rotation);
-        }
+        let space = self.space(doc).await?;
+        let output = space.remove(target).await.map_err(map_space_err)?;
+        let rotation = self
+            .take_output(doc, &output)
+            .ok_or_else(|| StoreError::Transport("a removal produced no key agreement message".into()))?;
         doc.refresh_members(&self.acl).await?;
         self.changed.notify_one();
         Ok(rotation)
@@ -302,17 +330,14 @@ impl Inner {
             }
         }
         doc.forge.set_context(&doc.id);
-        let space = doc
-            .manager
-            .space(doc.space_id)
+        let space = self
+            .space(doc)
             .await
-            .map_err(tr)?
-            .ok_or_else(|| StoreError::Forbidden("nothing of this document has been synced yet".into()))?;
+            .map_err(|_| StoreError::Forbidden("nothing of this document has been synced yet".into()))?;
         let state = doc.space_state().await?;
         let mut heads: Vec<String> = state
             .groups_y
-            .inner
-            .heads()
+            .heads(&[state.group_id])
             .into_iter()
             .map(|h| h.to_hex())
             .collect();
@@ -328,8 +353,8 @@ impl Inner {
             env: env.clone(),
         };
         let (plaintext, id) = signed::sign(&self.key, &body)?;
-        let (space_y, msg) = space.publish(&plaintext).await.map_err(map_space_err)?;
-        doc.persist(None, Some(space_y)).await?;
+        let (msg, _event) = space.publish(&plaintext).await.map_err(map_space_err)?;
+        doc.state_changed();
         {
             let mut st = doc.st.borrow_mut();
             st.applied.insert(msg.op.hash);
@@ -737,17 +762,18 @@ impl Inner {
         let authors: Vec<VerifyingKey> = doc.st.borrow().authors.iter().copied().collect();
         let mut out = Vec::new();
         for a in authors {
-            let entries = <p2panda_store::SqliteStore as p2panda_store::logs::LogStore<
-                Operation<DcpExt>,
+            // p2panda-store 0.8 replaced `get_log_entries` with a stream of `AnyOperation`s that
+            // carries the stored header bytes.
+            let mut entries = <p2panda_store::SqliteStore as p2panda_store::logs::LogStore<
+                p2panda_core::AnyOperation,
                 VerifyingKey,
                 String,
                 p2panda_core::SeqNum,
                 Hash,
-            >>::get_log_entries(&doc.store, &a, &doc.id, None, None)
-            .await
+            >>::log_entries(&doc.store, &a, &doc.id, None, None)
             .map_err(tr)?;
-            if let Some(v) = entries {
-                out.extend(v.into_iter().map(|(_, header)| header));
+            while let Some(e) = futures_util::StreamExt::next(&mut entries).await {
+                out.push(e.map_err(tr)?.bytes);
             }
         }
         Ok(out)

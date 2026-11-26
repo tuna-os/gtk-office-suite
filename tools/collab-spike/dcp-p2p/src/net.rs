@@ -26,7 +26,7 @@ use p2panda_store::SqliteStore;
 use p2panda_sync::protocols::{LogSync, LogSyncEvent, LogSyncMessage};
 use p2panda_sync::traits::Protocol;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 use crate::acl::Acl;
@@ -256,31 +256,34 @@ pub async fn run_session(
     recv: RecvStream,
 ) -> SessionOutcome {
     type Evt = LogSyncEvent<DcpExt>;
-    let (event_tx, mut event_rx) = broadcast::channel::<Evt>(1 << 17);
+    // p2panda-sync 0.8 takes a bounded `mpsc::Sender` (0.7.1: a `broadcast::Sender`) and awaits
+    // room on it, so the events are drained while the session runs, not after it.
+    let (event_tx, mut event_rx) = mpsc::channel::<Evt>(1024);
     let protocol = LogSync::<LogId, DcpExt, SqliteStore, Evt>::new(store.clone(), logs, event_tx);
     let mut sink = FramedWrite::new(send, Codec::<LogSyncMessage<LogId>>::new());
     let mut stream = FramedRead::new(recv, Codec::<LogSyncMessage<LogId>>::new());
 
-    let result = match tokio::time::timeout(SESSION_TIMEOUT, protocol.run(&mut sink, &mut stream)).await {
-        Ok(r) => r.map_err(|e| e.to_string()),
-        Err(_) => Err(format!("the session did not finish within {SESSION_TIMEOUT:?}")),
+    let mut ops = Vec::new();
+    let collect = async {
+        while let Some(ev) = event_rx.recv().await {
+            if let LogSyncEvent::OperationReceived { operation, .. } = ev {
+                ops.push(*operation);
+            }
+        }
     };
+    // `protocol` owns the only sender, so `collect` ends when the session ends.
+    let run = async {
+        match tokio::time::timeout(SESSION_TIMEOUT, protocol.run(&mut sink, &mut stream)).await {
+            Ok(r) => r.map_err(|e| e.to_string()),
+            Err(_) => Err(format!("the session did not finish within {SESSION_TIMEOUT:?}")),
+        }
+    };
+    let (result, ()) = tokio::join!(run, collect);
     // Finish the send half before anything else so the remote reads our last message.
     let mut send = sink.into_inner();
     let _ = send.finish();
 
-    let mut ops = Vec::new();
     let mut error = None;
-    loop {
-        match event_rx.try_recv() {
-            Ok(LogSyncEvent::OperationReceived { operation, .. }) => ops.push(*operation),
-            Ok(_) => {}
-            Err(broadcast::error::TryRecvError::Lagged(n)) => {
-                error = Some(format!("the session event buffer overflowed by {n} operations"));
-            }
-            Err(_) => break,
-        }
-    }
     let stats = match result {
         Ok((_dedup, metrics)) => Some(SessionStats {
             received_operations: metrics.received_operations,

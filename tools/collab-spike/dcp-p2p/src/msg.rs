@@ -4,11 +4,11 @@ use std::borrow::Borrow;
 use std::sync::{Arc, Mutex};
 
 use p2panda_core::traits::{Digest, Provenance};
-use p2panda_core::{Hash, Header, Operation, SeqNum, SigningKey, VerifyingKey};
+use p2panda_core::{AnyOperation, Hash, Header, Operation, SeqNum, SigningKey, VerifyingKey};
 use p2panda_spaces::{Forge, SpacesArgs};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::{SqliteError, SqliteStore};
 
 use crate::clock::Clock;
 use crate::ext::{DcpExt, MAX_CHUNKS};
@@ -23,6 +23,13 @@ pub struct DcpMsg {
 impl Borrow<SpacesArgs<()>> for DcpMsg {
     fn borrow(&self) -> &SpacesArgs<()> {
         &self.op.header.extensions.args
+    }
+}
+
+/// p2panda-spaces 0.8 reads messages back from the store (`SpacesMessageStore`), which needs this.
+impl From<Operation<DcpExt>> for DcpMsg {
+    fn from(op: Operation<DcpExt>) -> Self {
+        DcpMsg { op }
     }
 }
 
@@ -106,34 +113,24 @@ impl DcpForge {
         }
         let me = self.signing_key.verifying_key();
         let log = log.to_owned();
-        let permit = self.store.begin().await?;
-        let result: Result<Operation<DcpExt>, SqliteError> = async {
-            let latest = <SqliteStore as LogStore<Operation<DcpExt>, VerifyingKey, LogId, SeqNum, Hash>>::get_latest_entry_tx(
-                &self.store, &me, &log,
-            )
-            .await?;
-            let (seq_num, backlink) = latest
-                .map(|o| (o.header.seq_num + 1, Some(o.hash)))
-                .unwrap_or((0, None));
-            let header = Header::<DcpExt>::builder()
-                .seq_num(seq_num)
-                .backlink(backlink)
-                .build(&self.signing_key, ext);
-            let op = Operation::from_parts(header, None);
-            self.store.insert_operation(&op.hash, &op, &log).await?;
-            Ok(op)
-        }
-        .await;
-        match result {
-            Ok(op) => {
-                self.store.commit(permit).await?;
-                Ok(op)
-            }
-            Err(e) => {
-                let _ = self.store.rollback(permit).await;
-                Err(e.into())
-            }
-        }
+        // p2panda-spaces 0.8 calls the forge inside its own state transaction on this same store
+        // (`StateTransaction`, "make sure the forge itself is running within the same
+        // transaction"), and commits or rolls back with the state. So no transaction here: a
+        // second `begin` would wait on the first for ever.
+        let latest = <SqliteStore as LogStore<AnyOperation, VerifyingKey, LogId, SeqNum, Hash>>::get_latest_entry_tx(
+            &self.store, &me, &log,
+        )
+        .await?;
+        let (seq_num, backlink) = latest
+            .map(|o| (o.header.seq_num + 1, Some(o.hash)))
+            .unwrap_or((0, None));
+        let header = Header::<DcpExt>::builder()
+            .seq_num(seq_num)
+            .backlink(backlink)
+            .build(&*self.signing_key, ext);
+        let op = Operation::from_parts(header, None);
+        self.store.insert_operation_tx(&op.hash, &op, &log).await?;
+        Ok(op)
     }
 }
 
