@@ -38,6 +38,7 @@ mod highlight_flags;
 mod join_rule;
 mod member;
 mod member_list;
+mod moderation;
 mod permissions;
 mod timeline;
 mod typing_list;
@@ -2015,132 +2016,6 @@ impl Room {
             Ok(())
         } else {
             Err(failed_invites)
-        }
-    }
-
-    /// Kick the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the kicks are sent successfully, otherwise
-    /// returns the list of users who could not be kicked.
-    pub(crate) async fn kick<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.kick_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_kicks = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not kick user with ID {}: {error}", users[index].0);
-                    failed_kicks.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_kicks.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_kicks)
-        }
-    }
-
-    /// Ban the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the bans are sent successfully, otherwise
-    /// returns the list of users who could not be banned.
-    pub(crate) async fn ban<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.ban_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_bans = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not ban user with ID {}: {error}", users[index].0);
-                    failed_bans.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_bans.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_bans)
-        }
-    }
-
-    /// Unban the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the unbans are sent successfully, otherwise
-    /// returns the list of users who could not be unbanned.
-    pub(crate) async fn unban<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.unban_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_unbans = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not unban user with ID {}: {error}", users[index].0);
-                    failed_unbans.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_unbans.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_unbans)
         }
     }
 
