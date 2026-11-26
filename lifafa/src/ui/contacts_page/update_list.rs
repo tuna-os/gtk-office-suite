@@ -2,7 +2,7 @@
 //! sorting, the scope picked in the sidebar and the LDAP directories.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::contacts::{ContactDetails, ContactEdit};
 

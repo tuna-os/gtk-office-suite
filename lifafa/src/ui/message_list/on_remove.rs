@@ -4,7 +4,7 @@
 use super::types::{BulkAction, MessageListInput, MessageListOutput};
 use super::MessageList;
 use crate::models::Message;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl MessageList {
     pub(super) fn on_resolve_delete(&mut self, sender: &ComponentSender<Self>) {

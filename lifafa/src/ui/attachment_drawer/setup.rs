@@ -3,7 +3,7 @@
 
 use adw::prelude::*;
 use gtk::glib;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use super::{AttachmentDrawer, AttachmentDrawerInput};
 

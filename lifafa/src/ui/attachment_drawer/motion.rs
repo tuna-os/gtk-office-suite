@@ -6,7 +6,7 @@ use crate::config;
 use crate::models::Attachment;
 use adw::prelude::*;
 use gtk::glib;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl AttachmentDrawer {
     /// Show a new list. Opening a message hands it over while the reading

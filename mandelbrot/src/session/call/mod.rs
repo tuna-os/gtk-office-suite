@@ -150,7 +150,7 @@ mod imp {
         /// The local screen share, per room.
         #[cfg(feature = "calls-media")]
         pub(super) screens: RefCell<HashMap<OwnedRoomId, super::ScreenSlot>>,
-        /// The preferred foci from the `.well-known` of our homeserver.
+        /// The preferred foci advertised by our homeserver (RTC transports endpoint, `.well-known` fallback).
         pub(super) preferred_foci: RefCell<Vec<Transport>>,
         /// Guards keeping the SDK event handlers alive.
         pub(super) handler_guards: RefCell<Vec<matrix_sdk::event_handler::EventHandlerDropGuard>>,
@@ -392,24 +392,21 @@ impl CallManager {
         }
     }
 
-    /// Fetch the preferred RTC foci from the `.well-known` of our
-    /// homeserver (MSC4143 `org.matrix.msc4143.rtc_foci`).
+    /// Fetch the preferred RTC transports (MSC4143) of our homeserver.
+    ///
+    /// The SDK asks the homeserver the client resolved at login (which can
+    /// differ from the server name) and falls back to the `.well-known` foci.
     fn fetch_preferred_foci(&self, session: &Session) {
-        let server_name = session.user_id().server_name().to_owned();
+        let client = session.client();
 
         let handle = spawn_tokio!(async move {
-            let url = format!("https://{server_name}/.well-known/matrix/client");
-            let response = matrix_sdk::reqwest::get(&url).await.ok()?;
-            let body = response.bytes().await.ok()?;
-            let well_known = serde_json::from_slice::<JsonValue>(&body).ok()?;
-
-            let foci = well_known
-                .get("org.matrix.msc4143.rtc_foci")?
-                .as_array()?
-                .iter()
-                .filter_map(|focus| serde_json::from_value::<Transport>(focus.clone()).ok())
-                .collect::<Vec<_>>();
-            Some(foci)
+            match client.discover_rtc_transports().await {
+                Ok(transports) => transports.map(|t| transports_from_sdk(&t)),
+                Err(error) => {
+                    warn!("Could not discover RTC transports: {error}");
+                    None
+                }
+            }
         });
 
         spawn!(clone!(
@@ -417,7 +414,7 @@ impl CallManager {
             self,
             async move {
                 if let Ok(Some(foci)) = handle.await {
-                    debug!("Found {} preferred RTC foci in .well-known", foci.len());
+                    debug!("Found {} preferred RTC transports", foci.len());
                     obj.imp().preferred_foci.replace(foci);
                 }
             }
@@ -783,7 +780,7 @@ impl CallManager {
         #[cfg(not(feature = "calls-media"))]
         {
             let join_room_id = room_id.to_owned();
-            let foci = self.imp().preferred_foci.borrow().clone();
+            let foci = foci_for_room(&self.imp().preferred_foci.borrow(), room_id);
             let _join_handle = spawn_tokio!(async move {
                 if let Some((events, joined)) =
                     room_call_member_snapshot(&client, &join_room_id).await
@@ -815,7 +812,7 @@ impl CallManager {
         glib::JoinHandle<()>,
         glib::SignalHandlerId,
     ) {
-        let foci = self.imp().preferred_foci.borrow().clone();
+        let foci = foci_for_room(&self.imp().preferred_foci.borrow(), room_id);
         let camera_sink = self.camera_sink(room_id);
         let screen_sink = self.screen_sink(room_id);
         let (handle, mut media_events) = media::start(
@@ -1090,4 +1087,83 @@ async fn room_call_member_snapshot(
     }
 
     Some((events, joined))
+}
+
+/// Convert the SDK's RTC transports to our [`Transport`] type.
+///
+/// Transports that cannot be represented are skipped.
+fn transports_from_sdk(
+    transports: &[matrix_sdk::ruma::api::client::rtc::RtcTransport],
+) -> Vec<Transport> {
+    transports
+        .iter()
+        .filter_map(|transport| {
+            let value = serde_json::to_value(transport).ok()?;
+            serde_json::from_value::<Transport>(value).ok()
+        })
+        .collect()
+}
+
+/// The preferred transports to use for a call in `room_id`.
+///
+/// MSC4143 transports advertised by the homeserver only carry the service
+/// URL; the LiveKit room alias is the Matrix room ID (as Element Call does).
+/// Without an alias [`Transport::as_livekit`] returns `None` and the focus
+/// would never be usable, so fill it in where it is missing.
+fn foci_for_room(foci: &[Transport], room_id: &RoomId) -> Vec<Transport> {
+    foci.iter()
+        .cloned()
+        .map(|mut transport| {
+            if transport.transport_type == "livekit" {
+                transport
+                    .extra
+                    .entry("livekit_alias")
+                    .or_insert_with(|| room_id.as_str().into());
+            }
+            transport
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod rtc_transport_tests {
+    use matrix_sdk::ruma::{api::client::rtc::RtcTransport, room_id};
+
+    use super::{foci_for_room, transports_from_sdk};
+
+    /// The transports keep the service URL the homeserver advertises, whatever
+    /// the server name of the user is.
+    #[test]
+    fn keeps_advertised_livekit_service_url() {
+        let sdk: RtcTransport = serde_json::from_value(serde_json::json!({
+            "type": "livekit",
+            "livekit_service_url": "https://matrix-rtc.example.org/livekit/jwt"
+        }))
+        .unwrap();
+
+        let transports = transports_from_sdk(&[sdk]);
+        assert_eq!(transports.len(), 1);
+        assert_eq!(transports[0].transport_type, "livekit");
+        assert_eq!(
+            transports[0].extra["livekit_service_url"],
+            "https://matrix-rtc.example.org/livekit/jwt"
+        );
+    }
+
+    /// A converted transport is usable as a LiveKit focus for the room.
+    #[test]
+    fn converted_transport_is_usable_livekit_focus() {
+        let sdk: RtcTransport = serde_json::from_value(serde_json::json!({
+            "type": "livekit",
+            "livekit_service_url": "https://matrix-rtc.example.org/livekit/jwt"
+        }))
+        .unwrap();
+        let converted = transports_from_sdk(&[sdk]);
+        assert!(converted[0].as_livekit().is_none());
+
+        let foci = foci_for_room(&converted, room_id!("!room:example.org"));
+        let focus = foci[0].as_livekit().expect("usable livekit focus");
+        assert_eq!(focus.alias, "!room:example.org");
+        assert_eq!(focus.service_url, "https://matrix-rtc.example.org/livekit/jwt");
+    }
 }

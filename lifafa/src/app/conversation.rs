@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::models::{thread_ids, FolderKind, Message};
 use crate::ui::message_list::MessageListInput;

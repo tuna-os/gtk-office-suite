@@ -24,7 +24,7 @@ const PAGE_OPENER: &str = "letters-chip-page-opener";
 
 type Opener = std::rc::Rc<dyn Fn(bool)>;
 
-fn today() -> chips::NaiveDate {
+fn today() -> chips::Date {
     chips::today()
 }
 
@@ -63,7 +63,7 @@ fn suggestion_row(run: &Run) -> gtk::ListBoxRow {
     line.append(&icon);
     line.append(&title);
     // A date says which day it is relative to today, as Docs does.
-    let relative = chips::NaiveDate::parse_from_str(&chip.value, "%Y-%m-%d").ok().and_then(|d| match (d - today()).num_days() {
+    let relative = chips::parse_iso(&chip.value).and_then(|d| match chips::days_between(today(), d) {
         0 => Some("Today"),
         1 => Some("Tomorrow"),
         -1 => Some("Yesterday"),
@@ -307,16 +307,15 @@ pub fn show_card(view: &gtk::Widget, buf: &gtk::TextBuffer, rect: &gtk::gdk::Rec
     match chip.kind {
         ChipKind::Date => {
             let calendar = gtk::Calendar::new();
-            if let Ok(d) = chips::NaiveDate::parse_from_str(&chip.value, "%Y-%m-%d") {
-                use chips::Datelike;
-                if let Ok(dt) = glib::DateTime::from_local(d.year(), d.month() as i32, d.day() as i32, 12, 0, 0.0) {
+            if let Some(d) = chips::parse_iso(&chip.value) {
+                if let Ok(dt) = glib::DateTime::from_local(i32::from(d.year()), i32::from(d.month()), i32::from(d.day()), 12, 0, 0.0) {
                     calendar.select_day(&dt);
                 }
             }
             let (buf, pop2) = (buf.clone(), pop.clone());
             calendar.connect_day_selected(move |c| {
                 let dt = c.date();
-                let Some(d) = chips::NaiveDate::from_ymd_opt(dt.year(), dt.month() as u32, dt.day_of_month() as u32) else { return };
+                let Ok(d) = chips::Date::new(dt.year() as i16, dt.month() as i8, dt.day_of_month() as i8) else { return };
                 replace(&buf, range, chips::date_chip(d));
                 pop2.popdown();
             });
@@ -365,7 +364,7 @@ mod tests {
             let buf = tab("Due @ ok");
             // The caret after the "@".
             buf.place_cursor(&buf.iter_at_offset(5));
-            let d = chips::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap();
+            let d = chips::Date::new(2026, 10, 3).unwrap();
             assert!(insert(&buf, chips::date_chip(d), true));
             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
             assert_eq!(text, "Due 3 Oct 2026 ok", "the chip's label replaces the @");
@@ -380,7 +379,7 @@ mod tests {
             let (found, label, range) = chip_at(&buf, 8).unwrap();
             assert_eq!((found.kind, label.as_str(), range), (ChipKind::Date, "3 Oct 2026", (4, 14)));
             // Changing the date is one step; undo brings the first date back.
-            let d2 = chips::NaiveDate::from_ymd_opt(2026, 10, 4).unwrap();
+            let d2 = chips::Date::new(2026, 10, 4).unwrap();
             replace(&buf, range, chips::date_chip(d2));
             assert!(buf.text(&buf.start_iter(), &buf.end_iter(), false).contains("4 Oct 2026"));
             crate::live::undo(&buf, false);
@@ -398,7 +397,7 @@ mod tests {
         gtk_test(|| {
             let buf = tab("Due  ok");
             buf.place_cursor(&buf.iter_at_offset(4));
-            let d = chips::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap();
+            let d = chips::Date::new(2026, 10, 3).unwrap();
             insert(&buf, chips::date_chip(d), false);
             let view = crate::page_view::PageView::new();
             crate::page_edit::make_editable(&view, &buf);
@@ -422,7 +421,7 @@ mod tests {
     fn two_chips_side_by_side_stay_two() {
         gtk_test(|| {
             let buf = tab("");
-            let d = chips::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+            let d = chips::Date::new(2026, 1, 1).unwrap();
             insert(&buf, chips::date_chip(d), false);
             insert(&buf, chips::date_chip(d), false);
             let doc = crate::bridge::capture_with_starts(&buf).0;

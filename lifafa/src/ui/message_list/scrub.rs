@@ -7,7 +7,7 @@ use super::MessageList;
 use crate::ui::message_row::RowShared;
 use adw::prelude::*;
 use gtk::{gdk, glib};
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 

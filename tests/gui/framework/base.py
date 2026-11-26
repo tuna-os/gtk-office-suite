@@ -38,6 +38,21 @@ def describe_exit(code):
         return f"killed by {name} before the harness stopped it"
     return f"exited by itself with status {code} before the harness stopped it"
 
+EVIDENCE_SCHEMA_VERSION = 2
+
+
+def _sha256_file(path: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return ""
+    return h.hexdigest()
+
+
 class _SecondApp:
     """A second application running beside the primary one."""
 
@@ -490,13 +505,21 @@ class BaseGUITestCase(unittest.TestCase):
     def _finish_recording_if_running(self):
         """Setup-failure path: keep the clip, the run never got a verdict."""
         if getattr(self, "_recorder", None) is not None:
-            self._finish_recording(failed=True)
+            self._finish_recording("failed")
 
-    def _finish_recording(self, failed: bool):
+    def _finish_recording(self, outcome: str):
+        """Stop the recorder and write the sidecar with the FINAL outcome.
+
+        `outcome` is one of passed / failed / skipped. Callers must pass the
+        verdict only after the test body, tearDown diagnostics and cleanups
+        are known (#1809): a sidecar written earlier can say "passed" for a
+        journey whose teardown then failed.
+        """
         rec = getattr(self, "_recorder", None)
         if rec is None:
             return
         self._recorder = None
+        failed = outcome == "failed"
         keep = failed or self._video_mode() == "all"
         path = rec.stop(keep=keep)
         if not path:
@@ -509,10 +532,15 @@ class BaseGUITestCase(unittest.TestCase):
         meta = {
             "test": f"{type(self).__name__}.{self._testMethodName}",
             "app": self.app_name,
-            "outcome": "failed" if failed else "passed",
+            "schema_version": EVIDENCE_SCHEMA_VERSION,
+            "outcome": outcome,
             "video": os.path.basename(path),
+            "video_sha256": _sha256_file(path),
             "wall_seconds": round(time.monotonic() - (self._recording_started or time.monotonic()), 2),
             "revision": os.environ.get("GITHUB_SHA", ""),
+            "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+            "attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+            "trust": "self-reported-unauthenticated",
         }
         try:
             with open(os.path.splitext(path)[0] + ".json", "w") as f:
@@ -682,6 +710,7 @@ class BaseGUITestCase(unittest.TestCase):
         try:
             method()
             self._test_failed = False
+            self._test_outcome = "passed"
         except unittest.SkipTest:
             # A skip is neither a pass nor a failure, but for evidence it
             # behaves like a pass: there is nothing to debug. `SkipTest`
@@ -692,27 +721,37 @@ class BaseGUITestCase(unittest.TestCase):
             # journey. `skipTest("GEMINI_API_KEY not set")` in the VLM
             # helpers is the live case.
             self._test_failed = False
+            self._test_outcome = "skipped"
             raise
         except Exception:
             self._test_failed = True
+            self._test_outcome = "failed"
             raise
 
     def tearDown(self):
         failed = getattr(self, "_test_failed", None) is not False
         if failed:
             self._capture_failure_artifacts()
-        self._finish_recording(failed)
         rawinput.click = _dogtail_click
         rawinput.doubleClick = _dogtail_double_click
         rawinput.keyCombo = _dogtail_key_combo
         rawinput.typeText = _dogtail_type_text
-        if hasattr(self, "process") and self.process:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-            self._check_gtk_diagnostics()
+        outcome = getattr(self, "_test_outcome", None) or "failed"
+        try:
+            if hasattr(self, "process") and self.process:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                self._check_gtk_diagnostics()
+        except BaseException:
+            # A teardown failure (e.g. the GTK CRITICAL check) overrides a
+            # body pass or skip: the sidecar must match the final verdict.
+            outcome = "failed"
+            raise
+        finally:
+            self._finish_recording(outcome)
 
     # CRITICAL messages (substrings) a journey knows come from inside GTK
     # rather than from the app, and tolerates. Empty by default: a CRITICAL

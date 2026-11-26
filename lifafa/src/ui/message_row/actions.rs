@@ -8,7 +8,7 @@ use crate::models::Message;
 use crate::ui::drag_card::{self, DRAG_STACK};
 use crate::ui::message_list::MessageListInput;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl Row {
     pub(super) fn act(&self, action: RowAction) {

@@ -8,7 +8,7 @@ use super::MessageView;
 use crate::i18n::i18n;
 use crate::models::Message;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl MessageView {
     pub(super) fn on_print(&mut self) {

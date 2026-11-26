@@ -1468,7 +1468,7 @@ fn a_chain_kept_with_the_next_moves_whole() {
 #[test]
 fn a_smart_chip_is_one_object_drawn_as_a_pill() {
     let mut d = doc_of(1, "Due ");
-    let date = crate::chips::date_chip(crate::chips::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap());
+    let date = crate::chips::date_chip(crate::chips::Date::new(2026, 10, 3).unwrap());
     d.paragraphs[0].runs.push(date);
     d.paragraphs[0].runs.push(Run::plain(" ok"));
     assert_eq!(layout_text(&d.paragraphs[0].runs), "Due \u{FFFC} ok");

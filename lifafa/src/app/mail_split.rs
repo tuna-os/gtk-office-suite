@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
-use crate::relm::ComponentSender;
+use relm4::ComponentSender;
 
 use super::model::AppModel;
 use super::msg::AppMsg;

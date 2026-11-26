@@ -14,7 +14,7 @@ use crate::ui::drag_card;
 use adw::prelude::*;
 use gtk::gdk;
 use gtk::glib::Propagation;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use webkit6::prelude::WebViewExt;
