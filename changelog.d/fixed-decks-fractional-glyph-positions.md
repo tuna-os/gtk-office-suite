@@ -1,0 +1,1 @@
+- Decks: slide text is laid out on fractional glyph positions, as Impress lays it out, so a line that fits its box with a pixel or two to spare no longer wraps its last word.
