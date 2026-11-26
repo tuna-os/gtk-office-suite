@@ -1,0 +1,1 @@
+- Render lab: a required OCR/visual observation that is blocked, timed out, malformed or missing now fails instead of dropping out of a green result; OCR runs are bounded and checked (#1808).

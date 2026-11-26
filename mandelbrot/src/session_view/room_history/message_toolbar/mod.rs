@@ -1017,7 +1017,7 @@ mod imp {
             toast!(self.obj(), msg);
         }
 
-        /// Send the attachment with the given data.
+        /// Send the attachment with the given data to the current timeline.
         async fn send_attachment(
             &self,
             source: AttachmentSource,
@@ -1029,6 +1029,23 @@ mod imp {
                 return;
             };
 
+            self.send_attachment_to(&timeline, source, mime, info, thumbnail)
+                .await;
+        }
+
+        /// Send the attachment with the given data to the given timeline.
+        ///
+        /// Use this when the attachment was made for a timeline and the
+        /// current one might have changed since, because the user can open
+        /// another room while a future is pending.
+        async fn send_attachment_to(
+            &self,
+            timeline: &Timeline,
+            source: AttachmentSource,
+            mime: mime::Mime,
+            info: AttachmentInfo,
+            thumbnail: Option<Thumbnail>,
+        ) {
             let config = AttachmentConfig {
                 info: Some(info),
                 thumbnail,
@@ -1154,6 +1171,13 @@ mod imp {
             let Some(_send_guard) = self.send_guard.try_lock() else {
                 return;
             };
+            // The recording belongs to the timeline that is open now. Stopping
+            // the recorder waits for the pipeline, for up to a few seconds, and
+            // the user can open another room in the meantime: the recording
+            // must still be sent to this one.
+            let Some(timeline) = self.timeline.upgrade() else {
+                return;
+            };
             let Some(recorder) = self.recorder.take() else {
                 return;
             };
@@ -1184,7 +1208,8 @@ mod imp {
                 .parse()
                 .expect("audio/ogg should be a valid MIME type");
 
-            self.send_attachment(source, mime, info, None).await;
+            self.send_attachment_to(&timeline, source, mime, info, None)
+                .await;
         }
 
         /// Send the given texture as an image.

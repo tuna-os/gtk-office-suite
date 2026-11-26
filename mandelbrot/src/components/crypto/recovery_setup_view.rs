@@ -9,7 +9,7 @@ use tracing::{debug, error, warn};
 
 use crate::{
     components::{AuthDialog, AuthError, LoadingButton, SwitchLoadingRow},
-    session::{RecoveryState, Session},
+    session::{RecoveryDialogPage, Session, dialog_page},
     spawn_tokio, toast,
 };
 
@@ -192,17 +192,12 @@ mod imp {
 
             let security = session.security();
             let recovery_state = security.recovery_state();
-            let initial_page = match recovery_state {
-                RecoveryState::Unknown | RecoveryState::Disabled
-                    if !security.backup_exists_on_server() =>
-                {
-                    CryptoRecoverySetupInitialPage::Enable
-                }
-                RecoveryState::Unknown | RecoveryState::Disabled | RecoveryState::Enabled => {
-                    CryptoRecoverySetupInitialPage::Reset
-                }
-                RecoveryState::Incomplete => CryptoRecoverySetupInitialPage::Recover,
-            };
+            let initial_page =
+                match dialog_page(recovery_state, security.backup_exists_on_server()) {
+                    RecoveryDialogPage::Enable => CryptoRecoverySetupInitialPage::Enable,
+                    RecoveryDialogPage::Recover => CryptoRecoverySetupInitialPage::Recover,
+                    RecoveryDialogPage::Reset => CryptoRecoverySetupInitialPage::Reset,
+                };
 
             self.update_reset();
             self.set_initial_page(initial_page);

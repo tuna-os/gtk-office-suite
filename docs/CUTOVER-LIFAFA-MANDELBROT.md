@@ -214,10 +214,12 @@ The questions those answer:
   or re-opened here. Done for issues on 2026-11-14: tuna-os/lifafa #3, #4,
   #5, #8, #15, #16 and #17 are #2241-#2247 here, labelled `lifafa`, and
   tuna-os/mandelbrot #146, #162, #166, #171 and #253 are #2248-#2252,
-  labelled `mandelbrot`. Left there on purpose: lifafa #20 (that
-  repository's own upstream-sync alert) and mandelbrot #14 (its Renovate
-  dashboard), which close with their repositories. Still open: the pull
-  requests lifafa #11, mandelbrot #238 (ported here in #1976) and #246.
+  labelled `mandelbrot`. Left there on purpose: lifafa's own upstream-sync
+  alerts (#20, closed 2026-11-19, and #26 since) and mandelbrot #14 (its
+  Renovate dashboard), which close with their repositories. Still open: the
+  pull requests lifafa #27 (a draft, opened 2026-11-20) and mandelbrot #238
+  (ported here in #1976). Closed there since: lifafa #11 (merged 2026-11-18,
+  see step 7) and mandelbrot #246 (closed without merging on 2026-11-20).
 - [x] Private vulnerability reporting turned on here, and open advisories in
   either repository dealt with or moved: reporting is on here, and neither
   repository has an advisory in any state (checked 2026-11-14). The report
@@ -244,8 +246,15 @@ The questions those answer:
   vulnerability fixes for the releases it publishes until step 2 is done,
   and nothing else. What merged there after 2026-11-13, and where it is
   here: mandelbrot #257 (`matrixrtc/tests/call_membership.rs` tests,
-  carried), #258 (replaced by #2259), #260 (#2292), #264 (#2290). Anything
-  merged there later is added to this list.
+  carried), #258 (replaced by #2259), #260 (#2292), #264 (#2290), #266
+  (that repository's own `renovate.json` and `docs/DEVELOPMENT.md`, nothing
+  to carry), #267 (#2293); lifafa #11 and #25 (its upstream sync pushes with
+  a deploy key, nothing to carry: `lifafa-upstream-sync.yml` here opens a
+  pull request instead), #19 (`fork-release.yml` fetches the cargo source
+  generator from a pinned commit and checks its sha256; `lifafa-flatpak.yml`
+  here pins a commit but has no sha256 check), #22 and #24 (that
+  repository's notice from the step above), #28 (#2341). Anything merged
+  there later is added to this list.
 
 ## 8. Archive
 

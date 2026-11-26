@@ -6,7 +6,7 @@ use ruma::{OwnedRoomId, OwnedServerName, events::media_preview_config::MediaPrev
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use super::SidebarSectionName;
+use super::{SidebarSectionName, storage::DEFAULT_MEDIA_CACHE_LIMIT_MIB};
 use crate::{Application, session_list::SessionListSettings};
 
 /// The current version of the stored session settings.
@@ -44,6 +44,13 @@ pub(crate) struct StoredSessionSettings {
     )]
     typing_enabled: bool,
 
+    /// The limit of the media cache, in MiB.
+    #[serde(
+        default = "default_media_cache_limit_mib",
+        skip_serializing_if = "is_default_media_cache_limit_mib"
+    )]
+    media_cache_limit_mib: u32,
+
     /// The sections that are expanded.
     #[serde(default)]
     sections_expanded: SectionsExpanded,
@@ -68,6 +75,14 @@ pub(crate) struct StoredSessionSettings {
     pub(super) invite_avatars_enabled: Option<bool>,
 }
 
+fn default_media_cache_limit_mib() -> u32 {
+    DEFAULT_MEDIA_CACHE_LIMIT_MIB
+}
+
+fn is_default_media_cache_limit_mib(limit: &u32) -> bool {
+    *limit == DEFAULT_MEDIA_CACHE_LIMIT_MIB
+}
+
 impl Default for StoredSessionSettings {
     fn default() -> Self {
         Self {
@@ -76,6 +91,7 @@ impl Default for StoredSessionSettings {
             notifications_enabled: true,
             public_read_receipts_enabled: true,
             typing_enabled: true,
+            media_cache_limit_mib: DEFAULT_MEDIA_CACHE_LIMIT_MIB,
             sections_expanded: Default::default(),
             space_path: Default::default(),
             media_previews_enabled: Default::default(),
@@ -109,6 +125,9 @@ mod imp {
         /// Whether typing notifications are enabled for this session.
         #[property(get = Self::typing_enabled, set = Self::set_typing_enabled, explicit_notify, default = true)]
         typing_enabled: PhantomData<bool>,
+        /// The limit of the media cache, in MiB.
+        #[property(get = Self::media_cache_limit_mib, set = Self::set_media_cache_limit_mib, explicit_notify, default = DEFAULT_MEDIA_CACHE_LIMIT_MIB)]
+        media_cache_limit_mib: PhantomData<u32>,
     }
 
     #[glib::object_subclass]
@@ -169,6 +188,22 @@ mod imp {
             self.stored_settings.borrow_mut().typing_enabled = enabled;
             session_list_settings().save();
             self.obj().notify_typing_enabled();
+        }
+
+        /// The limit of the media cache, in MiB.
+        fn media_cache_limit_mib(&self) -> u32 {
+            self.stored_settings.borrow().media_cache_limit_mib
+        }
+
+        /// Set the limit of the media cache, in MiB.
+        fn set_media_cache_limit_mib(&self, limit: u32) {
+            if self.media_cache_limit_mib() == limit {
+                return;
+            }
+
+            self.stored_settings.borrow_mut().media_cache_limit_mib = limit;
+            session_list_settings().save();
+            self.obj().notify_media_cache_limit_mib();
         }
 
         /// Apply the migration of the stored settings from version 0 to version

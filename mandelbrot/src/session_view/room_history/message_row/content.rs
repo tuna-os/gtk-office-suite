@@ -1,7 +1,8 @@
 use adw::{prelude::*, subclass::prelude::*};
 use gettextrs::gettext;
 use gtk::{gdk, glib, glib::clone};
-use matrix_sdk_ui::timeline::{MsgLikeKind, TimelineDetails, TimelineItemContent};
+use matrix_sdk_base::crypto::types::events::UtdCause;
+use matrix_sdk_ui::timeline::{EncryptedMessage, MsgLikeKind, TimelineDetails, TimelineItemContent};
 use ruma::{OwnedEventId, OwnedTransactionId, events::room::message::MessageType};
 use tracing::{error, warn};
 
@@ -22,7 +23,7 @@ use crate::{
     session::{Event, Member, Room},
     session_view::room_history::message_toolbar::MessageEventSource,
     spawn,
-    utils::matrix::{MediaMessage, MessageCacheKey},
+    utils::matrix::{MediaMessage, MessageCacheKey, utd::UtdAdvice},
 };
 
 #[derive(Debug, Default, Hash, Eq, PartialEq, Clone, Copy, glib::Enum)]
@@ -315,12 +316,16 @@ trait MessageContentContainer: ChildPropertyExt {
                     let child = self.child_or_default::<MessagePoll>();
                     child.set_poll(&room, event_id, &poll_state, format);
                 }
-                MsgLikeKind::UnableToDecrypt(_) => {
+                MsgLikeKind::UnableToDecrypt(encrypted) => {
+                    let advice = match encrypted {
+                        EncryptedMessage::MegolmV1AesSha2 { cause, .. } => {
+                            UtdAdvice::for_cause(cause)
+                        }
+                        _ => UtdAdvice::for_cause(UtdCause::Unknown),
+                    };
                     let child = self.child_or_default::<MessageInfo>();
-                    child.set_info(
-                        MessageInfoIcon::Warning,
-                        &gettext("Could not decrypt this message, decryption will be retried once the keys are available.")
-                    );
+                    child.set_info(MessageInfoIcon::Warning, &advice.message);
+                    child.set_action(advice.action);
                 }
                 MsgLikeKind::Redacted => {
                     let child = self.child_or_default::<MessageInfo>();

@@ -137,7 +137,8 @@ Other MatrixRTC clients have not been tested.
 * **No device pickers**: input and output follow the system defaults (see
   [Audio and video](#audio-and-video)).
 * **No calls without a LiveKit focus**: homeservers that advertise no `rtc_foci` cannot host a
-  call that Mandelbrot starts.
+  call that Mandelbrot starts. A widget-driver fallback was considered and rejected; see
+  [DECISION-widget-driver-fallback.md](DECISION-widget-driver-fallback.md).
 * **Live-stack test status**: the per-PR `MatrixRTC conformance tests` CI job covers the session
   logic; the nightly live-stack harness (`.github/workflows/matrixrtc-e2e.yml`) is tracked in
   [#66](https://github.com/tuna-os/mandelbrot/issues/66).

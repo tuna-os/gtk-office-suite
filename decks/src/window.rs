@@ -125,8 +125,10 @@ impl DecksWindow {
         canvas.set_focus_on_click(true);
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
             // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every shown
-            // slide as the canvas draws it, 1280 px wide (13.33 in at 96 DPI,
-            // the size LibreOffice's reference PNGs come out at). A hidden
+            // slide drawn through the export path (`render_slide_png` with
+            // `Chrome::Export`, so no selection or placeholder chrome),
+            // 1280 px wide (13.33 in at 96 DPI, the size LibreOffice's
+            // reference PNGs come out at). A hidden
             // slide gets no page, as LibreOffice prints none, so pages are
             // numbered consecutively and line up with its reference.
             let ctl = controller.clone();

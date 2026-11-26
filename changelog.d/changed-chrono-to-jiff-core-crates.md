@@ -1,0 +1,1 @@
+- Internal: suite-common-core, letters-core and tables-core now use `jiff` instead of `chrono` (the first step of #2289; Lifafa and the dependencies that pull in `chrono` are still to move).

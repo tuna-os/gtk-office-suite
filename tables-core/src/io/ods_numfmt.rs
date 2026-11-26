@@ -52,7 +52,7 @@ fn decimals(attrs: &str) -> u8 {
     attr(attrs, "number:decimal-places").and_then(|v| v.parse().ok()).unwrap_or(0)
 }
 
-/// A chrono format for a `<number:date-style>` body, and whether it shows a
+/// A strftime format for a `<number:date-style>` body, and whether it shows a
 /// time of day.
 fn date_format(body: &str) -> (String, bool) {
     let mut fmt = String::new();
@@ -256,13 +256,15 @@ fn excel_codes(xml: &str, kinds: &[&str]) -> HashMap<String, String> {
 /// An ODF date or date-time value (`2023-03-15`, `2023-03-15T12:30:00`) as
 /// an Excel serial number, the form xlsx stores and the formats expect.
 pub fn iso_to_serial(iso: &str) -> Option<f64> {
-    use chrono::{NaiveDate, NaiveDateTime};
-    let dt = NaiveDateTime::parse_from_str(iso, "%Y-%m-%dT%H:%M:%S%.f")
-        .or_else(|_| NaiveDateTime::parse_from_str(iso, "%Y-%m-%dT%H:%M:%S"))
-        .ok()
-        .or_else(|| NaiveDate::parse_from_str(iso, "%Y-%m-%d").ok().and_then(|d| d.and_hms_opt(0, 0, 0)))?;
-    let epoch = NaiveDate::from_ymd_opt(1899, 12, 30)?.and_hms_opt(0, 0, 0)?;
-    let serial = (dt - epoch).num_milliseconds() as f64 / 86_400_000.0;
+    use jiff::civil::{date, DateTime};
+    use jiff::fmt::strtime;
+    let parse = |fmt: &str| strtime::parse(fmt, iso).ok();
+    let dt: DateTime = parse("%Y-%m-%dT%H:%M:%S%.f")
+        .or_else(|| parse("%Y-%m-%dT%H:%M:%S"))
+        .and_then(|t| t.to_datetime().ok())
+        .or_else(|| parse("%Y-%m-%d").and_then(|t| t.to_date().ok()).map(|d| d.at(0, 0, 0, 0)))?;
+    let epoch = date(1899, 12, 30).at(0, 0, 0, 0);
+    let serial = dt.duration_since(epoch).as_millis() as f64 / 86_400_000.0;
     // Excel's fictional 1900-02-29 sits before 1900-03-01, so dates before
     // it are one serial lower than a plain day count from 1899-12-30.
     Some(if serial < 61.0 { serial - 1.0 } else { serial })
